@@ -16,6 +16,8 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # The Apple signing and notarization credentials are environment secrets.
+    environment: Prod
     strategy:
       fail-fast: false
       matrix:
@@ -24,16 +26,21 @@ jobs:
             os: macos-latest
             target: --mac
             artifact: macos
+            signed: true
           - name: Windows
             os: windows-latest
             target: --win
             artifact: windows
+            signed: false
           - name: Linux
             os: ubuntu-latest
             target: --linux
             artifact: linux
+            signed: false
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # macOS signs with the Developer ID cert imported from CSC_LINK; the other
+      # platforms stay unsigned.
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.signed }}
 
     steps:
       - name: Checkout
@@ -63,6 +70,15 @@ jobs:
 
       - name: Build package
         working-directory: apps/desktop
+        env:
+          # Only exported on macOS: CSC_LINK is shared with the Windows signer,
+          # so leaking it into that job would make electron-builder try to sign
+          # the installer with the Developer ID certificate.
+          CSC_LINK: ${{ matrix.signed && secrets.APPLE_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.signed && secrets.APPLE_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.signed && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.signed && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.signed && secrets.APPLE_TEAM_ID || '' }}
         run: pnpm exec electron-builder ${{ matrix.target }} --publish never
 
       - name: Upload build artifacts

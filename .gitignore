@@ -12,3 +12,4 @@ out
 *.tsbuildinfo
 *.log*
 .alchemy
+*.p12

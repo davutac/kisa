@@ -36,6 +36,7 @@
 - IPC contracts and Effect Schema codecs live in `apps/desktop/src/shared/ipc`. Public handlers are declared in `apps/desktop/src/main/ipc/methods` and installed only by `desktop-ipc-handlers.ts`.
 - Renderer code should use feature hooks or `apps/desktop/src/renderer/src/platform/desktop.ts`, not import Electron main/preload internals or call Electron directly.
 - Auto-update is best-effort and disabled in dev/unpackaged builds; Linux self-update only works when running as AppImage (`APPIMAGE` set).
+- macOS release builds are signed with a Developer ID certificate and notarized; setup and required GitHub secrets are documented in `docs/releasing/macos-signing.md`. Windows and Linux artifacts are unsigned.
 
 ## Database
 
