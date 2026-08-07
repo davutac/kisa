@@ -29,6 +29,12 @@ import {
 interface MailThreadListProps {
   emptyMessage: string;
   hasNextPage?: boolean;
+  /**
+   * Rendered in place of the paging row once the cache is exhausted but the
+   * mail index is still running, so reaching the end of a partly-indexed
+   * mailbox reads as "more is coming" rather than as the end of the mail.
+   */
+  indexingMessage?: string;
   isInitialLoading: boolean;
   isLoadingNextPage?: boolean;
   loadNextPage?: () => Promise<boolean>;
@@ -42,6 +48,7 @@ interface MailThreadListProps {
 const MailThreadList = ({
   emptyMessage,
   hasNextPage = false,
+  indexingMessage,
   isInitialLoading,
   isLoadingNextPage = false,
   loadNextPage,
@@ -58,8 +65,12 @@ const MailThreadList = ({
   const openThread = useMailboxStore((state) => state.openThread);
   const selectThread = useMailboxStore((state) => state.selectThread);
   const previousReloadRevisionRef = useRef(reloadRevision);
+  // The trailing row is the paging trigger, but it also carries the indexing
+  // notice — the auto-load effect below still keys off `hasNextPage` alone, so
+  // showing the notice cannot start a paging loop against an exhausted cache.
+  const hasTrailingRow = hasNextPage || indexingMessage !== undefined;
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
-    count: threads.length + (hasNextPage ? 1 : 0),
+    count: threads.length + (hasTrailingRow ? 1 : 0),
     estimateSize: () => 88,
     getItemKey: (index) => {
       const thread = threads[index];
@@ -271,7 +282,7 @@ const MailThreadList = ({
                   aria-live="polite"
                   className="text-muted-foreground text-center text-sm"
                 >
-                  Loading more email…
+                  {hasNextPage ? "Loading more email…" : indexingMessage}
                 </p>
               </li>
             ) : (

@@ -8,6 +8,7 @@ import {
 } from "@repo/gmail/errors";
 import type {
   GatewayHistoryResult,
+  GatewayMailboxTotals,
   GatewayResult,
   GatewayThread,
   GatewayThreadPage,
@@ -42,6 +43,7 @@ import {
   isPresent,
   parseMailbox,
 } from "./gmail-payload";
+import { mailQuotaGovernor, QUOTA_UNITS } from "./quota-governor";
 
 // The OAuth2 client bundled with @googleapis/gmail, rather than a separate
 // google-auth-library install: a second copy is a distinct nominal type and
@@ -154,6 +156,11 @@ const toGatewayError = (
     status === 429 ||
     reasons.some((reason) => RATE_LIMIT_REASONS.has(reason))
   ) {
+    // Every rate limit is reported, whoever provoked it: the budget is
+    // per-user, so a foreground burst tripping the limit has to slow the
+    // indexer too.
+    mailQuotaGovernor.reportRateLimited(accountId);
+
     return new GmailRateLimitError({ accountId, message });
   }
 
@@ -309,22 +316,49 @@ const collectHistoryThreadIds = (
  * and `metadata` format omits the per-part `attachmentId` needed to build it.
  * This matches the request profile the hand-rolled sync already used.
  */
+const toGatewayThread = (
+  thread: gmail_v1.Schema$Thread
+): GatewayThread | undefined =>
+  isPresent(thread.id)
+    ? {
+        historyId: HistoryId.make(thread.historyId ?? "0"),
+        id: ThreadId.make(thread.id),
+        labelIds: [
+          ...new Set(
+            (thread.messages ?? []).flatMap((message) => message.labelIds ?? [])
+          ),
+        ],
+        messages: thread.messages ?? [],
+      }
+    : undefined;
+
+interface FetchedThreads {
+  readonly details: readonly GatewayThread[];
+  readonly summaries: readonly ThreadSummary[];
+}
+
 const fetchThreadSummaries = async (
+  accountId: AccountId,
   client: gmail_v1.Gmail,
   threadIds: readonly string[]
-): Promise<readonly ThreadSummary[]> => {
-  const summaries = await mapWithConcurrency(
+): Promise<FetchedThreads> => {
+  const fetched = await mapWithConcurrency(
     threadIds,
     THREAD_FETCH_CONCURRENCY,
     async (threadId) => {
       try {
+        mailQuotaGovernor.charge(accountId, QUOTA_UNITS.threadsGet);
+
         const detail = await client.users.threads.get({
           format: "full",
           id: threadId,
           userId: "me",
         });
+        const summary = toThreadSummary(detail.data);
 
-        return toThreadSummary(detail.data);
+        return summary === undefined
+          ? undefined
+          : { detail: toGatewayThread(detail.data), summary };
       } catch (error) {
         if (readErrorStatus(error) === 404) {
           return;
@@ -334,10 +368,14 @@ const fetchThreadSummaries = async (
       }
     }
   );
+  const present = fetched.filter((entry) => entry !== undefined);
 
-  return summaries.filter(
-    (summary): summary is ThreadSummary => summary !== undefined
-  );
+  return {
+    details: present.flatMap((entry) =>
+      entry.detail === undefined ? [] : [entry.detail]
+    ),
+    summaries: present.map((entry) => entry.summary),
+  };
 };
 
 export const GmailGatewayLive = Layer.succeed(
@@ -348,6 +386,11 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<GmailAttachment>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.attachmentsGet
+          );
           const response = await client.users.messages.attachments.get({
             id: request.attachmentId,
             messageId: request.messageId,
@@ -367,9 +410,34 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<HistoryIdType>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.getProfile
+          );
           const response = await client.users.getProfile({ userId: "me" });
 
           return succeed(HistoryId.make(response.data.historyId ?? "0"));
+        },
+      }),
+
+    getMailboxTotals: (authorization) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<GatewayMailboxTotals>> => {
+          const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.getProfile
+          );
+
+          const response = await client.users.getProfile({ userId: "me" });
+
+          return succeed({
+            messagesTotal: response.data.messagesTotal ?? 0,
+            threadsTotal: response.data.threadsTotal ?? 0,
+          });
         },
       }),
 
@@ -378,6 +446,11 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<GatewayThread>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.threadsGet
+          );
           const response = await client.users.threads.get({
             format: "full",
             id: threadId,
@@ -422,6 +495,11 @@ export const GmailGatewayLive = Layer.succeed(
           let pageToken: string | undefined;
 
           do {
+            mailQuotaGovernor.charge(
+              authorization.account.id,
+              QUOTA_UNITS.historyList
+            );
+
             // Each page's token comes from the previous response, so these
             // requests cannot be parallelised.
             // oxlint-disable-next-line eslint/no-await-in-loop
@@ -452,12 +530,19 @@ export const GmailGatewayLive = Layer.succeed(
             changedThreadIds.delete(removed);
           }
 
+          const fetched = await fetchThreadSummaries(
+            authorization.account.id,
+            client,
+            [...changedThreadIds]
+          );
+
           return succeed({
+            details: fetched.details,
             historyId: latestHistoryId,
             removedThreadIds: [...removedThreadIds].map((id) =>
               ThreadId.make(id)
             ),
-            threads: await fetchThreadSummaries(client, [...changedThreadIds]),
+            threads: fetched.summaries,
           });
         },
       }),
@@ -467,6 +552,11 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<readonly GmailLabel[]>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.labelsList
+          );
           const response = await client.users.labels.list({ userId: "me" });
 
           return succeed(
@@ -482,6 +572,12 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<GatewayThreadPage>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.threadsList
+          );
+
           const listed = await client.users.threads.list({
             includeSpamTrash: request.includeSpamTrash,
             labelIds: [...request.labelIds],
@@ -496,8 +592,15 @@ export const GmailGatewayLive = Layer.succeed(
             .map((entry) => entry.id)
             .filter((id): id is string => isPresent(id));
 
+          const fetched = await fetchThreadSummaries(
+            authorization.account.id,
+            client,
+            threadIds
+          );
+
           return succeed({
-            threads: await fetchThreadSummaries(client, threadIds),
+            details: fetched.details,
+            threads: fetched.summaries,
             ...(isPresent(listed.data.nextPageToken)
               ? { nextPageToken: listed.data.nextPageToken }
               : {}),
@@ -510,6 +613,11 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<void>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.threadsModify
+          );
 
           await client.users.threads.modify({
             id: request.threadId,
@@ -547,6 +655,11 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<SentMessage>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.messagesSend
+          );
           const response = await client.users.messages.send({
             requestBody: {
               raw: message.raw,
@@ -571,6 +684,11 @@ export const GmailGatewayLive = Layer.succeed(
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<void>> => {
           const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.threadsTrash
+          );
 
           await client.users.threads.trash({ id: threadId, userId: "me" });
 

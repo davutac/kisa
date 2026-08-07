@@ -39,6 +39,7 @@ describe(getRuntimeCapabilities, () => {
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
     disconnectGoogleAccount: () =>
       Promise.resolve({ data: [], ok: true as const }),
+    getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
     getVersions: () => versions,
@@ -66,6 +67,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: { threads: [] }, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
     onGoogleAccountsChanged: () => () => {},
+    onMailIndexProgressChanged: () => () => {},
     onMailSyncStatusChanged: () => () => {},
     onMailThreadsChanged: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
@@ -96,12 +98,14 @@ describe(getRuntimeCapabilities, () => {
       },
       isWeb: false,
       mail: {
+        getIndexProgress: desktopBridge.getMailIndexProgress,
         getSyncStatus: desktopBridge.getMailSyncStatus,
         listCachedThreadPage: desktopBridge.listCachedThreadPage,
         listLabels: desktopBridge.listGmailLabels,
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
         loadThread: desktopBridge.loadThread,
         loadThreadPage: desktopBridge.loadThreadPage,
+        onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,
         onSyncStatusChanged: desktopBridge.onMailSyncStatusChanged,
         onThreadsChanged: desktopBridge.onMailThreadsChanged,
         onTrustedImageSendersChanged:

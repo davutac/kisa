@@ -8,6 +8,7 @@ export const AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL =
   "desktop:auth:google-list-accounts";
 export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";
 
+export const MAIL_INDEX_PROGRESS_CHANNEL = "desktop:mail:index-progress";
 export const MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL =
   "desktop:mail:list-cached-thread-page";
 export const MAIL_LIST_LABELS_CHANNEL = "desktop:mail:list-labels";

@@ -4,6 +4,7 @@ import { DesktopIpc } from "./desktop-ipc";
 import { startApp } from "./methods/app";
 import { disconnectAccount, listAccounts, startGoogle } from "./methods/auth";
 import {
+  getIndexProgress,
   getSyncStatus,
   listCachedPage,
   listImageSenders,
@@ -28,6 +29,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(disconnectAccount);
   yield* ipc.handle(getSyncStatus);
+  yield* ipc.handle(getIndexProgress);
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);
   yield* ipc.handle(syncLabels);

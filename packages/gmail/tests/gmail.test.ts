@@ -42,12 +42,14 @@ interface TestState {
     readonly isRead: boolean;
     readonly threadId: ThreadId;
   }[];
+  readonly indexedThreadIds: ThreadId[];
   readonly removedThreads: ThreadId[];
 }
 
 const createTestLayer = () => {
   const state: TestState = {
     authorizations: new Map(),
+    indexedThreadIds: [],
     listThreadCalls: [],
     mutationCalls: [],
     readStateChanges: [],
@@ -98,12 +100,16 @@ const createTestLayer = () => {
           });
         }
       }),
-    upsertThreadSummaries: () => Effect.void,
+    upsertThreadDetails: (_accountId, _threads, details) =>
+      Effect.sync(() => {
+        state.indexedThreadIds.push(...details.map((thread) => thread.id));
+      }),
   };
 
   const gateway: GmailGatewayService = {
     getAttachment: () => Effect.die("unused"),
     getCurrentHistoryId: () => Effect.die("unused"),
+    getMailboxTotals: () => Effect.die("unused"),
     getThread: () => Effect.die("unused"),
     identifyAccount: (credentials) => {
       const token = Redacted.value(credentials.accessToken);
@@ -125,6 +131,7 @@ const createTestLayer = () => {
       );
       return Effect.succeed({
         value: {
+          details: [],
           historyId: HistoryId.make("history-1"),
           nextPageToken: request.pageToken === undefined ? "page-2" : undefined,
           threads: [

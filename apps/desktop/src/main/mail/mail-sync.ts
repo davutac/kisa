@@ -134,9 +134,6 @@ const toCachedThreadSummary = (row: CachedThreadRow): GmailThreadSummary => {
   };
 };
 
-const isInboxThread = (thread: GmailThreadSummary): boolean =>
-  thread.labels.includes(GMAIL_INBOX_LABEL);
-
 export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
   function* listCachedThreadPage(request: GmailCachedThreadPageRequest) {
     if (request.accountIds.length === 0) {
@@ -154,6 +151,11 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
           ],
           where: (thread, { and, eq: is, gt, inArray, lt, or }) =>
             and(
+              // The inbox predicate has to be in SQL, not a filter over the
+              // page below: the index stores archived mail in this table too,
+              // so filtering afterwards would return near-empty pages while
+              // paging through everything the user archived.
+              is(thread.isInInbox, true),
               inArray(thread.accountEmail, [...request.accountIds]),
               request.unreadOnly === true
                 ? is(thread.isUnread, true)
@@ -177,7 +179,7 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
         .sync()
     );
     const pageRows = rows.slice(0, THREAD_PAGE_SIZE);
-    const threads = pageRows.map(toCachedThreadSummary).filter(isInboxThread);
+    const threads = pageRows.map(toCachedThreadSummary);
     const lastRow = pageRows.at(-1);
 
     return rows.length > THREAD_PAGE_SIZE && lastRow !== undefined
@@ -613,6 +615,9 @@ const updateCachedThread = (
     database
       .update(gmailThreads)
       .set({
+        // `is_in_inbox` is derived from the labels, so the two always move
+        // together — the paging query reads the column, not the JSON.
+        isInInbox: summary.labels.includes(GMAIL_INBOX_LABEL),
         isUnread: summary.isUnread,
         labels: summary.labels,
         updatedAt: Date.now(),
@@ -696,11 +701,20 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
     const summary = toTrashedSummary(toCachedThreadSummary(row));
 
     yield* withDatabase("Could not cache email", (database) => {
+      // `is_in_inbox` has to be cleared explicitly: the spread carries the old
+      // `true` from `row`, and the paging query reads that column, so a trashed
+      // thread would otherwise keep its place in the list.
+      const values = {
+        isInInbox: false,
+        labels: summary.labels,
+        updatedAt: Date.now(),
+      };
+
       database
         .insert(gmailThreads)
-        .values({ ...row, labels: summary.labels, updatedAt: Date.now() })
+        .values({ ...row, ...values })
         .onConflictDoUpdate({
-          set: { labels: summary.labels, updatedAt: Date.now() },
+          set: values,
           target: [gmailThreads.accountEmail, gmailThreads.threadId],
         })
         .run();

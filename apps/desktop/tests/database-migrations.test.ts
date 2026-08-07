@@ -41,6 +41,35 @@ const createLegacySenderBrandDatabase = () => {
       scopes text NOT NULL,
       updated_at integer NOT NULL
     );
+    CREATE TABLE gmail_threads (
+      account_email text NOT NULL,
+      attachments text,
+      "from" text NOT NULL,
+      has_attachments integer,
+      is_unread integer NOT NULL,
+      labels text,
+      latest_at integer NOT NULL,
+      message_count integer NOT NULL,
+      snippet text NOT NULL,
+      subject text NOT NULL,
+      thread_id text NOT NULL,
+      updated_at integer NOT NULL,
+      PRIMARY KEY (account_email, thread_id)
+    );
+    INSERT INTO gmail_threads (
+      account_email,
+      "from",
+      is_unread,
+      labels,
+      latest_at,
+      message_count,
+      snippet,
+      subject,
+      thread_id,
+      updated_at
+    ) VALUES
+      ('user@example.com', 'a@example.com', 0, '["INBOX","IMPORTANT"]', 20, 1, 's', 'Inbox thread', 't-inbox', 1),
+      ('user@example.com', 'b@example.com', 0, '["ARCHIVE"]', 10, 1, 's', 'Archived thread', 't-archived', 1);
     CREATE TABLE gmail_sender_brands (
       authority_url text,
       domain text PRIMARY KEY NOT NULL,
@@ -98,6 +127,30 @@ describe("database migrations", () => {
           selector: "default",
           status: "available",
         },
+      ]);
+    } finally {
+      connection.close();
+    }
+  });
+
+  it("derives is_in_inbox for threads cached before the column existed", () => {
+    const connection = createLegacySenderBrandDatabase();
+
+    try {
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      expect(
+        connection
+          .prepare(
+            "SELECT thread_id, is_in_inbox FROM gmail_threads ORDER BY thread_id"
+          )
+          .all()
+      ).toStrictEqual([
+        { is_in_inbox: 0, thread_id: "t-archived" },
+        { is_in_inbox: 1, thread_id: "t-inbox" },
       ]);
     } finally {
       connection.close();

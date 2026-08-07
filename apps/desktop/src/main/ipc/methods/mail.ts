@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
+  MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
@@ -16,6 +17,7 @@ import {
 import {
   GmailCachedThreadPageReply,
   GmailCachedThreadPageRequest,
+  GmailIndexProgressList,
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
   GmailSyncStatus,
@@ -28,6 +30,7 @@ import {
   GmailTrustedImageSenderRequest,
   GmailTrustedImageSendersReply,
 } from "../../../shared/ipc/mail";
+import { getMailIndexProgress } from "../../mail/mail-backfill";
 import {
   getMailSyncStatus,
   listCachedThreadPage,
@@ -50,6 +53,13 @@ export const getSyncStatus = makeIpcMethod({
   handler: () => Effect.sync(getMailSyncStatus),
   payload: Schema.Void,
   result: GmailSyncStatus,
+});
+
+export const getIndexProgress = makeIpcMethod({
+  channel: MAIL_INDEX_PROGRESS_CHANNEL,
+  handler: () => Effect.sync(() => ({ accounts: getMailIndexProgress() })),
+  payload: Schema.Void,
+  result: GmailIndexProgressList,
 });
 
 export const listCachedPage = makeIpcMethod({

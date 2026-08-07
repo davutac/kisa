@@ -2,6 +2,7 @@ import { ipcRenderer } from "electron";
 
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
+  MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
@@ -16,6 +17,7 @@ import {
   MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL,
 } from "../shared/ipc/channels";
 import {
+  GmailIndexProgressList,
   GmailSyncStatus,
   GmailThreadsChanged,
   GmailTrustedImageSendersReply,
@@ -24,12 +26,14 @@ import { subscribe } from "./subscribe";
 
 export const mailApi: Pick<
   DesktopBridge,
+  | "getMailIndexProgress"
   | "getMailSyncStatus"
   | "listCachedThreadPage"
   | "listGmailLabels"
   | "listTrustedImageSenders"
   | "loadThread"
   | "loadThreadPage"
+  | "onMailIndexProgressChanged"
   | "onMailSyncStatusChanged"
   | "onMailThreadsChanged"
   | "onTrustedImageSendersChanged"
@@ -38,6 +42,7 @@ export const mailApi: Pick<
   | "trashThread"
   | "trustImageSender"
 > = {
+  getMailIndexProgress: () => ipcRenderer.invoke(MAIL_INDEX_PROGRESS_CHANNEL),
   getMailSyncStatus: () => ipcRenderer.invoke(MAIL_SYNC_STATUS_CHANNEL),
   listCachedThreadPage: (request) =>
     ipcRenderer.invoke(MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL, request),
@@ -49,6 +54,8 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_LOAD_THREAD_CHANNEL, request),
   loadThreadPage: (request) =>
     ipcRenderer.invoke(MAIL_LOAD_THREAD_PAGE_CHANNEL, request),
+  onMailIndexProgressChanged: (listener) =>
+    subscribe(MAIL_INDEX_PROGRESS_CHANNEL, GmailIndexProgressList, listener),
   onMailSyncStatusChanged: (listener) =>
     subscribe(MAIL_SYNC_STATUS_CHANNEL, GmailSyncStatus, listener),
   onMailThreadsChanged: (listener) =>

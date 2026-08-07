@@ -17,12 +17,14 @@ export interface AuthApi {
 }
 
 export interface MailApi {
+  getIndexProgress: DesktopBridge["getMailIndexProgress"];
   getSyncStatus: DesktopBridge["getMailSyncStatus"];
   listCachedThreadPage: DesktopBridge["listCachedThreadPage"];
   listLabels: DesktopBridge["listGmailLabels"];
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
   loadThread: DesktopBridge["loadThread"];
   loadThreadPage: DesktopBridge["loadThreadPage"];
+  onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
   onThreadsChanged: DesktopBridge["onMailThreadsChanged"];
   onTrustedImageSendersChanged: DesktopBridge["onTrustedImageSendersChanged"];
@@ -84,12 +86,14 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       startGoogle: bridge.startGoogleAuth,
     },
     mail: {
+      getIndexProgress: bridge.getMailIndexProgress,
       getSyncStatus: bridge.getMailSyncStatus,
       listCachedThreadPage: bridge.listCachedThreadPage,
       listLabels: bridge.listGmailLabels,
       listTrustedImageSenders: bridge.listTrustedImageSenders,
       loadThread: bridge.loadThread,
       loadThreadPage: bridge.loadThreadPage,
+      onIndexProgressChanged: bridge.onMailIndexProgressChanged,
       onSyncStatusChanged: bridge.onMailSyncStatusChanged,
       onThreadsChanged: bridge.onMailThreadsChanged,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,

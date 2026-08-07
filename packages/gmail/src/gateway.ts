@@ -34,6 +34,13 @@ export interface GatewayResult<A> {
 }
 
 export interface GatewayThreadPage {
+  /**
+   * The raw threads the summaries were built from. Summaries already require a
+   * `threads.get` with `format: "full"` per thread, so the bodies are on the
+   * wire either way — carrying them here is what lets the store index them
+   * without a second request.
+   */
+  readonly details: readonly GatewayThread[];
   readonly historyId?: HistoryId;
   readonly nextPageToken?: string;
   readonly threads: readonly ThreadSummary[];
@@ -62,6 +69,8 @@ export interface GatewayListThreadsRequest {
 }
 
 export interface GatewayHistoryResult {
+  /** See `GatewayThreadPage.details`. */
+  readonly details: readonly GatewayThread[];
   readonly historyId: HistoryId;
   readonly removedThreadIds: readonly ThreadId[];
   readonly threads: readonly ThreadSummary[];
@@ -79,6 +88,11 @@ export interface GmailIdentity {
   readonly id: AccountId;
 }
 
+export interface GatewayMailboxTotals {
+  readonly messagesTotal: number;
+  readonly threadsTotal: number;
+}
+
 export interface GmailGatewayService {
   readonly getAttachment: (
     authorization: GmailAuthorization,
@@ -87,6 +101,13 @@ export interface GmailGatewayService {
   readonly getCurrentHistoryId: (
     authorization: GmailAuthorization
   ) => Effect.Effect<GatewayResult<HistoryId>, GmailGatewayError>;
+  /**
+   * The mailbox's own totals, which is the only cheap way to get a denominator
+   * for indexing progress — one quota unit, versus walking every page to count.
+   */
+  readonly getMailboxTotals: (
+    authorization: GmailAuthorization
+  ) => Effect.Effect<GatewayResult<GatewayMailboxTotals>, GmailGatewayError>;
   readonly getThread: (
     authorization: GmailAuthorization,
     threadId: ThreadId

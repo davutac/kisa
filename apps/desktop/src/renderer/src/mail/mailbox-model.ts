@@ -135,11 +135,20 @@ export const advanceThreadPages = (
 ): AdvancedThreadPages => {
   const nextPageTokens = new Map(currentPageTokens);
   const threads = replies.flatMap((reply, index) => {
+    const accountId = pageTokenEntries[index]?.[0];
+
+    // A failed page drops its token rather than keeping it for another try.
+    // Retaining it is an infinite loop: the thread list does not grow, so
+    // `hasNextPage` stays true, and the list's end-reached effect re-fires on
+    // every render and reissues the same failing request — silently, because
+    // the reply's error is not surfaced anywhere.
     if (!reply.ok) {
+      if (accountId !== undefined) {
+        nextPageTokens.delete(accountId);
+      }
+
       return [];
     }
-
-    const accountId = pageTokenEntries[index]?.[0];
 
     if (accountId !== undefined) {
       if (reply.data.nextPageToken === undefined) {

@@ -1,12 +1,21 @@
+import { gzipSync } from "node:zlib";
+
 import type { DatabaseClient } from "@repo/database/client";
 import {
+  gmailBackfillState,
   gmailLabels,
+  gmailMessages,
   gmailSyncState,
   gmailThreads,
   googleAccounts,
 } from "@repo/database/schemas";
 import { GmailStoreError } from "@repo/gmail/errors";
-import type { GmailAuthorization, GmailScope } from "@repo/gmail/models";
+import type {
+  GmailAuthorization,
+  GmailMessage,
+  GmailScope,
+  Mailbox,
+} from "@repo/gmail/models";
 import {
   AccountId,
   GmailAccount,
@@ -24,6 +33,7 @@ import { Effect, Layer, Option, Redacted } from "effect";
 
 import { getGoogleAccessToken } from "../auth/auth";
 import { getDatabaseClient } from "../database";
+import { toIndexText } from "./message-text";
 
 const GMAIL_SCOPES = new Set<string>([
   GMAIL_MODIFY_SCOPE,
@@ -32,6 +42,65 @@ const GMAIL_SCOPES = new Set<string>([
 ]);
 
 const storeError = (message: string) => new GmailStoreError({ message });
+
+const INBOX_LABEL_ID = LabelId.make("INBOX");
+
+/**
+ * Bumped when the stored representation of a body changes, so rows written by
+ * an older parser can be told apart and re-indexed rather than silently served.
+ */
+const MESSAGE_SCHEMA_VERSION = 1;
+
+const toAddresses = (mailboxes: readonly Mailbox[]): readonly string[] =>
+  mailboxes.map((mailbox) => mailbox.address);
+
+/**
+ * `body_text` is stored uncompressed because `gmail_messages_fts` reads it as
+ * external content; `body_html` is gzipped, which is where nearly all of the
+ * bytes are. An HTML message still gets a text rendition so search matches it —
+ * most mail is HTML, and indexing only `text/plain` parts would miss it.
+ */
+const toMessageValues = (
+  accountId: string,
+  message: GmailMessage,
+  now: number
+) => {
+  const isHtml = message.body.type === "html";
+
+  return {
+    accountEmail: accountId,
+    attachments: message.attachments.map((attachment) => ({
+      attachmentId: attachment.attachmentId,
+      contentId: attachment.contentId,
+      filename: attachment.filename,
+      mediaType: attachment.mediaType,
+      messageId: attachment.messageId,
+      size: attachment.size,
+    })),
+    bccAddresses: toAddresses(message.bcc),
+    bodyHtml: isHtml
+      ? gzipSync(Buffer.from(message.body.sanitizedHtml, "utf-8"))
+      : null,
+    bodyText: isHtml
+      ? toIndexText(message.body.sanitizedHtml)
+      : message.body.text,
+    ccAddresses: toAddresses(message.cc),
+    fromAddress: message.from.address,
+    fromName: message.from.name ?? null,
+    hasBlockedRemoteImages: isHtml
+      ? message.body.hasBlockedRemoteImages
+      : false,
+    internalDate: Number(message.sentAt),
+    labelIds: [...message.labelIds],
+    messageId: message.id,
+    replyToAddress: message.replyTo?.address ?? null,
+    schemaVersion: MESSAGE_SCHEMA_VERSION,
+    subject: message.subject,
+    threadId: message.threadId,
+    toAddresses: toAddresses(message.to),
+    updatedAt: now,
+  };
+};
 
 const withDatabase = <A>(
   message: string,
@@ -86,20 +155,33 @@ const toGmailAccount = (row: {
 export const GmailStoreLive = Layer.succeed(
   GmailStore,
   GmailStore.of({
+    // Disconnecting must leave nothing behind, so every account-keyed mail
+    // table is cleared here. Deleting the message rows also clears their FTS
+    // entries, which the `gmail_messages_fts_delete` trigger handles.
     clearAccount: (accountId) =>
       withDatabase("Could not clear Gmail account data", (database) => {
-        database
-          .delete(gmailThreads)
-          .where(eq(gmailThreads.accountEmail, accountId))
-          .run();
-        database
-          .delete(gmailLabels)
-          .where(eq(gmailLabels.accountEmail, accountId))
-          .run();
-        database
-          .delete(gmailSyncState)
-          .where(eq(gmailSyncState.accountEmail, accountId))
-          .run();
+        database.transaction((transaction) => {
+          transaction
+            .delete(gmailThreads)
+            .where(eq(gmailThreads.accountEmail, accountId))
+            .run();
+          transaction
+            .delete(gmailMessages)
+            .where(eq(gmailMessages.accountEmail, accountId))
+            .run();
+          transaction
+            .delete(gmailLabels)
+            .where(eq(gmailLabels.accountEmail, accountId))
+            .run();
+          transaction
+            .delete(gmailSyncState)
+            .where(eq(gmailSyncState.accountEmail, accountId))
+            .run();
+          transaction
+            .delete(gmailBackfillState)
+            .where(eq(gmailBackfillState.accountEmail, accountId))
+            .run();
+        });
       }),
 
     /**
@@ -178,15 +260,28 @@ export const GmailStoreLive = Layer.succeed(
           return;
         }
 
-        database
-          .delete(gmailThreads)
-          .where(
-            and(
-              eq(gmailThreads.accountEmail, accountId),
-              inArray(gmailThreads.threadId, [...threadIds])
+        database.transaction((transaction) => {
+          transaction
+            .delete(gmailThreads)
+            .where(
+              and(
+                eq(gmailThreads.accountEmail, accountId),
+                inArray(gmailThreads.threadId, [...threadIds])
+              )
             )
-          )
-          .run();
+            .run();
+          // Otherwise a permanently deleted thread would keep its bodies, and
+          // its text would keep matching searches.
+          transaction
+            .delete(gmailMessages)
+            .where(
+              and(
+                eq(gmailMessages.accountEmail, accountId),
+                inArray(gmailMessages.threadId, [...threadIds])
+              )
+            )
+            .run();
+        });
       }),
 
     replaceLabels: (accountId, labels) =>
@@ -257,9 +352,9 @@ export const GmailStoreLive = Layer.succeed(
     /** See `saveAuthorization`. */
     updateCredentials: () => Effect.void,
 
-    upsertThreadSummaries: (accountId, threads) =>
+    upsertThreadDetails: (accountId, threads, details) =>
       withDatabase("Could not save Gmail threads", (database) => {
-        if (threads.length === 0) {
+        if (threads.length === 0 && details.length === 0) {
           return;
         }
 
@@ -275,40 +370,64 @@ export const GmailStoreLive = Layer.succeed(
             .map((row) => [row.labelId, row.name] as const)
         );
 
-        for (const thread of threads) {
-          const values = {
-            accountEmail: accountId,
-            attachments: thread.attachments.map((attachment) => ({
-              attachmentId: attachment.attachmentId,
-              filename: attachment.filename,
-              mediaType: attachment.mediaType,
-              messageId: attachment.messageId,
-              size: attachment.size,
-            })),
-            // `participants[0]` is the newest message's sender.
-            from: thread.participants[0]?.address ?? "Unknown sender",
-            hasAttachments: thread.hasAttachments,
-            isUnread: thread.hasUnread,
-            labels: thread.labelIds.map(
-              (labelId) => namesById.get(labelId) ?? labelId
-            ),
-            latestAt: Number(thread.latestAt),
-            messageCount: thread.messageCount,
-            snippet: thread.snippet,
-            subject: thread.subject,
-            threadId: thread.id,
-            updatedAt: now,
-          };
+        // One transaction for the whole page: a crash mid-page must not leave a
+        // thread row claiming messages that were never written, and it is what
+        // makes the indexer's per-page checkpoint atomic.
+        database.transaction((transaction) => {
+          for (const thread of threads) {
+            const values = {
+              accountEmail: accountId,
+              attachments: thread.attachments.map((attachment) => ({
+                attachmentId: attachment.attachmentId,
+                filename: attachment.filename,
+                mediaType: attachment.mediaType,
+                messageId: attachment.messageId,
+                size: attachment.size,
+              })),
+              // `participants[0]` is the newest message's sender.
+              from: thread.participants[0]?.address ?? "Unknown sender",
+              hasAttachments: thread.hasAttachments,
+              // Read off the label *ids*, not the mapped names above: the
+              // mapping falls back to the id for unknown labels, so a stale
+              // catalog would otherwise be able to change what counts as inbox.
+              isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+              isUnread: thread.hasUnread,
+              labels: thread.labelIds.map(
+                (labelId) => namesById.get(labelId) ?? labelId
+              ),
+              latestAt: Number(thread.latestAt),
+              messageCount: thread.messageCount,
+              snippet: thread.snippet,
+              subject: thread.subject,
+              threadId: thread.id,
+              updatedAt: now,
+            };
 
-          database
-            .insert(gmailThreads)
-            .values(values)
-            .onConflictDoUpdate({
-              set: values,
-              target: [gmailThreads.accountEmail, gmailThreads.threadId],
-            })
-            .run();
-        }
+            transaction
+              .insert(gmailThreads)
+              .values(values)
+              .onConflictDoUpdate({
+                set: values,
+                target: [gmailThreads.accountEmail, gmailThreads.threadId],
+              })
+              .run();
+          }
+
+          for (const detail of details) {
+            for (const message of detail.messages) {
+              const values = toMessageValues(accountId, message, now);
+
+              transaction
+                .insert(gmailMessages)
+                .values(values)
+                .onConflictDoUpdate({
+                  set: values,
+                  target: [gmailMessages.accountEmail, gmailMessages.messageId],
+                })
+                .run();
+            }
+          }
+        });
       }),
   })
 );

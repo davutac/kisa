@@ -20,6 +20,7 @@ import { AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels"
 import { getDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { toIpcReply } from "../ipc/reply";
+import { notifyGoogleAccountConnected } from "./account-events";
 
 const AUTH_WORKER_URL =
   process.env["AUTH_WORKER_URL"] ?? "https://kisa.davutcaliskan.de";
@@ -261,6 +262,8 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
           })
           .run(),
     });
+
+    return profile.emailAddress;
   }
 );
 
@@ -695,9 +698,13 @@ export const handleGoogleAuthCallback = async (
   }
 
   try {
-    await Effect.runPromise(
+    const email = await Effect.runPromise(
       exchangeCode(result.code).pipe(Effect.flatMap(saveAuthorization))
     );
+
+    // Reconnecting an already-indexed account is a no-op: the indexer ignores
+    // the request once its state row reads `complete`.
+    notifyGoogleAccountConnected(email);
     notifyGoogleAccountsChanged(
       await Effect.runPromise(
         toIpcReply(listGoogleAccounts(), "Google authentication failed")

@@ -11,6 +11,7 @@ import type {
   GmailCachedThreadPageRequest,
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
+  GmailIndexProgressList,
   GmailSyncStatus,
   GmailThreadMutationReply,
   GmailThreadPageReply,
@@ -38,6 +39,7 @@ export interface DesktopBridge {
   disconnectGoogleAccount: (
     request: GoogleAccountDisconnectRequest
   ) => Promise<GoogleAccountsReply>;
+  getMailIndexProgress: () => Promise<GmailIndexProgressList>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
@@ -60,6 +62,9 @@ export interface DesktopBridge {
   ) => () => void;
   onGoogleAccountsChanged: (
     listener: (reply: GoogleAccountsReply) => void
+  ) => () => void;
+  onMailIndexProgressChanged: (
+    listener: (progress: GmailIndexProgressList) => void
   ) => () => void;
   onMailSyncStatusChanged: (
     listener: (status: GmailSyncStatus) => void

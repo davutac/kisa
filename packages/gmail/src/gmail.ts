@@ -15,7 +15,11 @@ import {
   GmailPermissionError,
   InvalidAuthHandoffError,
 } from "./errors";
-import type { GatewayHistoryResult, GatewayResult } from "./gateway";
+import type {
+  GatewayHistoryResult,
+  GatewayResult,
+  GatewayThread,
+} from "./gateway";
 import { GmailGateway } from "./gateway";
 import { GmailMime } from "./mime";
 import type {
@@ -38,6 +42,7 @@ import type {
   SyncResult,
   ThreadMutationRequest,
   ThreadPage,
+  ThreadSummary,
 } from "./models";
 import {
   GmailAccount,
@@ -334,6 +339,38 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         return yield* refreshLabels(options.accountId);
       });
 
+      /**
+       * A thread whose MIME cannot be parsed is dropped rather than failing the
+       * page: one malformed message must not be able to stall a full-account
+       * index behind it. The summary still persists, so the thread stays
+       * visible and readable — only its indexed bodies are missing.
+       */
+      const persistThreadPage = Effect.fn("Gmail.persistThreadPage")(
+        function* persistThreadPage(
+          accountId: AccountId,
+          threads: readonly ThreadSummary[],
+          details: readonly GatewayThread[]
+        ) {
+          // Sequential on purpose: parsing is CPU-bound, and a page's worth of
+          // threads racing each other would just contend for the same thread.
+          // oxlint-disable-next-line unicorn/no-array-method-this-argument
+          const parsed = yield* Effect.forEach(
+            details,
+            (detail) =>
+              mime
+                .parseThread(detail)
+                .pipe(Effect.catch(() => Effect.succeed(null))),
+            { concurrency: 1 }
+          );
+
+          yield* store.upsertThreadDetails(
+            accountId,
+            threads,
+            parsed.filter((thread) => thread !== null)
+          );
+        }
+      );
+
       const listThreads = Effect.fn("Gmail.listThreads")(function* listThreads(
         request: ListThreadsRequest
       ) {
@@ -344,7 +381,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           (authorization) => gateway.listThreads(authorization, resolved)
         );
 
-        yield* store.upsertThreadSummaries(request.accountId, page.threads);
+        yield* persistThreadPage(request.accountId, page.threads, page.details);
         if (page.historyId !== undefined) {
           yield* store.saveSyncCursor(request.accountId, page.historyId);
         }
@@ -507,9 +544,10 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
 
         const applyHistory = Effect.fn("Gmail.applyHistory")(
           function* applyHistory(history: GatewayHistoryResult) {
-            yield* store.upsertThreadSummaries(
+            yield* persistThreadPage(
               request.accountId,
-              history.threads
+              history.threads,
+              history.details
             );
             yield* store.removeThreads(
               request.accountId,

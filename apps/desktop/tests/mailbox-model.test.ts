@@ -77,7 +77,7 @@ describe(getGmailQuery, () => {
 });
 
 describe(advanceThreadPages, () => {
-  it("preserves failed cursors, removes exhausted cursors, and advances others", () => {
+  it("drops failed cursors, removes exhausted cursors, and advances others", () => {
     const currentTokens = new Map([
       ["failed@example.com", "failed-token"],
       ["finished@example.com", "finished-token"],
@@ -98,10 +98,28 @@ describe(advanceThreadPages, () => {
       ]
     );
 
+    // The failed account's token is dropped, not retained. Keeping it made the
+    // page permanently retryable: the thread list never grew, so `hasNextPage`
+    // stayed true and the end-reached effect reissued the same failing request
+    // on every render, forever, with the error swallowed.
     expect([...result.nextPageTokens]).toStrictEqual([
-      ["failed@example.com", "failed-token"],
       ["more@example.com", "next-token"],
     ]);
     expect(result.threads).toStrictEqual([loadedThread]);
+  });
+
+  it("stops paging entirely when every account's page fails", () => {
+    const currentTokens = new Map([["one@example.com", "token"]]);
+
+    const result = advanceThreadPages(
+      currentTokens,
+      [...currentTokens],
+      [{ error: "Network unavailable", ok: false }]
+    );
+
+    // An empty token map is what makes `hasNextPage` go false and the retry
+    // loop terminate.
+    expect([...result.nextPageTokens]).toStrictEqual([]);
+    expect(result.threads).toStrictEqual([]);
   });
 });

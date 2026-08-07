@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import TitlebarAccountButton from "@/components/accounts/account-button";
+import TitlebarIndexButton from "@/components/mail/titlebar-index-button";
 import TitlebarMailSearch from "@/components/shell/mail-search";
 import TitlebarUnreadToggle from "@/components/shell/unread-toggle";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,7 @@ const Titlebar = () => {
         </div>
       </div>
       <div className="app-titlebar-interactive flex items-center gap-1">
+        <TitlebarIndexButton />
         <TitlebarMailSearch />
         <TitlebarUnreadToggle />
         {updates === undefined ? null : (

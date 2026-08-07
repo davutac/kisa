@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import { getDatabaseClient } from "../database";
+import { cancelMailBackfill } from "../mail/mail-backfill";
 import { forgetAccountMailData } from "../mail/mail-sync";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
 import { forgetAccountSettings } from "../settings/account-settings";
@@ -44,6 +45,10 @@ const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
 // credentials before the cached mail is deleted, so it cannot write rows back.
 export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
   function* disconnectGoogleAccount(email: string) {
+    // Stop the indexer before the rows go: it writes a page at a time, and one
+    // already in flight would otherwise re-create mail for a disconnected
+    // account moments after `forgetAccountMailData` cleared it.
+    cancelMailBackfill(email);
     yield* revokeGoogleAccountAccess(email);
     yield* deleteAccountRecord(email);
     yield* forgetAccountMailData(email).pipe(

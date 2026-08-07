@@ -6,6 +6,7 @@ import type {
 } from "../../shared/ipc/app";
 import { startDatabase } from "../database";
 import type { DatabaseError } from "../database";
+import { startMailBackfill } from "../mail/mail-backfill";
 import { startMailSync } from "../mail/mail-sync";
 
 let startupPromise: Promise<AppStartupExit> | null = null;
@@ -20,6 +21,9 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
     startupPromise = null;
   } else {
     startMailSync();
+    // Picks up any account whose index was still running when the app last
+    // closed, and seeds the renderer's progress state for the rest.
+    void Effect.runPromise(startMailBackfill().pipe(Effect.ignore));
   }
 
   return exit;

@@ -157,6 +157,44 @@ export const GmailSyncStatus = Schema.Struct({
 });
 export type GmailSyncStatus = typeof GmailSyncStatus.Type;
 
+/**
+ * `queued` is renderer-only and never persisted: it means the account is
+ * waiting behind another account's index. Whether it is queued is a fact about
+ * the current process, not about the account, so it must not survive a restart.
+ */
+export const GmailIndexStatus = Schema.Literals([
+  "complete",
+  "failed",
+  "idle",
+  "paused",
+  "queued",
+  "running",
+]);
+export type GmailIndexStatus = typeof GmailIndexStatus.Type;
+
+/**
+ * Progress for the full-account mail index. This rides its own channel rather
+ * than the threads-changed event, which triggers a first-page reload in the
+ * renderer — at one update per indexed page that would rebuild the list
+ * continuously for the length of the backfill.
+ */
+export const GmailIndexProgress = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  error: Schema.optional(Schema.String),
+  estimatedThreads: Schema.optional(Schema.Int),
+  indexedMessages: Schema.Int,
+  indexedThreads: Schema.Int,
+  /** Oldest message indexed so far — "indexed back to March 2019". */
+  oldestIndexedAt: Schema.optional(Schema.Int),
+  status: GmailIndexStatus,
+});
+export type GmailIndexProgress = typeof GmailIndexProgress.Type;
+
+export const GmailIndexProgressList = Schema.Struct({
+  accounts: Schema.Array(GmailIndexProgress),
+});
+export type GmailIndexProgressList = typeof GmailIndexProgressList.Type;
+
 export const GmailLabelCatalogReply = IpcReply(GmailLabelCatalog);
 export type GmailLabelCatalogReply = typeof GmailLabelCatalogReply.Type;
 

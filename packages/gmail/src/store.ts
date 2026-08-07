@@ -63,9 +63,17 @@ export interface GmailStoreService {
     accountId: AccountId,
     patch: GmailCredentialPatch
   ) => Effect.Effect<void, GmailStoreError>;
-  readonly upsertThreadSummaries: (
+  /**
+   * The single write path for cached mail. Summaries and their messages land in
+   * one transaction so a crash mid-page cannot leave a thread row without the
+   * bodies it claims to have, and so the indexer's per-page checkpoint is
+   * atomic. `details` may be shorter than `threads` when a thread's MIME could
+   * not be parsed; the summary still persists so the thread stays readable.
+   */
+  readonly upsertThreadDetails: (
     accountId: AccountId,
-    threads: readonly ThreadSummary[]
+    threads: readonly ThreadSummary[],
+    details: readonly GmailThread[]
   ) => Effect.Effect<void, GmailStoreError>;
 }
 
