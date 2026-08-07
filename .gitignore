@@ -1,0 +1,14 @@
+node_modules
+.turbo
+dist
+out
+.DS_Store
+.eslintcache
+.wrangler
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.tsbuildinfo
+*.log*
+.alchemy

@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.web.json",
+  "include": [
+    "src/main/updates/update-lifecycle.ts",
+    "src/shared/app-protocol.ts",
+    "src/preload/*.ts",
+    "src/preload/*.d.ts",
+    "src/renderer/src/env.d.ts",
+    "src/renderer/src/mail/**/*",
+    "src/renderer/src/platform/**/*",
+    "src/renderer/src/startup/**/*",
+    "src/renderer/src/updates/**/*",
+    "src/shared/**/*",
+    "tests/**/*",
+    "../../packages/database/src/**/*"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "types": ["node", "vite/client", "vitest/globals"]
+  }
+}

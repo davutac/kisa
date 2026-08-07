@@ -1,0 +1,31 @@
+{
+  "name": "kisa",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo run build",
+    "build:linux": "turbo run build:linux",
+    "build:mac": "turbo run build:mac",
+    "build:unpack": "turbo run build:unpack",
+    "build:win": "turbo run build:win",
+    "check": "ultracite check --disable-nested-config",
+    "deploy": "turbo run deploy",
+    "dev": "turbo run dev",
+    "fix": "ultracite fix --disable-nested-config",
+    "lint": "ultracite check --disable-nested-config",
+    "prepare": "husky",
+    "release": "node scripts/release.mjs",
+    "start": "turbo run start",
+    "test": "pnpm --recursive --if-present run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "husky": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "turbo": "catalog:",
+    "ultracite": "catalog:"
+  },
+  "packageManager": "pnpm@11.20.0"
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@repo/gmail",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./errors": "./src/errors.ts",
+    "./gateway": "./src/gateway.ts",
+    "./mime": "./src/mime.ts",
+    "./models": "./src/models.ts",
+    "./service": "./src/gmail.ts",
+    "./store": "./src/store.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.103"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.0-beta.103",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

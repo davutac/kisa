@@ -1,0 +1,23 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    },
+    {
+      "path": "./tsconfig.test.json"
+    },
+    {
+      "path": "./tsconfig.web.json"
+    }
+  ],
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/renderer/src/*"],
+      "@/renderer/*": ["./src/renderer/src/*"],
+      "@/shared/*": ["./src/shared/*"],
+      "@/constants": ["./src/constants.ts"]
+    },
+    "strictNullChecks": true
+  }
+}

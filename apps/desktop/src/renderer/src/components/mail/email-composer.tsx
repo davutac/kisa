@@ -1,0 +1,94 @@
+import { Placeholder } from "@tiptap/extensions";
+import { EditorContent, useEditor } from "@tiptap/react";
+import { StarterKit } from "@tiptap/starter-kit";
+import { useEffect, useRef } from "react";
+
+import EmailComposerToolbar from "@/components/mail/email-composer-toolbar";
+import { cn } from "@/lib/utils";
+
+export interface EmailComposerValue {
+  html: string;
+  isEmpty: boolean;
+  text: string;
+}
+
+interface EmailComposerProps {
+  ariaLabel?: string;
+  autoFocus?: boolean;
+  className?: string;
+  defaultValue?: string;
+  disabled?: boolean;
+  onChange?: (value: EmailComposerValue) => void;
+  placeholder?: string;
+}
+
+const toComposerValue = (
+  editor: NonNullable<ReturnType<typeof useEditor>>
+): EmailComposerValue => ({
+  html: editor.getHTML(),
+  isEmpty: editor.isEmpty,
+  text: editor.getText(),
+});
+
+const EmailComposer = ({
+  ariaLabel = "Message",
+  autoFocus = false,
+  className,
+  defaultValue = "",
+  disabled = false,
+  onChange,
+  placeholder = "Write a message",
+}: EmailComposerProps) => {
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const editor = useEditor({
+    autofocus: autoFocus ? "end" : false,
+    content: defaultValue,
+    editable: !disabled,
+    editorProps: {
+      attributes: {
+        "aria-label": ariaLabel,
+        class:
+          "min-h-32 px-4 py-2 text-sm leading-relaxed outline-none select-text",
+      },
+    },
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        link: {
+          openOnClick: false,
+        },
+      }),
+      Placeholder.configure({ placeholder }),
+    ],
+    onCreate: ({ editor: currentEditor }) => {
+      onChangeRef.current?.(toComposerValue(currentEditor));
+    },
+    onUpdate: ({ editor: currentEditor }) => {
+      onChangeRef.current?.(toComposerValue(currentEditor));
+    },
+  });
+
+  useEffect(() => {
+    editor?.setEditable(!disabled);
+  }, [disabled, editor]);
+
+  return (
+    <div
+      className={cn(
+        "email-composer bg-card border-background overflow-hidden border-y",
+        disabled && "opacity-50",
+        className
+      )}
+    >
+      <EditorContent editor={editor} />
+      <EmailComposerToolbar disabled={disabled} editor={editor} />
+    </div>
+  );
+};
+
+export default EmailComposer;

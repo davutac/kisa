@@ -1,0 +1,1 @@
+ALTER TABLE `gmail_threads` ADD `labels` text;

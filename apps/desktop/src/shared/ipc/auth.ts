@@ -1,0 +1,27 @@
+import * as Schema from "effect/Schema";
+
+import { IpcReply } from "./reply";
+
+export type GoogleAuthCallback =
+  | { readonly code: string; readonly error?: never }
+  | { readonly code?: never; readonly error: string };
+
+export const GoogleAccount = Schema.Struct({
+  avatarUrl: Schema.optional(Schema.String),
+  displayName: Schema.optional(Schema.String),
+  email: Schema.String,
+  scopes: Schema.Array(Schema.String),
+});
+export type GoogleAccount = typeof GoogleAccount.Type;
+
+export const GoogleAccountsReply = IpcReply(Schema.Array(GoogleAccount));
+export type GoogleAccountsReply = typeof GoogleAccountsReply.Type;
+
+export const GoogleAccountDisconnectRequest = Schema.Struct({
+  email: Schema.NonEmptyString,
+});
+export type GoogleAccountDisconnectRequest =
+  typeof GoogleAccountDisconnectRequest.Type;
+
+export const GoogleAuthStartReply = IpcReply(Schema.Void);
+export type GoogleAuthStartReply = typeof GoogleAuthStartReply.Type;
