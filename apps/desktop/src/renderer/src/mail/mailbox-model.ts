@@ -1,8 +1,6 @@
 import type {
   GmailCachedThreadPageRequest,
   GmailThreadCursor,
-  GmailThreadPageReply,
-  GmailThreadPageRequest,
   GmailThreadSummary,
 } from "@/shared/ipc/mail";
 
@@ -102,64 +100,8 @@ export const createCachedThreadPageRequest = (
   ...(unreadOnly ? { unreadOnly: true } : {}),
 });
 
-export const createGmailThreadPageRequest = (
-  accountId: string,
-  query: string,
-  pageToken?: string
-): GmailThreadPageRequest => ({
-  accountId,
-  ...(pageToken === undefined ? {} : { pageToken }),
-  ...(query.length > 0 ? { query } : {}),
-});
-
-export const getGmailQuery = (query: string, unreadOnly: boolean): string =>
-  [query.trim(), unreadOnly ? "is:unread" : ""]
-    .filter((value) => value.length > 0)
-    .join(" ");
-
 export const getMailboxScopeKey = (
   accountIds: readonly string[],
   unreadOnly: boolean
 ): string =>
   `${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}`;
-
-interface AdvancedThreadPages {
-  nextPageTokens: ReadonlyMap<string, string>;
-  threads: readonly GmailThreadSummary[];
-}
-
-export const advanceThreadPages = (
-  currentPageTokens: ReadonlyMap<string, string>,
-  pageTokenEntries: readonly (readonly [string, string])[],
-  replies: readonly GmailThreadPageReply[]
-): AdvancedThreadPages => {
-  const nextPageTokens = new Map(currentPageTokens);
-  const threads = replies.flatMap((reply, index) => {
-    const accountId = pageTokenEntries[index]?.[0];
-
-    // A failed page drops its token rather than keeping it for another try.
-    // Retaining it is an infinite loop: the thread list does not grow, so
-    // `hasNextPage` stays true, and the list's end-reached effect re-fires on
-    // every render and reissues the same failing request — silently, because
-    // the reply's error is not surfaced anywhere.
-    if (!reply.ok) {
-      if (accountId !== undefined) {
-        nextPageTokens.delete(accountId);
-      }
-
-      return [];
-    }
-
-    if (accountId !== undefined) {
-      if (reply.data.nextPageToken === undefined) {
-        nextPageTokens.delete(accountId);
-      } else {
-        nextPageTokens.set(accountId, reply.data.nextPageToken);
-      }
-    }
-
-    return reply.data.threads;
-  });
-
-  return { nextPageTokens, threads };
-};

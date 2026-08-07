@@ -3,7 +3,6 @@ import { create } from "zustand";
 interface MailboxState {
   /** The thread being read, over a mailbox that stays mounted underneath. */
   openThreadId: string | null;
-  searchQuery: string;
   /** `null` shows every account. */
   selectedAccountId: string | null;
   /** A thread selection key, see `getThreadSelectionKey`. */
@@ -13,7 +12,6 @@ interface MailboxState {
   openThread: (threadId: string) => void;
   selectAccount: (accountId: string | null) => void;
   selectThread: (threadId: string | null) => void;
-  setSearchQuery: (searchQuery: string) => void;
   setShowUnread: (showUnread: boolean) => void;
 }
 
@@ -27,7 +25,6 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
     set({ openThreadId, selectedThreadId: openThreadId });
   },
   openThreadId: null,
-  searchQuery: "",
   selectAccount: (selectedAccountId) => {
     set({ openThreadId: null, selectedAccountId, selectedThreadId: null });
   },
@@ -36,9 +33,6 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
   },
   selectedAccountId: null,
   selectedThreadId: null,
-  setSearchQuery: (searchQuery) => {
-    set({ openThreadId: null, searchQuery, selectedThreadId: null });
-  },
   setShowUnread: (showUnread) => {
     set({ openThreadId: null, selectedThreadId: null, showUnread });
   },
@@ -47,9 +41,6 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
 
 export const useOpenThreadId = (): string | null =>
   useMailboxStore((state) => state.openThreadId);
-
-export const useSearchQuery = (): string =>
-  useMailboxStore((state) => state.searchQuery);
 
 export const useSelectedAccountId = (): string | null =>
   useMailboxStore((state) => state.selectedAccountId);

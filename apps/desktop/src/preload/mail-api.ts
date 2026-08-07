@@ -5,9 +5,10 @@ import {
   MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
+  MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
-  MAIL_LOAD_THREAD_PAGE_CHANNEL,
+  MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SET_THREAD_READ_CHANNEL,
   MAIL_SYNC_LABELS_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
@@ -30,13 +31,14 @@ export const mailApi: Pick<
   | "getMailSyncStatus"
   | "listCachedThreadPage"
   | "listGmailLabels"
+  | "listGmailSenders"
   | "listTrustedImageSenders"
   | "loadThread"
-  | "loadThreadPage"
   | "onMailIndexProgressChanged"
   | "onMailSyncStatusChanged"
   | "onMailThreadsChanged"
   | "onTrustedImageSendersChanged"
+  | "searchMail"
   | "setThreadReadState"
   | "syncGmailLabels"
   | "trashThread"
@@ -48,12 +50,12 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL, request),
   listGmailLabels: (request) =>
     ipcRenderer.invoke(MAIL_LIST_LABELS_CHANNEL, request),
+  listGmailSenders: (request) =>
+    ipcRenderer.invoke(MAIL_LIST_SENDERS_CHANNEL, request),
   listTrustedImageSenders: () =>
     ipcRenderer.invoke(MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL),
   loadThread: (request) =>
     ipcRenderer.invoke(MAIL_LOAD_THREAD_CHANNEL, request),
-  loadThreadPage: (request) =>
-    ipcRenderer.invoke(MAIL_LOAD_THREAD_PAGE_CHANNEL, request),
   onMailIndexProgressChanged: (listener) =>
     subscribe(MAIL_INDEX_PROGRESS_CHANNEL, GmailIndexProgressList, listener),
   onMailSyncStatusChanged: (listener) =>
@@ -66,6 +68,8 @@ export const mailApi: Pick<
       GmailTrustedImageSendersReply,
       listener
     ),
+  searchMail: (request) =>
+    ipcRenderer.invoke(MAIL_SEARCH_THREADS_CHANNEL, request),
   setThreadReadState: (request) =>
     ipcRenderer.invoke(MAIL_SET_THREAD_READ_CHANNEL, request),
   syncGmailLabels: (request) =>

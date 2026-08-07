@@ -12,10 +12,12 @@ import type {
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
   GmailIndexProgressList,
+  GmailSearchRequest,
+  GmailSearchResultsReply,
+  GmailSenderSuggestionRequest,
+  GmailSenderSuggestionsReply,
   GmailSyncStatus,
   GmailThreadMutationReply,
-  GmailThreadPageReply,
-  GmailThreadPageRequest,
   GmailThreadReadStateRequest,
   GmailThreadReply,
   GmailThreadRequest,
@@ -51,12 +53,12 @@ export interface DesktopBridge {
   listGmailLabels: (
     request: GmailLabelCatalogRequest
   ) => Promise<GmailLabelCatalogReply>;
+  listGmailSenders: (
+    request: GmailSenderSuggestionRequest
+  ) => Promise<GmailSenderSuggestionsReply>;
   listGoogleAccounts: () => Promise<GoogleAccountsReply>;
   listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
   loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
-  loadThreadPage: (
-    request: GmailThreadPageRequest
-  ) => Promise<GmailThreadPageReply>;
   onAccountSettingsChanged: (
     listener: (reply: AccountSettingsReply) => void
   ) => () => void;
@@ -76,6 +78,7 @@ export interface DesktopBridge {
     listener: (reply: GmailTrustedImageSendersReply) => void
   ) => () => void;
   onUpdateStatus: (listener: (status: UpdateStatus) => void) => () => void;
+  searchMail: (request: GmailSearchRequest) => Promise<GmailSearchResultsReply>;
   setThreadReadState: (
     request: GmailThreadReadStateRequest
   ) => Promise<GmailThreadMutationReply>;

@@ -18,13 +18,12 @@ describe("mailbox store", () => {
   });
 
   it("starts on every account with no filters", () => {
-    const { searchQuery, selectedAccountId, selectedThreadId, showUnread } =
+    const { selectedAccountId, selectedThreadId, showUnread } =
       useMailboxStore.getState();
 
     expect(selectedAccountId).toBeNull();
     expect(selectedThreadId).toBeNull();
     expect(useMailboxStore.getState().openThreadId).toBeNull();
-    expect(searchQuery).toBe("");
     expect(showUnread).toBeFalsy();
   });
 
@@ -72,14 +71,6 @@ describe("mailbox store", () => {
     expect(useMailboxStore.getState().selectedAccountId).toBe(
       "other@example.com"
     );
-    expect(useMailboxStore.getState().selectedThreadId).toBeNull();
-  });
-
-  it("drops the selection when the query changes", () => {
-    withSelection("person@example.com:thread-42");
-    useMailboxStore.getState().setSearchQuery("has:attachment");
-
-    expect(useMailboxStore.getState().searchQuery).toBe("has:attachment");
     expect(useMailboxStore.getState().selectedThreadId).toBeNull();
   });
 

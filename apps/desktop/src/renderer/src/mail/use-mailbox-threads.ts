@@ -5,18 +5,14 @@ import type { GmailThreadCursor, GmailThreadSummary } from "@/shared/ipc/mail";
 
 import type { MailboxThreadsSnapshot } from "./mailbox-cache";
 import {
-  getMailboxCacheKey,
   getMailboxThreadsSnapshot,
   patchMailboxThreadsSnapshots,
   setMailboxThreadsSnapshot,
 } from "./mailbox-cache";
 import type { ThreadPatch } from "./mailbox-model";
 import {
-  advanceThreadPages,
   createCachedThreadPageRequest,
-  createGmailThreadPageRequest,
   filterThreadsByScope,
-  getGmailQuery,
   getMailboxScopeKey,
   mergeAndSortThreads,
   patchThreads,
@@ -34,42 +30,38 @@ interface MailboxThreadsState {
 
 type MailboxThreadsResult = MailboxThreadsSnapshot;
 
+/**
+ * The mailbox list is the cached inbox and nothing else. Searching lives in the
+ * palette, over the local index — this hook never queries Gmail, so a mailbox
+ * is one keyset walk through rows that are already on disk.
+ */
 export const useMailboxThreads = (
   accountIds: readonly string[],
-  query: string,
   unreadOnly = false,
   reloadRevision = 0
 ): MailboxThreadsState => {
   const mailApi = getMailApi();
-  const normalizedQuery = query.trim();
-  const gmailQuery = getGmailQuery(normalizedQuery, unreadOnly);
   const scopeKey = getMailboxScopeKey(accountIds, unreadOnly);
-  const resultKey = getMailboxCacheKey(scopeKey, normalizedQuery);
   const createStartingResult = (): MailboxThreadsResult =>
-    getMailboxThreadsSnapshot(resultKey) ?? {
+    getMailboxThreadsSnapshot(scopeKey) ?? {
       cacheCursor: null,
       isInitialLoading: mailApi !== undefined,
       isLoadingNextPage: false,
-      nextPageTokens: new Map(),
-      query: normalizedQuery,
       scopeKey,
       threads: [],
     };
   const [result, setResult] =
     useState<MailboxThreadsResult>(createStartingResult);
-  const [resultKeyInState, setResultKeyInState] = useState(resultKey);
+  const [scopeKeyInState, setScopeKeyInState] = useState(scopeKey);
   const cacheCursorRef = useRef<GmailThreadCursor | null>(result.cacheCursor);
   const generationRef = useRef(0);
   const isLoadingNextPageRef = useRef(false);
   const reloadRevisionRef = useRef(reloadRevision);
   const resultRef = useRef(result);
-  const nextPageTokensRef = useRef<ReadonlyMap<string, string>>(
-    result.nextPageTokens
-  );
   const threadsRef = useRef<readonly GmailThreadSummary[]>(result.threads);
 
-  if (resultKeyInState !== resultKey) {
-    setResultKeyInState(resultKey);
+  if (scopeKeyInState !== scopeKey) {
+    setScopeKeyInState(scopeKey);
     setResult(createStartingResult());
   }
 
@@ -78,18 +70,12 @@ export const useMailboxThreads = (
     const isReload = reloadRevisionRef.current !== reloadRevision;
     const liveResult = resultRef.current;
     const cachedResult =
-      getMailboxThreadsSnapshot(resultKey) ??
-      (isReload &&
-      liveResult.query === normalizedQuery &&
-      liveResult.scopeKey === scopeKey
-        ? liveResult
-        : undefined);
+      getMailboxThreadsSnapshot(scopeKey) ??
+      (isReload && liveResult.scopeKey === scopeKey ? liveResult : undefined);
     const startingResult = cachedResult ?? {
       cacheCursor: null,
       isInitialLoading: mailApi !== undefined,
       isLoadingNextPage: false,
-      nextPageTokens: new Map<string, string>(),
-      query: normalizedQuery,
       scopeKey,
       threads: [],
     };
@@ -98,7 +84,6 @@ export const useMailboxThreads = (
     reloadRevisionRef.current = reloadRevision;
     cacheCursorRef.current = startingResult.cacheCursor;
     isLoadingNextPageRef.current = false;
-    nextPageTokensRef.current = startingResult.nextPageTokens;
     threadsRef.current = startingResult.threads;
 
     if (mailApi === undefined) {
@@ -135,129 +120,44 @@ export const useMailboxThreads = (
         cacheCursor,
         isInitialLoading: false,
         isLoadingNextPage: false,
-        nextPageTokens: merge ? current.nextPageTokens : new Map(),
-        query: normalizedQuery,
         scopeKey,
         threads:
-          merge &&
-          current.query === normalizedQuery &&
-          current.scopeKey === scopeKey
+          merge && current.scopeKey === scopeKey
             ? mergeAndSortThreads(current.threads, reply.data.threads)
             : reply.data.threads,
       }));
     };
-    const loadSearchFirstPages = async (merge: boolean): Promise<void> => {
-      const pageReplies = await Promise.all(
-        accountIds.map((accountId) =>
-          mailApi.loadThreadPage(
-            createGmailThreadPageRequest(accountId, gmailQuery)
-          )
-        )
-      );
-
-      if (!(isActive && generationRef.current === generation)) {
-        return;
-      }
-
-      const nextPageTokens = new Map<string, string>();
-      const pageThreads = pageReplies.flatMap((reply, index) => {
-        if (!reply.ok) {
-          return [];
-        }
-
-        const accountId = accountIds[index];
-
-        if (accountId !== undefined && reply.data.nextPageToken !== undefined) {
-          nextPageTokens.set(accountId, reply.data.nextPageToken);
-        }
-
-        return reply.data.threads;
-      });
-
-      const mergedNextPageTokens = merge
-        ? nextPageTokensRef.current
-        : nextPageTokens;
-
-      nextPageTokensRef.current = mergedNextPageTokens;
-
-      setResult((current) => ({
-        cacheCursor: null,
-        isInitialLoading: false,
-        isLoadingNextPage: false,
-        nextPageTokens: mergedNextPageTokens,
-        query: normalizedQuery,
-        scopeKey,
-        threads:
-          merge &&
-          current.query === normalizedQuery &&
-          current.scopeKey === scopeKey
-            ? mergeAndSortThreads(current.threads, pageThreads)
-            : mergeAndSortThreads(pageThreads),
-      }));
-    };
 
     const unsubscribe = mailApi.onThreadsChanged(({ accountId }) => {
-      if (normalizedQuery.length === 0 && accountIds.includes(accountId)) {
+      if (accountIds.includes(accountId)) {
         void loadCachedFirstPage(true);
       }
     });
 
-    if (normalizedQuery.length === 0) {
-      void loadCachedFirstPage(cachedResult !== undefined);
-    } else if (cachedResult === undefined) {
-      void loadSearchFirstPages(false);
-    } else if (isReload) {
-      void loadSearchFirstPages(true);
-    }
+    void loadCachedFirstPage(cachedResult !== undefined);
 
     return () => {
       isActive = false;
       unsubscribe();
     };
-  }, [
-    accountIds,
-    gmailQuery,
-    mailApi,
-    normalizedQuery,
-    reloadRevision,
-    resultKey,
-    scopeKey,
-    unreadOnly,
-  ]);
+  }, [accountIds, mailApi, reloadRevision, scopeKey, unreadOnly]);
 
-  const isCurrentScope =
-    result.query === normalizedQuery && result.scopeKey === scopeKey;
-  const scopedThreads =
-    result.query === normalizedQuery
-      ? filterThreadsByScope(result.threads, accountIds, unreadOnly)
-      : [];
-  const currentResult =
-    result.query === normalizedQuery
-      ? {
-          ...result,
-          cacheCursor: isCurrentScope ? result.cacheCursor : null,
-          isInitialLoading: isCurrentScope
-            ? result.isInitialLoading
-            : scopedThreads.length === 0 && mailApi !== undefined,
-          isLoadingNextPage: isCurrentScope && result.isLoadingNextPage,
-          nextPageTokens: isCurrentScope
-            ? new Map(
-                [...result.nextPageTokens].filter(([accountId]) =>
-                  accountIds.includes(accountId)
-                )
-              )
-            : new Map<string, string>(),
-          threads: scopedThreads,
-        }
-      : {
-          cacheCursor: null,
-          isInitialLoading: mailApi !== undefined,
-          isLoadingNextPage: false,
-          nextPageTokens: new Map<string, string>(),
-          query: normalizedQuery,
-          scopeKey,
-          threads: [],
-        };
+  const isCurrentScope = result.scopeKey === scopeKey;
+  const scopedThreads = filterThreadsByScope(
+    result.threads,
+    accountIds,
+    unreadOnly
+  );
+  const currentResult = {
+    ...result,
+    cacheCursor: isCurrentScope ? result.cacheCursor : null,
+    isInitialLoading: isCurrentScope
+      ? result.isInitialLoading
+      : scopedThreads.length === 0 && mailApi !== undefined,
+    isLoadingNextPage: isCurrentScope && result.isLoadingNextPage,
+    scopeKey,
+    threads: scopedThreads,
+  };
 
   useEffect(() => {
     threadsRef.current = currentResult.threads;
@@ -266,70 +166,36 @@ export const useMailboxThreads = (
   useEffect(() => {
     resultRef.current = result;
 
-    if (result.query === normalizedQuery && result.scopeKey === scopeKey) {
-      setMailboxThreadsSnapshot(resultKey, result);
+    if (result.scopeKey === scopeKey) {
+      setMailboxThreadsSnapshot(scopeKey, result);
     }
-  }, [normalizedQuery, result, resultKey, scopeKey]);
+  }, [result, scopeKey]);
 
   const loadNextPage = useCallback(async (): Promise<boolean> => {
     const cacheCursor = cacheCursorRef.current;
-    const pageTokens = nextPageTokensRef.current;
 
     if (isLoadingNextPageRef.current) {
       return true;
     }
 
-    if (
-      mailApi === undefined ||
-      (cacheCursor === null && pageTokens.size === 0)
-    ) {
+    if (mailApi === undefined || cacheCursor === null) {
       return false;
     }
 
     const generation = generationRef.current;
     isLoadingNextPageRef.current = true;
     setResult((current) =>
-      current.query === normalizedQuery && current.scopeKey === scopeKey
+      current.scopeKey === scopeKey
         ? { ...current, isLoadingNextPage: true }
         : current
     );
 
-    if (normalizedQuery.length === 0 && cacheCursor !== null) {
-      const cachedReply = await mailApi.listCachedThreadPage(
-        createCachedThreadPageRequest(accountIds, unreadOnly, cacheCursor)
-      );
-
-      if (generationRef.current !== generation) {
-        return false;
-      }
-
-      const nextCacheCursor = cachedReply.ok
-        ? (cachedReply.data.nextCursor ?? null)
-        : cacheCursorRef.current;
-
-      cacheCursorRef.current = nextCacheCursor;
-      isLoadingNextPageRef.current = false;
-      setResult((current) =>
-        current.query === normalizedQuery && current.scopeKey === scopeKey
-          ? {
-              ...current,
-              cacheCursor: nextCacheCursor,
-              isLoadingNextPage: false,
-              threads: cachedReply.ok
-                ? mergeAndSortThreads(current.threads, cachedReply.data.threads)
-                : current.threads,
-            }
-          : current
-      );
-      return cachedReply.ok;
-    }
-
-    const pageTokenEntries = [...pageTokens];
-    const pageReplies = await Promise.all(
-      pageTokenEntries.map(([accountId, pageToken]) =>
-        mailApi.loadThreadPage(
-          createGmailThreadPageRequest(accountId, gmailQuery, pageToken)
-        )
+    const tailThread = threadsRef.current.at(-1);
+    const reply = await mailApi.listCachedThreadPage(
+      createCachedThreadPageRequest(
+        accountIds,
+        unreadOnly,
+        tailThread === undefined ? cacheCursor : toThreadCursor(tailThread)
       )
     );
 
@@ -337,64 +203,26 @@ export const useMailboxThreads = (
       return false;
     }
 
-    const { nextPageTokens, threads: pageThreads } = advanceThreadPages(
-      pageTokens,
-      pageTokenEntries,
-      pageReplies
-    );
+    const nextCacheCursor = reply.ok
+      ? (reply.data.nextCursor ?? null)
+      : cacheCursorRef.current;
 
-    nextPageTokensRef.current = nextPageTokens;
-
-    if (normalizedQuery.length === 0) {
-      const tailThread = threadsRef.current.at(-1);
-      const cachedReply = await mailApi.listCachedThreadPage(
-        createCachedThreadPageRequest(
-          accountIds,
-          unreadOnly,
-          tailThread === undefined ? undefined : toThreadCursor(tailThread)
-        )
-      );
-
-      if (generationRef.current !== generation) {
-        return false;
-      }
-
-      const nextCacheCursor = cachedReply.ok
-        ? (cachedReply.data.nextCursor ?? null)
-        : cacheCursorRef.current;
-
-      cacheCursorRef.current = nextCacheCursor;
-      isLoadingNextPageRef.current = false;
-      setResult((current) =>
-        current.query === normalizedQuery && current.scopeKey === scopeKey
-          ? {
-              ...current,
-              cacheCursor: nextCacheCursor,
-              isLoadingNextPage: false,
-              nextPageTokens,
-              threads: mergeAndSortThreads(
-                current.threads,
-                cachedReply.ok ? cachedReply.data.threads : pageThreads
-              ),
-            }
-          : current
-      );
-      return cachedReply.ok || pageReplies.some((reply) => reply.ok);
-    }
-
+    cacheCursorRef.current = nextCacheCursor;
     isLoadingNextPageRef.current = false;
     setResult((current) =>
-      current.query === normalizedQuery && current.scopeKey === scopeKey
+      current.scopeKey === scopeKey
         ? {
             ...current,
+            cacheCursor: nextCacheCursor,
             isLoadingNextPage: false,
-            nextPageTokens,
-            threads: mergeAndSortThreads(current.threads, pageThreads),
+            threads: reply.ok
+              ? mergeAndSortThreads(current.threads, reply.data.threads)
+              : current.threads,
           }
         : current
     );
-    return pageReplies.some((reply) => reply.ok);
-  }, [accountIds, gmailQuery, mailApi, normalizedQuery, scopeKey, unreadOnly]);
+    return reply.ok;
+  }, [accountIds, mailApi, scopeKey, unreadOnly]);
 
   const patchThread = useCallback(
     (threadKey: string, patch: ThreadPatch): void => {
@@ -408,9 +236,7 @@ export const useMailboxThreads = (
   );
 
   return {
-    hasNextPage:
-      currentResult.cacheCursor !== null ||
-      currentResult.nextPageTokens.size > 0,
+    hasNextPage: currentResult.cacheCursor !== null,
     isInitialLoading: currentResult.isInitialLoading,
     isLoadingNextPage: currentResult.isLoadingNextPage,
     loadNextPage,

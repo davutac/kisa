@@ -3,7 +3,7 @@ import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
 import { GmailMime } from "@repo/gmail/mime";
 import type { GmailThread as GmailDomainThread } from "@repo/gmail/models";
-import { AccountId, LabelId, PageCursor, ThreadId } from "@repo/gmail/models";
+import { AccountId, LabelId, ThreadId } from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
 import { eq } from "drizzle-orm";
@@ -22,8 +22,6 @@ import type {
   GmailSenderBrand,
   GmailThread as GmailThreadDto,
   GmailThreadMessage,
-  GmailThreadPage,
-  GmailThreadPageRequest,
   GmailThreadReadStateRequest,
   GmailThreadRequest,
   GmailThreadSummary,
@@ -282,71 +280,6 @@ export const syncGmailLabelCatalog = Effect.fn("syncGmailLabelCatalog")(
       })),
       syncedAt: Date.now(),
     } satisfies GmailLabelCatalog;
-  }
-);
-
-const readCachedSummaries = (
-  accountId: string,
-  threadIds: readonly string[]
-) =>
-  threadIds.length === 0
-    ? Effect.succeed([] as readonly GmailThreadSummary[])
-    : withDatabase("Could not load email", (database) =>
-        database.query.gmailThreads
-          .findMany({
-            where: (thread, { and, eq: is, inArray }) =>
-              and(
-                is(thread.accountEmail, accountId),
-                inArray(thread.threadId, [...threadIds])
-              ),
-          })
-          .sync()
-          .map(toCachedThreadSummary)
-      );
-
-/**
- * `Gmail.listThreads` persists each page through the store, so the rows read
- * back here are the same ones `listCachedThreadPage` serves. Reading them back
- * rather than mapping the domain summaries keeps one mapping in play.
- */
-export const loadThreadPage = Effect.fn("loadThreadPage")(
-  function* loadThreadPage(request: GmailThreadPageRequest) {
-    const accountId = AccountId.make(request.accountId);
-    const page = yield* runGmail(
-      Gmail.pipe(
-        Effect.flatMap((gmail) =>
-          gmail.listThreads(
-            request.pageToken === undefined
-              ? {
-                  accountId,
-                  labelIds: [LabelId.make(GMAIL_INBOX_LABEL)],
-                  pageSize: THREAD_PAGE_SIZE,
-                  ...(request.query === undefined
-                    ? {}
-                    : { search: request.query }),
-                }
-              : { accountId, cursor: PageCursor.make(request.pageToken) }
-          )
-        )
-      )
-    );
-    const orderedIds = page.items.map((thread) => thread.id);
-    const summariesById = new Map(
-      (yield* readCachedSummaries(request.accountId, orderedIds)).map(
-        (summary) => [summary.threadId, summary] as const
-      )
-    );
-    const threads = orderedIds.flatMap((threadId) => {
-      const summary = summariesById.get(threadId);
-
-      return summary === undefined ? [] : [summary];
-    });
-
-    return (
-      page.nextCursor === undefined
-        ? { threads }
-        : { nextPageToken: page.nextCursor, threads }
-    ) satisfies GmailThreadPage;
   }
 );
 

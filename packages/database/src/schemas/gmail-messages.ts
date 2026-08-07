@@ -65,5 +65,14 @@ export const gmailMessages = sqliteTable(
     primaryKey({ columns: [table.accountEmail, table.messageId] }),
     index("gmail_messages_thread_idx").on(table.accountEmail, table.threadId),
     index("gmail_messages_date_idx").on(table.accountEmail, table.internalDate),
+    /**
+     * Sender suggestions for the search palette group every indexed message by
+     * `from_address` on each keystroke; without this the grouping is a full
+     * table scan over every body in the mailbox.
+     */
+    index("gmail_messages_sender_idx").on(
+      table.accountEmail,
+      table.fromAddress
+    ),
   ]
 );

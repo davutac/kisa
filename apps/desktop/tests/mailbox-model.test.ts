@@ -1,9 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import {
-  advanceThreadPages,
   filterThreadsByScope,
-  getGmailQuery,
   mergeAndSortThreads,
 } from "../src/renderer/src/mail/mailbox-model";
 import type { GmailThreadSummary } from "../src/shared/ipc/mail";
@@ -64,62 +62,5 @@ describe(filterThreadsByScope, () => {
         true
       )
     ).toStrictEqual([unread]);
-  });
-});
-
-describe(getGmailQuery, () => {
-  it("normalizes search text and composes the unread filter", () => {
-    expect(getGmailQuery("  from:sender@example.com  ", true)).toBe(
-      "from:sender@example.com is:unread"
-    );
-    expect(getGmailQuery("   ", false)).toBe("");
-  });
-});
-
-describe(advanceThreadPages, () => {
-  it("drops failed cursors, removes exhausted cursors, and advances others", () => {
-    const currentTokens = new Map([
-      ["failed@example.com", "failed-token"],
-      ["finished@example.com", "finished-token"],
-      ["more@example.com", "more-token"],
-    ]);
-    const loadedThread = makeThread("more@example.com", "loaded", 500);
-
-    const result = advanceThreadPages(
-      currentTokens,
-      [...currentTokens],
-      [
-        { error: "Network unavailable", ok: false },
-        { data: { threads: [] }, ok: true },
-        {
-          data: { nextPageToken: "next-token", threads: [loadedThread] },
-          ok: true,
-        },
-      ]
-    );
-
-    // The failed account's token is dropped, not retained. Keeping it made the
-    // page permanently retryable: the thread list never grew, so `hasNextPage`
-    // stayed true and the end-reached effect reissued the same failing request
-    // on every render, forever, with the error swallowed.
-    expect([...result.nextPageTokens]).toStrictEqual([
-      ["more@example.com", "next-token"],
-    ]);
-    expect(result.threads).toStrictEqual([loadedThread]);
-  });
-
-  it("stops paging entirely when every account's page fails", () => {
-    const currentTokens = new Map([["one@example.com", "token"]]);
-
-    const result = advanceThreadPages(
-      currentTokens,
-      [...currentTokens],
-      [{ error: "Network unavailable", ok: false }]
-    );
-
-    // An empty token map is what makes `hasNextPage` go false and the retry
-    // loop terminate.
-    expect([...result.nextPageTokens]).toStrictEqual([]);
-    expect(result.threads).toStrictEqual([]);
   });
 });

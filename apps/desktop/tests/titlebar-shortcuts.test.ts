@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   ALL_ACCOUNTS_SHORTCUT,
   getAccountShortcut,
+  getSearchShortcutKeys,
   SETTINGS_SHORTCUT,
 } from "../src/renderer/src/shell/titlebar-shortcuts";
 
@@ -16,6 +17,12 @@ describe(getAccountShortcut, () => {
   it("stops at the end of the number row", () => {
     expect(getAccountShortcut(7)).toBe("9");
     expect(getAccountShortcut(8)).toBeUndefined();
+  });
+
+  it("spells the search shortcut the way each platform does", () => {
+    expect(getSearchShortcutKeys("mac")).toStrictEqual(["⌘", "K"]);
+    expect(getSearchShortcutKeys("windows")).toStrictEqual(["Ctrl", "K"]);
+    expect(getSearchShortcutKeys("linux")).toStrictEqual(["Ctrl", "K"]);
   });
 
   it("leaves the last digit to settings", () => {

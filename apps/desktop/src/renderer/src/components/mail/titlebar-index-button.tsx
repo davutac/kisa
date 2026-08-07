@@ -4,7 +4,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useMailIndexProgress } from "@/mail/use-mail-index-progress";
+import { formatRemaining } from "@/mail/mail-index-eta";
+import { useMailIndexState } from "@/mail/use-mail-index-progress";
 import type { GmailIndexProgress } from "@/shared/ipc/mail";
 
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -38,7 +39,7 @@ const toCounts = (entry: GmailIndexProgress): string =>
  * for each account rather than leaving a mystery spinner in the chrome.
  */
 const TitlebarIndexButton = () => {
-  const progress = useMailIndexProgress();
+  const { accounts: progress, etas } = useMailIndexState();
   // Queued counts as active: an account waiting its turn is still work in
   // flight, and hiding it makes the indicator disappear the moment a third
   // account is connected.
@@ -103,16 +104,19 @@ const TitlebarIndexButton = () => {
       {/*
         The base tooltip is `items-center` with `max-w-xs`, which centres every
         line and wraps the counts mid-phrase. A fixed width and `items-start`
-        give each account a stable two-line block instead.
+        give each account a stable block instead — wide enough that an address
+        and its "56% · ~1 h 20 min left" sit on one line without the address
+        truncating away to nothing.
       */}
       <TooltipContent
-        className="w-72 max-w-none flex-col items-start gap-3 px-3 py-2.5"
+        className="w-88 max-w-none flex-col items-start gap-3 px-3 py-2.5"
         side="bottom"
       >
         <span className="font-medium">Indexing your mail</span>
         <span className="flex w-full flex-col gap-2.5">
           {active.map((entry) => {
             const ratio = toRatio(entry);
+            const eta = etas.get(entry.accountId);
             const isQueued = entry.status === "queued";
 
             return (
@@ -122,10 +126,17 @@ const TitlebarIndexButton = () => {
               >
                 <span className="flex w-full items-baseline justify-between gap-3">
                   <span className="truncate">{entry.accountId}</span>
+                  {/*
+                    Percentage and remaining time answer different questions —
+                    how far in, and how much longer — so both earn their place.
+                    The time appears a few seconds late, once enough throughput
+                    has been observed to estimate it honestly.
+                  */}
                   <span className="shrink-0 tabular-nums opacity-60">
                     {isQueued || ratio === undefined
                       ? ""
                       : `${Math.round(ratio * 100)}%`}
+                    {eta === undefined ? "" : ` · ${formatRemaining(eta)}`}
                   </span>
                 </span>
                 <span className="bg-background/20 h-0.5 w-full overflow-hidden rounded-full">

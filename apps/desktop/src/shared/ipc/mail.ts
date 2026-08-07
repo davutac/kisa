@@ -118,19 +118,6 @@ export const GmailThreadsChanged = Schema.Struct({
 });
 export type GmailThreadsChanged = typeof GmailThreadsChanged.Type;
 
-export const GmailThreadPageRequest = Schema.Struct({
-  accountId: Schema.NonEmptyString,
-  pageToken: Schema.optional(Schema.NonEmptyString),
-  query: Schema.optional(Schema.NonEmptyString),
-});
-export type GmailThreadPageRequest = typeof GmailThreadPageRequest.Type;
-
-export const GmailThreadPage = Schema.Struct({
-  nextPageToken: Schema.optional(Schema.String),
-  threads: Schema.Array(GmailThreadSummary),
-});
-export type GmailThreadPage = typeof GmailThreadPage.Type;
-
 export const GmailThreadCursor = Schema.Struct({
   accountId: Schema.NonEmptyString,
   latestAt: Schema.Int,
@@ -156,6 +143,68 @@ export const GmailSyncStatus = Schema.Struct({
   accountIds: Schema.Array(Schema.String),
 });
 export type GmailSyncStatus = typeof GmailSyncStatus.Type;
+
+/**
+ * The operators the search palette turns into pills, spelled the way Gmail
+ * spells them so a query typed out of habit lands where it is expected.
+ */
+export const GmailSearchFilterField = Schema.Literals([
+  "from",
+  "has",
+  "is",
+  "subject",
+  "to",
+]);
+export type GmailSearchFilterField = typeof GmailSearchFilterField.Type;
+
+export const GmailSearchFilter = Schema.Struct({
+  field: GmailSearchFilterField,
+  value: Schema.NonEmptyString,
+});
+export type GmailSearchFilter = typeof GmailSearchFilter.Type;
+
+export const GmailSearchRequest = Schema.Struct({
+  accountIds: Schema.Array(Schema.NonEmptyString),
+  filters: Schema.optional(Schema.Array(GmailSearchFilter)),
+  limit: Schema.optional(Schema.Int),
+  text: Schema.optional(Schema.String),
+});
+export type GmailSearchRequest = typeof GmailSearchRequest.Type;
+
+export const GmailSearchResults = Schema.Struct({
+  /** More matched than were returned, so the list is a top slice. */
+  hasMore: Schema.Boolean,
+  threads: Schema.Array(GmailThreadSummary),
+});
+export type GmailSearchResults = typeof GmailSearchResults.Type;
+
+export const GmailSenderSuggestion = Schema.Struct({
+  address: Schema.String,
+  messageCount: Schema.Int,
+  name: Schema.optional(Schema.String),
+});
+export type GmailSenderSuggestion = typeof GmailSenderSuggestion.Type;
+
+/**
+ * Which side of a message the addresses come from: who wrote to this account,
+ * or who this account wrote to.
+ */
+export const GmailAddressRole = Schema.Literals(["recipient", "sender"]);
+export type GmailAddressRole = typeof GmailAddressRole.Type;
+
+export const GmailSenderSuggestionRequest = Schema.Struct({
+  accountIds: Schema.Array(Schema.NonEmptyString),
+  limit: Schema.optional(Schema.Int),
+  query: Schema.optional(Schema.String),
+  role: Schema.optional(GmailAddressRole),
+});
+export type GmailSenderSuggestionRequest =
+  typeof GmailSenderSuggestionRequest.Type;
+
+export const GmailSenderSuggestions = Schema.Struct({
+  senders: Schema.Array(GmailSenderSuggestion),
+});
+export type GmailSenderSuggestions = typeof GmailSenderSuggestions.Type;
 
 /**
  * `queued` is renderer-only and never persisted: it means the account is
@@ -204,8 +253,12 @@ export type GmailCachedThreadPageReply = typeof GmailCachedThreadPageReply.Type;
 export const GmailThreadReply = IpcReply(GmailThread);
 export type GmailThreadReply = typeof GmailThreadReply.Type;
 
-export const GmailThreadPageReply = IpcReply(GmailThreadPage);
-export type GmailThreadPageReply = typeof GmailThreadPageReply.Type;
+export const GmailSearchResultsReply = IpcReply(GmailSearchResults);
+export type GmailSearchResultsReply = typeof GmailSearchResultsReply.Type;
+
+export const GmailSenderSuggestionsReply = IpcReply(GmailSenderSuggestions);
+export type GmailSenderSuggestionsReply =
+  typeof GmailSenderSuggestionsReply.Type;
 
 export const GmailTrustedImageSendersReply = IpcReply(
   Schema.Array(GmailTrustedImageSender)

@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "@effect/vitest";
 import type { MailboxThreadsSnapshot } from "../src/renderer/src/mail/mailbox-cache";
 import {
   clearMailboxThreadsSnapshots,
-  getMailboxCacheKey,
   getMailboxThreadsSnapshot,
   retainMailboxThreadsSnapshotsForAccounts,
   setMailboxThreadsSnapshot,
@@ -19,8 +18,6 @@ const makeSnapshot = (scopeKey: string): MailboxThreadsSnapshot => ({
   },
   isInitialLoading: false,
   isLoadingNextPage: true,
-  nextPageTokens: new Map([["account@example.com", "next-page"]]),
-  query: "from:sender@example.com",
   scopeKey,
   threads: [],
 });
@@ -30,59 +27,38 @@ describe("mailbox thread snapshots", () => {
     clearMailboxThreadsSnapshots();
   });
 
-  it("keys normalized searches and retains pagination", () => {
+  it("hands a stored snapshot back with its loading flag settled", () => {
     const scopeKey = "mailbox-cache-test";
-    const key = getMailboxCacheKey(scopeKey, "  from:sender@example.com  ");
     const snapshot = makeSnapshot(scopeKey);
 
-    setMailboxThreadsSnapshot(key, snapshot);
+    setMailboxThreadsSnapshot(scopeKey, snapshot);
 
-    expect(key).toBe(`${scopeKey}\u0002from:sender@example.com`);
-    expect(getMailboxThreadsSnapshot(key)).toStrictEqual({
+    expect(getMailboxThreadsSnapshot(scopeKey)).toStrictEqual({
       ...snapshot,
       isLoadingNextPage: false,
     });
-
-    expect(getMailboxThreadsSnapshot(key)).toBeDefined();
   });
 
   it("clears loaded snapshots when a mailbox reload is requested", () => {
-    const key = getMailboxCacheKey("reload-mailbox", "");
+    const key = "reload-mailbox";
 
-    setMailboxThreadsSnapshot(key, makeSnapshot("reload-mailbox"));
+    setMailboxThreadsSnapshot(key, makeSnapshot(key));
     requestMailboxReload();
 
     expect(getMailboxThreadsSnapshot(key)).toBeUndefined();
   });
 
   it("retains only snapshots matching the account being switched to", () => {
-    const firstAccountKey = getMailboxCacheKey(
-      getMailboxScopeKey(["first@example.com"], false),
-      ""
-    );
-    const secondAccountKey = getMailboxCacheKey(
-      getMailboxScopeKey(["second@example.com"], false),
-      ""
-    );
-    const allAccountsKey = getMailboxCacheKey(
-      getMailboxScopeKey(["first@example.com", "second@example.com"], false),
-      ""
+    const firstAccountKey = getMailboxScopeKey(["first@example.com"], false);
+    const secondAccountKey = getMailboxScopeKey(["second@example.com"], false);
+    const allAccountsKey = getMailboxScopeKey(
+      ["first@example.com", "second@example.com"],
+      false
     );
 
-    setMailboxThreadsSnapshot(
-      firstAccountKey,
-      makeSnapshot(getMailboxScopeKey(["first@example.com"], false))
-    );
-    setMailboxThreadsSnapshot(
-      secondAccountKey,
-      makeSnapshot(getMailboxScopeKey(["second@example.com"], false))
-    );
-    setMailboxThreadsSnapshot(
-      allAccountsKey,
-      makeSnapshot(
-        getMailboxScopeKey(["first@example.com", "second@example.com"], false)
-      )
-    );
+    setMailboxThreadsSnapshot(firstAccountKey, makeSnapshot(firstAccountKey));
+    setMailboxThreadsSnapshot(secondAccountKey, makeSnapshot(secondAccountKey));
+    setMailboxThreadsSnapshot(allAccountsKey, makeSnapshot(allAccountsKey));
 
     retainMailboxThreadsSnapshotsForAccounts(["second@example.com"]);
 

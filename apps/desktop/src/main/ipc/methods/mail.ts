@@ -5,9 +5,10 @@ import {
   MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
+  MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
-  MAIL_LOAD_THREAD_PAGE_CHANNEL,
+  MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SET_THREAD_READ_CHANNEL,
   MAIL_SYNC_LABELS_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
@@ -20,10 +21,12 @@ import {
   GmailIndexProgressList,
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
+  GmailSearchRequest,
+  GmailSearchResultsReply,
+  GmailSenderSuggestionRequest,
+  GmailSenderSuggestionsReply,
   GmailSyncStatus,
   GmailThreadMutationReply,
-  GmailThreadPageReply,
-  GmailThreadPageRequest,
   GmailThreadReadStateRequest,
   GmailThreadReply,
   GmailThreadRequest,
@@ -32,11 +35,14 @@ import {
 } from "../../../shared/ipc/mail";
 import { getMailIndexProgress } from "../../mail/mail-backfill";
 import {
+  listIndexedSenders,
+  searchIndexedThreads,
+} from "../../mail/mail-search";
+import {
   getMailSyncStatus,
   listCachedThreadPage,
   listGmailLabelCatalog,
   loadFullThread,
-  loadThreadPage,
   setThreadReadState,
   syncGmailLabelCatalog,
   trashThread,
@@ -86,12 +92,20 @@ export const syncLabels = makeIpcMethod({
   result: GmailLabelCatalogReply,
 });
 
-export const loadPage = makeIpcMethod({
-  channel: MAIL_LOAD_THREAD_PAGE_CHANNEL,
+export const searchThreads = makeIpcMethod({
+  channel: MAIL_SEARCH_THREADS_CHANNEL,
   handler: (request) =>
-    toIpcReply(loadThreadPage(request), "Could not load email"),
-  payload: GmailThreadPageRequest,
-  result: GmailThreadPageReply,
+    toIpcReply(searchIndexedThreads(request), "Could not search your email"),
+  payload: GmailSearchRequest,
+  result: GmailSearchResultsReply,
+});
+
+export const listSenders = makeIpcMethod({
+  channel: MAIL_LIST_SENDERS_CHANNEL,
+  handler: (request) =>
+    toIpcReply(listIndexedSenders(request), "Could not load senders"),
+  payload: GmailSenderSuggestionRequest,
+  result: GmailSenderSuggestionsReply,
 });
 
 export const loadThread = makeIpcMethod({

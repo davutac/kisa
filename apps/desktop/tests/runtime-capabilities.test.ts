@@ -49,6 +49,8 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: { threads: [] }, ok: true as const }),
     listGmailLabels: () =>
       Promise.resolve({ data: { labels: [] }, ok: true as const }),
+    listGmailSenders: () =>
+      Promise.resolve({ data: { senders: [] }, ok: true as const }),
     listGoogleAccounts: () => Promise.resolve({ data: [], ok: true as const }),
     listTrustedImageSenders: () =>
       Promise.resolve({ data: [], ok: true as const }),
@@ -63,8 +65,6 @@ describe(getRuntimeCapabilities, () => {
         },
         ok: true as const,
       }),
-    loadThreadPage: () =>
-      Promise.resolve({ data: { threads: [] }, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
     onGoogleAccountsChanged: () => () => {},
     onMailIndexProgressChanged: () => () => {},
@@ -72,6 +72,11 @@ describe(getRuntimeCapabilities, () => {
     onMailThreadsChanged: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
     onUpdateStatus: () => () => {},
+    searchMail: () =>
+      Promise.resolve({
+        data: { hasMore: false, threads: [] },
+        ok: true as const,
+      }),
     setThreadReadState: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     startApp: () => Promise.resolve({ ok: true as const }),
@@ -102,14 +107,15 @@ describe(getRuntimeCapabilities, () => {
         getSyncStatus: desktopBridge.getMailSyncStatus,
         listCachedThreadPage: desktopBridge.listCachedThreadPage,
         listLabels: desktopBridge.listGmailLabels,
+        listSenders: desktopBridge.listGmailSenders,
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
         loadThread: desktopBridge.loadThread,
-        loadThreadPage: desktopBridge.loadThreadPage,
         onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,
         onSyncStatusChanged: desktopBridge.onMailSyncStatusChanged,
         onThreadsChanged: desktopBridge.onMailThreadsChanged,
         onTrustedImageSendersChanged:
           desktopBridge.onTrustedImageSendersChanged,
+        search: desktopBridge.searchMail,
         setThreadReadState: desktopBridge.setThreadReadState,
         syncLabels: desktopBridge.syncGmailLabels,
         trashThread: desktopBridge.trashThread,

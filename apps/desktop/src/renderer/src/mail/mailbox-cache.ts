@@ -7,16 +7,13 @@ export interface MailboxThreadsSnapshot {
   cacheCursor: GmailThreadCursor | null;
   isInitialLoading: boolean;
   isLoadingNextPage: boolean;
-  nextPageTokens: ReadonlyMap<string, string>;
-  query: string;
   scopeKey: string;
   threads: readonly GmailThreadSummary[];
 }
 
+// Keyed by mailbox scope alone: the list has no query of its own now that
+// searching lives in the palette.
 const mailboxSnapshots = new Map<string, MailboxThreadsSnapshot>();
-
-export const getMailboxCacheKey = (scopeKey: string, query: string): string =>
-  `${scopeKey}\u0002${query.trim()}`;
 
 export const getMailboxThreadsSnapshot = (
   key: string
@@ -34,11 +31,7 @@ export const setMailboxThreadsSnapshot = (
   key: string,
   snapshot: MailboxThreadsSnapshot
 ): void => {
-  mailboxSnapshots.set(key, {
-    ...snapshot,
-    isLoadingNextPage: false,
-    nextPageTokens: new Map(snapshot.nextPageTokens),
-  });
+  mailboxSnapshots.set(key, { ...snapshot, isLoadingNextPage: false });
 };
 
 // Every scope is patched, not just the visible one: snapshots are merged into

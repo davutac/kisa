@@ -12,10 +12,11 @@ export const MAIL_INDEX_PROGRESS_CHANNEL = "desktop:mail:index-progress";
 export const MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL =
   "desktop:mail:list-cached-thread-page";
 export const MAIL_LIST_LABELS_CHANNEL = "desktop:mail:list-labels";
+export const MAIL_LIST_SENDERS_CHANNEL = "desktop:mail:list-senders";
 export const MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL =
   "desktop:mail:list-trusted-image-senders";
 export const MAIL_LOAD_THREAD_CHANNEL = "desktop:mail:load-thread";
-export const MAIL_LOAD_THREAD_PAGE_CHANNEL = "desktop:mail:load-thread-page";
+export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
 export const MAIL_SET_THREAD_READ_CHANNEL = "desktop:mail:set-thread-read";
 export const MAIL_SYNC_LABELS_CHANNEL = "desktop:mail:sync-labels";
 export const MAIL_SYNC_STATUS_CHANNEL = "desktop:mail:sync-status";

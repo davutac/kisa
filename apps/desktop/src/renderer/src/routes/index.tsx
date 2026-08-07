@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import MailThreadList from "@/components/mail/thread-list";
 import MailThreadView from "@/components/mail/thread-view";
 import { useMailboxReloadRevision } from "@/mail/mailbox-reload";
-import { useDebouncedSearchQuery } from "@/mail/search";
 import { parseThreadSelectionKey } from "@/mail/thread-selection";
 import { useMailIndexProgress } from "@/mail/use-mail-index-progress";
 import { useMailboxThreads } from "@/mail/use-mailbox-threads";
@@ -17,17 +16,10 @@ import {
   useShowUnread,
 } from "@/state/mailbox";
 
-const getEmptyMessage = (query: string, unreadOnly: boolean): string => {
-  if (query.length > 0) {
-    return unreadOnly
-      ? `No unread email matches “${query}”.`
-      : `No email matches “${query}”.`;
-  }
-
-  return unreadOnly
+const getEmptyMessage = (unreadOnly: boolean): string =>
+  unreadOnly
     ? "No unread email."
     : "No cached inbox messages yet. Email is fetched in the background.";
-};
 
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
   month: "long",
@@ -37,18 +29,12 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
 /**
  * Reaching the bottom of a mailbox that is still being indexed is not the end
  * of the mail, so the row says how far back the index has reached instead of
- * going quiet. Searching is excluded: that path pages Gmail directly and is not
- * bounded by the index.
+ * going quiet.
  */
 const getIndexingMessage = (
   progress: readonly GmailIndexProgress[],
-  accountIds: readonly string[],
-  query: string
+  accountIds: readonly string[]
 ): string | undefined => {
-  if (query.length > 0) {
-    return undefined;
-  }
-
   const running = progress.filter(
     (entry) =>
       (entry.status === "running" || entry.status === "queued") &&
@@ -70,7 +56,6 @@ const getIndexingMessage = (
 
 const HomeRoute = () => {
   const accounts = useGoogleAccounts();
-  const query = useDebouncedSearchQuery();
   const showUnread = useShowUnread();
   const selectedAccountId = useSelectedAccountId();
   const reloadRevision = useMailboxReloadRevision();
@@ -94,17 +79,17 @@ const HomeRoute = () => {
     loadNextPage,
     patchThread,
     threads,
-  } = useMailboxThreads(accountIds, query, showUnread, reloadRevision);
+  } = useMailboxThreads(accountIds, showUnread, reloadRevision);
   const { toggleRead, trash } = useThreadActions(patchThread);
   const indexProgress = useMailIndexProgress();
-  const indexingMessage = getIndexingMessage(indexProgress, accountIds, query);
+  const indexingMessage = getIndexingMessage(indexProgress, accountIds);
 
   // The mailbox stays mounted underneath so its scroll position and virtualiser
   // survive reading a thread without any restoration bookkeeping.
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <MailThreadList
-        emptyMessage={getEmptyMessage(query, showUnread)}
+        emptyMessage={getEmptyMessage(showUnread)}
         hasNextPage={hasNextPage}
         indexingMessage={indexingMessage}
         isInitialLoading={isInitialLoading}

@@ -9,8 +9,9 @@ import {
   listCachedPage,
   listImageSenders,
   listLabels,
-  loadPage,
+  listSenders,
   loadThread,
+  searchThreads,
   setReadState,
   syncLabels,
   trash,
@@ -33,8 +34,9 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);
   yield* ipc.handle(syncLabels);
-  yield* ipc.handle(loadPage);
   yield* ipc.handle(loadThread);
+  yield* ipc.handle(searchThreads);
+  yield* ipc.handle(listSenders);
   yield* ipc.handle(setReadState);
   yield* ipc.handle(trash);
   yield* ipc.handle(listImageSenders);
