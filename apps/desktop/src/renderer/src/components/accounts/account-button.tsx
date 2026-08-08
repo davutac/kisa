@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
+import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
@@ -28,6 +29,7 @@ const TitlebarAccountButton = ({
   const { openAccount } = useMailboxNavigation();
   const selectedAccountId = useSelectedAccountId();
   const shouldReduceMotion = useReducedMotion();
+  const hasUnreadMail = useHasUnreadMail(account.email);
   const isSyncing = useIsAccountSyncing(account.email);
   const indexProgress = useAccountIndexProgress(account.email);
   const isActive = selectedAccountId === account.email;
@@ -51,54 +53,62 @@ const TitlebarAccountButton = ({
           <Button
             aria-busy={isSyncing || isIndexing}
             aria-keyshortcuts={shortcut}
-            aria-label={account.email}
-            className="h-7 min-w-7 justify-start gap-0 overflow-hidden rounded-full p-0"
+            aria-label={`${account.email}${hasUnreadMail ? ", unread email" : ""}`}
+            className="h-7 min-w-7 justify-start gap-0 overflow-visible rounded-full p-0"
             onClick={() => {
               openAccount(account.email);
             }}
             type="button"
             variant="secondary"
           >
-            <span className="relative grid size-7 shrink-0 place-items-center overflow-hidden rounded-full">
-              {account.avatarUrl === undefined ? (
-                <UserRoundIcon aria-hidden="true" className="size-3.5" />
-              ) : (
-                <img
-                  alt=""
-                  className="size-full object-cover"
-                  src={account.avatarUrl}
-                />
-              )}
-              {isSyncing ? (
-                <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/45">
-                  <Spinner className="size-4 text-white" />
-                </span>
-              ) : null}
-              {/*
-                Indexing runs for minutes, so it gets a ring rather than the
-                sync spinner: a determinate arc reads as "still working, this
-                far along" instead of an animation that never seems to end. It
-                paints over the sync overlay rather than yielding to it, so the
-                indicator does not blink out every fifteen seconds.
+            <span className="relative size-7 shrink-0">
+              <span className="relative grid size-7 place-items-center overflow-hidden rounded-full">
+                {account.avatarUrl === undefined ? (
+                  <UserRoundIcon aria-hidden="true" className="size-3.5" />
+                ) : (
+                  <img
+                    alt=""
+                    className="size-full object-cover"
+                    src={account.avatarUrl}
+                  />
+                )}
+                {isSyncing ? (
+                  <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/45">
+                    <Spinner className="size-4 text-white" />
+                  </span>
+                ) : null}
+                {/*
+                  Indexing runs for minutes, so it gets a ring rather than the
+                  sync spinner: a determinate arc reads as "still working, this
+                  far along" instead of an animation that never seems to end. It
+                  paints over the sync overlay rather than yielding to it, so the
+                  indicator does not blink out every fifteen seconds.
 
-                `closest-side` is load-bearing. The default `farthest-corner`
-                puts the gradient's 100% at the box corner — 19.8px on a 28px
-                avatar — so a 72% stop lands at 14.3px, outside the 14px circle
-                the parent clips to, and the ring renders entirely invisible.
-              */}
-              {isIndexing ? (
+                  `closest-side` is load-bearing. The default `farthest-corner`
+                  puts the gradient's 100% at the box corner — 19.8px on a 28px
+                  avatar — so a 72% stop lands at 14.3px, outside the 14px circle
+                  the parent clips to, and the ring renders entirely invisible.
+                */}
+                {isIndexing ? (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 rounded-full"
+                    style={{
+                      WebkitMask:
+                        "radial-gradient(circle closest-side, transparent 74%, black 76%)",
+                      background:
+                        indexedRatio === undefined
+                          ? "conic-gradient(var(--color-primary) 90deg, transparent 90deg)"
+                          : `conic-gradient(var(--color-primary) ${indexedRatio * 360}deg, transparent 0deg)`,
+                      mask: "radial-gradient(circle closest-side, transparent 74%, black 76%)",
+                    }}
+                  />
+                ) : null}
+              </span>
+              {hasUnreadMail ? (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 rounded-full"
-                  style={{
-                    WebkitMask:
-                      "radial-gradient(circle closest-side, transparent 74%, black 76%)",
-                    background:
-                      indexedRatio === undefined
-                        ? "conic-gradient(var(--color-primary) 90deg, transparent 90deg)"
-                        : `conic-gradient(var(--color-primary) ${indexedRatio * 360}deg, transparent 0deg)`,
-                    mask: "radial-gradient(circle closest-side, transparent 74%, black 76%)",
-                  }}
+                  className="bg-destructive ring-background pointer-events-none absolute top-0 right-0 size-2 rounded-full ring-2"
                 />
               ) : null}
             </span>
