@@ -8,6 +8,7 @@ import { startDatabase } from "../database";
 import type { DatabaseError } from "../database";
 import { startMailBackfill } from "../mail/mail-backfill";
 import { startMailSync } from "../mail/mail-sync";
+import { refreshUnreadBadge } from "../mail/unread-badge";
 
 let startupPromise: Promise<AppStartupExit> | null = null;
 
@@ -20,6 +21,7 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
   if (Exit.isFailure(exit)) {
     startupPromise = null;
   } else {
+    await Effect.runPromise(refreshUnreadBadge().pipe(Effect.ignore));
     startMailSync();
     // Picks up any account whose index was still running when the app last
     // closed, and seeds the renderer's progress state for the rest.

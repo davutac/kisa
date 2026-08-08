@@ -40,6 +40,7 @@ import {
 import { addUnreadLabel, removeUnreadLabel } from "./read-state";
 import type { MessageHeader } from "./sender-brand";
 import { getSenderBrand } from "./sender-brand";
+import { refreshUnreadBadge } from "./unread-badge";
 
 const GMAIL_INBOX_LABEL = "INBOX";
 const GMAIL_TRASH_LABEL = "TRASH";
@@ -220,6 +221,11 @@ const publishThreadsChanged = Effect.fn("publishThreadsChanged")(
         new MailSyncError({ message: "Could not publish email update" }),
       try: () => notifyThreadsChanged(accountId),
     });
+    yield* refreshUnreadBadge().pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Could not refresh unread badge: ${error.message}`)
+      )
+    );
   }
 );
 
@@ -236,6 +242,12 @@ export const forgetAccountMailData = Effect.fn("forgetAccountMailData")(
     if (syncingAccountIds.has(accountId)) {
       setAccountSyncing(accountId, false);
     }
+
+    yield* refreshUnreadBadge().pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Could not refresh unread badge: ${error.message}`)
+      )
+    );
   }
 );
 

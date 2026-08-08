@@ -34,6 +34,7 @@ import {
   toBeforeQuery,
 } from "./mail-backfill-cursor";
 import { mailQuotaGovernor, QUOTA_UNITS } from "./quota-governor";
+import { refreshUnreadBadge } from "./unread-badge";
 
 /**
  * 100 threads is Gmail's practical `threads.list` page and the unit of the
@@ -409,6 +410,7 @@ const settle = async (
   await Effect.runPromise(
     writeState(accountId, { ...patch, status }).pipe(
       Effect.andThen(refreshProgress(accountId, status)),
+      Effect.andThen(refreshUnreadBadge()),
       Effect.ignore
     )
   );
