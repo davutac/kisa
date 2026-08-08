@@ -9,11 +9,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "alchemy": "2.0.0-beta.70",
-    "effect": "4.0.0-beta.104"
+    "alchemy": "catalog:",
+    "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/platform-node": "4.0.0-beta.104",
+    "@effect/platform-node": "catalog:",
     "typescript": "catalog:"
   }
 }

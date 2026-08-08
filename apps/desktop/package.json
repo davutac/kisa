@@ -50,7 +50,7 @@
     "cmdk": "catalog:",
     "date-fns": "catalog:",
     "drizzle-orm": "catalog:",
-    "effect": "4.0.0-beta.103",
+    "effect": "catalog:",
     "electron-updater": "catalog:",
     "embla-carousel-react": "catalog:",
     "input-otp": "catalog:",
@@ -69,7 +69,7 @@
     "zustand": "catalog:"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-beta.103",
+    "@effect/vitest": "catalog:",
     "@electron-toolkit/tsconfig": "catalog:",
     "@rolldown/plugin-babel": "catalog:",
     "@tailwindcss/vite": "catalog:",
