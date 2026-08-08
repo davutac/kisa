@@ -5,6 +5,7 @@ import {
   GmailHistoryExpiredError,
   GmailRateLimitError,
   GmailReauthorizationRequiredError,
+  GmailSendOutcomeUnknownError,
 } from "@repo/gmail/errors";
 import type {
   GatewayHistoryResult,
@@ -174,6 +175,26 @@ const toGatewayError = (
     message,
     retryable: status !== undefined && RETRYABLE_STATUSES.has(status),
   });
+};
+
+const toSendError = (
+  accountId: AccountId,
+  error: unknown
+): GmailGatewayError | GmailSendOutcomeUnknownError => {
+  const gatewayError = toGatewayError(accountId, error);
+
+  if (
+    gatewayError._tag === "GmailApiError" &&
+    (gatewayError.retryable || readErrorStatus(error) === undefined)
+  ) {
+    return new GmailSendOutcomeUnknownError({
+      accountId,
+      message:
+        "Gmail did not confirm whether the message was sent. Check Sent mail before trying again.",
+    });
+  }
+
+  return gatewayError;
 };
 
 const createClient = (credentials: GmailCredentials): gmail_v1.Gmail => {
@@ -652,7 +673,7 @@ export const GmailGatewayLive = Layer.succeed(
 
     send: (authorization, message: RawMessage) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) => toSendError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<SentMessage>> => {
           const client = createClient(authorization.credentials);
 

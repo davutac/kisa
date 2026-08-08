@@ -235,8 +235,19 @@ export type ComposerBody =
 
 export interface OutgoingAttachment {
   readonly bytes: Uint8Array;
+  readonly contentId?: string;
   readonly filename: string;
   readonly mediaType: string;
+}
+
+export interface ForwardInput {
+  readonly accountId: AccountId;
+  readonly bcc?: readonly Mailbox[];
+  readonly body: ComposerBody;
+  readonly cc?: readonly Mailbox[];
+  readonly forwardMessageId: MessageId;
+  readonly threadId: ThreadId;
+  readonly to: readonly Mailbox[];
 }
 
 export interface SendMessageInput {

@@ -9,6 +9,7 @@ import {
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
+  MAIL_SEND_THREAD_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_READ_CHANNEL,
   MAIL_SYNC_LABELS_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
@@ -27,6 +28,8 @@ import {
   GmailSenderSuggestionsReply,
   GmailSyncStatus,
   GmailThreadMutationReply,
+  GmailThreadMessageSendReply,
+  GmailThreadMessageSendRequest,
   GmailThreadReadStateRequest,
   GmailThreadReply,
   GmailThreadRequest,
@@ -43,6 +46,7 @@ import {
   listCachedThreadPage,
   listGmailLabelCatalog,
   loadFullThread,
+  sendThreadMessage,
   setThreadReadState,
   syncGmailLabelCatalog,
   trashThread,
@@ -122,6 +126,14 @@ export const setReadState = makeIpcMethod({
     toIpcReply(setThreadReadState(request), "Could not update email"),
   payload: GmailThreadReadStateRequest,
   result: GmailThreadMutationReply,
+});
+
+export const sendMessage = makeIpcMethod({
+  channel: MAIL_SEND_THREAD_MESSAGE_CHANNEL,
+  handler: (request) =>
+    toIpcReply(sendThreadMessage(request), "Could not send message"),
+  payload: GmailThreadMessageSendRequest,
+  result: GmailThreadMessageSendReply,
 });
 
 export const trash = makeIpcMethod({

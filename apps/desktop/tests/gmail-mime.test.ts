@@ -1,13 +1,67 @@
 import { describe, expect, it } from "@effect/vitest";
 import type { GatewayThread } from "@repo/gmail/gateway";
 import { GmailMime } from "@repo/gmail/mime";
-import { HistoryId, ThreadId } from "@repo/gmail/models";
+import {
+  AccountId,
+  HistoryId,
+  Mailbox,
+  MessageId,
+  ThreadId,
+} from "@repo/gmail/models";
 import { Effect } from "effect";
 
 import { GmailMimeLive } from "../src/main/mail/gmail-mime";
 
 const encodeBody = (value: string): string =>
   Buffer.from(value, "utf-8").toString("base64url");
+
+const testThread = {
+  historyId: HistoryId.make("1"),
+  id: ThreadId.make("thread-1"),
+  labelIds: ["INBOX"],
+  messages: [
+    {
+      id: "message-1",
+      internalDate: "1700000000000",
+      payload: {
+        headers: [
+          { name: "Message-ID", value: "<message-1@example.com>" },
+          { name: "References", value: "<earlier@example.com>" },
+          { name: "From", value: "Alice <alice@example.com>" },
+          { name: "Date", value: "Tue, 14 Nov 2023 22:13:20 +0000" },
+          { name: "Subject", value: "Project update" },
+          { name: "To", value: "Me <me@example.com>" },
+          { name: "Cc", value: "Bob <bob@example.com>" },
+        ],
+        mimeType: "multipart/alternative",
+        parts: [
+          {
+            body: { data: encodeBody("Original text") },
+            mimeType: "text/plain",
+          },
+          {
+            body: { data: encodeBody("<p><strong>Original HTML</strong></p>") },
+            mimeType: "text/html",
+          },
+        ],
+      },
+    },
+  ],
+} as GatewayThread;
+
+const decodeRaw = (raw: string): string =>
+  Buffer.from(raw, "base64url").toString("utf-8");
+
+const decodeTransferBodies = (raw: string): readonly string[] => {
+  const lines = raw.split("\r\n");
+
+  return lines.flatMap((line, index) =>
+    lines[index - 2] === "Content-Transfer-Encoding: base64" &&
+    lines[index - 1] === ""
+      ? [Buffer.from(line, "base64").toString("utf-8")]
+      : []
+  );
+};
 
 const parse = (payload: unknown) =>
   Effect.runSync(
@@ -136,5 +190,104 @@ describe("GmailMime.parseThread", () => {
         size: 12,
       }),
     ]);
+  });
+});
+
+describe("GmailMime sending", () => {
+  it("composes a threaded reply with the original message quoted", () => {
+    const message = Effect.runSync(
+      GmailMime.pipe(
+        Effect.flatMap((mime) =>
+          mime.composeReply(
+            {
+              accountId: AccountId.make("me@example.com"),
+              body: {
+                html: "<p>My reply</p>",
+                text: "My reply",
+                type: "html",
+              },
+              cc: [new Mailbox({ address: "bob@example.com" })],
+              replyToMessageId: MessageId.make("message-1"),
+              threadId: ThreadId.make("thread-1"),
+              to: [new Mailbox({ address: "alice@example.com" })],
+            },
+            testThread
+          )
+        ),
+        Effect.provide(GmailMimeLive)
+      )
+    );
+    const raw = decodeRaw(message.raw);
+    const bodies = decodeTransferBodies(raw);
+
+    expect({
+      hasCc: raw.includes("Cc: bob@example.com"),
+      hasInReplyTo: raw.includes("In-Reply-To: <message-1@example.com>"),
+      hasReferences: raw.includes(
+        "References: <earlier@example.com> <message-1@example.com>"
+      ),
+      hasSubject: raw.includes("Subject: Re: Project update"),
+      hasTo: raw.includes("To: alice@example.com"),
+      threadId: message.threadId,
+    }).toStrictEqual({
+      hasCc: true,
+      hasInReplyTo: true,
+      hasReferences: true,
+      hasSubject: true,
+      hasTo: true,
+      threadId: "thread-1",
+    });
+    expect(bodies).toContainEqual(expect.stringContaining("My reply"));
+    expect(bodies).toContainEqual(expect.stringContaining("Original text"));
+    expect(bodies).toContainEqual(expect.stringContaining("Original HTML"));
+  });
+
+  it("composes a new forwarded message with inline attachments", () => {
+    const message = Effect.runSync(
+      GmailMime.pipe(
+        Effect.flatMap((mime) =>
+          mime.composeForward(
+            {
+              accountId: AccountId.make("me@example.com"),
+              attachments: [
+                {
+                  bytes: new Uint8Array([1, 2, 3]),
+                  contentId: "logo@example.com",
+                  filename: "logo.png",
+                  mediaType: "image/png",
+                },
+              ],
+              body: { text: "FYI", type: "text" },
+              forwardMessageId: MessageId.make("message-1"),
+              threadId: ThreadId.make("thread-1"),
+              to: [new Mailbox({ address: "carol@example.com" })],
+            },
+            testThread
+          )
+        ),
+        Effect.provide(GmailMimeLive)
+      )
+    );
+    const raw = decodeRaw(message.raw);
+    const bodies = decodeTransferBodies(raw);
+
+    expect({
+      hasContentId: raw.includes("Content-ID: <logo@example.com>"),
+      hasInlineDisposition: raw.includes("Content-Disposition: inline;"),
+      hasSubject: raw.includes("Subject: Fwd: Project update"),
+      hasTo: raw.includes("To: carol@example.com"),
+      threadId: message.threadId,
+    }).toStrictEqual({
+      hasContentId: true,
+      hasInlineDisposition: true,
+      hasSubject: true,
+      hasTo: true,
+      threadId: undefined,
+    });
+    expect(bodies).toContainEqual(expect.stringContaining("FYI"));
+    expect(bodies).toContainEqual(
+      expect.stringContaining("---------- Forwarded message ---------")
+    );
+    expect(bodies).toContainEqual(expect.stringContaining("Original HTML"));
   });
 });

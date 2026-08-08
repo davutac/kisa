@@ -12,6 +12,7 @@ import {
   listSenders,
   loadThread,
   searchThreads,
+  sendMessage,
   setReadState,
   syncLabels,
   trash,
@@ -36,6 +37,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(syncLabels);
   yield* ipc.handle(loadThread);
   yield* ipc.handle(searchThreads);
+  yield* ipc.handle(sendMessage);
   yield* ipc.handle(listSenders);
   yield* ipc.handle(setReadState);
   yield* ipc.handle(trash);

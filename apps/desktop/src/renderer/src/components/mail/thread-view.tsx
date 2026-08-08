@@ -78,6 +78,7 @@ const MailThreadView = ({ accountId, threadId }: MailThreadViewProps) => {
       <MailThreadConversation
         accountId={thread.accountId}
         messages={thread.messages}
+        threadId={thread.threadId}
       />
     </section>
   );

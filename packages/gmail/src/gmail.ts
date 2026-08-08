@@ -25,6 +25,7 @@ import { GmailMime } from "./mime";
 import type {
   AccountId,
   DisconnectAccountOptions,
+  ForwardInput,
   GetAttachmentRequest,
   GetThreadRequest,
   GmailAttachment,
@@ -137,6 +138,9 @@ export interface GmailService {
   readonly markThreadUnread: (
     request: ThreadMutationRequest
   ) => Effect.Effect<void, GmailError>;
+  readonly forward: (
+    input: ForwardInput
+  ) => Effect.Effect<SentMessage, GmailError>;
   readonly reply: (input: ReplyInput) => Effect.Effect<SentMessage, GmailError>;
   readonly sendMessage: (
     input: SendMessageInput
@@ -495,6 +499,54 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         );
       });
 
+      const forward = Effect.fn("Gmail.forward")(function* forward(
+        input: ForwardInput
+      ) {
+        const rawThread = yield* withAuthorization(
+          input.accountId,
+          "read",
+          (authorization) => gateway.getThread(authorization, input.threadId)
+        );
+        const parsed = yield* mime.parseThread(rawThread);
+        const forwarded =
+          parsed.messages.find(
+            (message) => message.id === input.forwardMessageId
+          ) ?? parsed.messages.at(-1);
+        const attachments =
+          forwarded === undefined
+            ? []
+            : yield* Effect.forEach(
+                forwarded.attachments,
+                (attachment) =>
+                  withAuthorization(input.accountId, "read", (authorization) =>
+                    gateway.getAttachment(authorization, {
+                      attachmentId: attachment.attachmentId,
+                      filename: attachment.filename,
+                      mediaType: attachment.mediaType,
+                      messageId: attachment.messageId,
+                    })
+                  ).pipe(
+                    Effect.map((loaded) => ({
+                      ...loaded,
+                      ...(attachment.contentId === undefined
+                        ? {}
+                        : { contentId: attachment.contentId }),
+                    }))
+                  ),
+                { concurrency: 3 }
+              );
+        const message = yield* mime.composeForward(
+          { ...input, attachments },
+          rawThread
+        );
+
+        return yield* withAuthorization(
+          input.accountId,
+          "send",
+          (authorization) => gateway.send(authorization, message)
+        );
+      });
+
       const reply = Effect.fn("Gmail.reply")(function* reply(
         input: ReplyInput
       ) {
@@ -579,6 +631,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
       return Gmail.of({
         authorizeAccount,
         disconnectAccount,
+        forward,
         getAccount,
         getAttachment,
         getThread,

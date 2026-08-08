@@ -102,6 +102,29 @@ export const GmailThreadReadStateRequest = Schema.Struct({
 export type GmailThreadReadStateRequest =
   typeof GmailThreadReadStateRequest.Type;
 
+export const GmailThreadMessageAction = Schema.Literals([
+  "forward",
+  "reply",
+  "reply-all",
+]);
+export type GmailThreadMessageAction = typeof GmailThreadMessageAction.Type;
+
+export const GmailThreadMessageSendRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  action: GmailThreadMessageAction,
+  bcc: Schema.Array(Schema.NonEmptyString),
+  body: Schema.Struct({
+    html: Schema.String,
+    text: Schema.String,
+  }),
+  cc: Schema.Array(Schema.NonEmptyString),
+  messageId: Schema.NonEmptyString,
+  threadId: Schema.NonEmptyString,
+  to: Schema.Array(Schema.NonEmptyString),
+});
+export type GmailThreadMessageSendRequest =
+  typeof GmailThreadMessageSendRequest.Type;
+
 /** A sender whose remote images the account has agreed to load. */
 export const GmailTrustedImageSender = Schema.Struct({
   accountId: Schema.String,
@@ -271,3 +294,7 @@ export type GmailTrustedImageSendersReply =
 
 export const GmailThreadMutationReply = IpcReply(Schema.Void);
 export type GmailThreadMutationReply = typeof GmailThreadMutationReply.Type;
+
+export const GmailThreadMessageSendReply = IpcReply(Schema.Void);
+export type GmailThreadMessageSendReply =
+  typeof GmailThreadMessageSendReply.Type;

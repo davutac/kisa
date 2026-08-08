@@ -3,11 +3,22 @@ import { Context } from "effect";
 
 import type { GmailMimeError, GmailValidationError } from "./errors";
 import type { GatewayThread, RawMessage } from "./gateway";
-import type { GmailThread, ReplyInput, SendMessageInput } from "./models";
+import type {
+  ForwardInput,
+  GmailThread,
+  ReplyInput,
+  SendMessageInput,
+} from "./models";
 
 export interface GmailMimeService {
   readonly composeMessage: (
     input: SendMessageInput
+  ) => Effect.Effect<RawMessage, GmailMimeError | GmailValidationError>;
+  readonly composeForward: (
+    input: ForwardInput & {
+      readonly attachments?: SendMessageInput["attachments"];
+    },
+    thread: GatewayThread
   ) => Effect.Effect<RawMessage, GmailMimeError | GmailValidationError>;
   readonly composeReply: (
     input: ReplyInput,

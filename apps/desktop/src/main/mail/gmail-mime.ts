@@ -2,6 +2,7 @@ import type { GatewayThread, RawMessage } from "@repo/gmail/gateway";
 import { GmailMime } from "@repo/gmail/mime";
 import type {
   ComposerBody,
+  ForwardInput,
   OutgoingAttachment,
   ReplyInput,
   SendMessageInput,
@@ -19,6 +20,7 @@ import {
 import { Effect, Layer } from "effect";
 
 import { collectAttachments, isPresent, parseMailbox } from "./gmail-payload";
+import { toIndexText } from "./message-text";
 
 interface RawPart {
   readonly body?: { readonly data?: string | null };
@@ -200,15 +202,115 @@ const bodyParts = (body: ComposerBody, boundary: string): string => {
 const attachmentPart = (
   attachment: OutgoingAttachment,
   boundary: string
-): string =>
-  [
+): string => {
+  const filename = attachment.filename.replaceAll(/["\r\n]/gu, "");
+
+  return [
     `--${boundary}`,
-    `Content-Type: ${attachment.mediaType}; name="${attachment.filename}"`,
+    `Content-Type: ${attachment.mediaType}; name="${filename}"`,
     "Content-Transfer-Encoding: base64",
-    `Content-Disposition: attachment; filename="${attachment.filename}"`,
+    `Content-Disposition: ${attachment.contentId === undefined ? "attachment" : "inline"}; filename="${filename}"`,
+    ...(attachment.contentId === undefined
+      ? []
+      : [`Content-ID: <${attachment.contentId.replaceAll(/[<>\r\n]/gu, "")}>`]),
     "",
     Buffer.from(attachment.bytes).toString("base64"),
   ].join(CRLF);
+};
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+
+const textToHtml = (value: string): string =>
+  escapeHtml(value).replaceAll(/\r?\n/gu, "<br>");
+
+const getComposerText = (body: ComposerBody): string =>
+  body.type === "text" ? body.text : (body.text ?? toIndexText(body.html));
+
+const getComposerHtml = (body: ComposerBody): string =>
+  body.type === "html" ? body.html : `<div>${textToHtml(body.text)}</div>`;
+
+const getOriginalBody = (
+  message: RawMessagePayload | undefined
+): { readonly html: string; readonly text: string } => {
+  const htmlParts: string[] = [];
+  const textParts: string[] = [];
+
+  collectBodies(message?.payload, htmlParts, textParts);
+
+  const html = htmlParts.join("\n");
+  const text = textParts.join("\n");
+
+  return {
+    html: html.length > 0 ? html : `<div>${textToHtml(text)}</div>`,
+    text: text.length > 0 ? text : toIndexText(html),
+  };
+};
+
+const getMessage = (
+  thread: GatewayThread,
+  messageId: string
+): RawMessagePayload | undefined => {
+  const messages = thread.messages as readonly RawMessagePayload[];
+  return (
+    messages.find((message) => message.id === messageId) ?? messages.at(-1)
+  );
+};
+
+const composeReplyBody = (
+  body: ComposerBody,
+  replied: RawMessagePayload | undefined
+): ComposerBody => {
+  if (replied === undefined) {
+    return body;
+  }
+
+  const original = getOriginalBody(replied);
+  const from = readHeader(replied, "from") ?? "";
+  const date = readHeader(replied, "date") ?? "";
+  const attribution = `On ${date}, ${from} wrote:`;
+  const quotedText = original.text
+    .split(/\r?\n/gu)
+    .map((line) => `> ${line}`)
+    .join("\n");
+
+  return {
+    html: `${getComposerHtml(body)}<div><br></div><div class="gmail_quote"><div class="gmail_attr">${escapeHtml(attribution)}<br></div><blockquote class="gmail_quote">${original.html}</blockquote></div>`,
+    text: `${getComposerText(body)}\n\n${attribution}\n${quotedText}`,
+    type: "html",
+  };
+};
+
+const composeForwardBody = (
+  body: ComposerBody,
+  forwarded: RawMessagePayload | undefined
+): ComposerBody => {
+  if (forwarded === undefined) {
+    return body;
+  }
+
+  const original = getOriginalBody(forwarded);
+  const headers = [
+    "---------- Forwarded message ---------",
+    `From: ${readHeader(forwarded, "from") ?? ""}`,
+    `Date: ${readHeader(forwarded, "date") ?? ""}`,
+    `Subject: ${readHeader(forwarded, "subject") ?? ""}`,
+    `To: ${readHeader(forwarded, "to") ?? ""}`,
+    ...(readHeader(forwarded, "cc") === undefined
+      ? []
+      : [`Cc: ${readHeader(forwarded, "cc")}`]),
+  ];
+
+  return {
+    html: `${getComposerHtml(body)}<div><br></div><div class="gmail_quote">${headers.map(escapeHtml).join("<br>")}<br><br>${original.html}</div>`,
+    text: `${getComposerText(body)}\n\n${headers.join("\n")}\n\n${original.text}`,
+    type: "html",
+  };
+};
 
 interface ComposeHeaders {
   readonly bcc?: readonly Mailbox[];
@@ -268,6 +370,38 @@ const toRaw = (raw: string): string =>
 export const GmailMimeLive = Layer.succeed(
   GmailMime,
   GmailMime.of({
+    composeForward: (
+      input: ForwardInput & {
+        readonly attachments?: readonly OutgoingAttachment[];
+      },
+      thread: GatewayThread
+    ) =>
+      Effect.sync((): RawMessage => {
+        const forwarded = getMessage(thread, input.forwardMessageId);
+        const subject =
+          forwarded === undefined
+            ? ""
+            : (readHeader(forwarded, "subject") ?? "");
+
+        return {
+          raw: toRaw(
+            composeRaw(
+              {
+                subject: subject.toLowerCase().startsWith("fwd:")
+                  ? subject
+                  : `Fwd: ${subject}`,
+                to: input.to,
+                ...(input.bcc === undefined ? {} : { bcc: input.bcc }),
+                ...(input.cc === undefined ? {} : { cc: input.cc }),
+              },
+              composeForwardBody(input.body, forwarded),
+              input.attachments ?? [],
+              input.forwardMessageId
+            )
+          ),
+        };
+      }),
+
     composeMessage: (input: SendMessageInput) =>
       Effect.sync((): RawMessage => ({
         raw: toRaw(
@@ -287,10 +421,7 @@ export const GmailMimeLive = Layer.succeed(
 
     composeReply: (input: ReplyInput, thread: GatewayThread) =>
       Effect.sync((): RawMessage => {
-        const messages = thread.messages as readonly RawMessagePayload[];
-        const replied =
-          messages.find((message) => message.id === input.replyToMessageId) ??
-          messages.at(-1);
+        const replied = getMessage(thread, input.replyToMessageId);
         const messageIdHeader =
           replied === undefined ? undefined : readHeader(replied, "message-id");
         const existingReferences =
@@ -325,7 +456,7 @@ export const GmailMimeLive = Layer.succeed(
                           : `${existingReferences} ${messageIdHeader}`,
                     }),
               },
-              input.body,
+              composeReplyBody(input.body, replied),
               input.attachments ?? [],
               input.threadId
             )

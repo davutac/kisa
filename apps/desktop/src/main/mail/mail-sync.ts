@@ -5,8 +5,11 @@ import type { gmailMessages } from "@repo/database/schemas";
 import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
 import { GmailMime } from "@repo/gmail/mime";
-import type { GmailThread as GmailDomainThread } from "@repo/gmail/models";
-import { AccountId, LabelId, ThreadId } from "@repo/gmail/models";
+import type {
+  GmailThread as GmailDomainThread,
+  Mailbox,
+} from "@repo/gmail/models";
+import { AccountId, LabelId, MessageId, ThreadId } from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
 import { and as andSql, eq } from "drizzle-orm";
@@ -30,6 +33,7 @@ import type {
   GmailSenderBrand,
   GmailThread as GmailThreadDto,
   GmailThreadMessage,
+  GmailThreadMessageSendRequest,
   GmailThreadReadStateRequest,
   GmailThreadRequest,
   GmailThreadSummary,
@@ -38,6 +42,7 @@ import { getDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
+import { parseMailbox } from "./gmail-payload";
 import { GmailStoreLive, MESSAGE_SCHEMA_VERSION } from "./gmail-store";
 import {
   inlineImageDataUrls,
@@ -866,6 +871,112 @@ export const setThreadReadState = Effect.fn("setThreadReadState")(
     }
 
     yield* publishThreadsChanged(request.accountId);
+  }
+);
+
+const parseRecipients = Effect.fn("parseRecipients")(function* parseRecipients(
+  addresses: readonly string[]
+) {
+  const recipients: Mailbox[] = [];
+
+  for (const address of addresses) {
+    const mailbox = parseMailbox(address);
+
+    if (mailbox === undefined) {
+      return yield* new MailSyncError({
+        message: `Invalid recipient address: ${address}`,
+      });
+    }
+
+    recipients.push(mailbox);
+  }
+
+  return recipients;
+});
+
+const refreshAfterSend = Effect.fn("refreshAfterSend")(
+  function* refreshAfterSend(request: GmailThreadMessageSendRequest) {
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.sync({
+            accountId: AccountId.make(request.accountId),
+            reason: "after-send",
+          })
+        )
+      )
+    );
+    yield* publishThreadsChanged(request.accountId);
+
+    if (request.action !== "forward") {
+      const thread = yield* fetchFullThreadFromGmail({
+        accountId: request.accountId,
+        threadId: request.threadId,
+      });
+
+      yield* Effect.sync(() =>
+        sendRendererEvent(
+          MAIL_THREAD_UPDATED_CHANNEL,
+          GmailThreadUpdated,
+          thread
+        )
+      );
+    }
+  },
+  // Oxlint mistakes Effect's combinator for Promise.prototype.catch.
+  // oxlint-disable-next-line promise/prefer-await-to-callbacks promise/prefer-await-to-then
+  Effect.catch((error) =>
+    Effect.logWarning(
+      `Message sent, but Gmail refresh failed: ${error.message}`
+    )
+  )
+);
+
+export const sendThreadMessage = Effect.fn("sendThreadMessage")(
+  function* sendThreadMessage(request: GmailThreadMessageSendRequest) {
+    const [to, cc, bcc] = yield* Effect.all([
+      parseRecipients(request.to),
+      parseRecipients(request.cc),
+      parseRecipients(request.bcc),
+    ]);
+    const recipientCount = to.length + cc.length + bcc.length;
+
+    if (recipientCount === 0) {
+      return yield* new MailSyncError({
+        message: "Add at least one recipient before sending",
+      });
+    }
+
+    const input = {
+      accountId: AccountId.make(request.accountId),
+      bcc,
+      body: {
+        html: request.body.html,
+        text: request.body.text,
+        type: "html" as const,
+      },
+      cc,
+      threadId: ThreadId.make(request.threadId),
+      to,
+    };
+
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          request.action === "forward"
+            ? gmail.forward({
+                ...input,
+                forwardMessageId: MessageId.make(request.messageId),
+              })
+            : gmail.reply({
+                ...input,
+                replyToMessageId: MessageId.make(request.messageId),
+              })
+        )
+      )
+    );
+
+    yield* refreshAfterSend(request);
   }
 );
 

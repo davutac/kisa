@@ -78,6 +78,8 @@ describe(getRuntimeCapabilities, () => {
         data: { hasMore: false, threads: [] },
         ok: true as const,
       }),
+    sendThreadMessage: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     startApp: () => Promise.resolve({ ok: true as const }),
@@ -118,6 +120,7 @@ describe(getRuntimeCapabilities, () => {
         onTrustedImageSendersChanged:
           desktopBridge.onTrustedImageSendersChanged,
         search: desktopBridge.searchMail,
+        sendThreadMessage: desktopBridge.sendThreadMessage,
         setThreadReadState: desktopBridge.setThreadReadState,
         syncLabels: desktopBridge.syncGmailLabels,
         trashThread: desktopBridge.trashThread,

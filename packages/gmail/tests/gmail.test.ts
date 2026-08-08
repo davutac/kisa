@@ -11,14 +11,20 @@ import { GmailMime } from "../src/mime";
 import type { GmailAuthorization } from "../src/models";
 import {
   AccountId,
+  AttachmentId,
+  AttachmentSummary,
   GmailAccount,
   GmailCapabilities,
+  GmailMessage,
+  GmailThread,
   GMAIL_MODIFY_SCOPE,
   GMAIL_READONLY_SCOPE,
   GMAIL_SEND_SCOPE,
   HistoryId,
   LabelId,
+  Mailbox,
   MessageId,
+  SentMessage,
   ThreadId,
   ThreadSummary,
 } from "../src/models";
@@ -26,6 +32,7 @@ import type { GmailStoreService } from "../src/store";
 import { GmailStore } from "../src/store";
 
 interface TestState {
+  readonly attachmentCalls: string[];
   readonly authorizations: Map<AccountId, GmailAuthorization>;
   readonly listThreadCalls: {
     readonly accountId: AccountId;
@@ -44,16 +51,21 @@ interface TestState {
   }[];
   readonly indexedThreadIds: ThreadId[];
   readonly removedThreads: ThreadId[];
+  forwardAttachmentContentIds: readonly (string | undefined)[];
+  sendCalls: number;
 }
 
 const createTestLayer = () => {
   const state: TestState = {
+    attachmentCalls: [],
     authorizations: new Map(),
+    forwardAttachmentContentIds: [],
     indexedThreadIds: [],
     listThreadCalls: [],
     mutationCalls: [],
     readStateChanges: [],
     removedThreads: [],
+    sendCalls: 0,
   };
 
   const store: GmailStoreService = {
@@ -107,10 +119,28 @@ const createTestLayer = () => {
   };
 
   const gateway: GmailGatewayService = {
-    getAttachment: () => Effect.die("unused"),
+    getAttachment: (_authorization, request) =>
+      Effect.sync(() => {
+        state.attachmentCalls.push(request.attachmentId);
+        return {
+          value: {
+            bytes: new Uint8Array([1, 2, 3]),
+            filename: request.filename,
+            mediaType: request.mediaType,
+          },
+        };
+      }),
     getCurrentHistoryId: () => Effect.die("unused"),
     getMailboxTotals: () => Effect.die("unused"),
-    getThread: () => Effect.die("unused"),
+    getThread: () =>
+      Effect.succeed({
+        value: {
+          historyId: HistoryId.make("history-1"),
+          id: ThreadId.make("thread-1"),
+          labelIds: ["INBOX"],
+          messages: [],
+        },
+      }),
     identifyAccount: (credentials) => {
       const token = Redacted.value(credentials.accessToken);
       const suffix = token.at(-1) ?? "a";
@@ -163,7 +193,16 @@ const createTestLayer = () => {
         return { value: undefined };
       }),
     revoke: () => Effect.void,
-    send: () => Effect.die("unused"),
+    send: () =>
+      Effect.sync(() => {
+        state.sendCalls += 1;
+        return {
+          value: new SentMessage({
+            id: MessageId.make("sent-message"),
+            threadId: ThreadId.make("sent-thread"),
+          }),
+        };
+      }),
     trashThread: (authorization, threadId) =>
       Effect.sync(() => {
         state.mutationCalls.push({
@@ -176,9 +215,46 @@ const createTestLayer = () => {
   };
 
   const mime: GmailMimeService = {
+    composeForward: (input) =>
+      Effect.sync(() => {
+        state.forwardAttachmentContentIds =
+          input.attachments?.map((attachment) => attachment.contentId) ?? [];
+        return { raw: "forwarded" };
+      }),
     composeMessage: () => Effect.die("unused"),
     composeReply: () => Effect.die("unused"),
-    parseThread: () => Effect.die("unused"),
+    parseThread: () =>
+      Effect.succeed(
+        new GmailThread({
+          historyId: HistoryId.make("history-1"),
+          id: ThreadId.make("thread-1"),
+          labelIds: [LabelId.make("INBOX")],
+          messages: [
+            new GmailMessage({
+              attachments: [
+                new AttachmentSummary({
+                  attachmentId: AttachmentId.make("attachment-1"),
+                  contentId: "logo@example.com",
+                  filename: "logo.png",
+                  mediaType: "image/png",
+                  messageId: MessageId.make("message-1"),
+                  size: 3,
+                }),
+              ],
+              bcc: [],
+              body: { text: "Hello", type: "text" },
+              cc: [],
+              from: new Mailbox({ address: "sender@example.com" }),
+              id: MessageId.make("message-1"),
+              labelIds: [LabelId.make("INBOX")],
+              sentAt: "1700000000000",
+              subject: "Subject",
+              threadId: ThreadId.make("thread-1"),
+              to: [new Mailbox({ address: "me@example.com" })],
+            }),
+          ],
+        })
+      ),
   };
 
   const dependencies = Layer.mergeAll(
@@ -341,6 +417,31 @@ describe(Gmail, () => {
         { accountId: account.id, isRead: false, threadId: request.threadId },
       ]);
       expect(state.removedThreads).toStrictEqual([request.threadId]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("loads original attachments before forwarding", () => {
+    const { layer, state } = createTestLayer();
+
+    return Effect.gen(function* forwardsAttachments() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(
+        authHandoff("access-a", "refresh-a")
+      );
+      const sent = yield* gmail.forward({
+        accountId: account.id,
+        body: { text: "FYI", type: "text" },
+        forwardMessageId: MessageId.make("message-1"),
+        threadId: ThreadId.make("thread-1"),
+        to: [new Mailbox({ address: "recipient@example.com" })],
+      });
+
+      expect(sent.id).toBe("sent-message");
+      expect(state.attachmentCalls).toStrictEqual(["attachment-1"]);
+      expect(state.forwardAttachmentContentIds).toStrictEqual([
+        "logo@example.com",
+      ]);
+      expect(state.sendCalls).toBe(1);
     }).pipe(Effect.provide(layer));
   });
 });

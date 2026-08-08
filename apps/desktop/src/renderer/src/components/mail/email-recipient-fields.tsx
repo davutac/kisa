@@ -14,6 +14,7 @@ export interface EmailRecipients {
 interface EmailRecipientFieldsProps {
   actions?: ReactNode;
   className?: string;
+  disabled?: boolean;
   onChange: (recipients: EmailRecipients) => void;
   value: EmailRecipients;
 }
@@ -23,6 +24,7 @@ type RecipientField = keyof EmailRecipients;
 const EmailRecipientFields = ({
   actions,
   className,
+  disabled = false,
   onChange,
   value,
 }: EmailRecipientFieldsProps) => {
@@ -45,6 +47,7 @@ const EmailRecipientFields = ({
             <InputGroupButton
               aria-controls={`${id}-cc`}
               aria-expanded={showCc}
+              disabled={disabled}
               onClick={() => setShowCc((isVisible) => !isVisible)}
               variant={showCc ? "secondary" : "ghost"}
             >
@@ -53,6 +56,7 @@ const EmailRecipientFields = ({
             <InputGroupButton
               aria-controls={`${id}-bcc`}
               aria-expanded={showBcc}
+              disabled={disabled}
               onClick={() => setShowBcc((isVisible) => !isVisible)}
               variant={showBcc ? "secondary" : "ghost"}
             >
@@ -64,6 +68,7 @@ const EmailRecipientFields = ({
       }
       id={`${id}-${field}`}
       label={label}
+      disabled={disabled}
       onChange={(addresses) => updateField(field, addresses)}
       value={value[field]}
     />

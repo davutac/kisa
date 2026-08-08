@@ -9,6 +9,7 @@ import {
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
+  MAIL_SEND_THREAD_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_READ_CHANNEL,
   MAIL_SYNC_LABELS_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
@@ -42,6 +43,7 @@ export const mailApi: Pick<
   | "onMailThreadsChanged"
   | "onTrustedImageSendersChanged"
   | "searchMail"
+  | "sendThreadMessage"
   | "setThreadReadState"
   | "syncGmailLabels"
   | "trashThread"
@@ -75,6 +77,8 @@ export const mailApi: Pick<
     ),
   searchMail: (request) =>
     ipcRenderer.invoke(MAIL_SEARCH_THREADS_CHANNEL, request),
+  sendThreadMessage: (request) =>
+    ipcRenderer.invoke(MAIL_SEND_THREAD_MESSAGE_CHANNEL, request),
   setThreadReadState: (request) =>
     ipcRenderer.invoke(MAIL_SET_THREAD_READ_CHANNEL, request),
   syncGmailLabels: (request) =>

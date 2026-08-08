@@ -15,6 +15,7 @@ import {
 
 interface EmailAddressInputProps {
   actions?: ReactNode;
+  disabled?: boolean;
   id: string;
   label: string;
   onChange: (addresses: readonly string[]) => void;
@@ -23,6 +24,7 @@ interface EmailAddressInputProps {
 
 const EmailAddressInput = ({
   actions,
+  disabled = false,
   id,
   label,
   onChange,
@@ -86,6 +88,7 @@ const EmailAddressInput = ({
             <button
               aria-label={`Remove ${address}`}
               className="hover:bg-foreground/10 focus-visible:ring-ring/50 grid size-3.5 shrink-0 place-items-center rounded-full p-0 focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-2.5!"
+              disabled={disabled}
               onClick={() => removeAddress(address)}
               type="button"
             >
@@ -98,6 +101,7 @@ const EmailAddressInput = ({
           aria-label={label}
           autoComplete="off"
           className="h-6 min-w-32 flex-1 px-0 text-sm"
+          disabled={disabled}
           id={id}
           inputMode="email"
           onBlur={() => commit(draft)}

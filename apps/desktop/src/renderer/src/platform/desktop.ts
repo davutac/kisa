@@ -25,6 +25,7 @@ export interface MailApi {
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
   loadThread: DesktopBridge["loadThread"];
   search: DesktopBridge["searchMail"];
+  sendThreadMessage: DesktopBridge["sendThreadMessage"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
   onThreadUpdated: DesktopBridge["onMailThreadUpdated"];
@@ -101,6 +102,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       onThreadsChanged: bridge.onMailThreadsChanged,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       search: bridge.searchMail,
+      sendThreadMessage: bridge.sendThreadMessage,
       setThreadReadState: bridge.setThreadReadState,
       syncLabels: bridge.syncGmailLabels,
       trashThread: bridge.trashThread,

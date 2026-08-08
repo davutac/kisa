@@ -9,11 +9,13 @@ import type { GmailThreadMessage } from "@/shared/ipc/mail";
 interface MailThreadConversationProps {
   accountId: string;
   messages: readonly GmailThreadMessage[];
+  threadId: string;
 }
 
 const MailThreadConversation = ({
   accountId,
   messages,
+  threadId,
 }: MailThreadConversationProps) => {
   const [selectedAction, setSelectedAction] =
     useState<MailMessageAction | null>(null);
@@ -47,6 +49,8 @@ const MailThreadConversation = ({
           key={`${latestMessage.id}:${selectedAction}`}
           message={latestMessage}
           onCancel={() => setSelectedAction(null)}
+          onSent={() => setSelectedAction(null)}
+          threadId={threadId}
         />
       )}
     </>

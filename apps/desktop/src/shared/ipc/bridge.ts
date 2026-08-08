@@ -18,6 +18,8 @@ import type {
   GmailSenderSuggestionsReply,
   GmailSyncStatus,
   GmailThreadMutationReply,
+  GmailThreadMessageSendReply,
+  GmailThreadMessageSendRequest,
   GmailThreadReadStateRequest,
   GmailThreadReply,
   GmailThreadRequest,
@@ -83,6 +85,9 @@ export interface DesktopBridge {
   ) => () => void;
   onUpdateStatus: (listener: (status: UpdateStatus) => void) => () => void;
   searchMail: (request: GmailSearchRequest) => Promise<GmailSearchResultsReply>;
+  sendThreadMessage: (
+    request: GmailThreadMessageSendRequest
+  ) => Promise<GmailThreadMessageSendReply>;
   setThreadReadState: (
     request: GmailThreadReadStateRequest
   ) => Promise<GmailThreadMutationReply>;
