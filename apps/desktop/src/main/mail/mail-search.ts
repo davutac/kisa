@@ -352,6 +352,50 @@ const toSenderStatement = (accounts: SQL, pattern: SQL, limit: number): SQL =>
   `;
 
 /**
+ * Every address that has appeared in mail for these accounts. Unlike the
+ * search-palette roles, composing can target somebody from either side of a
+ * conversation, including a person who has only appeared in Cc or Bcc.
+ */
+const toCorrespondentStatement = (
+  accounts: SQL,
+  pattern: SQL,
+  limit: number
+): SQL => sql`
+  WITH correspondent_addresses AS (
+    SELECT m.from_address AS address, coalesce(m.from_name, '') AS name
+    FROM gmail_messages m
+    WHERE m.account_email IN (${accounts})
+
+    UNION ALL
+
+    SELECT recipient.value AS address, '' AS name
+    FROM gmail_messages m
+    JOIN json_each(coalesce(m.to_addresses, '[]')) AS recipient
+    WHERE m.account_email IN (${accounts})
+
+    UNION ALL
+
+    SELECT recipient.value AS address, '' AS name
+    FROM gmail_messages m
+    JOIN json_each(coalesce(m.cc_addresses, '[]')) AS recipient
+    WHERE m.account_email IN (${accounts})
+
+    UNION ALL
+
+    SELECT recipient.value AS address, '' AS name
+    FROM gmail_messages m
+    JOIN json_each(coalesce(m.bcc_addresses, '[]')) AS recipient
+    WHERE m.account_email IN (${accounts})
+  )
+  SELECT address, max(name) AS name, count(*) AS message_count
+  FROM correspondent_addresses
+  WHERE 1 = 1${pattern}
+  GROUP BY lower(address)
+  ORDER BY message_count DESC, address ASC
+  LIMIT ${limit}
+`;
+
+/**
  * The addresses behind a `from:` or `to:` pill, ranked by how much mail they
  * account for — the address someone means is nearly always one they exchange
  * mail with often.
@@ -371,18 +415,32 @@ export const runSenderSuggestions = (
     return { senders: [] };
   }
 
-  const isRecipient = request.role === "recipient";
   const like = toContainsPattern(query);
-  const matching = isRecipient
-    ? sql` AND recipient.value LIKE ${like} ESCAPE '\\'`
-    : sql` AND (m.from_address LIKE ${like} ESCAPE '\\' OR coalesce(m.from_name, '') LIKE ${like} ESCAPE '\\')`;
-  const pattern = query.length === 0 ? sql`` : matching;
   const accounts = toAccountList(request.accountIds);
-  const rows = database.all<SenderRow>(
-    isRecipient
-      ? toRecipientStatement(accounts, pattern, limit)
-      : toSenderStatement(accounts, pattern, limit)
-  );
+  let statement: SQL;
+
+  if (request.role === "recipient") {
+    const pattern =
+      query.length === 0
+        ? sql``
+        : sql` AND recipient.value LIKE ${like} ESCAPE '\\'`;
+
+    statement = toRecipientStatement(accounts, pattern, limit);
+  } else if (request.role === "correspondent") {
+    const pattern =
+      query.length === 0 ? sql`` : sql` AND address LIKE ${like} ESCAPE '\\'`;
+
+    statement = toCorrespondentStatement(accounts, pattern, limit);
+  } else {
+    const pattern =
+      query.length === 0
+        ? sql``
+        : sql` AND (m.from_address LIKE ${like} ESCAPE '\\' OR coalesce(m.from_name, '') LIKE ${like} ESCAPE '\\')`;
+
+    statement = toSenderStatement(accounts, pattern, limit);
+  }
+
+  const rows = database.all<SenderRow>(statement);
 
   return {
     senders: rows.map(

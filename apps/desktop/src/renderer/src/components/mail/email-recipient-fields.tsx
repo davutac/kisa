@@ -12,20 +12,26 @@ export interface EmailRecipients {
 }
 
 interface EmailRecipientFieldsProps {
+  accountId: string;
   actions?: ReactNode;
   className?: string;
   disabled?: boolean;
   onChange: (recipients: EmailRecipients) => void;
+  suggestedAddresses?: readonly string[];
   value: EmailRecipients;
 }
 
 type RecipientField = keyof EmailRecipients;
 
+const NO_SUGGESTED_ADDRESSES: readonly string[] = [];
+
 const EmailRecipientFields = ({
+  accountId,
   actions,
   className,
   disabled = false,
   onChange,
+  suggestedAddresses = NO_SUGGESTED_ADDRESSES,
   value,
 }: EmailRecipientFieldsProps) => {
   const id = useId();
@@ -41,6 +47,7 @@ const EmailRecipientFields = ({
 
   const renderField = (field: RecipientField, label: "Bcc" | "Cc" | "To") => (
     <EmailAddressInput
+      accountId={accountId}
       actions={
         field === "to" ? (
           <>
@@ -70,6 +77,7 @@ const EmailRecipientFields = ({
       label={label}
       disabled={disabled}
       onChange={(addresses) => updateField(field, addresses)}
+      suggestedAddresses={suggestedAddresses}
       value={value[field]}
     />
   );

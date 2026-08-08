@@ -411,6 +411,30 @@ describe(runSenderSuggestions, () => {
     }
   });
 
+  it("ranks correspondents from both sides of existing messages", () => {
+    const { connection, database } = createIndexedDatabase();
+
+    try {
+      expect(
+        runSenderSuggestions(database, {
+          accountIds: [ACCOUNT],
+          query: "jan",
+          role: "correspondent",
+        }).senders
+      ).toStrictEqual([
+        { address: "jane@example.com", messageCount: 3, name: "Jane Doe" },
+      ]);
+      expect(
+        runSenderSuggestions(database, {
+          accountIds: [OTHER_ACCOUNT],
+          role: "correspondent",
+        }).senders.map((sender) => sender.address)
+      ).toStrictEqual(["billing@other.example", "second@example.com"]);
+    } finally {
+      connection.close();
+    }
+  });
+
   it("completes on the address or on the display name", () => {
     const { connection, database } = createIndexedDatabase();
 

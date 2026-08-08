@@ -2,6 +2,8 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   extractEmailAddresses,
+  findEmailAddressCompletion,
+  getThreadEmailAddresses,
   mergeUniqueEmailAddresses,
   parseEmailAddressList,
   parseMailboxAddress,
@@ -59,6 +61,63 @@ describe(mergeUniqueEmailAddresses, () => {
         ["FIRST@example.com", "second@example.com", "second@example.com"]
       )
     ).toStrictEqual(["first@example.com", "second@example.com"]);
+  });
+});
+
+describe(getThreadEmailAddresses, () => {
+  it("prioritizes recent thread participants and excludes the account", () => {
+    expect(
+      getThreadEmailAddresses(
+        [
+          {
+            from: "First <first@example.com>",
+            to: "user@example.com",
+          },
+          {
+            cc: "Teammate <team@example.com>",
+            from: "Second <second@example.com>",
+            replyTo: "Replies <reply@example.com>",
+            to: "user@example.com, first@example.com",
+          },
+        ],
+        ["USER@example.com"]
+      )
+    ).toStrictEqual([
+      "reply@example.com",
+      "second@example.com",
+      "first@example.com",
+      "team@example.com",
+    ]);
+  });
+});
+
+describe(findEmailAddressCompletion, () => {
+  it("returns the first case-insensitive prefix match", () => {
+    expect(
+      findEmailAddressCompletion("TES", [
+        "another@example.com",
+        "test@example.com",
+      ])
+    ).toBe("test@example.com");
+  });
+
+  it("does not suggest committed, exact, empty, or whitespace drafts", () => {
+    expect(
+      findEmailAddressCompletion(
+        "tes",
+        ["test@example.com"],
+        ["TEST@example.com"]
+      )
+    ).toBeUndefined();
+    expect(
+      findEmailAddressCompletion("test@example.com", ["test@example.com"])
+    ).toBeUndefined();
+    expect(
+      findEmailAddressCompletion("", ["test@example.com"])
+    ).toBeUndefined();
+    expect(
+      findEmailAddressCompletion(" tes", ["test@example.com"])
+    ).toBeUndefined();
   });
 });
 

@@ -20,6 +20,7 @@ interface MailReplyAreaProps {
   message: GmailThreadMessage;
   onCancel: () => void;
   onSent: () => void;
+  suggestedAddresses: readonly string[];
   threadId: string;
 }
 
@@ -35,6 +36,7 @@ const MailReplyArea = ({
   message,
   onCancel,
   onSent,
+  suggestedAddresses,
   threadId,
 }: MailReplyAreaProps) => {
   const mailApi = useMemo(() => getMailApi(), []);
@@ -87,8 +89,10 @@ const MailReplyArea = ({
       aria-label={isForward ? "Forward message" : "Reply"}
     >
       <EmailRecipientFields
+        accountId={accountId}
         disabled={isSending}
         onChange={setRecipients}
+        suggestedAddresses={suggestedAddresses}
         value={recipients}
       />
       <EmailComposer

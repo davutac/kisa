@@ -4,6 +4,7 @@ import MailMessageActions from "@/components/mail/message-actions";
 import type { MailMessageAction } from "@/components/mail/message-actions";
 import MailReplyArea from "@/components/mail/reply-area";
 import MailThreadMessage from "@/components/mail/thread-message";
+import { getThreadEmailAddresses } from "@/mail/address";
 import type { GmailThreadMessage } from "@/shared/ipc/mail";
 
 interface MailThreadConversationProps {
@@ -20,6 +21,7 @@ const MailThreadConversation = ({
   const [selectedAction, setSelectedAction] =
     useState<MailMessageAction | null>(null);
   const latestMessage = messages.at(-1);
+  const suggestedAddresses = getThreadEmailAddresses(messages, [accountId]);
 
   if (latestMessage === undefined) {
     return (
@@ -50,6 +52,7 @@ const MailThreadConversation = ({
           message={latestMessage}
           onCancel={() => setSelectedAction(null)}
           onSent={() => setSelectedAction(null)}
+          suggestedAddresses={suggestedAddresses}
           threadId={threadId}
         />
       )}

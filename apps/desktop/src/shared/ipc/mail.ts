@@ -211,11 +211,12 @@ export const GmailSenderSuggestion = Schema.Struct({
 });
 export type GmailSenderSuggestion = typeof GmailSenderSuggestion.Type;
 
-/**
- * Which side of a message the addresses come from: who wrote to this account,
- * or who this account wrote to.
- */
-export const GmailAddressRole = Schema.Literals(["recipient", "sender"]);
+/** Which side of a message to draw addresses from, or both for composing. */
+export const GmailAddressRole = Schema.Literals([
+  "correspondent",
+  "recipient",
+  "sender",
+]);
 export type GmailAddressRole = typeof GmailAddressRole.Type;
 
 export const GmailSenderSuggestionRequest = Schema.Struct({
