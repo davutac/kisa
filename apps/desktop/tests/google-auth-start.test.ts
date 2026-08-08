@@ -2,17 +2,19 @@
 
 import { Effect } from "effect";
 import type * as Electron from "electron";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { DatabaseClient } from "../../../packages/database/src/client";
 import type { notifyGoogleAccountConnected } from "../src/main/auth/account-events";
 import {
   handleGoogleAuthCallback,
   startGoogleAuth,
 } from "../src/main/auth/auth";
-import type { getDatabaseClient } from "../src/main/database";
+import { getDatabaseClient } from "../src/main/database";
 import type { sendRendererEvent } from "../src/main/electron/renderer-events";
 
 const electronState = vi.hoisted(() => ({
+  accountCount: 0,
   openedUrls: [] as string[],
 }));
 
@@ -53,11 +55,34 @@ vi.mock(import("../src/main/auth/account-events"), () => ({
 }));
 
 describe("Google authentication startup", () => {
+  beforeEach(() => {
+    electronState.accountCount = 0;
+    electronState.openedUrls = [];
+    vi.mocked(getDatabaseClient).mockReturnValue(
+      Effect.succeed({
+        select: () => ({
+          from: () => ({
+            all: () => [{ value: electronState.accountCount }],
+          }),
+        }),
+      } as unknown as DatabaseClient)
+    );
+  });
+
   it("opens a new browser flow while an earlier login is still pending", async () => {
     await Effect.runPromise(startGoogleAuth());
     await Effect.runPromise(startGoogleAuth());
 
     expect(electronState.openedUrls).toHaveLength(2);
+  });
+
+  it("does not open OAuth after nine accounts are connected", async () => {
+    electronState.accountCount = 9;
+
+    await expect(Effect.runPromise(startGoogleAuth())).rejects.toThrow(
+      "You can connect up to 9 Google accounts."
+    );
+    expect(electronState.openedUrls).toStrictEqual([]);
   });
 
   it("expires a pending login after ten minutes", async () => {

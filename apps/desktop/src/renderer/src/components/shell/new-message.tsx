@@ -1,20 +1,21 @@
-import { useHotkeys } from "@tanstack/react-hotkeys";
 import { SquarePenIcon } from "lucide-react";
 import { useState } from "react";
 
 import NewMessageDialog from "@/components/mail/new-message-dialog";
 import { Button } from "@/components/ui/button";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getMailApi } from "@/platform/desktop";
 import {
-  getNewMessageShortcutKeys,
-  NEW_MESSAGE_SHORTCUT,
-} from "@/shell/titlebar-shortcuts";
+  getHotkeyAriaLabel,
+  getHotkeyDisplay,
+  HotkeyHint,
+  useAppCommand,
+  useHotkeyLayer,
+} from "@/hotkeys";
+import { getMailApi } from "@/platform/desktop";
 import { useGoogleAccounts } from "@/state/google-accounts";
 import { useSelectedAccountId } from "@/state/mailbox";
 
@@ -25,7 +26,7 @@ const TitlebarNewMessage = () => {
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const canOpen = getMailApi() !== undefined && accounts.length > 0;
-  const shortcutKeys = getNewMessageShortcutKeys();
+  const display = getHotkeyDisplay("app.composeMessage");
 
   const openComposer = (): void => {
     if (!canOpen || isOpen) {
@@ -37,17 +38,8 @@ const TitlebarNewMessage = () => {
     setIsOpen(true);
   };
 
-  useHotkeys(
-    canOpen
-      ? [
-          {
-            callback: openComposer,
-            hotkey: NEW_MESSAGE_SHORTCUT,
-            options: { preventDefault: true },
-          },
-        ]
-      : []
-  );
+  useHotkeyLayer("composer", isOpen);
+  useAppCommand("app.composeMessage", openComposer, { enabled: canOpen });
 
   return (
     <>
@@ -55,8 +47,8 @@ const TitlebarNewMessage = () => {
         <TooltipTrigger
           render={
             <Button
-              aria-keyshortcuts={NEW_MESSAGE_SHORTCUT}
-              aria-label="New email"
+              aria-keyshortcuts={getHotkeyAriaLabel("app.composeMessage")}
+              aria-label={display.label}
               className="app-titlebar-interactive"
               disabled={!canOpen}
               onClick={openComposer}
@@ -68,12 +60,8 @@ const TitlebarNewMessage = () => {
           }
         />
         <TooltipContent className="flex items-center gap-2" side="bottom">
-          New email
-          <KbdGroup>
-            {shortcutKeys.map((key) => (
-              <Kbd key={key}>{key}</Kbd>
-            ))}
-          </KbdGroup>
+          {display.label}
+          <HotkeyHint command="app.composeMessage" />
         </TooltipContent>
       </Tooltip>
       <NewMessageDialog

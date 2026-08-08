@@ -1,4 +1,3 @@
-import { formatForDisplay, useHotkeys } from "@tanstack/react-hotkeys";
 import {
   LoaderCircleIcon,
   PaperclipIcon,
@@ -7,7 +6,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { m, useReducedMotion } from "motion/react";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import EmailComposer from "@/components/mail/email-composer";
@@ -28,12 +27,20 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AppCommand,
+  COMPOSER_ACCOUNT_COMMAND_IDS,
+  getHotkeyAriaLabel,
+  getHotkeyDisplay,
+  HotkeyHint,
+  useAppCommand,
+} from "@/hotkeys";
+import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { getMailApi, getPathForFile } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
@@ -54,11 +61,6 @@ const EMPTY_COMPOSER_VALUE: EmailComposerValue = {
 };
 
 const EMPTY_RECIPIENTS: EmailRecipients = { bcc: [], cc: [], to: [] };
-const SEND_MESSAGE_SHORTCUT = "Mod+Enter";
-const SHORTCUT_KEY_SEPARATOR = "\0";
-const SEND_MESSAGE_SHORTCUT_KEYS = formatForDisplay(SEND_MESSAGE_SHORTCUT, {
-  separatorToken: SHORTCUT_KEY_SEPARATOR,
-}).split(SHORTCUT_KEY_SEPARATOR);
 
 type ComposerAttachment = GmailOutgoingAttachment & {
   readonly id: string;
@@ -80,6 +82,7 @@ const formatAttachmentSize = (bytes: number): string => {
 interface AccountPickerButtonProps {
   account: GoogleAccount;
   autoFocus: boolean;
+  command?: HotkeyCommandId;
   isSelected: boolean;
   onSelect: () => void;
 }
@@ -87,6 +90,7 @@ interface AccountPickerButtonProps {
 const AccountPickerButton = ({
   account,
   autoFocus,
+  command,
   isSelected,
   onSelect,
 }: AccountPickerButtonProps) => {
@@ -97,6 +101,9 @@ const AccountPickerButton = ({
       <TooltipTrigger
         render={
           <Button
+            aria-keyshortcuts={
+              command === undefined ? undefined : getHotkeyAriaLabel(command)
+            }
             aria-label={`Send from ${account.email}`}
             aria-pressed={isSelected}
             autoFocus={autoFocus}
@@ -134,13 +141,18 @@ const AccountPickerButton = ({
           </Button>
         }
       />
-      <TooltipContent className="flex flex-col" side="bottom">
-        {account.displayName === undefined ? null : (
-          <span>{account.displayName}</span>
-        )}
-        <span className={account.displayName === undefined ? "" : "opacity-70"}>
-          {account.email}
+      <TooltipContent className="flex items-start gap-2" side="bottom">
+        <span className="flex flex-col">
+          {account.displayName === undefined ? null : (
+            <span>{account.displayName}</span>
+          )}
+          <span
+            className={account.displayName === undefined ? "" : "opacity-70"}
+          >
+            {account.email}
+          </span>
         </span>
+        {command === undefined ? null : <HotkeyHint command={command} />}
       </TooltipContent>
     </Tooltip>
   );
@@ -179,6 +191,7 @@ const NewMessageDialog = ({
     subject.trim().length > 0 &&
     !composer.isEmpty &&
     !isSending;
+  const sendDisplay = getHotkeyDisplay("composer.send");
 
   const addAttachments = (fileList: FileList | null): void => {
     const files = [...(fileList ?? [])];
@@ -266,20 +279,13 @@ const NewMessageDialog = ({
     }
   };
 
-  useHotkeys([
-    {
-      callback: () => {
-        void send();
-      },
-      hotkey: SEND_MESSAGE_SHORTCUT,
-      options: {
-        enabled: isOpen,
-        ignoreInputs: false,
-        preventDefault: true,
-        requireReset: true,
-      },
+  useAppCommand(
+    "composer.send",
+    () => {
+      void send();
     },
-  ]);
+    { enabled: isOpen && canSend }
+  );
 
   return (
     <Dialog
@@ -378,17 +384,27 @@ const NewMessageDialog = ({
               aria-label="From account"
               className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto"
             >
-              {accounts.map((account, index) => (
-                <AccountPickerButton
-                  account={account}
-                  autoFocus={selectedAccountId.length === 0 && index === 0}
-                  isSelected={account.email === selectedAccountId}
-                  key={account.email}
-                  onSelect={() => {
-                    setAccountId(account.email);
-                  }}
-                />
-              ))}
+              {accounts.map((account, index) => {
+                const command = COMPOSER_ACCOUNT_COMMAND_IDS[index];
+                const selectAccount = (): void => {
+                  setAccountId(account.email);
+                };
+
+                return (
+                  <Fragment key={account.email}>
+                    {command === undefined ? null : (
+                      <AppCommand callback={selectAccount} command={command} />
+                    )}
+                    <AccountPickerButton
+                      account={account}
+                      autoFocus={selectedAccountId.length === 0 && index === 0}
+                      command={command}
+                      isSelected={account.email === selectedAccountId}
+                      onSelect={selectAccount}
+                    />
+                  </Fragment>
+                );
+              })}
             </fieldset>
           </div>
           <EmailRecipientFields
@@ -415,6 +431,7 @@ const NewMessageDialog = ({
           <EmailComposer
             ariaLabel="Message"
             className="min-h-32 flex-1 border-0"
+            consumeModEnter
             onChange={setComposer}
             placeholder="Write a message"
             toolbarActions={
@@ -479,10 +496,10 @@ const NewMessageDialog = ({
           )}
           <div className="bg-card flex shrink-0 items-center">
             <Button
-              aria-keyshortcuts={SEND_MESSAGE_SHORTCUT}
+              aria-keyshortcuts={getHotkeyAriaLabel("composer.send")}
               className="relative h-auto w-full rounded-none px-4 py-2 text-lg"
               disabled={!canSend}
-              title="Send (Mod+Enter)"
+              title={`${sendDisplay.label} (${sendDisplay.bindings[0]?.join("+")})`}
               type="submit"
               variant="secondary"
             >
@@ -492,11 +509,10 @@ const NewMessageDialog = ({
                 <SendIcon />
               )}
               {isSending ? "Sending…" : "Send"}
-              <KbdGroup className="absolute right-4">
-                {SEND_MESSAGE_SHORTCUT_KEYS.map((key) => (
-                  <Kbd key={key}>{key}</Kbd>
-                ))}
-              </KbdGroup>
+              <HotkeyHint
+                className="absolute right-4"
+                command="composer.send"
+              />
             </Button>
           </div>
         </form>

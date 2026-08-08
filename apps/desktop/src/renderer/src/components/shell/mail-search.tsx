@@ -1,14 +1,15 @@
-import { useHotkeys } from "@tanstack/react-hotkeys";
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 
 import MailSearchDialog from "@/components/mail/mail-search-dialog";
 import { Button } from "@/components/ui/button";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
-  getSearchShortcutKeys,
-  SEARCH_SHORTCUT,
-} from "@/shell/titlebar-shortcuts";
+  getHotkeyAriaLabel,
+  getHotkeyDisplay,
+  HotkeyHint,
+  useAppCommand,
+  useHotkeyLayer,
+} from "@/hotkeys";
 
 /**
  * The titlebar's search affordance. It is a button rather than a field: search
@@ -20,23 +21,18 @@ import {
  */
 const TitlebarMailSearch = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const shortcutKeys = getSearchShortcutKeys();
+  const display = getHotkeyDisplay("app.searchMail");
 
-  useHotkeys([
-    {
-      callback: () => {
-        setIsOpen(true);
-      },
-      hotkey: SEARCH_SHORTCUT,
-      options: { preventDefault: true },
-    },
-  ]);
+  useHotkeyLayer("search", isOpen);
+  useAppCommand("app.searchMail", () => {
+    setIsOpen(true);
+  });
 
   return (
     <>
       <Button
-        aria-keyshortcuts={SEARCH_SHORTCUT}
-        aria-label="Search mail"
+        aria-keyshortcuts={getHotkeyAriaLabel("app.searchMail")}
+        aria-label={display.label}
         className="app-titlebar-interactive"
         onClick={() => {
           setIsOpen(true);
@@ -46,11 +42,7 @@ const TitlebarMailSearch = () => {
       >
         <SearchIcon className="size-3.5 shrink-0" />
         <span>Search</span>
-        <KbdGroup>
-          {shortcutKeys.map((key) => (
-            <Kbd key={key}>{key}</Kbd>
-          ))}
-        </KbdGroup>
+        <HotkeyHint command="app.searchMail" />
       </Button>
       <MailSearchDialog isOpen={isOpen} onOpenChange={setIsOpen} />
     </>

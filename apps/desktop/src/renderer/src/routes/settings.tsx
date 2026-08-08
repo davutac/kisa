@@ -14,6 +14,7 @@ import {
   SettingsSectionHeader,
   SettingsSectionTitle,
 } from "@/components/ui/settings";
+import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
 
 import SettingsAccountsSection from "./-components/settings-accounts-section";
@@ -21,6 +22,8 @@ import SettingsUpdateRow from "./-components/settings-update-row";
 
 const SettingsRoute = () => {
   const { auth, mail, settings, updates, versions } = getRuntimeCapabilities();
+
+  useHotkeyLayer("settings", true);
 
   return (
     <section

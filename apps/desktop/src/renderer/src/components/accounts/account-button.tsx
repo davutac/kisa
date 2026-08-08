@@ -3,13 +3,14 @@ import { UserRoundIcon } from "lucide-react";
 import { m, useReducedMotion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { getHotkeyAriaLabel, HotkeyHint } from "@/hotkeys";
+import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
@@ -20,14 +21,14 @@ import { useSelectedAccountId } from "@/state/mailbox";
 
 interface TitlebarAccountButtonProps {
   account: GoogleAccount;
+  command?: HotkeyCommandId;
   index: number;
-  shortcut?: string;
 }
 
 const TitlebarAccountButton = ({
   account,
+  command,
   index,
-  shortcut,
 }: TitlebarAccountButtonProps) => {
   const { ref, targetRef } = useSortable({
     id: account.email,
@@ -61,7 +62,9 @@ const TitlebarAccountButton = ({
         render={
           <Button
             aria-busy={isSyncing || isIndexing}
-            aria-keyshortcuts={shortcut}
+            aria-keyshortcuts={
+              command === undefined ? undefined : getHotkeyAriaLabel(command)
+            }
             aria-label={`${account.email}${hasUnreadMail ? ", unread email" : ""}`}
             className="h-7 min-w-7 justify-start gap-0 overflow-visible rounded-full p-0"
             onClick={() => {
@@ -162,7 +165,7 @@ const TitlebarAccountButton = ({
             </span>
           ) : null}
         </span>
-        {shortcut === undefined ? null : <Kbd>{shortcut}</Kbd>}
+        {command === undefined ? null : <HotkeyHint command={command} />}
       </TooltipContent>
     </Tooltip>
   );

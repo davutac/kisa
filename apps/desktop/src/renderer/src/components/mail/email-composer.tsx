@@ -1,5 +1,5 @@
 import { Placeholder } from "@tiptap/extensions";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, Extension, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
@@ -17,12 +17,25 @@ interface EmailComposerProps {
   ariaLabel?: string;
   autoFocus?: boolean;
   className?: string;
+  consumeModEnter?: boolean;
   defaultValue?: string;
   disabled?: boolean;
   onChange?: (value: EmailComposerValue) => void;
   placeholder?: string;
   toolbarActions?: ReactNode;
 }
+
+export const getComposerSendKeyboardShortcuts = () => ({
+  "Mod-Enter": () => true,
+});
+
+export const ComposerSendHotkeyGuard = Extension.create({
+  addKeyboardShortcuts() {
+    return getComposerSendKeyboardShortcuts();
+  },
+  name: "composerSendHotkeyGuard",
+  priority: 1000,
+});
 
 const toComposerValue = (
   editor: NonNullable<ReturnType<typeof useEditor>>
@@ -36,6 +49,7 @@ const EmailComposer = ({
   ariaLabel = "Message",
   autoFocus = false,
   className,
+  consumeModEnter = false,
   defaultValue = "",
   disabled = false,
   onChange,
@@ -67,6 +81,7 @@ const EmailComposer = ({
         },
       }),
       Placeholder.configure({ placeholder }),
+      ...(consumeModEnter ? [ComposerSendHotkeyGuard] : []),
     ],
     onCreate: ({ editor: currentEditor }) => {
       onChangeRef.current?.(toComposerValue(currentEditor));

@@ -1,4 +1,3 @@
-import { useHotkey } from "@tanstack/react-hotkeys";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { InboxIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
@@ -13,6 +12,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
 import type { ThreadSelectionDirection } from "@/mail/thread-selection";
 import {
   getNextThreadSelectionIndex,
@@ -20,11 +20,7 @@ import {
   getVisibleThreadSelectionIndex,
 } from "@/mail/thread-selection";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
-import {
-  useMailboxStore,
-  useOpenThreadId,
-  useSelectedThreadId,
-} from "@/state/mailbox";
+import { useMailboxStore, useSelectedThreadId } from "@/state/mailbox";
 
 interface MailThreadListProps {
   emptyMessage: string;
@@ -61,7 +57,6 @@ const MailThreadList = ({
   const scrollElementRef = useRef<HTMLElement>(null);
   const listElementRef = useRef<HTMLOListElement>(null);
   const selectedThreadKey = useSelectedThreadId();
-  const openThreadId = useOpenThreadId();
   const openThread = useMailboxStore((state) => state.openThread);
   const selectThread = useMailboxStore((state) => state.selectThread);
   const previousReloadRevisionRef = useRef(reloadRevision);
@@ -88,9 +83,6 @@ const MailThreadList = ({
     (thread) => getThreadSelectionKey(thread) === selectedThreadKey
   );
   const selectedThread = threads[selectedThreadIndex];
-  // The mailbox stays mounted behind an open thread; its keys must not fire.
-  const selectionHotkeysEnabled = threads.length > 0 && openThreadId === null;
-
   const getVisibleSelectionIndex = (
     direction: ThreadSelectionDirection
   ): number | null => {
@@ -141,73 +133,56 @@ const MailThreadList = ({
     rowVirtualizer.scrollToIndex(nextIndex, { align: "auto" });
   };
 
-  useHotkey(
-    "Tab",
+  useHotkeyLayer("mailbox", true);
+  useAppCommand(
+    "mailbox.nextThread",
     () => {
       moveSelection(1);
     },
-    { enabled: selectionHotkeysEnabled }
+    { enabled: threads.length > 0 }
   );
-  useHotkey(
-    "Shift+Tab",
+  useAppCommand(
+    "mailbox.previousThread",
     () => {
       moveSelection(-1);
     },
-    { enabled: selectionHotkeysEnabled }
+    { enabled: threads.length > 0 }
   );
-  useHotkey(
-    "ArrowDown",
-    () => {
-      moveSelection(1);
-    },
-    { enabled: selectionHotkeysEnabled }
-  );
-  useHotkey(
-    "ArrowUp",
-    () => {
-      moveSelection(-1);
-    },
-    { enabled: selectionHotkeysEnabled }
-  );
-  useHotkey(
-    "J",
-    () => {
-      moveSelection(1);
-    },
-    { enabled: selectionHotkeysEnabled }
-  );
-  useHotkey(
-    "K",
-    () => {
-      moveSelection(-1);
-    },
-    { enabled: selectionHotkeysEnabled }
-  );
-  useHotkey(
-    "Escape",
+  useAppCommand(
+    "mailbox.clearSelection",
     () => {
       selectThread(null);
     },
-    {
-      // The open thread owns Escape while it is up, so it closes before the
-      // mailbox underneath drops its selection.
-      enabled: selectedThreadKey !== null && openThreadId === null,
-      requireReset: true,
-    }
+    { enabled: selectedThreadKey !== null }
   );
-  useHotkey(
-    "Enter",
+  useAppCommand(
+    "mailbox.openThread",
     () => {
-      if (selectedThread === undefined) {
-        return;
+      if (selectedThread !== undefined) {
+        openThread(getThreadSelectionKey(selectedThread));
       }
-
-      openThread(getThreadSelectionKey(selectedThread));
+    },
+    { enabled: selectedThread !== undefined }
+  );
+  useAppCommand(
+    "mailbox.toggleThreadRead",
+    () => {
+      if (selectedThread !== undefined) {
+        onToggleThreadRead?.(selectedThread);
+      }
     },
     {
-      enabled: selectedThread !== undefined && openThreadId === null,
-      requireReset: true,
+      enabled: selectedThread !== undefined && onToggleThreadRead !== undefined,
     }
+  );
+  useAppCommand(
+    "mailbox.trashThread",
+    () => {
+      if (selectedThread !== undefined) {
+        onTrashThread?.(selectedThread);
+      }
+    },
+    { enabled: selectedThread !== undefined && onTrashThread !== undefined }
   );
 
   useEffect(() => {

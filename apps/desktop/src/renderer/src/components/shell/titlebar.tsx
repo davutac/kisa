@@ -2,10 +2,9 @@ import { PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { DragDropProvider } from "@dnd-kit/react";
 import type { DragEndEvent } from "@dnd-kit/react";
 import { isSortable } from "@dnd-kit/react/sortable";
-import { useHotkeys } from "@tanstack/react-hotkeys";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { HouseIcon, PlusIcon, SettingsIcon } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { toast } from "sonner";
 
 import TitlebarAccountButton from "@/components/accounts/account-button";
@@ -14,20 +13,23 @@ import TitlebarMailSearch from "@/components/shell/mail-search";
 import TitlebarNewMessage from "@/components/shell/new-message";
 import TitlebarUnreadToggle from "@/components/shell/unread-toggle";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import TitlebarUpdateButton from "@/components/updates/titlebar-update-button";
+import {
+  AppCommand,
+  getHotkeyAriaLabel,
+  getHotkeyDisplay,
+  HotkeyHint,
+  OPEN_ACCOUNT_COMMAND_IDS,
+  useAppCommand,
+} from "@/hotkeys";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 import { getRuntimeCapabilities } from "@/platform/desktop";
-import {
-  ALL_ACCOUNTS_SHORTCUT,
-  getAccountShortcut,
-  SETTINGS_SHORTCUT,
-} from "@/shell/titlebar-shortcuts";
+import { MAX_GOOGLE_ACCOUNTS } from "@/shared/ipc/auth";
 import {
   useGoogleAccounts,
   useReorderGoogleAccounts,
@@ -49,34 +51,23 @@ const Titlebar = () => {
   const matchRoute = useMatchRoute();
   const navigate = useNavigate();
   const { openAccount, openAllAccounts } = useMailboxNavigation();
-  const accountShortcuts = accounts.map((account, index) => ({
+  const canAddAccount = accounts.length < MAX_GOOGLE_ACCOUNTS;
+  const accountCommands = accounts.map((account, index) => ({
     account,
-    shortcut: getAccountShortcut(index),
+    command: OPEN_ACCOUNT_COMMAND_IDS[index],
   }));
+  const allAccountsDisplay = getHotkeyDisplay("app.openAllAccounts");
+  const settingsDisplay = getHotkeyDisplay("app.openSettings");
 
   const openSettings = (): void => {
     void navigate({ to: "/settings" });
   };
 
-  useHotkeys([
-    { callback: openAllAccounts, hotkey: ALL_ACCOUNTS_SHORTCUT },
-    { callback: openSettings, hotkey: SETTINGS_SHORTCUT },
-    ...accountShortcuts.flatMap(({ account, shortcut }) =>
-      shortcut === undefined
-        ? []
-        : [
-            {
-              callback: () => {
-                openAccount(account.email);
-              },
-              hotkey: shortcut,
-            },
-          ]
-    ),
-  ]);
+  useAppCommand("app.openAllAccounts", openAllAccounts);
+  useAppCommand("app.openSettings", openSettings);
 
   const addAccount = async (): Promise<void> => {
-    if (auth === undefined) {
+    if (auth === undefined || !canAddAccount) {
       return;
     }
 
@@ -121,7 +112,7 @@ const Titlebar = () => {
           <TooltipTrigger
             render={
               <Button
-                aria-keyshortcuts={ALL_ACCOUNTS_SHORTCUT}
+                aria-keyshortcuts={getHotkeyAriaLabel("app.openAllAccounts")}
                 className="text-muted-foreground hover:text-foreground"
                 onClick={openAllAccounts}
                 size="icon"
@@ -138,8 +129,8 @@ const Titlebar = () => {
             }
           />
           <TooltipContent className="flex items-center gap-2" side="bottom">
-            All accounts
-            <Kbd>{ALL_ACCOUNTS_SHORTCUT}</Kbd>
+            {allAccountsDisplay.label}
+            <HotkeyHint command="app.openAllAccounts" />
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">
@@ -150,16 +141,25 @@ const Titlebar = () => {
               delayedAccountPointerSensor,
             ]}
           >
-            {accountShortcuts.map(({ account, shortcut }, index) => (
-              <TitlebarAccountButton
-                account={account}
-                index={index}
-                key={account.email}
-                shortcut={shortcut}
-              />
+            {accountCommands.map(({ account, command }, index) => (
+              <Fragment key={account.email}>
+                {command === undefined ? null : (
+                  <AppCommand
+                    callback={() => {
+                      openAccount(account.email);
+                    }}
+                    command={command}
+                  />
+                )}
+                <TitlebarAccountButton
+                  account={account}
+                  command={command}
+                  index={index}
+                />
+              </Fragment>
             ))}
           </DragDropProvider>
-          {auth === undefined ? null : (
+          {auth === undefined || !canAddAccount ? null : (
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -194,7 +194,7 @@ const Titlebar = () => {
           <TooltipTrigger
             render={
               <Button
-                aria-keyshortcuts={SETTINGS_SHORTCUT}
+                aria-keyshortcuts={getHotkeyAriaLabel("app.openSettings")}
                 aria-label="Settings"
                 onClick={openSettings}
                 size="icon"
@@ -208,8 +208,8 @@ const Titlebar = () => {
             }
           />
           <TooltipContent className="flex items-center gap-2" side="bottom">
-            Settings
-            <Kbd>{SETTINGS_SHORTCUT}</Kbd>
+            {settingsDisplay.label}
+            <HotkeyHint command="app.openSettings" />
           </TooltipContent>
         </Tooltip>
       </div>

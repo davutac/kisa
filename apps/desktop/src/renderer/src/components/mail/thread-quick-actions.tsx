@@ -2,6 +2,7 @@ import { MailIcon, MailOpenIcon, Trash2Icon } from "lucide-react";
 import { m, useReducedMotion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
+import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import { MOTION_EASE, NO_MOTION } from "@/lib/motion";
 
 /** How far the thread row slides left to uncover the actions. */
@@ -27,6 +28,7 @@ const quickActionClassName =
 const quickActionStyle = { paddingLeft: QUICK_ACTIONS_OVERLAP };
 
 interface MailThreadQuickActionsProps {
+  hotkeysEnabled: boolean;
   isRevealed: boolean;
   isUnread: boolean;
   onToggleRead?: () => void;
@@ -34,6 +36,7 @@ interface MailThreadQuickActionsProps {
 }
 
 const MailThreadQuickActions = ({
+  hotkeysEnabled,
   isRevealed,
   isUnread,
   onToggleRead,
@@ -41,6 +44,11 @@ const MailThreadQuickActions = ({
 }: MailThreadQuickActionsProps) => {
   const shouldReduceMotion = useReducedMotion();
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
+  const toggleReadKeys = getHotkeyDisplay("mailbox.toggleThreadRead");
+  const trashKeys = getHotkeyDisplay("mailbox.trashThread");
+  const trashShortcutLabel = trashKeys.bindings
+    .map((keys) => keys.join("+"))
+    .join(" / ");
 
   return (
     // Parked behind the row: the row slides off it rather than the other way
@@ -59,23 +67,39 @@ const MailThreadQuickActions = ({
       variants={quickActionsVariants}
     >
       <Button
+        aria-keyshortcuts={
+          hotkeysEnabled
+            ? getHotkeyAriaLabel("mailbox.toggleThreadRead")
+            : undefined
+        }
         aria-label={toggleReadLabel}
         className={`${quickActionClassName} hover:text-foreground`}
         onClick={onToggleRead}
         size="icon"
         style={quickActionStyle}
-        title={toggleReadLabel}
+        title={
+          hotkeysEnabled
+            ? `${toggleReadLabel} (${toggleReadKeys.bindings[0]?.join("+")})`
+            : toggleReadLabel
+        }
         variant="ghost"
       >
         {isUnread ? <MailOpenIcon /> : <MailIcon />}
       </Button>
       <Button
+        aria-keyshortcuts={
+          hotkeysEnabled ? getHotkeyAriaLabel("mailbox.trashThread") : undefined
+        }
         aria-label="Move to trash"
         className={`${quickActionClassName} hover:bg-destructive/10 hover:text-destructive`}
         onClick={onTrash}
         size="icon"
         style={quickActionStyle}
-        title="Move to trash"
+        title={
+          hotkeysEnabled
+            ? `${trashKeys.label} (${trashShortcutLabel})`
+            : trashKeys.label
+        }
         variant="ghost"
       >
         <Trash2Icon />

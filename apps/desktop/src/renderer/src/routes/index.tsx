@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 import MailThreadList from "@/components/mail/thread-list";
 import MailThreadView from "@/components/mail/thread-view";
+import { useHotkeyLayer } from "@/hotkeys";
 import { useMailboxReloadRevision } from "@/mail/mailbox-reload";
 import { parseThreadSelectionKey } from "@/mail/thread-selection";
 import { useMailIndexProgress } from "@/mail/use-mail-index-progress";
@@ -83,6 +84,8 @@ const HomeRoute = () => {
   const { toggleRead, trash } = useThreadActions();
   const indexProgress = useMailIndexProgress();
   const indexingMessage = getIndexingMessage(indexProgress, accountIds);
+
+  useHotkeyLayer("thread", openThread !== null);
 
   // The mailbox stays mounted underneath so its scroll position and virtualiser
   // survive reading a thread without any restoration bookkeeping.

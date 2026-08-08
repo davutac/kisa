@@ -2,6 +2,8 @@ import * as Schema from "effect/Schema";
 
 import { IpcReply } from "./reply";
 
+export const MAX_GOOGLE_ACCOUNTS = 9;
+
 export type GoogleAuthCallback =
   | {
       readonly attempt: string;

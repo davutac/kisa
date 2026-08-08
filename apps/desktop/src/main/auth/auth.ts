@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 
 import { googleAccounts } from "@repo/database/schemas";
-import { eq as equals } from "drizzle-orm";
+import { count, eq as equals } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { app, BrowserWindow, safeStorage, shell } from "electron";
 
@@ -16,7 +16,10 @@ import type {
   GoogleAccountsReply,
   GoogleAuthCallback,
 } from "../../shared/ipc/auth";
-import { GoogleAccountsReply as GoogleAccountsReplySchema } from "../../shared/ipc/auth";
+import {
+  GoogleAccountsReply as GoogleAccountsReplySchema,
+  MAX_GOOGLE_ACCOUNTS,
+} from "../../shared/ipc/auth";
 import { AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
 import { getDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
@@ -36,6 +39,7 @@ const GOOGLE_PROFILE_SCOPES = new Set([
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 const GOOGLE_REQUEST_TIMEOUT_MS = 5000;
 const GOOGLE_AUTH_ATTEMPT_TTL_MS = 10 * 60 * 1000;
+const GOOGLE_ACCOUNT_LIMIT_MESSAGE = `You can connect up to ${MAX_GOOGLE_ACCOUNTS} Google accounts.`;
 
 const AuthHandoff = Schema.Struct({
   accessToken: Schema.NonEmptyString,
@@ -178,6 +182,29 @@ const requireSecureStorage = (): Effect.Effect<void, GoogleAuthError> =>
     )
   );
 
+const requireGoogleAccountCapacity = Effect.fn("requireGoogleAccountCapacity")(
+  function* requireGoogleAccountCapacity() {
+    const database = yield* getDatabaseClient().pipe(
+      Effect.mapError(
+        (error) => new GoogleAuthError({ message: error.message })
+      )
+    );
+    const accountCount = yield* Effect.try({
+      catch: () =>
+        new GoogleAuthError({ message: "Could not load Google accounts" }),
+      try: () =>
+        database.select({ value: count() }).from(googleAccounts).all().at(0)
+          ?.value ?? 0,
+    });
+
+    if (accountCount >= MAX_GOOGLE_ACCOUNTS) {
+      return yield* new GoogleAuthError({
+        message: GOOGLE_ACCOUNT_LIMIT_MESSAGE,
+      });
+    }
+  }
+);
+
 const exchangeCode = Effect.fn("exchangeCode")(function* exchangeCode(
   code: string,
   attempt: string
@@ -281,28 +308,51 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
     const now = Date.now();
 
     yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not save Google account" }),
+      catch: (error) =>
+        error instanceof GoogleAuthError
+          ? error
+          : new GoogleAuthError({ message: "Could not save Google account" }),
       try: () =>
-        database
-          .insert(googleAccounts)
-          .values({
-            createdAt: now,
-            credentials: encryptedCredentials,
-            email: profile.emailAddress,
-            scopes: JSON.stringify(handoff.scopes),
-            sortOrder: now,
-            updatedAt: now,
-          })
-          .onConflictDoUpdate({
-            set: {
+        database.transaction((transaction) => {
+          const isExistingAccount =
+            transaction
+              .select({ email: googleAccounts.email })
+              .from(googleAccounts)
+              .where(equals(googleAccounts.email, profile.emailAddress))
+              .all().length > 0;
+          const accountCount =
+            transaction
+              .select({ value: count() })
+              .from(googleAccounts)
+              .all()
+              .at(0)?.value ?? 0;
+
+          if (!isExistingAccount && accountCount >= MAX_GOOGLE_ACCOUNTS) {
+            throw new GoogleAuthError({
+              message: GOOGLE_ACCOUNT_LIMIT_MESSAGE,
+            });
+          }
+
+          transaction
+            .insert(googleAccounts)
+            .values({
+              createdAt: now,
               credentials: encryptedCredentials,
+              email: profile.emailAddress,
               scopes: JSON.stringify(handoff.scopes),
+              sortOrder: now,
               updatedAt: now,
-            },
-            target: googleAccounts.email,
-          })
-          .run(),
+            })
+            .onConflictDoUpdate({
+              set: {
+                credentials: encryptedCredentials,
+                scopes: JSON.stringify(handoff.scopes),
+                updatedAt: now,
+              },
+              target: googleAccounts.email,
+            })
+            .run();
+        }),
     });
 
     return profile.emailAddress;
@@ -874,6 +924,7 @@ const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> => {
 export const startGoogleAuth = Effect.fn("startGoogleAuth")(
   function* startGoogleAuth() {
     yield* requireSecureStorage();
+    yield* requireGoogleAccountCapacity();
 
     if (!app.isPackaged) {
       yield* startDevCallbackServer();

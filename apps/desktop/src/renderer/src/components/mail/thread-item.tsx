@@ -98,6 +98,7 @@ const MailThreadItem = ({
         }}
       >
         <MailThreadQuickActions
+          hotkeysEnabled={isSelected}
           isRevealed={isRevealed}
           isUnread={thread.isUnread}
           onToggleRead={() => {
