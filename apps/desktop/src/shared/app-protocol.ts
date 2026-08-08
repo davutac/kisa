@@ -29,16 +29,22 @@ export const parseGoogleAuthCallback = (
     return undefined;
   }
 
+  const attempt = url.searchParams.get("attempt");
+
+  if (attempt === null || attempt.length === 0) {
+    return undefined;
+  }
+
   const error = url.searchParams.get("error");
 
   if (error !== null && error.length > 0) {
-    return { error };
+    return { attempt, error };
   }
 
   const code = url.searchParams.get("code");
 
   if (code !== null && code.length > 0) {
-    return { code };
+    return { attempt, code };
   }
 
   return undefined;

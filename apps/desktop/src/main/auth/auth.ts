@@ -35,6 +35,7 @@ const GOOGLE_PROFILE_SCOPES = new Set([
 ]);
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 const GOOGLE_REQUEST_TIMEOUT_MS = 5000;
+const GOOGLE_AUTH_ATTEMPT_TTL_MS = 10 * 60 * 1000;
 
 const AuthHandoff = Schema.Struct({
   accessToken: Schema.NonEmptyString,
@@ -68,7 +69,12 @@ class GoogleAuthError extends Schema.TaggedErrorClass<GoogleAuthError>()(
   { message: Schema.String }
 ) {}
 
-let pendingVerifier: string | undefined;
+interface PendingGoogleAuthAttempt {
+  readonly createdAt: number;
+  readonly verifier: string;
+}
+
+const pendingGoogleAuthAttempts = new Map<string, PendingGoogleAuthAttempt>();
 let callbackServer: Server | undefined;
 
 const decodeHandoff = Schema.decodeUnknownPromise(AuthHandoff);
@@ -110,6 +116,40 @@ const closeCallbackServer = (): void => {
   callbackServer = undefined;
 };
 
+const pruneExpiredGoogleAuthAttempts = (now = Date.now()): void => {
+  for (const [attempt, pending] of pendingGoogleAuthAttempts) {
+    if (now - pending.createdAt >= GOOGLE_AUTH_ATTEMPT_TTL_MS) {
+      pendingGoogleAuthAttempts.delete(attempt);
+    }
+  }
+};
+
+const addPendingGoogleAuthAttempt = (
+  attempt: string,
+  verifier: string
+): void => {
+  const now = Date.now();
+  pruneExpiredGoogleAuthAttempts(now);
+  pendingGoogleAuthAttempts.set(attempt, {
+    createdAt: now,
+    verifier,
+  });
+};
+
+const takePendingGoogleAuthVerifier = (attempt: string): string | undefined => {
+  pruneExpiredGoogleAuthAttempts();
+  const pending = pendingGoogleAuthAttempts.get(attempt);
+  pendingGoogleAuthAttempts.delete(attempt);
+  return pending?.verifier;
+};
+
+const closeCallbackServerIfIdle = (): void => {
+  pruneExpiredGoogleAuthAttempts();
+  if (pendingGoogleAuthAttempts.size === 0) {
+    closeCallbackServer();
+  }
+};
+
 const requireSecureStorage = (): Effect.Effect<void, GoogleAuthError> =>
   Effect.try({
     catch: () =>
@@ -139,10 +179,10 @@ const requireSecureStorage = (): Effect.Effect<void, GoogleAuthError> =>
   );
 
 const exchangeCode = Effect.fn("exchangeCode")(function* exchangeCode(
-  code: string
+  code: string,
+  attempt: string
 ) {
-  const verifier = pendingVerifier;
-  pendingVerifier = undefined;
+  const verifier = takePendingGoogleAuthVerifier(attempt);
 
   if (verifier === undefined) {
     return yield* new GoogleAuthError({
@@ -738,18 +778,20 @@ export const revokeGoogleAccountAccess = (email: string): Effect.Effect<void> =>
 export const handleGoogleAuthCallback = async (
   result: GoogleAuthCallback
 ): Promise<void> => {
-  closeCallbackServer();
   focusAppWindow();
 
   if (result.error !== undefined) {
-    pendingVerifier = undefined;
+    pendingGoogleAuthAttempts.delete(result.attempt);
+    closeCallbackServerIfIdle();
     notifyGoogleAccountsChanged({ error: result.error, ok: false });
     return;
   }
 
   try {
     const email = await Effect.runPromise(
-      exchangeCode(result.code).pipe(Effect.flatMap(saveAuthorization))
+      exchangeCode(result.code, result.attempt).pipe(
+        Effect.flatMap(saveAuthorization)
+      )
     );
 
     // Reconnecting an already-indexed account is a no-op: the indexer ignores
@@ -766,13 +808,17 @@ export const handleGoogleAuthCallback = async (
         error instanceof Error ? error.message : "Google authentication failed",
       ok: false,
     });
+  } finally {
+    closeCallbackServerIfIdle();
   }
 };
 
-const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> =>
-  Effect.callback((resume) => {
-    closeCallbackServer();
+const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> => {
+  if (callbackServer !== undefined) {
+    return Effect.void;
+  }
 
+  return Effect.callback((resume) => {
     const callbackUrl = new URL(GOOGLE_AUTH_DEV_CALLBACK_URL);
     const server = createServer((request, response) => {
       const url = new URL(request.url ?? "/", callbackUrl);
@@ -784,12 +830,15 @@ const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> =>
 
       const error = url.searchParams.get("error");
       const code = url.searchParams.get("code");
+      const attempt = url.searchParams.get("attempt");
       let result: GoogleAuthCallback | undefined;
 
-      if (error !== null) {
-        result = { error };
-      } else if (code !== null) {
-        result = { code };
+      if (attempt !== null && attempt.length > 0) {
+        if (error !== null) {
+          result = { attempt, error };
+        } else if (code !== null) {
+          result = { attempt, code };
+        }
       }
 
       if (result === undefined) {
@@ -799,7 +848,6 @@ const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> =>
 
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end("You can close this window and return to Kisa.");
-      closeCallbackServer();
       void handleGoogleAuthCallback(result);
     });
     const handleListenError = (): void => {
@@ -823,16 +871,11 @@ const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> =>
 
     return Effect.sync(closeCallbackServer);
   });
+};
 
 export const startGoogleAuth = Effect.fn("startGoogleAuth")(
   function* startGoogleAuth() {
     yield* requireSecureStorage();
-
-    if (pendingVerifier !== undefined) {
-      return yield* new GoogleAuthError({
-        message: "Google sign-in is already in progress",
-      });
-    }
 
     if (!app.isPackaged) {
       yield* startDevCallbackServer();
@@ -849,7 +892,7 @@ export const startGoogleAuth = Effect.fn("startGoogleAuth")(
       code_challenge_method: "S256",
       redirect_uri: callbackUrl,
     }).toString();
-    pendingVerifier = verifier;
+    addPendingGoogleAuthAttempt(challenge, verifier);
 
     yield* Effect.tryPromise({
       catch: () =>
@@ -858,8 +901,8 @@ export const startGoogleAuth = Effect.fn("startGoogleAuth")(
     }).pipe(
       Effect.tapError(() =>
         Effect.sync(() => {
-          pendingVerifier = undefined;
-          closeCallbackServer();
+          pendingGoogleAuthAttempts.delete(challenge);
+          closeCallbackServerIfIdle();
         })
       )
     );

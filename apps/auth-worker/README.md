@@ -28,7 +28,7 @@ The app generates a PKCE verifier and S256 challenge, then opens:
 GET /oauth/google/start?redirect_uri=kisa%3A%2F%2Foauth%2Fgoogle%2Fcallback&code_challenge=<challenge>&code_challenge_method=S256
 ```
 
-The worker signs the redirect URI, PKCE challenge, and creation time into Google's `state` parameter. After Google authorization, it validates that state and redirects to the allowlisted app URI with Google's short-lived, one-time authorization `code`. The app sends that code back with the original verifier:
+The worker signs the redirect URI, PKCE challenge, and creation time into Google's `state` parameter. After Google authorization, it validates that state and redirects to the allowlisted app URI with Google's short-lived, one-time authorization `code` and the PKCE challenge as an `attempt` identifier. The identifier lets the app match callbacks when several login flows are open. The app sends that code back with the matching verifier:
 
 ```http
 POST /oauth/google/exchange
@@ -51,4 +51,4 @@ The successful response matches `@repo/gmail`'s authorization handoff:
 }
 ```
 
-The signed OAuth state expires after ten minutes. Google authorization codes are short-lived and can only be exchanged once.
+The signed OAuth state and the app's matching login attempt expire after ten minutes. Google authorization codes are short-lived and can only be exchanged once.

@@ -356,6 +356,7 @@ export default Cloudflare.Worker(
 
         if (googleError !== null) {
           return redirectToApp(pending.appRedirectUri, {
+            attempt: pending.codeChallenge,
             error: googleError,
           });
         }
@@ -364,11 +365,13 @@ export default Cloudflare.Worker(
 
         if (authorizationCode === null) {
           return redirectToApp(pending.appRedirectUri, {
+            attempt: pending.codeChallenge,
             error: "missing_authorization_code",
           });
         }
 
         return redirectToApp(pending.appRedirectUri, {
+          attempt: pending.codeChallenge,
           code: authorizationCode,
         });
       }

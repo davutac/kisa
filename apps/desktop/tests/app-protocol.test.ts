@@ -9,20 +9,27 @@ import {
 describe(parseGoogleAuthCallback, () => {
   it("parses a successful Google callback", () => {
     expect(
-      parseGoogleAuthCallback(`${GOOGLE_AUTH_CALLBACK_URL}?code=handoff-code`)
-    ).toStrictEqual({ code: "handoff-code" });
+      parseGoogleAuthCallback(
+        `${GOOGLE_AUTH_CALLBACK_URL}?code=handoff-code&attempt=pkce-challenge`
+      )
+    ).toStrictEqual({ attempt: "pkce-challenge", code: "handoff-code" });
   });
 
   it("parses an OAuth error callback", () => {
     expect(
-      parseGoogleAuthCallback(`${GOOGLE_AUTH_CALLBACK_URL}?error=access_denied`)
-    ).toStrictEqual({ error: "access_denied" });
+      parseGoogleAuthCallback(
+        `${GOOGLE_AUTH_CALLBACK_URL}?error=access_denied&attempt=pkce-challenge`
+      )
+    ).toStrictEqual({ attempt: "pkce-challenge", error: "access_denied" });
   });
 
   it("rejects unrelated and incomplete URLs", () => {
     expect(parseGoogleAuthCallback("https://example.com")).toBeUndefined();
     expect(
       parseGoogleAuthCallback("kisa://oauth/google/callback")
+    ).toBeUndefined();
+    expect(
+      parseGoogleAuthCallback(`${GOOGLE_AUTH_CALLBACK_URL}?code=handoff-code`)
     ).toBeUndefined();
     expect(parseGoogleAuthCallback("kisa://settings")).toBeUndefined();
     expect(parseGoogleAuthCallback("not a url")).toBeUndefined();

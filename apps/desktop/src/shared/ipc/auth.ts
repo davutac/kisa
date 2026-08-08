@@ -3,8 +3,16 @@ import * as Schema from "effect/Schema";
 import { IpcReply } from "./reply";
 
 export type GoogleAuthCallback =
-  | { readonly code: string; readonly error?: never }
-  | { readonly code?: never; readonly error: string };
+  | {
+      readonly attempt: string;
+      readonly code: string;
+      readonly error?: never;
+    }
+  | {
+      readonly attempt: string;
+      readonly code?: never;
+      readonly error: string;
+    };
 
 export const GoogleAccount = Schema.Struct({
   avatarUrl: Schema.optional(Schema.String),
