@@ -47,6 +47,8 @@ Dynamic lists use the renderless `AppCommand` component, which delegates to the 
 
 Account commands are static and cover the supported maximum of nine accounts. The app uses `1` through `9` for account navigation and the composer uses `Mod+1` through `Mod+9` for its From account.
 
+`U` toggles the unread-only mailbox filter.
+
 When a mailbox thread is selected, `M` toggles its read state. Both `Backspace` and `Delete` move it to trash, covering the Mac key labeled `⌫`, Mac forward-delete, and the Windows/Linux Delete key. These commands are not registered for hover-only quick actions.
 
 ## Interaction layers

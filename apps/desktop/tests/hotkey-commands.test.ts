@@ -68,6 +68,10 @@ describe("hotkey command registry", () => {
     ).toStrictEqual([["⌫"], ["⌦"]]);
   });
 
+  it("assigns the unread filter", () => {
+    expect(HOTKEY_COMMANDS["app.toggleUnread"].bindings).toStrictEqual(["U"]);
+  });
+
   it("formats display keys for each platform", () => {
     expect(getHotkeyDisplay("app.searchMail", "mac").bindings).toStrictEqual([
       ["⌘", "K"],

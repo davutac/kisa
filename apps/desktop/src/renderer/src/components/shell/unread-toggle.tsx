@@ -7,6 +7,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  getHotkeyAriaLabel,
+  getHotkeyDisplay,
+  HotkeyHint,
+  useAppCommand,
+} from "@/hotkeys";
 import { useMailboxStore, useShowUnread } from "@/state/mailbox";
 
 const TitlebarUnreadToggle = () => {
@@ -14,6 +20,7 @@ const TitlebarUnreadToggle = () => {
   const setShowUnread = useMailboxStore((state) => state.setShowUnread);
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const display = getHotkeyDisplay("app.toggleUnread");
 
   const updateShowUnread = (pressed: boolean): void => {
     setShowUnread(pressed);
@@ -23,21 +30,29 @@ const TitlebarUnreadToggle = () => {
     }
   };
 
+  useAppCommand("app.toggleUnread", () => {
+    updateShowUnread(!showUnread);
+  });
+
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Toggle
-            aria-label="Show unread email only"
+            aria-keyshortcuts={getHotkeyAriaLabel("app.toggleUnread")}
+            aria-label={display.label}
             onPressedChange={updateShowUnread}
             pressed={showUnread}
+            size="icon"
           >
-            <MailIcon data-icon="inline-start" />
-            Unread
+            <MailIcon />
           </Toggle>
         }
       />
-      <TooltipContent side="bottom">Show unread email only</TooltipContent>
+      <TooltipContent className="flex items-center gap-2" side="bottom">
+        {display.label}
+        <HotkeyHint command="app.toggleUnread" />
+      </TooltipContent>
     </Tooltip>
   );
 };

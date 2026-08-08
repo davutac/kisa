@@ -110,6 +110,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "app",
   },
+  "app.toggleUnread": {
+    bindings: ["U"],
+    input: "ignore",
+    label: "Toggle unread filter",
+    repeat: "once",
+    scope: "app",
+  },
   "composer.send": {
     bindings: ["Mod+Enter"],
     input: "allow",
