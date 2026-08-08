@@ -242,6 +242,49 @@ describe("GmailMime sending", () => {
     expect(bodies).toContainEqual(expect.stringContaining("Original HTML"));
   });
 
+  it("composes new messages with file attachments", () => {
+    const message = Effect.runSync(
+      GmailMime.pipe(
+        Effect.flatMap((mime) =>
+          mime.composeMessage({
+            accountId: AccountId.make("me@example.com"),
+            attachments: [
+              {
+                bytes: new TextEncoder().encode("Attachment contents"),
+                filename: "notes.txt",
+                mediaType: "text/plain",
+              },
+            ],
+            body: { html: "<p>Hello</p>", text: "Hello", type: "html" },
+            subject: "Attached notes",
+            to: [new Mailbox({ address: "carol@example.com" })],
+          })
+        ),
+        Effect.provide(GmailMimeLive)
+      )
+    );
+    const raw = decodeRaw(message.raw);
+
+    expect({
+      hasAttachmentDisposition: raw.includes(
+        'Content-Disposition: attachment; filename="notes.txt"'
+      ),
+      hasAttachmentType: raw.includes(
+        'Content-Type: text/plain; name="notes.txt"'
+      ),
+      hasMixedBody: raw.includes("Content-Type: multipart/mixed"),
+      hasSubject: raw.includes("Subject: Attached notes"),
+    }).toStrictEqual({
+      hasAttachmentDisposition: true,
+      hasAttachmentType: true,
+      hasMixedBody: true,
+      hasSubject: true,
+    });
+    expect(raw).toContain(
+      Buffer.from("Attachment contents", "utf-8").toString("base64")
+    );
+  });
+
   it("composes a new forwarded message with inline attachments", () => {
     const message = Effect.runSync(
       GmailMime.pipe(

@@ -142,6 +142,29 @@ export const GmailThreadMessageSendRequest = Schema.Struct({
 export type GmailThreadMessageSendRequest =
   typeof GmailThreadMessageSendRequest.Type;
 
+export const MAX_GMAIL_ATTACHMENT_BYTES = 25_000_000;
+
+export const GmailOutgoingAttachment = Schema.Struct({
+  filename: Schema.NonEmptyString,
+  mediaType: Schema.NonEmptyString,
+  path: Schema.NonEmptyString,
+});
+export type GmailOutgoingAttachment = typeof GmailOutgoingAttachment.Type;
+
+export const GmailMessageSendRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  attachments: Schema.Array(GmailOutgoingAttachment),
+  bcc: Schema.Array(Schema.NonEmptyString),
+  body: Schema.Struct({
+    html: Schema.String,
+    text: Schema.String,
+  }),
+  cc: Schema.Array(Schema.NonEmptyString),
+  subject: Schema.String,
+  to: Schema.Array(Schema.NonEmptyString),
+});
+export type GmailMessageSendRequest = typeof GmailMessageSendRequest.Type;
+
 /** A sender whose remote images the account has agreed to load. */
 export const GmailTrustedImageSender = Schema.Struct({
   accountId: Schema.String,
@@ -311,3 +334,6 @@ export type GmailThreadMutationReply = typeof GmailThreadMutationReply.Type;
 export const GmailThreadMessageSendReply = IpcReply(Schema.Void);
 export type GmailThreadMessageSendReply =
   typeof GmailThreadMessageSendReply.Type;
+
+export const GmailMessageSendReply = IpcReply(Schema.Void);
+export type GmailMessageSendReply = typeof GmailMessageSendReply.Type;

@@ -41,6 +41,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: [], ok: true as const }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
+    getPathForFile: () => "/tmp/attachment.txt",
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
     getVersions: () => versions,
     installUpdate: () => Promise.resolve(),
@@ -78,6 +79,7 @@ describe(getRuntimeCapabilities, () => {
         data: { hasMore: false, threads: [] },
         ok: true as const,
       }),
+    sendMessage: () => Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
@@ -120,6 +122,7 @@ describe(getRuntimeCapabilities, () => {
         onTrustedImageSendersChanged:
           desktopBridge.onTrustedImageSendersChanged,
         search: desktopBridge.searchMail,
+        sendMessage: desktopBridge.sendMessage,
         sendThreadMessage: desktopBridge.sendThreadMessage,
         setThreadReadState: desktopBridge.setThreadReadState,
         syncLabels: desktopBridge.syncGmailLabels,

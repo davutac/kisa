@@ -18,6 +18,7 @@ import { useAddressSuggestions } from "@/mail/use-mail-search";
 interface EmailAddressInputProps {
   actions?: ReactNode;
   accountId: string;
+  autoFocus?: boolean;
   disabled?: boolean;
   id: string;
   label: string;
@@ -31,6 +32,7 @@ const NO_SUGGESTED_ADDRESSES: readonly string[] = [];
 const EmailAddressInput = ({
   actions,
   accountId,
+  autoFocus = false,
   disabled = false,
   id,
   label,
@@ -41,9 +43,9 @@ const EmailAddressInput = ({
   const [draft, setDraft] = useState("");
   const [isInvalid, setIsInvalid] = useState(false);
   const indexedSuggestions = useAddressSuggestions(
-    [accountId],
+    accountId.length === 0 ? [] : [accountId],
     "correspondent",
-    draft.length === 0 ? undefined : draft
+    accountId.length === 0 || draft.length === 0 ? undefined : draft
   );
   const completion = findEmailAddressCompletion(
     draft,
@@ -140,6 +142,7 @@ const EmailAddressInput = ({
             aria-invalid={isInvalid || undefined}
             aria-label={label}
             autoComplete="off"
+            autoFocus={autoFocus}
             className="z-10 col-start-1 row-start-1 h-6 w-full px-0 text-sm md:text-sm"
             disabled={disabled}
             id={id}

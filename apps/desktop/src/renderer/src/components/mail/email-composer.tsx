@@ -1,6 +1,7 @@
 import { Placeholder } from "@tiptap/extensions";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
+import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 
 import EmailComposerToolbar from "@/components/mail/email-composer-toolbar";
@@ -20,6 +21,7 @@ interface EmailComposerProps {
   disabled?: boolean;
   onChange?: (value: EmailComposerValue) => void;
   placeholder?: string;
+  toolbarActions?: ReactNode;
 }
 
 const toComposerValue = (
@@ -38,6 +40,7 @@ const EmailComposer = ({
   disabled = false,
   onChange,
   placeholder = "Write a message",
+  toolbarActions,
 }: EmailComposerProps) => {
   const onChangeRef = useRef(onChange);
 
@@ -80,13 +83,20 @@ const EmailComposer = ({
   return (
     <div
       className={cn(
-        "email-composer bg-card border-background overflow-hidden border-y",
+        "email-composer bg-card border-background flex flex-col overflow-hidden border-y",
         disabled && "opacity-50",
         className
       )}
     >
-      <EditorContent editor={editor} />
-      <EmailComposerToolbar disabled={disabled} editor={editor} />
+      <EditorContent
+        className="min-h-0 flex-1 overflow-y-auto"
+        editor={editor}
+      />
+      <EmailComposerToolbar
+        actions={toolbarActions}
+        disabled={disabled}
+        editor={editor}
+      />
     </div>
   );
 };

@@ -17,6 +17,7 @@ export const MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL =
   "desktop:mail:list-trusted-image-senders";
 export const MAIL_LOAD_THREAD_CHANNEL = "desktop:mail:load-thread";
 export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
+export const MAIL_SEND_MESSAGE_CHANNEL = "desktop:mail:send-message";
 export const MAIL_SEND_THREAD_MESSAGE_CHANNEL =
   "desktop:mail:send-thread-message";
 export const MAIL_SET_THREAD_READ_CHANNEL = "desktop:mail:set-thread-read";

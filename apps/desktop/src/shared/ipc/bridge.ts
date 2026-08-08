@@ -12,6 +12,8 @@ import type {
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
   GmailIndexProgressList,
+  GmailMessageSendReply,
+  GmailMessageSendRequest,
   GmailSearchRequest,
   GmailSearchResultsReply,
   GmailSenderSuggestionRequest,
@@ -46,6 +48,7 @@ export interface DesktopBridge {
   ) => Promise<GoogleAccountsReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
+  getPathForFile: (file: File) => string;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
   installUpdate: () => Promise<void>;
@@ -85,6 +88,9 @@ export interface DesktopBridge {
   ) => () => void;
   onUpdateStatus: (listener: (status: UpdateStatus) => void) => () => void;
   searchMail: (request: GmailSearchRequest) => Promise<GmailSearchResultsReply>;
+  sendMessage: (
+    request: GmailMessageSendRequest
+  ) => Promise<GmailMessageSendReply>;
   sendThreadMessage: (
     request: GmailThreadMessageSendRequest
   ) => Promise<GmailThreadMessageSendReply>;

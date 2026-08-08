@@ -14,6 +14,7 @@ export interface EmailRecipients {
 interface EmailRecipientFieldsProps {
   accountId: string;
   actions?: ReactNode;
+  autoFocus?: boolean;
   className?: string;
   disabled?: boolean;
   onChange: (recipients: EmailRecipients) => void;
@@ -28,6 +29,7 @@ const NO_SUGGESTED_ADDRESSES: readonly string[] = [];
 const EmailRecipientFields = ({
   accountId,
   actions,
+  autoFocus = false,
   className,
   disabled = false,
   onChange,
@@ -48,6 +50,7 @@ const EmailRecipientFields = ({
   const renderField = (field: RecipientField, label: "Bcc" | "Cc" | "To") => (
     <EmailAddressInput
       accountId={accountId}
+      autoFocus={autoFocus && field === "to"}
       actions={
         field === "to" ? (
           <>

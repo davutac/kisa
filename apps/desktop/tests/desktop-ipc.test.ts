@@ -77,6 +77,23 @@ describe(DesktopIpc.DesktopIpc, () => {
     })
   );
 
+  it.effect("decodes binary payloads as Uint8Array values", () =>
+    Effect.gen(function* decodesBinaryPayload() {
+      const method = DesktopIpc.makeIpcMethod({
+        channel: "desktop:test:binary",
+        handler: ({ bytes }) => Effect.succeed([...bytes]),
+        payload: Schema.Struct({ bytes: Schema.Uint8Array }),
+        result: Schema.Array(Schema.Number),
+      });
+
+      const result = yield* method.handler({
+        bytes: new Uint8Array([1, 2, 3]),
+      });
+
+      expect(result).toStrictEqual([1, 2, 3]);
+    })
+  );
+
   it.effect("preserves handler registration failures", () =>
     Effect.gen(function* preservesRegistrationFailure() {
       const cause = new Error("registration failed");

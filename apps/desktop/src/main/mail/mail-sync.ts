@@ -1,3 +1,4 @@
+import { readFile, stat } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
 import { gmailThreads } from "@repo/database/schemas";
@@ -24,12 +25,14 @@ import {
   GmailSyncStatus,
   GmailThreadListUpdated,
   GmailThreadUpdated,
+  MAX_GMAIL_ATTACHMENT_BYTES,
 } from "../../shared/ipc/mail";
 import type {
   GmailCachedThreadPage,
   GmailCachedThreadPageRequest,
   GmailLabelCatalog,
   GmailLabelCatalogRequest,
+  GmailMessageSendRequest,
   GmailSenderBrand,
   GmailThread as GmailThreadDto,
   GmailThreadMessage,
@@ -962,22 +965,25 @@ const parseRecipients = Effect.fn("parseRecipients")(function* parseRecipients(
   return recipients;
 });
 
-const refreshAfterSend = Effect.fn("refreshAfterSend")(
-  function* refreshAfterSend(request: GmailThreadMessageSendRequest) {
+const refreshAccountAfterSend = Effect.fn("refreshAccountAfterSend")(
+  function* refreshAccountAfterSend(accountId: string) {
     const result = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.sync({
-            accountId: AccountId.make(request.accountId),
+            accountId: AccountId.make(accountId),
             reason: "after-send",
           })
         )
       )
     );
-    yield* publishCachedThreadListChanges(
-      request.accountId,
-      result.changedThreadIds
-    );
+    yield* publishCachedThreadListChanges(accountId, result.changedThreadIds);
+  }
+);
+
+const refreshAfterSend = Effect.fn("refreshAfterSend")(
+  function* refreshAfterSend(request: GmailThreadMessageSendRequest) {
+    yield* refreshAccountAfterSend(request.accountId);
 
     if (request.action !== "forward") {
       const thread = yield* fetchFullThreadFromGmail({
@@ -1001,6 +1007,118 @@ const refreshAfterSend = Effect.fn("refreshAfterSend")(
       `Message sent, but Gmail refresh failed: ${error.message}`
     )
   )
+);
+
+const refreshAfterNewMessage = Effect.fn("refreshAfterNewMessage")(
+  function* refreshAfterNewMessage(accountId: string) {
+    yield* refreshAccountAfterSend(accountId);
+  },
+  // Oxlint mistakes Effect's combinator for Promise.prototype.catch.
+  // oxlint-disable-next-line promise/prefer-await-to-callbacks promise/prefer-await-to-then
+  Effect.catch((error) =>
+    Effect.logWarning(
+      `Message sent, but Gmail refresh failed: ${error.message}`
+    )
+  )
+);
+
+export const sendNewMessage = Effect.fn("sendNewMessage")(
+  function* sendNewMessage(request: GmailMessageSendRequest) {
+    const [to, cc, bcc] = yield* Effect.all([
+      parseRecipients(request.to),
+      parseRecipients(request.cc),
+      parseRecipients(request.bcc),
+    ]);
+    const recipientCount = to.length + cc.length + bcc.length;
+
+    if (recipientCount === 0) {
+      return yield* new MailSyncError({
+        message: "Add at least one recipient before sending",
+      });
+    }
+
+    const attachmentStats = yield* Effect.forEach(
+      request.attachments,
+      (attachment) =>
+        Effect.tryPromise({
+          catch: () =>
+            new MailSyncError({
+              message: `Could not read attachment: ${attachment.filename}`,
+            }),
+          try: () => stat(attachment.path),
+        }),
+      { concurrency: 3 }
+    );
+    const invalidAttachmentIndex = attachmentStats.findIndex(
+      (attachmentStat) => !attachmentStat.isFile()
+    );
+
+    if (invalidAttachmentIndex !== -1) {
+      return yield* new MailSyncError({
+        message: `Could not read attachment: ${request.attachments[invalidAttachmentIndex]?.filename ?? "Unknown file"}`,
+      });
+    }
+
+    const attachmentBytes = attachmentStats.reduce(
+      (total, attachmentStat) => total + attachmentStat.size,
+      0
+    );
+
+    if (attachmentBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+      return yield* new MailSyncError({
+        message: "Attachments can total up to 25 MB",
+      });
+    }
+
+    const attachments = yield* Effect.forEach(
+      request.attachments,
+      (attachment) =>
+        Effect.tryPromise({
+          catch: () =>
+            new MailSyncError({
+              message: `Could not read attachment: ${attachment.filename}`,
+            }),
+          try: async () => ({
+            bytes: await readFile(attachment.path),
+            filename: attachment.filename,
+            mediaType: attachment.mediaType,
+          }),
+        }),
+      { concurrency: 1 }
+    );
+    const loadedAttachmentBytes = attachments.reduce(
+      (total, attachment) => total + attachment.bytes.byteLength,
+      0
+    );
+
+    if (loadedAttachmentBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+      return yield* new MailSyncError({
+        message: "Attachments can total up to 25 MB",
+      });
+    }
+
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.sendMessage({
+            accountId: AccountId.make(request.accountId),
+            attachments,
+            bcc,
+            body: {
+              html: request.body.html,
+              text: request.body.text,
+              type: "html",
+            },
+            cc,
+            subject: request.subject,
+            to,
+          })
+        )
+      )
+    );
+
+    yield* refreshAfterNewMessage(request.accountId);
+  }
 );
 
 export const sendThreadMessage = Effect.fn("sendThreadMessage")(

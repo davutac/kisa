@@ -10,15 +10,18 @@ import {
   UnderlineIcon,
   Undo2Icon,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 
 interface EmailComposerToolbarProps {
+  actions?: ReactNode;
   disabled?: boolean;
   editor: Editor | null;
 }
 
 const EmailComposerToolbar = ({
+  actions,
   disabled = false,
   editor,
 }: EmailComposerToolbarProps) => {
@@ -148,6 +151,9 @@ const EmailComposerToolbar = ({
       >
         <Redo2Icon />
       </Button>
+      {actions === undefined ? null : (
+        <div className="ml-auto flex items-center gap-1">{actions}</div>
+      )}
     </div>
   );
 };

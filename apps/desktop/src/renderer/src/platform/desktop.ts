@@ -25,6 +25,7 @@ export interface MailApi {
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
   loadThread: DesktopBridge["loadThread"];
   search: DesktopBridge["searchMail"];
+  sendMessage: DesktopBridge["sendMessage"];
   sendThreadMessage: DesktopBridge["sendThreadMessage"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
@@ -102,6 +103,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       onThreadUpdated: bridge.onMailThreadUpdated,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       search: bridge.searchMail,
+      sendMessage: bridge.sendMessage,
       sendThreadMessage: bridge.sendThreadMessage,
       setThreadReadState: bridge.setThreadReadState,
       syncLabels: bridge.syncGmailLabels,
@@ -157,6 +159,9 @@ export const getAuthApi = (): AuthApi | undefined =>
 
 export const getMailApi = (): MailApi | undefined =>
   getRuntimeCapabilities().mail;
+
+export const getPathForFile = (file: File): string | undefined =>
+  getRuntimeWindow().desktopBridge?.getPathForFile(file);
 
 export const getSettingsApi = (): SettingsApi | undefined =>
   getRuntimeCapabilities().settings;

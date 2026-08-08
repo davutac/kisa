@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import TitlebarAccountButton from "@/components/accounts/account-button";
 import TitlebarIndexButton from "@/components/mail/titlebar-index-button";
 import TitlebarMailSearch from "@/components/shell/mail-search";
+import TitlebarNewMessage from "@/components/shell/new-message";
 import TitlebarUnreadToggle from "@/components/shell/unread-toggle";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -77,6 +78,7 @@ const Titlebar = () => {
   return (
     <header className="app-titlebar border-border/70 bg-background fixed inset-x-0 top-0 z-30 flex items-center justify-between gap-2 border-b">
       <div className="app-titlebar-interactive flex items-center gap-2">
+        <TitlebarNewMessage />
         <Tooltip>
           <TooltipTrigger
             render={
