@@ -9,6 +9,7 @@ import icon from "../../../build/icon.png?asset";
 import { applyNativeMailIndexProgress } from "../app/native-mail-index-progress";
 import { openExternalUrl } from "../electron/shell";
 import { initializeAutoUpdates } from "../updates/updater";
+import { installNativeContextMenu } from "./native-context-menu";
 import {
   MIN_WINDOW_SIZE,
   readWindowState,
@@ -77,6 +78,7 @@ export const createWindow = (): BrowserWindow => {
   }
 
   initializeAutoUpdates(mainWindow);
+  installNativeContextMenu(mainWindow);
 
   mainWindow.on("ready-to-show", () => {
     mainWindow.show();
