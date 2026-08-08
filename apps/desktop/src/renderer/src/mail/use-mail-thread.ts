@@ -56,12 +56,42 @@ export const useMailThread = (
         });
       }
     });
+    const unsubscribeThreadList = mailApi.onThreadListUpdated(({ changes }) => {
+      const updated = changes.find(
+        (change) =>
+          change.kind === "upsert" &&
+          change.thread.accountId === accountId &&
+          change.thread.threadId === threadId
+      );
+
+      if (updated === undefined || updated.kind !== "upsert") {
+        return;
+      }
+
+      setResult((current) =>
+        current.accountId === accountId &&
+        current.threadId === threadId &&
+        current.state.status === "ready"
+          ? {
+              ...current,
+              state: {
+                status: "ready",
+                thread: {
+                  ...current.state.thread,
+                  labels: updated.thread.labels,
+                },
+              },
+            }
+          : current
+      );
+    });
 
     void load();
 
     return () => {
       isActive = false;
       unsubscribe();
+      unsubscribeThreadList();
     };
   }, [accountId, mailApi, threadId]);
 

@@ -93,6 +93,23 @@ export type GmailThreadRequest = typeof GmailThreadRequest.Type;
 export const GmailThreadUpdated = GmailThread;
 export type GmailThreadUpdated = typeof GmailThreadUpdated.Type;
 
+export const GmailThreadListChange = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("upsert"), thread: GmailThreadSummary }),
+  Schema.Struct({
+    accountId: Schema.String,
+    kind: Schema.Literal("remove"),
+    threadId: Schema.String,
+  }),
+  Schema.Struct({ accountId: Schema.String, kind: Schema.Literal("reload") }),
+]);
+export type GmailThreadListChange = typeof GmailThreadListChange.Type;
+
+/** Ordered cached-list changes produced by one completed mail operation. */
+export const GmailThreadListUpdated = Schema.Struct({
+  changes: Schema.Array(GmailThreadListChange),
+});
+export type GmailThreadListUpdated = typeof GmailThreadListUpdated.Type;
+
 export const GmailThreadReadStateRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   /** The state to move to, not the state the thread is in. */
@@ -138,11 +155,6 @@ export const GmailTrustedImageSenderRequest = Schema.Struct({
 });
 export type GmailTrustedImageSenderRequest =
   typeof GmailTrustedImageSenderRequest.Type;
-
-export const GmailThreadsChanged = Schema.Struct({
-  accountId: Schema.String,
-});
-export type GmailThreadsChanged = typeof GmailThreadsChanged.Type;
 
 export const GmailThreadCursor = Schema.Struct({
   accountId: Schema.NonEmptyString,

@@ -69,8 +69,8 @@ describe(getRuntimeCapabilities, () => {
     onGoogleAccountsChanged: () => () => {},
     onMailIndexProgressChanged: () => () => {},
     onMailSyncStatusChanged: () => () => {},
+    onMailThreadListUpdated: () => () => {},
     onMailThreadUpdated: () => () => {},
-    onMailThreadsChanged: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
     onUpdateStatus: () => () => {},
     searchMail: () =>
@@ -115,8 +115,8 @@ describe(getRuntimeCapabilities, () => {
         loadThread: desktopBridge.loadThread,
         onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,
         onSyncStatusChanged: desktopBridge.onMailSyncStatusChanged,
+        onThreadListUpdated: desktopBridge.onMailThreadListUpdated,
         onThreadUpdated: desktopBridge.onMailThreadUpdated,
-        onThreadsChanged: desktopBridge.onMailThreadsChanged,
         onTrustedImageSendersChanged:
           desktopBridge.onTrustedImageSendersChanged,
         search: desktopBridge.searchMail,

@@ -6,16 +6,16 @@ import type { GmailThreadCursor, GmailThreadSummary } from "@/shared/ipc/mail";
 import type { MailboxThreadsSnapshot } from "./mailbox-cache";
 import {
   getMailboxThreadsSnapshot,
-  patchMailboxThreadsSnapshots,
   setMailboxThreadsSnapshot,
+  updateMailboxThreadsSnapshots,
 } from "./mailbox-cache";
-import type { ThreadPatch } from "./mailbox-model";
 import {
+  applyThreadListChanges,
   createCachedThreadPageRequest,
   filterThreadsByScope,
   getMailboxScopeKey,
+  getThreadListChangeAccountId,
   mergeAndSortThreads,
-  patchThreads,
   toThreadCursor,
 } from "./mailbox-model";
 
@@ -24,7 +24,6 @@ interface MailboxThreadsState {
   isInitialLoading: boolean;
   isLoadingNextPage: boolean;
   loadNextPage: () => Promise<boolean>;
-  patchThread: (threadKey: string, patch: ThreadPatch) => void;
   threads: readonly GmailThreadSummary[];
 }
 
@@ -128,9 +127,30 @@ export const useMailboxThreads = (
       }));
     };
 
-    const unsubscribe = mailApi.onThreadsChanged(({ accountId }) => {
-      if (accountIds.includes(accountId)) {
-        void loadCachedFirstPage(true);
+    const unsubscribeThreadList = mailApi.onThreadListUpdated(({ changes }) => {
+      updateMailboxThreadsSnapshots(changes);
+
+      const relevantChanges = changes.filter((change) =>
+        accountIds.includes(getThreadListChangeAccountId(change))
+      );
+
+      if (relevantChanges.length === 0) {
+        return;
+      }
+
+      const preciseChanges = relevantChanges.filter(
+        (change) => change.kind !== "reload"
+      );
+
+      if (preciseChanges.length > 0) {
+        setResult((current) => ({
+          ...current,
+          threads: applyThreadListChanges(current.threads, preciseChanges),
+        }));
+      }
+
+      if (relevantChanges.some((change) => change.kind === "reload")) {
+        void loadCachedFirstPage(false);
       }
     });
 
@@ -138,7 +158,7 @@ export const useMailboxThreads = (
 
     return () => {
       isActive = false;
-      unsubscribe();
+      unsubscribeThreadList();
     };
   }, [accountIds, mailApi, reloadRevision, scopeKey, unreadOnly]);
 
@@ -224,23 +244,11 @@ export const useMailboxThreads = (
     return reply.ok;
   }, [accountIds, mailApi, scopeKey, unreadOnly]);
 
-  const patchThread = useCallback(
-    (threadKey: string, patch: ThreadPatch): void => {
-      patchMailboxThreadsSnapshots(threadKey, patch);
-      setResult((current) => ({
-        ...current,
-        threads: patchThreads(current.threads, threadKey, patch),
-      }));
-    },
-    []
-  );
-
   return {
     hasNextPage: currentResult.cacheCursor !== null,
     isInitialLoading: currentResult.isInitialLoading,
     isLoadingNextPage: currentResult.isLoadingNextPage,
     loadNextPage,
-    patchThread,
     threads: currentResult.threads,
   };
 };

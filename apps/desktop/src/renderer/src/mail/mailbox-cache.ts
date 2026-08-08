@@ -1,7 +1,13 @@
-import type { GmailThreadCursor, GmailThreadSummary } from "@/shared/ipc/mail";
+import type {
+  GmailThreadCursor,
+  GmailThreadListChange,
+  GmailThreadSummary,
+} from "@/shared/ipc/mail";
 
-import type { ThreadPatch } from "./mailbox-model";
-import { patchThreads } from "./mailbox-model";
+import {
+  applyThreadListChanges,
+  getThreadListChangeAccountId,
+} from "./mailbox-model";
 
 export interface MailboxThreadsSnapshot {
   cacheCursor: GmailThreadCursor | null;
@@ -34,17 +40,39 @@ export const setMailboxThreadsSnapshot = (
   mailboxSnapshots.set(key, { ...snapshot, isLoadingNextPage: false });
 };
 
-// Every scope is patched, not just the visible one: snapshots are merged into
-// rather than replaced on their next load, so a scope that missed the edit
-// would hand the stale thread back the moment it is opened.
-export const patchMailboxThreadsSnapshots = (
-  threadKey: string,
-  patch: ThreadPatch
+// Every relevant scope receives the same IPC change set, not just the visible
+// one. That prevents a stale snapshot from restoring an old projection later
+// and lets incoming threads appear without reloading a whole first page.
+const getSnapshotAccountIds = (snapshot: MailboxThreadsSnapshot): string[] => {
+  const separatorIndex = snapshot.scopeKey.indexOf("\u0001");
+
+  return snapshot.scopeKey
+    .slice(separatorIndex + 1)
+    .split("\u0000")
+    .filter((accountId) => accountId.length > 0);
+};
+
+export const updateMailboxThreadsSnapshots = (
+  changes: readonly GmailThreadListChange[]
 ): void => {
   for (const [key, snapshot] of mailboxSnapshots) {
+    const accountIds = getSnapshotAccountIds(snapshot);
+    const relevantChanges = changes.filter((change) =>
+      accountIds.includes(getThreadListChangeAccountId(change))
+    );
+
+    if (relevantChanges.length === 0) {
+      continue;
+    }
+
+    if (relevantChanges.some((change) => change.kind === "reload")) {
+      mailboxSnapshots.delete(key);
+      continue;
+    }
+
     mailboxSnapshots.set(key, {
       ...snapshot,
-      threads: patchThreads(snapshot.threads, threadKey, patch),
+      threads: applyThreadListChanges(snapshot.threads, relevantChanges),
     });
   }
 };
@@ -59,11 +87,7 @@ export const retainMailboxThreadsSnapshotsForAccounts = (
   const retainedAccountIds = new Set(accountIds);
 
   for (const [key, snapshot] of mailboxSnapshots) {
-    const separatorIndex = snapshot.scopeKey.indexOf("\u0001");
-    const snapshotAccountIds = snapshot.scopeKey
-      .slice(separatorIndex + 1)
-      .split("\u0000")
-      .filter((accountId) => accountId.length > 0);
+    const snapshotAccountIds = getSnapshotAccountIds(snapshot);
     const matchesAccounts =
       snapshotAccountIds.length === retainedAccountIds.size &&
       snapshotAccountIds.every((accountId) =>

@@ -1,13 +1,16 @@
 import type {
   GmailCachedThreadPageRequest,
+  GmailThreadListChange,
   GmailThreadCursor,
   GmailThreadSummary,
 } from "@/shared/ipc/mail";
 
-import { hasInboxLabel, withoutInboxLabel, withReadStateLabel } from "./label";
-import { getThreadSelectionKey } from "./thread-selection";
+import { hasInboxLabel } from "./label";
 
-export type ThreadPatch = (thread: GmailThreadSummary) => GmailThreadSummary;
+export const getThreadListChangeAccountId = (
+  change: GmailThreadListChange
+): string =>
+  change.kind === "upsert" ? change.thread.accountId : change.accountId;
 
 const compareAscending = (left: string, right: string): number => {
   if (left === right) {
@@ -55,32 +58,31 @@ export const filterThreadsByScope = (
       (!unreadOnly || isUnread)
   );
 
-export const patchThreads = (
+export const applyThreadListChanges = (
   threads: readonly GmailThreadSummary[],
-  threadKey: string,
-  patch: ThreadPatch
-): readonly GmailThreadSummary[] =>
-  threads.map((thread) =>
-    getThreadSelectionKey(thread) === threadKey ? patch(thread) : thread
-  );
+  changes: readonly GmailThreadListChange[]
+): readonly GmailThreadSummary[] => {
+  let updatedThreads = threads;
 
-export const toReadStateThread = (
-  thread: GmailThreadSummary,
-  isUnread: boolean
-): GmailThreadSummary => ({
-  ...thread,
-  isUnread,
-  labels: withReadStateLabel(thread.labels, isUnread),
-});
+  for (const change of changes) {
+    if (change.kind === "upsert") {
+      updatedThreads = mergeAndSortThreads(updatedThreads, [change.thread]);
+      continue;
+    }
 
-// Trashing drops the thread out of every mailbox scope, because each one is
-// filtered down to inbox threads.
-export const toTrashedThread = (
-  thread: GmailThreadSummary
-): GmailThreadSummary => ({
-  ...thread,
-  labels: withoutInboxLabel(thread.labels),
-});
+    if (change.kind === "reload") {
+      continue;
+    }
+
+    updatedThreads = updatedThreads.filter(
+      (thread) =>
+        thread.accountId !== change.accountId ||
+        thread.threadId !== change.threadId
+    );
+  }
+
+  return updatedThreads;
+};
 
 export const toThreadCursor = (
   thread: GmailThreadSummary

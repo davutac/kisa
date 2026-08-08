@@ -12,18 +12,18 @@ import type {
 import { AccountId, LabelId, MessageId, ThreadId } from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
-import { and as andSql, eq } from "drizzle-orm";
+import { and as andSql, eq, inArray as inArraySql } from "drizzle-orm";
 import { Clock, Effect, Layer, Schedule, Schema } from "effect";
 
 import {
   MAIL_SYNC_STATUS_CHANNEL,
+  MAIL_THREAD_LIST_UPDATED_CHANNEL,
   MAIL_THREAD_UPDATED_CHANNEL,
-  MAIL_THREADS_CHANGED_CHANNEL,
 } from "../../shared/ipc/channels";
 import {
   GmailSyncStatus,
+  GmailThreadListUpdated,
   GmailThreadUpdated,
-  GmailThreadsChanged,
 } from "../../shared/ipc/mail";
 import type {
   GmailCachedThreadPage,
@@ -36,6 +36,7 @@ import type {
   GmailThreadMessageSendRequest,
   GmailThreadReadStateRequest,
   GmailThreadRequest,
+  GmailThreadListChange,
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
 import { getDatabaseClient } from "../database";
@@ -318,9 +319,11 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
   }
 );
 
-const notifyThreadsChanged = (accountId: string): void => {
-  sendRendererEvent(MAIL_THREADS_CHANGED_CHANNEL, GmailThreadsChanged, {
-    accountId,
+const notifyThreadListUpdated = (
+  changes: readonly GmailThreadListChange[]
+): void => {
+  sendRendererEvent(MAIL_THREAD_LIST_UPDATED_CHANNEL, GmailThreadListUpdated, {
+    changes,
   });
 };
 
@@ -338,12 +341,14 @@ const setAccountSyncing = (accountId: string, isSyncing: boolean): void => {
   });
 };
 
-const publishThreadsChanged = Effect.fn("publishThreadsChanged")(
-  function* publishThreadsChanged(accountId: string) {
+const publishThreadListUpdated = Effect.fn("publishThreadListUpdated")(
+  function* publishThreadListUpdated(
+    changes: readonly GmailThreadListChange[]
+  ) {
     yield* Effect.try({
       catch: () =>
         new MailSyncError({ message: "Could not publish email update" }),
-      try: () => notifyThreadsChanged(accountId),
+      try: () => notifyThreadListUpdated(changes),
     });
     yield* refreshUnreadBadge().pipe(
       Effect.catch((error) =>
@@ -352,6 +357,9 @@ const publishThreadsChanged = Effect.fn("publishThreadsChanged")(
     );
   }
 );
+
+const reloadThreadList = (accountId: string) =>
+  publishThreadListUpdated([{ accountId, kind: "reload" }]);
 
 // Disconnecting an account must leave nothing behind, and every mail table is
 // keyed by the account address, so deleting by it clears the account entirely.
@@ -647,7 +655,7 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
           )
         )
       );
-      yield* publishThreadsChanged(request.accountId);
+      yield* reloadThreadList(request.accountId);
     }
 
     return {
@@ -702,6 +710,17 @@ const requestThreadRefresh = (request: GmailThreadRequest): void => {
 
 const activeReadMutations = new Set<string>();
 
+const toReadStateSummary = (
+  summary: GmailThreadSummary,
+  isUnread: boolean
+): GmailThreadSummary => ({
+  ...summary,
+  isUnread,
+  labels: isUnread
+    ? addUnreadLabel(summary.labels)
+    : removeUnreadLabel(summary.labels),
+});
+
 const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
   function* markCachedThreadRead(request: GmailThreadRequest) {
     yield* runGmail(
@@ -714,7 +733,7 @@ const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
         )
       )
     );
-    yield* withDatabase("Could not cache email", (database) => {
+    const summary = yield* withDatabase("Could not cache email", (database) => {
       const row = database.query.gmailThreads
         .findFirst({
           where: (thread, { and, eq: is }) =>
@@ -725,24 +744,33 @@ const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
         })
         .sync();
 
-      if (row !== undefined) {
-        database
-          .update(gmailThreads)
-          .set({
-            isUnread: false,
-            labels: removeUnreadLabel(row.labels ?? []),
-            updatedAt: Date.now(),
-          })
-          .where(
-            andSql(
-              eq(gmailThreads.accountEmail, request.accountId),
-              eq(gmailThreads.threadId, request.threadId)
-            )
-          )
-          .run();
+      if (row === undefined) {
+        return;
       }
+
+      const updated = toReadStateSummary(toCachedThreadSummary(row), false);
+
+      database
+        .update(gmailThreads)
+        .set({
+          isUnread: updated.isUnread,
+          labels: updated.labels,
+          updatedAt: Date.now(),
+        })
+        .where(
+          andSql(
+            eq(gmailThreads.accountEmail, request.accountId),
+            eq(gmailThreads.threadId, request.threadId)
+          )
+        )
+        .run();
+
+      return updated;
     });
-    yield* publishThreadsChanged(request.accountId);
+
+    yield* summary === undefined
+      ? reloadThreadList(request.accountId)
+      : publishThreadListUpdated([{ kind: "upsert", thread: summary }]);
   }
 );
 
@@ -803,6 +831,52 @@ const findCachedThread = (accountId: string, threadId: string) =>
       .sync()
   );
 
+const toCachedThreadListChanges = Effect.fn("toCachedThreadListChanges")(
+  function* toCachedThreadListChanges(
+    accountId: string,
+    threadIds: readonly ThreadId[]
+  ) {
+    if (threadIds.length === 0) {
+      return [];
+    }
+
+    const rows = yield* withDatabase("Could not load email", (database) =>
+      database
+        .select()
+        .from(gmailThreads)
+        .where(
+          andSql(
+            eq(gmailThreads.accountEmail, accountId),
+            inArraySql(gmailThreads.threadId, [...threadIds])
+          )
+        )
+        .all()
+    );
+    const rowsById = new Map(rows.map((row) => [row.threadId, row]));
+
+    return threadIds.map((threadId): GmailThreadListChange => {
+      const row = rowsById.get(threadId);
+
+      return row === undefined
+        ? { accountId, kind: "remove", threadId }
+        : { kind: "upsert", thread: toCachedThreadSummary(row) };
+    });
+  }
+);
+
+const publishCachedThreadListChanges = Effect.fn(
+  "publishCachedThreadListChanges"
+)(function* publishCachedThreadListChanges(
+  accountId: string,
+  threadIds: readonly ThreadId[]
+) {
+  const changes = yield* toCachedThreadListChanges(accountId, threadIds);
+
+  if (changes.length > 0) {
+    yield* publishThreadListUpdated(changes);
+  }
+});
+
 const updateCachedThread = (
   summary: GmailThreadSummary
 ): Effect.Effect<void, MailSyncError> =>
@@ -820,17 +894,6 @@ const updateCachedThread = (
       .where(eq(gmailThreads.threadId, summary.threadId))
       .run();
   });
-
-const toReadStateSummary = (
-  summary: GmailThreadSummary,
-  isUnread: boolean
-): GmailThreadSummary => ({
-  ...summary,
-  isUnread,
-  labels: isUnread
-    ? addUnreadLabel(summary.labels)
-    : removeUnreadLabel(summary.labels),
-});
 
 // Trashing is a label move for Gmail, so the cached row mirrors it rather than
 // being deleted: losing INBOX is already how the cache hides an archived
@@ -864,13 +927,18 @@ export const setThreadReadState = Effect.fn("setThreadReadState")(
 
     const row = yield* findCachedThread(request.accountId, request.threadId);
 
-    if (row !== undefined) {
-      yield* updateCachedThread(
-        toReadStateSummary(toCachedThreadSummary(row), request.isUnread)
-      );
+    if (row === undefined) {
+      yield* reloadThreadList(request.accountId);
+      return;
     }
 
-    yield* publishThreadsChanged(request.accountId);
+    const summary = toReadStateSummary(
+      toCachedThreadSummary(row),
+      request.isUnread
+    );
+
+    yield* updateCachedThread(summary);
+    yield* publishThreadListUpdated([{ kind: "upsert", thread: summary }]);
   }
 );
 
@@ -896,7 +964,7 @@ const parseRecipients = Effect.fn("parseRecipients")(function* parseRecipients(
 
 const refreshAfterSend = Effect.fn("refreshAfterSend")(
   function* refreshAfterSend(request: GmailThreadMessageSendRequest) {
-    yield* runGmail(
+    const result = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.sync({
@@ -906,7 +974,10 @@ const refreshAfterSend = Effect.fn("refreshAfterSend")(
         )
       )
     );
-    yield* publishThreadsChanged(request.accountId);
+    yield* publishCachedThreadListChanges(
+      request.accountId,
+      result.changedThreadIds
+    );
 
     if (request.action !== "forward") {
       const thread = yield* fetchFullThreadFromGmail({
@@ -1020,9 +1091,18 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
         })
         .run();
     });
+
+    yield* publishThreadListUpdated([{ kind: "upsert", thread: summary }]);
+    return;
   }
 
-  yield* publishThreadsChanged(request.accountId);
+  yield* publishThreadListUpdated([
+    {
+      accountId: request.accountId,
+      kind: "remove",
+      threadId: request.threadId,
+    },
+  ]);
 });
 
 const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
@@ -1037,7 +1117,7 @@ const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
   );
 
   if (result.changedThreadIds.length > 0) {
-    yield* publishThreadsChanged(accountId);
+    yield* publishCachedThreadListChanges(accountId, result.changedThreadIds);
   }
 });
 

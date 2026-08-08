@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 
-import { createCachedThreadPageRequest } from "@/mail/mailbox-model";
+import {
+  createCachedThreadPageRequest,
+  getThreadListChangeAccountId,
+} from "@/mail/mailbox-model";
 import { getMailApi } from "@/platform/desktop";
 
 /** Whether the cached inbox for one account contains at least one unread thread. */
@@ -27,8 +30,12 @@ export const useHasUnreadMail = (accountId: string): boolean => {
         setHasUnreadMail(reply.data.threads.length > 0);
       }
     };
-    const unsubscribe = mailApi.onThreadsChanged((event) => {
-      if (event.accountId === accountId) {
+    const unsubscribeThreadList = mailApi.onThreadListUpdated(({ changes }) => {
+      const includesAccount = changes.some(
+        (change) => getThreadListChangeAccountId(change) === accountId
+      );
+
+      if (includesAccount) {
         void loadUnreadState();
       }
     });
@@ -37,7 +44,7 @@ export const useHasUnreadMail = (accountId: string): boolean => {
 
     return () => {
       isActive = false;
-      unsubscribe();
+      unsubscribeThreadList();
     };
   }, [accountId]);
 

@@ -4,14 +4,13 @@ import type { MailboxThreadsSnapshot } from "../src/renderer/src/mail/mailbox-ca
 import {
   clearMailboxThreadsSnapshots,
   getMailboxThreadsSnapshot,
-  patchMailboxThreadsSnapshots,
   retainMailboxThreadsSnapshotsForAccounts,
   setMailboxThreadsSnapshot,
+  updateMailboxThreadsSnapshots,
 } from "../src/renderer/src/mail/mailbox-cache";
 import {
   filterThreadsByScope,
   getMailboxScopeKey,
-  toTrashedThread,
 } from "../src/renderer/src/mail/mailbox-model";
 import { requestMailboxReload } from "../src/renderer/src/mail/mailbox-reload";
 import type { GmailThreadSummary } from "../src/shared/ipc/mail";
@@ -87,7 +86,7 @@ describe("mailbox thread snapshots", () => {
     expect(getMailboxThreadsSnapshot(allAccountsKey)).toBeUndefined();
   });
 
-  it("removes a locally trashed thread from visible inbox snapshots", () => {
+  it("hides a trashed thread upsert from visible inbox snapshots", () => {
     const scopeKey = getMailboxScopeKey(["account@example.com"], false);
     const thread = makeThread();
 
@@ -95,10 +94,12 @@ describe("mailbox thread snapshots", () => {
       ...makeSnapshot(scopeKey),
       threads: [thread],
     });
-    patchMailboxThreadsSnapshots(
-      `${thread.accountId}:${thread.threadId}`,
-      toTrashedThread
-    );
+    updateMailboxThreadsSnapshots([
+      {
+        kind: "upsert",
+        thread: { ...thread, labels: ["TRASH"] },
+      },
+    ]);
 
     const snapshot = getMailboxThreadsSnapshot(scopeKey);
 
@@ -110,5 +111,53 @@ describe("mailbox thread snapshots", () => {
         false
       )
     ).toStrictEqual([]);
+  });
+
+  it("adds incoming threads only to snapshots containing their account", () => {
+    const accountScopeKey = getMailboxScopeKey(["account@example.com"], false);
+    const otherScopeKey = getMailboxScopeKey(["other@example.com"], false);
+    const incoming = makeThread();
+
+    setMailboxThreadsSnapshot(accountScopeKey, makeSnapshot(accountScopeKey));
+    setMailboxThreadsSnapshot(otherScopeKey, makeSnapshot(otherScopeKey));
+    updateMailboxThreadsSnapshots([{ kind: "upsert", thread: incoming }]);
+
+    expect(getMailboxThreadsSnapshot(accountScopeKey)?.threads).toStrictEqual([
+      incoming,
+    ]);
+    expect(getMailboxThreadsSnapshot(otherScopeKey)?.threads).toStrictEqual([]);
+  });
+
+  it("removes threads deleted by an external sync", () => {
+    const scopeKey = getMailboxScopeKey(["account@example.com"], false);
+    const thread = makeThread();
+
+    setMailboxThreadsSnapshot(scopeKey, {
+      ...makeSnapshot(scopeKey),
+      threads: [thread],
+    });
+    updateMailboxThreadsSnapshots([
+      {
+        accountId: thread.accountId,
+        kind: "remove",
+        threadId: thread.threadId,
+      },
+    ]);
+
+    expect(getMailboxThreadsSnapshot(scopeKey)?.threads).toStrictEqual([]);
+  });
+
+  it("invalidates relevant snapshots when an authoritative reload is needed", () => {
+    const accountScopeKey = getMailboxScopeKey(["account@example.com"], false);
+    const otherScopeKey = getMailboxScopeKey(["other@example.com"], false);
+
+    setMailboxThreadsSnapshot(accountScopeKey, makeSnapshot(accountScopeKey));
+    setMailboxThreadsSnapshot(otherScopeKey, makeSnapshot(otherScopeKey));
+    updateMailboxThreadsSnapshots([
+      { accountId: "account@example.com", kind: "reload" },
+    ]);
+
+    expect(getMailboxThreadsSnapshot(accountScopeKey)).toBeUndefined();
+    expect(getMailboxThreadsSnapshot(otherScopeKey)).toBeDefined();
   });
 });

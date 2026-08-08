@@ -22,8 +22,9 @@ export const MAIL_SEND_THREAD_MESSAGE_CHANNEL =
 export const MAIL_SET_THREAD_READ_CHANNEL = "desktop:mail:set-thread-read";
 export const MAIL_SYNC_LABELS_CHANNEL = "desktop:mail:sync-labels";
 export const MAIL_SYNC_STATUS_CHANNEL = "desktop:mail:sync-status";
+export const MAIL_THREAD_LIST_UPDATED_CHANNEL =
+  "desktop:mail:thread-list-updated";
 export const MAIL_THREAD_UPDATED_CHANNEL = "desktop:mail:thread-updated";
-export const MAIL_THREADS_CHANGED_CHANNEL = "desktop:mail:threads-changed";
 export const MAIL_TRASH_THREAD_CHANNEL = "desktop:mail:trash-thread";
 export const MAIL_TRUST_IMAGE_SENDER_CHANNEL =
   "desktop:mail:trust-image-sender";

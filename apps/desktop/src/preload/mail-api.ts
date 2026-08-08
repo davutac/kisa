@@ -13,8 +13,8 @@ import {
   MAIL_SET_THREAD_READ_CHANNEL,
   MAIL_SYNC_LABELS_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
+  MAIL_THREAD_LIST_UPDATED_CHANNEL,
   MAIL_THREAD_UPDATED_CHANNEL,
-  MAIL_THREADS_CHANGED_CHANNEL,
   MAIL_TRASH_THREAD_CHANNEL,
   MAIL_TRUST_IMAGE_SENDER_CHANNEL,
   MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL,
@@ -22,8 +22,8 @@ import {
 import {
   GmailIndexProgressList,
   GmailSyncStatus,
+  GmailThreadListUpdated,
   GmailThreadUpdated,
-  GmailThreadsChanged,
   GmailTrustedImageSendersReply,
 } from "../shared/ipc/mail";
 import { subscribe } from "./subscribe";
@@ -39,8 +39,8 @@ export const mailApi: Pick<
   | "loadThread"
   | "onMailIndexProgressChanged"
   | "onMailSyncStatusChanged"
+  | "onMailThreadListUpdated"
   | "onMailThreadUpdated"
-  | "onMailThreadsChanged"
   | "onTrustedImageSendersChanged"
   | "searchMail"
   | "sendThreadMessage"
@@ -65,10 +65,14 @@ export const mailApi: Pick<
     subscribe(MAIL_INDEX_PROGRESS_CHANNEL, GmailIndexProgressList, listener),
   onMailSyncStatusChanged: (listener) =>
     subscribe(MAIL_SYNC_STATUS_CHANNEL, GmailSyncStatus, listener),
+  onMailThreadListUpdated: (listener) =>
+    subscribe(
+      MAIL_THREAD_LIST_UPDATED_CHANNEL,
+      GmailThreadListUpdated,
+      listener
+    ),
   onMailThreadUpdated: (listener) =>
     subscribe(MAIL_THREAD_UPDATED_CHANNEL, GmailThreadUpdated, listener),
-  onMailThreadsChanged: (listener) =>
-    subscribe(MAIL_THREADS_CHANGED_CHANNEL, GmailThreadsChanged, listener),
   onTrustedImageSendersChanged: (listener) =>
     subscribe(
       MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL,

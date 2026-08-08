@@ -13,7 +13,6 @@ import { useMailboxStore } from "@/state/mailbox";
 
 interface MailThreadHeaderProps {
   accountId: string;
-  actionsDisabled?: boolean;
   isUnread: boolean;
   labels: readonly string[];
   latestAt?: number;
@@ -24,7 +23,6 @@ interface MailThreadHeaderProps {
 
 const MailThreadHeader = ({
   accountId,
-  actionsDisabled = false,
   isUnread,
   labels,
   latestAt,
@@ -60,7 +58,6 @@ const MailThreadHeader = ({
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
             aria-label={toggleReadLabel}
-            disabled={actionsDisabled}
             onClick={onToggleRead}
             size="icon"
             title={toggleReadLabel}
@@ -72,7 +69,6 @@ const MailThreadHeader = ({
           <Button
             aria-label="Move to trash"
             className="hover:bg-destructive/10 hover:text-destructive"
-            disabled={actionsDisabled}
             onClick={onTrash}
             size="icon"
             title="Move to trash"

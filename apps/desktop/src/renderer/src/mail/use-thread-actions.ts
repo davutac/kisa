@@ -2,100 +2,92 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { getMailApi } from "@/platform/desktop";
-import type {
-  GmailThreadMutationReply,
-  GmailThreadSummary,
-} from "@/shared/ipc/mail";
+import type { GmailThreadMutationReply } from "@/shared/ipc/mail";
 
-import type { ThreadPatch } from "./mailbox-model";
-import { toReadStateThread, toTrashedThread } from "./mailbox-model";
-import { getThreadSelectionKey } from "./thread-selection";
+export interface ThreadActionTarget {
+  accountId: string;
+  isUnread: boolean;
+  threadId: string;
+}
 
-type PatchThread = (threadKey: string, patch: ThreadPatch) => void;
+type OnThreadActionSuccess = () => void;
 
-interface ThreadActions {
-  toggleRead: (thread: GmailThreadSummary) => void;
-  trash: (thread: GmailThreadSummary) => void;
+export interface ThreadActions {
+  toggleRead: (
+    thread: ThreadActionTarget,
+    onSuccess?: OnThreadActionSuccess
+  ) => void;
+  trash: (
+    thread: ThreadActionTarget,
+    onSuccess?: OnThreadActionSuccess
+  ) => void;
 }
 
 /**
- * Quick actions apply locally first: Gmail round-trips take long enough that
- * waiting reads as a dead click. A failed call puts the thread back exactly as
- * it was, which is why the rollback replays the original rather than inverting
- * the edit — a background sync may have changed the thread in between.
+ * Every thread action enters through this hook. The main process performs the
+ * Gmail and cache mutation, then publishes the resulting list projection; the
+ * renderer list and open thread both reconcile from that one typed event.
  */
-export const useThreadActions = (patchThread: PatchThread): ThreadActions => {
+export const useThreadActions = (): ThreadActions => {
   const mailApi = getMailApi();
   const runThreadAction = useCallback(
     (
-      thread: GmailThreadSummary,
-      patch: ThreadPatch,
       send: () => Promise<GmailThreadMutationReply>,
-      fallbackMessage: string
+      fallbackMessage: string,
+      onSuccess?: OnThreadActionSuccess
     ): void => {
-      const threadKey = getThreadSelectionKey(thread);
-      const rollBack = (message: string): void => {
-        patchThread(threadKey, () => thread);
-        toast.error(message);
-      };
-
-      patchThread(threadKey, patch);
-
       void (async () => {
         try {
           const reply = await send();
 
           if (!reply.ok) {
-            rollBack(reply.error);
+            toast.error(reply.error);
+            return;
           }
+
+          onSuccess?.();
         } catch (error) {
-          // A rejected invoke means the channel never answered, so the edit is
-          // only ever local and has to come back off.
-          rollBack(error instanceof Error ? error.message : fallbackMessage);
+          toast.error(error instanceof Error ? error.message : fallbackMessage);
         }
       })();
     },
-    [patchThread]
+    []
   );
 
   const toggleRead = useCallback(
-    (thread: GmailThreadSummary): void => {
+    (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
       if (mailApi === undefined) {
         return;
       }
 
-      const isUnread = !thread.isUnread;
-
       runThreadAction(
-        thread,
-        (current) => toReadStateThread(current, isUnread),
         () =>
           mailApi.setThreadReadState({
             accountId: thread.accountId,
-            isUnread,
+            isUnread: !thread.isUnread,
             threadId: thread.threadId,
           }),
-        "Could not update email"
+        "Could not update email",
+        onSuccess
       );
     },
     [mailApi, runThreadAction]
   );
 
   const trash = useCallback(
-    (thread: GmailThreadSummary): void => {
+    (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
       if (mailApi === undefined) {
         return;
       }
 
       runThreadAction(
-        thread,
-        toTrashedThread,
         () =>
           mailApi.trashThread({
             accountId: thread.accountId,
             threadId: thread.threadId,
           }),
-        "Could not move email to trash"
+        "Could not move email to trash",
+        onSuccess
       );
     },
     [mailApi, runThreadAction]

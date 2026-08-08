@@ -11,9 +11,11 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { withReadStateLabel } from "@/mail/label";
 import { useMailThread } from "@/mail/use-mail-thread";
-import { useThreadDetailActions } from "@/mail/use-thread-detail-actions";
+import type {
+  ThreadActions,
+  ThreadActionTarget,
+} from "@/mail/use-thread-actions";
 import type { GmailThread } from "@/shared/ipc/mail";
 import { useMailboxStore } from "@/state/mailbox";
 
@@ -50,36 +52,39 @@ const ThreadError = ({
 
 interface MailThreadViewProps {
   accountId: string;
-  onReadStateChanged: (isUnread: boolean) => void;
-  onTrashed: () => void;
+  onToggleRead: ThreadActions["toggleRead"];
+  onTrash: ThreadActions["trash"];
   threadId: string;
 }
 
 interface MailThreadContentProps {
-  onReadStateChanged: (isUnread: boolean) => void;
-  onTrashed: () => void;
+  onToggleRead: ThreadActions["toggleRead"];
+  onTrash: ThreadActions["trash"];
   thread: GmailThread;
 }
 
 const MailThreadContent = ({
-  onReadStateChanged,
-  onTrashed,
+  onToggleRead,
+  onTrash,
   thread,
 }: MailThreadContentProps) => {
   const closeThread = useMailboxStore((state) => state.closeThread);
-  const handleTrashed = useCallback((): void => {
-    onTrashed();
-    closeThread();
-  }, [closeThread, onTrashed]);
-  const { isPending, isUnread, toggleRead, trash } = useThreadDetailActions({
-    accountId: thread.accountId,
-    initialIsUnread: thread.labels.includes("UNREAD"),
-    onReadStateChanged,
-    onTrashed: handleTrashed,
-    threadId: thread.threadId,
-  });
+  const { accountId, threadId } = thread;
+  const isUnread = thread.labels.includes("UNREAD");
+  const handleToggleRead = useCallback((): void => {
+    onToggleRead({
+      accountId,
+      isUnread,
+      threadId,
+    } satisfies ThreadActionTarget);
+  }, [accountId, isUnread, onToggleRead, threadId]);
+  const handleTrash = useCallback((): void => {
+    onTrash(
+      { accountId, isUnread, threadId } satisfies ThreadActionTarget,
+      closeThread
+    );
+  }, [accountId, closeThread, isUnread, onTrash, threadId]);
   const latestMessage = thread.messages.at(-1);
-  const labels = withReadStateLabel(thread.labels, isUnread);
 
   return (
     // The header owns the top gutter and the top radius: both belong to the
@@ -88,12 +93,11 @@ const MailThreadContent = ({
     <section className="relative flex w-full min-w-0 flex-col gap-px px-4 pb-4 *:last:rounded-b-lg">
       <MailThreadHeader
         accountId={thread.accountId}
-        actionsDisabled={isPending}
         isUnread={isUnread}
-        labels={labels}
+        labels={thread.labels}
         latestAt={latestMessage?.sentAt}
-        onToggleRead={toggleRead}
-        onTrash={trash}
+        onToggleRead={handleToggleRead}
+        onTrash={handleTrash}
         subject={thread.subject}
       />
       <MailThreadConversation
@@ -107,8 +111,8 @@ const MailThreadContent = ({
 
 const MailThreadView = ({
   accountId,
-  onReadStateChanged,
-  onTrashed,
+  onToggleRead,
+  onTrash,
   threadId,
 }: MailThreadViewProps) => {
   const closeThread = useMailboxStore((state) => state.closeThread);
@@ -124,8 +128,8 @@ const MailThreadView = ({
 
   return (
     <MailThreadContent
-      onReadStateChanged={onReadStateChanged}
-      onTrashed={onTrashed}
+      onToggleRead={onToggleRead}
+      onTrash={onTrash}
       thread={state.thread}
     />
   );

@@ -21,10 +21,10 @@ import type {
   GmailThreadMessageSendReply,
   GmailThreadMessageSendRequest,
   GmailThreadReadStateRequest,
+  GmailThreadListUpdated,
   GmailThreadReply,
   GmailThreadRequest,
   GmailThreadUpdated,
-  GmailThreadsChanged,
   GmailTrustedImageSenderRequest,
   GmailTrustedImageSendersReply,
 } from "./mail";
@@ -77,8 +77,8 @@ export interface DesktopBridge {
   onMailThreadUpdated: (
     listener: (payload: GmailThreadUpdated) => void
   ) => () => void;
-  onMailThreadsChanged: (
-    listener: (payload: GmailThreadsChanged) => void
+  onMailThreadListUpdated: (
+    listener: (payload: GmailThreadListUpdated) => void
   ) => () => void;
   onTrustedImageSendersChanged: (
     listener: (reply: GmailTrustedImageSendersReply) => void

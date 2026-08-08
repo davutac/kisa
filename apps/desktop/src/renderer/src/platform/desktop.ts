@@ -28,8 +28,8 @@ export interface MailApi {
   sendThreadMessage: DesktopBridge["sendThreadMessage"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
+  onThreadListUpdated: DesktopBridge["onMailThreadListUpdated"];
   onThreadUpdated: DesktopBridge["onMailThreadUpdated"];
-  onThreadsChanged: DesktopBridge["onMailThreadsChanged"];
   onTrustedImageSendersChanged: DesktopBridge["onTrustedImageSendersChanged"];
   setThreadReadState: DesktopBridge["setThreadReadState"];
   syncLabels: DesktopBridge["syncGmailLabels"];
@@ -98,8 +98,8 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       loadThread: bridge.loadThread,
       onIndexProgressChanged: bridge.onMailIndexProgressChanged,
       onSyncStatusChanged: bridge.onMailSyncStatusChanged,
+      onThreadListUpdated: bridge.onMailThreadListUpdated,
       onThreadUpdated: bridge.onMailThreadUpdated,
-      onThreadsChanged: bridge.onMailThreadsChanged,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       search: bridge.searchMail,
       sendThreadMessage: bridge.sendThreadMessage,
