@@ -153,9 +153,12 @@ const MailThreadItem = ({
                   size="compact"
                 />
                 {showAccount ? (
-                  <span className="bg-muted text-muted-foreground ml-auto shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] leading-none">
-                    to {thread.accountId}
-                  </span>
+                  <Badge
+                    className="bg-muted text-muted-foreground ml-auto h-auto shrink-0 rounded-sm px-1.5 text-[10px] leading-none"
+                    variant="secondary"
+                  >
+                    {thread.accountId}
+                  </Badge>
                 ) : null}
               </ItemHeader>
               <div className="flex min-w-0 items-center gap-1.5">

@@ -4,11 +4,17 @@ import type { MailboxThreadsSnapshot } from "../src/renderer/src/mail/mailbox-ca
 import {
   clearMailboxThreadsSnapshots,
   getMailboxThreadsSnapshot,
+  patchMailboxThreadsSnapshots,
   retainMailboxThreadsSnapshotsForAccounts,
   setMailboxThreadsSnapshot,
 } from "../src/renderer/src/mail/mailbox-cache";
-import { getMailboxScopeKey } from "../src/renderer/src/mail/mailbox-model";
+import {
+  filterThreadsByScope,
+  getMailboxScopeKey,
+  toTrashedThread,
+} from "../src/renderer/src/mail/mailbox-model";
 import { requestMailboxReload } from "../src/renderer/src/mail/mailbox-reload";
+import type { GmailThreadSummary } from "../src/shared/ipc/mail";
 
 const makeSnapshot = (scopeKey: string): MailboxThreadsSnapshot => ({
   cacheCursor: {
@@ -20,6 +26,20 @@ const makeSnapshot = (scopeKey: string): MailboxThreadsSnapshot => ({
   isLoadingNextPage: true,
   scopeKey,
   threads: [],
+});
+
+const makeThread = (): GmailThreadSummary => ({
+  accountId: "account@example.com",
+  attachments: [],
+  from: "Sender <sender@example.com>",
+  hasAttachments: false,
+  isUnread: false,
+  labels: ["INBOX"],
+  latestAt: 100,
+  messageCount: 1,
+  snippet: "Snippet",
+  subject: "Subject",
+  threadId: "thread-1",
 });
 
 describe("mailbox thread snapshots", () => {
@@ -65,5 +85,30 @@ describe("mailbox thread snapshots", () => {
     expect(getMailboxThreadsSnapshot(firstAccountKey)).toBeUndefined();
     expect(getMailboxThreadsSnapshot(secondAccountKey)).toBeDefined();
     expect(getMailboxThreadsSnapshot(allAccountsKey)).toBeUndefined();
+  });
+
+  it("removes a locally trashed thread from visible inbox snapshots", () => {
+    const scopeKey = getMailboxScopeKey(["account@example.com"], false);
+    const thread = makeThread();
+
+    setMailboxThreadsSnapshot(scopeKey, {
+      ...makeSnapshot(scopeKey),
+      threads: [thread],
+    });
+    patchMailboxThreadsSnapshots(
+      `${thread.accountId}:${thread.threadId}`,
+      toTrashedThread
+    );
+
+    const snapshot = getMailboxThreadsSnapshot(scopeKey);
+
+    expect(snapshot).toBeDefined();
+    expect(
+      filterThreadsByScope(
+        snapshot?.threads ?? [],
+        ["account@example.com"],
+        false
+      )
+    ).toStrictEqual([]);
   });
 });

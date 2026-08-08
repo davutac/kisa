@@ -1,5 +1,10 @@
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { ArrowLeftIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  MailIcon,
+  MailOpenIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 import MailLabelBadges from "@/components/mail/label-badges";
 import MailRelativeTime from "@/components/mail/relative-time";
@@ -8,18 +13,27 @@ import { useMailboxStore } from "@/state/mailbox";
 
 interface MailThreadHeaderProps {
   accountId: string;
+  actionsDisabled?: boolean;
+  isUnread: boolean;
   labels: readonly string[];
   latestAt?: number;
+  onToggleRead: () => void;
+  onTrash: () => void;
   subject: string;
 }
 
 const MailThreadHeader = ({
   accountId,
+  actionsDisabled = false,
+  isUnread,
   labels,
   latestAt,
+  onToggleRead,
+  onTrash,
   subject,
 }: MailThreadHeaderProps) => {
   const closeThread = useMailboxStore((state) => state.closeThread);
+  const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
 
   useHotkey("Escape", closeThread, { requireReset: true });
 
@@ -43,9 +57,34 @@ const MailThreadHeader = ({
         <div className="hidden min-w-0 gap-1 sm:flex">
           <MailLabelBadges accountId={accountId} labels={labels} />
         </div>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <Button
+            aria-label={toggleReadLabel}
+            disabled={actionsDisabled}
+            onClick={onToggleRead}
+            size="icon"
+            title={toggleReadLabel}
+            type="button"
+            variant="ghost"
+          >
+            {isUnread ? <MailOpenIcon /> : <MailIcon />}
+          </Button>
+          <Button
+            aria-label="Move to trash"
+            className="hover:bg-destructive/10 hover:text-destructive"
+            disabled={actionsDisabled}
+            onClick={onTrash}
+            size="icon"
+            title="Move to trash"
+            type="button"
+            variant="ghost"
+          >
+            <Trash2Icon />
+          </Button>
+        </div>
         {latestAt === undefined ? null : (
           <MailRelativeTime
-            className="text-muted-foreground ml-auto text-sm"
+            className="text-muted-foreground ml-2 text-sm"
             timestamp={latestAt}
           />
         )}

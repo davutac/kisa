@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import MailThreadList from "@/components/mail/thread-list";
 import MailThreadView from "@/components/mail/thread-view";
+import { toReadStateThread, toTrashedThread } from "@/mail/mailbox-model";
 import { useMailboxReloadRevision } from "@/mail/mailbox-reload";
 import { parseThreadSelectionKey } from "@/mail/thread-selection";
 import { useMailIndexProgress } from "@/mail/use-mail-index-progress";
@@ -59,7 +60,8 @@ const HomeRoute = () => {
   const showUnread = useShowUnread();
   const selectedAccountId = useSelectedAccountId();
   const reloadRevision = useMailboxReloadRevision();
-  const openThread = parseThreadSelectionKey(useOpenThreadId() ?? "");
+  const openThreadId = useOpenThreadId();
+  const openThread = parseThreadSelectionKey(openThreadId ?? "");
   const knownAccountId = accounts.some(
     ({ email }) => email === selectedAccountId
   )
@@ -83,6 +85,21 @@ const HomeRoute = () => {
   const { toggleRead, trash } = useThreadActions(patchThread);
   const indexProgress = useMailIndexProgress();
   const indexingMessage = getIndexingMessage(indexProgress, accountIds);
+  const patchOpenThreadReadState = useCallback(
+    (isUnread: boolean): void => {
+      if (openThreadId !== null) {
+        patchThread(openThreadId, (thread) =>
+          toReadStateThread(thread, isUnread)
+        );
+      }
+    },
+    [openThreadId, patchThread]
+  );
+  const patchOpenThreadAsTrashed = useCallback((): void => {
+    if (openThreadId !== null) {
+      patchThread(openThreadId, toTrashedThread);
+    }
+  }, [openThreadId, patchThread]);
 
   // The mailbox stays mounted underneath so its scroll position and virtualiser
   // survive reading a thread without any restoration bookkeeping.
@@ -106,6 +123,8 @@ const HomeRoute = () => {
           <MailThreadView
             accountId={openThread.accountId}
             key={`${openThread.accountId}:${openThread.threadId}`}
+            onReadStateChanged={patchOpenThreadReadState}
+            onTrashed={patchOpenThreadAsTrashed}
             threadId={openThread.threadId}
           />
         </div>

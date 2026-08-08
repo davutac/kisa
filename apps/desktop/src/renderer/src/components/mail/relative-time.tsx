@@ -16,7 +16,7 @@ interface MailRelativeTimeProps {
 const MailRelativeTime = ({ className, timestamp }: MailRelativeTimeProps) => {
   const fullDate = format(timestamp, "PPpp", { locale: enUS });
   const relativeTime = formatDistanceToNow(timestamp, {
-    addSuffix: true,
+    includeSeconds: false,
     locale: enUS,
   });
 
