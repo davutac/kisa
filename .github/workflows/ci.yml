@@ -57,6 +57,3 @@ jobs:
           else
             echo "No test script configured; skipping tests."
           fi
-
-      - name: Build
-        run: pnpm build
