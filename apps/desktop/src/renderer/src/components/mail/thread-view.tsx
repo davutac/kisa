@@ -14,7 +14,7 @@ import { useMailThread } from "@/mail/use-mail-thread";
 import { useMailboxStore } from "@/state/mailbox";
 
 const ThreadPending = () => (
-  <Empty aria-live="polite" className="min-h-0 flex-1 border-0">
+  <Empty aria-live="polite" className="h-full min-h-0 border-0">
     <EmptyHeader>
       <EmptyMedia variant="icon">
         <Spinner />
