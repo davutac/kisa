@@ -6,6 +6,7 @@ import { BrowserWindow } from "electron";
 import { APP_NAME } from "@/constants";
 
 import icon from "../../../build/icon.png?asset";
+import { applyNativeMailIndexProgress } from "../app/native-mail-index-progress";
 import { openExternalUrl } from "../electron/shell";
 import { initializeAutoUpdates } from "../updates/updater";
 import {
@@ -68,6 +69,8 @@ export const createWindow = (): BrowserWindow => {
       sandbox: true,
     },
   });
+
+  applyNativeMailIndexProgress(mainWindow);
 
   if (isMaximized === true) {
     mainWindow.maximize();

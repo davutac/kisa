@@ -22,6 +22,7 @@ import type {
   GmailIndexProgress,
   GmailIndexStatus,
 } from "../../shared/ipc/mail";
+import { setNativeMailIndexProgress } from "../app/native-mail-index-progress";
 import { onGoogleAccountConnected } from "../auth/account-events";
 import { getDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
@@ -203,6 +204,7 @@ let pendingProgressTimer: ReturnType<typeof setTimeout> | undefined;
 
 const sendProgress = (): void => {
   lastProgressSentAt = Date.now();
+  setNativeMailIndexProgress([...progressByAccount.values()]);
   sendRendererEvent(MAIL_INDEX_PROGRESS_CHANNEL, GmailIndexProgressList, {
     accounts: [...progressByAccount.values()],
   });
@@ -547,6 +549,7 @@ export const requestMailBackfill = (accountId: string): void => {
 export const cancelMailBackfill = (accountId: string): void => {
   cancellations.add(accountId);
   progressByAccount.delete(accountId);
+  sendProgress();
 };
 
 const GMAIL_READ_SCOPES = new Set([
