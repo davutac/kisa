@@ -41,6 +41,8 @@ interface MailThreadListProps {
   threads: readonly GmailThreadSummary[];
 }
 
+const RAPID_SELECTION_INTERVAL_MS = 150;
+
 const MailThreadList = ({
   emptyMessage,
   hasNextPage = false,
@@ -59,6 +61,7 @@ const MailThreadList = ({
   const selectedThreadKey = useSelectedThreadId();
   const openThread = useMailboxStore((state) => state.openThread);
   const selectThread = useMailboxStore((state) => state.selectThread);
+  const lastSelectionMoveAtRef = useRef<number | null>(null);
   const previousReloadRevisionRef = useRef(reloadRevision);
   // The trailing row is the paging trigger, but it also carries the indexing
   // notice — the auto-load effect below still keys off `hasNextPage` alone, so
@@ -130,7 +133,16 @@ const MailThreadList = ({
     }
 
     selectThread(getThreadSelectionKey(nextThread));
-    rowVirtualizer.scrollToIndex(nextIndex, { align: "auto" });
+    const now = performance.now();
+    const lastSelectionMoveAt = lastSelectionMoveAtRef.current;
+    const isRapidSelectionMove =
+      lastSelectionMoveAt !== null &&
+      now - lastSelectionMoveAt < RAPID_SELECTION_INTERVAL_MS;
+    lastSelectionMoveAtRef.current = now;
+    rowVirtualizer.scrollToIndex(nextIndex, {
+      align: "center",
+      behavior: isRapidSelectionMove ? "auto" : "smooth",
+    });
   };
 
   useHotkeyLayer("mailbox", true);
