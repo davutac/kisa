@@ -1,6 +1,8 @@
-import { electronApp, optimizer } from "@electron-toolkit/utils";
+import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow } from "electron";
 
+import icon from "../../build/icon.png?asset";
+import { setDevelopmentDockIcon } from "./app/app-icon";
 import { registerAppProtocol } from "./app/app-protocol";
 import { handleGoogleAuthCallback } from "./auth/auth";
 import { closeDatabase } from "./database";
@@ -21,6 +23,13 @@ if (hasSingleInstanceLock) {
   // Some APIs can only be used after this event occurs.
   void (async (): Promise<void> => {
     await app.whenReady();
+
+    setDevelopmentDockIcon({
+      dock: process.platform === "darwin" ? app.dock : undefined,
+      icon,
+      isDevelopment: is.dev,
+      platform: process.platform,
+    });
 
     // Set app user model id for windows
     electronApp.setAppUserModelId("com.kisa.app");
