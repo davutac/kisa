@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import MailMessageActions from "@/components/mail/message-actions";
 import type { MailMessageAction } from "@/components/mail/message-actions";
 import MailReplyArea from "@/components/mail/reply-area";
 import MailThreadMessage from "@/components/mail/thread-message";
@@ -10,18 +11,12 @@ interface MailThreadConversationProps {
   messages: readonly GmailThreadMessage[];
 }
 
-interface ReplySelection {
-  action: MailMessageAction;
-  message: GmailThreadMessage;
-}
-
 const MailThreadConversation = ({
   accountId,
   messages,
 }: MailThreadConversationProps) => {
-  const [replySelection, setReplySelection] = useState<ReplySelection | null>(
-    null
-  );
+  const [selectedAction, setSelectedAction] =
+    useState<MailMessageAction | null>(null);
   const latestMessage = messages.at(-1);
 
   if (latestMessage === undefined) {
@@ -32,8 +27,6 @@ const MailThreadConversation = ({
     );
   }
 
-  const replyMessage = replySelection?.message ?? latestMessage;
-
   return (
     <>
       {messages.map((message) => (
@@ -43,21 +36,19 @@ const MailThreadConversation = ({
           fallbackRecipient={accountId}
           key={message.id}
           message={message}
-          onAction={(selectedMessage, action) =>
-            setReplySelection({ action, message: selectedMessage })
-          }
         />
       ))}
-      <MailReplyArea
-        accountId={accountId}
-        action={replySelection?.action}
-        key={`${replyMessage.id}:${replySelection?.action ?? "closed"}`}
-        message={replyMessage}
-        onCancel={() => setReplySelection(null)}
-        onStartReply={() =>
-          setReplySelection({ action: "reply", message: latestMessage })
-        }
-      />
+      {selectedAction === null ? (
+        <MailMessageActions onAction={setSelectedAction} />
+      ) : (
+        <MailReplyArea
+          accountId={accountId}
+          action={selectedAction}
+          key={`${latestMessage.id}:${selectedAction}`}
+          message={latestMessage}
+          onCancel={() => setSelectedAction(null)}
+        />
+      )}
     </>
   );
 };

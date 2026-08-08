@@ -57,7 +57,7 @@ const StartupSplash = ({ errorMessage, onRetry }: StartupSplashProps) => {
           </span>
         </output>
         {hasError ? (
-          <Button onClick={onRetry} size="sm" variant="outline">
+          <Button onClick={onRetry} variant="outline">
             Retry
           </Button>
         ) : null}

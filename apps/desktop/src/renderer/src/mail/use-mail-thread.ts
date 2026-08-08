@@ -47,10 +47,21 @@ export const useMailThread = (
       });
     };
 
+    const unsubscribe = mailApi.onThreadUpdated((updated) => {
+      if (updated.accountId === accountId && updated.threadId === threadId) {
+        setResult({
+          accountId,
+          state: { status: "ready", thread: updated },
+          threadId,
+        });
+      }
+    });
+
     void load();
 
     return () => {
       isActive = false;
+      unsubscribe();
     };
   }, [accountId, mailApi, threadId]);
 

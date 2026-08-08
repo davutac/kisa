@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 
-import MailMessageActions from "@/components/mail/message-actions";
-import type { MailMessageAction } from "@/components/mail/message-actions";
 import MailMessageAttachments from "@/components/mail/message-attachments";
 import MailMessageBody from "@/components/mail/message-body";
 import MailMessageHeader from "@/components/mail/message-header";
@@ -19,7 +17,6 @@ interface MailThreadMessageProps {
   defaultExpanded: boolean;
   fallbackRecipient: string;
   message: GmailThreadMessage;
-  onAction: (message: GmailThreadMessage, action: MailMessageAction) => void;
 }
 
 const MailThreadMessage = ({
@@ -27,7 +24,6 @@ const MailThreadMessage = ({
   defaultExpanded,
   fallbackRecipient,
   message,
-  onAction,
 }: MailThreadMessageProps) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [showRemoteImages, setShowRemoteImages] = useState(false);
@@ -69,9 +65,6 @@ const MailThreadMessage = ({
             />
           </div>
           <MailMessageAttachments attachments={message.attachments} />
-          <MailMessageActions
-            onAction={(action) => onAction(message, action)}
-          />
         </>
       ) : null}
     </article>

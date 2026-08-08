@@ -49,7 +49,7 @@ const INBOX_LABEL_ID = LabelId.make("INBOX");
  * Bumped when the stored representation of a body changes, so rows written by
  * an older parser can be told apart and re-indexed rather than silently served.
  */
-const MESSAGE_SCHEMA_VERSION = 1;
+export const MESSAGE_SCHEMA_VERSION = 1;
 
 const toAddresses = (mailboxes: readonly Mailbox[]): readonly string[] =>
   mailboxes.map((mailbox) => mailbox.address);
@@ -244,9 +244,10 @@ export const GmailStoreLive = Layer.succeed(
       ),
 
     /**
-     * Message bodies are not cached; the hand-rolled sync always refetched a
-     * thread on open and this keeps that behaviour. `GmailService.getThread`
-     * treats `None` as "go to the network".
+     * The Electron adapter reads its renderer-ready conversation from the
+     * normalized message index. The generic Gmail service still has no cached
+     * domain-thread representation because history ids and raw headers are not
+     * persisted there, so its callers continue to fall through to the gateway.
      */
     getThread: () => Effect.succeedNone,
 
@@ -332,8 +333,81 @@ export const GmailStoreLive = Layer.succeed(
           .run();
       }),
 
-    /** See `getThread`: bodies are not cached. */
-    saveThread: () => Effect.void,
+    saveThread: (accountId, thread) =>
+      withDatabase("Could not save Gmail thread", (database) => {
+        const now = Date.now();
+        const [firstMessage] = thread.messages;
+        let latestMessage = firstMessage;
+
+        for (const message of thread.messages) {
+          if (
+            latestMessage === undefined ||
+            Number(message.sentAt) > Number(latestMessage.sentAt)
+          ) {
+            latestMessage = message;
+          }
+        }
+        const attachments = thread.messages.flatMap((message) =>
+          message.attachments.map((attachment) => ({
+            attachmentId: attachment.attachmentId,
+            filename: attachment.filename,
+            mediaType: attachment.mediaType,
+            messageId: attachment.messageId,
+            size: attachment.size,
+          }))
+        );
+        const namesById = new Map(
+          database.query.gmailLabels
+            .findMany({ where: eq(gmailLabels.accountEmail, accountId) })
+            .sync()
+            .map((row) => [row.labelId, row.name] as const)
+        );
+
+        database.transaction((transaction) => {
+          transaction
+            .delete(gmailMessages)
+            .where(
+              and(
+                eq(gmailMessages.accountEmail, accountId),
+                eq(gmailMessages.threadId, thread.id)
+              )
+            )
+            .run();
+
+          for (const message of thread.messages) {
+            transaction
+              .insert(gmailMessages)
+              .values(toMessageValues(accountId, message, now))
+              .run();
+          }
+
+          transaction
+            .update(gmailThreads)
+            .set({
+              attachments,
+              from: latestMessage?.from.address ?? "Unknown sender",
+              hasAttachments: attachments.length > 0,
+              isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+              isUnread: thread.messages.some((message) =>
+                message.labelIds.includes(LabelId.make("UNREAD"))
+              ),
+              labels: thread.labelIds.map(
+                (labelId) => namesById.get(labelId) ?? labelId
+              ),
+              latestAt: Number(latestMessage?.sentAt ?? 0),
+              messageCount: thread.messages.length,
+              subject: thread.messages[0]?.subject ?? "(No subject)",
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(gmailThreads.accountEmail, accountId),
+                eq(gmailThreads.threadId, thread.id)
+              )
+            )
+            .run();
+        });
+      }),
 
     setThreadReadState: (accountId, threadId, isRead) =>
       withDatabase("Could not update Gmail thread read state", (database) => {

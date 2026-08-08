@@ -27,6 +27,7 @@ export interface MailApi {
   search: DesktopBridge["searchMail"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
+  onThreadUpdated: DesktopBridge["onMailThreadUpdated"];
   onThreadsChanged: DesktopBridge["onMailThreadsChanged"];
   onTrustedImageSendersChanged: DesktopBridge["onTrustedImageSendersChanged"];
   setThreadReadState: DesktopBridge["setThreadReadState"];
@@ -96,6 +97,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       loadThread: bridge.loadThread,
       onIndexProgressChanged: bridge.onMailIndexProgressChanged,
       onSyncStatusChanged: bridge.onMailSyncStatusChanged,
+      onThreadUpdated: bridge.onMailThreadUpdated,
       onThreadsChanged: bridge.onMailThreadsChanged,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       search: bridge.searchMail,

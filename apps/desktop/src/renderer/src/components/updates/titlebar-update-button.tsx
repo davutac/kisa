@@ -23,7 +23,7 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
         aria-live="polite"
         className="app-titlebar-interactive"
         disabled
-        size="icon-sm"
+        size="icon"
         type="button"
         variant="secondary"
       >
@@ -39,7 +39,6 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
       onClick={() => {
         void updateApi.install();
       }}
-      size="sm"
       type="button"
       variant="secondary"
     >

@@ -37,7 +37,7 @@ const ThreadError = ({
         <MailOpenIcon />
       </EmptyMedia>
       <EmptyTitle>{message}</EmptyTitle>
-      <Button onClick={onClose} size="sm" type="button" variant="outline">
+      <Button onClick={onClose} type="button" variant="outline">
         Back to inbox
       </Button>
     </EmptyHeader>

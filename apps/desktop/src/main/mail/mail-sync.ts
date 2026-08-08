@@ -1,4 +1,7 @@
+import { gunzipSync } from "node:zlib";
+
 import { gmailThreads } from "@repo/database/schemas";
+import type { gmailMessages } from "@repo/database/schemas";
 import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
 import { GmailMime } from "@repo/gmail/mime";
@@ -6,14 +9,19 @@ import type { GmailThread as GmailDomainThread } from "@repo/gmail/models";
 import { AccountId, LabelId, ThreadId } from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
-import { eq } from "drizzle-orm";
-import { Effect, Layer, Schedule, Schema } from "effect";
+import { and as andSql, eq } from "drizzle-orm";
+import { Clock, Effect, Layer, Schedule, Schema } from "effect";
 
 import {
   MAIL_SYNC_STATUS_CHANNEL,
+  MAIL_THREAD_UPDATED_CHANNEL,
   MAIL_THREADS_CHANGED_CHANNEL,
 } from "../../shared/ipc/channels";
-import { GmailSyncStatus, GmailThreadsChanged } from "../../shared/ipc/mail";
+import {
+  GmailSyncStatus,
+  GmailThreadUpdated,
+  GmailThreadsChanged,
+} from "../../shared/ipc/mail";
 import type {
   GmailCachedThreadPage,
   GmailCachedThreadPageRequest,
@@ -30,7 +38,7 @@ import { getDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
-import { GmailStoreLive } from "./gmail-store";
+import { GmailStoreLive, MESSAGE_SCHEMA_VERSION } from "./gmail-store";
 import {
   inlineImageDataUrls,
   normalizeContentId,
@@ -40,6 +48,7 @@ import {
 import { addUnreadLabel, removeUnreadLabel } from "./read-state";
 import type { MessageHeader } from "./sender-brand";
 import { getSenderBrand } from "./sender-brand";
+import { getThreadCacheState } from "./thread-cache-policy";
 import { refreshUnreadBadge } from "./unread-badge";
 
 const GMAIL_INBOX_LABEL = "INBOX";
@@ -132,6 +141,116 @@ const toCachedThreadSummary = (row: CachedThreadRow): GmailThreadSummary => {
     threadId: row.threadId,
   };
 };
+
+type CachedMessageRow = typeof gmailMessages.$inferSelect;
+
+interface CachedConversation {
+  readonly cachedAt: number;
+  readonly isUnread: boolean;
+  readonly thread: GmailThreadDto;
+}
+
+const formatCachedAddresses = (addresses: readonly string[] | null): string =>
+  (addresses ?? []).join(", ");
+
+const toCachedThreadMessage = (
+  row: CachedMessageRow
+): GmailThreadMessage | undefined => {
+  let body: GmailThreadMessage["body"];
+
+  try {
+    body =
+      row.bodyHtml === null
+        ? { text: row.bodyText ?? "" }
+        : { html: gunzipSync(row.bodyHtml).toString("utf-8") };
+  } catch {
+    return;
+  }
+
+  const bcc = formatCachedAddresses(row.bccAddresses);
+  const cc = formatCachedAddresses(row.ccAddresses);
+  const to = formatCachedAddresses(row.toAddresses);
+
+  return {
+    attachments: (row.attachments ?? []).map((attachment) => ({
+      attachmentId: attachment.attachmentId,
+      filename: attachment.filename,
+      mediaType: attachment.mediaType,
+      messageId: attachment.messageId,
+      size: attachment.size,
+    })),
+    body,
+    from: row.fromAddress,
+    id: row.messageId,
+    labelIds: removeUnreadLabel(row.labelIds ?? []),
+    sentAt: row.internalDate,
+    snippet: "",
+    subject: row.subject.length === 0 ? "(No subject)" : row.subject,
+    ...(bcc.length === 0 ? {} : { bcc }),
+    ...(cc.length === 0 ? {} : { cc }),
+    ...(row.replyToAddress === null ? {} : { replyTo: row.replyToAddress }),
+    ...(to.length === 0 ? {} : { to }),
+  };
+};
+
+const readCachedConversation = Effect.fn("readCachedConversation")(
+  function* readCachedConversation(request: GmailThreadRequest) {
+    return yield* withDatabase("Could not load cached email", (database) => {
+      const threadRow = database.query.gmailThreads
+        .findFirst({
+          where: (thread, { and, eq: is }) =>
+            and(
+              is(thread.accountEmail, request.accountId),
+              is(thread.threadId, request.threadId)
+            ),
+        })
+        .sync();
+
+      if (threadRow === undefined) {
+        return;
+      }
+
+      const messageRows = database.query.gmailMessages
+        .findMany({
+          orderBy: (message, { asc }) => asc(message.internalDate),
+          where: (message, { and, eq: is }) =>
+            and(
+              is(message.accountEmail, request.accountId),
+              is(message.threadId, request.threadId)
+            ),
+        })
+        .sync();
+
+      if (
+        messageRows.length === 0 ||
+        messageRows.length !== threadRow.messageCount ||
+        messageRows.some((row) => row.schemaVersion !== MESSAGE_SCHEMA_VERSION)
+      ) {
+        return;
+      }
+
+      const messages = messageRows.map(toCachedThreadMessage);
+
+      if (messages.some((message) => message === undefined)) {
+        return;
+      }
+
+      const completeMessages = messages as readonly GmailThreadMessage[];
+
+      return {
+        cachedAt: Math.min(...messageRows.map((message) => message.updatedAt)),
+        isUnread: threadRow.isUnread,
+        thread: {
+          accountId: request.accountId,
+          labels: threadRow.labels ?? [],
+          messages: completeMessages,
+          subject: completeMessages[0]?.subject ?? "(No subject)",
+          threadId: request.threadId,
+        },
+      } satisfies CachedConversation;
+    });
+  }
+);
 
 export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
   function* listCachedThreadPage(request: GmailCachedThreadPageRequest) {
@@ -441,8 +560,8 @@ const resolveLabelNames = (accountId: string, labelIds: readonly string[]) =>
     return labelIds.map((labelId) => namesById.get(labelId) ?? labelId);
   });
 
-export const loadFullThread = Effect.fn("loadFullThread")(
-  function* loadFullThread(request: GmailThreadRequest) {
+const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
+  function* fetchFullThreadFromGmail(request: GmailThreadRequest) {
     const accountId = AccountId.make(request.accountId);
     const threadId = ThreadId.make(request.threadId);
     // The raw thread is needed twice: parsed into the domain model, and kept
@@ -460,6 +579,7 @@ export const loadFullThread = Effect.fn("loadFullThread")(
 
         const result = yield* gateway.getThread(authorization.value, threadId);
         const parsed = yield* mime.parseThread(result.value);
+        yield* store.saveThread(accountId, parsed);
 
         return {
           parsed,
@@ -537,6 +657,131 @@ export const loadFullThread = Effect.fn("loadFullThread")(
       subject: messages[0]?.subject ?? "(No subject)",
       threadId: parsed.id,
     } satisfies GmailThreadDto;
+  }
+);
+
+const activeThreadRefreshes = new Set<string>();
+
+const requestThreadRefresh = (request: GmailThreadRequest): void => {
+  const key = `${request.accountId}:${request.threadId}`;
+
+  if (activeThreadRefreshes.has(key)) {
+    return;
+  }
+
+  activeThreadRefreshes.add(key);
+
+  const refresh = async (): Promise<void> => {
+    try {
+      const thread = await Effect.runPromise(fetchFullThreadFromGmail(request));
+
+      sendRendererEvent(
+        MAIL_THREAD_UPDATED_CHANNEL,
+        GmailThreadUpdated,
+        thread
+      );
+    } catch (error) {
+      await Effect.runPromise(
+        Effect.logWarning(
+          "Could not refresh Gmail thread in the background",
+          error
+        )
+      );
+    } finally {
+      activeThreadRefreshes.delete(key);
+    }
+  };
+
+  void refresh();
+};
+
+const activeReadMutations = new Set<string>();
+
+const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
+  function* markCachedThreadRead(request: GmailThreadRequest) {
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.markThreadRead({
+            accountId: AccountId.make(request.accountId),
+            threadId: ThreadId.make(request.threadId),
+          })
+        )
+      )
+    );
+    yield* withDatabase("Could not cache email", (database) => {
+      const row = database.query.gmailThreads
+        .findFirst({
+          where: (thread, { and, eq: is }) =>
+            and(
+              is(thread.accountEmail, request.accountId),
+              is(thread.threadId, request.threadId)
+            ),
+        })
+        .sync();
+
+      if (row !== undefined) {
+        database
+          .update(gmailThreads)
+          .set({
+            isUnread: false,
+            labels: removeUnreadLabel(row.labels ?? []),
+            updatedAt: Date.now(),
+          })
+          .where(
+            andSql(
+              eq(gmailThreads.accountEmail, request.accountId),
+              eq(gmailThreads.threadId, request.threadId)
+            )
+          )
+          .run();
+      }
+    });
+    yield* publishThreadsChanged(request.accountId);
+  }
+);
+
+const requestCachedThreadRead = (request: GmailThreadRequest): void => {
+  const key = `${request.accountId}:${request.threadId}`;
+
+  if (activeReadMutations.has(key)) {
+    return;
+  }
+
+  activeReadMutations.add(key);
+
+  const markRead = async (): Promise<void> => {
+    try {
+      await Effect.runPromise(markCachedThreadRead(request));
+    } catch (error) {
+      await Effect.runPromise(
+        Effect.logWarning("Could not mark cached Gmail thread as read", error)
+      );
+    } finally {
+      activeReadMutations.delete(key);
+    }
+  };
+
+  void markRead();
+};
+
+export const loadFullThread = Effect.fn("loadFullThread")(
+  function* loadFullThread(request: GmailThreadRequest) {
+    const cached = yield* readCachedConversation(request);
+
+    if (cached === undefined) {
+      return yield* fetchFullThreadFromGmail(request);
+    }
+
+    const now = yield* Clock.currentTimeMillis;
+
+    if (getThreadCacheState(cached.cachedAt, now) === "stale") {
+      yield* Effect.sync(() => requestThreadRefresh(request));
+    } else if (cached.isUnread) {
+      yield* Effect.sync(() => requestCachedThreadRead(request));
+    }
+
+    return cached.thread;
   }
 );
 

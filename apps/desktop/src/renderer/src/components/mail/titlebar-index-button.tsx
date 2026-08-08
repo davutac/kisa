@@ -66,7 +66,6 @@ const TitlebarIndexButton = () => {
           <Button
             aria-live="polite"
             className="app-titlebar-interactive gap-1.5 px-2"
-            size="sm"
             type="button"
             variant="ghost"
           >

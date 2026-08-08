@@ -90,6 +90,9 @@ export const GmailThreadRequest = Schema.Struct({
 });
 export type GmailThreadRequest = typeof GmailThreadRequest.Type;
 
+export const GmailThreadUpdated = GmailThread;
+export type GmailThreadUpdated = typeof GmailThreadUpdated.Type;
+
 export const GmailThreadReadStateRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   /** The state to move to, not the state the thread is in. */

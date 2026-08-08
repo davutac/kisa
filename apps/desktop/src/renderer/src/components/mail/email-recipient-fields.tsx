@@ -46,7 +46,6 @@ const EmailRecipientFields = ({
               aria-controls={`${id}-cc`}
               aria-expanded={showCc}
               onClick={() => setShowCc((isVisible) => !isVisible)}
-              size="sm"
               variant={showCc ? "secondary" : "ghost"}
             >
               Cc
@@ -55,7 +54,6 @@ const EmailRecipientFields = ({
               aria-controls={`${id}-bcc`}
               aria-expanded={showBcc}
               onClick={() => setShowBcc((isVisible) => !isVisible)}
-              size="sm"
               variant={showBcc ? "secondary" : "ghost"}
             >
               Bcc
