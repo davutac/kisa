@@ -34,7 +34,7 @@ describe(getRuntimeCapabilities, () => {
     });
   });
 
-  const versions = { chrome: "1", electron: "2", node: "3" };
+  const versions = { app: "0", chrome: "1", electron: "2", node: "3" };
   const createDesktopBridge = (): DesktopBridge => ({
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
     disconnectGoogleAccount: () =>

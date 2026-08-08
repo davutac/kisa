@@ -16,7 +16,7 @@ const RootLayout = () => {
 
   return (
     <AccountGate initialState={authGateState}>
-      <div className="app-content flex h-svh flex-col">
+      <div className="app-content flex h-svh flex-col scroll-smooth antialiased">
         <Titlebar />
         <main className="scroll-fade-y flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
           <Outlet />

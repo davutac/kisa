@@ -13,6 +13,7 @@
       "@/shared/*": ["./src/shared/*"],
       "@/constants": ["./src/constants.ts"]
     },
+    "resolveJsonModule": true,
     "types": ["electron-vite/node", "node"],
     "strictNullChecks": true
   }

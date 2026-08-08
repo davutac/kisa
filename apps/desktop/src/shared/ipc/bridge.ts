@@ -38,6 +38,7 @@ import type {
 } from "./settings";
 
 export interface ElectronVersions {
+  app: string;
   chrome: string;
   electron: string;
   node: string;

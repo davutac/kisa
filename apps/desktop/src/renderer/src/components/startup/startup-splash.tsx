@@ -2,6 +2,14 @@ import { CircleAlertIcon } from "lucide-react";
 import { m, useReducedMotion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { easeInOut } from "@/lib/motion";
 
@@ -40,28 +48,26 @@ const StartupSplash = ({ errorMessage, onRetry }: StartupSplashProps) => {
       }
       transition={easeInOut(shouldReduceMotion ? 0.18 : 0.45)}
     >
-      <section className="flex w-full max-w-80 flex-col items-center gap-5 text-center">
-        <div className="border-border bg-secondary/60 text-muted-foreground flex size-11 items-center justify-center rounded-md border shadow-sm">
-          {hasError ? (
-            <CircleAlertIcon aria-hidden="true" className="size-5" />
-          ) : (
-            <Spinner className="size-5" />
-          )}
-        </div>
-        <output aria-live="polite" className="space-y-1.5">
-          <span className="block text-sm font-medium">
-            {getStatusLabel(errorMessage)}
-          </span>
-          <span className="text-muted-foreground block text-xs/5">
-            {getStatusDescription(errorMessage)}
-          </span>
+      <Empty className="max-w-80 flex-none gap-5 border-0">
+        <EmptyMedia variant="icon">
+          {hasError ? <CircleAlertIcon aria-hidden="true" /> : <Spinner />}
+        </EmptyMedia>
+        <output aria-live="polite">
+          <EmptyHeader className="gap-1.5">
+            <EmptyTitle>{getStatusLabel(errorMessage)}</EmptyTitle>
+            <EmptyDescription className="text-xs/5">
+              {getStatusDescription(errorMessage)}
+            </EmptyDescription>
+          </EmptyHeader>
         </output>
         {hasError ? (
-          <Button onClick={onRetry} variant="outline">
-            Retry
-          </Button>
+          <EmptyContent>
+            <Button onClick={onRetry} variant="outline">
+              Retry
+            </Button>
+          </EmptyContent>
         ) : null}
-      </section>
+      </Empty>
     </m.main>
   );
 };
