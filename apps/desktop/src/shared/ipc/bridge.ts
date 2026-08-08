@@ -3,6 +3,8 @@ import type { AppStartupReply } from "./app";
 import type {
   GoogleAccount,
   GoogleAccountDisconnectRequest,
+  GoogleAccountReorderReply,
+  GoogleAccountReorderRequest,
   GoogleAccountsReply,
   GoogleAuthStartReply,
 } from "./auth";
@@ -87,6 +89,9 @@ export interface DesktopBridge {
     listener: (reply: GmailTrustedImageSendersReply) => void
   ) => () => void;
   onUpdateStatus: (listener: (status: UpdateStatus) => void) => () => void;
+  reorderGoogleAccounts: (
+    request: GoogleAccountReorderRequest
+  ) => Promise<GoogleAccountReorderReply>;
   searchMail: (request: GmailSearchRequest) => Promise<GmailSearchResultsReply>;
   sendMessage: (
     request: GmailMessageSendRequest

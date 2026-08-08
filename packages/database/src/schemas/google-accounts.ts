@@ -11,5 +11,6 @@ export const googleAccounts = sqliteTable("google_accounts", {
   displayName: text("display_name"),
   email: text("email").primaryKey(),
   scopes: text("scopes").notNull(),
+  sortOrder: integer("sort_order").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });

@@ -2,7 +2,12 @@ import * as Effect from "effect/Effect";
 
 import { DesktopIpc } from "./desktop-ipc";
 import { startApp } from "./methods/app";
-import { disconnectAccount, listAccounts, startGoogle } from "./methods/auth";
+import {
+  disconnectAccount,
+  listAccounts,
+  reorderAccounts,
+  startGoogle,
+} from "./methods/auth";
 import {
   getIndexProgress,
   getSyncStatus,
@@ -30,6 +35,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(startApp);
   yield* ipc.handle(startGoogle);
   yield* ipc.handle(listAccounts);
+  yield* ipc.handle(reorderAccounts);
   yield* ipc.handle(disconnectAccount);
   yield* ipc.handle(getSyncStatus);
   yield* ipc.handle(getIndexProgress);

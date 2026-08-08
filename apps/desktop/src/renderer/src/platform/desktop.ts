@@ -13,6 +13,7 @@ export interface AuthApi {
   disconnectGoogleAccount: DesktopBridge["disconnectGoogleAccount"];
   listGoogleAccounts: DesktopBridge["listGoogleAccounts"];
   onGoogleAccountsChanged: DesktopBridge["onGoogleAccountsChanged"];
+  reorderGoogleAccounts: DesktopBridge["reorderGoogleAccounts"];
   startGoogle: DesktopBridge["startGoogleAuth"];
 }
 
@@ -87,6 +88,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       disconnectGoogleAccount: bridge.disconnectGoogleAccount,
       listGoogleAccounts: bridge.listGoogleAccounts,
       onGoogleAccountsChanged: bridge.onGoogleAccountsChanged,
+      reorderGoogleAccounts: bridge.reorderGoogleAccounts,
       startGoogle: bridge.startGoogleAuth,
     },
     mail: {

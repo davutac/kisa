@@ -6,6 +6,8 @@ export const AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL =
   "desktop:auth:google-disconnect-account";
 export const AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL =
   "desktop:auth:google-list-accounts";
+export const AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL =
+  "desktop:auth:google-reorder-accounts";
 export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";
 
 export const MAIL_INDEX_PROGRESS_CHANNEL = "desktop:mail:index-progress";

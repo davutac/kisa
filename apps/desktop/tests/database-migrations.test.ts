@@ -16,7 +16,7 @@ const migrationsFolder = fileURLToPath(
 );
 const temporaryDirectories: string[] = [];
 
-const createLegacySenderBrandDatabase = () => {
+const createLegacyDatabase = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
   const connection = openDatabaseConnection(path.join(directory, "app.sqlite"));
 
@@ -41,6 +41,15 @@ const createLegacySenderBrandDatabase = () => {
       scopes text NOT NULL,
       updated_at integer NOT NULL
     );
+    INSERT INTO google_accounts (
+      created_at,
+      credentials,
+      email,
+      scopes,
+      updated_at
+    ) VALUES
+      (20, X'00', 'second@example.com', '[]', 20),
+      (10, X'00', 'first@example.com', '[]', 10);
     CREATE TABLE gmail_threads (
       account_email text NOT NULL,
       attachments text,
@@ -109,7 +118,7 @@ describe("database migrations", () => {
   });
 
   it("upgrades the original sender-brand table without losing cached brands", () => {
-    const connection = createLegacySenderBrandDatabase();
+    const connection = createLegacyDatabase();
 
     try {
       applyDatabaseMigrations(
@@ -134,7 +143,7 @@ describe("database migrations", () => {
   });
 
   it("derives is_in_inbox for threads cached before the column existed", () => {
-    const connection = createLegacySenderBrandDatabase();
+    const connection = createLegacyDatabase();
 
     try {
       applyDatabaseMigrations(
@@ -151,6 +160,30 @@ describe("database migrations", () => {
       ).toStrictEqual([
         { is_in_inbox: 0, thread_id: "t-archived" },
         { is_in_inbox: 1, thread_id: "t-inbox" },
+      ]);
+    } finally {
+      connection.close();
+    }
+  });
+
+  it("preserves account creation order when adding persisted sorting", () => {
+    const connection = createLegacyDatabase();
+
+    try {
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      expect(
+        connection
+          .prepare(
+            "SELECT email, sort_order FROM google_accounts ORDER BY sort_order"
+          )
+          .all()
+      ).toStrictEqual([
+        { email: "first@example.com", sort_order: 10 },
+        { email: "second@example.com", sort_order: 20 },
       ]);
     } finally {
       connection.close();

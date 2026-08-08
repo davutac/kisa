@@ -23,5 +23,14 @@ export const GoogleAccountDisconnectRequest = Schema.Struct({
 export type GoogleAccountDisconnectRequest =
   typeof GoogleAccountDisconnectRequest.Type;
 
+export const GoogleAccountReorderRequest = Schema.Struct({
+  emails: Schema.Array(Schema.NonEmptyString),
+});
+export type GoogleAccountReorderRequest =
+  typeof GoogleAccountReorderRequest.Type;
+
+export const GoogleAccountReorderReply = IpcReply(Schema.Void);
+export type GoogleAccountReorderReply = typeof GoogleAccountReorderReply.Type;
+
 export const GoogleAuthStartReply = IpcReply(Schema.Void);
 export type GoogleAuthStartReply = typeof GoogleAuthStartReply.Type;

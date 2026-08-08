@@ -74,6 +74,8 @@ describe(getRuntimeCapabilities, () => {
     onMailThreadUpdated: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
     onUpdateStatus: () => () => {},
+    reorderGoogleAccounts: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     searchMail: () =>
       Promise.resolve({
         data: { hasMore: false, threads: [] },
@@ -104,6 +106,7 @@ describe(getRuntimeCapabilities, () => {
         disconnectGoogleAccount: desktopBridge.disconnectGoogleAccount,
         listGoogleAccounts: desktopBridge.listGoogleAccounts,
         onGoogleAccountsChanged: desktopBridge.onGoogleAccountsChanged,
+        reorderGoogleAccounts: desktopBridge.reorderGoogleAccounts,
         startGoogle: desktopBridge.startGoogleAuth,
       },
       isWeb: false,

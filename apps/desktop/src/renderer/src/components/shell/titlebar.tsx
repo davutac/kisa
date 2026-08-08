@@ -1,3 +1,7 @@
+import { PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import { DragDropProvider } from "@dnd-kit/react";
+import type { DragEndEvent } from "@dnd-kit/react";
+import { isSortable } from "@dnd-kit/react/sortable";
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { HouseIcon, PlusIcon, SettingsIcon } from "lucide-react";
@@ -24,12 +28,22 @@ import {
   getAccountShortcut,
   SETTINGS_SHORTCUT,
 } from "@/shell/titlebar-shortcuts";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import {
+  useGoogleAccounts,
+  useReorderGoogleAccounts,
+} from "@/state/google-accounts";
 import { useSelectedAccountId } from "@/state/mailbox";
+
+const delayedAccountPointerSensor = PointerSensor.configure({
+  activationConstraints: [
+    new PointerActivationConstraints.Delay({ tolerance: 6, value: 200 }),
+  ],
+});
 
 const Titlebar = () => {
   const { auth, updates } = getRuntimeCapabilities();
   const accounts = useGoogleAccounts();
+  const reorderAccounts = useReorderGoogleAccounts();
   const selectedAccountId = useSelectedAccountId();
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const matchRoute = useMatchRoute();
@@ -75,6 +89,30 @@ const Titlebar = () => {
     }
   };
 
+  const finishAccountDrag = (event: DragEndEvent): void => {
+    const { source } = event.operation;
+
+    if (event.canceled || !isSortable(source)) {
+      return;
+    }
+
+    const { index, initialIndex } = source;
+
+    if (index === initialIndex) {
+      return;
+    }
+
+    const reorderedAccounts = [...accounts];
+    const [movedAccount] = reorderedAccounts.splice(initialIndex, 1);
+
+    if (movedAccount === undefined) {
+      return;
+    }
+
+    reorderedAccounts.splice(index, 0, movedAccount);
+    void reorderAccounts(reorderedAccounts);
+  };
+
   return (
     <header className="app-titlebar border-border/70 bg-background fixed inset-x-0 top-0 z-30 flex items-center justify-between gap-2 border-b">
       <div className="app-titlebar-interactive flex items-center gap-2">
@@ -105,13 +143,22 @@ const Titlebar = () => {
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">
-          {accountShortcuts.map(({ account, shortcut }) => (
-            <TitlebarAccountButton
-              account={account}
-              key={account.email}
-              shortcut={shortcut}
-            />
-          ))}
+          <DragDropProvider
+            onDragEnd={finishAccountDrag}
+            sensors={(defaults) => [
+              ...defaults.filter((sensor) => sensor !== PointerSensor),
+              delayedAccountPointerSensor,
+            ]}
+          >
+            {accountShortcuts.map(({ account, shortcut }, index) => (
+              <TitlebarAccountButton
+                account={account}
+                index={index}
+                key={account.email}
+                shortcut={shortcut}
+              />
+            ))}
+          </DragDropProvider>
           {auth === undefined ? null : (
             <Tooltip>
               <TooltipTrigger

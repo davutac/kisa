@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { clearMailboxThreadsSnapshots } from "@/mail/mailbox-cache";
@@ -40,6 +40,33 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     initialState.status === "authenticated"
   );
   const [isStartingLogin, setIsStartingLogin] = useState(false);
+  const accountOrderVersion = useRef(0);
+
+  const reorderAccounts = async (
+    reorderedAccounts: readonly GoogleAccount[]
+  ): Promise<void> => {
+    const auth = getAuthApi();
+
+    if (auth === undefined) {
+      return;
+    }
+
+    const version = accountOrderVersion.current + 1;
+    accountOrderVersion.current = version;
+    const previousAccounts = accounts;
+    setAccounts(reorderedAccounts);
+    const reply = await auth.reorderGoogleAccounts({
+      emails: reorderedAccounts.map(({ email }) => email),
+    });
+
+    if (reply.ok || version !== accountOrderVersion.current) {
+      return;
+    }
+
+    toast.error(reply.error);
+    const refreshed = await auth.listGoogleAccounts();
+    setAccounts(refreshed.ok ? refreshed.data : previousAccounts);
+  };
 
   useEffect(() => {
     const auth = getAuthApi();
@@ -80,7 +107,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   }
 
   return (
-    <GoogleAccountsProvider accounts={accounts}>
+    <GoogleAccountsProvider accounts={accounts} onReorder={reorderAccounts}>
       <AccountSettingsProvider>
         <TrustedImageSendersProvider>{children}</TrustedImageSendersProvider>
       </AccountSettingsProvider>

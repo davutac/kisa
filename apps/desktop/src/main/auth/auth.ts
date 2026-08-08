@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 
 import { googleAccounts } from "@repo/database/schemas";
+import { eq as equals } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { app, BrowserWindow, safeStorage, shell } from "electron";
 
@@ -250,6 +251,7 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
             credentials: encryptedCredentials,
             email: profile.emailAddress,
             scopes: JSON.stringify(handoff.scopes),
+            sortOrder: now,
             updatedAt: now,
           })
           .onConflictDoUpdate({
@@ -484,6 +486,7 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
     readonly displayName: string | null;
     readonly email: string;
     readonly scopes: string;
+    readonly sortOrder: number;
   }) {
     const scopes = decodeStoredScopes(JSON.parse(row.scopes));
     const cachedAvatar = toAvatarDataUrl(row.avatarData, row.avatarMediaType);
@@ -546,6 +549,7 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
             displayName: profile.name,
             email: row.email,
             scopes: row.scopes,
+            sortOrder: row.sortOrder,
             updatedAt: now,
           })
           .onConflictDoUpdate({
@@ -599,7 +603,13 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
               displayName: true,
               email: true,
               scopes: true,
+              sortOrder: true,
             },
+            orderBy: (account, { asc }) => [
+              asc(account.sortOrder),
+              asc(account.createdAt),
+              asc(account.email),
+            ],
           })
           .sync(),
     });
@@ -629,6 +639,46 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
         ),
       { concurrency: 4 }
     );
+  }
+);
+
+export const reorderGoogleAccounts = Effect.fn("reorderGoogleAccounts")(
+  function* reorderGoogleAccounts(emails: readonly string[]) {
+    const database = yield* getDatabaseClient().pipe(
+      Effect.mapError(
+        (error) => new GoogleAuthError({ message: error.message })
+      )
+    );
+
+    yield* Effect.try({
+      catch: () =>
+        new GoogleAuthError({ message: "Could not save Google account order" }),
+      try: () =>
+        database.transaction((transaction) => {
+          const storedEmails = new Set(
+            transaction
+              .select({ email: googleAccounts.email })
+              .from(googleAccounts)
+              .all()
+              .map(({ email }) => email)
+          );
+
+          if (
+            emails.length !== storedEmails.size ||
+            !emails.every((email) => storedEmails.delete(email))
+          ) {
+            throw new Error("Account order did not match connected accounts");
+          }
+
+          for (const [sortOrder, email] of emails.entries()) {
+            transaction
+              .update(googleAccounts)
+              .set({ sortOrder })
+              .where(equals(googleAccounts.email, email))
+              .run();
+          }
+        }),
+    });
   }
 );
 

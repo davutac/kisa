@@ -1,3 +1,4 @@
+import { useSortable } from "@dnd-kit/react/sortable";
 import { UserRoundIcon } from "lucide-react";
 import { m, useReducedMotion } from "motion/react";
 
@@ -19,13 +20,19 @@ import { useSelectedAccountId } from "@/state/mailbox";
 
 interface TitlebarAccountButtonProps {
   account: GoogleAccount;
+  index: number;
   shortcut?: string;
 }
 
 const TitlebarAccountButton = ({
   account,
+  index,
   shortcut,
 }: TitlebarAccountButtonProps) => {
+  const { ref, targetRef } = useSortable({
+    id: account.email,
+    index,
+  });
   const { openAccount } = useMailboxNavigation();
   const selectedAccountId = useSelectedAccountId();
   const shouldReduceMotion = useReducedMotion();
@@ -46,6 +53,8 @@ const TitlebarAccountButton = ({
           indexProgress.indexedThreads / indexProgress.estimatedThreads
         );
 
+  // The button is the sortable DOM item, while the avatar stays the fixed-size
+  // collision target so an expanded account label cannot block position one.
   return (
     <Tooltip>
       <TooltipTrigger
@@ -58,10 +67,11 @@ const TitlebarAccountButton = ({
             onClick={() => {
               openAccount(account.email);
             }}
+            ref={ref}
             type="button"
             variant="secondary"
           >
-            <span className="relative size-7 shrink-0">
+            <span className="relative size-7 shrink-0" ref={targetRef}>
               <span className="relative grid size-7 place-items-center overflow-hidden rounded-full">
                 {account.avatarUrl === undefined ? (
                   <UserRoundIcon aria-hidden="true" className="size-3.5" />
