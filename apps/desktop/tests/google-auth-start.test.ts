@@ -25,6 +25,9 @@ vi.mock(import("electron"), () => ({
     isPackaged: true,
   } as unknown as typeof Electron.app,
   safeStorage: {
+    getSelectedStorageBackend: vi.fn<
+      typeof Electron.safeStorage.getSelectedStorageBackend
+    >(() => "gnome_libsecret"),
     isEncryptionAvailable: vi.fn<
       typeof Electron.safeStorage.isEncryptionAvailable
     >(() => true),
