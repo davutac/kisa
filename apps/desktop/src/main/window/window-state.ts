@@ -68,16 +68,15 @@ class WindowStateError extends Schema.TaggedErrorClass<WindowStateError>()(
     reason: Schema.Literals(["decode", "read", "write"]),
   }
 ) {
-  constructor(args: {
+  static readonly new = (args: {
     cause?: unknown;
     path: string;
     reason: WindowStateErrorReason;
-  }) {
-    super({
+  }): WindowStateError =>
+    new WindowStateError({
       ...args,
       message: getWindowStateErrorMessage(args),
     });
-  }
 }
 
 const isWindowVisibleOnScreen = (
@@ -101,7 +100,11 @@ const readWindowStateFile = Effect.fn("readWindowStateFile")(
   (windowStatePath: string) =>
     Effect.try({
       catch: (cause) =>
-        new WindowStateError({ cause, path: windowStatePath, reason: "read" }),
+        WindowStateError.new({
+          cause,
+          path: windowStatePath,
+          reason: "read",
+        }),
       try: () => readFileSync(windowStatePath, "utf-8"),
     })
 );
@@ -141,13 +144,12 @@ const readPersistedWindowState = Effect.fn("readPersistedWindowState")(
   function* readPersistedWindowStateEffect(windowStatePath: string) {
     const fileContents = yield* readWindowStateFile(windowStatePath);
     const windowState = yield* decodeWindowState(fileContents).pipe(
-      Effect.mapError(
-        (cause) =>
-          new WindowStateError({
-            cause,
-            path: windowStatePath,
-            reason: "decode",
-          })
+      Effect.mapError((cause) =>
+        WindowStateError.new({
+          cause,
+          path: windowStatePath,
+          reason: "decode",
+        })
       )
     );
     return normalizeWindowState(windowState);
@@ -161,7 +163,11 @@ const persistWindowState = Effect.fn("persistWindowState")((
 
   return Effect.try({
     catch: (cause) =>
-      new WindowStateError({ cause, path: windowStatePath, reason: "write" }),
+      WindowStateError.new({
+        cause,
+        path: windowStatePath,
+        reason: "write",
+      }),
     try: () => {
       mkdirSync(app.getPath("userData"), { recursive: true });
       writeFileSync(

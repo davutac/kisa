@@ -1,4 +1,5 @@
 {
+  "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "include": [
     "electron.vite.config.*",
@@ -9,6 +10,7 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "plugins": [{ "name": "@effect/language-service" }],
     "paths": {
       "@/shared/*": ["./src/shared/*"],
       "@/constants": ["./src/constants.ts"]

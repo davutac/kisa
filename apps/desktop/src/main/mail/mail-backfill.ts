@@ -302,7 +302,7 @@ const estimateThreadTotal = Effect.fn("mailBackfill.estimateThreadTotal")(
 
         return result.value;
       })
-    ).pipe(Effect.catch(() => Effect.succeed(null)));
+    ).pipe(Effect.orElseSucceed(() => null));
 
     // A missing or zero total is not fatal — the indicator falls back to an
     // indeterminate ring rather than the run refusing to start.
@@ -421,7 +421,7 @@ const settle = async (
 const runBackfill = async (accountId: string): Promise<void> => {
   const account = AccountId.make(accountId);
   const initial = await Effect.runPromise(
-    readState(accountId).pipe(Effect.catch(() => Effect.succeed(null)))
+    readState(accountId).pipe(Effect.orElseSucceed(() => null))
   );
 
   if (initial?.status === "complete") {
@@ -583,9 +583,7 @@ const listReadableAccountIds = () => {
       .map(({ email }) => email)
   );
 
-  // `Effect.catch` is an Effect combinator, not a promise `.catch`.
-  // oxlint-disable-next-line promise/prefer-await-to-then
-  return accounts.pipe(Effect.catch(() => Effect.succeed(NO_ACCOUNT_IDS)));
+  return accounts.pipe(Effect.orElseSucceed(() => NO_ACCOUNT_IDS));
 };
 
 /**
@@ -609,7 +607,7 @@ export const startMailBackfill = Effect.fn("startMailBackfill")(
     const rows = yield* withDatabase(
       "Could not load the mail index state",
       (database) => database.query.gmailBackfillState.findMany().sync()
-    ).pipe(Effect.catch(() => Effect.succeed([])));
+    ).pipe(Effect.orElseSucceed(() => []));
     const stateByAccount = new Map(
       rows.map((row) => [row.accountEmail, row] as const)
     );
@@ -618,7 +616,7 @@ export const startMailBackfill = Effect.fn("startMailBackfill")(
     for (const accountId of accountIds) {
       const row = stateByAccount.get(accountId);
       const counts = yield* readCounts(accountId).pipe(
-        Effect.catch(() => Effect.succeed({ messages: 0, threads: 0 }))
+        Effect.orElseSucceed(() => ({ messages: 0, threads: 0 }))
       );
 
       publishProgress(

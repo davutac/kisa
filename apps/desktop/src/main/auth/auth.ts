@@ -39,20 +39,20 @@ const GOOGLE_AUTH_ATTEMPT_TTL_MS = 10 * 60 * 1000;
 
 const AuthHandoff = Schema.Struct({
   accessToken: Schema.NonEmptyString,
-  expiresAt: Schema.optional(Schema.Number),
+  expiresAt: Schema.optional(Schema.Finite),
   refreshToken: Schema.optional(Schema.NonEmptyString),
   scopes: Schema.Array(Schema.NonEmptyString),
 });
 const GmailProfile = Schema.Struct({ emailAddress: Schema.NonEmptyString });
 const StoredCredentials = Schema.Struct({
   accessToken: Schema.NonEmptyString,
-  expiresAt: Schema.optional(Schema.Number),
+  expiresAt: Schema.optional(Schema.Finite),
   refreshToken: Schema.optional(Schema.NonEmptyString),
 });
 const StoredScopes = Schema.Array(Schema.NonEmptyString);
 const RefreshedCredentials = Schema.Struct({
   accessToken: Schema.NonEmptyString,
-  expiresAt: Schema.optional(Schema.Number),
+  expiresAt: Schema.optional(Schema.Finite),
   refreshToken: Schema.optional(Schema.NonEmptyString),
 });
 const GoogleUserInfo = Schema.Struct({
@@ -571,7 +571,7 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
       row.avatarData !== null && row.avatarUrl === (profile.picture ?? null)
         ? undefined
         : yield* downloadAvatar(profile.picture).pipe(
-            Effect.catch(() => Effect.succeed(NO_AVATAR))
+            Effect.orElseSucceed(() => NO_AVATAR)
           );
 
     yield* Effect.try({
@@ -658,24 +658,22 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
       rows,
       (row) =>
         refreshAccountProfile(row).pipe(
-          Effect.catch(() =>
-            Effect.succeed({
-              ...(toAvatarDataUrl(row.avatarData, row.avatarMediaType) ===
-              undefined
-                ? {}
-                : {
-                    avatarUrl: toAvatarDataUrl(
-                      row.avatarData,
-                      row.avatarMediaType
-                    ) as string,
-                  }),
-              ...(row.displayName === null
-                ? {}
-                : { displayName: row.displayName }),
-              email: row.email,
-              scopes: decodeStoredScopes(JSON.parse(row.scopes)),
-            })
-          )
+          Effect.orElseSucceed(() => ({
+            ...(toAvatarDataUrl(row.avatarData, row.avatarMediaType) ===
+            undefined
+              ? {}
+              : {
+                  avatarUrl: toAvatarDataUrl(
+                    row.avatarData,
+                    row.avatarMediaType
+                  ) as string,
+                }),
+            ...(row.displayName === null
+              ? {}
+              : { displayName: row.displayName }),
+            email: row.email,
+            scopes: decodeStoredScopes(JSON.parse(row.scopes)),
+          }))
         ),
       { concurrency: 4 }
     );

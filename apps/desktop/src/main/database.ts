@@ -36,12 +36,12 @@ const getDatabaseRuntime = (): DatabaseRuntime => {
   return databaseRuntime;
 };
 
-export const startDatabase = Effect.fn("startDatabase")(() =>
-  getDatabaseRuntime().start()
+export const startDatabase = Effect.fn("startDatabase")(
+  () => getDatabaseRuntime().start
 );
 
-export const getDatabaseClient = Effect.fn("getDatabaseClient")(() =>
-  getDatabaseRuntime().getClient()
+export const getDatabaseClient = Effect.fn("getDatabaseClient")(
+  () => getDatabaseRuntime().getClient
 );
 
 export const closeDatabase = (): void => {

@@ -34,20 +34,25 @@ export class DatabaseError extends Schema.TaggedErrorClass<DatabaseError>()(
     ]),
   }
 ) {
-  constructor(args: { cause?: unknown; reason: DatabaseErrorReason }) {
+  static readonly new = (args: {
+    cause?: unknown;
+    reason: DatabaseErrorReason;
+  }): DatabaseError => {
     if (args.reason === "not-ready") {
-      super({ message: "Database is not ready", reason: args.reason });
-      return;
+      return new DatabaseError({
+        message: "Database is not ready",
+        reason: args.reason,
+      });
     }
 
     const causeMessage = formatErrorCause(args.cause);
-    super({
+    return new DatabaseError({
       cause: args.cause,
       causeMessage,
       message: `Database startup failed during ${args.reason}: ${causeMessage}`,
       reason: args.reason,
     });
-  }
+  };
 }
 
 export { DatabaseError as DatabaseRuntimeError };
@@ -71,8 +76,8 @@ export interface DatabaseRuntimeAdapters {
 
 export interface DatabaseRuntime {
   close: () => void;
-  getClient: () => DatabaseRuntimeEffect<DatabaseClient>;
-  start: () => DatabaseRuntimeEffect<void>;
+  getClient: DatabaseRuntimeEffect<DatabaseClient>;
+  start: DatabaseRuntimeEffect<void>;
 }
 
 export const createDatabaseRuntime = (
@@ -102,55 +107,57 @@ export const createDatabaseRuntime = (
     databaseConnection = null;
   };
 
+  const getClient = Effect.gen(function* getClientEffect() {
+    if (databaseClient === null) {
+      return yield* DatabaseError.new({ reason: "not-ready" });
+    }
+
+    return databaseClient;
+  }).pipe(Effect.withSpan("DatabaseRuntime.getClient"));
+
+  const start = Effect.gen(function* startEffect() {
+    if (databaseClient !== null) {
+      return;
+    }
+
+    yield* Effect.try({
+      catch: (cause) =>
+        DatabaseError.new({ cause, reason: "create-directory" }),
+      try: () => createDirectory(path.dirname(paths.databasePath)),
+    });
+    const connection = yield* Effect.try({
+      catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
+      try: () => openConnection(paths.databasePath),
+    });
+    const client = yield* Effect.try({
+      catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
+      try: () => createClient(connection),
+    }).pipe(
+      Effect.tapError(() =>
+        Effect.sync(() => {
+          connection.close();
+        })
+      )
+    );
+
+    yield* Effect.try({
+      catch: (cause) => DatabaseError.new({ cause, reason: "migrate" }),
+      try: () => applyMigrations(client, paths.migrationsFolder),
+    }).pipe(
+      Effect.tapError(() =>
+        Effect.sync(() => {
+          connection.close();
+        })
+      )
+    );
+
+    databaseConnection = connection;
+    databaseClient = client;
+  }).pipe(Effect.withSpan("DatabaseRuntime.start"));
+
   return {
     close: closeCurrentConnection,
-    getClient: Effect.fn("DatabaseRuntime.getClient")(
-      function* getClientEffect() {
-        if (databaseClient === null) {
-          return yield* new DatabaseError({ reason: "not-ready" });
-        }
-
-        return databaseClient;
-      }
-    ),
-    start: Effect.fn("DatabaseRuntime.start")(function* startEffect() {
-      if (databaseClient !== null) {
-        return;
-      }
-
-      yield* Effect.try({
-        catch: (cause) =>
-          new DatabaseError({ cause, reason: "create-directory" }),
-        try: () => createDirectory(path.dirname(paths.databasePath)),
-      });
-      const connection = yield* Effect.try({
-        catch: (cause) => new DatabaseError({ cause, reason: "open" }),
-        try: () => openConnection(paths.databasePath),
-      });
-      const client = yield* Effect.try({
-        catch: (cause) => new DatabaseError({ cause, reason: "open" }),
-        try: () => createClient(connection),
-      }).pipe(
-        Effect.tapError(() =>
-          Effect.sync(() => {
-            connection.close();
-          })
-        )
-      );
-
-      yield* Effect.try({
-        catch: (cause) => new DatabaseError({ cause, reason: "migrate" }),
-        try: () => applyMigrations(client, paths.migrationsFolder),
-      }).pipe(
-        Effect.tapError(() =>
-          Effect.sync(() => {
-            connection.close();
-          })
-        )
-      );
-
-      databaseConnection = connection;
-      databaseClient = client;
-    }),
+    getClient,
+    start,
   };
 };

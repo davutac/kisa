@@ -14,17 +14,20 @@
     "dev": "turbo run dev",
     "fix": "ultracite fix --disable-nested-config",
     "lint": "ultracite check --disable-nested-config",
-    "prepare": "husky",
+    "prepare": "husky && effect-tsgo patch --typescript --oxlint",
     "release": "node scripts/release.mjs",
     "start": "turbo run start",
     "test": "pnpm --recursive --if-present run test",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "@effect/tsgo": "catalog:",
     "husky": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "turbo": "catalog:",
+    "typescript": "catalog:",
     "ultracite": "catalog:"
   },
   "packageManager": "pnpm@11.20.0"

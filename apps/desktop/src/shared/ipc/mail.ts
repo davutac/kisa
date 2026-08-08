@@ -7,7 +7,7 @@ export const GmailAttachmentSummary = Schema.Struct({
   filename: Schema.String,
   mediaType: Schema.String,
   messageId: Schema.String,
-  size: Schema.Number,
+  size: Schema.Finite,
 });
 export type GmailAttachmentSummary = typeof GmailAttachmentSummary.Type;
 
@@ -18,8 +18,8 @@ export const GmailThreadSummary = Schema.Struct({
   hasAttachments: Schema.Boolean,
   isUnread: Schema.Boolean,
   labels: Schema.Array(Schema.String),
-  latestAt: Schema.Number,
-  messageCount: Schema.Number,
+  latestAt: Schema.Finite,
+  messageCount: Schema.Finite,
   snippet: Schema.String,
   subject: Schema.String,
   threadId: Schema.String,
@@ -49,7 +49,7 @@ export const GmailThreadMessage = Schema.Struct({
   labelIds: Schema.Array(Schema.String),
   replyTo: Schema.optional(Schema.String),
   senderBrand: Schema.optional(GmailSenderBrand),
-  sentAt: Schema.Number,
+  sentAt: Schema.Finite,
   snippet: Schema.String,
   subject: Schema.String,
   to: Schema.optional(Schema.String),
@@ -75,7 +75,7 @@ export type GmailLabelSummary = typeof GmailLabelSummary.Type;
 
 export const GmailLabelCatalog = Schema.Struct({
   labels: Schema.Array(GmailLabelSummary),
-  syncedAt: Schema.optional(Schema.Number),
+  syncedAt: Schema.optional(Schema.Finite),
 });
 export type GmailLabelCatalog = typeof GmailLabelCatalog.Type;
 

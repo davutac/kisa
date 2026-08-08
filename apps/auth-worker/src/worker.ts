@@ -29,11 +29,11 @@ const RefreshRequest = Schema.Struct({
 const AuthState = Schema.Struct({
   appRedirectUri: Schema.NonEmptyString,
   codeChallenge: PkceValue,
-  createdAt: Schema.Number,
+  createdAt: Schema.Finite,
 });
 const GoogleTokenResponse = Schema.Struct({
   access_token: Schema.NonEmptyString,
-  expires_in: Schema.optional(Schema.Number),
+  expires_in: Schema.optional(Schema.Finite),
   refresh_token: Schema.optional(Schema.NonEmptyString),
   scope: Schema.NonEmptyString,
   token_type: Schema.NonEmptyString,
@@ -473,11 +473,7 @@ export default Cloudflare.Worker(
         }
 
         return errorResponse("not_found", 404);
-      }).pipe(
-        // The Worker boundary must always return an HTTP response.
-        // oxlint-disable-next-line promise/prefer-await-to-then
-        Effect.catch(() => Effect.succeed(errorResponse("internal_error", 500)))
-      ),
+      }).pipe(Effect.orElseSucceed(() => errorResponse("internal_error", 500))),
     };
   })
 );

@@ -43,9 +43,9 @@ describe(createDatabaseRuntime, () => {
         }
       );
 
-      yield* runtime.start();
-      yield* runtime.start();
-      const databaseClient = yield* runtime.getClient();
+      yield* runtime.start;
+      yield* runtime.start;
+      const databaseClient = yield* runtime.getClient;
 
       expect({
         databaseClient,
@@ -86,8 +86,8 @@ describe(createDatabaseRuntime, () => {
         }
       );
 
-      const startExit = yield* Effect.exit(runtime.start());
-      const clientExit = yield* Effect.exit(runtime.getClient());
+      const startExit = yield* Effect.exit(runtime.start);
+      const clientExit = yield* Effect.exit(runtime.getClient);
 
       expect({
         clientFailed: Exit.isFailure(clientExit),
@@ -122,7 +122,7 @@ describe(createDatabaseRuntime, () => {
         }
       );
 
-      const startExit = yield* Effect.exit(runtime.start());
+      const startExit = yield* Effect.exit(runtime.start);
 
       expect({
         didClose,

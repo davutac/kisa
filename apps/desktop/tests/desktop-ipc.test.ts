@@ -39,8 +39,8 @@ describe(DesktopIpc.DesktopIpc, () => {
         const method = DesktopIpc.makeIpcMethod({
           channel: "desktop:test:double",
           handler: ({ value }) => Effect.succeed({ value: value * 2 }),
-          payload: Schema.Struct({ value: Schema.Number }),
-          result: Schema.Struct({ value: Schema.Number }),
+          payload: Schema.Struct({ value: Schema.Finite }),
+          result: Schema.Struct({ value: Schema.Finite }),
         });
         let encodedResult: unknown;
 
@@ -67,8 +67,8 @@ describe(DesktopIpc.DesktopIpc, () => {
       const method = DesktopIpc.makeIpcMethod({
         channel: "desktop:test:validated",
         handler: ({ value }) => Effect.succeed(value),
-        payload: Schema.Struct({ value: Schema.Number }),
-        result: Schema.Number,
+        payload: Schema.Struct({ value: Schema.Finite }),
+        result: Schema.Finite,
       });
 
       const exit = yield* Effect.exit(method.handler({ value: "invalid" }));
@@ -83,7 +83,7 @@ describe(DesktopIpc.DesktopIpc, () => {
         channel: "desktop:test:binary",
         handler: ({ bytes }) => Effect.succeed([...bytes]),
         payload: Schema.Struct({ bytes: Schema.Uint8Array }),
-        result: Schema.Array(Schema.Number),
+        result: Schema.Array(Schema.Finite),
       });
 
       const result = yield* method.handler({

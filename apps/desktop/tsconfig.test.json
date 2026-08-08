@@ -1,4 +1,5 @@
 {
+  "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "extends": "./tsconfig.web.json",
   "include": [
     "src/main/app/unread-badge.ts",
@@ -18,6 +19,7 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "plugins": [{ "name": "@effect/language-service" }],
     "types": ["node", "vite/client", "vitest/globals"]
   }
 }

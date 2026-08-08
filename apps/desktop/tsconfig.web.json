@@ -1,4 +1,5 @@
 {
+  "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
   "include": [
     "src/renderer/src/env.d.ts",
@@ -11,6 +12,7 @@
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
+    "plugins": [{ "name": "@effect/language-service" }],
     "paths": {
       "@/*": ["./src/renderer/src/*"],
       "@/renderer/*": ["./src/renderer/src/*"],

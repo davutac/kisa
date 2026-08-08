@@ -17,6 +17,7 @@ catalog:
   "@base-ui/react": ^1.7.0
   "@dnd-kit/dom": ^0.5.0
   "@dnd-kit/react": ^0.5.0
+  "@effect/tsgo": 0.35.0
   "@electron-toolkit/tsconfig": ^2.0.0
   "@electron-toolkit/utils": ^4.0.0
   "@fontsource-variable/geist": ^5.3.0
@@ -56,6 +57,7 @@ catalog:
   next-themes: ^0.4.6
   oxfmt: ^0.62.0
   oxlint: ^1.77.0
+  oxlint-tsgolint: 7.0.2001
   react: ^19.2.8
   react-day-picker: ^10.0.1
   react-dom: ^19.2.8

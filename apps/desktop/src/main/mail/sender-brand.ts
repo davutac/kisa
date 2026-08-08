@@ -773,9 +773,7 @@ export const getSenderBrand = Effect.fn("getSenderBrand")(
         domain,
         request.headers,
         target
-      ).pipe(
-        Effect.catch(() => Effect.succeed({ status: "invalid" } as const))
-      );
+      ).pipe(Effect.orElseSucceed(() => ({ status: "invalid" }) as const));
 
       if (discovery.status === "invalid") {
         return null;

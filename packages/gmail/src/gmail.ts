@@ -361,9 +361,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           const parsed = yield* Effect.forEach(
             details,
             (detail) =>
-              mime
-                .parseThread(detail)
-                .pipe(Effect.catch(() => Effect.succeed(null))),
+              mime.parseThread(detail).pipe(Effect.orElseSucceed(() => null)),
             { concurrency: 1 }
           );
 

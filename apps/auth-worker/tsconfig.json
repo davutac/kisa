@@ -1,4 +1,5 @@
 {
+  "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true,
@@ -7,6 +8,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
+    "plugins": [{ "name": "@effect/language-service" }],
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2024"

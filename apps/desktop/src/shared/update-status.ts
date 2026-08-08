@@ -4,7 +4,7 @@ export const UpdateStatus = Schema.Union([
   Schema.Struct({ state: Schema.Literal("idle") }),
   Schema.Struct({ state: Schema.Literal("checking") }),
   Schema.Struct({
-    percent: Schema.Number,
+    percent: Schema.Finite,
     state: Schema.Literal("downloading"),
     version: Schema.String,
   }),

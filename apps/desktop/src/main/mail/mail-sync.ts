@@ -525,7 +525,7 @@ const withInlineImages = Effect.fn("withInlineImages")(
                     dataUrl: toImageDataUrl(image.mediaType, image.bytes),
                     messageId,
                   })),
-                  Effect.catch(() => Effect.succeed(null))
+                  Effect.orElseSucceed(() => null)
                 ),
             { concurrency: INLINE_IMAGE_CONCURRENCY }
           )
@@ -626,7 +626,7 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
           from: message.from.address,
           headers: headersById.get(message.id) ?? [],
         }).pipe(
-          Effect.catch(() => Effect.succeed(null)),
+          Effect.orElseSucceed(() => null),
           Effect.map((senderBrand) => toThreadMessage(message, senderBrand))
         ),
       { concurrency: 3 }

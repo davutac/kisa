@@ -1,4 +1,5 @@
 {
+  "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "compilerOptions": {
     "allowJs": false,
     "composite": true,
@@ -11,6 +12,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
+    "plugins": [{ "name": "@effect/language-service" }],
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
