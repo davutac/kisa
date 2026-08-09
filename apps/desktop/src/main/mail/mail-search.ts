@@ -1,4 +1,3 @@
-import type { DatabaseClient } from "@repo/database/client";
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -352,22 +351,6 @@ const toThreadSearchResults = (
   threads: rows.slice(0, limit).map(toThreadSummary),
 });
 
-export const runIndexedThreadSearch = (
-  database: DatabaseClient,
-  request: GmailSearchRequest
-): GmailSearchResults => {
-  const query = toThreadSearchQuery(request);
-
-  if (query === undefined) {
-    return { hasMore: false, threads: [] };
-  }
-
-  return toThreadSearchResults(
-    database.all<SearchThreadRow>(query.statement),
-    query.limit
-  );
-};
-
 const runIndexedThreadSearchRemote = async (
   database: RemoteDatabaseClient,
   request: GmailSearchRequest
@@ -518,24 +501,6 @@ const toSenderSuggestions = (
       }) satisfies GmailSenderSuggestion
   ),
 });
-
-/**
- * The addresses behind a `from:` or `to:` pill, ranked by how much mail they
- * account for — the address someone means is nearly always one they exchange
- * mail with often.
- */
-export const runSenderSuggestions = (
-  database: DatabaseClient,
-  request: GmailSenderSuggestionRequest
-): GmailSenderSuggestions => {
-  const query = toSenderSuggestionQuery(request);
-
-  if (query === undefined) {
-    return { senders: [] };
-  }
-
-  return toSenderSuggestions(database.all<SenderRow>(query));
-};
 
 const runSenderSuggestionsRemote = async (
   database: RemoteDatabaseClient,

@@ -2,6 +2,7 @@
 // oxlint-disable vitest/no-standalone-expect
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
+import { vi } from "vitest";
 
 import {
   createPinnedLookup,
@@ -11,6 +12,10 @@ import {
   getSenderBrand,
   parseBimiLocation,
 } from "../src/main/mail/sender-brand";
+
+vi.mock(import("../src/main/database"), () => ({
+  withDatabaseClient: () => Effect.die("Unexpected database access"),
+}));
 
 const stripeAuthenticationHeaders = [
   {
