@@ -12,6 +12,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 import { useMailThread } from "@/mail/use-mail-thread";
 import type {
   ThreadActions,
@@ -110,7 +111,11 @@ const MailThreadContent = ({
     // The header owns the top gutter and the top radius: both belong to the
     // sticky box so its backdrop keeps covering them once messages scroll up
     // behind it.
-    <section className="relative flex w-full min-w-0 flex-col gap-px px-4 pb-4 *:last:rounded-b-lg">
+    <section
+      className={cn(
+        "relative flex w-full min-w-0 flex-col gap-px px-4 pb-4 *:last:rounded-b-lg"
+      )}
+    >
       <MailThreadHeader
         isUnread={isUnread}
         latestAt={latestMessage?.sentAt}

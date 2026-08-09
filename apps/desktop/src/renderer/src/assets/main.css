@@ -167,8 +167,6 @@
   [data-slot="sidebar-menu-button"],
   [role="button"]:not(:disabled) {
     cursor: default;
-    app-region: no-drag;
-    -webkit-app-region: no-drag;
   }
 }
 #root {

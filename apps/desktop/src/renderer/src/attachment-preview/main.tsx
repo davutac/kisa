@@ -333,7 +333,7 @@ const AttachmentPreviewApp = () => {
         gridTemplateRows: `${TITLEBAR_HEIGHT}px minmax(0, 1fr)`,
       }}
     >
-      <header className="app-titlebar border-border/70 bg-background flex items-center justify-between gap-2 border-b">
+      <header className="app-titlebar bg-background flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-xs font-medium">

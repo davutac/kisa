@@ -14,6 +14,7 @@ import {
   getHotkeyDisplay,
   useAppCommand,
 } from "@/hotkeys";
+import { cn } from "@/lib/utils";
 
 interface MailThreadHeaderProps {
   isUnread: boolean;
@@ -46,7 +47,12 @@ const MailThreadHeader = ({
     // Sticking at top-0 with an opaque pt-4 gutter reads as a top-4 offset
     // while keeping messages from showing through the gutter, the card's
     // rounded corners and the 1px flex gap as they scroll up behind it.
-    <header className="bg-background after:bg-background sticky top-0 z-10 pt-4 after:absolute after:inset-x-0 after:top-full after:h-px">
+    <header
+      className={cn(
+        "bg-background after:bg-background sticky top-0 z-10 pt-4 after:absolute after:inset-x-0 after:top-full after:h-px",
+        !onPopOut && "pt-0"
+      )}
+    >
       {onPopOut === undefined ? null : (
         <AppCommand callback={onPopOut} command="thread.popout" />
       )}

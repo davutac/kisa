@@ -34,7 +34,7 @@ function RootLayout() {
         {isThreadWindow ? (
           <header
             aria-hidden="true"
-            className="app-titlebar border-border/70 bg-background fixed inset-x-0 top-0 z-30 border-b"
+            className="app-titlebar bg-background fixed inset-x-0 top-0 z-30"
           />
         ) : (
           <Titlebar />
