@@ -196,4 +196,34 @@ describe("database migrations", () => {
       connection.close();
     }
   });
+
+  it("enables notifications by default for existing account settings", () => {
+    const connection = createLegacyDatabase();
+
+    try {
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+      connection
+        .prepare(
+          `INSERT INTO account_settings (
+            account_email,
+            show_system_labels,
+            updated_at
+          ) VALUES (?, ?, ?)`
+        )
+        .run("user@example.com", 1, 1);
+
+      expect(
+        connection
+          .prepare(
+            "SELECT notifications_enabled FROM account_settings WHERE account_email = ?"
+          )
+          .get("user@example.com")
+      ).toStrictEqual({ notifications_enabled: 1 });
+    } finally {
+      connection.close();
+    }
+  });
 });

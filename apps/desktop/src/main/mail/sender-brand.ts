@@ -272,6 +272,38 @@ export const getBimiLookupDomains = (
     : [authorDomain, organizationalDomain];
 };
 
+/**
+ * A cheap hint used before re-reading a new message's authentication headers.
+ * The cached logo is never returned from this check: `getSenderBrand` still
+ * validates the new message before a notification may display it.
+ */
+export const hasCachedSenderBrand = Effect.fn("hasCachedSenderBrand")(
+  function* hasCachedSenderBrand(from: string) {
+    const senderDomain = extractSenderDomain(from);
+
+    if (senderDomain === null) {
+      return false;
+    }
+
+    const domains = getBimiLookupDomains(senderDomain);
+    const rows = yield* withDatabaseClient((database) =>
+      database.query.gmailSenderBrands.findMany({
+        where: {
+          domain: { in: [...domains] },
+          expiresAt: { gt: Date.now() },
+          status: "available",
+        },
+      })
+    ).pipe(
+      Effect.mapError(
+        () => new SenderBrandError({ message: "Could not load sender brand" })
+      )
+    );
+
+    return rows.some((row) => row.logoData !== null);
+  }
+);
+
 const parseHttpsUrl = (value: string | undefined): string | null => {
   if (value === undefined) {
     return null;

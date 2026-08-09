@@ -69,6 +69,8 @@ export interface GatewayListThreadsRequest {
 }
 
 export interface GatewayHistoryResult {
+  /** Messages Gmail explicitly reported as added since the saved cursor. */
+  readonly addedMessageIds: readonly MessageId[];
   /** See `GatewayThreadPage.details`. */
   readonly details: readonly GatewayThread[];
   readonly historyId: HistoryId;

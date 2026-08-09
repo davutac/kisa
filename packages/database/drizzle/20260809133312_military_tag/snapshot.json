@@ -1,0 +1,986 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "47a7eaca-36a5-4604-84a8-a900bd5c84d4",
+  "prevIds": [
+    "75e6767b-f126-484f-a29f-8f9910fdee30"
+  ],
+  "ddl": [
+    {
+      "name": "account_settings",
+      "entityType": "tables"
+    },
+    {
+      "name": "gmail_backfill_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "gmail_labels",
+      "entityType": "tables"
+    },
+    {
+      "name": "gmail_messages",
+      "entityType": "tables"
+    },
+    {
+      "name": "gmail_sender_brands",
+      "entityType": "tables"
+    },
+    {
+      "name": "gmail_sync_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "gmail_threads",
+      "entityType": "tables"
+    },
+    {
+      "name": "gmail_trusted_image_senders",
+      "entityType": "tables"
+    },
+    {
+      "name": "google_accounts",
+      "entityType": "tables"
+    },
+    {
+      "name": "test",
+      "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "notifications_enabled",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "show_system_labels",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "completed_at",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "estimated_threads",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "indexed_messages",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "indexed_threads",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_error",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "oldest_indexed_at",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "page_token",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "gmail_backfill_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "gmail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label_id",
+      "entityType": "columns",
+      "table": "gmail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "gmail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "type",
+      "entityType": "columns",
+      "table": "gmail_labels"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "gmail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attachments",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bcc_addresses",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "blob",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_html",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_text",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cc_addresses",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_address",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_name",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "has_blocked_remote_images",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "internal_date",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label_ids",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reply_to_address",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "schema_version",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subject",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thread_id",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to_addresses",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "gmail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authority_url",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "domain",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "blob",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "logo_data",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "logo_url",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selector",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "gmail_sync_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "history_id",
+      "entityType": "columns",
+      "table": "gmail_sync_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "gmail_sync_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attachments",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "has_attachments",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "is_in_inbox",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_unread",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "labels",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "latest_at",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_count",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snippet",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subject",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thread_id",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "gmail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "gmail_trusted_image_senders"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "gmail_trusted_image_senders"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sender_email",
+      "entityType": "columns",
+      "table": "gmail_trusted_image_senders"
+    },
+    {
+      "type": "blob",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "avatar_data",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "avatar_media_type",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "avatar_url",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "blob",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "credentials",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "display_name",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "email",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scopes",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sort_order",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "google_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "test"
+    },
+    {
+      "columns": [
+        "account_email",
+        "label_id"
+      ],
+      "nameExplicit": false,
+      "name": "gmail_labels_account_email_label_id_pk",
+      "entityType": "pks",
+      "table": "gmail_labels"
+    },
+    {
+      "columns": [
+        "account_email",
+        "message_id"
+      ],
+      "nameExplicit": false,
+      "name": "gmail_messages_account_email_message_id_pk",
+      "entityType": "pks",
+      "table": "gmail_messages"
+    },
+    {
+      "columns": [
+        "domain",
+        "selector"
+      ],
+      "nameExplicit": false,
+      "name": "gmail_sender_brands_domain_selector_pk",
+      "entityType": "pks",
+      "table": "gmail_sender_brands"
+    },
+    {
+      "columns": [
+        "account_email",
+        "thread_id"
+      ],
+      "nameExplicit": false,
+      "name": "gmail_threads_account_email_thread_id_pk",
+      "entityType": "pks",
+      "table": "gmail_threads"
+    },
+    {
+      "columns": [
+        "account_email",
+        "sender_email"
+      ],
+      "nameExplicit": false,
+      "name": "gmail_trusted_image_senders_account_email_sender_email_pk",
+      "entityType": "pks",
+      "table": "gmail_trusted_image_senders"
+    },
+    {
+      "columns": [
+        "account_email"
+      ],
+      "nameExplicit": false,
+      "name": "account_settings_pk",
+      "table": "account_settings",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "account_email"
+      ],
+      "nameExplicit": false,
+      "name": "gmail_backfill_state_pk",
+      "table": "gmail_backfill_state",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "account_email"
+      ],
+      "nameExplicit": false,
+      "name": "gmail_sync_state_pk",
+      "table": "gmail_sync_state",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "email"
+      ],
+      "nameExplicit": false,
+      "name": "google_accounts_pk",
+      "table": "google_accounts",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "test_pk",
+      "table": "test",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_email",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "gmail_messages_thread_idx",
+      "entityType": "indexes",
+      "table": "gmail_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_email",
+          "isExpression": false
+        },
+        {
+          "value": "internal_date",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "gmail_messages_date_idx",
+      "entityType": "indexes",
+      "table": "gmail_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_email",
+          "isExpression": false
+        },
+        {
+          "value": "from_address",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "gmail_messages_sender_idx",
+      "entityType": "indexes",
+      "table": "gmail_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "is_in_inbox",
+          "isExpression": false
+        },
+        {
+          "value": "\"latest_at\" desc",
+          "isExpression": true
+        },
+        {
+          "value": "account_email",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "gmail_threads_mailbox_idx",
+      "entityType": "indexes",
+      "table": "gmail_threads"
+    }
+  ],
+  "renames": []
+}

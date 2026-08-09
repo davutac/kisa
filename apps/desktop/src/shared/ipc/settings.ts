@@ -4,6 +4,8 @@ import { IpcReply } from "./reply";
 
 export const AccountSettings = Schema.Struct({
   accountId: Schema.String,
+  /** Whether newly synced unread Inbox messages may produce an OS alert. */
+  notificationsEnabled: Schema.Boolean,
   /** Gmail's own labels (INBOX, UNREAD, CATEGORY_*, …) shown next to threads. */
   showSystemLabels: Schema.Boolean,
 });
@@ -11,13 +13,20 @@ export type AccountSettings = typeof AccountSettings.Type;
 
 /** Accounts without a stored row behave as if they had these settings. */
 export const DEFAULT_ACCOUNT_SETTINGS = {
+  notificationsEnabled: true,
   showSystemLabels: true,
 } as const satisfies Omit<AccountSettings, "accountId">;
 
-export const AccountSettingsUpdateRequest = Schema.Struct({
-  accountId: Schema.NonEmptyString,
-  showSystemLabels: Schema.Boolean,
-});
+export const AccountSettingsUpdateRequest = Schema.Union([
+  Schema.Struct({
+    accountId: Schema.NonEmptyString,
+    notificationsEnabled: Schema.Boolean,
+  }),
+  Schema.Struct({
+    accountId: Schema.NonEmptyString,
+    showSystemLabels: Schema.Boolean,
+  }),
+]);
 export type AccountSettingsUpdateRequest =
   typeof AccountSettingsUpdateRequest.Type;
 

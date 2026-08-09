@@ -578,6 +578,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         );
         yield* store.saveSyncCursor(accountId, historyId);
         return {
+          addedMessageIds: [],
           changedThreadIds: page.items.map((thread) => thread.id),
           type,
         } satisfies SyncResult;
@@ -607,6 +608,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
             yield* refreshLabels(request.accountId);
 
             return {
+              addedMessageIds: history.addedMessageIds,
               changedThreadIds: [
                 ...history.threads.map((thread) => thread.id),
                 ...history.removedThreadIds,

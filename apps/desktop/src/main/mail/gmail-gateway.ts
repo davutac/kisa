@@ -302,16 +302,26 @@ const VOID_RESULT: GatewayResult<void> = { value: undefined };
  * Folds one page of history records into the changed/removed thread id sets.
  * Label changes and new messages both mean "re-read this thread".
  */
-const collectHistoryThreadIds = (
+export const collectHistoryIds = (
   records: readonly gmail_v1.Schema$History[],
   target: {
+    readonly addedMessageIds: Set<string>;
     readonly changedThreadIds: Set<string>;
     readonly removedThreadIds: Set<string>;
   }
 ): void => {
   for (const record of records) {
+    for (const added of record.messagesAdded ?? []) {
+      if (isPresent(added.message?.id)) {
+        target.addedMessageIds.add(added.message.id);
+      }
+
+      if (isPresent(added.message?.threadId)) {
+        target.changedThreadIds.add(added.message.threadId);
+      }
+    }
+
     for (const changed of [
-      ...(record.messagesAdded ?? []),
       ...(record.labelsAdded ?? []),
       ...(record.labelsRemoved ?? []),
     ]) {
@@ -510,6 +520,7 @@ export const GmailGatewayLive = Layer.succeed(
           }),
         try: async (): Promise<GatewayResult<GatewayHistoryResult>> => {
           const client = createClient(authorization.credentials);
+          const addedMessageIds = new Set<string>();
           const changedThreadIds = new Set<string>();
           const removedThreadIds = new Set<string>();
           let latestHistoryId = historyId;
@@ -536,7 +547,8 @@ export const GmailGatewayLive = Layer.succeed(
               response.data.historyId ?? latestHistoryId
             );
 
-            collectHistoryThreadIds(response.data.history ?? [], {
+            collectHistoryIds(response.data.history ?? [], {
+              addedMessageIds,
               changedThreadIds,
               removedThreadIds,
             });
@@ -558,6 +570,9 @@ export const GmailGatewayLive = Layer.succeed(
           );
 
           return succeed({
+            addedMessageIds: [...addedMessageIds].map((id) =>
+              MessageId.make(id)
+            ),
             details: fetched.details,
             historyId: latestHistoryId,
             removedThreadIds: [...removedThreadIds].map((id) =>

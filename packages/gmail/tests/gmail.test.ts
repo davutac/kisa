@@ -55,7 +55,12 @@ interface TestState {
   sendCalls: number;
 }
 
-const createTestLayer = () => {
+interface TestLayerOptions {
+  readonly historyAddedMessageIds?: readonly MessageId[];
+  readonly syncCursor?: HistoryId;
+}
+
+const createTestLayer = (options: TestLayerOptions = {}) => {
   const state: TestState = {
     attachmentCalls: [],
     authorizations: new Map(),
@@ -78,7 +83,8 @@ const createTestLayer = () => {
         Option.fromNullishOr(state.authorizations.get(accountId))
       ),
     getLabels: () => Effect.succeed([]),
-    getSyncCursor: () => Effect.succeed(Option.none()),
+    getSyncCursor: () =>
+      Effect.succeed(Option.fromNullishOr(options.syncCursor)),
     getThread: () => Effect.succeed(Option.none()),
     listAccounts: Effect.sync(() =>
       [...state.authorizations.values()].map(({ account }) => account)
@@ -130,7 +136,8 @@ const createTestLayer = () => {
           },
         };
       }),
-    getCurrentHistoryId: () => Effect.die("unused"),
+    getCurrentHistoryId: () =>
+      Effect.succeed({ value: HistoryId.make("history-current") }),
     getMailboxTotals: () => Effect.die("unused"),
     getThread: () =>
       Effect.succeed({
@@ -149,7 +156,16 @@ const createTestLayer = () => {
         id: AccountId.make(`account-${suffix}`),
       });
     },
-    listHistory: () => Effect.die("unused"),
+    listHistory: () =>
+      Effect.succeed({
+        value: {
+          addedMessageIds: options.historyAddedMessageIds ?? [],
+          details: [],
+          historyId: HistoryId.make("history-next"),
+          removedThreadIds: [],
+          threads: [],
+        },
+      }),
     listLabels: () => Effect.succeed({ value: [] }),
     listThreads: (authorization, request) => {
       state.listThreadCalls.push({
@@ -442,6 +458,46 @@ describe(Gmail, () => {
         "logo@example.com",
       ]);
       expect(state.sendCalls).toBe(1);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("does not treat initial mailbox hydration as new mail", () => {
+    const { layer } = createTestLayer();
+
+    return Effect.gen(function* ignoresInitialMailbox() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(
+        authHandoff("access-a", "refresh-a")
+      );
+      const result = yield* gmail.sync({
+        accountId: account.id,
+        reason: "startup",
+      });
+
+      expect(result.type).toBe("initial");
+      expect(result.addedMessageIds).toStrictEqual([]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("preserves only incremental message-added signals", () => {
+    const addedMessageId = MessageId.make("new-message");
+    const { layer } = createTestLayer({
+      historyAddedMessageIds: [addedMessageId],
+      syncCursor: HistoryId.make("history-before"),
+    });
+
+    return Effect.gen(function* preservesAddedMessages() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(
+        authHandoff("access-a", "refresh-a")
+      );
+      const result = yield* gmail.sync({
+        accountId: account.id,
+        reason: "timer",
+      });
+
+      expect(result.type).toBe("partial");
+      expect(result.addedMessageIds).toStrictEqual([addedMessageId]);
     }).pipe(Effect.provide(layer));
   });
 });

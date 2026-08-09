@@ -55,9 +55,11 @@ import {
   selectInlineImages,
   toImageDataUrl,
 } from "./inline-images";
+import type { NewMailNotificationMessage } from "./new-mail-notifications";
+import { showNewMailNotifications } from "./new-mail-notifications";
 import { addUnreadLabel, removeUnreadLabel } from "./read-state";
 import type { MessageHeader } from "./sender-brand";
-import { getSenderBrand } from "./sender-brand";
+import { getSenderBrand, hasCachedSenderBrand } from "./sender-brand";
 import { getThreadCacheState } from "./thread-cache-policy";
 import { refreshUnreadBadge } from "./unread-badge";
 
@@ -431,6 +433,49 @@ interface RawThreadMessage {
   readonly id?: string | null;
   readonly payload?: { readonly headers?: readonly MessageHeader[] };
 }
+
+const loadNotificationSenderBrand = Effect.fn("loadNotificationSenderBrand")(
+  function* loadNotificationSenderBrand(message: NewMailNotificationMessage) {
+    const hasCachedBrand = yield* hasCachedSenderBrand(message.fromAddress);
+
+    if (!hasCachedBrand) {
+      return null;
+    }
+
+    // Only known brand domains pay for this re-read. The current message's own
+    // authentication headers still have to validate the cached BIMI logo.
+    const rawMessages = yield* runGmail(
+      Effect.gen(function* loadRawNotificationMessage() {
+        const store = yield* GmailStore;
+        const gateway = yield* GmailGateway;
+        const authorization = yield* store.getAuthorization(
+          AccountId.make(message.accountId)
+        );
+
+        if (authorization._tag === "None") {
+          return [];
+        }
+
+        const result = yield* gateway.getThread(
+          authorization.value,
+          ThreadId.make(message.threadId)
+        );
+
+        return result.value.messages as readonly RawThreadMessage[];
+      })
+    );
+    const rawMessage = rawMessages.find(({ id }) => id === message.messageId);
+
+    if (rawMessage === undefined) {
+      return null;
+    }
+
+    return yield* getSenderBrand({
+      from: message.fromAddress,
+      headers: rawMessage.payload?.headers ?? [],
+    });
+  }
+);
 
 const formatList = (
   mailboxes: readonly { readonly address: string }[]
@@ -1222,6 +1267,20 @@ const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
 
   if (result.changedThreadIds.length > 0) {
     yield* publishCachedThreadListChanges(accountId, result.changedThreadIds);
+  }
+
+  if (result.type === "partial" && result.addedMessageIds.length > 0) {
+    yield* showNewMailNotifications(
+      accountId,
+      result.addedMessageIds,
+      loadNotificationSenderBrand
+    ).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Could not show new email notifications: ${error.message}`
+        )
+      )
+    );
   }
 });
 

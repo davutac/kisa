@@ -97,6 +97,65 @@ const SettingsAccountSystemLabelsRow = ({
   );
 };
 
+interface SettingsAccountNotificationsRowProps {
+  account: GoogleAccount;
+  settingsApi: SettingsApi;
+}
+
+const SettingsAccountNotificationsRow = ({
+  account,
+  settingsApi,
+}: SettingsAccountNotificationsRowProps) => {
+  const { notificationsEnabled } = useAccountSettings(account.email);
+  const [isSaving, setIsSaving] = useState(false);
+  const titleId = `account-${account.email}-notifications-title`;
+
+  const handleChange = async (checked: boolean): Promise<void> => {
+    setIsSaving(true);
+
+    try {
+      const reply = await settingsApi.updateAccountSettings({
+        accountId: account.email,
+        notificationsEnabled: checked,
+      });
+
+      if (!reply.ok) {
+        toast.error(reply.error);
+      }
+    } catch {
+      toast.error("Could not save the setting", {
+        description: "Please try again.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <SettingsRow>
+      <SettingsRowContent>
+        <SettingsRowTitle id={titleId}>
+          New email notifications
+        </SettingsRowTitle>
+        <SettingsRowDescription>
+          Show a system notification when new unread mail arrives for this
+          account.
+        </SettingsRowDescription>
+      </SettingsRowContent>
+      <SettingsRowActions>
+        <Switch
+          aria-labelledby={titleId}
+          checked={notificationsEnabled}
+          disabled={isSaving}
+          onCheckedChange={(checked) => {
+            void handleChange(checked);
+          }}
+        />
+      </SettingsRowActions>
+    </SettingsRow>
+  );
+};
+
 interface SettingsAccountDisconnectRowProps {
   account: GoogleAccount;
   authApi: AuthApi;
@@ -236,6 +295,12 @@ const SettingsAccountSection = ({
       </SettingsSectionHeader>
 
       <SettingsRows>
+        {settingsApi === undefined ? null : (
+          <SettingsAccountNotificationsRow
+            account={account}
+            settingsApi={settingsApi}
+          />
+        )}
         {mailApi === undefined ? null : (
           <SettingsAccountLabelsRow
             accountId={account.email}

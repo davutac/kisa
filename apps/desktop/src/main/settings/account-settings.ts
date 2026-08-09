@@ -8,7 +8,10 @@ import type {
   AccountSettingsReply,
   AccountSettingsUpdateRequest,
 } from "../../shared/ipc/settings";
-import { AccountSettingsReply as AccountSettingsReplySchema } from "../../shared/ipc/settings";
+import {
+  AccountSettingsReply as AccountSettingsReplySchema,
+  DEFAULT_ACCOUNT_SETTINGS,
+} from "../../shared/ipc/settings";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
@@ -47,6 +50,7 @@ export const listAccountSettings = Effect.fn("listAccountSettings")(
       (row) =>
         ({
           accountId: row.accountEmail,
+          notificationsEnabled: row.notificationsEnabled,
           showSystemLabels: row.showSystemLabels,
         }) satisfies AccountSettings
     );
@@ -56,18 +60,23 @@ export const listAccountSettings = Effect.fn("listAccountSettings")(
 export const updateAccountSettings = Effect.fn("updateAccountSettings")(
   function* updateAccountSettings(request: AccountSettingsUpdateRequest) {
     const now = Date.now();
+    const setting =
+      "notificationsEnabled" in request
+        ? { notificationsEnabled: request.notificationsEnabled }
+        : { showSystemLabels: request.showSystemLabels };
 
     yield* withDatabaseClient((database) =>
       database
         .insert(accountSettings)
         .values({
           accountEmail: request.accountId,
-          showSystemLabels: request.showSystemLabels,
+          ...DEFAULT_ACCOUNT_SETTINGS,
+          ...setting,
           updatedAt: now,
         })
         .onConflictDoUpdate({
           set: {
-            showSystemLabels: request.showSystemLabels,
+            ...setting,
             updatedAt: now,
           },
           target: accountSettings.accountEmail,
