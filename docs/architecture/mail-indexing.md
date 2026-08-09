@@ -73,7 +73,7 @@ The governor does not model this: it buckets per account only. A project-level 4
 
 ## Concurrency
 
-Up to two accounts index at once. Since quota is per-user, concurrency costs no per-account headroom — the cap exists only for the resources accounts genuinely share: sustained bandwidth and the synchronous main-thread SQLite writes. Accounts beyond the cap wait in a FIFO queue and report a `queued` status so they still show an indicator rather than appearing stalled.
+Up to two accounts index at once. Since quota is per-user, concurrency costs no per-account headroom — the cap exists only for the resources accounts genuinely share: sustained bandwidth and the serialized SQLite operation queue in the database utility process. Accounts beyond the cap wait in a FIFO queue and report a `queued` status so they still show an indicator rather than appearing stalled.
 
 `queued` is renderer-only and never persisted: whether an account is waiting is a fact about the current process, not about the account.
 
@@ -184,17 +184,13 @@ Access tokens expire hourly, but `withAuthorization` re-reads authorization per 
 
 `forgetAccountMailData` must be extended to clear `gmail_messages`, the FTS rows, and `gmail_backfill_state` — it is the single place disconnect cleans up, and the invariant is that nothing survives a disconnect.
 
-## Main-thread contention
+## Database process isolation
 
-`better-sqlite3` is synchronous and runs on the Electron main thread, and WAL is not currently enabled. A continuous backfill writing on that connection will jank IPC.
+`better-sqlite3` is synchronous, so the connection and migrations live in one long-running Electron `utilityProcess`, not on Electron's main/UI thread. Main-process services use an Effect RPC client backed by Drizzle's async SQLite proxy. The renderer still reaches data only through the existing typed preload/main IPC boundary.
 
-Mitigations, in order:
+One semaphore covers each complete `withDatabaseClient` operation. That is broader than an individual SQL statement: an async Drizzle transaction may make several RPC calls, and no second operation may interleave between its `BEGIN` and `COMMIT`. SQLite work is therefore serialized without blocking window management, OS events, or renderer IPC.
 
-1. Enable WAL.
-2. Bound each transaction to one page (~100 threads) and yield between pages.
-3. If that is not enough, move the backfill to a `utilityProcess` with its own connection.
-
-Start with 1 and 2 and measure; 3 is a real cost in plumbing and should be earned by a number, not assumed.
+WAL, bounded page transactions, and yielding between pages still matter for write latency and crash recovery. The utility process changes where synchronous work runs; it does not make an oversized transaction cheap.
 
 ## Renderer integration
 

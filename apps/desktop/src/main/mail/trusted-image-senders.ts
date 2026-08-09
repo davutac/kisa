@@ -9,7 +9,7 @@ import type {
   GmailTrustedImageSendersReply,
 } from "../../shared/ipc/mail";
 import { GmailTrustedImageSendersReply as GmailTrustedImageSendersReplySchema } from "../../shared/ipc/mail";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
 // oxlint-disable-next-line unicorn/throw-new-error
@@ -17,16 +17,6 @@ class TrustedImageSenderError extends Schema.TaggedErrorClass<TrustedImageSender
   "TrustedImageSenderError",
   { message: Schema.String }
 ) {}
-
-const openDatabase = Effect.fn("openTrustedImageSenderDatabase")(
-  function* openDatabase() {
-    return yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (cause) => new TrustedImageSenderError({ message: cause.message })
-      )
-    );
-  }
-);
 
 // Addresses arrive from headers and from the renderer, so both sides have to
 // agree on one spelling before they are compared.
@@ -45,14 +35,16 @@ export const notifyTrustedImageSendersChanged = (
 
 export const listTrustedImageSenders = Effect.fn("listTrustedImageSenders")(
   function* listTrustedImageSenders() {
-    const database = yield* openDatabase();
-    const rows = yield* Effect.try({
-      catch: () =>
-        new TrustedImageSenderError({
-          message: "Could not load the senders you trust with images",
-        }),
-      try: () => database.query.gmailTrustedImageSenders.findMany().sync(),
-    });
+    const rows = yield* withDatabaseClient((database) =>
+      database.query.gmailTrustedImageSenders.findMany()
+    ).pipe(
+      Effect.mapError(
+        () =>
+          new TrustedImageSenderError({
+            message: "Could not load the senders you trust with images",
+          })
+      )
+    );
 
     return rows.map(
       (row) =>
@@ -66,24 +58,24 @@ export const listTrustedImageSenders = Effect.fn("listTrustedImageSenders")(
 
 export const trustImageSender = Effect.fn("trustImageSender")(
   function* trustImageSender(request: GmailTrustedImageSenderRequest) {
-    const database = yield* openDatabase();
-
-    yield* Effect.try({
-      catch: () =>
-        new TrustedImageSenderError({
-          message: "Could not remember this sender",
-        }),
-      try: () =>
-        database
-          .insert(gmailTrustedImageSenders)
-          .values({
-            accountEmail: normalizeAddress(request.accountId),
-            createdAt: Date.now(),
-            senderEmail: normalizeAddress(request.senderEmail),
+    yield* withDatabaseClient((database) =>
+      database
+        .insert(gmailTrustedImageSenders)
+        .values({
+          accountEmail: normalizeAddress(request.accountId),
+          createdAt: Date.now(),
+          senderEmail: normalizeAddress(request.senderEmail),
+        })
+        .onConflictDoNothing()
+        .run()
+    ).pipe(
+      Effect.mapError(
+        () =>
+          new TrustedImageSenderError({
+            message: "Could not remember this sender",
           })
-          .onConflictDoNothing()
-          .run(),
-    });
+      )
+    );
 
     const senders = yield* listTrustedImageSenders();
 
@@ -95,23 +87,20 @@ export const trustImageSender = Effect.fn("trustImageSender")(
 
 export const forgetTrustedImageSenders = Effect.fn("forgetTrustedImageSenders")(
   function* forgetTrustedImageSenders(accountId: string) {
-    const database = yield* openDatabase();
-
-    yield* Effect.try({
-      catch: () =>
-        new TrustedImageSenderError({
-          message: "Could not delete the senders you trust with images",
-        }),
-      try: () =>
-        database
-          .delete(gmailTrustedImageSenders)
-          .where(
-            eq(
-              gmailTrustedImageSenders.accountEmail,
-              normalizeAddress(accountId)
-            )
-          )
-          .run(),
-    });
+    yield* withDatabaseClient((database) =>
+      database
+        .delete(gmailTrustedImageSenders)
+        .where(
+          eq(gmailTrustedImageSenders.accountEmail, normalizeAddress(accountId))
+        )
+        .run()
+    ).pipe(
+      Effect.mapError(
+        () =>
+          new TrustedImageSenderError({
+            message: "Could not delete the senders you trust with images",
+          })
+      )
+    );
   }
 );

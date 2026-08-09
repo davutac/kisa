@@ -8,7 +8,7 @@ import { Effect, Schema } from "effect";
 import { getDomain } from "tldts";
 
 import type { GmailSenderBrand } from "../../shared/ipc/mail";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 
 const AVAILABLE_TTL_MS = 24 * 60 * 60 * 1000;
 const MISSING_TTL_MS = 60 * 60 * 1000;
@@ -579,21 +579,15 @@ const toSenderBrand = (domain: string, logoData: Buffer): GmailSenderBrand => ({
 
 const loadCachedSenderBrand = Effect.fn("loadCachedSenderBrand")(
   function* loadCachedSenderBrand(domain: string, selector: string) {
-    const database = yield* getDatabaseClient().pipe(
+    const row = yield* withDatabaseClient((database) =>
+      database.query.gmailSenderBrands.findFirst({
+        where: { domain, selector },
+      })
+    ).pipe(
       Effect.mapError(
-        (error) => new SenderBrandError({ message: error.message })
+        () => new SenderBrandError({ message: "Could not load sender brand" })
       )
     );
-    const row = yield* Effect.try({
-      catch: () =>
-        new SenderBrandError({ message: "Could not load sender brand" }),
-      try: () =>
-        database.query.gmailSenderBrands
-          .findFirst({
-            where: { domain, selector },
-          })
-          .sync(),
-    });
 
     if (row === undefined || row.expiresAt <= Date.now()) {
       return null;
@@ -614,11 +608,6 @@ const storeSenderBrand = Effect.fn("storeSenderBrand")(
     selector: string,
     resolved: ResolvedSenderBrand | null
   ) {
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new SenderBrandError({ message: error.message })
-      )
-    );
     const updatedAt = Date.now();
     const values =
       resolved === null
@@ -643,19 +632,20 @@ const storeSenderBrand = Effect.fn("storeSenderBrand")(
             updatedAt,
           };
 
-    yield* Effect.try({
-      catch: () =>
-        new SenderBrandError({ message: "Could not cache sender brand" }),
-      try: () =>
-        database
-          .insert(gmailSenderBrands)
-          .values(values)
-          .onConflictDoUpdate({
-            set: values,
-            target: [gmailSenderBrands.domain, gmailSenderBrands.selector],
-          })
-          .run(),
-    });
+    yield* withDatabaseClient((database) =>
+      database
+        .insert(gmailSenderBrands)
+        .values(values)
+        .onConflictDoUpdate({
+          set: values,
+          target: [gmailSenderBrands.domain, gmailSenderBrands.selector],
+        })
+        .run()
+    ).pipe(
+      Effect.mapError(
+        () => new SenderBrandError({ message: "Could not cache sender brand" })
+      )
+    );
   }
 );
 

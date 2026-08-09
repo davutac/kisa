@@ -21,6 +21,7 @@ describe(createDatabaseRuntime, () => {
       let openCount = 0;
       let migrateCount = 0;
       const client = {} as DatabaseClient;
+      const connection = createConnection(() => {});
       const runtime = createDatabaseRuntime(
         {
           databasePath: "/app-data/example/app.sqlite",
@@ -38,7 +39,7 @@ describe(createDatabaseRuntime, () => {
           },
           openConnection: () => {
             openCount += 1;
-            return createConnection(() => {});
+            return connection;
           },
         }
       );
@@ -46,9 +47,11 @@ describe(createDatabaseRuntime, () => {
       yield* runtime.start;
       yield* runtime.start;
       const databaseClient = yield* runtime.getClient;
+      const databaseConnection = yield* runtime.getConnection;
 
       expect({
         databaseClient,
+        databaseConnection,
         directoryPath,
         migrateCount,
         migratedClient,
@@ -56,6 +59,7 @@ describe(createDatabaseRuntime, () => {
         openCount,
       }).toStrictEqual({
         databaseClient: client,
+        databaseConnection: connection,
         directoryPath: "/app-data/example",
         migrateCount: 1,
         migratedClient: client,

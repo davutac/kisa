@@ -9,7 +9,7 @@ import type {
   AccountSettingsUpdateRequest,
 } from "../../shared/ipc/settings";
 import { AccountSettingsReply as AccountSettingsReplySchema } from "../../shared/ipc/settings";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
 // oxlint-disable-next-line unicorn/throw-new-error
@@ -32,18 +32,16 @@ export const notifyAccountSettingsChanged = (
 // defaults for everything this list leaves out.
 export const listAccountSettings = Effect.fn("listAccountSettings")(
   function* listAccountSettings() {
-    const database = yield* getDatabaseClient().pipe(
+    const rows = yield* withDatabaseClient((database) =>
+      database.query.accountSettings.findMany()
+    ).pipe(
       Effect.mapError(
-        (error) => new AccountSettingsError({ message: error.message })
+        () =>
+          new AccountSettingsError({
+            message: "Could not load account settings",
+          })
       )
     );
-    const rows = yield* Effect.try({
-      catch: () =>
-        new AccountSettingsError({
-          message: "Could not load account settings",
-        }),
-      try: () => database.query.accountSettings.findMany().sync(),
-    });
 
     return rows.map(
       (row) =>
@@ -57,35 +55,32 @@ export const listAccountSettings = Effect.fn("listAccountSettings")(
 
 export const updateAccountSettings = Effect.fn("updateAccountSettings")(
   function* updateAccountSettings(request: AccountSettingsUpdateRequest) {
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new AccountSettingsError({ message: error.message })
-      )
-    );
     const now = Date.now();
 
-    yield* Effect.try({
-      catch: () =>
-        new AccountSettingsError({
-          message: "Could not save account settings",
-        }),
-      try: () =>
-        database
-          .insert(accountSettings)
-          .values({
-            accountEmail: request.accountId,
+    yield* withDatabaseClient((database) =>
+      database
+        .insert(accountSettings)
+        .values({
+          accountEmail: request.accountId,
+          showSystemLabels: request.showSystemLabels,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          set: {
             showSystemLabels: request.showSystemLabels,
             updatedAt: now,
+          },
+          target: accountSettings.accountEmail,
+        })
+        .run()
+    ).pipe(
+      Effect.mapError(
+        () =>
+          new AccountSettingsError({
+            message: "Could not save account settings",
           })
-          .onConflictDoUpdate({
-            set: {
-              showSystemLabels: request.showSystemLabels,
-              updatedAt: now,
-            },
-            target: accountSettings.accountEmail,
-          })
-          .run(),
-    });
+      )
+    );
 
     const settings = yield* listAccountSettings();
 
@@ -97,22 +92,18 @@ export const updateAccountSettings = Effect.fn("updateAccountSettings")(
 
 export const forgetAccountSettings = Effect.fn("forgetAccountSettings")(
   function* forgetAccountSettings(accountId: string) {
-    const database = yield* getDatabaseClient().pipe(
+    yield* withDatabaseClient((database) =>
+      database
+        .delete(accountSettings)
+        .where(eq(accountSettings.accountEmail, accountId))
+        .run()
+    ).pipe(
       Effect.mapError(
-        (error) => new AccountSettingsError({ message: error.message })
+        () =>
+          new AccountSettingsError({
+            message: "Could not delete account settings",
+          })
       )
     );
-
-    yield* Effect.try({
-      catch: () =>
-        new AccountSettingsError({
-          message: "Could not delete account settings",
-        }),
-      try: () =>
-        database
-          .delete(accountSettings)
-          .where(eq(accountSettings.accountEmail, accountId))
-          .run(),
-    });
   }
 );

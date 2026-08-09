@@ -14,7 +14,8 @@ export type DatabaseErrorReason =
   | "create-directory"
   | "migrate"
   | "not-ready"
-  | "open";
+  | "open"
+  | "query";
 
 const formatErrorCause = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
@@ -31,6 +32,7 @@ export class DatabaseError extends Schema.TaggedErrorClass<DatabaseError>()(
       "migrate",
       "not-ready",
       "open",
+      "query",
     ]),
   }
 ) {
@@ -49,7 +51,10 @@ export class DatabaseError extends Schema.TaggedErrorClass<DatabaseError>()(
     return new DatabaseError({
       cause: args.cause,
       causeMessage,
-      message: `Database startup failed during ${args.reason}: ${causeMessage}`,
+      message:
+        args.reason === "query"
+          ? `Database query failed: ${causeMessage}`
+          : `Database startup failed during ${args.reason}: ${causeMessage}`,
       reason: args.reason,
     });
   };
@@ -77,6 +82,7 @@ export interface DatabaseRuntimeAdapters {
 export interface DatabaseRuntime {
   close: () => void;
   getClient: DatabaseRuntimeEffect<DatabaseClient>;
+  getConnection: DatabaseRuntimeEffect<DatabaseConnection>;
   start: DatabaseRuntimeEffect<void>;
 }
 
@@ -114,6 +120,14 @@ export const createDatabaseRuntime = (
 
     return databaseClient;
   }).pipe(Effect.withSpan("DatabaseRuntime.getClient"));
+
+  const getConnection = Effect.gen(function* getConnectionEffect() {
+    if (databaseConnection === null) {
+      return yield* DatabaseError.new({ reason: "not-ready" });
+    }
+
+    return databaseConnection;
+  }).pipe(Effect.withSpan("DatabaseRuntime.getConnection"));
 
   const start = Effect.gen(function* startEffect() {
     if (databaseClient !== null) {
@@ -158,6 +172,7 @@ export const createDatabaseRuntime = (
   return {
     close: closeCurrentConnection,
     getClient,
+    getConnection,
     start,
   };
 };

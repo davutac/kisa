@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
+import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { gmailThreads } from "@repo/database/schemas";
 import type { gmailMessages } from "@repo/database/schemas";
 import type { GmailError } from "@repo/gmail/errors";
@@ -42,7 +43,7 @@ import type {
   GmailThreadListChange,
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
@@ -118,17 +119,10 @@ const runGmail = <A, E extends GmailError>(
 
 const withDatabase = <A>(
   message: string,
-  run: (database: Effect.Success<ReturnType<typeof getDatabaseClient>>) => A
+  run: (database: RemoteDatabaseClient) => Promise<A>
 ) =>
-  getDatabaseClient().pipe(
-    // oxlint-disable-next-line promise/prefer-await-to-callbacks
-    Effect.mapError((error) => new MailSyncError({ message: error.message })),
-    Effect.flatMap((database) =>
-      Effect.try({
-        catch: () => new MailSyncError({ message }),
-        try: () => run(database),
-      })
-    )
+  withDatabaseClient(run).pipe(
+    Effect.mapError(() => new MailSyncError({ message }))
   );
 
 type CachedThreadRow = typeof gmailThreads.$inferSelect;
@@ -204,58 +198,61 @@ const toCachedThreadMessage = (
 
 const readCachedConversation = Effect.fn("readCachedConversation")(
   function* readCachedConversation(request: GmailThreadRequest) {
-    return yield* withDatabase("Could not load cached email", (database) => {
-      const threadRow = database.query.gmailThreads
-        .findFirst({
+    return yield* withDatabase(
+      "Could not load cached email",
+      async (database) => {
+        const threadRow = await database.query.gmailThreads.findFirst({
           where: {
             accountEmail: request.accountId,
             threadId: request.threadId,
           },
-        })
-        .sync();
+        });
 
-      if (threadRow === undefined) {
-        return;
-      }
+        if (threadRow === undefined) {
+          return;
+        }
 
-      const messageRows = database.query.gmailMessages
-        .findMany({
+        const messageRows = await database.query.gmailMessages.findMany({
           orderBy: { internalDate: "asc" },
           where: {
             accountEmail: request.accountId,
             threadId: request.threadId,
           },
-        })
-        .sync();
+        });
 
-      if (
-        messageRows.length === 0 ||
-        messageRows.length !== threadRow.messageCount ||
-        messageRows.some((row) => row.schemaVersion !== MESSAGE_SCHEMA_VERSION)
-      ) {
-        return;
+        if (
+          messageRows.length === 0 ||
+          messageRows.length !== threadRow.messageCount ||
+          messageRows.some(
+            (row) => row.schemaVersion !== MESSAGE_SCHEMA_VERSION
+          )
+        ) {
+          return;
+        }
+
+        const messages = messageRows.map(toCachedThreadMessage);
+
+        if (messages.some((message) => message === undefined)) {
+          return;
+        }
+
+        const completeMessages = messages as readonly GmailThreadMessage[];
+
+        return {
+          cachedAt: Math.min(
+            ...messageRows.map((message) => message.updatedAt)
+          ),
+          isUnread: threadRow.isUnread,
+          thread: {
+            accountId: request.accountId,
+            labels: threadRow.labels ?? [],
+            messages: completeMessages,
+            subject: completeMessages[0]?.subject ?? "(No subject)",
+            threadId: request.threadId,
+          },
+        } satisfies CachedConversation;
       }
-
-      const messages = messageRows.map(toCachedThreadMessage);
-
-      if (messages.some((message) => message === undefined)) {
-        return;
-      }
-
-      const completeMessages = messages as readonly GmailThreadMessage[];
-
-      return {
-        cachedAt: Math.min(...messageRows.map((message) => message.updatedAt)),
-        isUnread: threadRow.isUnread,
-        thread: {
-          accountId: request.accountId,
-          labels: threadRow.labels ?? [],
-          messages: completeMessages,
-          subject: completeMessages[0]?.subject ?? "(No subject)",
-          threadId: request.threadId,
-        },
-      } satisfies CachedConversation;
-    });
+    );
   }
 );
 
@@ -266,43 +263,41 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
     }
 
     const rows = yield* withDatabase("Could not load email", (database) =>
-      database.query.gmailThreads
-        .findMany({
-          limit: THREAD_PAGE_SIZE + 1,
-          // SQL ordering follows insertion order, so these keys are semantic.
-          // oxlint-disable-next-line eslint/sort-keys
-          orderBy: {
-            latestAt: "desc",
-            accountEmail: "asc",
-            threadId: "asc",
-          },
-          where: {
-            accountEmail: { in: [...request.accountIds] },
-            // The inbox predicate has to be in SQL, not a filter over the
-            // page below: the index stores archived mail in this table too,
-            // so filtering afterwards would return near-empty pages while
-            // paging through everything the user archived.
-            isInInbox: true,
-            ...(request.unreadOnly === true ? { isUnread: true } : {}),
-            ...(request.cursor === undefined
-              ? {}
-              : {
-                  OR: [
-                    { latestAt: { lt: request.cursor.latestAt } },
-                    {
-                      accountEmail: { gt: request.cursor.accountId },
-                      latestAt: request.cursor.latestAt,
-                    },
-                    {
-                      accountEmail: request.cursor.accountId,
-                      latestAt: request.cursor.latestAt,
-                      threadId: { gt: request.cursor.threadId },
-                    },
-                  ],
-                }),
-          },
-        })
-        .sync()
+      database.query.gmailThreads.findMany({
+        limit: THREAD_PAGE_SIZE + 1,
+        // SQL ordering follows insertion order, so these keys are semantic.
+        // oxlint-disable-next-line eslint/sort-keys
+        orderBy: {
+          latestAt: "desc",
+          accountEmail: "asc",
+          threadId: "asc",
+        },
+        where: {
+          accountEmail: { in: [...request.accountIds] },
+          // The inbox predicate has to be in SQL, not a filter over the
+          // page below: the index stores archived mail in this table too,
+          // so filtering afterwards would return near-empty pages while
+          // paging through everything the user archived.
+          isInInbox: true,
+          ...(request.unreadOnly === true ? { isUnread: true } : {}),
+          ...(request.cursor === undefined
+            ? {}
+            : {
+                OR: [
+                  { latestAt: { lt: request.cursor.latestAt } },
+                  {
+                    accountEmail: { gt: request.cursor.accountId },
+                    latestAt: request.cursor.latestAt,
+                  },
+                  {
+                    accountEmail: request.cursor.accountId,
+                    latestAt: request.cursor.latestAt,
+                    threadId: { gt: request.cursor.threadId },
+                  },
+                ],
+              }),
+        },
+      })
     );
     const pageRows = rows.slice(0, THREAD_PAGE_SIZE);
     const threads = pageRows.map(toCachedThreadSummary);
@@ -562,14 +557,12 @@ const withInlineImages = Effect.fn("withInlineImages")(
 );
 
 const resolveLabelNames = (accountId: string, labelIds: readonly string[]) =>
-  withDatabase("Could not load Gmail labels", (database) => {
+  withDatabase("Could not load Gmail labels", async (database) => {
+    const rows = await database.query.gmailLabels.findMany({
+      where: { accountEmail: accountId },
+    });
     const namesById = new Map(
-      database.query.gmailLabels
-        .findMany({
-          where: { accountEmail: accountId },
-        })
-        .sync()
-        .map((row) => [row.labelId, row.name] as const)
+      rows.map((row) => [row.labelId, row.name] as const)
     );
 
     return labelIds.map((labelId) => namesById.get(labelId) ?? labelId);
@@ -735,39 +728,40 @@ const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
         )
       )
     );
-    const summary = yield* withDatabase("Could not cache email", (database) => {
-      const row = database.query.gmailThreads
-        .findFirst({
+    const summary = yield* withDatabase(
+      "Could not cache email",
+      async (database) => {
+        const row = await database.query.gmailThreads.findFirst({
           where: {
             accountEmail: request.accountId,
             threadId: request.threadId,
           },
-        })
-        .sync();
+        });
 
-      if (row === undefined) {
-        return;
-      }
+        if (row === undefined) {
+          return;
+        }
 
-      const updated = toReadStateSummary(toCachedThreadSummary(row), false);
+        const updated = toReadStateSummary(toCachedThreadSummary(row), false);
 
-      database
-        .update(gmailThreads)
-        .set({
-          isUnread: updated.isUnread,
-          labels: updated.labels,
-          updatedAt: Date.now(),
-        })
-        .where(
-          andSql(
-            eq(gmailThreads.accountEmail, request.accountId),
-            eq(gmailThreads.threadId, request.threadId)
+        await database
+          .update(gmailThreads)
+          .set({
+            isUnread: updated.isUnread,
+            labels: updated.labels,
+            updatedAt: Date.now(),
+          })
+          .where(
+            andSql(
+              eq(gmailThreads.accountEmail, request.accountId),
+              eq(gmailThreads.threadId, request.threadId)
+            )
           )
-        )
-        .run();
+          .run();
 
-      return updated;
-    });
+        return updated;
+      }
+    );
 
     yield* summary === undefined
       ? reloadThreadList(request.accountId)
@@ -821,11 +815,9 @@ export const loadFullThread = Effect.fn("loadFullThread")(
 
 const findCachedThread = (accountId: string, threadId: string) =>
   withDatabase("Could not load email", (database) =>
-    database.query.gmailThreads
-      .findFirst({
-        where: { accountEmail: accountId, threadId },
-      })
-      .sync()
+    database.query.gmailThreads.findFirst({
+      where: { accountEmail: accountId, threadId },
+    })
   );
 
 const toCachedThreadListChanges = Effect.fn("toCachedThreadListChanges")(
@@ -877,8 +869,8 @@ const publishCachedThreadListChanges = Effect.fn(
 const updateCachedThread = (
   summary: GmailThreadSummary
 ): Effect.Effect<void, MailSyncError> =>
-  withDatabase("Could not cache email", (database) => {
-    database
+  withDatabase("Could not cache email", async (database) => {
+    await database
       .update(gmailThreads)
       .set({
         // `is_in_inbox` is derived from the labels, so the two always move
@@ -1184,7 +1176,7 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
   if (row !== undefined) {
     const summary = toTrashedSummary(toCachedThreadSummary(row));
 
-    yield* withDatabase("Could not cache email", (database) => {
+    yield* withDatabase("Could not cache email", async (database) => {
       // `is_in_inbox` has to be cleared explicitly: the spread carries the old
       // `true` from `row`, and the paging query reads that column, so a trashed
       // thread would otherwise keep its place in the list.
@@ -1194,7 +1186,7 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
         updatedAt: Date.now(),
       };
 
-      database
+      await database
         .insert(gmailThreads)
         .values({ ...row, ...values })
         .onConflictDoUpdate({
@@ -1238,9 +1230,9 @@ const syncAllAccounts = Effect.fn("syncAllAccounts")(
     const accounts = yield* withDatabase(
       "Could not load Google accounts",
       (database) =>
-        database.query.googleAccounts
-          .findMany({ columns: { email: true, scopes: true } })
-          .sync()
+        database.query.googleAccounts.findMany({
+          columns: { email: true, scopes: true },
+        })
     );
     const readableAccounts = accounts.filter(({ scopes }) => {
       const granted = JSON.parse(scopes) as unknown;

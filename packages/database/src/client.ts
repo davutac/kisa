@@ -1,37 +1,12 @@
 import Database from "better-sqlite3";
-import { defineRelations } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
-import { accountSettings } from "./schemas/account-settings";
-import { gmailBackfillState } from "./schemas/gmail-backfill-state";
-import { gmailLabels } from "./schemas/gmail-labels";
-import { gmailMessages } from "./schemas/gmail-messages";
-import { gmailSenderBrands } from "./schemas/gmail-sender-brands";
-import { gmailSyncState } from "./schemas/gmail-sync-state";
-import { gmailThreads } from "./schemas/gmail-threads";
-import { gmailTrustedImageSenders } from "./schemas/gmail-trusted-image-senders";
-import { googleAccounts } from "./schemas/google-accounts";
-import { test } from "./schemas/test";
-
-const schema = {
-  accountSettings,
-  gmailBackfillState,
-  gmailLabels,
-  gmailMessages,
-  gmailSenderBrands,
-  gmailSyncState,
-  gmailThreads,
-  gmailTrustedImageSenders,
-  googleAccounts,
-  test,
-};
-
-const relations = defineRelations(schema);
+import { databaseRelations } from "./relations";
 
 export type DatabaseConnection = Database.Database;
-export type DatabaseClient = BetterSQLite3Database<typeof relations>;
+export type DatabaseClient = BetterSQLite3Database<typeof databaseRelations>;
 
 /**
  * WAL is what lets the mail indexer write while the UI reads: the default
@@ -56,7 +31,8 @@ export const openDatabaseConnection = (
 
 export const createDatabaseClient = (
   database: DatabaseConnection
-): DatabaseClient => drizzle({ client: database, relations });
+): DatabaseClient =>
+  drizzle({ client: database, relations: databaseRelations });
 
 export const applyDatabaseMigrations = (
   database: DatabaseClient,

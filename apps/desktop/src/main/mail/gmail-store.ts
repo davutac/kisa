@@ -1,6 +1,6 @@
 import { gzipSync } from "node:zlib";
 
-import type { DatabaseClient } from "@repo/database/client";
+import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import {
   gmailBackfillState,
   gmailLabels,
@@ -31,7 +31,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Effect, Layer, Option, Redacted } from "effect";
 
 import { getGoogleAccessToken } from "../auth/auth";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { toIndexText } from "./message-text";
 
 const GMAIL_SCOPES = new Set<string>([
@@ -103,15 +103,8 @@ const toMessageValues = (
 
 const withDatabase = <A>(
   message: string,
-  run: (database: DatabaseClient) => A
-) =>
-  getDatabaseClient().pipe(
-    // oxlint-disable-next-line promise/prefer-await-to-callbacks
-    Effect.mapError((error) => storeError(error.message)),
-    Effect.flatMap((database) =>
-      Effect.try({ catch: () => storeError(message), try: () => run(database) })
-    )
-  );
+  run: (database: RemoteDatabaseClient) => Promise<A>
+) => withDatabaseClient(run).pipe(Effect.mapError(() => storeError(message)));
 
 const decodeScopes = (raw: string): readonly GmailScope[] => {
   try {
@@ -158,25 +151,25 @@ export const GmailStoreLive = Layer.succeed(
     // table is cleared here. Deleting the message rows also clears their FTS
     // entries, which the `gmail_messages_fts_delete` trigger handles.
     clearAccount: (accountId) =>
-      withDatabase("Could not clear Gmail account data", (database) => {
-        database.transaction((transaction) => {
-          transaction
+      withDatabase("Could not clear Gmail account data", async (database) => {
+        await database.transaction(async (transaction) => {
+          await transaction
             .delete(gmailThreads)
             .where(eq(gmailThreads.accountEmail, accountId))
             .run();
-          transaction
+          await transaction
             .delete(gmailMessages)
             .where(eq(gmailMessages.accountEmail, accountId))
             .run();
-          transaction
+          await transaction
             .delete(gmailLabels)
             .where(eq(gmailLabels.accountEmail, accountId))
             .run();
-          transaction
+          await transaction
             .delete(gmailSyncState)
             .where(eq(gmailSyncState.accountEmail, accountId))
             .run();
-          transaction
+          await transaction
             .delete(gmailBackfillState)
             .where(eq(gmailBackfillState.accountEmail, accountId))
             .run();
@@ -190,9 +183,7 @@ export const GmailStoreLive = Layer.succeed(
      */
     getAuthorization: (accountId) =>
       withDatabase("Could not load Gmail account", (database) =>
-        database.query.googleAccounts
-          .findFirst({ where: { email: accountId } })
-          .sync()
+        database.query.googleAccounts.findFirst({ where: { email: accountId } })
       ).pipe(
         Effect.flatMap((row) =>
           row === undefined
@@ -215,25 +206,25 @@ export const GmailStoreLive = Layer.succeed(
       ),
 
     getLabels: (accountId) =>
-      withDatabase("Could not load Gmail labels", (database) =>
-        database.query.gmailLabels
-          .findMany({ where: { accountEmail: accountId } })
-          .sync()
-          .map(
-            (row) =>
-              new GmailLabel({
-                id: LabelId.make(row.labelId),
-                name: row.name,
-                type: row.type === "system" ? "system" : "user",
-              })
-          )
-      ),
+      withDatabase("Could not load Gmail labels", async (database) => {
+        const rows = await database.query.gmailLabels.findMany({
+          where: { accountEmail: accountId },
+        });
+        return rows.map(
+          (row) =>
+            new GmailLabel({
+              id: LabelId.make(row.labelId),
+              name: row.name,
+              type: row.type === "system" ? "system" : "user",
+            })
+        );
+      }),
 
     getSyncCursor: (accountId) =>
       withDatabase("Could not load Gmail sync cursor", (database) =>
-        database.query.gmailSyncState
-          .findFirst({ where: { accountEmail: accountId } })
-          .sync()
+        database.query.gmailSyncState.findFirst({
+          where: { accountEmail: accountId },
+        })
       ).pipe(
         Effect.map((row) =>
           row === undefined
@@ -250,18 +241,22 @@ export const GmailStoreLive = Layer.succeed(
      */
     getThread: () => Effect.succeedNone,
 
-    listAccounts: withDatabase("Could not load Gmail accounts", (database) =>
-      database.query.googleAccounts.findMany().sync().map(toGmailAccount)
+    listAccounts: withDatabase(
+      "Could not load Gmail accounts",
+      async (database) => {
+        const rows = await database.query.googleAccounts.findMany();
+        return rows.map(toGmailAccount);
+      }
     ),
 
     removeThreads: (accountId, threadIds) =>
-      withDatabase("Could not remove Gmail threads", (database) => {
+      withDatabase("Could not remove Gmail threads", async (database) => {
         if (threadIds.length === 0) {
           return;
         }
 
-        database.transaction((transaction) => {
-          transaction
+        await database.transaction(async (transaction) => {
+          await transaction
             .delete(gmailThreads)
             .where(
               and(
@@ -272,7 +267,7 @@ export const GmailStoreLive = Layer.succeed(
             .run();
           // Otherwise a permanently deleted thread would keep its bodies, and
           // its text would keep matching searches.
-          transaction
+          await transaction
             .delete(gmailMessages)
             .where(
               and(
@@ -285,10 +280,10 @@ export const GmailStoreLive = Layer.succeed(
       }),
 
     replaceLabels: (accountId, labels) =>
-      withDatabase("Could not save Gmail labels", (database) => {
+      withDatabase("Could not save Gmail labels", async (database) => {
         const now = Date.now();
 
-        database
+        await database
           .delete(gmailLabels)
           .where(eq(gmailLabels.accountEmail, accountId))
           .run();
@@ -297,7 +292,7 @@ export const GmailStoreLive = Layer.succeed(
           return;
         }
 
-        database
+        await database
           .insert(gmailLabels)
           .values(
             labels.map((label) => ({
@@ -315,10 +310,10 @@ export const GmailStoreLive = Layer.succeed(
     saveAuthorization: () => Effect.void,
 
     saveSyncCursor: (accountId, historyId) =>
-      withDatabase("Could not save Gmail sync cursor", (database) => {
+      withDatabase("Could not save Gmail sync cursor", async (database) => {
         const now = Date.now();
 
-        database
+        await database
           .insert(gmailSyncState)
           .values({
             accountEmail: accountId,
@@ -333,7 +328,7 @@ export const GmailStoreLive = Layer.succeed(
       }),
 
     saveThread: (accountId, thread) =>
-      withDatabase("Could not save Gmail thread", (database) => {
+      withDatabase("Could not save Gmail thread", async (database) => {
         const now = Date.now();
         const [firstMessage] = thread.messages;
         let latestMessage = firstMessage;
@@ -355,15 +350,15 @@ export const GmailStoreLive = Layer.succeed(
             size: attachment.size,
           }))
         );
+        const labelRows = await database.query.gmailLabels.findMany({
+          where: { accountEmail: accountId },
+        });
         const namesById = new Map(
-          database.query.gmailLabels
-            .findMany({ where: { accountEmail: accountId } })
-            .sync()
-            .map((row) => [row.labelId, row.name] as const)
+          labelRows.map((row) => [row.labelId, row.name] as const)
         );
 
-        database.transaction((transaction) => {
-          transaction
+        await database.transaction(async (transaction) => {
+          await transaction
             .delete(gmailMessages)
             .where(
               and(
@@ -374,13 +369,15 @@ export const GmailStoreLive = Layer.succeed(
             .run();
 
           for (const message of thread.messages) {
-            transaction
+            // Message writes must remain ordered within this transaction.
+            // oxlint-disable-next-line eslint/no-await-in-loop
+            await transaction
               .insert(gmailMessages)
               .values(toMessageValues(accountId, message, now))
               .run();
           }
 
-          transaction
+          await transaction
             .update(gmailThreads)
             .set({
               attachments,
@@ -409,24 +406,27 @@ export const GmailStoreLive = Layer.succeed(
       }),
 
     setThreadReadState: (accountId, threadId, isRead) =>
-      withDatabase("Could not update Gmail thread read state", (database) => {
-        database
-          .update(gmailThreads)
-          .set({ isUnread: !isRead, updatedAt: Date.now() })
-          .where(
-            and(
-              eq(gmailThreads.accountEmail, accountId),
-              eq(gmailThreads.threadId, threadId)
+      withDatabase(
+        "Could not update Gmail thread read state",
+        async (database) => {
+          await database
+            .update(gmailThreads)
+            .set({ isUnread: !isRead, updatedAt: Date.now() })
+            .where(
+              and(
+                eq(gmailThreads.accountEmail, accountId),
+                eq(gmailThreads.threadId, threadId)
+              )
             )
-          )
-          .run();
-      }),
+            .run();
+        }
+      ),
 
     /** See `saveAuthorization`. */
     updateCredentials: () => Effect.void,
 
     upsertThreadDetails: (accountId, threads, details) =>
-      withDatabase("Could not save Gmail threads", (database) => {
+      withDatabase("Could not save Gmail threads", async (database) => {
         if (threads.length === 0 && details.length === 0) {
           return;
         }
@@ -436,17 +436,17 @@ export const GmailStoreLive = Layer.succeed(
         // directly as badges, and `listCachedThreadPage` filters the inbox on
         // it. System label ids double as their names, so an unknown id (a label
         // created since the last catalog refresh) falls back to the id.
+        const labelRows = await database.query.gmailLabels.findMany({
+          where: { accountEmail: accountId },
+        });
         const namesById = new Map(
-          database.query.gmailLabels
-            .findMany({ where: { accountEmail: accountId } })
-            .sync()
-            .map((row) => [row.labelId, row.name] as const)
+          labelRows.map((row) => [row.labelId, row.name] as const)
         );
 
         // One transaction for the whole page: a crash mid-page must not leave a
         // thread row claiming messages that were never written, and it is what
         // makes the indexer's per-page checkpoint atomic.
-        database.transaction((transaction) => {
+        await database.transaction(async (transaction) => {
           for (const thread of threads) {
             const values = {
               accountEmail: accountId,
@@ -476,7 +476,9 @@ export const GmailStoreLive = Layer.succeed(
               updatedAt: now,
             };
 
-            transaction
+            // Page writes must remain ordered within this transaction.
+            // oxlint-disable-next-line eslint/no-await-in-loop
+            await transaction
               .insert(gmailThreads)
               .values(values)
               .onConflictDoUpdate({
@@ -490,7 +492,9 @@ export const GmailStoreLive = Layer.succeed(
             for (const message of detail.messages) {
               const values = toMessageValues(accountId, message, now);
 
-              transaction
+              // Page writes must remain ordered within this transaction.
+              // oxlint-disable-next-line eslint/no-await-in-loop
+              await transaction
                 .insert(gmailMessages)
                 .values(values)
                 .onConflictDoUpdate({

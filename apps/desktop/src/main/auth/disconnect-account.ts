@@ -2,7 +2,7 @@ import { googleAccounts } from "@repo/database/schemas";
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { cancelMailBackfill } from "../mail/mail-backfill";
 import { forgetAccountMailData } from "../mail/mail-sync";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
@@ -21,23 +21,19 @@ class GoogleAccountDisconnectError extends Schema.TaggedErrorClass<GoogleAccount
 
 const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
   function* deleteAccountRecord(email: string) {
-    const database = yield* getDatabaseClient().pipe(
+    yield* withDatabaseClient((database) =>
+      database
+        .delete(googleAccounts)
+        .where(eq(googleAccounts.email, email))
+        .run()
+    ).pipe(
       Effect.mapError(
-        (error) => new GoogleAccountDisconnectError({ message: error.message })
+        () =>
+          new GoogleAccountDisconnectError({
+            message: "Could not remove the Google account",
+          })
       )
     );
-
-    yield* Effect.try({
-      catch: () =>
-        new GoogleAccountDisconnectError({
-          message: "Could not remove the Google account",
-        }),
-      try: () =>
-        database
-          .delete(googleAccounts)
-          .where(eq(googleAccounts.email, email))
-          .run(),
-    });
   }
 );
 

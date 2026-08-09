@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 
+import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
 import { count, eq as equals } from "drizzle-orm";
 import { Effect, Schema } from "effect";
@@ -21,7 +22,7 @@ import {
   MAX_GOOGLE_ACCOUNTS,
 } from "../../shared/ipc/auth";
 import { AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { toIpcReply } from "../ipc/reply";
 import { notifyGoogleAccountConnected } from "./account-events";
@@ -182,20 +183,26 @@ const requireSecureStorage = (): Effect.Effect<void, GoogleAuthError> =>
     )
   );
 
+const withDatabase = <A>(
+  message: string,
+  run: (database: RemoteDatabaseClient) => Promise<A>
+): Effect.Effect<A, GoogleAuthError> =>
+  withDatabaseClient(run).pipe(
+    Effect.mapError(() => new GoogleAuthError({ message }))
+  );
+
 const requireGoogleAccountCapacity = Effect.fn("requireGoogleAccountCapacity")(
   function* requireGoogleAccountCapacity() {
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new GoogleAuthError({ message: error.message })
-      )
+    const accountCount = yield* withDatabase(
+      "Could not load Google accounts",
+      async (database) => {
+        const rows = await database
+          .select({ value: count() })
+          .from(googleAccounts)
+          .all();
+        return rows.at(0)?.value ?? 0;
+      }
     );
-    const accountCount = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not load Google accounts" }),
-      try: () =>
-        database.select({ value: count() }).from(googleAccounts).all().at(0)
-          ?.value ?? 0,
-    });
 
     if (accountCount >= MAX_GOOGLE_ACCOUNTS) {
       return yield* new GoogleAuthError({
@@ -268,22 +275,14 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
   function* saveAuthorization(handoff: AuthHandoff) {
     yield* requireSecureStorage();
     const profile = yield* identifyAccount(handoff);
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new GoogleAuthError({ message: error.message })
-      )
+    const existing = yield* withDatabase(
+      "Could not load Google account",
+      (database) =>
+        database.query.googleAccounts.findFirst({
+          columns: { credentials: true },
+          where: { email: profile.emailAddress },
+        })
     );
-    const existing = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not load Google account" }),
-      try: () =>
-        database.query.googleAccounts
-          .findFirst({
-            columns: { credentials: true },
-            where: { email: profile.emailAddress },
-          })
-          .sync(),
-    });
     const existingRefreshToken = yield* Effect.try({
       catch: () =>
         new GoogleAuthError({ message: "Could not read saved credentials" }),
@@ -307,33 +306,27 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
     );
     const now = Date.now();
 
-    yield* Effect.try({
-      catch: (error) =>
-        error instanceof GoogleAuthError
-          ? error
-          : new GoogleAuthError({ message: "Could not save Google account" }),
-      try: () =>
-        database.transaction((transaction) => {
-          const isExistingAccount =
-            transaction
-              .select({ email: googleAccounts.email })
-              .from(googleAccounts)
-              .where(equals(googleAccounts.email, profile.emailAddress))
-              .all().length > 0;
-          const accountCount =
-            transaction
-              .select({ value: count() })
-              .from(googleAccounts)
-              .all()
-              .at(0)?.value ?? 0;
+    const saved = yield* withDatabase(
+      "Could not save Google account",
+      (database) =>
+        database.transaction(async (transaction) => {
+          const existingAccounts = await transaction
+            .select({ email: googleAccounts.email })
+            .from(googleAccounts)
+            .where(equals(googleAccounts.email, profile.emailAddress))
+            .all();
+          const accountRows = await transaction
+            .select({ value: count() })
+            .from(googleAccounts)
+            .all();
+          const isExistingAccount = existingAccounts.length > 0;
+          const accountCount = accountRows.at(0)?.value ?? 0;
 
           if (!isExistingAccount && accountCount >= MAX_GOOGLE_ACCOUNTS) {
-            throw new GoogleAuthError({
-              message: GOOGLE_ACCOUNT_LIMIT_MESSAGE,
-            });
+            return false;
           }
 
-          transaction
+          await transaction
             .insert(googleAccounts)
             .values({
               createdAt: now,
@@ -352,8 +345,15 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
               target: googleAccounts.email,
             })
             .run();
-        }),
-    });
+          return true;
+        })
+    );
+
+    if (!saved) {
+      return yield* new GoogleAuthError({
+        message: GOOGLE_ACCOUNT_LIMIT_MESSAGE,
+      });
+    }
 
     return profile.emailAddress;
   }
@@ -404,21 +404,13 @@ export const getGoogleAccessToken = Effect.fn("getGoogleAccessToken")(
     options: { readonly forceRefresh?: boolean } = {}
   ) {
     yield* requireSecureStorage();
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new GoogleAuthError({ message: error.message })
-      )
+    const account = yield* withDatabase(
+      "Could not load Google account",
+      (database) =>
+        database.query.googleAccounts.findFirst({
+          where: { email },
+        })
     );
-    const account = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not load Google account" }),
-      try: () =>
-        database.query.googleAccounts
-          .findFirst({
-            where: { email },
-          })
-          .sync(),
-    });
 
     if (account === undefined) {
       return yield* new GoogleAuthError({
@@ -448,28 +440,23 @@ export const getGoogleAccessToken = Effect.fn("getGoogleAccessToken")(
       JSON.stringify(refreshed)
     );
 
-    yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({
-          message: "Could not save refreshed credentials",
-        }),
-      try: () =>
-        database
-          .insert(googleAccounts)
-          .values({
-            ...account,
+    yield* withDatabase("Could not save refreshed credentials", (database) =>
+      database
+        .insert(googleAccounts)
+        .values({
+          ...account,
+          credentials: encryptedCredentials,
+          updatedAt: Date.now(),
+        })
+        .onConflictDoUpdate({
+          set: {
             credentials: encryptedCredentials,
             updatedAt: Date.now(),
-          })
-          .onConflictDoUpdate({
-            set: {
-              credentials: encryptedCredentials,
-              updatedAt: Date.now(),
-            },
-            target: googleAccounts.email,
-          })
-          .run(),
-    });
+          },
+          target: googleAccounts.email,
+        })
+        .run()
+    );
 
     return refreshed.accessToken;
   }
@@ -607,11 +594,6 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
       });
     }
 
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new GoogleAuthError({ message: error.message })
-      )
-    );
     const encryptedCredentials =
       credentials === stored
         ? row.credentials
@@ -624,37 +606,34 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
             Effect.orElseSucceed(() => NO_AVATAR)
           );
 
-    yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not save Google profile" }),
-      try: () =>
-        database
-          .insert(googleAccounts)
-          .values({
+    yield* withDatabase("Could not save Google profile", (database) =>
+      database
+        .insert(googleAccounts)
+        .values({
+          avatarData: avatar?.data ?? row.avatarData,
+          avatarMediaType: avatar?.mediaType ?? row.avatarMediaType,
+          avatarUrl: profile.picture,
+          createdAt: row.createdAt,
+          credentials: encryptedCredentials,
+          displayName: profile.name,
+          email: row.email,
+          scopes: row.scopes,
+          sortOrder: row.sortOrder,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          set: {
             avatarData: avatar?.data ?? row.avatarData,
             avatarMediaType: avatar?.mediaType ?? row.avatarMediaType,
             avatarUrl: profile.picture,
-            createdAt: row.createdAt,
             credentials: encryptedCredentials,
             displayName: profile.name,
-            email: row.email,
-            scopes: row.scopes,
-            sortOrder: row.sortOrder,
             updatedAt: now,
-          })
-          .onConflictDoUpdate({
-            set: {
-              avatarData: avatar?.data ?? row.avatarData,
-              avatarMediaType: avatar?.mediaType ?? row.avatarMediaType,
-              avatarUrl: profile.picture,
-              credentials: encryptedCredentials,
-              displayName: profile.name,
-              updatedAt: now,
-            },
-            target: googleAccounts.email,
-          })
-          .run(),
-    });
+          },
+          target: googleAccounts.email,
+        })
+        .run()
+    );
 
     const avatarUrl = toAvatarDataUrl(
       avatar?.data ?? row.avatarData,
@@ -673,38 +652,30 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
 
 export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
   function* listGoogleAccounts() {
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new GoogleAuthError({ message: error.message })
-      )
+    const rows = yield* withDatabase(
+      "Could not load Google accounts",
+      (database) =>
+        database.query.googleAccounts.findMany({
+          columns: {
+            avatarData: true,
+            avatarMediaType: true,
+            avatarUrl: true,
+            createdAt: true,
+            credentials: true,
+            displayName: true,
+            email: true,
+            scopes: true,
+            sortOrder: true,
+          },
+          // SQL ordering follows insertion order, so these keys are semantic.
+          // oxlint-disable-next-line eslint/sort-keys
+          orderBy: {
+            sortOrder: "asc",
+            createdAt: "asc",
+            email: "asc",
+          },
+        })
     );
-    const rows = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not load Google accounts" }),
-      try: () =>
-        database.query.googleAccounts
-          .findMany({
-            columns: {
-              avatarData: true,
-              avatarMediaType: true,
-              avatarUrl: true,
-              createdAt: true,
-              credentials: true,
-              displayName: true,
-              email: true,
-              scopes: true,
-              sortOrder: true,
-            },
-            // SQL ordering follows insertion order, so these keys are semantic.
-            // oxlint-disable-next-line eslint/sort-keys
-            orderBy: {
-              sortOrder: "asc",
-              createdAt: "asc",
-              email: "asc",
-            },
-          })
-          .sync(),
-    });
 
     return yield* Effect.forEach(
       rows,
@@ -734,62 +705,54 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
 
 export const reorderGoogleAccounts = Effect.fn("reorderGoogleAccounts")(
   function* reorderGoogleAccounts(emails: readonly string[]) {
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new GoogleAuthError({ message: error.message })
-      )
-    );
-
-    yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not save Google account order" }),
-      try: () =>
-        database.transaction((transaction) => {
-          const storedEmails = new Set(
-            transaction
-              .select({ email: googleAccounts.email })
-              .from(googleAccounts)
-              .all()
-              .map(({ email }) => email)
-          );
+    const matchesStoredAccounts = yield* withDatabase(
+      "Could not save Google account order",
+      (database) =>
+        database.transaction(async (transaction) => {
+          const accountRows = await transaction
+            .select({ email: googleAccounts.email })
+            .from(googleAccounts)
+            .all();
+          const storedEmails = new Set(accountRows.map(({ email }) => email));
 
           if (
             emails.length !== storedEmails.size ||
             !emails.every((email) => storedEmails.delete(email))
           ) {
-            throw new Error("Account order did not match connected accounts");
+            return false;
           }
 
           for (const [sortOrder, email] of emails.entries()) {
-            transaction
+            // Account order updates must remain ordered within this transaction.
+            // oxlint-disable-next-line eslint/no-await-in-loop
+            await transaction
               .update(googleAccounts)
               .set({ sortOrder })
               .where(equals(googleAccounts.email, email))
               .run();
           }
-        }),
-    });
+          return true;
+        })
+    );
+
+    if (!matchesStoredAccounts) {
+      return yield* new GoogleAuthError({
+        message: "Account order did not match connected accounts",
+      });
+    }
   }
 );
 
 const revokeStoredCredentials = Effect.fn("revokeStoredCredentials")(
   function* revokeStoredCredentials(email: string) {
-    const database = yield* getDatabaseClient().pipe(
-      Effect.mapError(
-        (error) => new GoogleAuthError({ message: error.message })
-      )
+    const account = yield* withDatabase(
+      "Could not load Google account",
+      (database) =>
+        database.query.googleAccounts.findFirst({
+          columns: { credentials: true },
+          where: { email },
+        })
     );
-    const account = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not load Google account" }),
-      try: () =>
-        database.query.googleAccounts
-          .findFirst({
-            columns: { credentials: true },
-            where: { email },
-          })
-          .sync(),
-    });
 
     if (account === undefined) {
       return;

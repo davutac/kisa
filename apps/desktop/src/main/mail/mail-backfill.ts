@@ -1,5 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 
+import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import {
   gmailBackfillState,
   gmailMessages,
@@ -24,7 +25,7 @@ import type {
 } from "../../shared/ipc/mail";
 import { setNativeMailIndexProgress } from "../app/native-mail-index-progress";
 import { onGoogleAccountConnected } from "../auth/account-events";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
@@ -96,18 +97,9 @@ const backfillError = (message: string) => new MailBackfillError({ message });
 
 const withDatabase = <A>(
   message: string,
-  run: (database: Effect.Success<ReturnType<typeof getDatabaseClient>>) => A
+  run: (database: RemoteDatabaseClient) => Promise<A>
 ) =>
-  getDatabaseClient().pipe(
-    // oxlint-disable-next-line promise/prefer-await-to-callbacks
-    Effect.mapError((error) => backfillError(error.message)),
-    Effect.flatMap((database) =>
-      Effect.try({
-        catch: () => backfillError(message),
-        try: () => run(database),
-      })
-    )
-  );
+  withDatabaseClient(run).pipe(Effect.mapError(() => backfillError(message)));
 
 interface BackfillState {
   readonly estimatedThreads: number | null;
@@ -121,11 +113,9 @@ interface BackfillState {
 
 const readState = (accountId: string) =>
   withDatabase("Could not read the mail index state", (database) =>
-    database.query.gmailBackfillState
-      .findFirst({
-        where: { accountEmail: accountId },
-      })
-      .sync()
+    database.query.gmailBackfillState.findFirst({
+      where: { accountEmail: accountId },
+    })
   );
 
 interface StatePatch {
@@ -139,7 +129,7 @@ interface StatePatch {
 }
 
 const writeState = (accountId: string, patch: StatePatch) =>
-  withDatabase("Could not save the mail index state", (database) => {
+  withDatabase("Could not save the mail index state", async (database) => {
     const values = {
       accountEmail: accountId,
       status: "idle" as GmailBackfillStatus,
@@ -147,7 +137,7 @@ const writeState = (accountId: string, patch: StatePatch) =>
       ...patch,
     };
 
-    database
+    await database
       .insert(gmailBackfillState)
       .values(values)
       .onConflictDoUpdate({
@@ -164,22 +154,23 @@ const writeState = (accountId: string, patch: StatePatch) =>
  * than the mailbox contains.
  */
 const readCounts = (accountId: string) =>
-  withDatabase("Could not read the mail index counts", (database) => ({
-    messages:
-      database
-        .select({ value: count() })
-        .from(gmailMessages)
-        .where(eq(gmailMessages.accountEmail, accountId))
-        .all()
-        .at(0)?.value ?? 0,
-    threads:
-      database
-        .select({ value: count() })
-        .from(gmailThreads)
-        .where(eq(gmailThreads.accountEmail, accountId))
-        .all()
-        .at(0)?.value ?? 0,
-  }));
+  withDatabase("Could not read the mail index counts", async (database) => {
+    const messageRows = await database
+      .select({ value: count() })
+      .from(gmailMessages)
+      .where(eq(gmailMessages.accountEmail, accountId))
+      .all();
+    const threadRows = await database
+      .select({ value: count() })
+      .from(gmailThreads)
+      .where(eq(gmailThreads.accountEmail, accountId))
+      .all();
+
+    return {
+      messages: messageRows.at(0)?.value ?? 0,
+      threads: threadRows.at(0)?.value ?? 0,
+    };
+  });
 
 const toProgress = (
   accountId: string,
@@ -575,12 +566,16 @@ const hasReadScope = (scopes: string): boolean => {
 const NO_ACCOUNT_IDS: readonly string[] = [];
 
 const listReadableAccountIds = () => {
-  const accounts = withDatabase("Could not load Google accounts", (database) =>
-    database.query.googleAccounts
-      .findMany({ columns: { email: true, scopes: true } })
-      .sync()
-      .filter(({ scopes }) => hasReadScope(scopes))
-      .map(({ email }) => email)
+  const accounts = withDatabase(
+    "Could not load Google accounts",
+    async (database) => {
+      const rows = await database.query.googleAccounts.findMany({
+        columns: { email: true, scopes: true },
+      });
+      return rows
+        .filter(({ scopes }) => hasReadScope(scopes))
+        .map(({ email }) => email);
+    }
   );
 
   return accounts.pipe(Effect.orElseSucceed(() => NO_ACCOUNT_IDS));
@@ -606,7 +601,7 @@ export const startMailBackfill = Effect.fn("startMailBackfill")(
 
     const rows = yield* withDatabase(
       "Could not load the mail index state",
-      (database) => database.query.gmailBackfillState.findMany().sync()
+      (database) => database.query.gmailBackfillState.findMany()
     ).pipe(Effect.orElseSucceed(() => []));
     const stateByAccount = new Map(
       rows.map((row) => [row.accountEmail, row] as const)

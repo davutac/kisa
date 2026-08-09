@@ -1,4 +1,5 @@
 import type { DatabaseClient } from "@repo/database/client";
+import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { Effect, Schema } from "effect";
@@ -12,7 +13,7 @@ import type {
   GmailSenderSuggestions,
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
-import { getDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database";
 import { toContainsPattern, toFtsMatchQuery } from "./search-match";
 
 const DEFAULT_RESULT_LIMIT = 50;
@@ -37,17 +38,10 @@ class MailSearchError extends Schema.TaggedErrorClass<MailSearchError>()(
 
 const withDatabase = <A>(
   message: string,
-  run: (database: Effect.Success<ReturnType<typeof getDatabaseClient>>) => A
+  run: (database: RemoteDatabaseClient) => Promise<A>
 ) =>
-  getDatabaseClient().pipe(
-    // oxlint-disable-next-line promise/prefer-await-to-callbacks
-    Effect.mapError((error) => new MailSearchError({ message: error.message })),
-    Effect.flatMap((database) =>
-      Effect.try({
-        catch: () => new MailSearchError({ message }),
-        try: () => run(database),
-      })
-    )
+  withDatabaseClient(run).pipe(
+    Effect.mapError(() => new MailSearchError({ message }))
   );
 
 /**
@@ -73,6 +67,42 @@ interface SenderRow {
   readonly message_count: number;
   readonly name: string | null;
 }
+
+type SearchThreadTuple = [
+  accountEmail: string,
+  attachments: string | null,
+  from: string,
+  hasAttachments: number | null,
+  isUnread: number,
+  labels: string | null,
+  latestAt: number,
+  messageCount: number,
+  snippet: string,
+  subject: string,
+  threadId: string,
+];
+
+type SenderTuple = [address: string, name: string | null, messageCount: number];
+
+const toSearchThreadRow = (row: SearchThreadTuple): SearchThreadRow => ({
+  account_email: row[0],
+  attachments: row[1],
+  from: row[2],
+  has_attachments: row[3],
+  is_unread: row[4],
+  labels: row[5],
+  latest_at: row[6],
+  message_count: row[7],
+  snippet: row[8],
+  subject: row[9],
+  thread_id: row[10],
+});
+
+const toSenderRow = (row: SenderTuple): SenderRow => ({
+  address: row[0],
+  message_count: row[2],
+  name: row[1],
+});
 
 const parseJsonArray = <A>(value: string | null): readonly A[] => {
   if (value === null) {
@@ -267,10 +297,9 @@ const toMatchedThreadsCte = (
  * Takes the client rather than reaching for it, so the statement can be run
  * against a real migrated database in tests.
  */
-export const runIndexedThreadSearch = (
-  database: DatabaseClient,
+const toThreadSearchQuery = (
   request: GmailSearchRequest
-): GmailSearchResults => {
+): { readonly limit: number; readonly statement: SQL } | undefined => {
   const limit = clampLimit(
     request.limit,
     DEFAULT_RESULT_LIMIT,
@@ -278,7 +307,7 @@ export const runIndexedThreadSearch = (
   );
 
   if (request.accountIds.length === 0) {
-    return { hasMore: false, threads: [] };
+    return;
   }
 
   const filters = request.filters ?? [];
@@ -294,27 +323,65 @@ export const runIndexedThreadSearch = (
     matched?.isRanked === true
       ? sql`matched.score + ${RECENCY_PENALTY} * (1.0 - 1.0 / (1.0 + max(0, ${Date.now()} - t.latest_at) * 1.0 / ${RECENCY_SPAN_MS})) ASC, t.latest_at DESC`
       : sql`t.latest_at DESC`;
-  const rows = database.all<SearchThreadRow>(sql`
-    ${matched?.sql ?? sql``}
-    SELECT t.account_email, t.attachments, t."from", t.has_attachments,
-           t.is_unread, t.labels, t.latest_at, t.message_count,
-           t.snippet, t.subject, t.thread_id
-    FROM gmail_threads t
-    ${
-      matched === undefined
-        ? sql``
-        : sql`JOIN matched ON matched.account_email = t.account_email
-              AND matched.thread_id = t.thread_id`
-    }
-    WHERE t.account_email IN (${accounts})${andAll(toThreadConditions(filters))}
-    ORDER BY ${order}, t.account_email ASC, t.thread_id ASC
-    LIMIT ${limit + 1}
-  `);
-
   return {
-    hasMore: rows.length > limit,
-    threads: rows.slice(0, limit).map(toThreadSummary),
+    limit,
+    statement: sql`
+      ${matched?.sql ?? sql``}
+      SELECT t.account_email, t.attachments, t."from", t.has_attachments,
+             t.is_unread, t.labels, t.latest_at, t.message_count,
+             t.snippet, t.subject, t.thread_id
+      FROM gmail_threads t
+      ${
+        matched === undefined
+          ? sql``
+          : sql`JOIN matched ON matched.account_email = t.account_email
+                AND matched.thread_id = t.thread_id`
+      }
+      WHERE t.account_email IN (${accounts})${andAll(toThreadConditions(filters))}
+      ORDER BY ${order}, t.account_email ASC, t.thread_id ASC
+      LIMIT ${limit + 1}
+    `,
   };
+};
+
+const toThreadSearchResults = (
+  rows: readonly SearchThreadRow[],
+  limit: number
+): GmailSearchResults => ({
+  hasMore: rows.length > limit,
+  threads: rows.slice(0, limit).map(toThreadSummary),
+});
+
+export const runIndexedThreadSearch = (
+  database: DatabaseClient,
+  request: GmailSearchRequest
+): GmailSearchResults => {
+  const query = toThreadSearchQuery(request);
+
+  if (query === undefined) {
+    return { hasMore: false, threads: [] };
+  }
+
+  return toThreadSearchResults(
+    database.all<SearchThreadRow>(query.statement),
+    query.limit
+  );
+};
+
+const runIndexedThreadSearchRemote = async (
+  database: RemoteDatabaseClient,
+  request: GmailSearchRequest
+): Promise<GmailSearchResults> => {
+  const query = toThreadSearchQuery(request);
+
+  if (query === undefined) {
+    return { hasMore: false, threads: [] };
+  }
+
+  const tuples = await database.values<SearchThreadTuple>(query.statement);
+  const rows = tuples.map(toSearchThreadRow);
+
+  return toThreadSearchResults(rows, query.limit);
 };
 
 /**
@@ -395,15 +462,9 @@ const toCorrespondentStatement = (
   LIMIT ${limit}
 `;
 
-/**
- * The addresses behind a `from:` or `to:` pill, ranked by how much mail they
- * account for — the address someone means is nearly always one they exchange
- * mail with often.
- */
-export const runSenderSuggestions = (
-  database: DatabaseClient,
+const toSenderSuggestionQuery = (
   request: GmailSenderSuggestionRequest
-): GmailSenderSuggestions => {
+): SQL | undefined => {
   const limit = clampLimit(
     request.limit,
     DEFAULT_SENDER_LIMIT,
@@ -412,7 +473,7 @@ export const runSenderSuggestions = (
   const query = request.query?.trim() ?? "";
 
   if (request.accountIds.length === 0) {
-    return { senders: [] };
+    return;
   }
 
   const like = toContainsPattern(query);
@@ -440,26 +501,62 @@ export const runSenderSuggestions = (
     statement = toSenderStatement(accounts, pattern, limit);
   }
 
-  const rows = database.all<SenderRow>(statement);
+  return statement;
+};
 
-  return {
-    senders: rows.map(
-      (row) =>
-        ({
-          address: row.address,
-          messageCount: row.message_count,
-          ...(row.name === null || row.name.length === 0
-            ? {}
-            : { name: row.name }),
-        }) satisfies GmailSenderSuggestion
-    ),
-  };
+const toSenderSuggestions = (
+  rows: readonly SenderRow[]
+): GmailSenderSuggestions => ({
+  senders: rows.map(
+    (row) =>
+      ({
+        address: row.address,
+        messageCount: row.message_count,
+        ...(row.name === null || row.name.length === 0
+          ? {}
+          : { name: row.name }),
+      }) satisfies GmailSenderSuggestion
+  ),
+});
+
+/**
+ * The addresses behind a `from:` or `to:` pill, ranked by how much mail they
+ * account for — the address someone means is nearly always one they exchange
+ * mail with often.
+ */
+export const runSenderSuggestions = (
+  database: DatabaseClient,
+  request: GmailSenderSuggestionRequest
+): GmailSenderSuggestions => {
+  const query = toSenderSuggestionQuery(request);
+
+  if (query === undefined) {
+    return { senders: [] };
+  }
+
+  return toSenderSuggestions(database.all<SenderRow>(query));
+};
+
+const runSenderSuggestionsRemote = async (
+  database: RemoteDatabaseClient,
+  request: GmailSenderSuggestionRequest
+): Promise<GmailSenderSuggestions> => {
+  const query = toSenderSuggestionQuery(request);
+
+  if (query === undefined) {
+    return { senders: [] };
+  }
+
+  const tuples = await database.values<SenderTuple>(query);
+  const rows = tuples.map(toSenderRow);
+
+  return toSenderSuggestions(rows);
 };
 
 export const searchIndexedThreads = Effect.fn("searchIndexedThreads")(
   function* searchIndexedThreads(request: GmailSearchRequest) {
     return yield* withDatabase("Could not search your email", (database) =>
-      runIndexedThreadSearch(database, request)
+      runIndexedThreadSearchRemote(database, request)
     );
   }
 );
@@ -467,7 +564,7 @@ export const searchIndexedThreads = Effect.fn("searchIndexedThreads")(
 export const listIndexedSenders = Effect.fn("listIndexedSenders")(
   function* listIndexedSenders(request: GmailSenderSuggestionRequest) {
     return yield* withDatabase("Could not load senders", (database) =>
-      runSenderSuggestions(database, request)
+      runSenderSuggestionsRemote(database, request)
     );
   }
 );

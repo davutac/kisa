@@ -1,4 +1,5 @@
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
+import { Effect } from "effect";
 import { app, BrowserWindow } from "electron";
 
 import icon from "../../build/icon.png?asset";
@@ -56,10 +57,25 @@ if (hasSingleInstanceLock) {
   app.quit();
 }
 
-app.on("before-quit", () => {
+let shutdownStarted = false;
+
+const finishShutdown = async (): Promise<void> => {
+  await Promise.allSettled([
+    Effect.runPromise(closeDatabase()),
+    stopDesktopIpc(),
+  ]);
+  app.quit();
+};
+
+app.on("before-quit", (event) => {
+  if (shutdownStarted) {
+    return;
+  }
+
+  event.preventDefault();
+  shutdownStarted = true;
   stopMailSync();
-  closeDatabase();
-  void stopDesktopIpc();
+  void finishShutdown();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

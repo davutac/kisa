@@ -6,6 +6,7 @@
   "exports": {
     "./schemas": "./src/schemas/index.ts",
     "./client": "./src/client.ts",
+    "./remote-client": "./src/remote-client.ts",
     "./runtime": "./src/runtime.ts"
   },
   "scripts": {

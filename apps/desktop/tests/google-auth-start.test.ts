@@ -4,13 +4,13 @@ import { Effect } from "effect";
 import type * as Electron from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DatabaseClient } from "../../../packages/database/src/client";
+import type { RemoteDatabaseClient } from "../../../packages/database/src/remote-client";
 import type { notifyGoogleAccountConnected } from "../src/main/auth/account-events";
 import {
   handleGoogleAuthCallback,
   startGoogleAuth,
 } from "../src/main/auth/auth";
-import { getDatabaseClient } from "../src/main/database";
+import { withDatabaseClient } from "../src/main/database";
 import type { sendRendererEvent } from "../src/main/electron/renderer-events";
 
 const electronState = vi.hoisted(() => ({
@@ -43,7 +43,9 @@ vi.mock(import("electron"), () => ({
 }));
 
 vi.mock(import("../src/main/database"), () => ({
-  getDatabaseClient: vi.fn<typeof getDatabaseClient>(),
+  withDatabaseClient: vi.fn<
+    () => never
+  >() as unknown as typeof withDatabaseClient,
 }));
 
 vi.mock(import("../src/main/electron/renderer-events"), () => ({
@@ -58,15 +60,17 @@ describe("Google authentication startup", () => {
   beforeEach(() => {
     electronState.accountCount = 0;
     electronState.openedUrls = [];
-    vi.mocked(getDatabaseClient).mockReturnValue(
-      Effect.succeed({
-        select: () => ({
-          from: () => ({
-            all: () => [{ value: electronState.accountCount }],
+    vi.mocked(withDatabaseClient).mockImplementation(((run) =>
+      Effect.promise(() =>
+        run({
+          select: () => ({
+            from: () => ({
+              all: () =>
+                Promise.resolve([{ value: electronState.accountCount }]),
+            }),
           }),
-        }),
-      } as unknown as DatabaseClient)
-    );
+        } as unknown as RemoteDatabaseClient)
+      )) as typeof withDatabaseClient);
   });
 
   it("opens a new browser flow while an earlier login is still pending", async () => {
