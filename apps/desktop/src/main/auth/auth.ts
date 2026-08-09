@@ -280,7 +280,7 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
         database.query.googleAccounts
           .findFirst({
             columns: { credentials: true },
-            where: (account, { eq }) => eq(account.email, profile.emailAddress),
+            where: { email: profile.emailAddress },
           })
           .sync(),
     });
@@ -415,7 +415,7 @@ export const getGoogleAccessToken = Effect.fn("getGoogleAccessToken")(
       try: () =>
         database.query.googleAccounts
           .findFirst({
-            where: (row, { eq }) => eq(row.email, email),
+            where: { email },
           })
           .sync(),
     });
@@ -695,11 +695,13 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
               scopes: true,
               sortOrder: true,
             },
-            orderBy: (account, { asc }) => [
-              asc(account.sortOrder),
-              asc(account.createdAt),
-              asc(account.email),
-            ],
+            // SQL ordering follows insertion order, so these keys are semantic.
+            // oxlint-disable-next-line eslint/sort-keys
+            orderBy: {
+              sortOrder: "asc",
+              createdAt: "asc",
+              email: "asc",
+            },
           })
           .sync(),
     });
@@ -784,7 +786,7 @@ const revokeStoredCredentials = Effect.fn("revokeStoredCredentials")(
         database.query.googleAccounts
           .findFirst({
             columns: { credentials: true },
-            where: (row, { eq }) => eq(row.email, email),
+            where: { email },
           })
           .sync(),
     });

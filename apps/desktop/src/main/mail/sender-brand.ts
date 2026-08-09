@@ -590,8 +590,7 @@ const loadCachedSenderBrand = Effect.fn("loadCachedSenderBrand")(
       try: () =>
         database.query.gmailSenderBrands
           .findFirst({
-            where: (brand, { and, eq }) =>
-              and(eq(brand.domain, domain), eq(brand.selector, selector)),
+            where: { domain, selector },
           })
           .sync(),
     });

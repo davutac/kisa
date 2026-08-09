@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { defineRelations } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
@@ -27,8 +28,10 @@ const schema = {
   test,
 };
 
+const relations = defineRelations(schema);
+
 export type DatabaseConnection = Database.Database;
-export type DatabaseClient = BetterSQLite3Database<typeof schema>;
+export type DatabaseClient = BetterSQLite3Database<typeof relations>;
 
 /**
  * WAL is what lets the mail indexer write while the UI reads: the default
@@ -53,7 +56,7 @@ export const openDatabaseConnection = (
 
 export const createDatabaseClient = (
   database: DatabaseConnection
-): DatabaseClient => drizzle(database, { casing: "snake_case", schema });
+): DatabaseClient => drizzle({ client: database, relations });
 
 export const applyDatabaseMigrations = (
   database: DatabaseClient,

@@ -9,6 +9,7 @@ export default defineConfig({
   ignorePatterns: [
     ...(core.ignorePatterns ?? []),
     "**/components/ui/**",
+    "packages/database/drizzle/**/snapshot.json",
     "repos/**",
   ],
 });

@@ -6,6 +6,7 @@ export default defineConfig({
   ignorePatterns: [
     ...(ultracite.ignorePatterns ?? []),
     "apps/desktop/src/renderer/src/routeTree.gen.ts",
+    "packages/database/drizzle/**/snapshot.json",
     "repos/**",
     "**/components/ui/**",
   ],

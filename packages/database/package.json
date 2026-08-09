@@ -15,7 +15,8 @@
   "dependencies": {
     "better-sqlite3": "catalog:",
     "drizzle-orm": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/better-sqlite3": "catalog:",

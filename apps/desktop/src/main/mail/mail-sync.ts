@@ -207,11 +207,10 @@ const readCachedConversation = Effect.fn("readCachedConversation")(
     return yield* withDatabase("Could not load cached email", (database) => {
       const threadRow = database.query.gmailThreads
         .findFirst({
-          where: (thread, { and, eq: is }) =>
-            and(
-              is(thread.accountEmail, request.accountId),
-              is(thread.threadId, request.threadId)
-            ),
+          where: {
+            accountEmail: request.accountId,
+            threadId: request.threadId,
+          },
         })
         .sync();
 
@@ -221,12 +220,11 @@ const readCachedConversation = Effect.fn("readCachedConversation")(
 
       const messageRows = database.query.gmailMessages
         .findMany({
-          orderBy: (message, { asc }) => asc(message.internalDate),
-          where: (message, { and, eq: is }) =>
-            and(
-              is(message.accountEmail, request.accountId),
-              is(message.threadId, request.threadId)
-            ),
+          orderBy: { internalDate: "asc" },
+          where: {
+            accountEmail: request.accountId,
+            threadId: request.threadId,
+          },
         })
         .sync();
 
@@ -271,37 +269,38 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
       database.query.gmailThreads
         .findMany({
           limit: THREAD_PAGE_SIZE + 1,
-          orderBy: (thread, { asc, desc }) => [
-            desc(thread.latestAt),
-            asc(thread.accountEmail),
-            asc(thread.threadId),
-          ],
-          where: (thread, { and, eq: is, gt, inArray, lt, or }) =>
-            and(
-              // The inbox predicate has to be in SQL, not a filter over the
-              // page below: the index stores archived mail in this table too,
-              // so filtering afterwards would return near-empty pages while
-              // paging through everything the user archived.
-              is(thread.isInInbox, true),
-              inArray(thread.accountEmail, [...request.accountIds]),
-              request.unreadOnly === true
-                ? is(thread.isUnread, true)
-                : undefined,
-              request.cursor === undefined
-                ? undefined
-                : or(
-                    lt(thread.latestAt, request.cursor.latestAt),
-                    and(
-                      is(thread.latestAt, request.cursor.latestAt),
-                      gt(thread.accountEmail, request.cursor.accountId)
-                    ),
-                    and(
-                      is(thread.latestAt, request.cursor.latestAt),
-                      is(thread.accountEmail, request.cursor.accountId),
-                      gt(thread.threadId, request.cursor.threadId)
-                    )
-                  )
-            ),
+          // SQL ordering follows insertion order, so these keys are semantic.
+          // oxlint-disable-next-line eslint/sort-keys
+          orderBy: {
+            latestAt: "desc",
+            accountEmail: "asc",
+            threadId: "asc",
+          },
+          where: {
+            accountEmail: { in: [...request.accountIds] },
+            // The inbox predicate has to be in SQL, not a filter over the
+            // page below: the index stores archived mail in this table too,
+            // so filtering afterwards would return near-empty pages while
+            // paging through everything the user archived.
+            isInInbox: true,
+            ...(request.unreadOnly === true ? { isUnread: true } : {}),
+            ...(request.cursor === undefined
+              ? {}
+              : {
+                  OR: [
+                    { latestAt: { lt: request.cursor.latestAt } },
+                    {
+                      accountEmail: { gt: request.cursor.accountId },
+                      latestAt: request.cursor.latestAt,
+                    },
+                    {
+                      accountEmail: request.cursor.accountId,
+                      latestAt: request.cursor.latestAt,
+                      threadId: { gt: request.cursor.threadId },
+                    },
+                  ],
+                }),
+          },
         })
         .sync()
     );
@@ -567,7 +566,7 @@ const resolveLabelNames = (accountId: string, labelIds: readonly string[]) =>
     const namesById = new Map(
       database.query.gmailLabels
         .findMany({
-          where: (label, { eq: is }) => is(label.accountEmail, accountId),
+          where: { accountEmail: accountId },
         })
         .sync()
         .map((row) => [row.labelId, row.name] as const)
@@ -739,11 +738,10 @@ const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
     const summary = yield* withDatabase("Could not cache email", (database) => {
       const row = database.query.gmailThreads
         .findFirst({
-          where: (thread, { and, eq: is }) =>
-            and(
-              is(thread.accountEmail, request.accountId),
-              is(thread.threadId, request.threadId)
-            ),
+          where: {
+            accountEmail: request.accountId,
+            threadId: request.threadId,
+          },
         })
         .sync();
 
@@ -825,11 +823,7 @@ const findCachedThread = (accountId: string, threadId: string) =>
   withDatabase("Could not load email", (database) =>
     database.query.gmailThreads
       .findFirst({
-        where: (thread, { and, eq: is }) =>
-          and(
-            is(thread.accountEmail, accountId),
-            is(thread.threadId, threadId)
-          ),
+        where: { accountEmail: accountId, threadId },
       })
       .sync()
   );

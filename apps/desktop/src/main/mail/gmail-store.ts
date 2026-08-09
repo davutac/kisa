@@ -7,7 +7,6 @@ import {
   gmailMessages,
   gmailSyncState,
   gmailThreads,
-  googleAccounts,
 } from "@repo/database/schemas";
 import { GmailStoreError } from "@repo/gmail/errors";
 import type {
@@ -192,7 +191,7 @@ export const GmailStoreLive = Layer.succeed(
     getAuthorization: (accountId) =>
       withDatabase("Could not load Gmail account", (database) =>
         database.query.googleAccounts
-          .findFirst({ where: eq(googleAccounts.email, accountId) })
+          .findFirst({ where: { email: accountId } })
           .sync()
       ).pipe(
         Effect.flatMap((row) =>
@@ -218,7 +217,7 @@ export const GmailStoreLive = Layer.succeed(
     getLabels: (accountId) =>
       withDatabase("Could not load Gmail labels", (database) =>
         database.query.gmailLabels
-          .findMany({ where: eq(gmailLabels.accountEmail, accountId) })
+          .findMany({ where: { accountEmail: accountId } })
           .sync()
           .map(
             (row) =>
@@ -233,7 +232,7 @@ export const GmailStoreLive = Layer.succeed(
     getSyncCursor: (accountId) =>
       withDatabase("Could not load Gmail sync cursor", (database) =>
         database.query.gmailSyncState
-          .findFirst({ where: eq(gmailSyncState.accountEmail, accountId) })
+          .findFirst({ where: { accountEmail: accountId } })
           .sync()
       ).pipe(
         Effect.map((row) =>
@@ -358,7 +357,7 @@ export const GmailStoreLive = Layer.succeed(
         );
         const namesById = new Map(
           database.query.gmailLabels
-            .findMany({ where: eq(gmailLabels.accountEmail, accountId) })
+            .findMany({ where: { accountEmail: accountId } })
             .sync()
             .map((row) => [row.labelId, row.name] as const)
         );
@@ -439,7 +438,7 @@ export const GmailStoreLive = Layer.succeed(
         // created since the last catalog refresh) falls back to the id.
         const namesById = new Map(
           database.query.gmailLabels
-            .findMany({ where: eq(gmailLabels.accountEmail, accountId) })
+            .findMany({ where: { accountEmail: accountId } })
             .sync()
             .map((row) => [row.labelId, row.name] as const)
         );

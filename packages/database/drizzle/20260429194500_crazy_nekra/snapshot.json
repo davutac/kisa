@@ -1,0 +1,34 @@
+{
+  "dialect": "sqlite",
+  "id": "8a8a5b16-fe41-4e89-b8bf-76b689f621df",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "version": "7",
+  "ddl": [
+    {
+      "name": "test",
+      "entityType": "tables"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "table": "test",
+      "entityType": "columns"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "test_pk",
+      "table": "test",
+      "entityType": "pks"
+    }
+  ],
+  "renames": []
+}

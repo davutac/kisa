@@ -123,7 +123,7 @@ const readState = (accountId: string) =>
   withDatabase("Could not read the mail index state", (database) =>
     database.query.gmailBackfillState
       .findFirst({
-        where: (row, { eq: is }) => is(row.accountEmail, accountId),
+        where: { accountEmail: accountId },
       })
       .sync()
   );

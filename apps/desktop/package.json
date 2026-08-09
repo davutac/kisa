@@ -66,6 +66,7 @@
     "tldts": "catalog:",
     "tw-animate-css": "catalog:",
     "vaul": "catalog:",
+    "zod": "catalog:",
     "zustand": "catalog:"
   },
   "devDependencies": {

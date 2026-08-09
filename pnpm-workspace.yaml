@@ -45,8 +45,8 @@ catalog:
   clsx: ^2.1.1
   cmdk: ^1.1.1
   date-fns: ^4.4.0
-  drizzle-kit: ^0.31.10
-  drizzle-orm: ^0.45.2
+  drizzle-kit: 1.0.0-rc.4
+  drizzle-orm: 1.0.0-rc.4
   electron: ^43.3.0
   electron-builder: ^26.15.3
   electron-updater: ^6.8.9
@@ -78,6 +78,7 @@ catalog:
   vaul: ^1.1.2
   vite: ^8.2.1
   vitest: ^4.1.10
+  zod: ^4.4.3
   zustand: ^5.0.14
 
 overrides:
