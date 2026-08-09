@@ -9,6 +9,10 @@ export interface AppStartupApi {
   start: DesktopBridge["startApp"];
 }
 
+export interface AppLifecycleApi {
+  onClosing: DesktopBridge["onAppClosing"];
+}
+
 export interface AuthApi {
   disconnectGoogleAccount: DesktopBridge["disconnectGoogleAccount"];
   listGoogleAccounts: DesktopBridge["listGoogleAccounts"];
@@ -55,6 +59,7 @@ export interface UpdateApi {
 export interface RuntimeCapabilities {
   auth?: AuthApi;
   isWeb: boolean;
+  lifecycle?: AppLifecycleApi;
   mail?: MailApi;
   settings?: SettingsApi;
   startup?: AppStartupApi;
@@ -64,6 +69,7 @@ export interface RuntimeCapabilities {
 
 interface DesktopCapabilities {
   auth: AuthApi;
+  lifecycle: AppLifecycleApi;
   mail: MailApi;
   settings: SettingsApi;
   startup: AppStartupApi;
@@ -91,6 +97,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       reorderGoogleAccounts: bridge.reorderGoogleAccounts,
       startGoogle: bridge.startGoogleAuth,
     },
+    lifecycle: { onClosing: bridge.onAppClosing },
     mail: {
       getIndexProgress: bridge.getMailIndexProgress,
       getSyncStatus: bridge.getMailSyncStatus,
@@ -142,6 +149,7 @@ export const getRuntimeCapabilities = (
     return {
       auth: undefined,
       isWeb: !isElectron,
+      lifecycle: undefined,
       mail: undefined,
       settings: undefined,
       startup: undefined,
@@ -155,6 +163,9 @@ export const getRuntimeCapabilities = (
 
 export const getStartupApi = (): AppStartupApi | undefined =>
   getRuntimeCapabilities().startup;
+
+export const getAppLifecycleApi = (): AppLifecycleApi | undefined =>
+  getRuntimeCapabilities().lifecycle;
 
 export const getAuthApi = (): AuthApi | undefined =>
   getRuntimeCapabilities().auth;

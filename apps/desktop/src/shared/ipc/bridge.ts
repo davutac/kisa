@@ -71,6 +71,7 @@ export interface DesktopBridge {
   onAccountSettingsChanged: (
     listener: (reply: AccountSettingsReply) => void
   ) => () => void;
+  onAppClosing: (listener: () => void) => () => void;
   onGoogleAccountsChanged: (
     listener: (reply: GoogleAccountsReply) => void
   ) => () => void;

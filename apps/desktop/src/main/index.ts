@@ -3,10 +3,13 @@ import { Effect } from "effect";
 import { app, BrowserWindow } from "electron";
 
 import icon from "../../build/icon.png?asset";
+import { AppClosingEvent } from "../shared/ipc/app";
+import { APP_CLOSING_CHANNEL } from "../shared/ipc/channels";
 import { setDevelopmentDockIcon } from "./app/app-icon";
 import { registerAppProtocol } from "./app/app-protocol";
 import { handleGoogleAuthCallback } from "./auth/auth";
 import { closeDatabase } from "./database";
+import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailSync } from "./mail/mail-sync";
 import { createWindow } from "./window/create-window";
@@ -74,6 +77,7 @@ app.on("before-quit", (event) => {
 
   event.preventDefault();
   shutdownStarted = true;
+  sendRendererEvent(APP_CLOSING_CHANNEL, AppClosingEvent, "closing");
   stopMailSync();
   void finishShutdown();
 });

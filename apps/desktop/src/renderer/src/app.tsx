@@ -3,6 +3,7 @@ import { AnimatePresence, domMax, LazyMotion } from "motion/react";
 
 import type { AppRouter } from "@/router";
 
+import AppClosingOverlay from "./components/shell/app-closing-overlay";
 import Providers from "./providers";
 
 const App = ({ router }: { router: AppRouter }) => (
@@ -12,6 +13,7 @@ const App = ({ router }: { router: AppRouter }) => (
         <RouterProvider router={router} />
       </AnimatePresence>
     </LazyMotion>
+    <AppClosingOverlay />
   </Providers>
 );
 

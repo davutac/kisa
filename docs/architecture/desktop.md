@@ -73,6 +73,8 @@ The renderer is sandboxed with context isolation. Preload exposes only the appli
 
 The sandbox preload is emitted as CommonJS and bundles its non-Electron dependencies. Sandboxed Electron preloads cannot load the application's ESM entrypoint or resolve arbitrary package imports at runtime. If Electron starts without the bridge, the root route now reports a startup failure instead of silently rendering the browser fallback with an empty account list.
 
+On quit, the main process sends a typed closing event before stopping mail synchronization and waiting for the database and IPC runtimes to dispose. The renderer keeps a route-independent closing overlay mounted so cleanup remains visible even when quit is requested during startup or from a non-mail route.
+
 ## Scope relative to t3code
 
 t3code also has an HTTP/WebSocket RPC plane because its web client connects to local, SSH, WSL, and remote environments. Kisa has one desktop host, so adding a local server would duplicate Electron IPC without adding an environment boundary. If Kisa gains a standalone web client or remote mailbox backend, that is the point to introduce a shared RPC contract.

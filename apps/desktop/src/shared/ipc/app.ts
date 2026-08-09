@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+export const AppClosingEvent = Schema.Literal("closing");
+
 export const AppStartupErrorPayload = Schema.Struct({
   message: Schema.String,
   reason: Schema.optional(Schema.String),

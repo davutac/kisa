@@ -10,6 +10,7 @@ describe(getRuntimeCapabilities, () => {
     expect(capabilities).toStrictEqual({
       auth: undefined,
       isWeb: true,
+      lifecycle: undefined,
       mail: undefined,
       settings: undefined,
       startup: undefined,
@@ -26,6 +27,7 @@ describe(getRuntimeCapabilities, () => {
     expect(capabilities).toStrictEqual({
       auth: undefined,
       isWeb: false,
+      lifecycle: undefined,
       mail: undefined,
       settings: undefined,
       startup: undefined,
@@ -67,6 +69,7 @@ describe(getRuntimeCapabilities, () => {
         ok: true as const,
       }),
     onAccountSettingsChanged: () => () => {},
+    onAppClosing: () => () => {},
     onGoogleAccountsChanged: () => () => {},
     onMailIndexProgressChanged: () => () => {},
     onMailSyncStatusChanged: () => () => {},
@@ -110,6 +113,9 @@ describe(getRuntimeCapabilities, () => {
         startGoogle: desktopBridge.startGoogleAuth,
       },
       isWeb: false,
+      lifecycle: {
+        onClosing: desktopBridge.onAppClosing,
+      },
       mail: {
         getIndexProgress: desktopBridge.getMailIndexProgress,
         getSyncStatus: desktopBridge.getMailSyncStatus,
@@ -153,10 +159,13 @@ describe(getRuntimeCapabilities, () => {
     const capabilities = getRuntimeCapabilities({ desktopBridge });
     const nextCapabilities = getRuntimeCapabilities({ desktopBridge });
 
-    expect(nextCapabilities.auth).toBe(capabilities.auth);
-    expect(nextCapabilities.mail).toBe(capabilities.mail);
-    expect(nextCapabilities.settings).toBe(capabilities.settings);
-    expect(nextCapabilities.startup).toBe(capabilities.startup);
-    expect(nextCapabilities.updates).toBe(capabilities.updates);
+    expect([
+      nextCapabilities.auth === capabilities.auth,
+      nextCapabilities.lifecycle === capabilities.lifecycle,
+      nextCapabilities.mail === capabilities.mail,
+      nextCapabilities.settings === capabilities.settings,
+      nextCapabilities.startup === capabilities.startup,
+      nextCapabilities.updates === capabilities.updates,
+    ]).toStrictEqual([true, true, true, true, true, true]);
   });
 });
