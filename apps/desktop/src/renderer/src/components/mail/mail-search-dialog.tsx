@@ -10,7 +10,7 @@ import {
   UserIcon,
   XIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import MailRelativeTime from "@/components/mail/relative-time";
 import { Badge } from "@/components/ui/badge";
@@ -504,6 +504,7 @@ interface ResultGroupProps {
   hasMore: boolean;
   isLoading: boolean;
   onSelect: (thread: GmailThreadSummary) => void;
+  selectionToCenter: string | null;
   showAccount: boolean;
   threads: readonly GmailThreadSummary[];
 }
@@ -522,6 +523,7 @@ const ResultGroup = ({
   hasMore,
   isLoading,
   onSelect,
+  selectionToCenter,
   showAccount,
   threads,
 }: ResultGroupProps) => {
@@ -542,6 +544,28 @@ const ResultGroup = ({
     getScrollElement: () => scrollElement,
     overscan: 12,
   });
+  const selectedIndex = threads.findIndex(
+    (thread) => `thread:${getThreadSelectionKey(thread)}` === selectionToCenter
+  );
+
+  useEffect(() => {
+    if (selectedIndex === -1 || scrollElement === null) {
+      return;
+    }
+
+    // Run after cmdk's nearest-edge scroll so centering is the final position.
+    const animationFrame = window.requestAnimationFrame(() => {
+      const selectedRow = scrollElement.querySelector<HTMLElement>(
+        `[data-index="${selectedIndex}"]`
+      );
+
+      selectedRow?.scrollIntoView({ block: "center" });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [scrollElement, selectedIndex, selectionToCenter]);
 
   return (
     <CommandGroup heading={hasMore ? "Results (top matches)" : "Results"}>
@@ -679,11 +703,16 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
   // the first item on screen is always the one Enter commits.
   const firstItem = toFirstItem(completions, isEmpty ? [] : threads);
   const [selection, setSelection] = useState(firstItem);
+  const [selectionToCenter, setSelectionToCenter] = useState<string | null>(
+    firstItem
+  );
   const [selectedFirstItem, setSelectedFirstItem] = useState(firstItem);
+  const isKeyboardSelectionMoveRef = useRef(false);
 
   if (selectedFirstItem !== firstItem) {
     setSelectedFirstItem(firstItem);
     setSelection(firstItem);
+    setSelectionToCenter(firstItem);
   }
 
   const close = (): void => {
@@ -712,11 +741,23 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
       title="Search mail"
     >
       <Command
+        className="bg-background p-0"
         loop
-        onValueChange={setSelection}
+        onKeyDown={() => {
+          isKeyboardSelectionMoveRef.current = true;
+        }}
+        onKeyUp={() => {
+          isKeyboardSelectionMoveRef.current = false;
+        }}
+        onValueChange={(value) => {
+          setSelection(value);
+          setSelectionToCenter(
+            isKeyboardSelectionMoveRef.current ? value : null
+          );
+          isKeyboardSelectionMoveRef.current = false;
+        }}
         shouldFilter={false}
         value={selection}
-        className="bg-background p-0"
       >
         {/*
           `CommandInput` owns its `InputGroup` and takes no children, so the
@@ -783,6 +824,7 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
               hasMore={hasMore}
               isLoading={isLoading}
               onSelect={openResult}
+              selectionToCenter={selectionToCenter}
               showAccount={accountIds.length > 1}
               threads={threads}
             />
