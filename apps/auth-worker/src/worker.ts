@@ -270,7 +270,7 @@ const readAuthState = Effect.fn("readAuthState")(function* readAuthState(
 
 export default Cloudflare.Worker(
   "AuthWorker",
-  { domain: "kisa.davutcaliskan.de", main: import.meta.url },
+  { domain: "auth.kisa.email", main: import.meta.url },
   Effect.gen(function* initializeWorker() {
     const appRedirectUris = yield* Config.string("APP_REDIRECT_URIS");
     const googleClientId = yield* Config.string("GOOGLE_CLIENT_ID");

@@ -29,7 +29,7 @@ import { getMainWindow } from "../window/create-window";
 import { notifyGoogleAccountConnected } from "./account-events";
 
 const AUTH_WORKER_URL =
-  process.env["AUTH_WORKER_URL"] ?? "https://kisa.davutcaliskan.de";
+  process.env["AUTH_WORKER_URL"] ?? "https://auth.kisa.email";
 const GOOGLE_PROFILE_URL =
   "https://gmail.googleapis.com/gmail/v1/users/me/profile";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
