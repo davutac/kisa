@@ -42,6 +42,7 @@ import {
 } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
+import { getInitialComposerAccountId } from "@/mail/composer-account";
 import { getMailApi, getPathForFile } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import { MAX_GMAIL_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
@@ -164,12 +165,9 @@ const NewMessageDialog = ({
   isOpen,
   onOpenChange,
 }: NewMessageDialogProps) => {
-  const knownInitialAccountId = accounts.some(
-    ({ email }) => email === initialAccountId
-  )
-    ? (initialAccountId ?? "")
-    : "";
-  const [accountId, setAccountId] = useState(knownInitialAccountId);
+  const [accountId, setAccountId] = useState(() =>
+    getInitialComposerAccountId(accounts, initialAccountId)
+  );
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>(
     []
   );
