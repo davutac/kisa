@@ -194,6 +194,10 @@ WAL, bounded page transactions, and yielding between pages still matter for writ
 
 ## Renderer integration
 
+### Search scope
+
+The search palette opens with a visible `label:inbox` pill, plus an `account:` pill when one account is selected. Search therefore inherits the mailbox scope by default; removing the Inbox pill widens it to every indexed thread for the selected accounts. `label:` matches the resolved thread label name case-insensitively, including Gmail system labels and user labels. Its completions come from the selected account's cached catalog, or merge every connected account's catalog when no account pill is present. Merged rows retain their owning account emails, and Gmail-owned labels use a distinct system icon and friendly display name while preserving the raw label id as the filter value. Spam, Trash, and Chats are omitted because those messages are not indexed.
+
 **Progress travels on its own channel.** `onThreadsChanged` triggers a full first-page reload in `use-mailbox-threads.ts`; firing it per backfill page would hammer the list. A new `MAIL_INDEX_PROGRESS_CHANNEL` carries `{ accountId, status, indexedThreads, estimatedThreads, oldestIndexedAt, error? }`, throttled to ~1/second, with a matching getter for initial state and a `useAccountIndexProgress` hook alongside the existing `useSyncingAccountIds`. `threads-changed` keeps firing only for head-of-mailbox changes, as today.
 
 **Indicators.** The account button already has an `isSyncing` spinner slot — a determinate ring goes there. The thread list gains a footer row ("Indexing your mail — 12,430 of ~48,000 · back to March 2019"), and settings gains a row with pause/resume and a size readout.

@@ -213,6 +213,7 @@ export const GmailSearchFilterField = Schema.Literals([
   "from",
   "has",
   "is",
+  "label",
   "subject",
   "to",
 ]);

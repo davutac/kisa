@@ -3,8 +3,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Command as CommandPrimitive } from "cmdk";
 import {
   AtSignIcon,
+  LaptopIcon,
   PaperclipIcon,
   SearchIcon,
+  TagIcon,
   UserIcon,
   XIcon,
 } from "lucide-react";
@@ -23,28 +25,34 @@ import {
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { Kbd } from "@/components/ui/kbd";
 import { parseMailboxAddress } from "@/mail/address";
+import { formatGmailLabel } from "@/mail/label";
 import {
   addSearchFilter,
   addSearchFilters,
-  EMPTY_SEARCH_QUERY,
+  createScopedSearchQuery,
   extractSearchFilters,
   getSearchAccountIds,
   getSearchFilterLabel,
-  isSearchQueryEmpty,
+  hasInboxSearchScope,
+  isSearchQueryScopeOnly,
   parseFilterDraft,
   removeFilterDraft,
   removeSearchFilterAt,
   SEARCH_FILTER_FIELDS,
-  toIndexSearchFilters,
 } from "@/mail/search-query";
 import type {
   FilterDraft,
   SearchFilter,
   SearchFilterField,
+  SearchLabelSuggestion,
   SearchQuery,
 } from "@/mail/search-query";
 import { getThreadSelectionKey } from "@/mail/thread-selection";
-import { useAddressSuggestions, useMailSearch } from "@/mail/use-mail-search";
+import {
+  useAddressSuggestions,
+  useLabelSuggestions,
+  useMailSearch,
+} from "@/mail/use-mail-search";
 import type {
   GmailAddressRole,
   GmailSenderSuggestion,
@@ -110,13 +118,14 @@ const FIXED_FILTER_VALUES: Partial<
   is: ["unread", "read"],
 };
 
-const FILTER_HINTS: Record<SearchFilterField, string> = {
-  account: "account:you@example.com",
-  from: "from:person@example.com",
-  has: "has:attachment",
-  is: "is:unread",
-  subject: "subject:invoice",
-  to: "to:person@example.com",
+const FILTER_EXAMPLES: Record<SearchFilterField, string> = {
+  account: "you@example.com",
+  from: "person@example.com",
+  has: "attachment",
+  is: "unread",
+  label: "inbox",
+  subject: "invoice",
+  to: "person@example.com",
 };
 
 const NUMBER_FORMAT = new Intl.NumberFormat();
@@ -137,21 +146,17 @@ const getAddressRole = (
   return field === "to" ? "recipient" : undefined;
 };
 
-/** The palette opens scoped to whatever the mailbox is showing. */
-const createScopedQuery = (accountId: string | null): SearchQuery =>
-  accountId === null
-    ? EMPTY_SEARCH_QUERY
-    : { filters: [{ field: "account", value: accountId }], text: "" };
-
 interface FilterPillProps {
   filter: SearchFilter;
   onRemove: () => void;
 }
 
 const FilterPill = ({ filter, onRemove }: FilterPillProps) => (
-  <Badge className="h-5 gap-1 pr-1 pl-2" variant="secondary">
+  <Badge className="bg-muted h-5 gap-1 pr-1 pl-2" variant="secondary">
     <span className="opacity-60">{getSearchFilterLabel(filter.field)}</span>
-    <span className="max-w-48 truncate">{filter.value}</span>
+    <span className="max-w-48 truncate">
+      {filter.field === "label" ? formatGmailLabel(filter.value) : filter.value}
+    </span>
     <button
       aria-label={`Remove ${filter.field} filter`}
       className="hover:text-foreground rounded-full opacity-60"
@@ -163,7 +168,13 @@ const FilterPill = ({ filter, onRemove }: FilterPillProps) => (
   </Badge>
 );
 
-type CompletionIcon = "account" | "address" | "attachment" | "operator";
+type CompletionIcon =
+  | "account"
+  | "address"
+  | "attachment"
+  | "label"
+  | "operator"
+  | "system-label";
 
 interface CompletionItem {
   icon: CompletionIcon;
@@ -172,6 +183,7 @@ interface CompletionItem {
   onSelect: () => void;
   shortcut?: string;
   sublabel?: string;
+  trailing?: string;
   /** cmdk's identity for the item, and what the selection is tracked by. */
   value: string;
 }
@@ -189,9 +201,11 @@ interface CompletionInputs {
   draftFilter?: SearchFilter;
   /** Nothing has been asked yet, so the operators are worth listing. */
   isQueryEmpty: boolean;
+  labels: readonly SearchLabelSuggestion[] | undefined;
   onSelectField: (field: SearchFilterField) => void;
   onSelectFilter: (filter: SearchFilter) => void;
   senders: readonly GmailSenderSuggestion[];
+  showLabelAccounts: boolean;
   typedWord: string;
 }
 
@@ -254,9 +268,11 @@ const toCompletions = ({
   draft,
   draftFilter,
   isQueryEmpty,
+  labels,
   onSelectField,
   onSelectFilter,
   senders,
+  showLabelAccounts,
   typedWord,
 }: CompletionInputs): Completions | undefined => {
   if (draft === undefined) {
@@ -277,10 +293,11 @@ const toCompletions = ({
           heading: "Filters",
           items: fields.map((field) => ({
             icon: "operator" as const,
-            label: FILTER_HINTS[field],
+            label: `${field}:`,
             onSelect: () => {
               onSelectField(field);
             },
+            sublabel: FILTER_EXAMPLES[field],
             value: `field:${field}`,
           })),
         };
@@ -309,6 +326,53 @@ const toCompletions = ({
 
   if (draft.field === "from" || draft.field === "to") {
     return toAddressItems(draft.field, senders, typedValue, onSelectFilter);
+  }
+
+  if (draft.field === "label") {
+    const normalizedValue = typedValue.toLowerCase();
+    const matches = (labels ?? []).filter((label) => {
+      const displayLabel = formatGmailLabel(label.name).toLowerCase();
+
+      return (
+        label.name.toLowerCase().includes(normalizedValue) ||
+        displayLabel.includes(normalizedValue)
+      );
+    });
+    const hasExactMatch = matches.some(
+      (label) =>
+        label.name.toLowerCase() === normalizedValue ||
+        formatGmailLabel(label.name).toLowerCase() === normalizedValue
+    );
+
+    return {
+      empty: labels === undefined ? "Loading labels…" : "No labels match.",
+      heading: "Label",
+      items: [
+        ...matches.map((label) => ({
+          icon: label.isSystem ? ("system-label" as const) : ("label" as const),
+          label: formatGmailLabel(label.name),
+          onSelect: () => {
+            onSelectFilter({ field: "label", value: label.name });
+          },
+          ...(showLabelAccounts
+            ? { trailing: label.accountIds.join(", ") }
+            : {}),
+          value: `label:${label.name}`,
+        })),
+        ...(typedValue.length === 0 || hasExactMatch
+          ? []
+          : [
+              {
+                icon: "label" as const,
+                label: `Use “${typedValue}” as typed`,
+                onSelect: () => {
+                  onSelectFilter({ field: "label", value: typedValue });
+                },
+                value: "label:as-typed",
+              },
+            ]),
+      ],
+    };
   }
 
   const fixedValues = FIXED_FILTER_VALUES[draft.field];
@@ -357,7 +421,9 @@ const COMPLETION_ICONS = {
   account: AtSignIcon,
   address: UserIcon,
   attachment: PaperclipIcon,
+  label: TagIcon,
   operator: SearchIcon,
+  "system-label": LaptopIcon,
 } as const;
 
 const CompletionGroup = ({ empty, heading, items }: Completions) => (
@@ -380,6 +446,11 @@ const CompletionGroup = ({ empty, heading, items }: Completions) => (
             <span className="text-muted-foreground truncate">
               {item.sublabel}
             </span>
+          )}
+          {item.trailing === undefined ? null : (
+            <CommandShortcut className="max-w-[60%] truncate text-right text-xs tracking-normal">
+              {item.trailing}
+            </CommandShortcut>
           )}
           {item.shortcut === undefined ? null : (
             <CommandShortcut>{item.shortcut}</CommandShortcut>
@@ -531,7 +602,7 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
     ? selectedAccountId
     : null;
   const [query, setQuery] = useState<SearchQuery>(() =>
-    createScopedQuery(knownAccountId)
+    createScopedSearchQuery(knownAccountId)
   );
   const [wasOpen, setWasOpen] = useState(isOpen);
   const allAccountIds = useMemo(
@@ -546,7 +617,7 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
     setWasOpen(isOpen);
 
     if (isOpen) {
-      setQuery(createScopedQuery(knownAccountId));
+      setQuery(createScopedSearchQuery(knownAccountId));
     }
   }
 
@@ -556,10 +627,8 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
   const draftFilter = toDraftFilter(filterDraft);
   const searchQuery = toLiveQuery(query, filterDraft, draftFilter);
   const accountIds = getSearchAccountIds(searchQuery, allAccountIds);
-  const isEmpty = isSearchQueryEmpty({
-    ...searchQuery,
-    filters: toIndexSearchFilters(searchQuery),
-  });
+  const isInboxScoped = hasInboxSearchScope(searchQuery);
+  const isEmpty = isSearchQueryScopeOnly(searchQuery);
   const { hasMore, isLoading, threads } = useMailSearch(
     accountIds,
     searchQuery,
@@ -572,6 +641,10 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
     accountIds,
     addressRole,
     addressRole === undefined ? undefined : (filterDraft?.value ?? "")
+  );
+  const labels = useLabelSuggestions(
+    accountIds,
+    filterDraft?.field === "label"
   );
 
   const commitFilter = (filter: SearchFilter): void => {
@@ -588,6 +661,7 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
     draft: filterDraft,
     draftFilter,
     isQueryEmpty: isEmpty,
+    labels,
     onSelectField: (field) => {
       setQuery((current) => ({
         ...current,
@@ -596,6 +670,7 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
     },
     onSelectFilter: commitFilter,
     senders,
+    showLabelAccounts: accountIds.length > 1,
     typedWord: query.text.trim().toLowerCase(),
   });
   // cmdk tracks the highlighted item itself, and with filtering off it never
@@ -641,14 +716,15 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
         onValueChange={setSelection}
         shouldFilter={false}
         value={selection}
+        className="bg-background p-0"
       >
         {/*
           `CommandInput` owns its `InputGroup` and takes no children, so the
           field is composed here from the same primitives: pills belong inside
           it, reading as part of the query rather than as chrome around it.
         */}
-        <div className="p-1 pb-0">
-          <InputGroup className="bg-input/20 dark:bg-input/30 h-auto min-h-8 flex-wrap gap-1 py-1 pr-2">
+        <div className="p-2 pb-0">
+          <InputGroup className="bg-input/20 dark:bg-input/30 h-auto min-h-8 flex-wrap gap-1 border-0 py-1 pr-2">
             <InputGroupAddon className="py-0">
               <SearchIcon className="shrink-0 opacity-50" />
             </InputGroupAddon>
@@ -690,15 +766,15 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
                 );
               }}
               placeholder={
-                query.filters.length === 0
-                  ? "Search all mail — try from:someone@example.com"
-                  : "Search all mail"
+                isInboxScoped
+                  ? "Search Inbox"
+                  : "Search all mail — try from:someone@example.com"
               }
               value={query.text}
             />
           </InputGroup>
         </div>
-        <CommandList className="max-h-96">
+        <CommandList className="max-h-96 px-1 py-2">
           {completions === undefined ? null : (
             <CompletionGroup {...completions} />
           )}
@@ -712,7 +788,7 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
             />
           )}
         </CommandList>
-        <div className="text-muted-foreground border-border/60 flex items-center gap-3 border-t px-2.5 py-1.5 text-[0.625rem]">
+        <div className="text-muted-foreground bg-card border-border/40 flex items-center gap-3 border-t px-4 py-2 text-[0.625rem]">
           <span className="flex items-center gap-1">
             <Kbd>↵</Kbd> open
           </span>
@@ -720,7 +796,9 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
             <Kbd>esc</Kbd> close
           </span>
           <span className="ml-auto">
-            Searches every message indexed on this device.
+            {isInboxScoped
+              ? "Searching Inbox."
+              : "Searches every message indexed on this device."}
           </span>
         </div>
       </Command>

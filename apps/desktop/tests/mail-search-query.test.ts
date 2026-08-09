@@ -2,19 +2,21 @@ import { describe, expect, it } from "vitest";
 
 import {
   addSearchFilter,
-  EMPTY_SEARCH_QUERY,
+  createScopedSearchQuery,
   extractSearchFilters,
   formatSearchQuery,
   getSearchAccountIds,
-  isSearchQueryEmpty,
+  isSearchQueryScopeOnly,
   parseFilterDraft,
   parseSearchQuery,
   removeFilterDraft,
   removeSearchFilterAt,
+  toSearchLabelSuggestions,
   toIndexSearchFilters,
 } from "../src/renderer/src/mail/search-query";
 
 const ACCOUNTS = ["one@example.com", "two@example.com"];
+const EMPTY_SEARCH_QUERY = { filters: [], text: "" } as const;
 
 describe(parseSearchQuery, () => {
   it("splits operators away from the words to match", () => {
@@ -33,10 +35,17 @@ describe(parseSearchQuery, () => {
     });
   });
 
+  it("parses a label operator", () => {
+    expect(parseSearchQuery("label:inbox receipt")).toStrictEqual({
+      filters: [{ field: "label", value: "inbox" }],
+      text: "receipt",
+    });
+  });
+
   it("leaves unknown operators as text", () => {
-    expect(parseSearchQuery("label:work")).toStrictEqual({
+    expect(parseSearchQuery("after:today")).toStrictEqual({
       filters: [],
-      text: "label:work",
+      text: "after:today",
     });
   });
 
@@ -45,6 +54,78 @@ describe(parseSearchQuery, () => {
       filters: [],
       text: "from:",
     });
+  });
+});
+
+describe(createScopedSearchQuery, () => {
+  it("defaults every search to Inbox", () => {
+    expect(createScopedSearchQuery(null)).toStrictEqual({
+      filters: [{ field: "label", value: "inbox" }],
+      text: "",
+    });
+  });
+
+  it("keeps the selected account alongside Inbox", () => {
+    expect(createScopedSearchQuery("one@example.com")).toStrictEqual({
+      filters: [
+        { field: "account", value: "one@example.com" },
+        { field: "label", value: "inbox" },
+      ],
+      text: "",
+    });
+  });
+});
+
+describe(toSearchLabelSuggestions, () => {
+  it("merges indexed labels while preserving ownership and system status", () => {
+    expect(
+      toSearchLabelSuggestions([
+        {
+          accountId: "one@example.com",
+          labels: [
+            { id: "INBOX", name: "INBOX", type: "system" },
+            {
+              id: "CATEGORY_PERSONAL",
+              name: "CATEGORY_PERSONAL",
+              type: "system",
+            },
+            { id: "CHAT", name: "CHAT", type: "system" },
+            { id: "SPAM", name: "SPAM", type: "system" },
+            { id: "TRASH", name: "TRASH", type: "system" },
+            { id: "Label_1", name: "Work", type: "user" },
+          ],
+        },
+        {
+          accountId: "two@example.com",
+          labels: [
+            { id: "INBOX", name: "inbox", type: "system" },
+            { id: "Label_2", name: "Personal", type: "user" },
+            { id: "Label_9", name: "work", type: "user" },
+          ],
+        },
+      ])
+    ).toStrictEqual([
+      {
+        accountIds: ["one@example.com", "two@example.com"],
+        isSystem: true,
+        name: "INBOX",
+      },
+      {
+        accountIds: ["two@example.com"],
+        isSystem: false,
+        name: "Personal",
+      },
+      {
+        accountIds: ["one@example.com"],
+        isSystem: true,
+        name: "CATEGORY_PERSONAL",
+      },
+      {
+        accountIds: ["one@example.com", "two@example.com"],
+        isSystem: false,
+        name: "Work",
+      },
+    ]);
   });
 });
 
@@ -194,12 +275,27 @@ describe(toIndexSearchFilters, () => {
   });
 });
 
-describe(isSearchQueryEmpty, () => {
-  it("treats whitespace as empty", () => {
-    expect(isSearchQueryEmpty({ filters: [], text: "   " })).toBeTruthy();
+describe(isSearchQueryScopeOnly, () => {
+  it("does not treat the default Inbox and account pills as a search", () => {
+    expect(isSearchQueryScopeOnly(createScopedSearchQuery(null))).toBeTruthy();
     expect(
-      isSearchQueryEmpty({
-        filters: [{ field: "is", value: "unread" }],
+      isSearchQueryScopeOnly(createScopedSearchQuery("one@example.com"))
+    ).toBeTruthy();
+  });
+
+  it("recognizes another label or filter as a search", () => {
+    expect(
+      isSearchQueryScopeOnly({
+        filters: [{ field: "label", value: "work" }],
+        text: "",
+      })
+    ).toBeFalsy();
+    expect(
+      isSearchQueryScopeOnly({
+        filters: [
+          { field: "label", value: "inbox" },
+          { field: "is", value: "unread" },
+        ],
         text: "",
       })
     ).toBeFalsy();

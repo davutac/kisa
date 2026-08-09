@@ -195,6 +195,20 @@ const toThreadConditions = (
       return value === "read" ? [sql`t.is_unread = 0`] : [];
     }
 
+    if (filter.field === "label") {
+      if (filter.value.toLowerCase() === "inbox") {
+        return [sql`t.is_in_inbox = 1`];
+      }
+
+      return [
+        sql`EXISTS (
+          SELECT 1
+          FROM json_each(coalesce(t.labels, '[]')) AS thread_label
+          WHERE lower(thread_label.value) = lower(${filter.value})
+        )`,
+      ];
+    }
+
     return filter.field === "has" &&
       filter.value.toLowerCase().startsWith("attach")
       ? [sql`t.has_attachments = 1`]
@@ -351,7 +365,7 @@ const toThreadSearchResults = (
   threads: rows.slice(0, limit).map(toThreadSummary),
 });
 
-const runIndexedThreadSearchRemote = async (
+export const runIndexedThreadSearchRemote = async (
   database: RemoteDatabaseClient,
   request: GmailSearchRequest
 ): Promise<GmailSearchResults> => {

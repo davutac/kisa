@@ -1,7 +1,10 @@
 import type {
+  GmailLabelSummary,
   GmailSearchFilter,
   GmailSearchFilterField,
 } from "@/shared/ipc/mail";
+
+import { formatGmailLabel, isSystemGmailLabel } from "./label";
 
 /**
  * `account` is the one operator the index does not answer: it scopes *which*
@@ -21,13 +24,28 @@ export interface SearchQuery {
   text: string;
 }
 
-export const EMPTY_SEARCH_QUERY: SearchQuery = { filters: [], text: "" };
+const INBOX_FILTER: SearchFilter = { field: "label", value: "inbox" };
+
+const isInboxFilter = (filter: SearchFilter): boolean =>
+  filter.field === "label" && filter.value.toLowerCase() === "inbox";
+
+/** Search opens in the visible Inbox and can widen when this pill is removed. */
+export const createScopedSearchQuery = (
+  accountId: string | null
+): SearchQuery => ({
+  filters:
+    accountId === null
+      ? [INBOX_FILTER]
+      : [{ field: "account", value: accountId }, INBOX_FILTER],
+  text: "",
+});
 
 export const SEARCH_FILTER_FIELDS: readonly SearchFilterField[] = [
   "account",
   "from",
   "to",
   "subject",
+  "label",
   "has",
   "is",
 ];
@@ -122,8 +140,12 @@ export const formatSearchQuery = (query: SearchQuery): string =>
     .filter((part) => part.length > 0)
     .join(" ");
 
-export const isSearchQueryEmpty = (query: SearchQuery): boolean =>
-  query.filters.length === 0 && query.text.trim().length === 0;
+/** Account and Inbox describe where to search; another filter asks a question. */
+export const isSearchQueryScopeOnly = (query: SearchQuery): boolean =>
+  query.text.trim().length === 0 &&
+  query.filters.every(
+    (filter) => filter.field === "account" || isInboxFilter(filter)
+  );
 
 const isSameFilter = (left: SearchFilter, right: SearchFilter): boolean =>
   left.field === right.field &&
@@ -252,12 +274,86 @@ const FILTER_LABELS: Record<SearchFilterField, string> = {
   from: "From",
   has: "Has",
   is: "Is",
+  label: "Label",
   subject: "Subject",
   to: "To",
 };
 
 export const getSearchFilterLabel = (field: SearchFilterField): string =>
   FILTER_LABELS[field];
+
+export const hasInboxSearchScope = (query: SearchQuery): boolean =>
+  query.filters.some(isInboxFilter);
+
+const LABEL_NAME_COLLATOR = new Intl.Collator(undefined, {
+  sensitivity: "base",
+});
+
+const UNINDEXED_SYSTEM_LABELS = new Set(["CHAT", "SPAM", "TRASH"]);
+
+export interface SearchLabelSuggestion {
+  accountIds: readonly string[];
+  isSystem: boolean;
+  name: string;
+}
+
+interface SearchLabelCatalog {
+  accountId: string;
+  labels: readonly GmailLabelSummary[];
+}
+
+interface MutableSearchLabelSuggestion {
+  accountIds: Set<string>;
+  isSystem: boolean;
+  name: string;
+}
+
+const isSystemSearchLabel = (label: GmailLabelSummary): boolean =>
+  label.type === "system" || isSystemGmailLabel(label.name);
+
+export const toSearchLabelSuggestions = (
+  catalogs: readonly SearchLabelCatalog[]
+): readonly SearchLabelSuggestion[] => {
+  const suggestions = new Map<string, MutableSearchLabelSuggestion>();
+
+  for (const catalog of catalogs) {
+    for (const label of catalog.labels) {
+      const isSystem = isSystemSearchLabel(label);
+
+      if (isSystem && UNINDEXED_SYSTEM_LABELS.has(label.id.toUpperCase())) {
+        continue;
+      }
+
+      const key = label.name.toLowerCase();
+      const existing = suggestions.get(key);
+
+      if (existing === undefined) {
+        suggestions.set(key, {
+          accountIds: new Set([catalog.accountId]),
+          isSystem,
+          name: label.name,
+        });
+        continue;
+      }
+
+      existing.accountIds.add(catalog.accountId);
+      existing.isSystem ||= isSystem;
+    }
+  }
+
+  return [...suggestions.values()]
+    .map((suggestion) => ({
+      accountIds: [...suggestion.accountIds],
+      isSystem: suggestion.isSystem,
+      name: suggestion.name,
+    }))
+    .toSorted((left, right) =>
+      LABEL_NAME_COLLATOR.compare(
+        formatGmailLabel(left.name),
+        formatGmailLabel(right.name)
+      )
+    );
+};
 
 /**
  * The accounts an `account:` pill narrows to, matched against the connected

@@ -11,6 +11,7 @@ describe(formatGmailLabel, () => {
   it("formats Gmail system labels in English", () => {
     expect(formatGmailLabel("CATEGORY_UPDATES")).toBe("Updates");
     expect(formatGmailLabel("INBOX")).toBe("Inbox");
+    expect(formatGmailLabel("inbox")).toBe("Inbox");
     expect(formatGmailLabel("IMPORTANT")).toBe("Important");
   });
 

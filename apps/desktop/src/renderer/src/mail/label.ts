@@ -17,7 +17,7 @@ const SYSTEM_LABEL_NAMES: Readonly<Record<string, string>> = {
 };
 
 export const formatGmailLabel = (label: string): string =>
-  SYSTEM_LABEL_NAMES[label] ?? label;
+  SYSTEM_LABEL_NAMES[label.toUpperCase()] ?? label;
 
 // Gmail reports its own labels by id, and user labels by the name their owner
 // typed, so an id that Gmail reserves is what marks a label as a system one.
