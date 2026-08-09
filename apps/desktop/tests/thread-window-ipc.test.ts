@@ -1,20 +1,28 @@
+// oxlint-disable typescript/no-unsafe-type-assertion
 import { Effect, Exit } from "effect";
+import type { BrowserWindow } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { openThreadWindow } from "../src/main/ipc/methods/app";
+import { openThreadWindow as openThreadWindowMethod } from "../src/main/ipc/methods/app";
 
 const mocks = vi.hoisted(() => ({
-  openThreadWindow: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+  openThreadWindow:
+    vi.fn<
+      (request: {
+        readonly accountId: string;
+        readonly threadId: string;
+      }) => Promise<BrowserWindow>
+    >(),
 }));
 
 vi.mock(import("../src/main/window/create-window"), () => ({
   openThreadWindow: mocks.openThreadWindow,
 }));
 
-describe(openThreadWindow, () => {
+describe("openThreadWindow IPC", () => {
   beforeEach(() => {
     mocks.openThreadWindow.mockReset();
-    mocks.openThreadWindow.mockResolvedValue();
+    mocks.openThreadWindow.mockResolvedValue({} as BrowserWindow);
   });
 
   it("opens a validated account and thread target", async () => {
@@ -24,7 +32,7 @@ describe(openThreadWindow, () => {
     };
 
     await expect(
-      Effect.runPromise(openThreadWindow.handler(request))
+      Effect.runPromise(openThreadWindowMethod.handler(request))
     ).resolves.toStrictEqual({ data: undefined, ok: true });
     expect(mocks.openThreadWindow).toHaveBeenCalledWith(request);
   });
@@ -36,7 +44,7 @@ describe(openThreadWindow, () => {
 
     await expect(
       Effect.runPromise(
-        openThreadWindow.handler({
+        openThreadWindowMethod.handler({
           accountId: "person@example.com",
           threadId: "thread-id",
         })
@@ -49,7 +57,7 @@ describe(openThreadWindow, () => {
 
   it("rejects an empty account or thread identifier", async () => {
     const exit = await Effect.runPromiseExit(
-      openThreadWindow.handler({ accountId: "", threadId: "" })
+      openThreadWindowMethod.handler({ accountId: "", threadId: "" })
     );
 
     expect(Exit.isFailure(exit)).toBeTruthy();

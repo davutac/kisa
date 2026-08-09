@@ -15,29 +15,32 @@ interface TestWindow {
 
 const electronState = vi.hoisted(() => ({
   createdWindows: [] as TestWindow[],
-  loadBarrier: undefined as Promise<void> | undefined,
+  loadBarrier: undefined as Promise<unknown> | undefined,
   loadFailure: undefined as Error | undefined,
 }));
 
 vi.mock(import("electron"), () => ({
   BrowserWindow: class BrowserWindow {
-    readonly focus = vi.fn();
-    readonly loadFile = vi.fn(async () => {
+    readonly focus = vi.fn<() => void>();
+    readonly isMinimized = vi.fn<() => boolean>(() => false);
+    readonly loadFile = vi.fn<() => Promise<void>>(async () => {
       await electronState.loadBarrier;
 
       if (electronState.loadFailure !== undefined) {
         throw electronState.loadFailure;
       }
     });
-    readonly loadURL = vi.fn(async () => {});
+    readonly loadURL = vi.fn<() => Promise<void>>(async () => {});
     readonly options: Electron.BrowserWindowConstructorOptions;
+    readonly restore = vi.fn<() => void>();
+    readonly show = vi.fn<() => void>();
     readonly webContents = {
-      getURL: vi.fn(() => "file:///index.html"),
-      on: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
+      getURL: vi.fn<() => string>(() => "file:///index.html"),
+      on: vi.fn<(...args: unknown[]) => void>(),
+      setWindowOpenHandler: vi.fn<(...args: unknown[]) => void>(),
     };
     private destroyed = false;
-    private readonly handlers = new Map<string, Array<() => void>>();
+    private readonly handlers = new Map<string, (() => void)[]>();
 
     constructor(options: Electron.BrowserWindowConstructorOptions) {
       this.options = options;
@@ -56,39 +59,35 @@ vi.mock(import("electron"), () => ({
       return this.destroyed;
     }
 
-    isMinimized(): boolean {
-      return false;
-    }
-
     on(event: string, handler: () => void): void {
       const handlers = this.handlers.get(event) ?? [];
       handlers.push(handler);
       this.handlers.set(event, handlers);
     }
-
-    restore(): void {}
-
-    show(): void {}
   } as unknown as typeof Electron.BrowserWindow,
 }));
 
 vi.mock(import("@electron-toolkit/utils"), () => ({ is: { dev: false } }));
 vi.mock(import("../src/main/app/native-mail-index-progress"), () => ({
-  applyNativeMailIndexProgress: vi.fn(),
+  applyNativeMailIndexProgress:
+    vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 vi.mock(import("../src/main/electron/shell"), () => ({
-  openExternalUrl: vi.fn(),
+  openExternalUrl: vi.fn<(rawUrl: unknown) => boolean>(() => true),
 }));
 vi.mock(import("../src/main/updates/updater"), () => ({
-  initializeAutoUpdates: vi.fn(),
+  initializeAutoUpdates: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 vi.mock(import("../src/main/window/native-context-menu"), () => ({
-  installNativeContextMenu: vi.fn(),
+  installNativeContextMenu: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 vi.mock(import("../src/main/window/window-state"), () => ({
-  MIN_WINDOW_SIZE: { height: 560, width: 860 },
-  readWindowState: vi.fn(() => ({ height: 670, width: 900 })),
-  writeWindowState: vi.fn(),
+  MIN_WINDOW_SIZE: { height: 560, width: 860 } as const,
+  readWindowState: vi.fn<() => { height: number; width: number }>(() => ({
+    height: 670,
+    width: 900,
+  })),
+  writeWindowState: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 
 describe(openThreadWindow, () => {
@@ -132,16 +131,14 @@ describe(openThreadWindow, () => {
       accountId: "same@example.com",
       threadId: "same-thread",
     };
-    let finishLoading = (): void => {};
-    electronState.loadBarrier = new Promise((resolve) => {
-      finishLoading = resolve;
-    });
+    const loadBarrier = Promise.withResolvers<null>();
+    electronState.loadBarrier = loadBarrier.promise;
 
     const firstWindow = openThreadWindow(request);
     const secondWindow = openThreadWindow(request);
 
     expect(electronState.createdWindows).toHaveLength(1);
-    finishLoading();
+    loadBarrier.resolve(null);
 
     const [first, second] = (await Promise.all([
       firstWindow,

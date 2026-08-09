@@ -124,9 +124,7 @@ const loadRenderer = (window: BrowserWindow, hash?: string): Promise<void> => {
 
   return window.loadFile(
     path.join(import.meta.dirname, "../renderer/index.html"),
-    {
-      ...(hash === undefined ? {} : { hash }),
-    }
+    hash === undefined ? {} : { hash }
   );
 };
 
@@ -209,10 +207,10 @@ export const openThreadWindow = async (
   try {
     await entry.loaded;
     return window;
-  } catch (cause) {
+  } catch (error) {
     if (!window.isDestroyed()) {
       window.destroy();
     }
-    throw cause;
+    throw error;
   }
 };

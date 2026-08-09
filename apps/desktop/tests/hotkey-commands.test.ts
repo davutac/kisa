@@ -73,9 +73,7 @@ describe("hotkey command registry", () => {
       "Shift+Enter",
     ]);
     expect(getHotkeyAriaLabel("thread.popout", "mac")).toBe("Shift+Enter");
-    expect(getHotkeyAriaLabel("thread.popout", "windows")).toBe(
-      "Shift+Enter"
-    );
+    expect(getHotkeyAriaLabel("thread.popout", "windows")).toBe("Shift+Enter");
   });
 
   it("assigns the unread filter", () => {

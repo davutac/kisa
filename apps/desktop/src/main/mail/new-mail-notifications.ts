@@ -149,6 +149,7 @@ const openNotificationThread = Effect.fn("openNotificationThread")(
     app.focus({ steal: true });
     window.focus();
   },
+  // oxlint-disable-next-line promise/prefer-await-to-then -- This is Effect error recovery, not Promise.prototype.catch.
   Effect.catch(() =>
     Effect.try({
       catch: () =>

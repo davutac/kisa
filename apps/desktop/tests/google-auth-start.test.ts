@@ -12,6 +12,7 @@ import {
 } from "../src/main/auth/auth";
 import { withDatabaseClient } from "../src/main/database";
 import type { sendRendererEvent } from "../src/main/electron/renderer-events";
+import type { getMainWindow } from "../src/main/window/create-window";
 
 const electronState = vi.hoisted(() => ({
   accountCount: 0,
@@ -54,6 +55,10 @@ vi.mock(import("../src/main/electron/renderer-events"), () => ({
 
 vi.mock(import("../src/main/auth/account-events"), () => ({
   notifyGoogleAccountConnected: vi.fn<typeof notifyGoogleAccountConnected>(),
+}));
+
+vi.mock(import("../src/main/window/create-window"), () => ({
+  getMainWindow: vi.fn<typeof getMainWindow>(() => {}),
 }));
 
 describe("Google authentication startup", () => {

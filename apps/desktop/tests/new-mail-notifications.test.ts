@@ -20,20 +20,26 @@ interface TestMessageRow {
 }
 
 const mocks = vi.hoisted(() => ({
-  appFocus: vi.fn(),
+  appFocus: vi.fn<typeof Electron.app.focus>(),
   brandIcon: { isEmpty: () => false },
   createdNotifications: [] as Record<string, unknown>[],
   mainWindow: {
-    focus: vi.fn(),
+    focus: vi.fn<() => void>(),
     isDestroyed: () => false,
     isMinimized: () => false,
-    restore: vi.fn(),
-    show: vi.fn(),
+    restore: vi.fn<() => void>(),
+    show: vi.fn<() => void>(),
   },
-  notificationListeners: [] as Map<string, () => void>[],
-  openThreadWindow: vi.fn(() => Promise.resolve()),
   messages: [] as TestMessageRow[],
+  notificationListeners: [] as Map<string, () => void>[],
   notificationsEnabled: true,
+  openThreadWindow:
+    vi.fn<
+      (request: {
+        readonly accountId: string;
+        readonly threadId: string;
+      }) => Promise<Electron.BrowserWindow>
+    >(),
   threads: [] as { readonly snippet: string; readonly threadId: string }[],
 }));
 
@@ -51,9 +57,7 @@ vi.mock(import("electron"), () => {
       return this;
     }
 
-    show(): void {
-      void this.once();
-    }
+    readonly show = vi.fn<() => void>();
   }
 
   return {
@@ -101,7 +105,9 @@ vi.mock(import("../src/main/window/create-window"), () => ({
   createWindow: vi.fn<() => Electron.BrowserWindow>(() => {
     throw new Error("Unexpected window creation");
   }),
-  getMainWindow: vi.fn(() => mocks.mainWindow),
+  getMainWindow: vi.fn<() => Electron.BrowserWindow | undefined>(
+    () => mocks.mainWindow as unknown as Electron.BrowserWindow
+  ),
   openThreadWindow: mocks.openThreadWindow,
 }));
 
@@ -130,10 +136,10 @@ describe(showNewMailNotifications, () => {
     mocks.notificationsEnabled = true;
     mocks.openThreadWindow.mockReset();
     mocks.openThreadWindow.mockResolvedValue({
-      focus: vi.fn(),
+      focus: vi.fn<() => void>(),
       isDestroyed: () => false,
-      show: vi.fn(),
-    });
+      show: vi.fn<() => void>(),
+    } as unknown as Electron.BrowserWindow);
     mocks.threads = [];
   });
 

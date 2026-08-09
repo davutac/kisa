@@ -1,6 +1,9 @@
 import type { UpdateStatus } from "../update-status";
-import type { AppStartupReply } from "./app";
-import type { ThreadWindowOpenReply, ThreadWindowOpenRequest } from "./app";
+import type {
+  AppStartupReply,
+  ThreadWindowOpenReply,
+  ThreadWindowOpenRequest,
+} from "./app";
 import type {
   GoogleAccount,
   GoogleAccountDisconnectRequest,
