@@ -19,6 +19,12 @@ vi.mock(import("../src/main/window/create-window"), () => ({
   openThreadWindow: mocks.openThreadWindow,
 }));
 
+// Importing startup reaches the database utility entry through its production
+// module-path import, which must not execute inside a Vitest worker.
+vi.mock(import("../src/main/app/startup"), () => ({
+  getAppStartupReply: vi.fn<() => Promise<{ readonly ok: true }>>(),
+}));
+
 describe("openThreadWindow IPC", () => {
   beforeEach(() => {
     mocks.openThreadWindow.mockReset();

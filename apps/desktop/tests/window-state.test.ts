@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import type * as Electron from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -92,7 +94,9 @@ describe("window state", () => {
     for (const [type, filename, bounds] of cases) {
       writeWindowState(createWindow(bounds), type);
 
-      expect(fileState.files.has(`/test/user-data/${filename}`)).toBeTruthy();
+      expect(
+        fileState.files.has(path.join("/test/user-data", filename))
+      ).toBeTruthy();
       expect(readWindowState(type)).toMatchObject(bounds);
     }
   });
