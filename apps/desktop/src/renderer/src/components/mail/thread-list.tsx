@@ -229,7 +229,7 @@ const MailThreadList = ({
   return (
     <section
       aria-label="Inbox"
-      className="scroll-fade-y relative overflow-x-hidden overflow-y-auto p-4"
+      className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4"
       ref={scrollElementRef}
       tabIndex={-1}
     >
