@@ -16,6 +16,7 @@ describe(getRuntimeCapabilities, () => {
       startup: undefined,
       updates: undefined,
       versions: undefined,
+      window: undefined,
     });
   });
 
@@ -33,6 +34,7 @@ describe(getRuntimeCapabilities, () => {
       startup: undefined,
       updates: undefined,
       versions: undefined,
+      window: undefined,
     });
   });
 
@@ -77,6 +79,8 @@ describe(getRuntimeCapabilities, () => {
     onMailThreadUpdated: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
     onUpdateStatus: () => () => {},
+    openThreadWindow: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     reorderGoogleAccounts: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     searchMail: () =>
@@ -151,6 +155,7 @@ describe(getRuntimeCapabilities, () => {
         onStatusChange: desktopBridge.onUpdateStatus,
       },
       versions,
+      window: { openThread: desktopBridge.openThreadWindow },
     });
   });
 
@@ -166,6 +171,7 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.settings === capabilities.settings,
       nextCapabilities.startup === capabilities.startup,
       nextCapabilities.updates === capabilities.updates,
-    ]).toStrictEqual([true, true, true, true, true, true]);
+      nextCapabilities.window === capabilities.window,
+    ]).toStrictEqual([true, true, true, true, true, true, true]);
   });
 });

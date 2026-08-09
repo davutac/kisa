@@ -12,7 +12,7 @@ Initial sync, expired-cursor recovery, historical indexing/backfill, label-only 
 
 A notification may use a BIMI sender logo only when Kisa already has a valid, unexpired brand candidate. That cache hit is only a quota-saving hint: Kisa re-reads the new message and runs its own authentication headers through the normal sender-brand validation. It then rasterizes the validated SVG to PNG for Electron's `NativeImage` API. It never applies a cached logo based on the sender-controlled `From` address alone.
 
-If the logo cannot be validated or converted to a native image, the notification falls back to the normal app presentation. Clicking an alert restores and focuses the Kisa window.
+If the logo cannot be validated or converted to a native image, the notification falls back to the normal app presentation. Clicking an alert—or its Open action on platforms that expose notification actions—opens and focuses the exact account-scoped conversation in a thread window. If that window cannot be created, Kisa restores and focuses the main window instead.
 
 ## Platform behavior
 

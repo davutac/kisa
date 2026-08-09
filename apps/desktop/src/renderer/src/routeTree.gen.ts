@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ThreadAccountIdThreadIdRouteImport } from './routes/thread.$accountId.$threadId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ThreadAccountIdThreadIdRoute = ThreadAccountIdThreadIdRouteImport.update({
+  id: '/thread/$accountId/$threadId',
+  path: '/thread/$accountId/$threadId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings'
+  fullPaths: '/' | '/settings' | '/thread/$accountId/$threadId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings'
-  id: '__root__' | '/' | '/settings'
+  to: '/' | '/settings' | '/thread/$accountId/$threadId'
+  id: '__root__' | '/' | '/settings' | '/thread/$accountId/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
+  ThreadAccountIdThreadIdRoute: typeof ThreadAccountIdThreadIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/thread/$accountId/$threadId': {
+      id: '/thread/$accountId/$threadId'
+      path: '/thread/$accountId/$threadId'
+      fullPath: '/thread/$accountId/$threadId'
+      preLoaderRoute: typeof ThreadAccountIdThreadIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
+  ThreadAccountIdThreadIdRoute: ThreadAccountIdThreadIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

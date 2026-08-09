@@ -4,6 +4,7 @@ import { is } from "@electron-toolkit/utils";
 import { BrowserWindow } from "electron";
 
 import { APP_NAME } from "@/constants";
+import type { ThreadWindowOpenRequest } from "@/shared/ipc/app";
 
 import icon from "../../../build/icon.png?asset";
 import { applyNativeMailIndexProgress } from "../app/native-mail-index-progress";
@@ -19,6 +20,20 @@ import {
 const TITLEBAR_HEIGHT = 42;
 const TRAFFIC_LIGHT_INSET = 18;
 const TRAFFIC_LIGHT_SIZE = 14;
+const THREAD_WINDOW_SIZE = {
+  height: 720,
+  minHeight: 420,
+  minWidth: 520,
+  width: 760,
+} as const;
+
+interface ThreadWindowEntry {
+  readonly loaded: Promise<void>;
+  readonly window: BrowserWindow;
+}
+
+let mainWindow: BrowserWindow | undefined;
+const threadWindows = new Map<string, ThreadWindowEntry>();
 
 const isSameDocumentNavigation = (
   currentUrl: string,
@@ -38,14 +53,19 @@ const isSameDocumentNavigation = (
   }
 };
 
-export const createWindow = (): BrowserWindow => {
-  const { isMaximized, ...windowBounds } = readWindowState();
-  const mainWindow = new BrowserWindow({
+const createBrowserWindow = (options: {
+  height: number;
+  minHeight: number;
+  minWidth: number;
+  title: string;
+  width: number;
+  x?: number;
+  y?: number;
+}): BrowserWindow =>
+  new BrowserWindow({
     autoHideMenuBar: true,
     backgroundColor: "#121212",
-    ...windowBounds,
-    minHeight: MIN_WINDOW_SIZE.height,
-    minWidth: MIN_WINDOW_SIZE.width,
+    ...options,
     ...(process.platform === "darwin"
       ? {
           trafficLightPosition: {
@@ -56,7 +76,6 @@ export const createWindow = (): BrowserWindow => {
       : {}),
     ...(process.platform === "linux" ? { icon } : {}),
     show: false,
-    title: APP_NAME,
     titleBarOverlay: {
       color: "#ffffff00",
       height: TITLEBAR_HEIGHT,
@@ -71,41 +90,129 @@ export const createWindow = (): BrowserWindow => {
     },
   });
 
-  applyNativeMailIndexProgress(mainWindow);
+const installWindowBehavior = (window: BrowserWindow): void => {
+  applyNativeMailIndexProgress(window);
+  installNativeContextMenu(window);
 
-  if (isMaximized === true) {
-    mainWindow.maximize();
-  }
-
-  initializeAutoUpdates(mainWindow);
-  installNativeContextMenu(mainWindow);
-
-  mainWindow.on("ready-to-show", () => {
-    mainWindow.show();
+  window.on("ready-to-show", () => {
+    window.show();
   });
-  mainWindow.on("close", () => {
-    writeWindowState(mainWindow);
-  });
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  window.webContents.setWindowOpenHandler(({ url }) => {
     openExternalUrl(url);
     return { action: "deny" };
   });
-  mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (isSameDocumentNavigation(mainWindow.webContents.getURL(), url)) {
+  window.webContents.on("will-navigate", (event, url) => {
+    if (isSameDocumentNavigation(window.webContents.getURL(), url)) {
       return;
     }
 
     event.preventDefault();
     openExternalUrl(url);
   });
+};
 
+const loadRenderer = (window: BrowserWindow, hash?: string): Promise<void> => {
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-    void mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
-  } else {
-    void mainWindow.loadFile(
-      path.join(import.meta.dirname, "../renderer/index.html")
-    );
+    const url = new URL(process.env["ELECTRON_RENDERER_URL"]);
+
+    if (hash !== undefined) {
+      url.hash = hash;
+    }
+
+    return window.loadURL(url.toString());
   }
 
-  return mainWindow;
+  return window.loadFile(
+    path.join(import.meta.dirname, "../renderer/index.html"),
+    {
+      ...(hash === undefined ? {} : { hash }),
+    }
+  );
+};
+
+export const getMainWindow = (): BrowserWindow | undefined =>
+  mainWindow?.isDestroyed() === false ? mainWindow : undefined;
+
+export const createWindow = (): BrowserWindow => {
+  const { isMaximized, ...windowBounds } = readWindowState();
+  const window = createBrowserWindow({
+    ...windowBounds,
+    minHeight: MIN_WINDOW_SIZE.height,
+    minWidth: MIN_WINDOW_SIZE.width,
+    title: APP_NAME,
+  });
+  mainWindow = window;
+
+  installWindowBehavior(window);
+
+  if (isMaximized === true) {
+    window.maximize();
+  }
+
+  initializeAutoUpdates(window);
+
+  window.on("close", () => {
+    writeWindowState(window);
+  });
+  window.on("closed", () => {
+    if (mainWindow === window) {
+      mainWindow = undefined;
+    }
+  });
+
+  void loadRenderer(window);
+
+  return window;
+};
+
+const getThreadWindowKey = ({
+  accountId,
+  threadId,
+}: ThreadWindowOpenRequest): string => `${accountId}\u0000${threadId}`;
+
+const focusWindow = (window: BrowserWindow): void => {
+  if (window.isMinimized()) {
+    window.restore();
+  }
+
+  window.show();
+  window.focus();
+};
+
+export const openThreadWindow = async (
+  request: ThreadWindowOpenRequest
+): Promise<BrowserWindow> => {
+  const key = getThreadWindowKey(request);
+  const existing = threadWindows.get(key);
+
+  if (existing !== undefined && !existing.window.isDestroyed()) {
+    await existing.loaded;
+    focusWindow(existing.window);
+    return existing.window;
+  }
+
+  const window = createBrowserWindow({
+    ...THREAD_WINDOW_SIZE,
+    title: `Conversation — ${APP_NAME}`,
+  });
+  const threadRoute = `/thread/${encodeURIComponent(request.accountId)}/${encodeURIComponent(request.threadId)}`;
+  installWindowBehavior(window);
+  const entry = { loaded: loadRenderer(window, threadRoute), window };
+  threadWindows.set(key, entry);
+
+  window.on("closed", () => {
+    if (threadWindows.get(key) === entry) {
+      threadWindows.delete(key);
+    }
+  });
+
+  try {
+    await entry.loaded;
+    return window;
+  } catch (cause) {
+    if (!window.isDestroyed()) {
+      window.destroy();
+    }
+    throw cause;
+  }
 };

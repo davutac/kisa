@@ -13,6 +13,10 @@ export interface AppLifecycleApi {
   onClosing: DesktopBridge["onAppClosing"];
 }
 
+export interface WindowApi {
+  openThread: DesktopBridge["openThreadWindow"];
+}
+
 export interface AuthApi {
   disconnectGoogleAccount: DesktopBridge["disconnectGoogleAccount"];
   listGoogleAccounts: DesktopBridge["listGoogleAccounts"];
@@ -65,6 +69,7 @@ export interface RuntimeCapabilities {
   startup?: AppStartupApi;
   updates?: UpdateApi;
   versions?: ElectronVersions;
+  window?: WindowApi;
 }
 
 interface DesktopCapabilities {
@@ -75,6 +80,7 @@ interface DesktopCapabilities {
   startup: AppStartupApi;
   updates: UpdateApi;
   versions: ElectronVersions;
+  window: WindowApi;
 }
 
 const capabilitiesByBridge = new WeakMap<DesktopBridge, DesktopCapabilities>();
@@ -132,6 +138,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       onStatusChange: bridge.onUpdateStatus,
     },
     versions: bridge.getVersions(),
+    window: { openThread: bridge.openThreadWindow },
   };
 
   capabilitiesByBridge.set(bridge, capabilities);
@@ -155,6 +162,7 @@ export const getRuntimeCapabilities = (
       startup: undefined,
       updates: undefined,
       versions: undefined,
+      window: undefined,
     };
   }
 
@@ -184,5 +192,8 @@ export const getUpdateApi = (): UpdateApi | undefined =>
 
 export const getElectronVersions = (): ElectronVersions | undefined =>
   getRuntimeCapabilities().versions;
+
+export const getWindowApi = (): WindowApi | undefined =>
+  getRuntimeCapabilities().window;
 
 export const isWebEnvironment = (): boolean => getRuntimeCapabilities().isWeb;

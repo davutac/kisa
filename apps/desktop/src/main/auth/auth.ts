@@ -6,7 +6,7 @@ import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
 import { count, eq as equals } from "drizzle-orm";
 import { Effect, Schema } from "effect";
-import { app, BrowserWindow, safeStorage, shell } from "electron";
+import { app, safeStorage, shell } from "electron";
 
 import {
   GOOGLE_AUTH_CALLBACK_URL,
@@ -25,6 +25,7 @@ import { AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels"
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { toIpcReply } from "../ipc/reply";
+import { getMainWindow } from "../window/create-window";
 import { notifyGoogleAccountConnected } from "./account-events";
 
 const AUTH_WORKER_URL =
@@ -101,7 +102,7 @@ export const notifyGoogleAccountsChanged = (
 };
 
 const focusAppWindow = (): void => {
-  const [window] = BrowserWindow.getAllWindows();
+  const window = getMainWindow();
 
   if (window === undefined || window.isDestroyed()) {
     return;

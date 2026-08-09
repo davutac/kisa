@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { toast } from "sonner";
 
 import MailThreadList from "@/components/mail/thread-list";
 import MailThreadView from "@/components/mail/thread-view";
@@ -9,18 +10,23 @@ import { parseThreadSelectionKey } from "@/mail/thread-selection";
 import { useMailIndexProgress } from "@/mail/use-mail-index-progress";
 import { useMailboxThreads } from "@/mail/use-mailbox-threads";
 import { useThreadActions } from "@/mail/use-thread-actions";
+import { getWindowApi } from "@/platform/desktop";
 import type { GmailIndexProgress } from "@/shared/ipc/mail";
 import { useGoogleAccounts } from "@/state/google-accounts";
 import {
   useOpenThreadId,
+  useMailboxStore,
   useSelectedAccountId,
   useShowUnread,
 } from "@/state/mailbox";
 
-const getEmptyMessage = (unreadOnly: boolean): string =>
-  unreadOnly
+export const Route = createFileRoute("/")({ component: HomeRoute });
+
+function getEmptyMessage(unreadOnly: boolean): string {
+  return unreadOnly
     ? "No unread email."
     : "No cached inbox messages yet. Email is fetched in the background.";
+}
 
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
   month: "long",
@@ -32,10 +38,10 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
  * of the mail, so the row says how far back the index has reached instead of
  * going quiet.
  */
-const getIndexingMessage = (
+function getIndexingMessage(
   progress: readonly GmailIndexProgress[],
   accountIds: readonly string[]
-): string | undefined => {
+): string | undefined {
   const running = progress.filter(
     (entry) =>
       (entry.status === "running" || entry.status === "queued") &&
@@ -53,14 +59,16 @@ const getIndexingMessage = (
   return oldest.length === 0
     ? "Indexing your mail…"
     : `Indexing your mail — back to ${MONTH_FORMAT.format(new Date(Math.min(...oldest)))}`;
-};
+}
 
-const HomeRoute = () => {
+function HomeRoute() {
   const accounts = useGoogleAccounts();
   const showUnread = useShowUnread();
   const selectedAccountId = useSelectedAccountId();
   const reloadRevision = useMailboxReloadRevision();
   const openThreadId = useOpenThreadId();
+  const closeThread = useMailboxStore((state) => state.closeThread);
+  const windowApi = getWindowApi();
   const openThread = parseThreadSelectionKey(openThreadId ?? "");
   const knownAccountId = accounts.some(
     ({ email }) => email === selectedAccountId
@@ -84,6 +92,27 @@ const HomeRoute = () => {
   const { toggleRead, trash } = useThreadActions();
   const indexProgress = useMailIndexProgress();
   const indexingMessage = getIndexingMessage(indexProgress, accountIds);
+  const popOutThread = useCallback(
+    async (thread: { accountId: string; threadId: string }): Promise<void> => {
+      if (windowApi === undefined) {
+        return;
+      }
+
+      try {
+        const reply = await windowApi.openThread(thread);
+
+        if (!reply.ok) {
+          toast.error(reply.error);
+          return;
+        }
+
+        closeThread();
+      } catch {
+        toast.error("Could not open the conversation in a new window");
+      }
+    },
+    [closeThread, windowApi]
+  );
 
   useHotkeyLayer("thread", openThread !== null);
 
@@ -109,6 +138,8 @@ const HomeRoute = () => {
           <MailThreadView
             accountId={openThread.accountId}
             key={`${openThread.accountId}:${openThread.threadId}`}
+            onClose={closeThread}
+            onPopOut={windowApi === undefined ? undefined : popOutThread}
             onToggleRead={toggleRead}
             onTrash={trash}
             threadId={openThread.threadId}
@@ -117,6 +148,4 @@ const HomeRoute = () => {
       )}
     </div>
   );
-};
-
-export const Route = createFileRoute("/")({ component: HomeRoute });
+}

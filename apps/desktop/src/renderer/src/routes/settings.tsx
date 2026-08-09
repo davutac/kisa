@@ -20,7 +20,11 @@ import { getRuntimeCapabilities } from "@/platform/desktop";
 import SettingsAccountsSection from "./-components/settings-accounts-section";
 import SettingsUpdateRow from "./-components/settings-update-row";
 
-const SettingsRoute = () => {
+export const Route = createFileRoute("/settings")({
+  component: SettingsRoute,
+});
+
+function SettingsRoute() {
   const { auth, mail, settings, updates, versions } = getRuntimeCapabilities();
 
   useHotkeyLayer("settings", true);
@@ -68,8 +72,4 @@ const SettingsRoute = () => {
       </Settings>
     </section>
   );
-};
-
-export const Route = createFileRoute("/settings")({
-  component: SettingsRoute,
-});
+}

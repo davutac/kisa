@@ -1,6 +1,6 @@
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { Effect } from "effect";
-import { app, BrowserWindow } from "electron";
+import { app } from "electron";
 
 import icon from "../../build/icon.png?asset";
 import { AppClosingEvent } from "../shared/ipc/app";
@@ -12,13 +12,13 @@ import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailSync } from "./mail/mail-sync";
-import { createWindow } from "./window/create-window";
+import { createWindow, getMainWindow } from "./window/create-window";
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (hasSingleInstanceLock) {
   registerAppProtocol({
-    getWindow: () => BrowserWindow.getAllWindows()[0],
+    getWindow: getMainWindow,
     onGoogleCallback: handleGoogleAuthCallback,
   });
 
@@ -51,7 +51,7 @@ if (hasSingleInstanceLock) {
     app.on("activate", () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (getMainWindow() === undefined) {
         createWindow();
       }
     });

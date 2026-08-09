@@ -1,11 +1,15 @@
 import { Effect, Schema } from "effect";
-import { app, BrowserWindow, nativeImage, Notification } from "electron";
+import { app, nativeImage, Notification } from "electron";
 import type { NativeImage } from "electron";
 import sharp from "sharp";
 
 import type { GmailSenderBrand } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
-import { createWindow } from "../window/create-window";
+import {
+  createWindow,
+  getMainWindow,
+  openThreadWindow,
+} from "../window/create-window";
 
 const GMAIL_INBOX_LABEL = "INBOX";
 const GMAIL_UNREAD_LABEL = "UNREAD";
@@ -106,7 +110,7 @@ export const toNewMailNotificationCopy = (
 };
 
 const focusMainWindow = (): void => {
-  const window = BrowserWindow.getAllWindows()[0] ?? createWindow();
+  const window = getMainWindow() ?? createWindow();
 
   if (window.isDestroyed()) {
     return;
@@ -120,6 +124,41 @@ const focusMainWindow = (): void => {
   app.focus({ steal: true });
   window.focus();
 };
+
+const openNotificationThread = Effect.fn("openNotificationThread")(
+  function* openNotificationThread(message: NewMailNotificationMessage) {
+    const window = yield* Effect.tryPromise({
+      catch: () =>
+        new NewMailNotificationError({
+          message: "Could not open a notification conversation",
+        }),
+      try: () =>
+        openThreadWindow({
+          accountId: message.accountId,
+          threadId: message.threadId,
+        }),
+    });
+
+    if (window.isDestroyed()) {
+      return yield* new NewMailNotificationError({
+        message: "Notification conversation window was closed",
+      });
+    }
+
+    window.show();
+    app.focus({ steal: true });
+    window.focus();
+  },
+  Effect.catch(() =>
+    Effect.try({
+      catch: () =>
+        new NewMailNotificationError({
+          message: "Could not focus the application window",
+        }),
+      try: focusMainWindow,
+    }).pipe(Effect.ignore)
+  )
+);
 
 const activeNotifications = new Set<Notification>();
 const brandIcons = new Map<string, NativeImage>();
@@ -191,6 +230,7 @@ const showNotification = (
     MAX_NOTIFICATION_HEADING_BYTES
   );
   const notification = new Notification({
+    actions: [{ text: "Open", type: "button" }],
     body: copy.body,
     groupId: message.accountId,
     groupTitle: accountTitle,
@@ -202,11 +242,19 @@ const showNotification = (
   const release = (): void => {
     activeNotifications.delete(notification);
   };
+  let wasActivated = false;
+  const activate = (): void => {
+    if (wasActivated) {
+      return;
+    }
 
-  notification.once("click", () => {
+    wasActivated = true;
     release();
-    focusMainWindow();
-  });
+    void Effect.runPromise(openNotificationThread(message));
+  };
+
+  notification.once("action", activate);
+  notification.once("click", activate);
   notification.once("close", release);
   notification.once("failed", release);
 

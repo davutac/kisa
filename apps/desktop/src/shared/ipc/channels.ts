@@ -1,5 +1,6 @@
 export const APP_START_CHANNEL = "desktop:app:start";
 export const APP_CLOSING_CHANNEL = "desktop:app:closing";
+export const APP_OPEN_THREAD_WINDOW_CHANNEL = "desktop:app:open-thread-window";
 
 export const AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL =
   "desktop:auth:google-accounts-changed";

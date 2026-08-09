@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 
 import { DesktopIpc } from "./desktop-ipc";
-import { startApp } from "./methods/app";
+import { openThreadWindow, startApp } from "./methods/app";
 import {
   disconnectAccount,
   listAccounts,
@@ -33,6 +33,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   const ipc = yield* DesktopIpc;
 
   yield* ipc.handle(startApp);
+  yield* ipc.handle(openThreadWindow);
   yield* ipc.handle(startGoogle);
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);

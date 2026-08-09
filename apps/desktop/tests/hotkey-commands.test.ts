@@ -68,6 +68,16 @@ describe("hotkey command registry", () => {
     ).toStrictEqual([["⌫"], ["⌦"]]);
   });
 
+  it("assigns the thread popout shortcut", () => {
+    expect(HOTKEY_COMMANDS["thread.popout"].bindings).toStrictEqual([
+      "Shift+Enter",
+    ]);
+    expect(getHotkeyAriaLabel("thread.popout", "mac")).toBe("Shift+Enter");
+    expect(getHotkeyAriaLabel("thread.popout", "windows")).toBe(
+      "Shift+Enter"
+    );
+  });
+
   it("assigns the unread filter", () => {
     expect(HOTKEY_COMMANDS["app.toggleUnread"].bindings).toStrictEqual(["U"]);
   });

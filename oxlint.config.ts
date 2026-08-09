@@ -12,4 +12,23 @@ export default defineConfig({
     "packages/database/drizzle/**/snapshot.json",
     "repos/**",
   ],
+  overrides: [
+    {
+      excludeFiles: [
+        "apps/desktop/src/renderer/src/routes/**/-components/**/*.tsx",
+      ],
+      files: ["apps/desktop/src/renderer/src/routes/**/*.tsx"],
+      rules: {
+        "func-style": ["error", "declaration"],
+        "no-use-before-define": ["error", { functions: false }],
+        "react/function-component-definition": [
+          "error",
+          {
+            namedComponents: "function-declaration",
+            unnamedComponents: "arrow-function",
+          },
+        ],
+      },
+    },
+  ],
 });

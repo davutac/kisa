@@ -51,6 +51,8 @@ Account commands are static and cover the supported maximum of nine accounts. Th
 
 When a mailbox thread is selected, `M` toggles its read state. Both `Backspace` and `Delete` move it to trash, covering the Mac key labeled `⌫`, Mac forward-delete, and the Windows/Linux Delete key. These commands are not registered for hover-only quick actions.
 
+While reading a conversation in the main window, `Shift+Enter` opens it in a thread window and closes the inline conversation. The command is disabled inside the resulting thread window because it is already popped out.
+
 ## Interaction layers
 
 Mounted features declare their active layer with `useHotkeyLayer`:

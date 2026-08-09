@@ -1,5 +1,6 @@
 import type { UpdateStatus } from "../update-status";
 import type { AppStartupReply } from "./app";
+import type { ThreadWindowOpenReply, ThreadWindowOpenRequest } from "./app";
 import type {
   GoogleAccount,
   GoogleAccountDisconnectRequest,
@@ -91,6 +92,9 @@ export interface DesktopBridge {
     listener: (reply: GmailTrustedImageSendersReply) => void
   ) => () => void;
   onUpdateStatus: (listener: (status: UpdateStatus) => void) => () => void;
+  openThreadWindow: (
+    request: ThreadWindowOpenRequest
+  ) => Promise<ThreadWindowOpenReply>;
   reorderGoogleAccounts: (
     request: GoogleAccountReorderRequest
   ) => Promise<GoogleAccountReorderReply>;

@@ -236,6 +236,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "thread",
   },
+  "thread.popout": {
+    bindings: ["Shift+Enter"],
+    input: "ignore",
+    label: "Open in new window",
+    repeat: "once",
+    scope: "thread",
+  },
 } as const satisfies Record<string, HotkeyCommandDefinition>;
 
 export type HotkeyCommandId = keyof typeof HOTKEY_COMMANDS;

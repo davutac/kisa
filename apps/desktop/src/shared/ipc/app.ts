@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+import { IpcReply } from "./reply";
+
 export const AppClosingEvent = Schema.Literal("closing");
 
 export const AppStartupErrorPayload = Schema.Struct({
@@ -14,3 +16,12 @@ export const AppStartupReply = Schema.Union([
   Schema.Struct({ error: AppStartupErrorPayload, ok: Schema.Literal(false) }),
 ]);
 export type AppStartupReply = typeof AppStartupReply.Type;
+
+export const ThreadWindowOpenRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  threadId: Schema.NonEmptyString,
+});
+export type ThreadWindowOpenRequest = typeof ThreadWindowOpenRequest.Type;
+
+export const ThreadWindowOpenReply = IpcReply(Schema.Void);
+export type ThreadWindowOpenReply = typeof ThreadWindowOpenReply.Type;

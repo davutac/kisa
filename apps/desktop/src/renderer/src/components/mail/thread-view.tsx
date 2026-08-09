@@ -3,6 +3,7 @@ import { useCallback } from "react";
 
 import MailThreadConversation from "@/components/mail/thread-conversation";
 import MailThreadHeader from "@/components/mail/thread-header";
+import ThreadLabels from "@/components/mail/thread-labels";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -17,7 +18,6 @@ import type {
   ThreadActionTarget,
 } from "@/mail/use-thread-actions";
 import type { GmailThread } from "@/shared/ipc/mail";
-import { useMailboxStore } from "@/state/mailbox";
 
 const ThreadPending = () => (
   <Empty aria-live="polite" className="h-full min-h-0 border-0">
@@ -31,9 +31,11 @@ const ThreadPending = () => (
 );
 
 const ThreadError = ({
+  closeLabel,
   message,
   onClose,
 }: {
+  closeLabel: string;
   message: string;
   onClose: () => void;
 }) => (
@@ -44,7 +46,7 @@ const ThreadError = ({
       </EmptyMedia>
       <EmptyTitle>{message}</EmptyTitle>
       <Button onClick={onClose} type="button" variant="outline">
-        Back to inbox
+        {closeLabel}
       </Button>
     </EmptyHeader>
   </Empty>
@@ -52,23 +54,34 @@ const ThreadError = ({
 
 interface MailThreadViewProps {
   accountId: string;
+  closeLabel?: string;
+  onClose: () => void;
+  onPopOut?: (
+    target: Pick<ThreadActionTarget, "accountId" | "threadId">
+  ) => Promise<void>;
   onToggleRead: ThreadActions["toggleRead"];
   onTrash: ThreadActions["trash"];
+  showCloseButton?: boolean;
   threadId: string;
 }
 
 interface MailThreadContentProps {
+  onClose: () => void;
+  onPopOut?: MailThreadViewProps["onPopOut"];
   onToggleRead: ThreadActions["toggleRead"];
   onTrash: ThreadActions["trash"];
+  showCloseButton?: boolean;
   thread: GmailThread;
 }
 
 const MailThreadContent = ({
+  onClose,
+  onPopOut,
   onToggleRead,
   onTrash,
+  showCloseButton,
   thread,
 }: MailThreadContentProps) => {
-  const closeThread = useMailboxStore((state) => state.closeThread);
   const { accountId, threadId } = thread;
   const isUnread = thread.labels.includes("UNREAD");
   const handleToggleRead = useCallback((): void => {
@@ -81,9 +94,16 @@ const MailThreadContent = ({
   const handleTrash = useCallback((): void => {
     onTrash(
       { accountId, isUnread, threadId } satisfies ThreadActionTarget,
-      closeThread
+      onClose
     );
-  }, [accountId, closeThread, isUnread, onTrash, threadId]);
+  }, [accountId, isUnread, onClose, onTrash, threadId]);
+  const handlePopOut = useCallback((): void => {
+    if (onPopOut === undefined) {
+      return;
+    }
+
+    void onPopOut({ accountId, threadId });
+  }, [accountId, onPopOut, threadId]);
   const latestMessage = thread.messages.at(-1);
 
   return (
@@ -92,14 +112,16 @@ const MailThreadContent = ({
     // behind it.
     <section className="relative flex w-full min-w-0 flex-col gap-px px-4 pb-4 *:last:rounded-b-lg">
       <MailThreadHeader
-        accountId={thread.accountId}
         isUnread={isUnread}
-        labels={thread.labels}
         latestAt={latestMessage?.sentAt}
+        onClose={onClose}
+        onPopOut={onPopOut === undefined ? undefined : handlePopOut}
         onToggleRead={handleToggleRead}
         onTrash={handleTrash}
+        showCloseButton={showCloseButton}
         subject={thread.subject}
       />
+      <ThreadLabels accountId={thread.accountId} labels={thread.labels} />
       <MailThreadConversation
         accountId={thread.accountId}
         messages={thread.messages}
@@ -111,11 +133,14 @@ const MailThreadContent = ({
 
 const MailThreadView = ({
   accountId,
+  closeLabel = "Back to inbox",
+  onClose,
+  onPopOut,
   onToggleRead,
   onTrash,
+  showCloseButton,
   threadId,
 }: MailThreadViewProps) => {
-  const closeThread = useMailboxStore((state) => state.closeThread);
   const state = useMailThread(accountId, threadId);
 
   if (state.status === "loading") {
@@ -123,13 +148,22 @@ const MailThreadView = ({
   }
 
   if (state.status === "error") {
-    return <ThreadError message={state.message} onClose={closeThread} />;
+    return (
+      <ThreadError
+        closeLabel={closeLabel}
+        message={state.message}
+        onClose={onClose}
+      />
+    );
   }
 
   return (
     <MailThreadContent
+      onClose={onClose}
+      onPopOut={onPopOut}
       onToggleRead={onToggleRead}
       onTrash={onTrash}
+      showCloseButton={showCloseButton}
       thread={state.thread}
     />
   );

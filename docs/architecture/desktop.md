@@ -21,6 +21,8 @@ React feature / hook
 
 Events take the reverse path. `main/electron/renderer-events.ts` encodes the payload before sending it; `preload/subscribe.ts` decodes it before notifying a renderer listener. Every subscription returns an exact unsubscribe function.
 
+Conversation popouts use the same boundary. The main mailbox requests an account-scoped thread window through a schema-validated IPC method, and only closes its inline conversation after the new window's renderer has loaded. Each popout loads the dedicated `/thread/$accountId/$threadId` hash route, reuses the existing mail bridge, and has minimal window chrome. A second request for the same account and Gmail thread focuses the existing popout; the main window remains the explicit target for app activation, OAuth handoff, and notification-click fallback.
+
 ## Ownership
 
 ```text
