@@ -31,6 +31,7 @@ export interface NewMailNotificationMessage {
 
 export interface NewMailNotificationCopy {
   readonly body: string;
+  readonly subtitle: string;
   readonly title: string;
 }
 
@@ -85,15 +86,18 @@ const truncateNotificationText = (value: string, maxBytes: number): string => {
 export const toNewMailNotificationCopy = (
   message: NewMailNotificationMessage
 ): NewMailNotificationCopy => {
-  const sender = cleanNotificationText(message.fromName ?? message.fromAddress);
+  const senderName = cleanNotificationText(message.fromName ?? "");
+  const senderAddress = cleanNotificationText(message.fromAddress);
   const subject = cleanNotificationText(message.subject) || "(No subject)";
   const snippet = cleanNotificationText(message.snippet);
+  const sender =
+    senderName.length === 0 || senderName === senderAddress
+      ? senderAddress
+      : `${senderName} <${senderAddress}>`;
 
   return {
-    body: truncateNotificationText(
-      snippet.length === 0 ? subject : `${subject} — ${snippet}`,
-      MAX_NOTIFICATION_BODY_BYTES
-    ),
+    body: truncateNotificationText(snippet, MAX_NOTIFICATION_BODY_BYTES),
+    subtitle: truncateNotificationText(subject, MAX_NOTIFICATION_HEADING_BYTES),
     title: truncateNotificationText(
       sender.length === 0 ? message.fromAddress : sender,
       MAX_NOTIFICATION_HEADING_BYTES
@@ -191,7 +195,7 @@ const showNotification = (
     groupId: message.accountId,
     groupTitle: accountTitle,
     id: `${message.accountId}:${message.messageId}`,
-    subtitle: accountTitle,
+    subtitle: copy.subtitle,
     title: copy.title,
     ...(brandIcon === null ? {} : { icon: brandIcon }),
   });

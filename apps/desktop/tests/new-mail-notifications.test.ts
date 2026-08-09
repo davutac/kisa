@@ -164,8 +164,9 @@ describe(showNewMailNotifications, () => {
     expect(resolveBrand).toHaveBeenCalledOnce();
     expect(mocks.createdNotifications).toHaveLength(1);
     expect(mocks.createdNotifications[0]).toMatchObject({
-      body: "A subject — A short preview",
-      title: "Sender",
+      body: "A short preview",
+      subtitle: "A subject",
+      title: "Sender <sender@example.com>",
     });
   });
 
