@@ -27,6 +27,12 @@ export default defineConfig({
     build: {
       externalizeDeps: false,
       rolldownOptions: {
+        input: {
+          "attachment-preview": path.resolve(
+            "src/preload/attachment-preview.ts"
+          ),
+          index: path.resolve("src/preload/index.ts"),
+        },
         output: {
           entryFileNames: "[name].cjs",
           format: "cjs",
@@ -35,6 +41,16 @@ export default defineConfig({
     },
   },
   renderer: {
+    build: {
+      rolldownOptions: {
+        input: {
+          "attachment-preview": path.resolve(
+            "src/renderer/attachment-preview.html"
+          ),
+          index: path.resolve("src/renderer/index.html"),
+        },
+      },
+    },
     plugins: [
       tanstackRouter({
         generatedRouteTree: "./src/routeTree.gen.ts",

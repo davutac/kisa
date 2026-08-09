@@ -61,6 +61,7 @@ catalog:
   oxfmt: ^0.62.0
   oxlint: ^1.77.0
   oxlint-tsgolint: 7.0.2001
+  pdfjs-dist: ^6.2.108
   react: ^19.2.8
   react-day-picker: ^10.0.1
   react-dom: ^19.2.8

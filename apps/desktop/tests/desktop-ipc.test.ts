@@ -3,6 +3,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import type { IpcMainInvokeEvent } from "electron";
 
 import * as DesktopIpc from "../src/main/ipc/desktop-ipc";
 import { DesktopIpcRegistrationError } from "../src/main/ipc/desktop-ipc-registration-error";
@@ -38,7 +39,11 @@ describe(DesktopIpc.DesktopIpc, () => {
         const ipc = DesktopIpc.make(ipcMain);
         const method = DesktopIpc.makeIpcMethod({
           channel: "desktop:test:double",
-          handler: ({ value }) => Effect.succeed({ value: value * 2 }),
+          handler: ({ value }, event) =>
+            Effect.sync(() => {
+              expect(event?.sender.id).toBe(7);
+              return { value: value * 2 };
+            }),
           payload: Schema.Struct({ value: Schema.Finite }),
           result: Schema.Struct({ value: Schema.Finite }),
         });
@@ -51,7 +56,11 @@ describe(DesktopIpc.DesktopIpc, () => {
 
             expect(listener).toBeDefined();
             encodedResult = yield* Effect.promise(() =>
-              Promise.resolve(listener?.({}, { value: 21 }))
+              Promise.resolve(
+                listener?.({ sender: { id: 7 } } as IpcMainInvokeEvent, {
+                  value: 21,
+                })
+              )
             );
             expect(encodedResult).toStrictEqual({ value: 42 });
           })

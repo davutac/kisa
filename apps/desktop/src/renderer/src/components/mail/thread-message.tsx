@@ -64,7 +64,10 @@ const MailThreadMessage = ({
               fallbackText={message.snippet}
             />
           </div>
-          <MailMessageAttachments attachments={message.attachments} />
+          <MailMessageAttachments
+            accountId={accountId}
+            attachments={message.attachments}
+          />
         </>
       ) : null}
     </article>

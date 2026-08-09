@@ -3,12 +3,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
+import type { IpcMainInvokeEvent } from "electron";
 
 import { DesktopIpcRegistrationError } from "./desktop-ipc-registration-error";
 import { DesktopIpcUnregistrationError } from "./desktop-ipc-unregistration-error";
 
 export type DesktopIpcHandleListener = (
-  event: unknown,
+  event: IpcMainInvokeEvent,
   raw: unknown
 ) => unknown | Promise<unknown>;
 
@@ -19,7 +20,10 @@ export interface DesktopIpcMain {
 
 export interface DesktopIpcMethod<E, R> {
   readonly channel: string;
-  readonly handler: (raw: unknown) => Effect.Effect<unknown, E, R>;
+  readonly handler: (
+    raw: unknown,
+    event?: IpcMainInvokeEvent
+  ) => Effect.Effect<unknown, E, R>;
 }
 
 export class DesktopIpc extends Context.Service<
@@ -45,9 +49,9 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
           catch: (cause) => new DesktopIpcRegistrationError({ cause, channel }),
           try: () => {
             ipcMain.removeHandler(channel);
-            ipcMain.handle(channel, (_event, raw) =>
+            ipcMain.handle(channel, (event, raw) =>
               runPromise(
-                handler(raw).pipe(
+                handler(raw, event).pipe(
                   Effect.annotateLogs({ channel }),
                   Effect.withSpan("desktop.ipc.invoke", {
                     attributes: { channel },
@@ -83,7 +87,10 @@ export interface DesktopIpcMethodRegistration<
   ResultEncodingServices = never,
 > {
   readonly channel: string;
-  readonly handler: (input: Payload) => Effect.Effect<Result, E, R>;
+  readonly handler: (
+    input: Payload,
+    event?: IpcMainInvokeEvent
+  ) => Effect.Effect<Result, E, R>;
   readonly payload: Schema.Codec<
     Payload,
     EncodedPayload,
@@ -131,9 +138,9 @@ export const makeIpcMethod = <
 
   return {
     channel: method.channel,
-    handler: (raw) =>
+    handler: (raw, event) =>
       decode(raw).pipe(
-        Effect.flatMap(method.handler),
+        Effect.flatMap((input) => method.handler(input, event)),
         Effect.flatMap(encode),
         Effect.withSpan("desktop.ipc.method", {
           attributes: { channel: method.channel },

@@ -105,7 +105,10 @@ const MailReplyArea = ({
       {isForward ? (
         <>
           <MailForwardedMessage message={message} />
-          <MailMessageAttachments attachments={message.attachments} />
+          <MailMessageAttachments
+            accountId={accountId}
+            attachments={message.attachments}
+          />
         </>
       ) : null}
       <div className="bg-card flex items-center gap-2 p-4">

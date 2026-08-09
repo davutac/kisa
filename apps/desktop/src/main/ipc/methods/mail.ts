@@ -1,13 +1,18 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { BrowserWindow } from "electron";
 
 import {
+  ATTACHMENT_PREVIEW_LOAD_CHANNEL,
+  ATTACHMENT_PREVIEW_SAVE_CHANNEL,
   MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
   MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
+  MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
+  MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
@@ -18,6 +23,10 @@ import {
   MAIL_TRUST_IMAGE_SENDER_CHANNEL,
 } from "../../../shared/ipc/channels";
 import {
+  GmailAttachmentActionReply,
+  GmailAttachmentPreviewReply,
+  GmailAttachmentRequest,
+  GmailAttachmentSaveReply,
   GmailCachedThreadPageReply,
   GmailCachedThreadPageRequest,
   GmailIndexProgressList,
@@ -39,6 +48,12 @@ import {
   GmailTrustedImageSenderRequest,
   GmailTrustedImageSendersReply,
 } from "../../../shared/ipc/mail";
+import {
+  loadAttachmentPreview as loadAttachmentPreviewAction,
+  openAttachmentPreview as openAttachmentPreviewAction,
+  saveAttachment as saveAttachmentAction,
+  saveAttachmentPreview as saveAttachmentPreviewAction,
+} from "../../mail/attachment-actions";
 import { getMailIndexProgress } from "../../mail/mail-backfill";
 import {
   listIndexedSenders,
@@ -61,6 +76,71 @@ import {
 } from "../../mail/trusted-image-senders";
 import { makeIpcMethod } from "../desktop-ipc";
 import { toIpcReply } from "../reply";
+
+export const openAttachmentPreview = makeIpcMethod({
+  channel: MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
+  handler: (request) =>
+    toIpcReply(
+      openAttachmentPreviewAction(request),
+      "Could not open attachment preview"
+    ),
+  payload: GmailAttachmentRequest,
+  result: GmailAttachmentActionReply,
+});
+
+export const saveAttachment = makeIpcMethod({
+  channel: MAIL_SAVE_ATTACHMENT_CHANNEL,
+  handler: (request, event) => {
+    const window =
+      event === undefined
+        ? undefined
+        : BrowserWindow.fromWebContents(event.sender);
+
+    return window === undefined || window === null
+      ? Effect.succeed({
+          error: "Could not open the save dialog",
+          ok: false as const,
+        })
+      : toIpcReply(
+          saveAttachmentAction(request, window),
+          "Could not save attachment"
+        );
+  },
+  payload: GmailAttachmentRequest,
+  result: GmailAttachmentSaveReply,
+});
+
+export const loadAttachmentPreview = makeIpcMethod({
+  channel: ATTACHMENT_PREVIEW_LOAD_CHANNEL,
+  handler: (_request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Attachment preview is unavailable",
+          ok: false as const,
+        })
+      : toIpcReply(
+          loadAttachmentPreviewAction(event.sender.id),
+          "Could not load attachment"
+        ),
+  payload: Schema.Void,
+  result: GmailAttachmentPreviewReply,
+});
+
+export const saveAttachmentPreview = makeIpcMethod({
+  channel: ATTACHMENT_PREVIEW_SAVE_CHANNEL,
+  handler: (_request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Attachment preview is unavailable",
+          ok: false as const,
+        })
+      : toIpcReply(
+          saveAttachmentPreviewAction(event.sender.id),
+          "Could not save attachment"
+        ),
+  payload: Schema.Void,
+  result: GmailAttachmentSaveReply,
+});
 
 export const getSyncStatus = makeIpcMethod({
   channel: MAIL_SYNC_STATUS_CHANNEL,

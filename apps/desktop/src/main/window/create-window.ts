@@ -1,15 +1,15 @@
 import path from "node:path";
 
 import { is } from "@electron-toolkit/utils";
-import { BrowserWindow } from "electron";
+import type { BrowserWindow } from "electron";
 
 import { APP_NAME } from "@/constants";
 import type { ThreadWindowOpenRequest } from "@/shared/ipc/app";
 
-import icon from "../../../build/icon.png?asset";
 import { applyNativeMailIndexProgress } from "../app/native-mail-index-progress";
 import { openExternalUrl } from "../electron/shell";
 import { initializeAutoUpdates } from "../updates/updater";
+import { createBrowserWindow } from "./browser-window";
 import { installNativeContextMenu } from "./native-context-menu";
 import {
   MIN_WINDOW_SIZE,
@@ -17,9 +17,6 @@ import {
   writeWindowState,
 } from "./window-state";
 
-const TITLEBAR_HEIGHT = 42;
-const TRAFFIC_LIGHT_INSET = 18;
-const TRAFFIC_LIGHT_SIZE = 14;
 const THREAD_WINDOW_SIZE = {
   height: 720,
   minHeight: 420,
@@ -52,43 +49,6 @@ const isSameDocumentNavigation = (
     return false;
   }
 };
-
-const createBrowserWindow = (options: {
-  height: number;
-  minHeight: number;
-  minWidth: number;
-  title: string;
-  width: number;
-  x?: number;
-  y?: number;
-}): BrowserWindow =>
-  new BrowserWindow({
-    autoHideMenuBar: true,
-    backgroundColor: "#121212",
-    ...options,
-    ...(process.platform === "darwin"
-      ? {
-          trafficLightPosition: {
-            x: TRAFFIC_LIGHT_INSET,
-            y: Math.round((TITLEBAR_HEIGHT - TRAFFIC_LIGHT_SIZE) / 2),
-          },
-        }
-      : {}),
-    ...(process.platform === "linux" ? { icon } : {}),
-    show: false,
-    titleBarOverlay: {
-      color: "#ffffff00",
-      height: TITLEBAR_HEIGHT,
-      symbolColor: "#f5f5f5",
-    },
-    titleBarStyle: "hidden",
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      preload: path.join(import.meta.dirname, "../preload/index.cjs"),
-      sandbox: true,
-    },
-  });
 
 const installWindowBehavior = (window: BrowserWindow): void => {
   applyNativeMailIndexProgress(window);
@@ -189,15 +149,23 @@ export const openThreadWindow = async (
     return existing.window;
   }
 
+  const { isMaximized, ...windowBounds } = readWindowState("thread");
   const window = createBrowserWindow({
     ...THREAD_WINDOW_SIZE,
+    ...windowBounds,
     title: `Conversation — ${APP_NAME}`,
   });
+  if (isMaximized === true) {
+    window.maximize();
+  }
   const threadRoute = `/thread/${encodeURIComponent(request.accountId)}/${encodeURIComponent(request.threadId)}`;
   installWindowBehavior(window);
   const entry = { loaded: loadRenderer(window, threadRoute), window };
   threadWindows.set(key, entry);
 
+  window.on("close", () => {
+    writeWindowState(window, "thread");
+  });
   window.on("closed", () => {
     if (threadWindows.get(key) === entry) {
       threadWindows.delete(key);

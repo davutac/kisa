@@ -13,7 +13,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "build": "pnpm run typecheck && electron-vite build",
+    "build": "pnpm run typecheck && electron-vite build && node scripts/check-preload-bundles.mjs",
     "build:linux": "electron-builder --linux",
     "build:mac": "electron-builder --mac",
     "build:unpack": "electron-builder --dir",
@@ -57,6 +57,7 @@
     "lucide-react": "catalog:",
     "motion": "catalog:",
     "next-themes": "catalog:",
+    "pdfjs-dist": "catalog:",
     "react-day-picker": "catalog:",
     "react-resizable-panels": "catalog:",
     "recharts": "catalog:",

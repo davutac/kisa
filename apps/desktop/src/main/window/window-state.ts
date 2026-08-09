@@ -11,7 +11,7 @@ export const MIN_WINDOW_SIZE = {
   width: 860,
 } as const;
 
-const WINDOW_STATE_FILE = "window-state.json";
+export type WindowStateType = "attachment-preview" | "main" | "thread";
 
 const WindowStateSchema = Schema.Struct({
   height: Schema.Finite,
@@ -28,8 +28,33 @@ const DEFAULT_WINDOW_STATE: WindowState = {
   width: 900,
 };
 
-const getWindowStatePath = (): string =>
-  path.join(app.getPath("userData"), WINDOW_STATE_FILE);
+const WINDOW_STATE_CONFIG = {
+  "attachment-preview": {
+    defaultState: { height: 760, width: 920 },
+    filename: "attachment-preview-window-state.json",
+    minimumSize: { height: 420, width: 520 },
+  },
+  main: {
+    defaultState: DEFAULT_WINDOW_STATE,
+    filename: "window-state.json",
+    minimumSize: MIN_WINDOW_SIZE,
+  },
+  thread: {
+    defaultState: { height: 720, width: 760 },
+    filename: "thread-window-state.json",
+    minimumSize: { height: 420, width: 520 },
+  },
+} as const satisfies Record<
+  WindowStateType,
+  {
+    readonly defaultState: WindowState;
+    readonly filename: string;
+    readonly minimumSize: { readonly height: number; readonly width: number };
+  }
+>;
+
+const getWindowStatePath = (type: WindowStateType): string =>
+  path.join(app.getPath("userData"), WINDOW_STATE_CONFIG[type].filename);
 
 const formatErrorCause = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
@@ -113,15 +138,13 @@ const decodeWindowState = Schema.decodeUnknownEffect(
   Schema.fromJsonString(WindowStateSchema)
 );
 
-const normalizeWindowState = ({
-  height,
-  isMaximized,
-  width,
-  x,
-  y,
-}: WindowState): WindowState => {
-  const normalizedHeight = Math.max(height, MIN_WINDOW_SIZE.height);
-  const normalizedWidth = Math.max(width, MIN_WINDOW_SIZE.width);
+const normalizeWindowState = (
+  { height, isMaximized, width, x, y }: WindowState,
+  type: WindowStateType
+): WindowState => {
+  const { minimumSize } = WINDOW_STATE_CONFIG[type];
+  const normalizedHeight = Math.max(height, minimumSize.height);
+  const normalizedWidth = Math.max(width, minimumSize.width);
   const hasVisiblePosition =
     x !== undefined &&
     y !== undefined &&
@@ -141,7 +164,10 @@ const normalizeWindowState = ({
 };
 
 const readPersistedWindowState = Effect.fn("readPersistedWindowState")(
-  function* readPersistedWindowStateEffect(windowStatePath: string) {
+  function* readPersistedWindowStateEffect(
+    windowStatePath: string,
+    type: WindowStateType
+  ) {
     const fileContents = yield* readWindowStateFile(windowStatePath);
     const windowState = yield* decodeWindowState(fileContents).pipe(
       Effect.mapError((cause) =>
@@ -152,14 +178,15 @@ const readPersistedWindowState = Effect.fn("readPersistedWindowState")(
         })
       )
     );
-    return normalizeWindowState(windowState);
+    return normalizeWindowState(windowState, type);
   }
 );
 
 const persistWindowState = Effect.fn("persistWindowState")((
+  type: WindowStateType,
   windowState: WindowState
 ) => {
-  const windowStatePath = getWindowStatePath();
+  const windowStatePath = getWindowStatePath(type);
 
   return Effect.try({
     catch: (cause) =>
@@ -178,22 +205,26 @@ const persistWindowState = Effect.fn("persistWindowState")((
   });
 });
 
-export const readWindowState = (): WindowState => {
-  const windowStatePath = getWindowStatePath();
+export const readWindowState = (
+  type: WindowStateType = "main"
+): WindowState => {
+  const windowStatePath = getWindowStatePath(type);
+  const { defaultState } = WINDOW_STATE_CONFIG[type];
 
   if (!existsSync(windowStatePath)) {
-    return DEFAULT_WINDOW_STATE;
+    return defaultState;
   }
 
   const windowStateExit = Effect.runSyncExit(
-    readPersistedWindowState(windowStatePath)
+    readPersistedWindowState(windowStatePath, type)
   );
-  return Exit.isSuccess(windowStateExit)
-    ? windowStateExit.value
-    : DEFAULT_WINDOW_STATE;
+  return Exit.isSuccess(windowStateExit) ? windowStateExit.value : defaultState;
 };
 
-export const writeWindowState = (window: BrowserWindow): void => {
+export const writeWindowState = (
+  window: BrowserWindow,
+  type: WindowStateType = "main"
+): void => {
   if (window.isMinimized() || window.isFullScreen()) {
     return;
   }
@@ -207,5 +238,5 @@ export const writeWindowState = (window: BrowserWindow): void => {
   };
 
   // Persisting window state is best-effort and should never block startup.
-  Effect.runSyncExit(persistWindowState(windowState));
+  Effect.runSyncExit(persistWindowState(type, windowState));
 };

@@ -4,9 +4,14 @@ import type * as Electron from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { openThreadWindow } from "../src/main/window/create-window";
+import {
+  readWindowState,
+  writeWindowState,
+} from "../src/main/window/window-state";
 
 interface TestWindow {
   readonly destroy: () => void;
+  readonly emit: (event: string) => void;
   readonly focus: ReturnType<typeof vi.fn>;
   readonly isDestroyed: () => boolean;
   readonly loadFile: ReturnType<typeof vi.fn>;
@@ -55,6 +60,12 @@ vi.mock(import("electron"), () => ({
       }
     }
 
+    emit(event: string): void {
+      for (const handler of this.handlers.get(event) ?? []) {
+        handler();
+      }
+    }
+
     isDestroyed(): boolean {
       return this.destroyed;
     }
@@ -83,11 +94,14 @@ vi.mock(import("../src/main/window/native-context-menu"), () => ({
 }));
 vi.mock(import("../src/main/window/window-state"), () => ({
   MIN_WINDOW_SIZE: { height: 560, width: 860 } as const,
-  readWindowState: vi.fn<() => { height: number; width: number }>(() => ({
-    height: 670,
-    width: 900,
-  })),
-  writeWindowState: vi.fn<(window: Electron.BrowserWindow) => void>(),
+  readWindowState: vi.fn<(type?: string) => { height: number; width: number }>(
+    (type = "main") =>
+      type === "thread"
+        ? { height: 720, width: 760 }
+        : { height: 670, width: 900 }
+  ),
+  writeWindowState:
+    vi.fn<(window: Electron.BrowserWindow, type?: string) => void>(),
 }));
 
 describe(openThreadWindow, () => {
@@ -95,6 +109,8 @@ describe(openThreadWindow, () => {
     electronState.createdWindows.length = 0;
     electronState.loadBarrier = undefined;
     electronState.loadFailure = undefined;
+    vi.mocked(readWindowState).mockClear();
+    vi.mocked(writeWindowState).mockClear();
   });
 
   afterEach(() => {
@@ -124,6 +140,10 @@ describe(openThreadWindow, () => {
     expect(window.loadFile).toHaveBeenCalledWith(expect.any(String), {
       hash: "/thread/person%2Bmail%40example.com/thread%2F1",
     });
+    expect(readWindowState).toHaveBeenCalledWith("thread");
+
+    window.emit("close");
+    expect(writeWindowState).toHaveBeenCalledWith(window, "thread");
   });
 
   it("focuses the existing window for the same account and thread", async () => {

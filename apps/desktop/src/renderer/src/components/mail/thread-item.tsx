@@ -2,7 +2,7 @@ import type { HTMLMotionProps } from "motion/react";
 import { m, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
-import MailAttachmentPill from "@/components/mail/attachment-pill";
+import MailAttachmentList from "@/components/mail/attachment-list";
 import MailLabelBadges from "@/components/mail/label-badges";
 import MailRelativeTime from "@/components/mail/relative-time";
 import MailThreadQuickActions, {
@@ -116,24 +116,22 @@ const MailThreadItem = ({
         >
           <Item
             className={cn(
-              "data-[active=true]:bg-muted/60 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3 data-[active=true]:opacity-100",
+              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3 data-[active=true]:opacity-100",
               thread.isUnread ? "bg-muted/30" : "opacity-60"
             )}
             data-active={isRevealed}
             data-selected={isSelected}
-            render={
-              <button
-                aria-current={isSelected}
-                aria-label={`${thread.subject}, from ${thread.from}`}
-                className="w-full text-left"
-                onClick={() => {
-                  openThread(getThreadSelectionKey(thread));
-                }}
-                type="button"
-              />
-            }
           >
-            <ItemContent className="min-w-0 gap-1">
+            <button
+              aria-current={isSelected}
+              aria-label={`${thread.subject}, from ${thread.from}`}
+              className="focus-visible:ring-ring/50 absolute inset-0 z-0 rounded-md text-left outline-none focus-visible:ring-[3px]"
+              onClick={() => {
+                openThread(getThreadSelectionKey(thread));
+              }}
+              type="button"
+            />
+            <ItemContent className="pointer-events-none relative z-10 min-w-0 gap-1">
               <ItemHeader className="min-w-0 flex-wrap justify-start gap-2">
                 <ItemTitle
                   className="max-w-full min-w-0 gap-1.5 overflow-hidden text-xs"
@@ -192,12 +190,10 @@ const MailThreadItem = ({
                   aria-label="Attachments"
                   className="flex flex-wrap items-center gap-1.5 pt-1"
                 >
-                  {visibleAttachments.map((attachment, index) => (
-                    <MailAttachmentPill
-                      attachment={attachment}
-                      key={`${attachment.messageId}:${attachment.attachmentId ?? attachment.filename}:${index}`}
-                    />
-                  ))}
+                  <MailAttachmentList
+                    accountId={thread.accountId}
+                    attachments={visibleAttachments}
+                  />
                   {hiddenAttachmentCount > 0 ? (
                     <Badge
                       aria-label={`${hiddenAttachmentCount} more attachments`}
@@ -210,7 +206,7 @@ const MailThreadItem = ({
                 </div>
               )}
             </ItemContent>
-            <ItemActions className="self-start pt-0.5">
+            <ItemActions className="pointer-events-none relative z-10 self-start pt-0.5">
               <MailRelativeTime
                 className={
                   thread.isUnread

@@ -8,6 +8,8 @@ import {
   MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
+  MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
+  MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
@@ -38,12 +40,14 @@ export const mailApi: Pick<
   | "listGmailSenders"
   | "listTrustedImageSenders"
   | "loadThread"
+  | "openAttachmentPreview"
   | "onMailIndexProgressChanged"
   | "onMailSyncStatusChanged"
   | "onMailThreadListUpdated"
   | "onMailThreadUpdated"
   | "onTrustedImageSendersChanged"
   | "searchMail"
+  | "saveAttachment"
   | "sendMessage"
   | "sendThreadMessage"
   | "setThreadReadState"
@@ -81,6 +85,10 @@ export const mailApi: Pick<
       GmailTrustedImageSendersReply,
       listener
     ),
+  openAttachmentPreview: (request) =>
+    ipcRenderer.invoke(MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL, request),
+  saveAttachment: (request) =>
+    ipcRenderer.invoke(MAIL_SAVE_ATTACHMENT_CHANNEL, request),
   searchMail: (request) =>
     ipcRenderer.invoke(MAIL_SEARCH_THREADS_CHANNEL, request),
   sendMessage: (request) =>

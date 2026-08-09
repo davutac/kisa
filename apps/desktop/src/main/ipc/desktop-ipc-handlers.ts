@@ -11,12 +11,16 @@ import {
 import {
   getIndexProgress,
   getSyncStatus,
+  loadAttachmentPreview,
   listCachedPage,
   listImageSenders,
   listLabels,
   listSenders,
   loadThread,
+  openAttachmentPreview,
   searchThreads,
+  saveAttachment,
+  saveAttachmentPreview,
   sendNew,
   sendThread,
   setReadState,
@@ -44,6 +48,10 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(listLabels);
   yield* ipc.handle(syncLabels);
   yield* ipc.handle(loadThread);
+  yield* ipc.handle(openAttachmentPreview);
+  yield* ipc.handle(saveAttachment);
+  yield* ipc.handle(loadAttachmentPreview);
+  yield* ipc.handle(saveAttachmentPreview);
   yield* ipc.handle(searchThreads);
   yield* ipc.handle(sendNew);
   yield* ipc.handle(sendThread);

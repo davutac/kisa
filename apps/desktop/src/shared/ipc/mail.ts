@@ -11,6 +11,27 @@ export const GmailAttachmentSummary = Schema.Struct({
 });
 export type GmailAttachmentSummary = typeof GmailAttachmentSummary.Type;
 
+export const GmailAttachmentRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  attachmentId: Schema.NonEmptyString,
+  messageId: Schema.NonEmptyString,
+});
+export type GmailAttachmentRequest = typeof GmailAttachmentRequest.Type;
+
+export const GmailAttachmentSaveOutcome = Schema.Literals([
+  "cancelled",
+  "saved",
+]);
+export type GmailAttachmentSaveOutcome = typeof GmailAttachmentSaveOutcome.Type;
+
+export const GmailAttachmentPreview = Schema.Struct({
+  bytes: Schema.Uint8Array,
+  filename: Schema.NonEmptyString,
+  kind: Schema.Literals(["image", "pdf"]),
+  mediaType: Schema.NonEmptyString,
+});
+export type GmailAttachmentPreview = typeof GmailAttachmentPreview.Type;
+
 export const GmailThreadSummary = Schema.Struct({
   accountId: Schema.String,
   attachments: Schema.Array(GmailAttachmentSummary),
@@ -315,6 +336,13 @@ export type GmailCachedThreadPageReply = typeof GmailCachedThreadPageReply.Type;
 
 export const GmailThreadReply = IpcReply(GmailThread);
 export type GmailThreadReply = typeof GmailThreadReply.Type;
+export const GmailAttachmentActionReply = IpcReply(Schema.Void);
+export type GmailAttachmentActionReply = typeof GmailAttachmentActionReply.Type;
+export const GmailAttachmentSaveReply = IpcReply(GmailAttachmentSaveOutcome);
+export type GmailAttachmentSaveReply = typeof GmailAttachmentSaveReply.Type;
+export const GmailAttachmentPreviewReply = IpcReply(GmailAttachmentPreview);
+export type GmailAttachmentPreviewReply =
+  typeof GmailAttachmentPreviewReply.Type;
 
 export const GmailSearchResultsReply = IpcReply(GmailSearchResults);
 export type GmailSearchResultsReply = typeof GmailSearchResultsReply.Type;

@@ -13,6 +13,9 @@ import type {
   GoogleAuthStartReply,
 } from "./auth";
 import type {
+  GmailAttachmentActionReply,
+  GmailAttachmentRequest,
+  GmailAttachmentSaveReply,
   GmailCachedThreadPageReply,
   GmailCachedThreadPageRequest,
   GmailLabelCatalogReply,
@@ -72,6 +75,9 @@ export interface DesktopBridge {
   listGoogleAccounts: () => Promise<GoogleAccountsReply>;
   listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
   loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
+  openAttachmentPreview: (
+    request: GmailAttachmentRequest
+  ) => Promise<GmailAttachmentActionReply>;
   onAccountSettingsChanged: (
     listener: (reply: AccountSettingsReply) => void
   ) => () => void;
@@ -102,6 +108,9 @@ export interface DesktopBridge {
     request: GoogleAccountReorderRequest
   ) => Promise<GoogleAccountReorderReply>;
   searchMail: (request: GmailSearchRequest) => Promise<GmailSearchResultsReply>;
+  saveAttachment: (
+    request: GmailAttachmentRequest
+  ) => Promise<GmailAttachmentSaveReply>;
   sendMessage: (
     request: GmailMessageSendRequest
   ) => Promise<GmailMessageSendReply>;

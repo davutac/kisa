@@ -79,10 +79,14 @@ describe(getRuntimeCapabilities, () => {
     onMailThreadUpdated: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
     onUpdateStatus: () => () => {},
+    openAttachmentPreview: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     openThreadWindow: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     reorderGoogleAccounts: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    saveAttachment: () =>
+      Promise.resolve({ data: "saved" as const, ok: true as const }),
     searchMail: () =>
       Promise.resolve({
         data: { hasMore: false, threads: [] },
@@ -134,6 +138,8 @@ describe(getRuntimeCapabilities, () => {
         onThreadUpdated: desktopBridge.onMailThreadUpdated,
         onTrustedImageSendersChanged:
           desktopBridge.onTrustedImageSendersChanged,
+        openAttachmentPreview: desktopBridge.openAttachmentPreview,
+        saveAttachment: desktopBridge.saveAttachment,
         search: desktopBridge.searchMail,
         sendMessage: desktopBridge.sendMessage,
         sendThreadMessage: desktopBridge.sendThreadMessage,

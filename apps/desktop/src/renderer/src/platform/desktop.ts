@@ -33,7 +33,9 @@ export interface MailApi {
   listSenders: DesktopBridge["listGmailSenders"];
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
   loadThread: DesktopBridge["loadThread"];
+  openAttachmentPreview: DesktopBridge["openAttachmentPreview"];
   search: DesktopBridge["searchMail"];
+  saveAttachment: DesktopBridge["saveAttachment"];
   sendMessage: DesktopBridge["sendMessage"];
   sendThreadMessage: DesktopBridge["sendThreadMessage"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
@@ -117,6 +119,8 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       onThreadListUpdated: bridge.onMailThreadListUpdated,
       onThreadUpdated: bridge.onMailThreadUpdated,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
+      openAttachmentPreview: bridge.openAttachmentPreview,
+      saveAttachment: bridge.saveAttachment,
       search: bridge.searchMail,
       sendMessage: bridge.sendMessage,
       sendThreadMessage: bridge.sendThreadMessage,

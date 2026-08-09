@@ -1,11 +1,13 @@
-import MailAttachmentPill from "@/components/mail/attachment-pill";
+import MailAttachmentList from "@/components/mail/attachment-list";
 import type { GmailAttachmentSummary } from "@/shared/ipc/mail";
 
 interface MailMessageAttachmentsProps {
+  accountId: string;
   attachments: readonly GmailAttachmentSummary[];
 }
 
 const MailMessageAttachments = ({
+  accountId,
   attachments,
 }: MailMessageAttachmentsProps) => {
   if (attachments.length === 0) {
@@ -17,12 +19,7 @@ const MailMessageAttachments = ({
       aria-label="Attachments"
       className="bg-card flex flex-wrap gap-2 p-4"
     >
-      {attachments.map((attachment, index) => (
-        <MailAttachmentPill
-          attachment={attachment}
-          key={`${attachment.messageId}:${attachment.attachmentId ?? attachment.filename}:${index}`}
-        />
-      ))}
+      <MailAttachmentList accountId={accountId} attachments={attachments} />
     </section>
   );
 };
