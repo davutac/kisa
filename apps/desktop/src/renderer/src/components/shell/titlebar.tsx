@@ -105,7 +105,7 @@ const Titlebar = () => {
   };
 
   return (
-    <header className="app-titlebar bg-background fixed inset-x-0 top-0 z-999 flex items-center justify-between gap-2">
+    <header className="app-titlebar bg-background fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-2">
       <div className="app-titlebar-interactive flex items-center gap-2">
         <TitlebarNewMessage />
         <Tooltip>
