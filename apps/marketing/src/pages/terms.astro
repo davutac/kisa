@@ -1,0 +1,151 @@
+---
+import { ArrowLeftIcon } from "lucide-react";
+
+import ThemeToggle from "@/components/theme-toggle";
+import BaseLayout from "@/layouts/base-layout.astro";
+
+const repositoryUrl = "https://github.com/davutac/kisa";
+const licenseUrl = `${repositoryUrl}/blob/main/LICENSE`;
+---
+
+<BaseLayout
+  description="The terms that govern your use of the Kisa desktop app and website."
+  title="Terms of Service | Kisa"
+>
+  <div class="page-shell relative min-h-screen overflow-x-clip">
+    <header class="sticky inset-x-0 top-0 z-50" data-sticky-header>
+      <div aria-hidden="true" class="header-backdrop" data-header-backdrop></div>
+      <div class="relative mx-auto flex h-18 max-w-6xl items-center justify-between px-5 sm:px-8">
+        <a class="flex items-center gap-2.5" href="/" aria-label="Kisa home">
+          <img alt="" class="size-8 rounded-lg shadow-sm" height="32" src="/icon.png" width="32" />
+          <span class="text-sm font-semibold tracking-tight">Kisa</span>
+        </a>
+
+        <div class="flex items-center gap-1">
+          <a class="inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground" href="/">
+            <ArrowLeftIcon className="size-3.5" />
+            Home
+          </a>
+          <ThemeToggle client:load />
+        </div>
+      </div>
+    </header>
+
+    <main class="relative z-10 mx-auto max-w-2xl px-5 pb-24 pt-16 sm:px-8 sm:pb-32 sm:pt-24">
+      <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Kisa / Legal</p>
+      <h1 class="mt-5 text-balance text-5xl font-semibold tracking-[-0.05em] sm:text-6xl">Terms of Service</h1>
+      <p class="mt-6 text-pretty text-lg leading-8 text-muted-foreground">
+        These Terms govern your use of the Kisa desktop app and kisa.email. Kisa is local-first, open-source software with only a narrow hosted OAuth handoff.
+      </p>
+
+      <dl class="mt-8 flex flex-wrap gap-x-12 gap-y-5 text-xs">
+        <div>
+          <dt class="font-medium uppercase tracking-[0.14em] text-muted-foreground">Effective</dt>
+          <dd class="mt-1.5 font-mono text-foreground">August 10, 2026</dd>
+        </div>
+        <div>
+          <dt class="font-medium uppercase tracking-[0.14em] text-muted-foreground">Last updated</dt>
+          <dd class="mt-1.5 font-mono text-foreground">August 10, 2026</dd>
+        </div>
+      </dl>
+
+      <div class="mt-14 divide-y border-y">
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">01</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Using Kisa</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            By accessing the Kisa website or using the Kisa desktop app, you agree to these Terms. If you do not agree, do not use them. These Terms do not replace or limit the rights granted to you by Kisa's open-source license.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">02</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Open-source license</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            Kisa's software and source code are provided under the{" "}
+            <a class="underline decoration-border underline-offset-4 transition-colors hover:text-foreground" href={licenseUrl} rel="noreferrer" target="_blank">MIT License</a>.
+            You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the software, subject to the license's notice requirements. If these Terms conflict with the MIT License regarding the software or source code, the MIT License controls.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">03</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Your mail and Google account</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            You retain all rights you have in your mail and other content. Kisa connects to the Google account you authorize and acts only at your direction. You are responsible for your Google account, the content you access or send, and compliance with Google's terms and policies.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">04</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Hosted infrastructure</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            Kisa does not provide a hosted mailbox or user-account service. The website and a small OAuth handoff are hosted to present Kisa and complete Google sign-in. You may not probe, attack, disrupt, bypass security controls for, or gain unauthorized access to that infrastructure.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">05</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Availability and changes</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            Kisa is under active development. Features, integrations, and supported platforms may change, break, or be removed, and the project or its hosted infrastructure may be paused or discontinued without notice. Kisa also depends on Google and other third-party services that may change independently.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">06</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Fees</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            Kisa is currently offered without a Kisa subscription fee. You remain responsible for charges from Google, your internet provider, app stores, or other third parties.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">07</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Privacy</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            The{" "}
+            <a class="underline decoration-border underline-offset-4 transition-colors hover:text-foreground" href="/privacy">Privacy Policy</a>{" "}
+            explains how Kisa handles information when you use the app and website. Google and other third parties process information under their own terms and privacy policies.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">08</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">No warranty</h2>
+          <p class="mt-4 text-sm font-medium uppercase leading-6 text-foreground/80">
+            The software is provided “as is,” without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement.
+          </p>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            To the extent permitted by law, Kisa's authors and copyright holders are not liable for claims, damages, or other liability arising from the software or its use. The full MIT License controls if this summary differs from it.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">09</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Stopping use</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            You may stop using Kisa at any time by uninstalling it. You can disconnect an account in Kisa or revoke Kisa's access from your Google account settings.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">10</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Changes to these Terms</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            These Terms may be updated as Kisa changes. Updated Terms will be posted at this URL with a new effective date. Changes apply from that date; continued use means you accept the updated Terms.
+          </p>
+        </section>
+
+        <section class="py-9">
+          <p class="text-xs font-medium tracking-[0.14em] text-muted-foreground">11</p>
+          <h2 class="mt-3 text-xl font-semibold tracking-tight">Questions</h2>
+          <p class="mt-4 text-sm leading-6 text-muted-foreground">
+            For questions about these Terms, contact the project maintainer through the{" "}
+            <a class="underline decoration-border underline-offset-4 transition-colors hover:text-foreground" href={repositoryUrl} rel="noreferrer" target="_blank">Kisa repository</a>.
+          </p>
+        </section>
+      </div>
+    </main>
+  </div>
+</BaseLayout>
