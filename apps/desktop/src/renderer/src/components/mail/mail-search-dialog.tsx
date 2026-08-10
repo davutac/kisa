@@ -53,13 +53,14 @@ import {
   useLabelSuggestions,
   useMailSearch,
 } from "@/mail/use-mail-search";
+import { useOpenThread } from "@/mail/use-open-thread";
 import type {
   GmailAddressRole,
   GmailSenderSuggestion,
   GmailThreadSummary,
 } from "@/shared/ipc/mail";
 import { useGoogleAccounts } from "@/state/google-accounts";
-import { useMailboxStore, useSelectedAccountId } from "@/state/mailbox";
+import { useSelectedAccountId } from "@/state/mailbox";
 
 /**
  * An operator counts as a filter the moment it has a value, so
@@ -619,7 +620,7 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
   const navigate = useNavigate();
   const accounts = useGoogleAccounts();
   const selectedAccountId = useSelectedAccountId();
-  const openThread = useMailboxStore((state) => state.openThread);
+  const openThread = useOpenThread();
   const knownAccountId = accounts.some(
     ({ email }) => email === selectedAccountId
   )
@@ -720,8 +721,12 @@ const MailSearchDialog = ({ isOpen, onOpenChange }: MailSearchDialogProps) => {
   };
 
   const openResult = (thread: GmailThreadSummary): void => {
-    openThread(getThreadSelectionKey(thread));
-    void navigate({ to: "/" });
+    const location = openThread(thread);
+
+    if (location === "inline") {
+      void navigate({ to: "/" });
+    }
+
     close();
   };
 

@@ -20,9 +20,7 @@ import {
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
-import { getThreadSelectionKey } from "@/mail/thread-selection";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
-import { useMailboxStore } from "@/state/mailbox";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
 
@@ -33,6 +31,7 @@ const rowVariants = {
 
 interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   isSelected?: boolean;
+  onOpen: (thread: GmailThreadSummary) => void;
   onToggleRead?: (thread: GmailThreadSummary) => void;
   onTrash?: (thread: GmailThreadSummary) => void;
   position: number;
@@ -43,6 +42,7 @@ interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
 
 const MailThreadItem = ({
   isSelected = false,
+  onOpen,
   onToggleRead,
   onTrash,
   position,
@@ -53,7 +53,6 @@ const MailThreadItem = ({
 }: MailThreadItemProps) => {
   const shouldReduceMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
-  const openThread = useMailboxStore((state) => state.openThread);
   // Hovering the uncovered strip still counts as hovering the row, so the
   // actions cannot be chased away by the pointer that is reaching for them.
   const isRevealed = isSelected || isHovered;
@@ -127,7 +126,7 @@ const MailThreadItem = ({
               aria-label={`${thread.subject}, from ${thread.from}`}
               className="focus-visible:ring-ring/50 absolute inset-0 z-0 rounded-md text-left outline-none focus-visible:ring-[3px]"
               onClick={() => {
-                openThread(getThreadSelectionKey(thread));
+                onOpen(thread);
               }}
               type="button"
             />
