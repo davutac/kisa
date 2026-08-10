@@ -3,13 +3,18 @@ import { ipcRenderer } from "electron";
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
   MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_DISCARD_DRAFT_CHANNEL,
+  MAIL_DRAFT_CHANGED_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
   MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
+  MAIL_LIST_STASHED_DRAFTS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
+  MAIL_LOAD_THREAD_DRAFT_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
+  MAIL_SAVE_DRAFT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
@@ -28,19 +33,24 @@ import {
   GmailThreadListUpdated,
   GmailThreadUpdated,
   GmailTrustedImageSendersReply,
+  MailDraftChanged,
 } from "../shared/ipc/mail";
 import { subscribe } from "./subscribe";
 
 export const mailApi: Pick<
   DesktopBridge,
+  | "discardMailDraft"
   | "getMailIndexProgress"
   | "getMailSyncStatus"
   | "listCachedThreadPage"
   | "listGmailLabels"
   | "listGmailSenders"
+  | "listStashedDrafts"
   | "listTrustedImageSenders"
   | "loadThread"
+  | "loadThreadDraft"
   | "openAttachmentPreview"
+  | "onMailDraftChanged"
   | "onMailIndexProgressChanged"
   | "onMailSyncStatusChanged"
   | "onMailThreadListUpdated"
@@ -48,6 +58,7 @@ export const mailApi: Pick<
   | "onTrustedImageSendersChanged"
   | "searchMail"
   | "saveAttachment"
+  | "saveMailDraft"
   | "sendMessage"
   | "sendThreadMessage"
   | "setThreadReadState"
@@ -55,6 +66,8 @@ export const mailApi: Pick<
   | "trashThread"
   | "trustImageSender"
 > = {
+  discardMailDraft: (request) =>
+    ipcRenderer.invoke(MAIL_DISCARD_DRAFT_CHANNEL, request),
   getMailIndexProgress: () => ipcRenderer.invoke(MAIL_INDEX_PROGRESS_CHANNEL),
   getMailSyncStatus: () => ipcRenderer.invoke(MAIL_SYNC_STATUS_CHANNEL),
   listCachedThreadPage: (request) =>
@@ -63,10 +76,16 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_LIST_LABELS_CHANNEL, request),
   listGmailSenders: (request) =>
     ipcRenderer.invoke(MAIL_LIST_SENDERS_CHANNEL, request),
+  listStashedDrafts: (request) =>
+    ipcRenderer.invoke(MAIL_LIST_STASHED_DRAFTS_CHANNEL, request),
   listTrustedImageSenders: () =>
     ipcRenderer.invoke(MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL),
   loadThread: (request) =>
     ipcRenderer.invoke(MAIL_LOAD_THREAD_CHANNEL, request),
+  loadThreadDraft: (request) =>
+    ipcRenderer.invoke(MAIL_LOAD_THREAD_DRAFT_CHANNEL, request),
+  onMailDraftChanged: (listener) =>
+    subscribe(MAIL_DRAFT_CHANGED_CHANNEL, MailDraftChanged, listener),
   onMailIndexProgressChanged: (listener) =>
     subscribe(MAIL_INDEX_PROGRESS_CHANNEL, GmailIndexProgressList, listener),
   onMailSyncStatusChanged: (listener) =>
@@ -89,6 +108,8 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL, request),
   saveAttachment: (request) =>
     ipcRenderer.invoke(MAIL_SAVE_ATTACHMENT_CHANNEL, request),
+  saveMailDraft: (request) =>
+    ipcRenderer.invoke(MAIL_SAVE_DRAFT_CHANNEL, request),
   searchMail: (request) =>
     ipcRenderer.invoke(MAIL_SEARCH_THREADS_CHANNEL, request),
   sendMessage: (request) =>

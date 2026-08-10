@@ -21,6 +21,14 @@ import type {
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
   GmailIndexProgressList,
+  MailDraftChanged,
+  MailDraftDiscardReply,
+  MailDraftDiscardRequest,
+  MailDraftInput,
+  MailDraftListReply,
+  MailDraftListRequest,
+  MailDraftLoadReply,
+  MailDraftReply,
   GmailMessageSendReply,
   GmailMessageSendRequest,
   GmailSearchRequest,
@@ -66,6 +74,9 @@ export interface DesktopBridge {
     request: DatabaseImportSession
   ) => Promise<DatabaseImportCancelReply>;
   checkForUpdates: () => Promise<UpdateStatus>;
+  discardMailDraft: (
+    request: MailDraftDiscardRequest
+  ) => Promise<MailDraftDiscardReply>;
   disconnectGoogleAccount: (
     request: GoogleAccountDisconnectRequest
   ) => Promise<GoogleAccountsReply>;
@@ -95,8 +106,12 @@ export interface DesktopBridge {
     request: GmailSenderSuggestionRequest
   ) => Promise<GmailSenderSuggestionsReply>;
   listGoogleAccounts: () => Promise<GoogleAccountsReply>;
+  listStashedDrafts: (
+    request: MailDraftListRequest
+  ) => Promise<MailDraftListReply>;
   listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
   loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
+  loadThreadDraft: (request: GmailThreadRequest) => Promise<MailDraftLoadReply>;
   openAttachmentPreview: (
     request: GmailAttachmentRequest
   ) => Promise<GmailAttachmentActionReply>;
@@ -109,6 +124,9 @@ export interface DesktopBridge {
   onAppClosing: (listener: () => void) => () => void;
   onGoogleAccountsChanged: (
     listener: (reply: GoogleAccountsReply) => void
+  ) => () => void;
+  onMailDraftChanged: (
+    listener: (change: MailDraftChanged) => void
   ) => () => void;
   onMailIndexProgressChanged: (
     listener: (progress: GmailIndexProgressList) => void
@@ -136,6 +154,7 @@ export interface DesktopBridge {
   saveAttachment: (
     request: GmailAttachmentRequest
   ) => Promise<GmailAttachmentSaveReply>;
+  saveMailDraft: (request: MailDraftInput) => Promise<MailDraftReply>;
   selectDatabaseImportFile: (
     request: DatabaseImportFileSelectionRequest
   ) => Promise<DatabaseImportFileSelectionReply>;

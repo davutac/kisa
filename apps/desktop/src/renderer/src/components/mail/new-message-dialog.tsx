@@ -1,23 +1,30 @@
+import { ArchiveIcon, LoaderCircleIcon, SendIcon } from "lucide-react";
 import {
-  LoaderCircleIcon,
-  PaperclipIcon,
-  SendIcon,
-  UserRoundIcon,
-  XIcon,
-} from "lucide-react";
-import { m, useReducedMotion } from "motion/react";
-import { Fragment, useRef, useState } from "react";
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import EmailComposer from "@/components/mail/email-composer";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
-import { Badge } from "@/components/ui/badge";
+import NewMessageAccountPicker from "@/components/mail/new-message-account-picker";
+import {
+  NewMessageAttachmentButton,
+  NewMessageAttachmentList,
+  useNewMessageAttachments,
+} from "@/components/mail/new-message-attachments";
+import NewMessageDialogShell from "@/components/mail/new-message-dialog-shell";
+import NewMessageStashPicker from "@/components/mail/new-message-stash-picker";
+import { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -28,25 +35,22 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  AppCommand,
-  COMPOSER_ACCOUNT_COMMAND_IDS,
   getHotkeyAriaLabel,
   getHotkeyDisplay,
   HotkeyHint,
   useAppCommand,
 } from "@/hotkeys";
-import type { HotkeyCommandId } from "@/hotkeys";
-import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { getInitialComposerAccountId } from "@/mail/composer-account";
-import { getMailApi, getPathForFile } from "@/platform/desktop";
+import {
+  createNewMailDraft,
+  getNewMailStashCommandAction,
+  getDraftResumeFocusTarget,
+  isNewMailDraftEmpty,
+} from "@/mail/mail-draft";
+import { getMailApi } from "@/platform/desktop";
+import type { MailApi } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
-import type { GmailOutgoingAttachment } from "@/shared/ipc/mail";
+import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 
 interface NewMessageDialogProps {
   accounts: readonly GoogleAccount[];
@@ -63,100 +67,82 @@ const EMPTY_COMPOSER_VALUE: EmailComposerValue = {
 
 const EMPTY_RECIPIENTS: EmailRecipients = { bcc: [], cc: [], to: [] };
 
-type ComposerAttachment = GmailOutgoingAttachment & {
-  readonly id: string;
-  readonly size: number;
+const toOptimisticStash = (draft: MailDraftInput): MailDraft => {
+  const now = Date.now();
+  return { ...draft, createdAt: now, updatedAt: now };
 };
 
-const formatAttachmentSize = (bytes: number): string => {
-  if (bytes < 1000) {
-    return `${bytes} B`;
-  }
-
-  if (bytes < 1_000_000) {
-    return `${Math.ceil(bytes / 1000)} KB`;
-  }
-
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
-};
-
-interface AccountPickerButtonProps {
-  account: GoogleAccount;
-  autoFocus: boolean;
-  command?: HotkeyCommandId;
-  isSelected: boolean;
-  onSelect: () => void;
-}
-
-const AccountPickerButton = ({
-  account,
-  autoFocus,
-  command,
-  isSelected,
-  onSelect,
-}: AccountPickerButtonProps) => {
-  const shouldReduceMotion = useReducedMotion();
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            aria-keyshortcuts={
-              command === undefined ? undefined : getHotkeyAriaLabel(command)
-            }
-            aria-label={`Send from ${account.email}`}
-            aria-pressed={isSelected}
-            autoFocus={autoFocus}
-            className="h-7 min-w-7 justify-start gap-0 overflow-visible rounded-full p-0"
-            onClick={onSelect}
-            type="button"
-            variant="secondary"
-          >
-            <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full">
-              {account.avatarUrl === undefined ? (
-                <UserRoundIcon className="size-3.5" />
-              ) : (
-                <img
-                  alt=""
-                  className="size-full object-cover"
-                  src={account.avatarUrl}
-                />
-              )}
-            </span>
-            <m.span
-              animate={
-                isSelected
-                  ? { opacity: 1, width: "auto" }
-                  : { opacity: 0, width: 0 }
-              }
-              aria-hidden="true"
-              className="block overflow-hidden"
-              initial={false}
-              transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.22)}
-            >
-              <span className="block max-w-48 truncate px-2.5 pl-1.5">
-                {account.email}
-              </span>
-            </m.span>
-          </Button>
-        }
-      />
-      <TooltipContent className="flex items-start gap-2" side="bottom">
-        <span className="flex flex-col">
-          {account.displayName === undefined ? null : (
-            <span>{account.displayName}</span>
-          )}
-          <span
-            className={account.displayName === undefined ? "" : "opacity-70"}
-          >
-            {account.email}
-          </span>
-        </span>
-        {command === undefined ? null : <HotkeyHint command={command} />}
-      </TooltipContent>
-    </Tooltip>
+const upsertStash = (
+  stashes: readonly MailDraft[],
+  draft: MailDraft
+): readonly MailDraft[] =>
+  [draft, ...stashes.filter(({ id }) => id !== draft.id)].toSorted(
+    (left, right) => right.updatedAt - left.updatedAt
   );
+
+const runQueuedDraftOperation = async (
+  previous: Promise<void>,
+  operation: () => Promise<void>
+): Promise<void> => {
+  try {
+    await previous;
+  } catch {
+    // A failed operation must not prevent later stashes from being persisted.
+  }
+  await operation();
+};
+
+const useDraftPersistence = (mailApi: MailApi | undefined) => {
+  const persistDraft = useCallback(
+    async (draft: MailDraftInput): Promise<boolean> => {
+      if (mailApi === undefined) {
+        return false;
+      }
+
+      try {
+        const reply = await mailApi.saveDraft(draft);
+        if (!reply.ok) {
+          toast.error(reply.error);
+          return false;
+        }
+
+        return true;
+      } catch {
+        toast.error("Could not save draft");
+        return false;
+      }
+    },
+    [mailApi]
+  );
+
+  const popDraft = useCallback(
+    async (draft: MailDraftInput): Promise<boolean> => {
+      if (mailApi === undefined) {
+        return false;
+      }
+
+      try {
+        const reply = await mailApi.discardDraft({
+          ...(draft.accountId === undefined
+            ? {}
+            : { accountId: draft.accountId }),
+          draftId: draft.id,
+        });
+        if (!reply.ok) {
+          toast.error(reply.error);
+          return false;
+        }
+
+        return true;
+      } catch {
+        toast.error("Could not update stashes");
+        return false;
+      }
+    },
+    [mailApi]
+  );
+
+  return { persistDraft, popDraft };
 };
 
 const NewMessageDialog = ({
@@ -168,84 +154,217 @@ const NewMessageDialog = ({
   const [accountId, setAccountId] = useState(() =>
     getInitialComposerAccountId(accounts, initialAccountId)
   );
-  const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>(
-    []
-  );
+  const { addAttachments, attachments, inputRef, setAttachments } =
+    useNewMessageAttachments();
   const [composer, setComposer] = useState(EMPTY_COMPOSER_VALUE);
-  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [draftId, setDraftId] = useState<string>(() => crypto.randomUUID());
   const [isSending, setIsSending] = useState(false);
   const [recipients, setRecipients] = useState(EMPTY_RECIPIENTS);
+  const [stashes, setStashes] = useState<readonly MailDraft[]>([]);
   const [subject, setSubject] = useState("");
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const fileDragDepthRef = useRef(0);
-  const mailApi = getMailApi();
+  const draftOperationQueueRef = useRef(Promise.resolve());
+  const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mailApi = useMemo(() => getMailApi(), []);
+  const { persistDraft, popDraft } = useDraftPersistence(mailApi);
+  const {
+    getCurrentTarget,
+    getElement,
+    getReturnElement,
+    handleRefFor,
+    onFocusCapture,
+    refFor,
+    requestRestore,
+    restorePending,
+  } = useComposerFocus();
   const selectedAccountId = accounts.some(({ email }) => email === accountId)
     ? accountId
     : "";
+  const currentDraft = useMemo<MailDraftInput>(
+    () => ({
+      ...(selectedAccountId.length === 0
+        ? {}
+        : { accountId: selectedAccountId }),
+      attachments,
+      bcc: recipients.bcc,
+      body: { html: composer.html, text: composer.text },
+      cc: recipients.cc,
+      id: draftId,
+      kind: "new",
+      subject,
+      to: recipients.to,
+    }),
+    [
+      attachments,
+      composer.html,
+      composer.text,
+      draftId,
+      recipients.bcc,
+      recipients.cc,
+      recipients.to,
+      selectedAccountId,
+      subject,
+    ]
+  );
+  const currentDraftRef = useRef(currentDraft);
+
+  const enqueueDraftOperation = useCallback(
+    (operation: () => Promise<void>): void => {
+      draftOperationQueueRef.current = runQueuedDraftOperation(
+        draftOperationQueueRef.current,
+        operation
+      );
+    },
+    []
+  );
+
+  useEffect(() => {
+    currentDraftRef.current = currentDraft;
+  }, [currentDraft]);
+
+  useLayoutEffect(() => {
+    restorePending();
+  }, [draftId, restorePending]);
+  const availableStashes = stashes.filter(({ id }) => id !== draftId);
+  const stashCommandAction = getNewMailStashCommandAction(
+    currentDraft,
+    availableStashes.length > 0
+  );
+  const canStash = stashCommandAction === "stash" && !isSending;
   const canSend =
     mailApi !== undefined &&
     selectedAccountId.length > 0 &&
-    recipients.to.length > 0 &&
-    subject.trim().length > 0 &&
+    currentDraft.to.length > 0 &&
+    currentDraft.subject.trim().length > 0 &&
     !composer.isEmpty &&
     !isSending;
   const sendDisplay = getHotkeyDisplay("composer.send");
 
-  const addAttachments = (fileList: FileList | null): void => {
-    const files = [...(fileList ?? [])];
-
-    if (files.length === 0) {
+  useEffect(() => {
+    if (mailApi === undefined) {
       return;
     }
 
-    const currentBytes = attachments.reduce(
-      (total, attachment) => total + attachment.size,
-      0
-    );
-    const selectedBytes = files.reduce((total, file) => total + file.size, 0);
-
-    if (currentBytes + selectedBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
-      toast.error("Attachments can total up to 25 MB");
-      return;
-    }
-
-    try {
-      const loaded = files.map((file): ComposerAttachment => {
-        const path = getPathForFile(file);
-
-        if (path === undefined || path.length === 0) {
-          throw new Error(`Could not access ${file.name || "attachment"}`);
+    let active = true;
+    const load = async (): Promise<void> => {
+      try {
+        const reply = await mailApi.listStashedDrafts({
+          accountIds: accounts.map(({ email }) => email),
+        });
+        if (!(active && reply.ok)) {
+          if (active && !reply.ok) {
+            toast.error(reply.error);
+          }
+          return;
         }
 
-        return {
-          filename: file.name.length === 0 ? "attachment" : file.name,
-          id: crypto.randomUUID(),
-          mediaType:
-            file.type.length === 0 ? "application/octet-stream" : file.type,
-          path,
-          size: file.size,
-        };
-      });
-
-      setAttachments((current) => [...current, ...loaded]);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not attach files"
-      );
-    } finally {
-      if (attachmentInputRef.current !== null) {
-        attachmentInputRef.current.value = "";
+        setStashes(reply.data);
+      } catch {
+        if (active) {
+          toast.error("Could not load stashed drafts");
+        }
       }
+    };
+    void load();
+
+    const unsubscribe = mailApi.onDraftChanged((change) => {
+      if (change.kind === "remove") {
+        setStashes((current) =>
+          current.filter(({ id }) => id !== change.draftId)
+        );
+        return;
+      }
+
+      if (
+        change.draft.kind !== "new" ||
+        (change.draft.accountId !== undefined &&
+          !accounts.some(({ email }) => email === change.draft.accountId))
+      ) {
+        return;
+      }
+
+      setStashes((current) => upsertStash(current, change.draft));
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [accounts, mailApi]);
+
+  const applyDraft = (draft: MailDraftInput): void => {
+    currentDraftRef.current = draft;
+    setAccountId(draft.accountId ?? "");
+    setAttachments(draft.attachments);
+    setComposer({
+      html: draft.body.html,
+      isEmpty: draft.body.text.trim().length === 0,
+      text: draft.body.text,
+    });
+    setDraftId(draft.id);
+    setRecipients({ bcc: draft.bcc, cc: draft.cc, to: draft.to });
+    setSubject(draft.subject);
+  };
+
+  const stashCurrentDraft = (): void => {
+    const draft = currentDraftRef.current;
+    if (isSending) {
+      return;
     }
+
+    if (isNewMailDraftEmpty(draft)) {
+      return;
+    }
+
+    const optimisticStash = toOptimisticStash(draft);
+    const blankDraft = createNewMailDraft(draft.accountId);
+    const focusTarget = getCurrentTarget();
+    setStashes((current) => upsertStash(current, optimisticStash));
+    requestRestore(focusTarget);
+    applyDraft(blankDraft);
+
+    enqueueDraftOperation(async () => {
+      const succeeded = await persistDraft(draft);
+      if (succeeded) {
+        toast.success("Draft stashed");
+        return;
+      }
+
+      setStashes((current) =>
+        current.filter(({ id }) => id !== optimisticStash.id)
+      );
+      if (
+        currentDraftRef.current.id === blankDraft.id &&
+        isNewMailDraftEmpty(currentDraftRef.current)
+      ) {
+        requestRestore(focusTarget);
+        applyDraft(draft);
+      }
+    });
+  };
+
+  const switchDraft = (next: MailDraft): void => {
+    if (next.id === draftId || isSending) {
+      return;
+    }
+
+    setStashes((current) => current.filter(({ id }) => id !== next.id));
+    requestRestore(getDraftResumeFocusTarget(next));
+    applyDraft(next);
+
+    enqueueDraftOperation(async () => {
+      const succeeded = await popDraft(next);
+      if (!succeeded) {
+        setStashes((current) => upsertStash(current, next));
+      }
+    });
   };
 
   const send = async (): Promise<void> => {
-    if (!canSend) {
+    if (!(canSend && mailApi)) {
       return;
     }
 
     setIsSending(true);
-
     try {
       const reply = await mailApi.sendMessage({
         accountId: selectedAccountId,
@@ -255,7 +374,7 @@ const NewMessageDialog = ({
           path,
         })),
         bcc: recipients.bcc,
-        body: { html: composer.html, text: composer.text },
+        body: currentDraft.body,
         cc: recipients.cc,
         subject,
         to: recipients.to,
@@ -266,6 +385,9 @@ const NewMessageDialog = ({
         return;
       }
 
+      enqueueDraftOperation(async () => {
+        await popDraft(currentDraft);
+      });
       toast.success("Message sent");
       onOpenChange(false);
     } catch (error) {
@@ -284,133 +406,77 @@ const NewMessageDialog = ({
     },
     { enabled: isOpen && canSend }
   );
+  useAppCommand(
+    "composer.stash",
+    () => {
+      if (stashCommandAction === "open-picker") {
+        stashPickerTriggerRef.current?.click();
+      } else if (stashCommandAction === "stash") {
+        stashCurrentDraft();
+      }
+    },
+    {
+      enabled: isOpen && !isSending && stashCommandAction !== "none",
+    }
+  );
 
   return (
     <Dialog
       onOpenChange={(open) => {
-        if (!isSending) {
-          onOpenChange(open);
+        if (!open && !isSending) {
+          onOpenChange(false);
         }
       }}
       open={isOpen}
     >
-      <DialogContent
-        className="top-[calc(var(--app-titlebar-height)+1rem)] flex max-h-[calc(100svh-var(--app-titlebar-height)-2rem)] min-h-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 ring-0 sm:max-w-2xl"
-        onDragEndCapture={(event) => {
-          if (!event.dataTransfer.types.includes("Files")) {
-            return;
-          }
-
-          event.stopPropagation();
-          fileDragDepthRef.current = 0;
-          setIsDraggingFiles(false);
-        }}
-        onDragEnterCapture={(event) => {
-          if (!event.dataTransfer.types.includes("Files")) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-          fileDragDepthRef.current += 1;
-          setIsDraggingFiles(true);
-        }}
-        onDragLeaveCapture={(event) => {
-          if (!event.dataTransfer.types.includes("Files")) {
-            return;
-          }
-
-          event.stopPropagation();
-          fileDragDepthRef.current = Math.max(fileDragDepthRef.current - 1, 0);
-
-          if (fileDragDepthRef.current === 0) {
-            setIsDraggingFiles(false);
-          }
-        }}
-        onDragOverCapture={(event) => {
-          if (event.dataTransfer.types.includes("Files")) {
-            event.preventDefault();
-            event.stopPropagation();
-            event.dataTransfer.dropEffect = "copy";
-          }
-        }}
-        onDropCapture={(event) => {
-          if (!event.dataTransfer.types.includes("Files")) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-          fileDragDepthRef.current = 0;
-          setIsDraggingFiles(false);
-          addAttachments(event.dataTransfer.files);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Tab") {
-            event.stopPropagation();
-          }
-        }}
+      <NewMessageDialogShell
+        initialFocus={() => getElement("to")}
+        onFiles={addAttachments}
       >
-        <m.div
-          animate={{ opacity: isDraggingFiles ? 1 : 0 }}
-          aria-hidden="true"
-          className="bg-background/90 pointer-events-none absolute inset-2 z-50 grid place-items-center rounded-lg border-2 border-dashed"
-          initial={false}
-          transition={easeInOut(0.15)}
-        >
-          <div className="text-muted-foreground flex flex-col items-center gap-2 font-medium">
-            <PaperclipIcon className="size-6" />
-            Drop files to attach
-          </div>
-        </m.div>
         <DialogHeader className="shrink-0 px-4 py-3 pr-12">
-          <DialogTitle className="shrink-0">New email</DialogTitle>
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className="shrink-0">New email</DialogTitle>
+            <div className="flex h-7 w-24 shrink-0 justify-end">
+              {availableStashes.length > 0 ? (
+                <NewMessageStashPicker
+                  accountsCount={accounts.length}
+                  disabled={isSending}
+                  drafts={availableStashes}
+                  getReturnFocus={getReturnElement}
+                  onSelect={switchDraft}
+                  triggerRef={stashPickerTriggerRef}
+                />
+              ) : null}
+            </div>
+          </div>
           <DialogDescription className="sr-only">
-            Write and send a new email message
+            Write, stash, or send a new email message
           </DialogDescription>
         </DialogHeader>
         <form
           className="bg-background flex min-h-0 flex-1 flex-col gap-px overflow-hidden"
+          onFocusCapture={onFocusCapture}
           onSubmit={(event) => {
             event.preventDefault();
             void send();
           }}
         >
-          <div className="bg-card flex min-h-9 shrink-0 items-center px-4 py-1">
-            <span className="text-muted-foreground w-10 shrink-0">From</span>
-            <fieldset
-              aria-label="From account"
-              className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto"
-            >
-              {accounts.map((account, index) => {
-                const command = COMPOSER_ACCOUNT_COMMAND_IDS[index];
-                const selectAccount = (): void => {
-                  setAccountId(account.email);
-                };
-
-                return (
-                  <Fragment key={account.email}>
-                    {command === undefined ? null : (
-                      <AppCommand callback={selectAccount} command={command} />
-                    )}
-                    <AccountPickerButton
-                      account={account}
-                      autoFocus={selectedAccountId.length === 0 && index === 0}
-                      command={command}
-                      isSelected={account.email === selectedAccountId}
-                      onSelect={selectAccount}
-                    />
-                  </Fragment>
-                );
-              })}
-            </fieldset>
-          </div>
+          <NewMessageAccountPicker
+            accounts={accounts}
+            focusRefForAccount={(email) => refFor(`account:${email}`)}
+            onSelect={setAccountId}
+            selectedAccountId={selectedAccountId}
+          />
           <EmailRecipientFields
             accountId={selectedAccountId}
-            autoFocus={selectedAccountId.length > 0}
             className="shrink-0"
-            key={selectedAccountId}
+            inputRefs={{
+              bcc: refFor("bcc"),
+              cc: refFor("cc"),
+              to: refFor("to"),
+            }}
             onChange={setRecipients}
+            resetKey={draftId}
             value={recipients}
           />
           <InputGroup className="bg-card dark:bg-card h-9 shrink-0 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0">
@@ -420,9 +486,8 @@ const NewMessageDialog = ({
             <InputGroupInput
               className="h-8 px-0 text-sm md:text-sm"
               id="new-message-subject"
-              onChange={(event) => {
-                setSubject(event.currentTarget.value);
-              }}
+              onChange={(event) => setSubject(event.currentTarget.value)}
+              ref={refFor("subject")}
               value={subject}
             />
           </InputGroup>
@@ -430,72 +495,46 @@ const NewMessageDialog = ({
             ariaLabel="Message"
             className="min-h-32 flex-1 border-0"
             consumeModEnter
+            contentKey={draftId}
+            defaultValue={composer.html}
+            focusHandleRef={handleRefFor("message")}
             onChange={setComposer}
             placeholder="Write a message"
             toolbarActions={
-              <>
-                <input
-                  className="hidden"
-                  multiple
-                  onChange={(event) => {
-                    addAttachments(event.currentTarget.files);
-                  }}
-                  ref={attachmentInputRef}
-                  type="file"
-                />
-                <Button
-                  aria-label="Attach files"
-                  onClick={() => {
-                    attachmentInputRef.current?.click();
-                  }}
-                  size="icon"
-                  title="Attach files"
-                  type="button"
-                  variant="ghost"
-                >
-                  <PaperclipIcon />
-                </Button>
-              </>
+              <NewMessageAttachmentButton
+                focusRef={refFor("attachment")}
+                inputRef={inputRef}
+                onFiles={addAttachments}
+              />
             }
           />
-          {attachments.length === 0 ? null : (
-            <section
-              aria-label="Attachments"
-              className="bg-card flex max-h-24 shrink-0 flex-wrap gap-2 overflow-y-auto px-4 py-2"
+          <NewMessageAttachmentList
+            attachments={attachments}
+            onRemove={(attachmentId) =>
+              setAttachments((current) =>
+                current.filter(({ id }) => id !== attachmentId)
+              )
+            }
+          />
+          <div className="bg-background flex shrink-0 items-stretch gap-0">
+            <Button
+              aria-label="Stash draft"
+              aria-keyshortcuts={getHotkeyAriaLabel("composer.stash")}
+              className="border-background size-12 shrink-0 rounded-none border-0 border-r p-0"
+              disabled={!canStash}
+              onClick={() => {
+                stashCurrentDraft();
+              }}
+              onMouseDown={(event) => event.preventDefault()}
+              title="Stash draft"
+              type="button"
+              variant="secondary"
             >
-              {attachments.map((attachment) => (
-                <Badge
-                  className="h-7 max-w-72 gap-1.5 pr-1.5 pl-2.5"
-                  key={attachment.id}
-                  variant="secondary"
-                >
-                  <PaperclipIcon aria-hidden="true" />
-                  <span className="min-w-0 truncate">
-                    {attachment.filename}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">
-                    {formatAttachmentSize(attachment.size)}
-                  </span>
-                  <button
-                    aria-label={`Remove ${attachment.filename}`}
-                    className="hover:bg-foreground/10 focus-visible:ring-ring/50 grid size-4 shrink-0 place-items-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
-                    onClick={() => {
-                      setAttachments((current) =>
-                        current.filter(({ id }) => id !== attachment.id)
-                      );
-                    }}
-                    type="button"
-                  >
-                    <XIcon className="size-2.5" />
-                  </button>
-                </Badge>
-              ))}
-            </section>
-          )}
-          <div className="bg-card flex shrink-0 items-center">
+              <ArchiveIcon />
+            </Button>
             <Button
               aria-keyshortcuts={getHotkeyAriaLabel("composer.send")}
-              className="relative h-auto w-full rounded-none px-4 py-2 text-lg"
+              className="relative h-auto min-w-0 flex-1 rounded-none border-0 px-4 py-2 text-lg"
               disabled={!canSend}
               title={`${sendDisplay.label} (${sendDisplay.bindings[0]?.join("+")})`}
               type="submit"
@@ -514,7 +553,7 @@ const NewMessageDialog = ({
             </Button>
           </div>
         </form>
-      </DialogContent>
+      </NewMessageDialogShell>
     </Dialog>
   );
 };

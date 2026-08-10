@@ -26,23 +26,28 @@ export interface AuthApi {
 }
 
 export interface MailApi {
+  discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
   getSyncStatus: DesktopBridge["getMailSyncStatus"];
   listCachedThreadPage: DesktopBridge["listCachedThreadPage"];
   listLabels: DesktopBridge["listGmailLabels"];
   listSenders: DesktopBridge["listGmailSenders"];
+  listStashedDrafts: DesktopBridge["listStashedDrafts"];
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
   loadThread: DesktopBridge["loadThread"];
-  openAttachmentPreview: DesktopBridge["openAttachmentPreview"];
-  search: DesktopBridge["searchMail"];
-  saveAttachment: DesktopBridge["saveAttachment"];
-  sendMessage: DesktopBridge["sendMessage"];
-  sendThreadMessage: DesktopBridge["sendThreadMessage"];
+  loadThreadDraft: DesktopBridge["loadThreadDraft"];
+  onDraftChanged: DesktopBridge["onMailDraftChanged"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
   onThreadListUpdated: DesktopBridge["onMailThreadListUpdated"];
   onThreadUpdated: DesktopBridge["onMailThreadUpdated"];
   onTrustedImageSendersChanged: DesktopBridge["onTrustedImageSendersChanged"];
+  openAttachmentPreview: DesktopBridge["openAttachmentPreview"];
+  search: DesktopBridge["searchMail"];
+  saveAttachment: DesktopBridge["saveAttachment"];
+  saveDraft: DesktopBridge["saveMailDraft"];
+  sendMessage: DesktopBridge["sendMessage"];
+  sendThreadMessage: DesktopBridge["sendThreadMessage"];
   setThreadReadState: DesktopBridge["setThreadReadState"];
   syncLabels: DesktopBridge["syncGmailLabels"];
   trashThread: DesktopBridge["trashThread"];
@@ -114,13 +119,17 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     },
     lifecycle: { onClosing: bridge.onAppClosing },
     mail: {
+      discardDraft: bridge.discardMailDraft,
       getIndexProgress: bridge.getMailIndexProgress,
       getSyncStatus: bridge.getMailSyncStatus,
       listCachedThreadPage: bridge.listCachedThreadPage,
       listLabels: bridge.listGmailLabels,
       listSenders: bridge.listGmailSenders,
+      listStashedDrafts: bridge.listStashedDrafts,
       listTrustedImageSenders: bridge.listTrustedImageSenders,
       loadThread: bridge.loadThread,
+      loadThreadDraft: bridge.loadThreadDraft,
+      onDraftChanged: bridge.onMailDraftChanged,
       onIndexProgressChanged: bridge.onMailIndexProgressChanged,
       onSyncStatusChanged: bridge.onMailSyncStatusChanged,
       onThreadListUpdated: bridge.onMailThreadListUpdated,
@@ -128,6 +137,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       openAttachmentPreview: bridge.openAttachmentPreview,
       saveAttachment: bridge.saveAttachment,
+      saveDraft: bridge.saveMailDraft,
       search: bridge.searchMail,
       sendMessage: bridge.sendMessage,
       sendThreadMessage: bridge.sendThreadMessage,

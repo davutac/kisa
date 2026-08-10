@@ -4,6 +4,7 @@ import { Effect, Schema } from "effect";
 
 import { withDatabaseClient } from "../database";
 import { cancelMailBackfill } from "../mail/mail-backfill";
+import { forgetAccountDrafts } from "../mail/mail-drafts";
 import { forgetAccountMailData } from "../mail/mail-sync";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
 import { forgetAccountSettings } from "../settings/account-settings";
@@ -53,6 +54,11 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
       )
     );
     yield* forgetAccountSettings(email).pipe(
+      Effect.mapError(
+        (error) => new GoogleAccountDisconnectError({ message: error.message })
+      )
+    );
+    yield* forgetAccountDrafts(email).pipe(
       Effect.mapError(
         (error) => new GoogleAccountDisconnectError({ message: error.message })
       )

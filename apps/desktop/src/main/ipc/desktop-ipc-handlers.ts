@@ -9,6 +9,7 @@ import {
   startGoogle,
 } from "./methods/auth";
 import {
+  discardDraft,
   getIndexProgress,
   getSyncStatus,
   loadAttachmentPreview,
@@ -16,11 +17,14 @@ import {
   listImageSenders,
   listLabels,
   listSenders,
+  listStashedDrafts,
   loadThread,
+  loadThreadDraft,
   openAttachmentPreview,
   searchThreads,
   saveAttachment,
   saveAttachmentPreview,
+  saveDraft,
   sendNew,
   sendThread,
   setReadState,
@@ -57,6 +61,10 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(listLabels);
   yield* ipc.handle(syncLabels);
   yield* ipc.handle(loadThread);
+  yield* ipc.handle(listStashedDrafts);
+  yield* ipc.handle(loadThreadDraft);
+  yield* ipc.handle(saveDraft);
+  yield* ipc.handle(discardDraft);
   yield* ipc.handle(openAttachmentPreview);
   yield* ipc.handle(saveAttachment);
   yield* ipc.handle(loadAttachmentPreview);

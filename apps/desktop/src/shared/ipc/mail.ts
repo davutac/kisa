@@ -186,6 +186,67 @@ export const GmailMessageSendRequest = Schema.Struct({
 });
 export type GmailMessageSendRequest = typeof GmailMessageSendRequest.Type;
 
+export const MailDraftKind = Schema.Literals([
+  "forward",
+  "new",
+  "reply",
+  "reply-all",
+]);
+export type MailDraftKind = typeof MailDraftKind.Type;
+
+export const MailDraftAttachment = Schema.Struct({
+  filename: Schema.NonEmptyString,
+  id: Schema.NonEmptyString,
+  mediaType: Schema.NonEmptyString,
+  path: Schema.NonEmptyString,
+  size: Schema.Finite,
+});
+export type MailDraftAttachment = typeof MailDraftAttachment.Type;
+
+export const MailDraftInput = Schema.Struct({
+  accountId: Schema.optional(Schema.NonEmptyString),
+  attachments: Schema.Array(MailDraftAttachment),
+  bcc: Schema.Array(Schema.NonEmptyString),
+  body: Schema.Struct({ html: Schema.String, text: Schema.String }),
+  cc: Schema.Array(Schema.NonEmptyString),
+  id: Schema.NonEmptyString,
+  kind: MailDraftKind,
+  messageId: Schema.optional(Schema.NonEmptyString),
+  subject: Schema.String,
+  threadId: Schema.optional(Schema.NonEmptyString),
+  to: Schema.Array(Schema.NonEmptyString),
+});
+export type MailDraftInput = typeof MailDraftInput.Type;
+
+export const MailDraft = Schema.Struct({
+  ...MailDraftInput.fields,
+  createdAt: Schema.Finite,
+  updatedAt: Schema.Finite,
+});
+export type MailDraft = typeof MailDraft.Type;
+
+export const MailDraftListRequest = Schema.Struct({
+  accountIds: Schema.Array(Schema.NonEmptyString),
+});
+export type MailDraftListRequest = typeof MailDraftListRequest.Type;
+
+export const MailDraftDiscardRequest = Schema.Struct({
+  accountId: Schema.optional(Schema.NonEmptyString),
+  draftId: Schema.NonEmptyString,
+});
+export type MailDraftDiscardRequest = typeof MailDraftDiscardRequest.Type;
+
+export const MailDraftChanged = Schema.Union([
+  Schema.Struct({ draft: MailDraft, kind: Schema.Literal("upsert") }),
+  Schema.Struct({
+    accountId: Schema.optional(Schema.NonEmptyString),
+    draftId: Schema.NonEmptyString,
+    kind: Schema.Literal("remove"),
+    threadId: Schema.optional(Schema.NonEmptyString),
+  }),
+]);
+export type MailDraftChanged = typeof MailDraftChanged.Type;
+
 /** A sender whose remote images the account has agreed to load. */
 export const GmailTrustedImageSender = Schema.Struct({
   accountId: Schema.String,
@@ -366,3 +427,11 @@ export type GmailThreadMessageSendReply =
 
 export const GmailMessageSendReply = IpcReply(Schema.Void);
 export type GmailMessageSendReply = typeof GmailMessageSendReply.Type;
+export const MailDraftReply = IpcReply(MailDraft);
+export type MailDraftReply = typeof MailDraftReply.Type;
+export const MailDraftListReply = IpcReply(Schema.Array(MailDraft));
+export type MailDraftListReply = typeof MailDraftListReply.Type;
+export const MailDraftLoadReply = IpcReply(Schema.NullOr(MailDraft));
+export type MailDraftLoadReply = typeof MailDraftLoadReply.Type;
+export const MailDraftDiscardReply = IpcReply(Schema.Void);
+export type MailDraftDiscardReply = typeof MailDraftDiscardReply.Type;

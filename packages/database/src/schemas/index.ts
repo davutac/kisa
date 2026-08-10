@@ -10,4 +10,6 @@ export { gmailSenderBrands } from "./gmail-sender-brands";
 export { gmailSyncState } from "./gmail-sync-state";
 export { gmailTrustedImageSenders } from "./gmail-trusted-image-senders";
 export { gmailThreads } from "./gmail-threads";
+export { mailDrafts } from "./mail-drafts";
+export type { MailDraftKind, StoredMailDraftAttachment } from "./mail-drafts";
 export { test } from "./test";

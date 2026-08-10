@@ -6,6 +6,7 @@ import {
   getHotkeyDisplay,
   HOTKEY_COMMANDS,
   OPEN_ACCOUNT_COMMAND_IDS,
+  shouldRunHotkeyCommand,
   validateHotkeyCommands,
 } from "../src/renderer/src/hotkeys/commands";
 import { MAX_GOOGLE_ACCOUNTS } from "../src/shared/ipc/auth";
@@ -47,6 +48,18 @@ describe("hotkey command registry", () => {
       "Mod+9",
     ]);
     expect(COMPOSER_ACCOUNT_COMMAND_IDS).toHaveLength(MAX_GOOGLE_ACCOUNTS);
+  });
+
+  it("assigns the composer stash shortcut", () => {
+    expect(HOTKEY_COMMANDS["composer.stash"].bindings).toStrictEqual(["Mod+S"]);
+    expect(HOTKEY_COMMANDS["composer.stash"].repeat).toBe("ignore-key-repeat");
+    expect(getHotkeyAriaLabel("composer.stash", "mac")).toBe("Meta+S");
+    expect(getHotkeyAriaLabel("composer.stash", "windows")).toBe("Control+S");
+  });
+
+  it("allows repeated stash key presses while ignoring keydown auto-repeat", () => {
+    expect(shouldRunHotkeyCommand("ignore-key-repeat", false)).toBeTruthy();
+    expect(shouldRunHotkeyCommand("ignore-key-repeat", true)).toBeFalsy();
   });
 
   it("assigns selected-thread quick actions", () => {
