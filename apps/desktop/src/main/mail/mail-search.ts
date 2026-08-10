@@ -419,50 +419,6 @@ const toSenderStatement = (accounts: SQL, pattern: SQL, limit: number): SQL =>
     LIMIT ${limit}
   `;
 
-/**
- * Every address that has appeared in mail for these accounts. Unlike the
- * search-palette roles, composing can target somebody from either side of a
- * conversation, including a person who has only appeared in Cc or Bcc.
- */
-const toCorrespondentStatement = (
-  accounts: SQL,
-  pattern: SQL,
-  limit: number
-): SQL => sql`
-  WITH correspondent_addresses AS (
-    SELECT m.from_address AS address, coalesce(m.from_name, '') AS name
-    FROM gmail_messages m
-    WHERE m.account_email IN (${accounts})
-
-    UNION ALL
-
-    SELECT recipient.value AS address, '' AS name
-    FROM gmail_messages m
-    JOIN json_each(coalesce(m.to_addresses, '[]')) AS recipient
-    WHERE m.account_email IN (${accounts})
-
-    UNION ALL
-
-    SELECT recipient.value AS address, '' AS name
-    FROM gmail_messages m
-    JOIN json_each(coalesce(m.cc_addresses, '[]')) AS recipient
-    WHERE m.account_email IN (${accounts})
-
-    UNION ALL
-
-    SELECT recipient.value AS address, '' AS name
-    FROM gmail_messages m
-    JOIN json_each(coalesce(m.bcc_addresses, '[]')) AS recipient
-    WHERE m.account_email IN (${accounts})
-  )
-  SELECT address, max(name) AS name, count(*) AS message_count
-  FROM correspondent_addresses
-  WHERE 1 = 1${pattern}
-  GROUP BY lower(address)
-  ORDER BY message_count DESC, address ASC
-  LIMIT ${limit}
-`;
-
 const toSenderSuggestionQuery = (
   request: GmailSenderSuggestionRequest
 ): SQL | undefined => {
@@ -473,7 +429,7 @@ const toSenderSuggestionQuery = (
   );
   const query = request.query?.trim() ?? "";
 
-  if (request.accountIds.length === 0) {
+  if (request.accountIds.length === 0 || request.role === "correspondent") {
     return;
   }
 
@@ -488,11 +444,6 @@ const toSenderSuggestionQuery = (
         : sql` AND recipient.value LIKE ${like} ESCAPE '\\'`;
 
     statement = toRecipientStatement(accounts, pattern, limit);
-  } else if (request.role === "correspondent") {
-    const pattern =
-      query.length === 0 ? sql`` : sql` AND address LIKE ${like} ESCAPE '\\'`;
-
-    statement = toCorrespondentStatement(accounts, pattern, limit);
   } else {
     const pattern =
       query.length === 0
@@ -552,24 +503,19 @@ export const listIndexedSenders = Effect.fn("listIndexedSenders")(
         DEFAULT_SENDER_LIMIT,
         MAX_SENDER_LIMIT
       );
-      let cached = listCachedCorrespondents(
-        request.accountIds,
-        request.query,
-        limit
-      );
+      const readCache = () =>
+        listCachedCorrespondents(request.accountIds, request.query, limit);
+      const cached = readCache();
 
-      if (cached === undefined) {
-        yield* withDatabase("Could not load correspondents", (database) =>
-          loadCachedCorrespondentsRemote(database, request.accountIds)
-        );
-        cached = listCachedCorrespondents(
-          request.accountIds,
-          request.query,
-          limit
-        );
+      if (cached !== undefined) {
+        return cached;
       }
 
-      return cached ?? { senders: [] };
+      yield* withDatabase("Could not load correspondents", (database) =>
+        loadCachedCorrespondentsRemote(database, request.accountIds)
+      );
+
+      return readCache() ?? { senders: [] };
     }
 
     return yield* withDatabase("Could not load senders", (database) =>

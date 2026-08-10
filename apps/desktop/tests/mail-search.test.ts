@@ -5,8 +5,17 @@ import {
   createDatabaseClient,
   openDatabaseConnection,
 } from "@repo/database/client";
+import type { DatabaseRemoteCallback } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import {
   forgetCachedCorrespondents,
@@ -24,26 +33,29 @@ vi.mock(import("../src/main/database"), () => ({
 
 const connection = openDatabaseConnection(":memory:");
 const database = createDatabaseClient(connection);
-const remoteDatabase = createRemoteDatabaseClient(
-  (query, parameters, method) => {
-    const statement = connection.prepare(query).raw(true);
+const executeRemoteQuery: DatabaseRemoteCallback = (
+  query,
+  parameters,
+  method
+) => {
+  const statement = connection.prepare(query).raw(true);
 
-    if (method === "run") {
-      statement.run(...parameters);
-      return Promise.resolve({ rows: [] });
-    }
-
-    if (method === "get") {
-      const row = statement.get(...parameters);
-
-      return Promise.resolve({ rows: row === undefined ? [] : [row] });
-    }
-
-    return Promise.resolve({ rows: statement.all(...parameters) });
+  if (method === "run") {
+    statement.run(...parameters);
+    return Promise.resolve({ rows: [] });
   }
-);
 
-describe(runIndexedThreadSearchRemote, () => {
+  if (method === "get") {
+    const row = statement.get(...parameters);
+
+    return Promise.resolve({ rows: row === undefined ? [] : [row] });
+  }
+
+  return Promise.resolve({ rows: statement.all(...parameters) });
+};
+const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
+
+describe("mail search", () => {
   beforeAll(() => {
     applyDatabaseMigrations(
       database,
@@ -137,7 +149,10 @@ describe(runIndexedThreadSearchRemote, () => {
     );
   });
 
+  beforeEach(() => forgetCachedCorrespondents());
+
   afterAll(() => {
+    forgetCachedCorrespondents();
     connection.close();
   });
 
@@ -160,8 +175,7 @@ describe(runIndexedThreadSearchRemote, () => {
     ]);
   });
 
-  it("loads compose correspondents once with account isolation", async () => {
-    forgetCachedCorrespondents();
+  it("loads every address field with account isolation", async () => {
     await loadCachedCorrespondentsRemote(remoteDatabase, [
       "one@example.com",
       "two@example.com",
@@ -190,8 +204,22 @@ describe(runIndexedThreadSearchRemote, () => {
     ).toStrictEqual([]);
   });
 
+  it("does not reload an account already in memory", async () => {
+    let queryCount = 0;
+    const countingDatabase = createRemoteDatabaseClient(
+      (query, parameters, method) => {
+        queryCount += 1;
+        return executeRemoteQuery(query, parameters, method);
+      }
+    );
+
+    await loadCachedCorrespondentsRemote(countingDatabase, ["one@example.com"]);
+    await loadCachedCorrespondentsRemote(countingDatabase, ["one@example.com"]);
+
+    expect(queryCount).toBe(1);
+  });
+
   it("folds newly indexed addresses into a loaded snapshot", async () => {
-    forgetCachedCorrespondents();
     await loadCachedCorrespondentsRemote(remoteDatabase, ["one@example.com"]);
 
     rememberCorrespondentMessages("one@example.com", [
@@ -216,7 +244,6 @@ describe(runIndexedThreadSearchRemote, () => {
   });
 
   it("keeps the in-memory snapshot bounded per account", async () => {
-    forgetCachedCorrespondents();
     await loadCachedCorrespondentsRemote(remoteDatabase, ["empty@example.com"]);
 
     rememberCorrespondentMessages(

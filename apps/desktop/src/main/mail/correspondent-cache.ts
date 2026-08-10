@@ -1,4 +1,5 @@
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
+import type { GmailMessage } from "@repo/gmail/models";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -13,17 +14,7 @@ import type {
  */
 const MAX_CORRESPONDENTS_PER_ACCOUNT = 10_000;
 
-interface CorrespondentMailbox {
-  readonly address: string;
-  readonly name?: string;
-}
-
-interface CorrespondentMessage {
-  readonly bcc: readonly CorrespondentMailbox[];
-  readonly cc: readonly CorrespondentMailbox[];
-  readonly from: CorrespondentMailbox;
-  readonly to: readonly CorrespondentMailbox[];
-}
+type CorrespondentMessage = Pick<GmailMessage, "bcc" | "cc" | "from" | "to">;
 
 type CorrespondentTuple = [
   accountId: string,
@@ -52,21 +43,11 @@ const compareSuggestions = (
   right.messageCount - left.messageCount ||
   left.address.localeCompare(right.address);
 
-/**
- * Builds every account snapshot in one utility-process query. The window
- * function applies the memory ceiling independently per account.
- */
-export const loadCachedCorrespondentsRemote = async (
+const loadAccountSnapshots = async (
   database: RemoteDatabaseClient,
   accountIds: readonly string[]
 ): Promise<void> => {
-  const uniqueAccountIds = [...new Set(accountIds)];
-
-  if (uniqueAccountIds.length === 0) {
-    return;
-  }
-
-  const accounts = toAccountList(uniqueAccountIds);
+  const accounts = toAccountList(accountIds);
   const tuples = await database.values<CorrespondentTuple>(sql`
     WITH correspondent_addresses AS (
       SELECT m.account_email, m.from_address AS address,
@@ -114,20 +95,14 @@ export const loadCachedCorrespondentsRemote = async (
     ORDER BY account_email ASC, address_rank ASC
   `);
   const nextByAccount = new Map(
-    uniqueAccountIds.map(
+    accountIds.map(
       (accountId) =>
         [accountId, new Map<string, GmailSenderSuggestion>()] as const
     )
   );
 
   for (const [accountId, address, name, messageCount] of tuples) {
-    const account = nextByAccount.get(accountId);
-
-    if (account === undefined) {
-      continue;
-    }
-
-    account.set(toCacheKey(address), {
+    nextByAccount.get(accountId)?.set(toCacheKey(address), {
       address,
       messageCount,
       ...(name === null || name.length === 0 ? {} : { name }),
@@ -137,6 +112,25 @@ export const loadCachedCorrespondentsRemote = async (
   for (const [accountId, correspondents] of nextByAccount) {
     correspondentsByAccount.set(accountId, correspondents);
   }
+};
+
+/**
+ * Builds every missing account snapshot in one utility-process query. The
+ * window function applies the memory ceiling independently per account.
+ */
+export const loadCachedCorrespondentsRemote = async (
+  database: RemoteDatabaseClient,
+  accountIds: readonly string[]
+): Promise<void> => {
+  const missingAccountIds = [...new Set(accountIds)].filter(
+    (accountId) => !correspondentsByAccount.has(accountId)
+  );
+
+  if (missingAccountIds.length === 0) {
+    return;
+  }
+
+  await loadAccountSnapshots(database, missingAccountIds);
 };
 
 /**
@@ -152,20 +146,14 @@ export const listCachedCorrespondents = (
     return { senders: [] };
   }
 
-  const accounts = accountIds.map((accountId) =>
-    correspondentsByAccount.get(accountId)
-  );
-
-  if (accounts.some((account) => account === undefined)) {
-    return;
-  }
-
   const needle = query?.trim().toLowerCase() ?? "";
   const merged = new Map<string, GmailSenderSuggestion>();
 
-  for (const account of accounts) {
+  for (const accountId of new Set(accountIds)) {
+    const account = correspondentsByAccount.get(accountId);
+
     if (account === undefined) {
-      continue;
+      return;
     }
 
     for (const [key, suggestion] of account) {
@@ -211,7 +199,7 @@ export const rememberCorrespondentMessages = (
     return;
   }
 
-  const rememberMailbox = (mailbox: CorrespondentMailbox): void => {
+  const rememberMailbox = (mailbox: GmailMessage["from"]): void => {
     const key = toCacheKey(mailbox.address);
 
     if (key.length === 0) {
