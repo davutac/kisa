@@ -26,6 +26,8 @@ Run only the desktop app with:
 pnpm --dir apps/desktop dev
 ```
 
+Development launches use `<userData>/database/app.dev.sqlite` and its own sealed encryption key, keeping local development mail data separate from the installed app's `app.sqlite` database and key.
+
 The OAuth worker has separate configuration and deployment requirements; see [`apps/auth-worker/README.md`](apps/auth-worker/README.md).
 
 ## Verification

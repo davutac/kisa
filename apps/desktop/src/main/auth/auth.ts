@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 
+import { is } from "@electron-toolkit/utils";
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
 import { count, eq as equals } from "drizzle-orm";
@@ -892,16 +893,16 @@ export const startGoogleAuth = Effect.fn("startGoogleAuth")(
     yield* requireSecureStorage();
     yield* requireGoogleAccountCapacity();
 
-    if (!app.isPackaged) {
+    if (is.dev) {
       yield* startDevCallbackServer();
     }
 
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const url = new URL("/oauth/google/start", AUTH_WORKER_URL);
-    const callbackUrl = app.isPackaged
-      ? GOOGLE_AUTH_CALLBACK_URL
-      : GOOGLE_AUTH_DEV_CALLBACK_URL;
+    const callbackUrl = is.dev
+      ? GOOGLE_AUTH_DEV_CALLBACK_URL
+      : GOOGLE_AUTH_CALLBACK_URL;
     url.search = new URLSearchParams({
       code_challenge: challenge,
       code_challenge_method: "S256",

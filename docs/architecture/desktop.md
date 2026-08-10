@@ -44,6 +44,12 @@ Feature services do not register `ipcMain` handlers. Each public operation is a 
 
 The renderer does not import main or preload modules and does not call Electron directly. Components use feature hooks or `platform/desktop.ts`; browser mode is represented by an absent optional bridge.
 
+The local SQLite database uses the `better-sqlite3-multiple-ciphers` implementation with a fixed ChaCha20 configuration. Main generates a 256-bit key, seals it with Electron `safeStorage`, and stores only the sealed blob beside the database. Development uses `app.dev.sqlite` and `app.dev.sqlite.key`; packaged builds use `app.sqlite` and `app.sqlite.key`. Linux's insecure `basic_text` storage backend is rejected.
+
+Main sends the unlocked key to the database utility process as its first private process message; it never enters renderer IPC, process arguments, environment variables, or logs. The utility applies the key before any query or migration and erases its key buffer after opening the connection. Existing plaintext databases are checkpointed, switched out of WAL, and encrypted in place with `rekey` before normal startup continues.
+
+The Database settings section exports a versioned `.kisa-key` recovery file and imports an existing Kisa database with that key. A blocking overlay accepts each file through a native picker or drop target, then reports coarse progress after the user starts the import. Selected paths remain behind an opaque main-process session; the renderer receives only display names, and preload resolves dropped `File` objects without exposing their paths. Import copies and validates a private staged database in an isolated utility process. A clean restart activates the staged files and preserves the previous database, sealed key, and journal sidecars under `database/backups/`; interrupted activation resumes on the next startup. Packaged builds can relaunch automatically. Development quits instead because `electron-vite` owns the renderer server, and the user reruns the development command.
+
 ## Renderer organization and routing
 
 The renderer follows the same broad shape as t3code's web app: feature-oriented component folders, domain logic outside React components, a `state` folder for application-wide context, and a small `platform` adapter around the host bridge.

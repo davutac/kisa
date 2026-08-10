@@ -71,13 +71,17 @@ The provider stores each declaration under a unique token. The highest-priority,
 | `settings` | `always`, `app`, `settings` |
 | `composer` | `always`, `composer`        |
 | `search`   | `always`, `search`          |
+| `blocking` | `always`                    |
 
 Composer and search overlays suppress every underlying application command. Removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
+
+Blocking operations, such as database import, activate the highest-priority `blocking` layer. It suspends every product command while the modal owns the window; only commands in the reserved `always` scope remain active.
 
 The fixed priorities are:
 
 ```ts
 const LAYER_PRIORITY = {
+  blocking: 1000,
   composer: 100,
   search: 100,
   thread: 20,

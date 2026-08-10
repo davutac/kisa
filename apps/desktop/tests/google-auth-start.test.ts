@@ -19,13 +19,14 @@ const electronState = vi.hoisted(() => ({
   openedUrls: [] as string[],
 }));
 
+vi.mock(import("@electron-toolkit/utils"), () => ({ is: { dev: false } }));
+
 vi.mock(import("electron"), () => ({
   BrowserWindow: {
     getAllWindows: vi.fn<typeof Electron.BrowserWindow.getAllWindows>(() => []),
   } as unknown as typeof Electron.BrowserWindow,
   app: {
     focus: vi.fn<typeof Electron.app.focus>(),
-    isPackaged: true,
   } as unknown as typeof Electron.app,
   safeStorage: {
     getSelectedStorageBackend: vi.fn<

@@ -28,7 +28,16 @@ import {
   trash,
   trustImages,
 } from "./methods/mail";
-import { listSettings, updateSettings } from "./methods/settings";
+import {
+  beginImport,
+  cancelImport,
+  dropImportFile,
+  exportRecoveryKey,
+  importExistingDatabase,
+  listSettings,
+  selectImportFile,
+  updateSettings,
+} from "./methods/settings";
 import { check, getStatus, install } from "./methods/updates";
 
 export const installDesktopIpcHandlers = Effect.fn(
@@ -60,6 +69,12 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(trash);
   yield* ipc.handle(listImageSenders);
   yield* ipc.handle(trustImages);
+  yield* ipc.handle(beginImport);
+  yield* ipc.handle(cancelImport);
+  yield* ipc.handle(dropImportFile);
+  yield* ipc.handle(exportRecoveryKey);
+  yield* ipc.handle(importExistingDatabase);
+  yield* ipc.handle(selectImportFile);
   yield* ipc.handle(listSettings);
   yield* ipc.handle(updateSettings);
   yield* ipc.handle(getStatus);

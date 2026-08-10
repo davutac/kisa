@@ -16,7 +16,7 @@ const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 let isInitialized = false;
 
 const canSelfUpdate = (): boolean => {
-  if (is.dev || !app.isPackaged) {
+  if (is.dev) {
     return false;
   }
 

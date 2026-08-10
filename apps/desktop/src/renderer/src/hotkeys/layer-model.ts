@@ -1,4 +1,5 @@
 export const HOTKEY_LAYERS = [
+  "blocking",
   "mailbox",
   "thread",
   "settings",
@@ -17,6 +18,7 @@ export interface LayerRegistration {
 }
 
 export const LAYER_PRIORITY = {
+  blocking: 1000,
   composer: 100,
   mailbox: 10,
   search: 100,
@@ -63,6 +65,10 @@ export const isHotkeyScopeActive = (
 ): boolean => {
   if (scope === "always") {
     return true;
+  }
+
+  if (topLayer === "blocking") {
+    return false;
   }
 
   if (topLayer === null) {

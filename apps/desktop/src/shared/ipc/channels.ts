@@ -46,6 +46,20 @@ export const ATTACHMENT_PREVIEW_SAVE_CHANNEL =
 
 export const SETTINGS_ACCOUNT_SETTINGS_CHANGED_CHANNEL =
   "desktop:settings:account-settings-changed";
+export const SETTINGS_BEGIN_DATABASE_IMPORT_CHANNEL =
+  "desktop:settings:begin-database-import";
+export const SETTINGS_CANCEL_DATABASE_IMPORT_CHANNEL =
+  "desktop:settings:cancel-database-import";
+export const SETTINGS_EXPORT_DATABASE_RECOVERY_KEY_CHANNEL =
+  "desktop:settings:export-database-recovery-key";
+export const SETTINGS_IMPORT_DATABASE_CHANNEL =
+  "desktop:settings:import-database";
+export const SETTINGS_DATABASE_IMPORT_PROGRESS_CHANNEL =
+  "desktop:settings:database-import-progress";
+export const SETTINGS_DROP_DATABASE_IMPORT_FILE_CHANNEL =
+  "desktop:settings:drop-database-import-file";
+export const SETTINGS_SELECT_DATABASE_IMPORT_FILE_CHANNEL =
+  "desktop:settings:select-database-import-file";
 export const SETTINGS_LIST_ACCOUNT_SETTINGS_CHANNEL =
   "desktop:settings:list-account-settings";
 export const SETTINGS_UPDATE_ACCOUNT_SETTINGS_CHANNEL =

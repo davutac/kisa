@@ -40,14 +40,24 @@ describe(getRuntimeCapabilities, () => {
 
   const versions = { app: "0", chrome: "1", electron: "2", node: "3" };
   const createDesktopBridge = (): DesktopBridge => ({
+    beginDatabaseImport: () =>
+      Promise.resolve({ data: { sessionId: "import-1" }, ok: true as const }),
+    cancelDatabaseImport: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
     disconnectGoogleAccount: () =>
       Promise.resolve({ data: [], ok: true as const }),
+    dropDatabaseImportFile: () =>
+      Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
+    exportDatabaseRecoveryKey: () =>
+      Promise.resolve({ data: "saved" as const, ok: true as const }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
     getPathForFile: () => "/tmp/attachment.txt",
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
     getVersions: () => versions,
+    importDatabase: () =>
+      Promise.resolve({ data: "restart-pending" as const, ok: true as const }),
     installUpdate: () => Promise.resolve(),
     listAccountSettings: () => Promise.resolve({ data: [], ok: true as const }),
     listCachedThreadPage: () =>
@@ -72,6 +82,7 @@ describe(getRuntimeCapabilities, () => {
       }),
     onAccountSettingsChanged: () => () => {},
     onAppClosing: () => () => {},
+    onDatabaseImportProgress: () => () => {},
     onGoogleAccountsChanged: () => () => {},
     onMailIndexProgressChanged: () => () => {},
     onMailSyncStatusChanged: () => () => {},
@@ -92,6 +103,8 @@ describe(getRuntimeCapabilities, () => {
         data: { hasMore: false, threads: [] },
         ok: true as const,
       }),
+    selectDatabaseImportFile: () =>
+      Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
     sendMessage: () => Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
@@ -149,8 +162,15 @@ describe(getRuntimeCapabilities, () => {
         trustImageSender: desktopBridge.trustImageSender,
       },
       settings: {
+        beginDatabaseImport: desktopBridge.beginDatabaseImport,
+        cancelDatabaseImport: desktopBridge.cancelDatabaseImport,
+        dropDatabaseImportFile: desktopBridge.dropDatabaseImportFile,
+        exportDatabaseRecoveryKey: desktopBridge.exportDatabaseRecoveryKey,
+        importDatabase: desktopBridge.importDatabase,
         listAccountSettings: desktopBridge.listAccountSettings,
         onAccountSettingsChanged: desktopBridge.onAccountSettingsChanged,
+        onDatabaseImportProgress: desktopBridge.onDatabaseImportProgress,
+        selectDatabaseImportFile: desktopBridge.selectDatabaseImportFile,
         updateAccountSettings: desktopBridge.updateAccountSettings,
       },
       startup: { start: desktopBridge.startApp },
