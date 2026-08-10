@@ -23,6 +23,8 @@ Events take the reverse path. `main/electron/renderer-events.ts` encodes the pay
 
 Conversation popouts use the same boundary. The main mailbox requests an account-scoped thread window through a schema-validated IPC method, and only closes its inline conversation after the new window's renderer has loaded. Each popout loads the dedicated `/thread/$accountId/$threadId` hash route, reuses the existing mail bridge, and has minimal window chrome. A second request for the same account and Gmail thread focuses the existing popout; the main window remains the explicit target for app activation, OAuth handoff, and notification-click fallback.
 
+The app-wide General setting "Always open threads in new windows" changes the default for mailbox clicks, the mailbox open command, and search results. It persists locally across restarts, while the explicit inline popout action remains available when the preference is off.
+
 ## Ownership
 
 ```text

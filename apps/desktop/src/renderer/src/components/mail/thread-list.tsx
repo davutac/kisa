@@ -19,6 +19,7 @@ import {
   getThreadSelectionKey,
   getVisibleThreadSelectionIndex,
 } from "@/mail/thread-selection";
+import { useOpenThread } from "@/mail/use-open-thread";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
 import { useMailboxStore, useSelectedThreadId } from "@/state/mailbox";
 
@@ -59,7 +60,7 @@ const MailThreadList = ({
   const scrollElementRef = useRef<HTMLElement>(null);
   const listElementRef = useRef<HTMLOListElement>(null);
   const selectedThreadKey = useSelectedThreadId();
-  const openThread = useMailboxStore((state) => state.openThread);
+  const openThread = useOpenThread();
   const selectThread = useMailboxStore((state) => state.selectThread);
   const lastSelectionMoveAtRef = useRef<number | null>(null);
   const previousReloadRevisionRef = useRef(reloadRevision);
@@ -171,7 +172,7 @@ const MailThreadList = ({
     "mailbox.openThread",
     () => {
       if (selectedThread !== undefined) {
-        openThread(getThreadSelectionKey(selectedThread));
+        openThread(selectedThread);
       }
     },
     { enabled: selectedThread !== undefined }
@@ -277,6 +278,7 @@ const MailThreadList = ({
                 data-index={virtualRow.index}
                 isSelected={getThreadSelectionKey(thread) === selectedThreadKey}
                 key={virtualRow.key}
+                onOpen={openThread}
                 onToggleRead={onToggleThreadRead}
                 onTrash={onTrashThread}
                 position={virtualRow.index + 1}

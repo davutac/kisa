@@ -14,8 +14,13 @@ import {
   SettingsSectionHeader,
   SettingsSectionTitle,
 } from "@/components/ui/settings";
+import { Switch } from "@/components/ui/switch";
 import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
+import {
+  useGeneralSettingsStore,
+  useOpenThreadsInNewWindows,
+} from "@/state/general-settings";
 
 import SettingsAccountsSection from "./-components/settings-accounts-section";
 import SettingsDatabaseSection from "./-components/settings-database-section";
@@ -26,7 +31,18 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsRoute() {
-  const { auth, mail, settings, updates, versions } = getRuntimeCapabilities();
+  const {
+    auth,
+    mail,
+    settings,
+    updates,
+    versions,
+    window: windowApi,
+  } = getRuntimeCapabilities();
+  const openThreadsInNewWindows = useOpenThreadsInNewWindows();
+  const setOpenThreadsInNewWindows = useGeneralSettingsStore(
+    (state) => state.setOpenThreadsInNewWindows
+  );
 
   useHotkeyLayer("settings", true);
 
@@ -55,6 +71,26 @@ function SettingsRoute() {
                 <ModeToggle />
               </SettingsRowActions>
             </SettingsRow>
+            {windowApi === undefined ? null : (
+              <SettingsRow>
+                <SettingsRowContent>
+                  <SettingsRowTitle id="thread-window-title">
+                    Always open threads in new windows
+                  </SettingsRowTitle>
+                  <SettingsRowDescription>
+                    Open conversations in their own window instead of over the
+                    mailbox.
+                  </SettingsRowDescription>
+                </SettingsRowContent>
+                <SettingsRowActions>
+                  <Switch
+                    aria-labelledby="thread-window-title"
+                    checked={openThreadsInNewWindows}
+                    onCheckedChange={setOpenThreadsInNewWindows}
+                  />
+                </SettingsRowActions>
+              </SettingsRow>
+            )}
             {updates === undefined ? null : (
               <SettingsUpdateRow updateApi={updates} />
             )}
