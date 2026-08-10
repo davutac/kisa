@@ -44,7 +44,7 @@ React feature or hook
      -> database utility process -> SQLite
 ```
 
-See the [desktop architecture](docs/architecture/desktop.md) for details.
+See the [desktop architecture](docs/architecture/desktop.md) and [Gmail API capabilities](docs/architecture/gmail-api.md) for details.
 
 ## Repository
 
