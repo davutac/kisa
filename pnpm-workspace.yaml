@@ -4,6 +4,7 @@ packages:
 
 allowBuilds:
   better-sqlite3: true
+  better-sqlite3-multiple-ciphers: true
   electron-winstaller: true
   esbuild: true
   msgpackr-extract: true
@@ -40,7 +41,7 @@ catalog:
   "@vitejs/plugin-react": ^6.0.5
   alchemy: 2.0.0-beta.70
   babel-plugin-react-compiler: ^1.0.0
-  better-sqlite3: ^13.0.3
+  better-sqlite3: npm:better-sqlite3-multiple-ciphers@13.0.3
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   cmdk: ^1.1.1

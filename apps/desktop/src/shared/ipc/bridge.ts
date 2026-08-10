@@ -42,6 +42,15 @@ import type {
 import type {
   AccountSettingsReply,
   AccountSettingsUpdateRequest,
+  DatabaseImportCancelReply,
+  DatabaseImportFileSelectionReply,
+  DatabaseImportFileSelectionRequest,
+  DatabaseImportFileKind,
+  DatabaseImportReply,
+  DatabaseImportProgress,
+  DatabaseImportSession,
+  DatabaseImportSessionReply,
+  DatabaseRecoveryKeyExportReply,
 } from "./settings";
 
 export interface ElectronVersions {
@@ -52,16 +61,29 @@ export interface ElectronVersions {
 }
 
 export interface DesktopBridge {
+  beginDatabaseImport: () => Promise<DatabaseImportSessionReply>;
+  cancelDatabaseImport: (
+    request: DatabaseImportSession
+  ) => Promise<DatabaseImportCancelReply>;
   checkForUpdates: () => Promise<UpdateStatus>;
   disconnectGoogleAccount: (
     request: GoogleAccountDisconnectRequest
   ) => Promise<GoogleAccountsReply>;
+  dropDatabaseImportFile: (request: {
+    readonly file: File;
+    readonly kind: DatabaseImportFileKind;
+    readonly sessionId: string;
+  }) => Promise<DatabaseImportFileSelectionReply>;
+  exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
   getPathForFile: (file: File) => string;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
   installUpdate: () => Promise<void>;
+  importDatabase: (
+    request: DatabaseImportSession
+  ) => Promise<DatabaseImportReply>;
   listAccountSettings: () => Promise<AccountSettingsReply>;
   listCachedThreadPage: (
     request: GmailCachedThreadPageRequest
@@ -80,6 +102,9 @@ export interface DesktopBridge {
   ) => Promise<GmailAttachmentActionReply>;
   onAccountSettingsChanged: (
     listener: (reply: AccountSettingsReply) => void
+  ) => () => void;
+  onDatabaseImportProgress: (
+    listener: (progress: DatabaseImportProgress) => void
   ) => () => void;
   onAppClosing: (listener: () => void) => () => void;
   onGoogleAccountsChanged: (
@@ -111,6 +136,9 @@ export interface DesktopBridge {
   saveAttachment: (
     request: GmailAttachmentRequest
   ) => Promise<GmailAttachmentSaveReply>;
+  selectDatabaseImportFile: (
+    request: DatabaseImportFileSelectionRequest
+  ) => Promise<DatabaseImportFileSelectionReply>;
   sendMessage: (
     request: GmailMessageSendRequest
   ) => Promise<GmailMessageSendReply>;

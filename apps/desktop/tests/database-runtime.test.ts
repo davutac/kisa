@@ -19,12 +19,15 @@ describe(createDatabaseRuntime, () => {
       let migratedClient: DatabaseClient | null = null;
       let migrationsFolder = "";
       let openCount = 0;
+      let openedWithKey = Buffer.alloc(0);
       let migrateCount = 0;
       const client = {} as DatabaseClient;
       const connection = createConnection(() => {});
+      const encryptionKey = Buffer.alloc(32, 7);
       const runtime = createDatabaseRuntime(
         {
           databasePath: "/app-data/example/app.sqlite",
+          encryptionKey,
           migrationsFolder: "/app-data/example/drizzle",
         },
         {
@@ -37,8 +40,9 @@ describe(createDatabaseRuntime, () => {
           createDirectory: (nextDirectoryPath) => {
             directoryPath = nextDirectoryPath;
           },
-          openConnection: () => {
+          openConnection: (_databasePath, key) => {
             openCount += 1;
+            openedWithKey = Buffer.from(key);
             return connection;
           },
         }
@@ -57,6 +61,8 @@ describe(createDatabaseRuntime, () => {
         migratedClient,
         migrationsFolder,
         openCount,
+        openedWithKey,
+        retainedKey: encryptionKey,
       }).toStrictEqual({
         databaseClient: client,
         databaseConnection: connection,
@@ -65,6 +71,8 @@ describe(createDatabaseRuntime, () => {
         migratedClient: client,
         migrationsFolder: "/app-data/example/drizzle",
         openCount: 1,
+        openedWithKey: Buffer.alloc(32, 7),
+        retainedKey: Buffer.alloc(32),
       });
     })
   );
@@ -75,6 +83,7 @@ describe(createDatabaseRuntime, () => {
       const runtime = createDatabaseRuntime(
         {
           databasePath: "/app-data/example/app.sqlite",
+          encryptionKey: Buffer.alloc(32),
           migrationsFolder: "/app-data/example/drizzle",
         },
         {
@@ -111,6 +120,7 @@ describe(createDatabaseRuntime, () => {
       const runtime = createDatabaseRuntime(
         {
           databasePath: "/app-data/example/app.sqlite",
+          encryptionKey: Buffer.alloc(32),
           migrationsFolder: "/app-data/example/drizzle",
         },
         {

@@ -82,6 +82,18 @@ describe("hotkey interaction layers", () => {
     expect(isHotkeyScopeActive("app", "thread")).toBeTruthy();
   });
 
+  it("blocks product hotkeys while a modal operation is active", () => {
+    expect(
+      getTopHotkeyLayer([
+        registration("settings", 1),
+        registration("blocking", 2),
+      ])
+    ).toBe("blocking");
+    expect(isHotkeyScopeActive("app", "blocking")).toBeFalsy();
+    expect(isHotkeyScopeActive("settings", "blocking")).toBeFalsy();
+    expect(isHotkeyScopeActive("always", "blocking")).toBeTruthy();
+  });
+
   it("keeps the app scope active without a layer", () => {
     expect(isHotkeyScopeActive("app", null)).toBeTruthy();
   });

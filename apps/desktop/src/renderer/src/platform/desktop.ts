@@ -50,8 +50,15 @@ export interface MailApi {
 }
 
 export interface SettingsApi {
+  beginDatabaseImport: DesktopBridge["beginDatabaseImport"];
+  cancelDatabaseImport: DesktopBridge["cancelDatabaseImport"];
+  dropDatabaseImportFile: DesktopBridge["dropDatabaseImportFile"];
+  exportDatabaseRecoveryKey: DesktopBridge["exportDatabaseRecoveryKey"];
+  importDatabase: DesktopBridge["importDatabase"];
   listAccountSettings: DesktopBridge["listAccountSettings"];
   onAccountSettingsChanged: DesktopBridge["onAccountSettingsChanged"];
+  onDatabaseImportProgress: DesktopBridge["onDatabaseImportProgress"];
+  selectDatabaseImportFile: DesktopBridge["selectDatabaseImportFile"];
   updateAccountSettings: DesktopBridge["updateAccountSettings"];
 }
 
@@ -130,8 +137,15 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       trustImageSender: bridge.trustImageSender,
     },
     settings: {
+      beginDatabaseImport: bridge.beginDatabaseImport,
+      cancelDatabaseImport: bridge.cancelDatabaseImport,
+      dropDatabaseImportFile: bridge.dropDatabaseImportFile,
+      exportDatabaseRecoveryKey: bridge.exportDatabaseRecoveryKey,
+      importDatabase: bridge.importDatabase,
       listAccountSettings: bridge.listAccountSettings,
       onAccountSettingsChanged: bridge.onAccountSettingsChanged,
+      onDatabaseImportProgress: bridge.onDatabaseImportProgress,
+      selectDatabaseImportFile: bridge.selectDatabaseImportFile,
       updateAccountSettings: bridge.updateAccountSettings,
     },
     startup: { start: bridge.startApp },

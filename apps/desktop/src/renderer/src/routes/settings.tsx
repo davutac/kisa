@@ -18,6 +18,7 @@ import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
 
 import SettingsAccountsSection from "./-components/settings-accounts-section";
+import SettingsDatabaseSection from "./-components/settings-database-section";
 import SettingsUpdateRow from "./-components/settings-update-row";
 
 export const Route = createFileRoute("/settings")({
@@ -59,6 +60,10 @@ function SettingsRoute() {
             )}
           </SettingsRows>
         </SettingsSection>
+
+        {settings === undefined ? null : (
+          <SettingsDatabaseSection settingsApi={settings} />
+        )}
 
         {auth === undefined ? null : (
           <SettingsAccountsSection

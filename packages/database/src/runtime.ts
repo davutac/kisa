@@ -6,7 +6,7 @@ import { Effect, Schema } from "effect";
 import {
   applyDatabaseMigrations,
   createDatabaseClient,
-  openDatabaseConnection,
+  openEncryptedDatabaseConnection,
 } from "./client";
 import type { DatabaseClient, DatabaseConnection } from "./client";
 
@@ -66,6 +66,7 @@ export type DatabaseRuntimeEffect<T> = Effect.Effect<T, DatabaseError>;
 
 export interface DatabaseRuntimePaths {
   databasePath: string;
+  encryptionKey: Uint8Array;
   migrationsFolder: string;
 }
 
@@ -76,7 +77,10 @@ export interface DatabaseRuntimeAdapters {
   ) => void;
   createClient?: (connection: DatabaseConnection) => DatabaseClient;
   createDirectory?: (directoryPath: string) => void;
-  openConnection?: (databasePath: string) => DatabaseConnection;
+  openConnection?: (
+    databasePath: string,
+    encryptionKey: Uint8Array
+  ) => DatabaseConnection;
 }
 
 export interface DatabaseRuntime {
@@ -95,7 +99,8 @@ export const createDatabaseRuntime = (
     ((directoryPath: string): void => {
       mkdirSync(directoryPath, { recursive: true });
     });
-  const openConnection = adapters.openConnection ?? openDatabaseConnection;
+  const openConnection =
+    adapters.openConnection ?? openEncryptedDatabaseConnection;
   const createClient = adapters.createClient ?? createDatabaseClient;
   const applyMigrations = adapters.applyMigrations ?? applyDatabaseMigrations;
 
@@ -141,7 +146,7 @@ export const createDatabaseRuntime = (
     });
     const connection = yield* Effect.try({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
-      try: () => openConnection(paths.databasePath),
+      try: () => openConnection(paths.databasePath, paths.encryptionKey),
     });
     const client = yield* Effect.try({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
@@ -167,7 +172,14 @@ export const createDatabaseRuntime = (
 
     databaseConnection = connection;
     databaseClient = client;
-  }).pipe(Effect.withSpan("DatabaseRuntime.start"));
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        paths.encryptionKey.fill(0);
+      })
+    ),
+    Effect.withSpan("DatabaseRuntime.start")
+  );
 
   return {
     close: closeCurrentConnection,

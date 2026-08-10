@@ -12,3 +12,6 @@ export const getDatabasePath = ({
     "database",
     isDevelopment ? "app.dev.sqlite" : "app.sqlite"
   );
+
+export const getDatabaseKeyPath = (databasePath: string): string =>
+  `${databasePath}.key`;
