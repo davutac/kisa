@@ -13,7 +13,7 @@
     "check": "ultracite check --disable-nested-config",
     "deploy": "turbo run deploy",
     "deploy:marketing": "turbo run deploy --filter=@kisa/marketing",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=!@kisa/marketing",
     "dev:marketing": "turbo run dev --filter=@kisa/marketing",
     "fix": "ultracite fix --disable-nested-config",
     "lint": "ultracite check --disable-nested-config",
