@@ -1,7 +1,7 @@
 import { useHotkeys } from "@tanstack/react-hotkeys";
 
 import { useIsHotkeyScopeActive } from "@/hotkeys/app-hotkeys-provider";
-import { HOTKEY_COMMANDS } from "@/hotkeys/commands";
+import { HOTKEY_COMMANDS, shouldRunHotkeyCommand } from "@/hotkeys/commands";
 import type { HotkeyCommandId } from "@/hotkeys/commands";
 
 export interface UseAppCommandOptions {
@@ -17,7 +17,7 @@ interface AppCommandProps {
 
 export const useAppCommand = (
   commandId: HotkeyCommandId,
-  callback: () => void,
+  onCommand: () => void,
   options: UseAppCommandOptions = {}
 ): void => {
   const command = HOTKEY_COMMANDS[commandId];
@@ -26,7 +26,13 @@ export const useAppCommand = (
   const definitions =
     scopeActive && enabled
       ? command.bindings.map((hotkey) => ({
-          callback,
+          callback: (event: KeyboardEvent) => {
+            if (!shouldRunHotkeyCommand(command.repeat, event.repeat)) {
+              return;
+            }
+
+            onCommand();
+          },
           hotkey,
           options: {
             ignoreInputs: command.input === "ignore",

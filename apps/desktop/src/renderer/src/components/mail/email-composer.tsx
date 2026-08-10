@@ -1,10 +1,12 @@
 import { Placeholder } from "@tiptap/extensions";
+import { EditorState, Selection } from "@tiptap/pm/state";
 import { EditorContent, Extension, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 import EmailComposerToolbar from "@/components/mail/email-composer-toolbar";
+import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
 import { cn } from "@/lib/utils";
 
 export interface EmailComposerValue {
@@ -18,8 +20,10 @@ interface EmailComposerProps {
   autoFocus?: boolean;
   className?: string;
   consumeModEnter?: boolean;
+  contentKey?: string;
   defaultValue?: string;
   disabled?: boolean;
+  focusHandleRef?: (handle: ComposerFocusHandle | null) => void;
   onChange?: (value: EmailComposerValue) => void;
   placeholder?: string;
   toolbarActions?: ReactNode;
@@ -50,12 +54,15 @@ const EmailComposer = ({
   autoFocus = false,
   className,
   consumeModEnter = false,
+  contentKey,
   defaultValue = "",
   disabled = false,
+  focusHandleRef,
   onChange,
   placeholder = "Write a message",
   toolbarActions,
 }: EmailComposerProps) => {
+  const contentKeyRef = useRef(contentKey);
   const onChangeRef = useRef(onChange);
 
   useEffect(() => {
@@ -94,6 +101,39 @@ const EmailComposer = ({
   useEffect(() => {
     editor?.setEditable(!disabled);
   }, [disabled, editor]);
+
+  useLayoutEffect(() => {
+    if (editor === null || contentKeyRef.current === contentKey) {
+      return;
+    }
+
+    contentKeyRef.current = contentKey;
+    editor.commands.setContent(defaultValue, { emitUpdate: false });
+
+    // A new editor state keeps undo history from crossing draft boundaries.
+    const { doc, plugins } = editor.state;
+    editor.view.updateState(
+      EditorState.create({
+        doc,
+        plugins,
+        selection: Selection.atEnd(doc),
+      })
+    );
+  }, [contentKey, defaultValue, editor]);
+
+  useLayoutEffect(() => {
+    const element = editor?.view.dom ?? null;
+    focusHandleRef?.(
+      element === null || editor === null
+        ? null
+        : {
+            element,
+            focus: () => editor.commands.focus("end"),
+          }
+    );
+
+    return () => focusHandleRef?.(null);
+  }, [editor, focusHandleRef]);
 
   return (
     <div

@@ -1,5 +1,5 @@
 import { XIcon } from "lucide-react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +21,10 @@ interface EmailAddressInputProps {
   autoFocus?: boolean;
   disabled?: boolean;
   id: string;
+  inputRef?: Ref<HTMLInputElement>;
   label: string;
   onChange: (addresses: readonly string[]) => void;
+  onFocus?: () => void;
   suggestedAddresses?: readonly string[];
   value: readonly string[];
 }
@@ -35,8 +37,10 @@ const EmailAddressInput = ({
   autoFocus = false,
   disabled = false,
   id,
+  inputRef,
   label,
   onChange,
+  onFocus,
   suggestedAddresses = NO_SUGGESTED_ADDRESSES,
   value,
 }: EmailAddressInputProps) => {
@@ -152,7 +156,9 @@ const EmailAddressInput = ({
               setDraft(event.currentTarget.value);
               setIsInvalid(false);
             }}
+            onFocus={onFocus}
             onKeyDown={handleKeyDown}
+            ref={inputRef}
             spellCheck={false}
             type="text"
             value={draft}

@@ -9,12 +9,13 @@ import { HOTKEY_LAYERS, isHotkeyScopeActive } from "@/hotkeys/layer-model";
 import type { HotkeyScope } from "@/hotkeys/layer-model";
 
 export type HotkeyPlatform = "linux" | "mac" | "windows";
+export type HotkeyRepeat = "allow" | "ignore-key-repeat" | "once";
 
 interface HotkeyCommandDefinition {
   readonly bindings: readonly string[];
   readonly input: "allow" | "ignore";
   readonly label: string;
-  readonly repeat: "allow" | "once";
+  readonly repeat: HotkeyRepeat;
   readonly scope: HotkeyScope;
 }
 
@@ -122,6 +123,13 @@ export const HOTKEY_COMMANDS = {
     input: "allow",
     label: "Send message",
     repeat: "once",
+    scope: "composer",
+  },
+  "composer.stash": {
+    bindings: ["Mod+S"],
+    input: "allow",
+    label: "Stash draft",
+    repeat: "ignore-key-repeat",
     scope: "composer",
   },
   "composer.useAccount1": {
@@ -244,6 +252,11 @@ export const HOTKEY_COMMANDS = {
     scope: "thread",
   },
 } as const satisfies Record<string, HotkeyCommandDefinition>;
+
+export const shouldRunHotkeyCommand = (
+  repeat: HotkeyRepeat,
+  isKeyboardRepeat: boolean
+): boolean => repeat !== "ignore-key-repeat" || !isKeyboardRepeat;
 
 export type HotkeyCommandId = keyof typeof HOTKEY_COMMANDS;
 

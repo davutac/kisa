@@ -6,13 +6,17 @@ import {
   ATTACHMENT_PREVIEW_LOAD_CHANNEL,
   ATTACHMENT_PREVIEW_SAVE_CHANNEL,
   MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
   MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
+  MAIL_LIST_STASHED_DRAFTS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
+  MAIL_LOAD_THREAD_DRAFT_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
+  MAIL_SAVE_DRAFT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
@@ -47,6 +51,13 @@ import {
   GmailThreadRequest,
   GmailTrustedImageSenderRequest,
   GmailTrustedImageSendersReply,
+  MailDraftDiscardReply,
+  MailDraftDiscardRequest,
+  MailDraftInput,
+  MailDraftListReply,
+  MailDraftListRequest,
+  MailDraftLoadReply,
+  MailDraftReply,
 } from "../../../shared/ipc/mail";
 import {
   loadAttachmentPreview as loadAttachmentPreviewAction,
@@ -55,6 +66,12 @@ import {
   saveAttachmentPreview as saveAttachmentPreviewAction,
 } from "../../mail/attachment-actions";
 import { getMailIndexProgress } from "../../mail/mail-backfill";
+import {
+  discardMailDraft,
+  listStashedDrafts as listStashedDraftsAction,
+  loadThreadDraft as loadSavedThreadDraft,
+  saveMailDraft,
+} from "../../mail/mail-drafts";
 import {
   listIndexedSenders,
   searchIndexedThreads,
@@ -202,6 +219,44 @@ export const loadThread = makeIpcMethod({
     toIpcReply(loadFullThread(request), "Could not load email"),
   payload: GmailThreadRequest,
   result: GmailThreadReply,
+});
+
+export const listStashedDrafts = makeIpcMethod({
+  channel: MAIL_LIST_STASHED_DRAFTS_CHANNEL,
+  handler: (request) =>
+    toIpcReply(
+      listStashedDraftsAction(request),
+      "Could not load stashed drafts"
+    ),
+  payload: MailDraftListRequest,
+  result: MailDraftListReply,
+});
+
+export const loadThreadDraft = makeIpcMethod({
+  channel: MAIL_LOAD_THREAD_DRAFT_CHANNEL,
+  handler: (request) =>
+    toIpcReply(
+      loadSavedThreadDraft(request.accountId, request.threadId),
+      "Could not load saved reply"
+    ),
+  payload: GmailThreadRequest,
+  result: MailDraftLoadReply,
+});
+
+export const saveDraft = makeIpcMethod({
+  channel: MAIL_SAVE_DRAFT_CHANNEL,
+  handler: (request) =>
+    toIpcReply(saveMailDraft(request), "Could not save draft"),
+  payload: MailDraftInput,
+  result: MailDraftReply,
+});
+
+export const discardDraft = makeIpcMethod({
+  channel: MAIL_DISCARD_DRAFT_CHANNEL,
+  handler: (request) =>
+    toIpcReply(discardMailDraft(request), "Could not discard draft"),
+  payload: MailDraftDiscardRequest,
+  result: MailDraftDiscardReply,
 });
 
 export const setReadState = makeIpcMethod({

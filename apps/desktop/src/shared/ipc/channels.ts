@@ -13,9 +13,15 @@ export const AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL =
 export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";
 
 export const MAIL_INDEX_PROGRESS_CHANNEL = "desktop:mail:index-progress";
+export const MAIL_DRAFT_CHANGED_CHANNEL = "desktop:mail:draft-changed";
+export const MAIL_DISCARD_DRAFT_CHANNEL = "desktop:mail:discard-draft";
+export const MAIL_LIST_STASHED_DRAFTS_CHANNEL =
+  "desktop:mail:list-stashed-drafts";
+export const MAIL_LOAD_THREAD_DRAFT_CHANNEL = "desktop:mail:load-thread-draft";
 export const MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL =
   "desktop:mail:open-attachment-preview";
 export const MAIL_SAVE_ATTACHMENT_CHANNEL = "desktop:mail:save-attachment";
+export const MAIL_SAVE_DRAFT_CHANNEL = "desktop:mail:save-draft";
 export const MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL =
   "desktop:mail:list-cached-thread-page";
 export const MAIL_LIST_LABELS_CHANNEL = "desktop:mail:list-labels";

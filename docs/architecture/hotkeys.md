@@ -17,7 +17,7 @@ The hotkey module owns commands that apply to an application screen or interacti
 - App navigation, search, and message composition
 - Mailbox selection, thread opening, read-state toggling, and trashing
 - Closing the active thread
-- Selecting the composer account and sending a message
+- Selecting the composer account, stashing a draft, and sending a message
 
 Focused widgets retain their native keyboard behavior. Recipient completion, search results, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused.
 
@@ -46,6 +46,8 @@ The hook expands alternative bindings and unregisters inactive commands. It inte
 Dynamic lists use the renderless `AppCommand` component, which delegates to the same hook without calling hooks inside a loop.
 
 Account commands are static and cover the supported maximum of nine accounts. The app uses `1` through `9` for account navigation and the composer uses `Mod+1` through `Mod+9` for its From account.
+
+In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, and keeps the dialog open. On a blank form, it opens the stash picker when saved stashes are available. The command can be pressed again without releasing `Mod`, while operating-system key repeat from holding `S` is ignored. The same command definition drives the Stash button hint and ARIA metadata.
 
 `U` toggles the unread-only mailbox filter.
 
@@ -109,7 +111,7 @@ Buttons and tooltips should derive labels and shortcut metadata from the registr
 
 ## Composer integration
 
-Tiptap's StarterKit maps `Mod+Enter` to a hard break, while Kisa maps it to Send. `EmailComposer` can install a high-priority Tiptap extension that consumes the editor command without stopping DOM propagation. TanStack then handles Send at the document layer. `Shift+Enter` remains owned by Tiptap.
+Tiptap's StarterKit maps `Mod+Enter` to a hard break, while Kisa maps it to Send. `EmailComposer` can install a high-priority Tiptap extension that consumes the editor command without stopping DOM propagation. TanStack then handles Send at the document layer. `Mod+S` remains an application command while the composer layer is active, and `Shift+Enter` remains owned by Tiptap.
 
 ## Validation
 

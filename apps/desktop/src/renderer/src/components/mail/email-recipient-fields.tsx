@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { useId, useState } from "react";
 
 import EmailAddressInput from "@/components/mail/email-address-input";
@@ -17,12 +17,14 @@ interface EmailRecipientFieldsProps {
   autoFocus?: boolean;
   className?: string;
   disabled?: boolean;
+  inputRefs?: Partial<Record<RecipientField, Ref<HTMLInputElement>>>;
   onChange: (recipients: EmailRecipients) => void;
+  resetKey?: string;
   suggestedAddresses?: readonly string[];
   value: EmailRecipients;
 }
 
-type RecipientField = keyof EmailRecipients;
+export type RecipientField = keyof EmailRecipients;
 
 const NO_SUGGESTED_ADDRESSES: readonly string[] = [];
 
@@ -32,19 +34,31 @@ const EmailRecipientFields = ({
   autoFocus = false,
   className,
   disabled = false,
+  inputRefs,
   onChange,
+  resetKey,
   suggestedAddresses = NO_SUGGESTED_ADDRESSES,
   value,
 }: EmailRecipientFieldsProps) => {
   const id = useId();
   const [showCc, setShowCc] = useState(value.cc.length > 0);
   const [showBcc, setShowBcc] = useState(value.bcc.length > 0);
+  const isCcVisible = showCc || value.cc.length > 0;
+  const isBccVisible = showBcc || value.bcc.length > 0;
 
   const updateField = (
     field: RecipientField,
     fieldValue: readonly string[]
   ) => {
     onChange({ ...value, [field]: fieldValue });
+  };
+
+  const rememberVisibleField = (field: RecipientField): void => {
+    if (field === "cc") {
+      setShowCc(true);
+    } else if (field === "bcc") {
+      setShowBcc(true);
+    }
   };
 
   const renderField = (field: RecipientField, label: "Bcc" | "Cc" | "To") => (
@@ -56,19 +70,19 @@ const EmailRecipientFields = ({
           <>
             <InputGroupButton
               aria-controls={`${id}-cc`}
-              aria-expanded={showCc}
+              aria-expanded={isCcVisible}
               disabled={disabled}
               onClick={() => setShowCc((isVisible) => !isVisible)}
-              variant={showCc ? "secondary" : "ghost"}
+              variant={isCcVisible ? "secondary" : "ghost"}
             >
               Cc
             </InputGroupButton>
             <InputGroupButton
               aria-controls={`${id}-bcc`}
-              aria-expanded={showBcc}
+              aria-expanded={isBccVisible}
               disabled={disabled}
               onClick={() => setShowBcc((isVisible) => !isVisible)}
-              variant={showBcc ? "secondary" : "ghost"}
+              variant={isBccVisible ? "secondary" : "ghost"}
             >
               Bcc
             </InputGroupButton>
@@ -77,9 +91,12 @@ const EmailRecipientFields = ({
         ) : undefined
       }
       id={`${id}-${field}`}
+      inputRef={inputRefs?.[field]}
+      key={`${field}:${resetKey ?? "stable"}`}
       label={label}
       disabled={disabled}
       onChange={(addresses) => updateField(field, addresses)}
+      onFocus={field === "to" ? undefined : () => rememberVisibleField(field)}
       suggestedAddresses={suggestedAddresses}
       value={value[field]}
     />
@@ -88,8 +105,8 @@ const EmailRecipientFields = ({
   return (
     <div className={cn("flex flex-col gap-px", className)}>
       {renderField("to", "To")}
-      {showCc ? renderField("cc", "Cc") : null}
-      {showBcc ? renderField("bcc", "Bcc") : null}
+      {isCcVisible ? renderField("cc", "Cc") : null}
+      {isBccVisible ? renderField("bcc", "Bcc") : null}
     </div>
   );
 };

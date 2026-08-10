@@ -45,6 +45,8 @@ describe(getRuntimeCapabilities, () => {
     cancelDatabaseImport: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
+    discardMailDraft: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     disconnectGoogleAccount: () =>
       Promise.resolve({ data: [], ok: true as const }),
     dropDatabaseImportFile: () =>
@@ -67,6 +69,7 @@ describe(getRuntimeCapabilities, () => {
     listGmailSenders: () =>
       Promise.resolve({ data: { senders: [] }, ok: true as const }),
     listGoogleAccounts: () => Promise.resolve({ data: [], ok: true as const }),
+    listStashedDrafts: () => Promise.resolve({ data: [], ok: true as const }),
     listTrustedImageSenders: () =>
       Promise.resolve({ data: [], ok: true as const }),
     loadThread: () =>
@@ -80,10 +83,12 @@ describe(getRuntimeCapabilities, () => {
         },
         ok: true as const,
       }),
+    loadThreadDraft: () => Promise.resolve({ data: null, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
     onAppClosing: () => () => {},
     onDatabaseImportProgress: () => () => {},
     onGoogleAccountsChanged: () => () => {},
+    onMailDraftChanged: () => () => {},
     onMailIndexProgressChanged: () => () => {},
     onMailSyncStatusChanged: () => () => {},
     onMailThreadListUpdated: () => () => {},
@@ -98,6 +103,11 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     saveAttachment: () =>
       Promise.resolve({ data: "saved" as const, ok: true as const }),
+    saveMailDraft: (request) =>
+      Promise.resolve({
+        data: { ...request, createdAt: 1, updatedAt: 1 },
+        ok: true as const,
+      }),
     searchMail: () =>
       Promise.resolve({
         data: { hasMore: false, threads: [] },
@@ -138,13 +148,17 @@ describe(getRuntimeCapabilities, () => {
         onClosing: desktopBridge.onAppClosing,
       },
       mail: {
+        discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
         getSyncStatus: desktopBridge.getMailSyncStatus,
         listCachedThreadPage: desktopBridge.listCachedThreadPage,
         listLabels: desktopBridge.listGmailLabels,
         listSenders: desktopBridge.listGmailSenders,
+        listStashedDrafts: desktopBridge.listStashedDrafts,
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
         loadThread: desktopBridge.loadThread,
+        loadThreadDraft: desktopBridge.loadThreadDraft,
+        onDraftChanged: desktopBridge.onMailDraftChanged,
         onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,
         onSyncStatusChanged: desktopBridge.onMailSyncStatusChanged,
         onThreadListUpdated: desktopBridge.onMailThreadListUpdated,
@@ -153,6 +167,7 @@ describe(getRuntimeCapabilities, () => {
           desktopBridge.onTrustedImageSendersChanged,
         openAttachmentPreview: desktopBridge.openAttachmentPreview,
         saveAttachment: desktopBridge.saveAttachment,
+        saveDraft: desktopBridge.saveMailDraft,
         search: desktopBridge.searchMail,
         sendMessage: desktopBridge.sendMessage,
         sendThreadMessage: desktopBridge.sendThreadMessage,
