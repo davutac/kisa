@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build --filter=kisa",
+    "build:auth-worker": "turbo run build --filter=@repo/auth-worker",
     "build:linux": "turbo run build:linux",
     "build:mac": "turbo run build:mac",
     "build:marketing": "turbo run build --filter=@kisa/marketing",
@@ -13,7 +14,7 @@
     "check": "ultracite check --disable-nested-config",
     "deploy": "turbo run deploy",
     "deploy:marketing": "turbo run deploy --filter=@kisa/marketing",
-    "dev": "turbo run dev --filter=!@kisa/marketing",
+    "dev": "turbo run dev --filter=kisa",
     "dev:marketing": "turbo run dev --filter=@kisa/marketing",
     "fix": "ultracite fix --disable-nested-config",
     "lint": "ultracite check --disable-nested-config",
