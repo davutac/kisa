@@ -14,6 +14,8 @@ A notification may use a BIMI sender logo only when Kisa already has a valid, un
 
 If the logo cannot be validated or converted to a native image, the notification falls back to the normal app presentation. Clicking an alert—or its Open action on platforms that expose notification actions—opens and focuses the exact account-scoped conversation in a thread window. If that window cannot be created, Kisa restores and focuses the main window instead.
 
+When Kisa successfully marks a thread as read, it closes any still-active notifications for that account and Gmail thread. The account scope prevents colliding Gmail thread IDs from dismissing another account's alerts.
+
 ## Platform behavior
 
 Electron's main-process `Notification` API owns delivery. macOS requires a code-signed app for notifications to appear; Windows packaged notifications use Kisa's configured AppUserModelID; Linux delivery depends on the desktop's notification service. OS-level permission or focus settings remain controlled by the user.

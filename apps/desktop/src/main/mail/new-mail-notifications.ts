@@ -161,8 +161,30 @@ const openNotificationThread = Effect.fn("openNotificationThread")(
   )
 );
 
-const activeNotifications = new Set<Notification>();
+const activeNotifications = new Map<
+  Notification,
+  Pick<NewMailNotificationMessage, "accountId" | "threadId">
+>();
 const brandIcons = new Map<string, NativeImage>();
+
+export const dismissThreadNotifications = (
+  accountId: string,
+  threadId: string
+): void => {
+  for (const [notification, message] of activeNotifications) {
+    if (message.accountId !== accountId || message.threadId !== threadId) {
+      continue;
+    }
+
+    activeNotifications.delete(notification);
+
+    try {
+      notification.close();
+    } catch {
+      // Notification dismissal is best-effort after the mail mutation succeeds.
+    }
+  }
+};
 
 const toBrandIcon = Effect.fn("toBrandIcon")(function* toBrandIcon(
   brand: GmailSenderBrand
@@ -260,7 +282,7 @@ const showNotification = (
   notification.once("failed", release);
 
   if (activeNotifications.size >= MAX_ACTIVE_NOTIFICATIONS) {
-    const oldest = activeNotifications.values().next().value;
+    const oldest = activeNotifications.keys().next().value;
 
     if (oldest !== undefined) {
       activeNotifications.delete(oldest);
@@ -268,7 +290,7 @@ const showNotification = (
     }
   }
 
-  activeNotifications.add(notification);
+  activeNotifications.set(notification, message);
   notification.show();
 };
 

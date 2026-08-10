@@ -5,6 +5,7 @@ import type * as Electron from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  dismissThreadNotifications,
   showNewMailNotifications,
   toNewMailNotificationCopy,
 } from "../src/main/mail/new-mail-notifications";
@@ -22,6 +23,7 @@ interface TestMessageRow {
 const mocks = vi.hoisted(() => ({
   appFocus: vi.fn<typeof Electron.app.focus>(),
   brandIcon: { isEmpty: () => false },
+  closedNotificationIds: [] as string[],
   createdNotifications: [] as Record<string, unknown>[],
   mainWindow: {
     focus: vi.fn<() => void>(),
@@ -46,16 +48,24 @@ const mocks = vi.hoisted(() => ({
 vi.mock(import("electron"), () => {
   class TestNotification {
     static isSupported = (): boolean => true;
+    readonly id: string;
+    readonly listeners = new Map<string, () => void>();
 
     constructor(options: Record<string, unknown>) {
+      this.id = String(options.id);
       mocks.createdNotifications.push(options);
-      mocks.notificationListeners.push(new Map());
+      mocks.notificationListeners.push(this.listeners);
     }
 
     once(event: string, listener: () => void): this {
-      mocks.notificationListeners.at(-1)?.set(event, listener);
+      this.listeners.set(event, listener);
       return this;
     }
+
+    readonly close = vi.fn<() => void>(() => {
+      mocks.closedNotificationIds.push(this.id);
+      this.listeners.get("close")?.();
+    });
 
     readonly show = vi.fn<() => void>();
   }
@@ -126,7 +136,12 @@ const makeMessage = (
 
 describe(showNewMailNotifications, () => {
   beforeEach(() => {
+    for (const listeners of mocks.notificationListeners) {
+      listeners.get("close")?.();
+    }
+
     mocks.appFocus.mockClear();
+    mocks.closedNotificationIds.length = 0;
     mocks.createdNotifications.length = 0;
     mocks.notificationListeners.length = 0;
     mocks.messages = [];
@@ -200,6 +215,41 @@ describe(showNewMailNotifications, () => {
       subtitle: "A subject",
       title: "Sender <sender@example.com>",
     });
+  });
+
+  it("dismisses only notifications for the matching account and thread", async () => {
+    mocks.messages = [
+      { ...makeMessage("first", ["INBOX", "UNREAD"]), threadId: "shared" },
+      { ...makeMessage("second", ["INBOX", "UNREAD"]), threadId: "shared" },
+      makeMessage("other", ["INBOX", "UNREAD"]),
+    ];
+    mocks.threads = [
+      { snippet: "Shared", threadId: "shared" },
+      { snippet: "Other", threadId: "thread-other" },
+    ];
+
+    await Effect.runPromise(
+      showNewMailNotifications(
+        "user@example.com",
+        ["first", "second", "other"],
+        () => Effect.succeed(null)
+      )
+    );
+    mocks.messages = [
+      { ...makeMessage("first", ["INBOX", "UNREAD"]), threadId: "shared" },
+    ];
+    await Effect.runPromise(
+      showNewMailNotifications("other@example.com", ["first"], () =>
+        Effect.succeed(null)
+      )
+    );
+
+    dismissThreadNotifications("user@example.com", "shared");
+
+    expect(mocks.closedNotificationIds).toStrictEqual([
+      "user@example.com:first",
+      "user@example.com:second",
+    ]);
   });
 
   it.each(["action", "click"])(

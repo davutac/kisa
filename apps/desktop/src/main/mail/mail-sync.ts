@@ -56,7 +56,10 @@ import {
   toImageDataUrl,
 } from "./inline-images";
 import type { NewMailNotificationMessage } from "./new-mail-notifications";
-import { showNewMailNotifications } from "./new-mail-notifications";
+import {
+  dismissThreadNotifications,
+  showNewMailNotifications,
+} from "./new-mail-notifications";
 import { addUnreadLabel, removeUnreadLabel } from "./read-state";
 import type { MessageHeader } from "./sender-brand";
 import { getSenderBrand, hasCachedSenderBrand } from "./sender-brand";
@@ -689,12 +692,18 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
           )
         )
       ).pipe(
+        Effect.tap(() =>
+          Effect.sync(() =>
+            dismissThreadNotifications(request.accountId, request.threadId)
+          )
+        ),
         Effect.catch((error) =>
           Effect.logWarning(
             `Could not mark Gmail thread as read: ${error.message}`
           )
         )
       );
+
       yield* reloadThreadList(request.accountId);
     }
 
@@ -772,6 +781,9 @@ const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
           })
         )
       )
+    );
+    yield* Effect.sync(() =>
+      dismissThreadNotifications(request.accountId, request.threadId)
     );
     const summary = yield* withDatabase(
       "Could not cache email",
@@ -958,6 +970,12 @@ export const setThreadReadState = Effect.fn("setThreadReadState")(
         )
       )
     );
+
+    if (!request.isUnread) {
+      yield* Effect.sync(() =>
+        dismissThreadNotifications(request.accountId, request.threadId)
+      );
+    }
 
     const row = yield* findCachedThread(request.accountId, request.threadId);
 
