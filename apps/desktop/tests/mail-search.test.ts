@@ -8,6 +8,12 @@ import {
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import {
+  forgetCachedCorrespondents,
+  listCachedCorrespondents,
+  loadCachedCorrespondentsRemote,
+  rememberCorrespondentMessages,
+} from "../src/main/mail/correspondent-cache";
 import { runIndexedThreadSearchRemote } from "../src/main/mail/mail-search";
 
 vi.mock(import("../src/main/database"), () => ({
@@ -78,6 +84,57 @@ describe(runIndexedThreadSearchRemote, () => {
       "archived-thread",
       1
     );
+
+    const insertMessage = connection.prepare(`
+      INSERT INTO gmail_messages (
+        account_email, bcc_addresses, cc_addresses, from_address, from_name,
+        internal_date, message_id, schema_version, subject, thread_id,
+        to_addresses, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insertMessage.run(
+      "one@example.com",
+      '["blind@example.com"]',
+      '["copy@example.com"]',
+      "alice@example.com",
+      "Alice",
+      1,
+      "message-one",
+      1,
+      "First",
+      "message-thread-one",
+      '["bob@example.com"]',
+      1
+    );
+    insertMessage.run(
+      "one@example.com",
+      "[]",
+      "[]",
+      "alice@example.com",
+      "Alice",
+      2,
+      "message-two",
+      1,
+      "Second",
+      "message-thread-two",
+      '["bob@example.com"]',
+      2
+    );
+    insertMessage.run(
+      "two@example.com",
+      "[]",
+      "[]",
+      "other@example.com",
+      "Other",
+      3,
+      "message-three",
+      1,
+      "Third",
+      "message-thread-three",
+      '["bob@example.com"]',
+      3
+    );
   });
 
   afterAll(() => {
@@ -101,5 +158,80 @@ describe(runIndexedThreadSearchRemote, () => {
       "inbox-thread",
       "archived-thread",
     ]);
+  });
+
+  it("loads compose correspondents once with account isolation", async () => {
+    forgetCachedCorrespondents();
+    await loadCachedCorrespondentsRemote(remoteDatabase, [
+      "one@example.com",
+      "two@example.com",
+    ]);
+
+    expect(
+      listCachedCorrespondents(["one@example.com"], undefined, 10)?.senders.map(
+        ({ address }) => address
+      )
+    ).toStrictEqual([
+      "alice@example.com",
+      "bob@example.com",
+      "blind@example.com",
+      "copy@example.com",
+    ]);
+    expect(
+      listCachedCorrespondents(["one@example.com"], "copy", 10)?.senders
+    ).toStrictEqual([{ address: "copy@example.com", messageCount: 1 }]);
+    expect(
+      listCachedCorrespondents(["two@example.com"], "other", 10)?.senders
+    ).toStrictEqual([
+      { address: "other@example.com", messageCount: 1, name: "Other" },
+    ]);
+    expect(
+      listCachedCorrespondents(["one@example.com"], "other", 10)?.senders
+    ).toStrictEqual([]);
+  });
+
+  it("folds newly indexed addresses into a loaded snapshot", async () => {
+    forgetCachedCorrespondents();
+    await loadCachedCorrespondentsRemote(remoteDatabase, ["one@example.com"]);
+
+    rememberCorrespondentMessages("one@example.com", [
+      {
+        bcc: [],
+        cc: [],
+        from: { address: "new@example.com", name: "New Sender" },
+        to: [{ address: "latest@example.com" }],
+      },
+    ]);
+
+    expect(
+      listCachedCorrespondents(["one@example.com"], "new@", 10)?.senders
+    ).toStrictEqual([
+      { address: "new@example.com", messageCount: 1, name: "New Sender" },
+    ]);
+
+    forgetCachedCorrespondents("one@example.com");
+    expect(
+      listCachedCorrespondents(["one@example.com"], "new@", 10)
+    ).toBeUndefined();
+  });
+
+  it("keeps the in-memory snapshot bounded per account", async () => {
+    forgetCachedCorrespondents();
+    await loadCachedCorrespondentsRemote(remoteDatabase, ["empty@example.com"]);
+
+    rememberCorrespondentMessages(
+      "empty@example.com",
+      Array.from({ length: 10_001 }, (_, index) => ({
+        bcc: [],
+        cc: [],
+        from: { address: `person-${index}@example.com` },
+        to: [],
+      }))
+    );
+
+    expect(
+      listCachedCorrespondents(["empty@example.com"], undefined, 12_000)
+        ?.senders
+    ).toHaveLength(10_000);
   });
 });

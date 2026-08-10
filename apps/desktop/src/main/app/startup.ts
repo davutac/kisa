@@ -7,10 +7,12 @@ import type {
 import { startDatabase } from "../database";
 import type { DatabaseError } from "../database";
 import { startMailBackfill } from "../mail/mail-backfill";
+import { warmCorrespondentCache } from "../mail/mail-search";
 import { startMailSync } from "../mail/mail-sync";
 import { refreshUnreadBadge } from "../mail/unread-badge";
 
 let startupPromise: Promise<AppStartupExit> | null = null;
+const CORRESPONDENT_WARM_DELAY_MS = 1000;
 
 type AppStartupError = DatabaseError;
 type AppStartupExit = Exit.Exit<void, AppStartupError>;
@@ -26,6 +28,11 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
     // Picks up any account whose index was still running when the app last
     // closed, and seeds the renderer's progress state for the rest.
     void Effect.runPromise(startMailBackfill().pipe(Effect.ignore));
+    // Give the first mailbox page priority over this one-time full-index scan.
+    const warmTimer = setTimeout(() => {
+      void Effect.runPromise(warmCorrespondentCache().pipe(Effect.ignore));
+    }, CORRESPONDENT_WARM_DELAY_MS);
+    warmTimer.unref();
   }
 
   return exit;

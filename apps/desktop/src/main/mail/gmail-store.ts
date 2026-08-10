@@ -32,6 +32,10 @@ import { Effect, Layer, Option, Redacted } from "effect";
 
 import { getGoogleAccessToken } from "../auth/auth";
 import { withDatabaseClient } from "../database";
+import {
+  forgetCachedCorrespondents,
+  rememberCorrespondentMessages,
+} from "./correspondent-cache";
 import { toIndexText } from "./message-text";
 
 const GMAIL_SCOPES = new Set<string>([
@@ -174,6 +178,8 @@ export const GmailStoreLive = Layer.succeed(
             .where(eq(gmailBackfillState.accountEmail, accountId))
             .run();
         });
+
+        forgetCachedCorrespondents(accountId);
       }),
 
     /**
@@ -403,6 +409,8 @@ export const GmailStoreLive = Layer.succeed(
             )
             .run();
         });
+
+        rememberCorrespondentMessages(accountId, thread.messages);
       }),
 
     setThreadReadState: (accountId, threadId, isRead) =>
@@ -505,6 +513,11 @@ export const GmailStoreLive = Layer.succeed(
             }
           }
         });
+
+        rememberCorrespondentMessages(
+          accountId,
+          details.flatMap(({ messages }) => messages)
+        );
       }),
   })
 );

@@ -13,6 +13,10 @@ import type {
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
+import {
+  listCachedCorrespondents,
+  loadCachedCorrespondentsRemote,
+} from "./correspondent-cache";
 import { toContainsPattern, toFtsMatchQuery } from "./search-match";
 
 const DEFAULT_RESULT_LIMIT = 50;
@@ -542,8 +546,53 @@ export const searchIndexedThreads = Effect.fn("searchIndexedThreads")(
 
 export const listIndexedSenders = Effect.fn("listIndexedSenders")(
   function* listIndexedSenders(request: GmailSenderSuggestionRequest) {
+    if (request.role === "correspondent") {
+      const limit = clampLimit(
+        request.limit,
+        DEFAULT_SENDER_LIMIT,
+        MAX_SENDER_LIMIT
+      );
+      let cached = listCachedCorrespondents(
+        request.accountIds,
+        request.query,
+        limit
+      );
+
+      if (cached === undefined) {
+        yield* withDatabase("Could not load correspondents", (database) =>
+          loadCachedCorrespondentsRemote(database, request.accountIds)
+        );
+        cached = listCachedCorrespondents(
+          request.accountIds,
+          request.query,
+          limit
+        );
+      }
+
+      return cached ?? { senders: [] };
+    }
+
     return yield* withDatabase("Could not load senders", (database) =>
       runSenderSuggestionsRemote(database, request)
+    );
+  }
+);
+
+/** Warm compose completion without delaying the first window. */
+export const warmCorrespondentCache = Effect.fn("warmCorrespondentCache")(
+  function* warmCorrespondentCache() {
+    yield* withDatabase(
+      "Could not warm correspondent suggestions",
+      async (database) => {
+        const accounts = await database.query.googleAccounts.findMany({
+          columns: { email: true },
+        });
+
+        await loadCachedCorrespondentsRemote(
+          database,
+          accounts.map(({ email }) => email)
+        );
+      }
     );
   }
 );
