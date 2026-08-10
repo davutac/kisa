@@ -1,0 +1,26 @@
+---
+interface Props {
+  class?: string;
+  tone?: "adaptive" | "inverse";
+}
+
+const { class: className = "size-4", tone = "adaptive" } = Astro.props;
+const inverse = tone === "inverse";
+---
+
+<span aria-hidden="true" class:list={["inline-grid shrink-0 place-items-center", className]}>
+  <img
+    alt=""
+    class:list={["size-full", inverse ? "hidden dark:block" : "dark:hidden"]}
+    height="16"
+    src="/github-light.svg"
+    width="16"
+  />
+  <img
+    alt=""
+    class:list={["size-full", inverse ? "dark:hidden" : "hidden dark:block"]}
+    height="16"
+    src="/github-dark.svg"
+    width="16"
+  />
+</span>

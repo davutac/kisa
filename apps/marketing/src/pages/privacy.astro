@@ -1,0 +1,66 @@
+---
+import { ArrowLeftIcon } from "lucide-react";
+
+import ThemeToggle from "@/components/theme-toggle";
+import BaseLayout from "@/layouts/base-layout.astro";
+---
+
+<BaseLayout
+  description="Kisa has no remote mailbox database. Your mail and encrypted credentials stay on your device."
+  title="Privacy | Kisa"
+>
+  <div class="page-shell relative min-h-screen overflow-x-clip">
+    <header class="sticky inset-x-0 top-0 z-50" data-sticky-header>
+      <div aria-hidden="true" class="header-backdrop" data-header-backdrop></div>
+      <div class="relative mx-auto flex h-18 max-w-6xl items-center justify-between px-5 sm:px-8">
+        <a class="flex items-center gap-2.5" href="/" aria-label="Kisa home">
+          <img alt="" class="size-8 rounded-lg shadow-sm" height="32" src="/icon.png" width="32" />
+          <span class="text-sm font-semibold tracking-tight">Kisa</span>
+        </a>
+
+        <div class="flex items-center gap-1">
+          <a class="inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground" href="/">
+            <ArrowLeftIcon className="size-3.5" />
+            Home
+          </a>
+          <ThemeToggle client:load />
+        </div>
+      </div>
+    </header>
+
+    <main class="relative z-10 mx-auto max-w-2xl px-5 pb-24 pt-16 sm:px-8 sm:pb-32 sm:pt-24">
+      <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Privacy</p>
+      <h1 class="mt-5 text-balance text-5xl font-semibold tracking-[-0.05em] sm:text-6xl">We store nothing.</h1>
+      <p class="mt-6 text-pretty text-lg leading-8 text-muted-foreground">
+        Kisa has no cloud mailbox or user account service. Your mail and credentials are not retained by a Kisa backend.
+      </p>
+
+      <div class="mt-14 divide-y border-y">
+        <section class="py-8">
+          <h2 class="text-sm font-semibold">Your data stays on your device</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            Your mail cache, search index, settings, and encrypted OAuth credentials are stored locally by the Kisa desktop app. We do not upload or keep a copy.
+          </p>
+        </section>
+
+        <section class="py-8">
+          <h2 class="text-sm font-semibold">Kisa connects directly to Gmail</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            The app talks to Gmail to sync and manage your mail. A small Cloudflare Worker processes OAuth data only to complete sign-in and token refresh. Kisa does not save your mail or tokens in that worker.
+          </p>
+        </section>
+
+        <section class="py-8">
+          <h2 class="text-sm font-semibold">Website hosting</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            Kisa does not add analytics, tracking pixels, or advertising cookies to this site. Cloudflare hosts it and processes limited technical data, such as IP addresses and request metadata, to deliver and protect it under its{" "}
+            <a class="underline decoration-border underline-offset-4 transition-colors hover:text-foreground" href="https://www.cloudflare.com/policies/privacy/" rel="noreferrer" target="_blank">privacy policy</a>.
+            Your theme preference is stored only in your browser.
+          </p>
+        </section>
+      </div>
+
+      <p class="mt-8 text-xs text-muted-foreground">Last updated August 10, 2026.</p>
+    </main>
+  </div>
+</BaseLayout>
