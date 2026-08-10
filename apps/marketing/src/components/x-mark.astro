@@ -1,0 +1,12 @@
+---
+interface Props {
+  class?: string;
+}
+
+const { class: className = "size-3" } = Astro.props;
+---
+
+<span aria-hidden="true" class:list={["inline-grid shrink-0 place-items-center", className]}>
+  <img alt="" class="size-full dark:hidden" height="12" src="/x-light.svg" width="12" />
+  <img alt="" class="hidden size-full dark:block" height="12" src="/x-dark.svg" width="12" />
+</span>

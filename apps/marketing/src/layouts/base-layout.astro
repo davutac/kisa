@@ -1,0 +1,69 @@
+---
+import "@/styles/global.css";
+
+interface Props {
+  description: string;
+  title: string;
+}
+
+const { description, title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <title>{title}</title>
+    <script is:inline>
+      (() => {
+        const storedTheme = localStorage.getItem("kisa-theme");
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.classList.toggle(
+          "dark",
+          storedTheme === "dark" || (storedTheme === null && prefersDark)
+        );
+      })();
+    </script>
+  </head>
+  <body>
+    <slot />
+    <script>
+      const headerBackdrops = document.querySelectorAll<HTMLElement>(
+        "[data-header-backdrop]"
+      );
+      let headerFrame = 0;
+
+      const updateHeaderBackdrops = () => {
+        const visible = window.scrollY > 8;
+
+        for (const backdrop of headerBackdrops) {
+          backdrop.dataset.visible = String(visible);
+        }
+      };
+
+      const queueHeaderUpdate = () => {
+        if (headerFrame !== 0) {
+          return;
+        }
+
+        headerFrame = window.requestAnimationFrame(() => {
+          updateHeaderBackdrops();
+          headerFrame = 0;
+        });
+      };
+
+      updateHeaderBackdrops();
+      window.addEventListener("scroll", queueHeaderUpdate, { passive: true });
+    </script>
+  </body>
+</html>

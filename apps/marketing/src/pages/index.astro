@@ -1,0 +1,398 @@
+---
+import {
+  ArchiveRestoreIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  DatabaseIcon,
+  DownloadIcon,
+  EyeIcon,
+  HouseIcon,
+  KeyboardIcon,
+  LockKeyholeIcon,
+  MailIcon,
+  PlusIcon,
+  SearchIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
+  SquarePenIcon,
+  UserRoundIcon,
+} from "lucide-react";
+
+import GithubMark from "@/components/github-mark.astro";
+import ThemeToggle from "@/components/theme-toggle";
+import { buttonVariants } from "@/components/ui/button";
+import XMark from "@/components/x-mark.astro";
+import BaseLayout from "@/layouts/base-layout.astro";
+import { cn } from "@/lib/utils";
+
+const repositoryUrl = "https://github.com/davutac/kisa";
+
+const features = [
+  {
+    description:
+      "Clear new mail without losing track. Stash a message and Kisa brings it back when you choose.",
+    icon: ArchiveRestoreIcon,
+    title: "Stash until later",
+  },
+  {
+    description:
+      "Your cache and full-text search index live in an encrypted database on your device.",
+    icon: DatabaseIcon,
+    title: "Local by design",
+  },
+  {
+    description:
+      "Move through mail, search, switch accounts, and take action without reaching for the mouse.",
+    icon: KeyboardIcon,
+    title: "Made for momentum",
+  },
+  {
+    description:
+      "Credentials stay outside the renderer. Message HTML is isolated and remote images wait for you.",
+    icon: ShieldCheckIcon,
+    title: "Private by default",
+  },
+];
+
+const threads = [
+  {
+    attachments: [
+      { filename: "design-notes.pdf", kind: "preview", type: "PDF" },
+      { filename: "handoff.zip", kind: "download", type: "ZIP" },
+    ],
+    email: "maya@example.com",
+    labels: ["Work", "Design"],
+    preview: "The calm direction feels right. One thought…",
+    sender: "Maya Chen",
+    subject: "Design review",
+    time: "10:42",
+    unread: true,
+  },
+  {
+    email: "alex@example.com",
+    labels: ["Personal"],
+    preview: "Saturday morning works perfectly for us.",
+    sender: "Alex Morgan",
+    subject: "Weekend plans",
+    time: "09:18",
+    unread: true,
+  },
+  {
+    email: "notifications@linear.app",
+    labels: ["Updates"],
+    preview: "12 issues completed across 3 projects.",
+    sender: "Linear",
+    subject: "Your weekly digest",
+    time: "Mon",
+    unread: false,
+  },
+  {
+    attachments: [
+      { filename: "berlin-01.jpg", kind: "preview", type: "JPG" },
+      { filename: "berlin-02.jpg", kind: "preview", type: "JPG" },
+      { filename: "berlin-03.jpg", kind: "preview", type: "JPG" },
+      { filename: "weekend-map.pdf", kind: "preview", type: "PDF" },
+    ],
+    email: "nora@example.com",
+    labels: ["Photos"],
+    preview: "Finally sorted these. Thought you'd like them.",
+    sender: "Nora Patel",
+    subject: "Photos from Berlin",
+    time: "Sun",
+    unread: false,
+  },
+  {
+    email: "hello@raycast.com",
+    preview: "A calmer command bar and a few small refinements.",
+    sender: "Raycast",
+    subject: "What's new this week",
+    time: "Fri",
+    unread: false,
+  },
+];
+---
+
+<BaseLayout
+  description="Kisa is a fast, local-first Gmail client built for a calm, keyboard-first desktop experience."
+  title="Kisa | Email, without the noise"
+>
+  <div class="page-shell relative overflow-x-clip">
+    <header class="sticky inset-x-0 top-0 z-50" data-sticky-header>
+      <div aria-hidden="true" class="header-backdrop" data-header-backdrop></div>
+      <div class="relative mx-auto flex h-18 max-w-6xl items-center justify-between px-5 sm:px-8">
+        <a class="flex items-center gap-2.5" href="#top" aria-label="Kisa home">
+          <img
+            alt=""
+            class="size-8 rounded-lg shadow-sm"
+            height="32"
+            src="/icon.png"
+            width="32"
+          />
+          <span class="text-sm font-semibold tracking-tight">Kisa</span>
+        </a>
+
+        <nav class="flex items-center gap-1" aria-label="Primary navigation">
+          <a class="hidden rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block" href="#features">
+            Features
+          </a>
+          <a class="hidden rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block" href="/privacy">
+            Privacy
+          </a>
+          <a
+            class="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            href={repositoryUrl}
+            rel="noreferrer"
+            target="_blank"
+            aria-label="View Kisa on GitHub"
+          >
+            <GithubMark />
+          </a>
+          <ThemeToggle client:load />
+        </nav>
+      </div>
+    </header>
+
+    <main class="relative z-10" id="top">
+      <section class="mx-auto flex max-w-4xl flex-col items-center px-5 pb-16 pt-22 text-center sm:px-8 sm:pb-24 sm:pt-30">
+        <h1 class="reveal max-w-3xl text-balance text-5xl font-semibold tracking-[-0.055em] sm:text-7xl sm:leading-[0.98]">
+          Email, without the noise.
+        </h1>
+
+        <p class="reveal reveal-delay mt-6 max-w-2xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
+          Kisa is a fast, keyboard-first Gmail desktop client that keeps its cache and search index on your device, so your inbox feels calm, quick, and yours.
+        </p>
+
+        <div class="reveal reveal-delay mt-8 flex flex-col items-center gap-3 sm:flex-row">
+          <a
+            class={cn(buttonVariants({ size: "lg" }), "group min-w-42")}
+            href={repositoryUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <GithubMark tone="inverse" />
+            Follow on GitHub
+            <ArrowRightIcon className="transition-transform group-hover:translate-x-0.5" />
+          </a>
+          <a class={cn(buttonVariants({ size: "lg", variant: "outline" }), "min-w-42")} href="#features">
+            See why Kisa
+          </a>
+        </div>
+
+        <p class="reveal reveal-delay mt-5 flex items-center gap-2 text-xs text-muted-foreground">
+          <CheckIcon className="size-3.5" />
+          Gmail only for now · Open source
+        </p>
+      </section>
+
+      <section class="mx-auto max-w-6xl px-3 pb-24 sm:px-8 sm:pb-32" aria-label="Kisa desktop app preview">
+        <div class="app-shadow overflow-hidden rounded-2xl border bg-background ring-1 ring-foreground/5">
+          <div class="relative flex h-11 items-center justify-between gap-2 bg-background px-3 sm:ps-21">
+            <div class="absolute start-4 flex gap-1.5 max-sm:hidden" aria-hidden="true">
+              <span class="size-2.5 rounded-full bg-foreground/15"></span>
+              <span class="size-2.5 rounded-full bg-foreground/15"></span>
+              <span class="size-2.5 rounded-full bg-foreground/15"></span>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <span class="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground shadow-xs">
+                <SquarePenIcon className="size-3.5" />
+              </span>
+              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
+                <HouseIcon className="size-3.5" />
+              </span>
+              <span class="flex h-7 items-center rounded-full bg-secondary text-[10px] font-medium sm:pe-2.5">
+                <span class="grid size-7 place-items-center rounded-full bg-muted">
+                  <UserRoundIcon className="size-3.5" />
+                </span>
+                <span class="hidden ps-1.5 sm:block">davut@example.com</span>
+              </span>
+              <span class="hidden size-7 place-items-center rounded-full bg-secondary text-[9px] font-semibold text-muted-foreground sm:grid">
+                W
+              </span>
+              <span class="hidden size-7 place-items-center rounded-full bg-secondary text-[9px] font-semibold text-muted-foreground sm:grid">
+                P
+              </span>
+              <span class="hidden size-7 place-items-center rounded-full bg-secondary text-[9px] font-semibold text-muted-foreground sm:grid">
+                M
+              </span>
+              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
+                <PlusIcon className="size-3.5" />
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <span class="flex h-7 items-center gap-1.5 rounded-md bg-secondary px-2 text-[10px] font-medium">
+                <SearchIcon className="size-3.5" />
+                <span class="hidden sm:inline">Search</span>
+                <span class="hidden rounded-sm border border-border bg-background/60 px-1 py-0.5 font-mono text-[8px] text-muted-foreground sm:inline">⌘ K</span>
+              </span>
+              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
+                <MailIcon className="size-3.5" />
+              </span>
+              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
+                <SettingsIcon className="size-3.5" />
+              </span>
+            </div>
+          </div>
+
+          <section class="min-h-120 bg-background p-3 sm:p-4" aria-label="Example Kisa inbox">
+            <ol class="relative space-y-px">
+              {threads.map((thread) => (
+                <li
+                  class:list={[
+                    "relative grid min-h-20 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 rounded-md px-4 py-3",
+                    thread.unread ? "bg-muted/30" : "opacity-60",
+                  ]}
+                >
+                  <div class="min-w-0 space-y-1">
+                    <div class="flex min-w-0 items-center gap-1.5 text-xs">
+                      <span class="truncate font-medium">{thread.sender}</span>
+                      <span class="truncate text-muted-foreground">{thread.email}</span>
+                      {thread.labels?.map((label) => (
+                        <span class="h-4 max-w-28 shrink-0 truncate rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                    <p class:list={["truncate text-sm", thread.unread ? "font-semibold" : "font-medium text-foreground/90"]}>
+                      {thread.subject}
+                    </p>
+                    <p class="truncate text-sm text-muted-foreground">{thread.preview}</p>
+                    {thread.attachments === undefined ? null : (
+                      <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                        {thread.attachments.slice(0, 3).map((attachment) => {
+                          const AttachmentIcon = attachment.kind === "preview" ? EyeIcon : DownloadIcon;
+
+                          return (
+                            <span class="flex h-6 max-w-56 items-center gap-1.5 rounded-md bg-muted px-2 text-[10px] font-medium text-muted-foreground">
+                              <AttachmentIcon className="size-2.5 shrink-0" />
+                              <span class="min-w-0 truncate">{attachment.filename}</span>
+                              <span class="shrink-0 border-s border-border/80 ps-2 text-[9px] font-semibold tracking-wide text-foreground/50">
+                                {attachment.type}
+                              </span>
+                            </span>
+                          );
+                        })}
+                        {thread.attachments.length > 3 ? (
+                          <span class="flex h-5 items-center rounded-full bg-muted px-2 text-[10px] font-medium text-muted-foreground">
+                            +{thread.attachments.length - 3}
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                  <time class:list={["pt-0.5 text-xs", thread.unread ? "font-medium text-foreground" : "text-muted-foreground"]}>
+                    {thread.time}
+                  </time>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
+      </section>
+
+      <section class="border-y bg-card/70" id="features">
+        <div class="mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-32">
+          <div class="max-w-xl">
+            <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">The inbox, reconsidered</p>
+            <h2 class="mt-4 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">Everything you need. Less of everything else.</h2>
+          </div>
+
+          <div class="mt-14 grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-2 lg:grid-cols-4">
+            {features.map(({ icon: Icon, title, description }) => (
+              <article class="bg-background p-7 sm:p-8">
+                <div class="grid size-9 place-items-center rounded-lg border bg-card shadow-xs">
+                  <Icon className="size-4" />
+                </div>
+                <h3 class="mt-8 text-sm font-semibold">{title}</h3>
+                <p class="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="mx-auto grid max-w-6xl items-center gap-14 px-5 py-24 sm:px-8 sm:py-32 lg:grid-cols-2" id="privacy">
+        <div>
+          <p class="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            <LockKeyholeIcon className="size-3.5" />
+            Privacy by default
+          </p>
+          <h2 class="mt-5 max-w-lg text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">Your mail stays between you and Gmail.</h2>
+          <p class="mt-5 max-w-xl text-pretty text-base leading-7 text-muted-foreground">
+            Kisa has no remote mailbox backend. OAuth credentials stay encrypted in the desktop main process, while local mail data and search indexes stay account-scoped on your device.
+          </p>
+        </div>
+
+        <div class="rounded-2xl border bg-card p-3 shadow-sm">
+          <div class="rounded-xl border bg-background p-5 sm:p-7">
+            <div class="flex items-center gap-3 border-b pb-5">
+              <span class="grid size-9 place-items-center rounded-lg bg-foreground text-background">
+                <ShieldCheckIcon className="size-4" />
+              </span>
+              <div>
+                <p class="text-sm font-semibold">Narrow by design</p>
+                <p class="text-xs text-muted-foreground">Only the capability each surface needs</p>
+              </div>
+            </div>
+            <ul class="mt-5 space-y-4 text-sm">
+              <li class="flex gap-3"><CheckIcon className="mt-0.5 size-4 shrink-0" /><span>Encrypted local database and credentials</span></li>
+              <li class="flex gap-3"><CheckIcon className="mt-0.5 size-4 shrink-0" /><span>Sandboxed message content with remote images blocked</span></li>
+              <li class="flex gap-3"><CheckIcon className="mt-0.5 size-4 shrink-0" /><span>Typed, account-scoped boundaries across the app</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="mx-auto max-w-6xl px-5 pb-24 sm:px-8 sm:pb-32">
+        <div class="relative overflow-hidden rounded-3xl border bg-primary px-6 py-16 text-center text-primary-foreground sm:px-12 sm:py-22">
+          <div class="relative z-10 mx-auto max-w-2xl">
+            <p class="text-xs font-medium uppercase tracking-[0.18em] opacity-60">Built in the open</p>
+            <h2 class="mt-4 text-balance text-3xl font-semibold tracking-[-0.04em] sm:text-5xl">A calmer place for your mail.</h2>
+            <p class="mx-auto mt-5 max-w-xl text-pretty text-sm leading-6 opacity-65 sm:text-base">Kisa is under active development. Follow the repository to watch it take shape and be there for the first public builds.</p>
+            <a
+              class={cn(buttonVariants({ size: "lg" }), "mt-8 bg-background text-foreground hover:bg-background/85")}
+              href={repositoryUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <GithubMark />
+              Follow Kisa on GitHub
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="relative z-10 border-t">
+      <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-7 text-xs text-muted-foreground sm:flex-row sm:px-8">
+        <div class="flex items-center gap-2">
+          <img alt="" class="size-5 rounded-md" height="20" src="/icon.png" width="20" />
+          <span>Kisa · Local-first Gmail for desktop</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <a
+            class="inline-flex size-8 items-center justify-center rounded-full transition-colors hover:bg-muted hover:text-foreground"
+            href="https://x.com/Davut_Cali"
+            rel="noreferrer"
+            target="_blank"
+            aria-label="Davut on X"
+          >
+            <XMark class="size-3.5" />
+          </a>
+          <a
+            class="inline-flex size-8 items-center justify-center rounded-full transition-colors hover:bg-muted hover:text-foreground"
+            href={repositoryUrl}
+            rel="noreferrer"
+            target="_blank"
+            aria-label="Kisa on GitHub"
+          >
+            <GithubMark class="size-3.5" />
+          </a>
+          <a class="ms-2 transition-colors hover:text-foreground" href="/privacy">Privacy</a>
+          <a class="transition-colors hover:text-foreground" href={`${repositoryUrl}/blob/main/LICENSE`} rel="noreferrer" target="_blank">MIT License</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</BaseLayout>
