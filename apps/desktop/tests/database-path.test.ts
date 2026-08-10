@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { describe, expect, it } from "@effect/vitest";
 
 import { getDatabaseKeyPath, getDatabasePath } from "../src/main/database-path";
@@ -9,7 +11,7 @@ describe(getDatabasePath, () => {
         isDevelopment: true,
         userDataPath: "/test/user-data",
       })
-    ).toBe("/test/user-data/database/app.dev.sqlite");
+    ).toBe(path.join("/test/user-data", "database", "app.dev.sqlite"));
   });
 
   it("preserves the production database path", () => {
@@ -18,7 +20,7 @@ describe(getDatabasePath, () => {
         isDevelopment: false,
         userDataPath: "/test/user-data",
       })
-    ).toBe("/test/user-data/database/app.sqlite");
+    ).toBe(path.join("/test/user-data", "database", "app.sqlite"));
   });
 
   it("keeps the sealed key beside its database", () => {

@@ -61,7 +61,7 @@ describe("database recovery key export", () => {
     expect(state.saveDialog).not.toHaveBeenCalled();
   });
 
-  it("writes a versioned portable key file with owner-only permissions", async () => {
+  it("writes a versioned portable key file", async () => {
     const destination = path.join(temporaryDirectory, "recovery.kisa-key");
     const key = Buffer.alloc(32, 7);
     state.messageBox.mockResolvedValue({ checkboxChecked: false, response: 0 });
@@ -80,14 +80,34 @@ describe("database recovery key export", () => {
       key: key.toString("base64"),
       version: 1,
     });
-    const destinationStat = await stat(destination);
-    expect(destinationStat.mode % 0o1000).toBe(0o600);
     expect(state.saveDialog).toHaveBeenCalledWith(
       expect.objectContaining({
         defaultPath: "Kisa Development Database Recovery Key.kisa-key",
       })
     );
   });
+
+  it.runIf(process.platform !== "win32")(
+    "writes the recovery key with owner-only permissions",
+    async () => {
+      const destination = path.join(temporaryDirectory, "recovery.kisa-key");
+      state.messageBox.mockResolvedValue({
+        checkboxChecked: false,
+        response: 0,
+      });
+      state.saveDialog.mockResolvedValue({
+        canceled: false,
+        filePath: destination,
+      });
+
+      await expect(
+        Effect.runPromise(exportDatabaseRecoveryKey(Buffer.alloc(32, 7), false))
+      ).resolves.toBe("saved");
+
+      const destinationStat = await stat(destination);
+      expect(destinationStat.mode % 0o1000).toBe(0o600);
+    }
+  );
 
   it("rejects keys that do not match the database key size", () => {
     expect(() => encodeDatabaseRecoveryKeyFile(Buffer.alloc(31))).toThrow(
