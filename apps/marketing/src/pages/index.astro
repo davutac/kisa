@@ -113,8 +113,8 @@ const threads = [
 ---
 
 <BaseLayout
-  description="Kisa is a fast, local-first Gmail client built for a calm, keyboard-first desktop experience."
-  title="Kisa | Email, without the noise"
+  description="Kisa is a fast, local-first desktop email client with keyboard-first navigation, private on-device search, and a calm, focused inbox."
+  title="Kisa | Calm, local-first email for desktop"
 >
   <div class="page-shell relative overflow-x-clip">
     <header class="sticky inset-x-0 top-0 z-50" data-sticky-header>
@@ -135,7 +135,7 @@ const threads = [
           <a class="hidden rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block" href="#features">
             Features
           </a>
-          <a class="hidden rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block" href="/privacy">
+          <a class="hidden rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block" href="/privacy/">
             Privacy
           </a>
           <a
@@ -159,7 +159,7 @@ const threads = [
         </h1>
 
         <p class="reveal reveal-delay mt-6 max-w-2xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
-          Kisa is a fast, keyboard-first Gmail desktop client that keeps its cache and search index on your device, so your inbox feels calm, quick, and yours.
+          Kisa is a fast, keyboard-first desktop email client that keeps its cache and search index on your device, so your inbox feels calm, quick, and yours.
         </p>
 
         <div class="reveal reveal-delay mt-8 flex flex-col items-center gap-3 sm:flex-row">
@@ -180,7 +180,7 @@ const threads = [
 
         <p class="reveal reveal-delay mt-5 flex items-center gap-2 text-xs text-muted-foreground">
           <CheckIcon className="size-3.5" />
-          Gmail only for now · Open source
+          Works with Google accounts · Open source
         </p>
       </section>
 
@@ -318,7 +318,7 @@ const threads = [
             <LockKeyholeIcon className="size-3.5" />
             Privacy by default
           </p>
-          <h2 class="mt-5 max-w-lg text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">Your mail stays between you and Gmail.</h2>
+          <h2 class="mt-5 max-w-lg text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">Your mail stays between you and your provider.</h2>
           <p class="mt-5 max-w-xl text-pretty text-base leading-7 text-muted-foreground">
             Kisa has no remote mailbox backend. OAuth credentials stay encrypted in the desktop main process, while local mail data and search indexes stay account-scoped on your device.
           </p>
@@ -365,34 +365,39 @@ const threads = [
     </main>
 
     <footer class="relative z-10 border-t">
-      <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-7 text-xs text-muted-foreground sm:flex-row sm:px-8">
-        <div class="flex items-center gap-2">
-          <img alt="" class="size-5 rounded-md" height="20" src="/icon.png" width="20" />
-          <span>Kisa · Local-first Gmail for desktop</span>
+      <div class="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5 py-7 text-xs text-muted-foreground sm:px-8">
+        <div class="flex w-full flex-col items-center justify-between gap-4 sm:flex-row">
+          <div class="flex items-center gap-2">
+            <img alt="" class="size-5 rounded-md" height="20" src="/icon.png" width="20" />
+            <span>Kisa · Local-first email for desktop</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <a
+              class="inline-flex size-8 items-center justify-center rounded-full transition-colors hover:bg-muted hover:text-foreground"
+              href="https://x.com/Davut_Cali"
+              rel="noreferrer"
+              target="_blank"
+              aria-label="Davut on X"
+            >
+              <XMark class="size-3.5" />
+            </a>
+            <a
+              class="inline-flex size-8 items-center justify-center rounded-full transition-colors hover:bg-muted hover:text-foreground"
+              href={repositoryUrl}
+              rel="noreferrer"
+              target="_blank"
+              aria-label="Kisa on GitHub"
+            >
+              <GithubMark class="size-3.5" />
+            </a>
+            <a class="ms-2 transition-colors hover:text-foreground" href="/privacy/">Privacy</a>
+            <a class="transition-colors hover:text-foreground" href="/terms/">Terms</a>
+            <a class="transition-colors hover:text-foreground" href={`${repositoryUrl}/blob/main/LICENSE`} rel="noreferrer" target="_blank">MIT License</a>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <a
-            class="inline-flex size-8 items-center justify-center rounded-full transition-colors hover:bg-muted hover:text-foreground"
-            href="https://x.com/Davut_Cali"
-            rel="noreferrer"
-            target="_blank"
-            aria-label="Davut on X"
-          >
-            <XMark class="size-3.5" />
-          </a>
-          <a
-            class="inline-flex size-8 items-center justify-center rounded-full transition-colors hover:bg-muted hover:text-foreground"
-            href={repositoryUrl}
-            rel="noreferrer"
-            target="_blank"
-            aria-label="Kisa on GitHub"
-          >
-            <GithubMark class="size-3.5" />
-          </a>
-          <a class="ms-2 transition-colors hover:text-foreground" href="/privacy">Privacy</a>
-          <a class="transition-colors hover:text-foreground" href="/terms">Terms</a>
-          <a class="transition-colors hover:text-foreground" href={`${repositoryUrl}/blob/main/LICENSE`} rel="noreferrer" target="_blank">MIT License</a>
-        </div>
+        <p class="max-w-3xl text-center text-[11px] leading-5">
+          Kisa is an independent project and is not affiliated with, endorsed by, or sponsored by Google.
+        </p>
       </div>
     </footer>
   </div>

@@ -5,7 +5,11 @@ import { buttonVariants } from "@/components/ui/button";
 import BaseLayout from "@/layouts/base-layout.astro";
 ---
 
-<BaseLayout description="The page you were looking for could not be found." title="Page not found | Kisa">
+<BaseLayout
+  description="The page you were looking for could not be found."
+  noindex
+  title="Page not found | Kisa"
+>
   <main class="grid min-h-screen place-items-center px-5 text-center">
     <div>
       <p class="text-sm font-medium text-muted-foreground">404</p>

@@ -3,10 +3,21 @@ import "@/styles/global.css";
 
 interface Props {
   description: string;
+  noindex?: boolean;
   title: string;
 }
 
-const { description, title } = Astro.props;
+const { description, noindex = false, title } = Astro.props;
+const siteUrl = Astro.site ?? new URL(Astro.url.origin);
+const canonicalUrl = new URL(Astro.url.pathname, siteUrl);
+const socialImageUrl = new URL("/icon.png", siteUrl);
+const isHomePage = Astro.url.pathname === "/";
+const websiteStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Kisa",
+  url: siteUrl.href,
+};
 ---
 
 <!doctype html>
@@ -14,16 +25,30 @@ const { description, title } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : null}
     <meta name="viewport" content="width=device-width" />
     <meta name="theme-color" content="#ffffff" />
     <link rel="icon" type="image/png" href="/icon.png" />
+    {noindex ? null : <link rel="canonical" href={canonicalUrl} />}
+    <link rel="sitemap" href="/sitemap-index.xml" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Kisa" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    {noindex ? null : <meta property="og:url" content={canonicalUrl} />}
+    <meta property="og:image" content={socialImageUrl} />
+    <meta property="og:image:alt" content="Kisa" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImageUrl} />
+    <meta name="twitter:image:alt" content="Kisa" />
     <title>{title}</title>
+    {isHomePage ? (
+      <script is:inline type="application/ld+json" set:html={JSON.stringify(websiteStructuredData)} />
+    ) : null}
     <script is:inline>
       (() => {
         const storedTheme = localStorage.getItem("kisa-theme");
