@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { is } from "@electron-toolkit/utils";
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { DatabaseError } from "@repo/database/runtime";
 import { Effect, ManagedRuntime } from "effect";
@@ -8,32 +9,33 @@ import { app, utilityProcess } from "electron";
 // electron-vite exposes child entry points as a default module-path import.
 // oxlint-disable-next-line import/default
 import databaseProcessPath from "../utility/database-process/entry?modulePath";
+import { getDatabasePath } from "./database-path";
 import type { DatabaseProcessClient } from "./database-process/client";
 import { createDatabaseProcessClient } from "./database-process/client";
 import { DatabaseRpcClient } from "./database-process/rpc-client";
 
 export { DatabaseError } from "@repo/database/runtime";
 
-const getDatabasePath = (): string =>
-  path.join(app.getPath("userData"), "database", "app.sqlite");
-
 const getMigrationsFolder = (): string => {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, "database", "drizzle");
+  if (is.dev) {
+    return path.join(
+      app.getAppPath(),
+      "..",
+      "..",
+      "packages",
+      "database",
+      "drizzle"
+    );
   }
 
-  return path.join(
-    app.getAppPath(),
-    "..",
-    "..",
-    "packages",
-    "database",
-    "drizzle"
-  );
+  return path.join(process.resourcesPath, "database", "drizzle");
 };
 
 const createRuntime = () => {
-  const databasePath = getDatabasePath();
+  const databasePath = getDatabasePath({
+    isDevelopment: is.dev,
+    userDataPath: app.getPath("userData"),
+  });
   const migrationsFolder = getMigrationsFolder();
 
   return ManagedRuntime.make(
