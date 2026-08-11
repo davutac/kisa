@@ -21,8 +21,7 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
     return (
       <Button
         aria-live="polite"
-        className="app-titlebar-interactive bg-blue-400 text-white"
-        disabled
+        className="app-titlebar-interactive bg-blue-400 text-black hover:bg-blue-400/80"
         size="icon"
         type="button"
       >
@@ -34,7 +33,7 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
 
   return (
     <Button
-      className="app-titlebar-interactive bg-blue-400 text-white"
+      className="app-titlebar-interactive bg-blue-400 text-black hover:bg-blue-400/80"
       onClick={() => {
         void updateApi.install();
       }}
