@@ -52,11 +52,11 @@ In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, a
 
 `U` toggles the unread-only mailbox filter.
 
-When a mailbox thread is selected, `M` toggles its read state. Both `Backspace` and `Delete` move it to trash, covering the Mac key labeled `⌫`, Mac forward-delete, and the Windows/Linux Delete key. These commands are not registered for hover-only quick actions.
+When a mailbox thread is selected, `M` toggles its read state. In Inbox, both `Backspace` and `Delete` move it to trash; in Spam, they open the permanent-delete confirmation. This covers the Mac key labeled `⌫`, Mac forward-delete, and the Windows/Linux Delete key. These commands are not registered for hover-only quick actions.
 
 While reading a conversation in the main window, `Shift+Enter` opens it in a thread window and closes the inline conversation. The command is disabled inside the resulting thread window because it is already popped out.
 
-While reading a conversation, `L` scrolls the label row into view and opens its picker. `M`, `Backspace`, and `Delete` retain the same read-state and trash behavior as they have on the selected mailbox conversation.
+While reading a conversation, `L` scrolls the label row into view and opens its picker. `M`, `Backspace`, and `Delete` retain the same read-state and mailbox-context behavior as they have on the selected mailbox conversation.
 
 `Mod+Shift+A` opens the attachment picker while composing a new email.
 

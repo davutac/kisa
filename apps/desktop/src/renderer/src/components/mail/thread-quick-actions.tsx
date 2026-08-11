@@ -31,6 +31,7 @@ interface MailThreadQuickActionsProps {
   hotkeysEnabled: boolean;
   isRevealed: boolean;
   isUnread: boolean;
+  onDeleteSpam?: () => void;
   onNotSpam?: () => void;
   onToggleRead?: () => void;
   onTrash?: () => void;
@@ -40,6 +41,7 @@ const MailThreadQuickActions = ({
   hotkeysEnabled,
   isRevealed,
   isUnread,
+  onDeleteSpam,
   onNotSpam,
   onToggleRead,
   onTrash,
@@ -49,6 +51,9 @@ const MailThreadQuickActions = ({
   const toggleReadKeys = getHotkeyDisplay("mailbox.toggleThreadRead");
   const trashKeys = getHotkeyDisplay("mailbox.trashThread");
   const trashShortcutLabel = trashKeys.bindings.join(" / ");
+  const destructiveLabel =
+    onDeleteSpam === undefined ? trashKeys.label : "Delete forever";
+  const destructiveAction = onDeleteSpam ?? onTrash;
 
   return (
     // Parked behind the row: the row slides off it rather than the other way
@@ -86,28 +91,7 @@ const MailThreadQuickActions = ({
       >
         {isUnread ? <MailOpenIcon /> : <MailIcon />}
       </Button>
-      {onNotSpam === undefined ? (
-        <Button
-          aria-keyshortcuts={
-            hotkeysEnabled
-              ? getHotkeyAriaLabel("mailbox.trashThread")
-              : undefined
-          }
-          aria-label="Move to trash"
-          className={`${quickActionClassName} hover:bg-destructive/10 hover:text-destructive`}
-          onClick={onTrash}
-          size="icon"
-          style={quickActionStyle}
-          title={
-            hotkeysEnabled
-              ? `${trashKeys.label} (${trashShortcutLabel})`
-              : trashKeys.label
-          }
-          variant="ghost"
-        >
-          <Trash2Icon />
-        </Button>
-      ) : (
+      {onNotSpam === undefined ? null : (
         <Button
           aria-label="Not spam"
           className={`${quickActionClassName} hover:text-foreground`}
@@ -118,6 +102,28 @@ const MailThreadQuickActions = ({
           variant="ghost"
         >
           <InboxIcon />
+        </Button>
+      )}
+      {destructiveAction === undefined ? null : (
+        <Button
+          aria-keyshortcuts={
+            hotkeysEnabled
+              ? getHotkeyAriaLabel("mailbox.trashThread")
+              : undefined
+          }
+          aria-label={destructiveLabel}
+          className={`${quickActionClassName} hover:bg-destructive/10 hover:text-destructive`}
+          onClick={destructiveAction}
+          size="icon"
+          style={quickActionStyle}
+          title={
+            hotkeysEnabled
+              ? `${destructiveLabel} (${trashShortcutLabel})`
+              : destructiveLabel
+          }
+          variant="ghost"
+        >
+          <Trash2Icon />
         </Button>
       )}
     </m.div>

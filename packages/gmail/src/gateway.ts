@@ -97,6 +97,10 @@ export interface GatewayMailboxTotals {
 }
 
 export interface GmailGatewayService {
+  readonly deleteThread: (
+    authorization: GmailAuthorization,
+    threadId: ThreadId
+  ) => Effect.Effect<GatewayResult<void>, GmailGatewayError>;
   readonly getAttachment: (
     authorization: GmailAuthorization,
     request: GatewayAttachmentRequest

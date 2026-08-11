@@ -26,6 +26,7 @@ export interface AuthApi {
 }
 
 export interface MailApi {
+  deleteSpamThread: DesktopBridge["deleteSpamThread"];
   discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
   getSyncStatus: DesktopBridge["getMailSyncStatus"];
@@ -132,6 +133,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     },
     lifecycle: { onClosing: bridge.onAppClosing },
     mail: {
+      deleteSpamThread: bridge.deleteSpamThread,
       discardDraft: bridge.discardMailDraft,
       getIndexProgress: bridge.getMailIndexProgress,
       getSpamStatus: bridge.getSpamStatus,

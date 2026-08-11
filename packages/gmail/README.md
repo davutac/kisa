@@ -39,15 +39,16 @@ const account =
 
 `authorizeAccount` validates the payload, discovers the Google identity through `GmailGateway`, redacts credentials, derives capabilities from granted scopes, and persists the authorization through `GmailStore`. Reauthorization does not erase a stored refresh token when the new response omits one.
 
-Mailbox mutations use `gmail.modify` and operate on complete conversations:
+Mailbox mutations require full Gmail access and operate on complete conversations:
 
 ```ts
 yield * gmail.markThreadRead({ accountId, threadId });
 yield * gmail.markThreadUnread({ accountId, threadId });
 yield * gmail.trashThread({ accountId, threadId });
+yield * gmail.deleteThread({ accountId, threadId });
 ```
 
-`trashThread` moves mail to Gmail Trash. It does not permanently delete mail or require the broad `https://mail.google.com/` scope.
+`trashThread` moves mail to Gmail Trash. `deleteThread` permanently deletes a conversation.
 
 Provide these services to `Gmail.layerWithoutDependencies`:
 

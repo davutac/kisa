@@ -49,10 +49,8 @@ import type {
 } from "./models";
 import {
   GmailAccount,
-  GmailCapabilities,
-  GMAIL_MODIFY_SCOPE,
-  GMAIL_READONLY_SCOPE,
-  GMAIL_SEND_SCOPE,
+  getGmailCapabilities,
+  isGmailScope,
   LabelId,
 } from "./models";
 import { GmailStore } from "./store";
@@ -69,12 +67,7 @@ const AuthHandoff = Schema.Struct({
 const decodeAuthHandoff = Schema.decodeUnknownEffect(AuthHandoff);
 
 const selectScopes = (scopes: readonly string[]): readonly GmailScope[] =>
-  scopes.filter(
-    (scope): scope is GmailScope =>
-      scope === GMAIL_MODIFY_SCOPE ||
-      scope === GMAIL_READONLY_SCOPE ||
-      scope === GMAIL_SEND_SCOPE
-  );
+  scopes.filter(isGmailScope);
 
 const mergeCredentials = (
   current: GmailAuthorization | undefined,
@@ -117,6 +110,9 @@ export interface GmailService {
   ) => Effect.Effect<GmailAccount, GmailError>;
   readonly disconnectAccount: (
     options: DisconnectAccountOptions
+  ) => Effect.Effect<void, GmailError>;
+  readonly deleteThread: (
+    request: ThreadMutationRequest
   ) => Effect.Effect<void, GmailError>;
   readonly getAccount: (
     accountId: AccountId
@@ -267,14 +263,9 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
             handoff.scopes
           );
           const scopes = selectScopes(handoff.scopes);
-          const canModify = scopes.includes(GMAIL_MODIFY_SCOPE);
           const account = new GmailAccount({
             avatarUrl: identity.avatarUrl,
-            capabilities: new GmailCapabilities({
-              modify: canModify,
-              read: canModify || scopes.includes(GMAIL_READONLY_SCOPE),
-              send: canModify || scopes.includes(GMAIL_SEND_SCOPE),
-            }),
+            capabilities: getGmailCapabilities(scopes),
             displayName: identity.displayName,
             email: identity.email,
             id: identity.id,
@@ -579,6 +570,18 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         yield* store.removeThreads(request.accountId, [request.threadId]);
       });
 
+      const deleteThread = Effect.fn("Gmail.deleteThread")(
+        function* deleteThread(request: ThreadMutationRequest) {
+          yield* withAuthorization(
+            request.accountId,
+            "modify",
+            (authorization) =>
+              gateway.deleteThread(authorization, request.threadId)
+          );
+          yield* store.removeThreads(request.accountId, [request.threadId]);
+        }
+      );
+
       const sendMessage = Effect.fn("Gmail.sendMessage")(function* sendMessage(
         input: SendMessageInput
       ) {
@@ -724,6 +727,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
 
       return Gmail.of({
         authorizeAccount,
+        deleteThread,
         disconnectAccount,
         forward,
         getAccount,

@@ -11,7 +11,7 @@ import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
 import type { GmailMime } from "@repo/gmail/mime";
 import type { PageCursor, ThreadPage } from "@repo/gmail/models";
-import { AccountId } from "@repo/gmail/models";
+import { AccountId, isGmailScope } from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
 import { count, eq } from "drizzle-orm";
@@ -543,21 +543,11 @@ export const cancelMailBackfill = (accountId: string): void => {
   sendProgress();
 };
 
-const GMAIL_READ_SCOPES = new Set([
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/gmail.readonly",
-]);
-
 const hasReadScope = (scopes: string): boolean => {
   try {
     const granted: unknown = JSON.parse(scopes);
 
-    return (
-      Array.isArray(granted) &&
-      granted.some(
-        (scope) => typeof scope === "string" && GMAIL_READ_SCOPES.has(scope)
-      )
-    );
+    return Array.isArray(granted) && granted.some(isGmailScope);
   } catch {
     return false;
   }

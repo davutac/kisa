@@ -31,6 +31,7 @@ const rowVariants = {
 
 interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   isSelected?: boolean;
+  onDeleteSpam?: (thread: GmailThreadSummary) => void;
   onOpen: (thread: GmailThreadSummary) => void;
   onNotSpam?: (thread: GmailThreadSummary) => void;
   onToggleRead?: (thread: GmailThreadSummary) => void;
@@ -48,6 +49,7 @@ const bindThreadAction = (
 
 const MailThreadItem = ({
   isSelected = false,
+  onDeleteSpam,
   onOpen,
   onNotSpam,
   onToggleRead,
@@ -108,6 +110,7 @@ const MailThreadItem = ({
           hotkeysEnabled={isSelected}
           isRevealed={isRevealed}
           isUnread={thread.isUnread}
+          onDeleteSpam={bindThreadAction(onDeleteSpam, thread)}
           onNotSpam={handleNotSpam}
           onToggleRead={() => {
             onToggleRead?.(thread);

@@ -5,6 +5,7 @@ import { BrowserWindow } from "electron";
 import {
   ATTACHMENT_PREVIEW_LOAD_CHANNEL,
   ATTACHMENT_PREVIEW_SAVE_CHANNEL,
+  MAIL_DELETE_SPAM_THREAD_CHANNEL,
   MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
@@ -84,6 +85,7 @@ import {
   searchIndexedThreads,
 } from "../../mail/mail-search";
 import {
+  deleteSpamThread,
   getMailSyncStatus,
   getSpamStatus as loadSpamStatus,
   listCachedThreadPage,
@@ -322,6 +324,14 @@ export const trash = makeIpcMethod({
   channel: MAIL_TRASH_THREAD_CHANNEL,
   handler: (request) =>
     toIpcReply(trashThread(request), "Could not move email to trash"),
+  payload: GmailThreadRequest,
+  result: GmailThreadMutationReply,
+});
+
+export const deleteSpam = makeIpcMethod({
+  channel: MAIL_DELETE_SPAM_THREAD_CHANNEL,
+  handler: (request) =>
+    toIpcReply(deleteSpamThread(request), "Could not permanently delete email"),
   payload: GmailThreadRequest,
   result: GmailThreadMutationReply,
 });

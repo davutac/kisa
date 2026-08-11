@@ -39,6 +39,7 @@ Google recommends poll-based synchronization for installed applications. Gmail a
 - Gmail uses labels rather than conventional folders. Archiving removes `INBOX`, while marking unread adds `UNREAD`.
 - Spam is a separate cached mailbox. Existing accounts seed it one bounded page per normal sync and persist the page cursor; Gmail history owns later transitions. Spam stays out of Inbox, default search, unread badges, and OS notifications. The title-bar dot tracks threads newly moved into Spam since that account's Spam mailbox was last opened, so clearing the dot never changes read state.
 - **Not spam** performs one Gmail label mutation that removes `SPAM` and adds `INBOX`, preserves `UNREAD`, updates every cached message and the thread projection in one account-scoped transaction, and publishes the normal list event.
+- **Delete forever** is available only for a cached Spam conversation, requires confirmation, permanently deletes the Gmail thread with full-mail access, removes its account-scoped thread and message cache rows, and publishes the normal list removal event.
 - Labels belong to messages. Messages within one thread can have different label sets, and a thread's labels represent their union.
 - The thread label picker exposes only labels whose Gmail catalog type is `user`, applies changes optimistically, and rolls back on failure.
 - Rendered label collections place system labels first and user labels second, sorting each group by display name.
@@ -65,6 +66,8 @@ The granted OAuth scopes determine which operations are available:
 | `mail.google.com` | Full mail access, including immediate permanent deletion. | Restricted |
 
 Request the narrowest set that implements the product. Google's current classifications and exact descriptions are recorded in the [Gmail OAuth scope table](https://developers.google.com/workspace/gmail/api/auth/scopes).
+
+Kisa requests `mail.google.com` because Spam supports immediate permanent deletion; requesting `gmail.modify` alongside it would add no capability. Accounts connected with a narrower scope must connect again.
 
 Public applications using restricted Gmail scopes generally require OAuth verification. Storing or transmitting restricted-scope data through a server can add security-assessment requirements. Kisa's local-first design reduces that remote data exposure, but it does not remove the need for verification or careful local protection. Credentials remain encrypted in Electron's main process and never cross into the renderer.
 

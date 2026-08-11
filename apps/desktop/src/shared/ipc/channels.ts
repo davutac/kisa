@@ -22,6 +22,8 @@ export const COMPOSER_TEMPLATE_SAVE_CHANNEL = "desktop:composer-template:save";
 export const MAIL_INDEX_PROGRESS_CHANNEL = "desktop:mail:index-progress";
 export const MAIL_DRAFT_CHANGED_CHANNEL = "desktop:mail:draft-changed";
 export const MAIL_DISCARD_DRAFT_CHANNEL = "desktop:mail:discard-draft";
+export const MAIL_DELETE_SPAM_THREAD_CHANNEL =
+  "desktop:mail:delete-spam-thread";
 export const MAIL_LIST_STASHED_DRAFTS_CHANNEL =
   "desktop:mail:list-stashed-drafts";
 export const MAIL_LOAD_THREAD_DRAFT_CHANNEL = "desktop:mail:load-thread-draft";

@@ -47,6 +47,7 @@ export const QUOTA_UNITS = {
   messagesGet: 20,
   messagesList: 5,
   messagesSend: 100,
+  threadsDelete: 20,
   threadsGet: 40,
   threadsList: 10,
   threadsModify: 10,

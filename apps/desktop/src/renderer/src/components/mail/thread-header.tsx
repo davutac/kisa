@@ -22,6 +22,7 @@ interface MailThreadHeaderProps {
   isUnread: boolean;
   latestAt?: number;
   onClose: () => void;
+  onDeleteSpam: () => void;
   onNotSpam: () => void;
   onPopOut?: () => void;
   onToggleRead: () => void;
@@ -35,6 +36,7 @@ const MailThreadHeader = ({
   isUnread,
   latestAt,
   onClose,
+  onDeleteSpam,
   onNotSpam,
   onPopOut,
   onToggleRead,
@@ -47,10 +49,12 @@ const MailThreadHeader = ({
   const popOutDisplay = getHotkeyDisplay("thread.popout");
   const toggleReadDisplay = getHotkeyDisplay("thread.toggleThreadRead");
   const trashDisplay = getHotkeyDisplay("thread.trashThread");
+  const destructiveLabel = isSpam ? "Delete forever" : trashDisplay.label;
+  const destructiveAction = isSpam ? onDeleteSpam : onTrash;
 
   useAppCommand("thread.close", onClose);
   useAppCommand("thread.toggleThreadRead", onToggleRead);
-  useAppCommand("thread.trashThread", onTrash);
+  useAppCommand("thread.trashThread", destructiveAction);
 
   return (
     // Sticking at top-0 with an opaque pt-4 gutter reads as a top-4 offset
@@ -108,11 +112,11 @@ const MailThreadHeader = ({
           </Button>
           <Button
             aria-keyshortcuts={getHotkeyAriaLabel("thread.trashThread")}
-            aria-label={trashDisplay.label}
+            aria-label={destructiveLabel}
             className="hover:bg-destructive/10 hover:text-destructive"
-            onClick={onTrash}
+            onClick={destructiveAction}
             size="icon"
-            title={`${trashDisplay.label} (${trashDisplay.bindings[0]})`}
+            title={`${destructiveLabel} (${trashDisplay.bindings[0]})`}
             type="button"
             variant="ghost"
           >

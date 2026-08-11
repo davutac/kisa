@@ -30,19 +30,11 @@ export const PageCursor = Schema.NonEmptyString.pipe(
 );
 export type PageCursor = typeof PageCursor.Type;
 
-export const GmailScope = Schema.Literals([
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.send",
-]);
+export const GmailScope = Schema.Literal("https://mail.google.com/");
 export type GmailScope = typeof GmailScope.Type;
+export const isGmailScope = Schema.is(GmailScope);
 
-export const GMAIL_MODIFY_SCOPE: GmailScope =
-  "https://www.googleapis.com/auth/gmail.modify";
-export const GMAIL_READONLY_SCOPE: GmailScope =
-  "https://www.googleapis.com/auth/gmail.readonly";
-export const GMAIL_SEND_SCOPE: GmailScope =
-  "https://www.googleapis.com/auth/gmail.send";
+export const GMAIL_FULL_ACCESS_SCOPE: GmailScope = "https://mail.google.com/";
 
 export class GmailCapabilities extends Schema.Class<GmailCapabilities>(
   "@repo/gmail/GmailCapabilities"
@@ -51,6 +43,18 @@ export class GmailCapabilities extends Schema.Class<GmailCapabilities>(
   read: Schema.Boolean,
   send: Schema.Boolean,
 }) {}
+
+export const getGmailCapabilities = (
+  scopes: readonly GmailScope[]
+): GmailCapabilities => {
+  const hasFullAccess = scopes.includes(GMAIL_FULL_ACCESS_SCOPE);
+
+  return new GmailCapabilities({
+    modify: hasFullAccess,
+    read: hasFullAccess,
+    send: hasFullAccess,
+  });
+};
 
 export class GmailAccount extends Schema.Class<GmailAccount>(
   "@repo/gmail/GmailAccount"

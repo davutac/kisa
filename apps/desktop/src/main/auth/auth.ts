@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
+import { GMAIL_FULL_ACCESS_SCOPE } from "@repo/gmail/models";
 import { count, eq as equals } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { app, safeStorage, shell } from "electron";
@@ -37,7 +38,7 @@ const GOOGLE_AUTH_SCOPES = [
   "openid",
   "email",
   "profile",
-  "https://www.googleapis.com/auth/gmail.modify",
+  GMAIL_FULL_ACCESS_SCOPE,
 ] as const;
 const GOOGLE_PROFILE_SCOPES = new Set([
   "profile",

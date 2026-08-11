@@ -14,6 +14,7 @@ import type {
 } from "@repo/gmail/models";
 import {
   AccountId,
+  isGmailScope,
   LabelId,
   MessageId,
   PageCursor,
@@ -87,10 +88,6 @@ import { refreshUnreadBadge } from "./unread-badge";
 const GMAIL_INBOX_LABEL = "INBOX";
 const GMAIL_SPAM_LABEL = "SPAM";
 const GMAIL_TRASH_LABEL = "TRASH";
-const GMAIL_READ_SCOPES = new Set([
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/gmail.readonly",
-]);
 const THREAD_PAGE_SIZE = 50;
 const SPAM_PAGE_QUOTA_UNITS =
   QUOTA_UNITS.threadsList + THREAD_PAGE_SIZE * QUOTA_UNITS.threadsGet;
@@ -1383,6 +1380,39 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
   ]);
 });
 
+export const deleteSpamThread = Effect.fn("deleteSpamThread")(
+  function* deleteSpamThread(request: GmailThreadRequest) {
+    const row = yield* findCachedThread(request.accountId, request.threadId);
+
+    if (row?.isInSpam !== true) {
+      return yield* new MailSyncError({
+        message: "Only conversations in Spam can be permanently deleted",
+      });
+    }
+
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.deleteThread({
+            accountId: AccountId.make(request.accountId),
+            threadId: ThreadId.make(request.threadId),
+          })
+        )
+      )
+    );
+    yield* Effect.sync(() =>
+      dismissThreadNotifications(request.accountId, request.threadId)
+    );
+    yield* publishThreadListUpdated([
+      {
+        accountId: request.accountId,
+        kind: "remove",
+        threadId: request.threadId,
+      },
+    ]);
+  }
+);
+
 const activeTrashMutations = new Set<string>();
 
 const requestCachedThreadTrash = (request: GmailThreadRequest): void => {
@@ -1560,12 +1590,7 @@ const syncAllAccounts = Effect.fn("syncAllAccounts")(
     const readableAccounts = accounts.filter(({ scopes }) => {
       const granted = JSON.parse(scopes) as unknown;
 
-      return (
-        Array.isArray(granted) &&
-        granted.some(
-          (scope) => typeof scope === "string" && GMAIL_READ_SCOPES.has(scope)
-        )
-      );
+      return Array.isArray(granted) && granted.some(isGmailScope);
     });
     const retrySchedule = Schedule.exponential(1000).pipe(Schedule.jittered);
 

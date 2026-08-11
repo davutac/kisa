@@ -105,7 +105,8 @@ function HomeRoute() {
     reloadRevision,
     unreadOnly: showUnread,
   });
-  const { notSpam, setLabel, toggleRead, trash } = useThreadActions();
+  const { deleteSpam, notSpam, setLabel, toggleRead, trash } =
+    useThreadActions();
   const indexProgress = useMailIndexProgress();
   const emptyState = getEmptyState(mailbox, showUnread);
   const indexingMessage =
@@ -149,6 +150,7 @@ function HomeRoute() {
         isLoadingNextPage={isLoadingNextPage}
         loadNextPage={loadNextPage}
         mailbox={mailbox}
+        onDeleteSpamThread={mailbox === "spam" ? deleteSpam : undefined}
         onNotSpamThread={mailbox === "spam" ? notSpam : undefined}
         onToggleThreadRead={toggleRead}
         onTrashThread={trash}
@@ -163,6 +165,7 @@ function HomeRoute() {
             closeLabel={mailbox === "spam" ? "Back to spam" : undefined}
             key={`${openThread.accountId}:${openThread.threadId}`}
             onClose={closeThread}
+            onDeleteSpam={deleteSpam}
             onPopOut={windowApi === undefined ? undefined : popOutThread}
             onNotSpam={notSpam}
             onSetLabel={setLabel}

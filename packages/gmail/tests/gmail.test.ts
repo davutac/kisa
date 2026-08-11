@@ -14,14 +14,11 @@ import {
   AccountId,
   AttachmentId,
   AttachmentSummary,
-  GmailAccount,
   GmailCapabilities,
   GmailLabel,
   GmailMessage,
   GmailThread,
-  GMAIL_MODIFY_SCOPE,
-  GMAIL_READONLY_SCOPE,
-  GMAIL_SEND_SCOPE,
+  GMAIL_FULL_ACCESS_SCOPE,
   HistoryId,
   LabelId,
   Mailbox,
@@ -62,7 +59,7 @@ interface TestState {
   labels: readonly GmailLabel[];
   readonly mutationCalls: {
     readonly accountId: AccountId;
-    readonly operation: "labels" | "trash";
+    readonly operation: "delete" | "labels" | "trash";
     readonly threadId: ThreadId;
     readonly unread?: boolean;
   }[];
@@ -193,6 +190,15 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
   };
 
   const gateway: GmailGatewayService = {
+    deleteThread: (authorization, threadId) =>
+      Effect.sync(() => {
+        state.mutationCalls.push({
+          accountId: authorization.account.id,
+          operation: "delete",
+          threadId,
+        });
+        return { value: undefined };
+      }),
     getAttachment: (_authorization, request) =>
       Effect.sync(() => {
         state.attachmentCalls.push(request.attachmentId);
@@ -388,7 +394,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
 const authHandoff = (accessToken: string, refreshToken?: string): unknown => ({
   accessToken,
   refreshToken,
-  scopes: [GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE],
+  scopes: [GMAIL_FULL_ACCESS_SCOPE],
 });
 
 const threadSummaryWithLabels = (labelIds: readonly LabelId[]): ThreadSummary =>
@@ -477,31 +483,6 @@ describe(Gmail, () => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("derives capabilities from the granted scopes", () => {
-    const { layer } = createTestLayer();
-
-    return Effect.gen(function* derivesCapabilities() {
-      const gmail = yield* Gmail;
-      const account = yield* gmail.authorizeAccount({
-        accessToken: "access-a",
-        scopes: [GMAIL_READONLY_SCOPE],
-      });
-
-      expect(account).toMatchObject(
-        new GmailAccount({
-          capabilities: new GmailCapabilities({
-            modify: false,
-            read: true,
-            send: false,
-          }),
-          email: "a@example.com",
-          id: AccountId.make("account-a"),
-          scopes: [GMAIL_READONLY_SCOPE],
-        })
-      );
-    }).pipe(Effect.provide(layer));
-  });
-
   it.effect("marks threads read or unread and moves them to trash", () => {
     const { layer, state } = createTestLayer();
 
@@ -509,7 +490,7 @@ describe(Gmail, () => {
       const gmail = yield* Gmail;
       const account = yield* gmail.authorizeAccount({
         accessToken: "access-a",
-        scopes: [GMAIL_MODIFY_SCOPE],
+        scopes: [GMAIL_FULL_ACCESS_SCOPE],
       });
       const request = {
         accountId: account.id,
@@ -551,6 +532,46 @@ describe(Gmail, () => {
     }).pipe(Effect.provide(layer));
   });
 
+  it.effect("permanently deletes threads only with full Gmail access", () => {
+    const { layer, state } = createTestLayer();
+
+    return Effect.gen(function* permanentlyDeletesThreads() {
+      const gmail = yield* Gmail;
+      const noScopeAccount = yield* gmail.authorizeAccount({
+        accessToken: "access-a",
+        scopes: [],
+      });
+      const request = {
+        accountId: noScopeAccount.id,
+        threadId: ThreadId.make("thread-1"),
+      };
+      const permissionError = yield* gmail
+        .deleteThread(request)
+        .pipe(Effect.flip);
+
+      expect(permissionError).toMatchObject({
+        _tag: "GmailPermissionError",
+        capability: "modify",
+      });
+
+      const fullAccessAccount = yield* gmail.authorizeAccount({
+        accessToken: "access-a",
+        scopes: [GMAIL_FULL_ACCESS_SCOPE],
+      });
+
+      yield* gmail.deleteThread(request);
+
+      expect(state.mutationCalls).toStrictEqual([
+        {
+          accountId: fullAccessAccount.id,
+          operation: "delete",
+          threadId: request.threadId,
+        },
+      ]);
+      expect(state.removedThreads).toStrictEqual([request.threadId]);
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("moves a thread from Spam to Inbox", () => {
     const { layer, state } = createTestLayer();
 
@@ -558,7 +579,7 @@ describe(Gmail, () => {
       const gmail = yield* Gmail;
       const account = yield* gmail.authorizeAccount({
         accessToken: "access-a",
-        scopes: [GMAIL_MODIFY_SCOPE],
+        scopes: [GMAIL_FULL_ACCESS_SCOPE],
       });
       const request = {
         accountId: account.id,
@@ -587,7 +608,7 @@ describe(Gmail, () => {
       const gmail = yield* Gmail;
       const account = yield* gmail.authorizeAccount({
         accessToken: "access-a",
-        scopes: [GMAIL_MODIFY_SCOPE],
+        scopes: [GMAIL_FULL_ACCESS_SCOPE],
       });
       const request = {
         accountId: account.id,
@@ -634,7 +655,7 @@ describe(Gmail, () => {
       const gmail = yield* Gmail;
       const account = yield* gmail.authorizeAccount({
         accessToken: "access-a",
-        scopes: [GMAIL_MODIFY_SCOPE],
+        scopes: [GMAIL_FULL_ACCESS_SCOPE],
       });
       const error = yield* gmail
         .setThreadLabel({

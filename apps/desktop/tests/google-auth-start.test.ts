@@ -130,6 +130,7 @@ describe("Google authentication startup", () => {
       method: authorizationUrl.searchParams.get("code_challenge_method"),
       origin: authorizationUrl.origin,
       path: authorizationUrl.pathname,
+      scopes: authorizationUrl.searchParams.get("scope")?.split(" "),
     }).toStrictEqual({
       callbackHost: "127.0.0.1",
       callbackPath: "/oauth/google/callback",
@@ -138,6 +139,7 @@ describe("Google authentication startup", () => {
       method: "S256",
       origin: "https://accounts.google.com",
       path: "/o/oauth2/v2/auth",
+      scopes: ["openid", "email", "profile", "https://mail.google.com/"],
     });
     expect(authorizationUrl.searchParams.get("code_challenge")).toMatch(
       /^[\w-]{43}$/u

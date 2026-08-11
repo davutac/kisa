@@ -9,6 +9,7 @@ import {
   startGoogle,
 } from "./methods/auth";
 import {
+  deleteSpam,
   discardDraft,
   getIndexProgress,
   getSpamStatus,
@@ -90,6 +91,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(setLabel);
   yield* ipc.handle(setReadState);
   yield* ipc.handle(trash);
+  yield* ipc.handle(deleteSpam);
   yield* ipc.handle(markThreadNotSpam);
   yield* ipc.handle(listImageSenders);
   yield* ipc.handle(trustImages);

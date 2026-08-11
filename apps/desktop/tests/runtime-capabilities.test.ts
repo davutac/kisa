@@ -49,6 +49,8 @@ describe(getRuntimeCapabilities, () => {
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
     deleteComposerTemplate: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    deleteSpamThread: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     discardMailDraft: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     disconnectGoogleAccount: () =>
@@ -168,6 +170,7 @@ describe(getRuntimeCapabilities, () => {
         onClosing: desktopBridge.onAppClosing,
       },
       mail: {
+        deleteSpamThread: desktopBridge.deleteSpamThread,
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
         getSpamStatus: desktopBridge.getSpamStatus,

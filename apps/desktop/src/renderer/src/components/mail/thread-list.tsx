@@ -1,8 +1,9 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { InboxIcon, ShieldAlertIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import PermanentDeleteDialog from "@/components/mail/permanent-delete-dialog";
 import MailThreadItem from "@/components/mail/thread-item";
 import {
   Empty,
@@ -37,6 +38,7 @@ interface MailThreadListProps {
   isLoadingNextPage?: boolean;
   loadNextPage?: () => Promise<boolean>;
   mailbox?: GmailMailbox;
+  onDeleteSpamThread?: (thread: GmailThreadSummary) => void;
   onNotSpamThread?: (thread: GmailThreadSummary) => void;
   onToggleThreadRead?: (thread: GmailThreadSummary) => void;
   onTrashThread?: (thread: GmailThreadSummary) => void;
@@ -56,6 +58,7 @@ const MailThreadList = ({
   isLoadingNextPage = false,
   loadNextPage,
   mailbox = "inbox",
+  onDeleteSpamThread,
   onNotSpamThread,
   onToggleThreadRead,
   onTrashThread,
@@ -70,6 +73,9 @@ const MailThreadList = ({
   const selectThread = useMailboxStore((state) => state.selectThread);
   const lastSelectionMoveAtRef = useRef<number | null>(null);
   const previousReloadRevisionRef = useRef(reloadRevision);
+  const [pendingDelete, setPendingDelete] = useState<GmailThreadSummary | null>(
+    null
+  );
   // The trailing row is the paging trigger, but it also carries the indexing
   // notice — the auto-load effect below still keys off `hasNextPage` alone, so
   // showing the notice cannot start a paging loop against an exhausted cache.
@@ -199,10 +205,20 @@ const MailThreadList = ({
     "mailbox.trashThread",
     () => {
       if (selectedThread !== undefined) {
-        onTrashThread?.(selectedThread);
+        if (mailbox === "spam") {
+          setPendingDelete(selectedThread);
+        } else {
+          onTrashThread?.(selectedThread);
+        }
       }
     },
-    { enabled: selectedThread !== undefined && onTrashThread !== undefined }
+    {
+      enabled:
+        selectedThread !== undefined &&
+        (mailbox === "spam"
+          ? onDeleteSpamThread !== undefined
+          : onTrashThread !== undefined),
+    }
   );
 
   useEffect(() => {
@@ -285,6 +301,7 @@ const MailThreadList = ({
                 data-index={virtualRow.index}
                 isSelected={getThreadSelectionKey(thread) === selectedThreadKey}
                 key={virtualRow.key}
+                onDeleteSpam={mailbox === "spam" ? setPendingDelete : undefined}
                 onOpen={openThread}
                 onNotSpam={onNotSpamThread}
                 onToggleRead={onToggleThreadRead}
@@ -300,6 +317,19 @@ const MailThreadList = ({
           })}
         </AnimatePresence>
       </ol>
+      <PermanentDeleteDialog
+        onConfirm={() => {
+          if (pendingDelete !== null) {
+            onDeleteSpamThread?.(pendingDelete);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDelete(null);
+          }
+        }}
+        open={pendingDelete !== null}
+      />
     </section>
   );
 };

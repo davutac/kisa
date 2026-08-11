@@ -3,6 +3,7 @@ import { ipcRenderer } from "electron";
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
   MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_DELETE_SPAM_THREAD_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_DRAFT_CHANGED_CHANNEL,
@@ -44,6 +45,7 @@ import { subscribe } from "./subscribe";
 export const mailApi: Pick<
   DesktopBridge,
   | "discardMailDraft"
+  | "deleteSpamThread"
   | "getMailIndexProgress"
   | "getMailSyncStatus"
   | "getSpamStatus"
@@ -74,6 +76,8 @@ export const mailApi: Pick<
   | "trashThread"
   | "trustImageSender"
 > = {
+  deleteSpamThread: (request) =>
+    ipcRenderer.invoke(MAIL_DELETE_SPAM_THREAD_CHANNEL, request),
   discardMailDraft: (request) =>
     ipcRenderer.invoke(MAIL_DISCARD_DRAFT_CHANNEL, request),
   getMailIndexProgress: () => ipcRenderer.invoke(MAIL_INDEX_PROGRESS_CHANNEL),

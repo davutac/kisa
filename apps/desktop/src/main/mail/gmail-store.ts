@@ -18,14 +18,12 @@ import type {
 import {
   AccountId,
   GmailAccount,
-  GmailCapabilities,
   GmailLabel,
-  GMAIL_MODIFY_SCOPE,
-  GMAIL_READONLY_SCOPE,
-  GMAIL_SEND_SCOPE,
   HistoryId,
   LabelColor,
   LabelId,
+  getGmailCapabilities,
+  isGmailScope,
 } from "@repo/gmail/models";
 import { GmailStore } from "@repo/gmail/store";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -38,12 +36,6 @@ import {
   rememberCorrespondentMessages,
 } from "./correspondent-cache";
 import { toIndexText } from "./message-text";
-
-const GMAIL_SCOPES = new Set<string>([
-  GMAIL_MODIFY_SCOPE,
-  GMAIL_READONLY_SCOPE,
-  GMAIL_SEND_SCOPE,
-]);
 
 const storeError = (message: string) => new GmailStoreError({ message });
 
@@ -151,12 +143,7 @@ const decodeScopes = (raw: string): readonly GmailScope[] => {
   try {
     const parsed: unknown = JSON.parse(raw);
 
-    return Array.isArray(parsed)
-      ? parsed.filter(
-          (scope): scope is GmailScope =>
-            typeof scope === "string" && GMAIL_SCOPES.has(scope)
-        )
-      : [];
+    return Array.isArray(parsed) ? parsed.filter(isGmailScope) : [];
   } catch {
     return [];
   }
@@ -169,14 +156,9 @@ const toGmailAccount = (row: {
   readonly scopes: string;
 }): GmailAccount => {
   const scopes = decodeScopes(row.scopes);
-  const canModify = scopes.includes(GMAIL_MODIFY_SCOPE);
 
   return new GmailAccount({
-    capabilities: new GmailCapabilities({
-      modify: canModify,
-      read: canModify || scopes.includes(GMAIL_READONLY_SCOPE),
-      send: canModify || scopes.includes(GMAIL_SEND_SCOPE),
-    }),
+    capabilities: getGmailCapabilities(scopes),
     email: row.email,
     id: AccountId.make(row.email),
     scopes,

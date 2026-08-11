@@ -13,6 +13,10 @@ export interface ThreadActionTarget {
 type OnThreadActionSuccess = () => void;
 
 export interface ThreadActions {
+  deleteSpam: (
+    thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
+    onSuccess?: OnThreadActionSuccess
+  ) => void;
   notSpam: (
     thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
     onSuccess?: OnThreadActionSuccess
@@ -125,6 +129,31 @@ export const useThreadActions = (): ThreadActions => {
     [mailApi, runThreadAction]
   );
 
+  const deleteSpam = useCallback(
+    (
+      thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
+      onSuccess?: OnThreadActionSuccess
+    ): void => {
+      if (mailApi === undefined) {
+        return;
+      }
+
+      void runThreadAction(
+        () =>
+          mailApi.deleteSpamThread({
+            accountId: thread.accountId,
+            threadId: thread.threadId,
+          }),
+        "Could not permanently delete email",
+        () => {
+          toast.success("Conversation permanently deleted");
+          onSuccess?.();
+        }
+      );
+    },
+    [mailApi, runThreadAction]
+  );
+
   const trash = useCallback(
     (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
       if (mailApi === undefined) {
@@ -144,5 +173,5 @@ export const useThreadActions = (): ThreadActions => {
     [mailApi, runThreadAction]
   );
 
-  return { notSpam, setLabel, toggleRead, trash };
+  return { deleteSpam, notSpam, setLabel, toggleRead, trash };
 };

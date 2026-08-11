@@ -448,6 +448,23 @@ const fetchThreadSummaries = async (
 export const GmailGatewayLive = Layer.succeed(
   GmailGateway,
   GmailGateway.of({
+    deleteThread: (authorization, threadId: ThreadIdType) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<void>> => {
+          const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.threadsDelete
+          );
+
+          await client.users.threads.delete({ id: threadId, userId: "me" });
+
+          return VOID_RESULT;
+        },
+      }),
+
     getAttachment: (authorization, request) =>
       Effect.tryPromise({
         catch: (error) => toGatewayError(authorization.account.id, error),

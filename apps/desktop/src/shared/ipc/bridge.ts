@@ -88,6 +88,9 @@ export interface DesktopBridge {
   deleteComposerTemplate: (
     request: ComposerTemplateDeleteRequest
   ) => Promise<ComposerTemplateDeleteReply>;
+  deleteSpamThread: (
+    request: GmailThreadRequest
+  ) => Promise<GmailThreadMutationReply>;
   discardMailDraft: (
     request: MailDraftDiscardRequest
   ) => Promise<MailDraftDiscardReply>;

@@ -1,6 +1,7 @@
 import { MailOpenIcon } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
+import PermanentDeleteDialog from "@/components/mail/permanent-delete-dialog";
 import MailThreadConversation from "@/components/mail/thread-conversation";
 import MailThreadHeader from "@/components/mail/thread-header";
 import ThreadLabels from "@/components/mail/thread-labels";
@@ -57,6 +58,7 @@ interface MailThreadViewProps {
   accountId: string;
   closeLabel?: string;
   onClose: () => void;
+  onDeleteSpam: ThreadActions["deleteSpam"];
   onPopOut?: (
     target: Pick<ThreadActionTarget, "accountId" | "threadId">
   ) => Promise<void>;
@@ -70,6 +72,7 @@ interface MailThreadViewProps {
 
 interface MailThreadContentProps {
   onClose: () => void;
+  onDeleteSpam: ThreadActions["deleteSpam"];
   onNotSpam: ThreadActions["notSpam"];
   onPopOut?: MailThreadViewProps["onPopOut"];
   onSetLabel: ThreadActions["setLabel"];
@@ -81,6 +84,7 @@ interface MailThreadContentProps {
 
 const MailThreadContent = ({
   onClose,
+  onDeleteSpam,
   onNotSpam,
   onPopOut,
   onSetLabel,
@@ -92,6 +96,8 @@ const MailThreadContent = ({
   const { accountId, threadId } = thread;
   const isSpam = hasSpamLabel(thread.labels);
   const isUnread = thread.labels.includes("UNREAD");
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
+    useState(false);
   const handleToggleRead = useCallback((): void => {
     onToggleRead({
       accountId,
@@ -105,6 +111,9 @@ const MailThreadContent = ({
       onClose
     );
   }, [accountId, isUnread, onClose, onTrash, threadId]);
+  const handleDeleteSpam = useCallback((): void => {
+    setIsDeleteConfirmationOpen(true);
+  }, []);
   const handleNotSpam = useCallback((): void => {
     onNotSpam({ accountId, threadId }, onClose);
   }, [accountId, onClose, onNotSpam, threadId]);
@@ -127,6 +136,7 @@ const MailThreadContent = ({
         isUnread={isUnread}
         latestAt={latestMessage?.sentAt}
         onClose={onClose}
+        onDeleteSpam={handleDeleteSpam}
         onNotSpam={handleNotSpam}
         onPopOut={onPopOut === undefined ? undefined : handlePopOut}
         onToggleRead={handleToggleRead}
@@ -145,6 +155,13 @@ const MailThreadContent = ({
         messages={thread.messages}
         threadId={thread.threadId}
       />
+      <PermanentDeleteDialog
+        onConfirm={() => {
+          onDeleteSpam({ accountId, threadId }, onClose);
+        }}
+        onOpenChange={setIsDeleteConfirmationOpen}
+        open={isDeleteConfirmationOpen}
+      />
     </section>
   );
 };
@@ -153,6 +170,7 @@ const MailThreadView = ({
   accountId,
   closeLabel = "Back to inbox",
   onClose,
+  onDeleteSpam,
   onNotSpam,
   onPopOut,
   onSetLabel,
@@ -180,6 +198,7 @@ const MailThreadView = ({
   return (
     <MailThreadContent
       onClose={onClose}
+      onDeleteSpam={onDeleteSpam}
       onNotSpam={onNotSpam}
       onPopOut={onPopOut}
       onSetLabel={onSetLabel}
