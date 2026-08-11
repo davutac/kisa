@@ -16,6 +16,7 @@ import type {
   GmailCredentials,
   GmailLabel,
   HistoryId,
+  LabelId,
   MessageId,
   SentMessage,
   ThreadId,
@@ -103,6 +104,10 @@ export interface GmailGatewayService {
   readonly getCurrentHistoryId: (
     authorization: GmailAuthorization
   ) => Effect.Effect<GatewayResult<HistoryId>, GmailGatewayError>;
+  readonly getLabels: (
+    authorization: GmailAuthorization,
+    labelIds: readonly LabelId[]
+  ) => Effect.Effect<GatewayResult<readonly GmailLabel[]>, GmailGatewayError>;
   /**
    * The mailbox's own totals, which is the only cheap way to get a denominator
    * for indexing progress — one quota unit, versus walking every page to count.

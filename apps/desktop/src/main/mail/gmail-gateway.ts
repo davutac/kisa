@@ -30,6 +30,7 @@ import {
   AccountId,
   GmailLabel,
   HistoryId,
+  LabelColor,
   LabelId,
   MessageId,
   SentMessage,
@@ -57,6 +58,7 @@ const HISTORY_TYPES = ["labelAdded", "labelRemoved", "messageAdded"];
 const HISTORY_PAGE_SIZE = 500;
 /** Matches the fan-out the hand-rolled sync used; Gmail throttles above this. */
 const THREAD_FETCH_CONCURRENCY = 5;
+const LABEL_FETCH_CONCURRENCY = 5;
 
 const mapWithConcurrency = async <A, B>(
   items: readonly A[],
@@ -271,10 +273,15 @@ const toThreadSummary = (
   });
 };
 
-const toGmailLabel = (label: gmail_v1.Schema$Label): GmailLabel | undefined => {
+export const toGmailLabel = (
+  label: gmail_v1.Schema$Label
+): GmailLabel | undefined => {
   if (!isPresent(label.id) || !isPresent(label.name)) {
     return undefined;
   }
+
+  const background = label.color?.backgroundColor;
+  const text = label.color?.textColor;
 
   return new GmailLabel({
     id: LabelId.make(label.id),
@@ -285,6 +292,9 @@ const toGmailLabel = (label: gmail_v1.Schema$Label): GmailLabel | undefined => {
         : undefined,
     name: label.name,
     type: label.type === "system" ? "system" : "user",
+    ...(isPresent(background) && isPresent(text)
+      ? { color: new LabelColor({ background, text }) }
+      : {}),
     ...(isPresent(label.messagesTotal)
       ? { messageCount: label.messagesTotal }
       : {}),
@@ -292,6 +302,32 @@ const toGmailLabel = (label: gmail_v1.Schema$Label): GmailLabel | undefined => {
       ? { threadCount: label.threadsTotal }
       : {}),
   });
+};
+
+export const hydrateUserLabelDetails = (
+  labels: readonly gmail_v1.Schema$Label[],
+  load: (labelId: string) => Promise<gmail_v1.Schema$Label>
+): Promise<readonly gmail_v1.Schema$Label[]> =>
+  mapWithConcurrency(labels, LABEL_FETCH_CONCURRENCY, async (label) => {
+    if (label.type !== "user" || !isPresent(label.id)) {
+      return label;
+    }
+
+    return { ...label, ...(await load(label.id)) };
+  });
+
+const fetchLabelResource = async (
+  accountId: AccountId,
+  client: gmail_v1.Gmail,
+  labelId: string
+): Promise<gmail_v1.Schema$Label> => {
+  mailQuotaGovernor.charge(accountId, QUOTA_UNITS.labelsGet);
+  const response = await client.users.labels.get({
+    id: labelId,
+    userId: "me",
+  });
+
+  return response.data;
 };
 
 const succeed = <A>(value: A): GatewayResult<A> => ({ value });
@@ -452,6 +488,36 @@ export const GmailGatewayLive = Layer.succeed(
         },
       }),
 
+    getLabels: (authorization, labelIds) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<readonly GmailLabel[]>> => {
+          const client = createClient(authorization.credentials);
+          const labels = await mapWithConcurrency(
+            labelIds,
+            LABEL_FETCH_CONCURRENCY,
+            async (labelId) => {
+              const resource = await fetchLabelResource(
+                authorization.account.id,
+                client,
+                labelId
+              );
+              const label = toGmailLabel(resource);
+
+              if (label === undefined) {
+                throw new TypeError(
+                  `Gmail returned an invalid label for ${labelId}`
+                );
+              }
+
+              return label;
+            }
+          );
+
+          return succeed(labels);
+        },
+      }),
+
     getMailboxTotals: (authorization) =>
       Effect.tryPromise({
         catch: (error) => toGatewayError(authorization.account.id, error),
@@ -594,9 +660,14 @@ export const GmailGatewayLive = Layer.succeed(
             QUOTA_UNITS.labelsList
           );
           const response = await client.users.labels.list({ userId: "me" });
+          const labels = await hydrateUserLabelDetails(
+            response.data.labels ?? [],
+            (labelId) =>
+              fetchLabelResource(authorization.account.id, client, labelId)
+          );
 
           return succeed(
-            (response.data.labels ?? [])
+            labels
               .map(toGmailLabel)
               .filter((label): label is GmailLabel => label !== undefined)
           );

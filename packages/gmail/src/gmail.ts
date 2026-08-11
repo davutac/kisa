@@ -343,6 +343,38 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         return yield* refreshLabels(options.accountId);
       });
 
+      const resolveUnknownLabels = Effect.fn("Gmail.resolveUnknownLabels")(
+        function* resolveUnknownLabels(
+          accountId: AccountId,
+          labelIds: readonly string[]
+        ) {
+          const cachedLabels = yield* store.getLabels(accountId);
+          const knownLabelIds = new Set<string>(
+            cachedLabels.map((label) => label.id)
+          );
+          const unknownLabelIds = [
+            ...new Set(
+              labelIds.filter((labelId) => !knownLabelIds.has(labelId))
+            ),
+          ];
+
+          if (unknownLabelIds.length === 0) {
+            return;
+          }
+
+          const labels = yield* withAuthorization(
+            accountId,
+            "read",
+            (authorization) =>
+              gateway.getLabels(
+                authorization,
+                unknownLabelIds.map((labelId) => LabelId.make(labelId))
+              )
+          );
+          yield* store.upsertLabels(accountId, labels);
+        }
+      );
+
       /**
        * A thread whose MIME cannot be parsed is dropped rather than failing the
        * page: one malformed message must not be able to stall a full-account
@@ -355,6 +387,11 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           threads: readonly ThreadSummary[],
           details: readonly GatewayThread[]
         ) {
+          yield* resolveUnknownLabels(
+            accountId,
+            threads.flatMap((thread) => thread.labelIds)
+          );
+
           // Sequential on purpose: parsing is CPU-bound, and a page's worth of
           // threads racing each other would just contend for the same thread.
           // oxlint-disable-next-line unicorn/no-array-method-this-argument
@@ -427,6 +464,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           "read",
           (authorization) => gateway.getThread(authorization, request.threadId)
         );
+        yield* resolveUnknownLabels(request.accountId, raw.labelIds);
         const thread = yield* mime.parseThread(raw);
         yield* store.saveThread(request.accountId, thread);
         return thread;
@@ -565,7 +603,9 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         accountId: AccountId,
         type: "cursor-recovered" | "initial"
       ) {
-        yield* refreshLabels(accountId);
+        if (type === "initial") {
+          yield* refreshLabels(accountId);
+        }
         const page = yield* listThreads({
           accountId,
           labelIds: [LabelId.make("INBOX")],
@@ -605,7 +645,6 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
               history.removedThreadIds
             );
             yield* store.saveSyncCursor(request.accountId, history.historyId);
-            yield* refreshLabels(request.accountId);
 
             return {
               addedMessageIds: history.addedMessageIds,

@@ -17,7 +17,7 @@ const ThreadLabels = ({ accountId, labels }: ThreadLabelsProps) => {
 
   return (
     <div className="no-scrollbar bg-card flex min-w-0 gap-1 overflow-x-auto overscroll-x-contain p-4">
-      <MailLabelBadges accountId={accountId} labels={visibleLabels} />
+      <MailLabelBadges accountId={accountId} labels={labels} />
     </div>
   );
 };

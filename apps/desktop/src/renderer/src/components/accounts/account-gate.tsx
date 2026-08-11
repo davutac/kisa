@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { clearMailboxThreadsSnapshots } from "@/mail/mailbox-cache";
@@ -7,6 +7,7 @@ import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { AuthGateState } from "@/startup/auth-gate";
 import { AccountSettingsProvider } from "@/state/account-settings";
 import { ComposerTemplatesProvider } from "@/state/composer-templates";
+import { GmailLabelsProvider } from "@/state/gmail-labels";
 import { GoogleAccountsProvider } from "@/state/google-accounts";
 import { useMailboxStore } from "@/state/mailbox";
 import { TrustedImageSendersProvider } from "@/state/trusted-image-senders";
@@ -42,6 +43,10 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   );
   const [isStartingLogin, setIsStartingLogin] = useState(false);
   const accountOrderVersion = useRef(0);
+  const accountIds = useMemo(
+    () => accounts.map(({ email }) => email),
+    [accounts]
+  );
 
   const reorderAccounts = async (
     reorderedAccounts: readonly GoogleAccount[]
@@ -110,9 +115,13 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   return (
     <GoogleAccountsProvider accounts={accounts} onReorder={reorderAccounts}>
       <AccountSettingsProvider>
-        <ComposerTemplatesProvider>
-          <TrustedImageSendersProvider>{children}</TrustedImageSendersProvider>
-        </ComposerTemplatesProvider>
+        <GmailLabelsProvider accountIds={accountIds}>
+          <ComposerTemplatesProvider>
+            <TrustedImageSendersProvider>
+              {children}
+            </TrustedImageSendersProvider>
+          </ComposerTemplatesProvider>
+        </GmailLabelsProvider>
       </AccountSettingsProvider>
     </GoogleAccountsProvider>
   );

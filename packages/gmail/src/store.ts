@@ -63,6 +63,10 @@ export interface GmailStoreService {
     accountId: AccountId,
     patch: GmailCredentialPatch
   ) => Effect.Effect<void, GmailStoreError>;
+  readonly upsertLabels: (
+    accountId: AccountId,
+    labels: readonly GmailLabel[]
+  ) => Effect.Effect<void, GmailStoreError>;
   /**
    * The single write path for cached mail. Summaries and their messages land in
    * one transaction so a crash mid-page cannot leave a thread row without the

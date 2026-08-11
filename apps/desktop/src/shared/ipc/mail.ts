@@ -87,7 +87,14 @@ export const GmailThread = Schema.Struct({
 });
 export type GmailThread = typeof GmailThread.Type;
 
+export const GmailLabelColor = Schema.Struct({
+  background: Schema.String,
+  text: Schema.String,
+});
+export type GmailLabelColor = typeof GmailLabelColor.Type;
+
 export const GmailLabelSummary = Schema.Struct({
+  color: Schema.optional(GmailLabelColor),
   id: Schema.String,
   name: Schema.String,
   /** Gmail's own wording: "system" for its labels, "user" for the rest. */

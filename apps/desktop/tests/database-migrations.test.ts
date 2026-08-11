@@ -57,6 +57,27 @@ const createLegacyDatabase = () => {
     ) VALUES
       (20, X'00', 'second@example.com', '[]', 20),
       (10, X'00', 'first@example.com', '[]', 10);
+    CREATE TABLE gmail_labels (
+      account_email text NOT NULL,
+      label_id text NOT NULL,
+      name text NOT NULL,
+      type text,
+      updated_at integer NOT NULL,
+      PRIMARY KEY (account_email, label_id)
+    );
+    INSERT INTO gmail_labels (
+      account_email,
+      label_id,
+      name,
+      type,
+      updated_at
+    ) VALUES (
+      'user@example.com',
+      'Label_1',
+      'Receipts',
+      'user',
+      1
+    );
     CREATE TABLE gmail_threads (
       account_email text NOT NULL,
       attachments text,
@@ -222,6 +243,33 @@ describe("database migrations", () => {
           )
           .get("user@example.com")
       ).toStrictEqual({ notifications_enabled: 1 });
+    } finally {
+      connection.close();
+    }
+  });
+
+  it("adds label colors without losing the existing catalog", () => {
+    const connection = createLegacyDatabase();
+
+    try {
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      expect(
+        connection
+          .prepare(
+            `SELECT background_color, label_id, name, text_color
+             FROM gmail_labels`
+          )
+          .get()
+      ).toStrictEqual({
+        background_color: null,
+        label_id: "Label_1",
+        name: "Receipts",
+        text_color: null,
+      });
     } finally {
       connection.close();
     }

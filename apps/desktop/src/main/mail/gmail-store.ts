@@ -24,10 +24,11 @@ import {
   GMAIL_READONLY_SCOPE,
   GMAIL_SEND_SCOPE,
   HistoryId,
+  LabelColor,
   LabelId,
 } from "@repo/gmail/models";
 import { GmailStore } from "@repo/gmail/store";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { Effect, Layer, Option, Redacted } from "effect";
 
 import { getGoogleAccessToken } from "../auth/auth";
@@ -56,6 +57,20 @@ export const MESSAGE_SCHEMA_VERSION = 1;
 
 const toAddresses = (mailboxes: readonly Mailbox[]): readonly string[] =>
   mailboxes.map((mailbox) => mailbox.address);
+
+const toLabelValues = (
+  accountId: string,
+  label: GmailLabel,
+  updatedAt: number
+) => ({
+  accountEmail: accountId,
+  backgroundColor: label.color?.background ?? null,
+  labelId: label.id,
+  name: label.name,
+  textColor: label.color?.text ?? null,
+  type: label.type,
+  updatedAt,
+});
 
 /**
  * `body_text` is stored uncompressed because `gmail_messages_fts` reads it as
@@ -222,6 +237,14 @@ export const GmailStoreLive = Layer.succeed(
               id: LabelId.make(row.labelId),
               name: row.name,
               type: row.type === "system" ? "system" : "user",
+              ...(row.backgroundColor === null || row.textColor === null
+                ? {}
+                : {
+                    color: new LabelColor({
+                      background: row.backgroundColor,
+                      text: row.textColor,
+                    }),
+                  }),
             })
         );
       }),
@@ -300,15 +323,7 @@ export const GmailStoreLive = Layer.succeed(
 
         await database
           .insert(gmailLabels)
-          .values(
-            labels.map((label) => ({
-              accountEmail: accountId,
-              labelId: label.id,
-              name: label.name,
-              type: label.type,
-              updatedAt: now,
-            }))
-          )
+          .values(labels.map((label) => toLabelValues(accountId, label, now)))
           .run();
       }),
 
@@ -432,6 +447,29 @@ export const GmailStoreLive = Layer.succeed(
 
     /** See `saveAuthorization`. */
     updateCredentials: () => Effect.void,
+
+    upsertLabels: (accountId, labels) =>
+      withDatabase("Could not save Gmail labels", async (database) => {
+        if (labels.length === 0) {
+          return;
+        }
+
+        const now = Date.now();
+        await database
+          .insert(gmailLabels)
+          .values(labels.map((label) => toLabelValues(accountId, label, now)))
+          .onConflictDoUpdate({
+            set: {
+              backgroundColor: sql`excluded.background_color`,
+              name: sql`excluded.name`,
+              textColor: sql`excluded.text_color`,
+              type: sql`excluded.type`,
+              updatedAt: now,
+            },
+            target: [gmailLabels.accountEmail, gmailLabels.labelId],
+          })
+          .run();
+      }),
 
     upsertThreadDetails: (accountId, threads, details) =>
       withDatabase("Could not save Gmail threads", async (database) => {

@@ -3,6 +3,7 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option, Redacted } from "effect";
 
+import { GmailHistoryExpiredError } from "../src/errors";
 import type { GmailGatewayService } from "../src/gateway";
 import { GmailGateway } from "../src/gateway";
 import { Gmail } from "../src/gmail";
@@ -15,6 +16,7 @@ import {
   AttachmentSummary,
   GmailAccount,
   GmailCapabilities,
+  GmailLabel,
   GmailMessage,
   GmailThread,
   GMAIL_MODIFY_SCOPE,
@@ -31,6 +33,13 @@ import {
 import type { GmailStoreService } from "../src/store";
 import { GmailStore } from "../src/store";
 
+const INBOX_LABEL = new GmailLabel({
+  id: LabelId.make("INBOX"),
+  name: "INBOX",
+  type: "system",
+});
+const UNKNOWN_LABEL_ID = LabelId.make("Label_99");
+
 interface TestState {
   readonly attachmentCalls: string[];
   readonly authorizations: Map<AccountId, GmailAuthorization>;
@@ -38,6 +47,9 @@ interface TestState {
     readonly accountId: AccountId;
     readonly pageToken?: string;
   }[];
+  readonly labelGetCalls: LabelId[];
+  labelListCalls: number;
+  labels: readonly GmailLabel[];
   readonly mutationCalls: {
     readonly accountId: AccountId;
     readonly operation: "labels" | "trash";
@@ -56,8 +68,12 @@ interface TestState {
 }
 
 interface TestLayerOptions {
+  readonly cachedLabels?: readonly GmailLabel[];
   readonly historyAddedMessageIds?: readonly MessageId[];
+  readonly historyExpired?: boolean;
+  readonly historyThreads?: readonly ThreadSummary[];
   readonly syncCursor?: HistoryId;
+  readonly threadLabelIds?: readonly LabelId[];
 }
 
 const createTestLayer = (options: TestLayerOptions = {}) => {
@@ -66,6 +82,9 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     authorizations: new Map(),
     forwardAttachmentContentIds: [],
     indexedThreadIds: [],
+    labelGetCalls: [],
+    labelListCalls: 0,
+    labels: options.cachedLabels ?? [],
     listThreadCalls: [],
     mutationCalls: [],
     readStateChanges: [],
@@ -82,7 +101,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
       Effect.sync(() =>
         Option.fromNullishOr(state.authorizations.get(accountId))
       ),
-    getLabels: () => Effect.succeed([]),
+    getLabels: () => Effect.succeed(state.labels),
     getSyncCursor: () =>
       Effect.succeed(Option.fromNullishOr(options.syncCursor)),
     getThread: () => Effect.succeed(Option.none()),
@@ -93,7 +112,10 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
       Effect.sync(() => {
         state.removedThreads.push(...threadIds);
       }),
-    replaceLabels: () => Effect.void,
+    replaceLabels: (_accountId, labels) =>
+      Effect.sync(() => {
+        state.labels = labels;
+      }),
     saveAuthorization: (authorization) =>
       Effect.sync(() => {
         state.authorizations.set(authorization.account.id, authorization);
@@ -118,6 +140,16 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
           });
         }
       }),
+    upsertLabels: (_accountId, labels) =>
+      Effect.sync(() => {
+        const next = new Map(state.labels.map((label) => [label.id, label]));
+
+        for (const label of labels) {
+          next.set(label.id, label);
+        }
+
+        state.labels = [...next.values()];
+      }),
     upsertThreadDetails: (_accountId, _threads, details) =>
       Effect.sync(() => {
         state.indexedThreadIds.push(...details.map((thread) => thread.id));
@@ -138,6 +170,20 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
       }),
     getCurrentHistoryId: () =>
       Effect.succeed({ value: HistoryId.make("history-current") }),
+    getLabels: (_authorization, labelIds) =>
+      Effect.sync(() => {
+        state.labelGetCalls.push(...labelIds);
+        return {
+          value: labelIds.map(
+            (labelId) =>
+              new GmailLabel({
+                id: labelId,
+                name: labelId === UNKNOWN_LABEL_ID ? "New label" : labelId,
+                type: labelId.startsWith("Label_") ? "user" : "system",
+              })
+          ),
+        };
+      }),
     getMailboxTotals: () => Effect.die("unused"),
     getThread: () =>
       Effect.succeed({
@@ -156,17 +202,30 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
         id: AccountId.make(`account-${suffix}`),
       });
     },
-    listHistory: () =>
-      Effect.succeed({
-        value: {
-          addedMessageIds: options.historyAddedMessageIds ?? [],
-          details: [],
-          historyId: HistoryId.make("history-next"),
-          removedThreadIds: [],
-          threads: [],
-        },
+    listHistory: (authorization) =>
+      options.historyExpired === true
+        ? Effect.fail(
+            new GmailHistoryExpiredError({
+              accountId: authorization.account.id,
+              message: "History expired",
+            })
+          )
+        : Effect.succeed({
+            value: {
+              addedMessageIds: options.historyAddedMessageIds ?? [],
+              details: [],
+              historyId: HistoryId.make("history-next"),
+              removedThreadIds: [],
+              threads: options.historyThreads ?? [],
+            },
+          }),
+    listLabels: () =>
+      Effect.sync(() => {
+        state.labelListCalls += 1;
+        return {
+          value: [INBOX_LABEL],
+        };
       }),
-    listLabels: () => Effect.succeed({ value: [] }),
     listThreads: (authorization, request) => {
       state.listThreadCalls.push({
         accountId: authorization.account.id,
@@ -186,7 +245,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
               hasAttachments: false,
               hasUnread: true,
               id,
-              labelIds: [LabelId.make("INBOX")],
+              labelIds: options.threadLabelIds ?? [LabelId.make("INBOX")],
               latestAt: "2026-08-06T12:00:00.000Z",
               latestMessageId: MessageId.make(`${id}-message`),
               messageCount: 1,
@@ -290,6 +349,21 @@ const authHandoff = (accessToken: string, refreshToken?: string): unknown => ({
   refreshToken,
   scopes: [GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE],
 });
+
+const threadSummaryWithLabels = (labelIds: readonly LabelId[]): ThreadSummary =>
+  new ThreadSummary({
+    attachments: [],
+    hasAttachments: false,
+    hasUnread: false,
+    id: ThreadId.make("thread-with-labels"),
+    labelIds,
+    latestAt: "2026-08-06T12:00:00.000Z",
+    latestMessageId: MessageId.make("message-with-labels"),
+    messageCount: 1,
+    participants: [],
+    snippet: "",
+    subject: "Labels",
+  });
 
 describe(Gmail, () => {
   it.effect("preserves a refresh token when reconnecting an account", () => {
@@ -462,7 +536,7 @@ describe(Gmail, () => {
   });
 
   it.effect("does not treat initial mailbox hydration as new mail", () => {
-    const { layer } = createTestLayer();
+    const { layer, state } = createTestLayer();
 
     return Effect.gen(function* ignoresInitialMailbox() {
       const gmail = yield* Gmail;
@@ -476,12 +550,13 @@ describe(Gmail, () => {
 
       expect(result.type).toBe("initial");
       expect(result.addedMessageIds).toStrictEqual([]);
+      expect(state.labelListCalls).toBe(1);
     }).pipe(Effect.provide(layer));
   });
 
   it.effect("preserves only incremental message-added signals", () => {
     const addedMessageId = MessageId.make("new-message");
-    const { layer } = createTestLayer({
+    const { layer, state } = createTestLayer({
       historyAddedMessageIds: [addedMessageId],
       syncCursor: HistoryId.make("history-before"),
     });
@@ -498,6 +573,108 @@ describe(Gmail, () => {
 
       expect(result.type).toBe("partial");
       expect(result.addedMessageIds).toStrictEqual([addedMessageId]);
+      expect(state.labelListCalls).toBe(0);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("gets labels first seen during incremental history", () => {
+    const { layer, state } = createTestLayer({
+      cachedLabels: [INBOX_LABEL],
+      historyThreads: [
+        threadSummaryWithLabels([INBOX_LABEL.id, UNKNOWN_LABEL_ID]),
+      ],
+      syncCursor: HistoryId.make("history-before"),
+    });
+
+    return Effect.gen(function* repairsTheCatalogFromHistory() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(
+        authHandoff("access-a", "refresh-a")
+      );
+
+      yield* gmail.sync({ accountId: account.id, reason: "timer" });
+      yield* gmail.sync({ accountId: account.id, reason: "timer" });
+
+      expect(state.labelGetCalls).toStrictEqual([UNKNOWN_LABEL_ID]);
+      expect(state.labels.map((label) => label.name)).toStrictEqual([
+        "INBOX",
+        "New label",
+      ]);
+      expect(state.labelListCalls).toBe(0);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("gets labels first seen during indexed thread pages", () => {
+    const { layer, state } = createTestLayer({
+      cachedLabels: [INBOX_LABEL],
+      threadLabelIds: [INBOX_LABEL.id, UNKNOWN_LABEL_ID],
+    });
+
+    return Effect.gen(function* repairsTheCatalogDuringIndexing() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(
+        authHandoff("access-a", "refresh-a")
+      );
+
+      yield* gmail.listThreads({
+        accountId: account.id,
+        labelIds: [INBOX_LABEL.id],
+        pageSize: 50,
+      });
+
+      expect(state.labelGetCalls).toStrictEqual([UNKNOWN_LABEL_ID]);
+      expect(state.labelListCalls).toBe(0);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect(
+    "does not refresh labels while recovering an expired cursor",
+    () => {
+      const { layer, state } = createTestLayer({
+        cachedLabels: [INBOX_LABEL],
+        historyExpired: true,
+        syncCursor: HistoryId.make("history-before"),
+        threadLabelIds: [INBOX_LABEL.id, UNKNOWN_LABEL_ID],
+      });
+
+      return Effect.gen(function* recoversWithoutRefreshingLabels() {
+        const gmail = yield* Gmail;
+        const account = yield* gmail.authorizeAccount(
+          authHandoff("access-a", "refresh-a")
+        );
+        const result = yield* gmail.sync({
+          accountId: account.id,
+          reason: "timer",
+        });
+
+        expect(result.type).toBe("cursor-recovered");
+        expect(state.labelListCalls).toBe(0);
+        expect(state.labelGetCalls).toStrictEqual([UNKNOWN_LABEL_ID]);
+      }).pipe(Effect.provide(layer));
+    }
+  );
+
+  it.effect("reads cached labels unless a manual refresh is requested", () => {
+    const cachedLabel = new GmailLabel({
+      id: LabelId.make("Label_1"),
+      name: "Receipts",
+      type: "user",
+    });
+    const { layer, state } = createTestLayer({ cachedLabels: [cachedLabel] });
+
+    return Effect.gen(function* respectsExplicitLabelRefresh() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(
+        authHandoff("access-a", "refresh-a")
+      );
+
+      expect(yield* gmail.listLabels({ accountId: account.id })).toStrictEqual([
+        cachedLabel,
+      ]);
+      expect(state.labelListCalls).toBe(0);
+
+      yield* gmail.listLabels({ accountId: account.id, refresh: true });
+      expect(state.labelListCalls).toBe(1);
     }).pipe(Effect.provide(layer));
   });
 });

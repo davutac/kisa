@@ -12,8 +12,10 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { gmailLabelColorStyle } from "@/mail/label";
 import type { MailApi } from "@/platform/desktop";
 import type { GmailLabelCatalog, GmailLabelSummary } from "@/shared/ipc/mail";
+import { useUpdateGmailLabelCatalog } from "@/state/gmail-labels";
 
 // Gmail owns the labels it names itself; the ones worth listing here are the
 // labels the account holder created.
@@ -31,6 +33,7 @@ const SettingsAccountLabelsRow = ({
 }: SettingsAccountLabelsRowProps) => {
   const [catalog, setCatalog] = useState<GmailLabelCatalog>();
   const [isSyncing, setIsSyncing] = useState(false);
+  const updateLabelCatalog = useUpdateGmailLabelCatalog();
   const titleId = `account-${accountId}-labels-title`;
 
   useEffect(() => {
@@ -42,6 +45,7 @@ const SettingsAccountLabelsRow = ({
 
         if (isMounted && reply.ok) {
           setCatalog(reply.data);
+          updateLabelCatalog(accountId, reply.data);
         }
       } catch {
         // Syncing is the retry: a failed read leaves the row empty, not broken.
@@ -51,7 +55,7 @@ const SettingsAccountLabelsRow = ({
     return () => {
       isMounted = false;
     };
-  }, [accountId, mailApi]);
+  }, [accountId, mailApi, updateLabelCatalog]);
 
   const handleSync = async (): Promise<void> => {
     setIsSyncing(true);
@@ -65,6 +69,7 @@ const SettingsAccountLabelsRow = ({
       }
 
       setCatalog(reply.data);
+      updateLabelCatalog(accountId, reply.data);
       toast.success("Gmail labels synced");
     } catch {
       toast.error("Could not sync the labels", {
@@ -98,6 +103,7 @@ const SettingsAccountLabelsRow = ({
               <Badge
                 className="bg-muted text-muted-foreground max-w-40"
                 key={label.id}
+                style={gmailLabelColorStyle(label.color)}
                 title={label.name}
                 variant="secondary"
               >

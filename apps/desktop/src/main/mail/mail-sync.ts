@@ -8,6 +8,7 @@ import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
 import { GmailMime } from "@repo/gmail/mime";
 import type {
+  GmailLabel,
   GmailThread as GmailDomainThread,
   Mailbox,
 } from "@repo/gmail/models";
@@ -33,6 +34,7 @@ import type {
   GmailCachedThreadPageRequest,
   GmailLabelCatalog,
   GmailLabelCatalogRequest,
+  GmailLabelSummary,
   GmailMessageSendRequest,
   GmailSenderBrand,
   GmailThread as GmailThreadDto,
@@ -385,6 +387,13 @@ export const forgetAccountMailData = Effect.fn("forgetAccountMailData")(
   }
 );
 
+const toGmailLabelSummary = (label: GmailLabel): GmailLabelSummary => ({
+  ...(label.color === undefined ? {} : { color: label.color }),
+  id: label.id,
+  name: label.name,
+  type: label.type,
+});
+
 export const listGmailLabelCatalog = Effect.fn("listGmailLabelCatalog")(
   function* listGmailLabelCatalog(request: GmailLabelCatalogRequest) {
     const labels = yield* runGmail(
@@ -396,11 +405,7 @@ export const listGmailLabelCatalog = Effect.fn("listGmailLabelCatalog")(
     );
 
     return {
-      labels: labels.map((label) => ({
-        id: label.id,
-        name: label.name,
-        type: label.type,
-      })),
+      labels: labels.map(toGmailLabelSummary),
     } satisfies GmailLabelCatalog;
   }
 );
@@ -419,11 +424,7 @@ export const syncGmailLabelCatalog = Effect.fn("syncGmailLabelCatalog")(
     );
 
     return {
-      labels: labels.map((label) => ({
-        id: label.id,
-        name: label.name,
-        type: label.type,
-      })),
+      labels: labels.map(toGmailLabelSummary),
       syncedAt: Date.now(),
     } satisfies GmailLabelCatalog;
   }

@@ -42,6 +42,7 @@ export const QUOTA_UNITS = {
   attachmentsGet: 20,
   getProfile: 1,
   historyList: 2,
+  labelsGet: 1,
   labelsList: 1,
   messagesGet: 20,
   messagesList: 5,

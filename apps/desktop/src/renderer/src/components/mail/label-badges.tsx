@@ -1,7 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { formatGmailLabel, visibleGmailLabels } from "@/mail/label";
+import {
+  formatGmailLabel,
+  gmailLabelColorStyle,
+  visibleGmailLabels,
+} from "@/mail/label";
 import { useAccountSettings } from "@/state/account-settings";
+import { useGmailLabelColors } from "@/state/gmail-labels";
 
 interface MailLabelBadgesProps {
   accountId: string;
@@ -15,6 +20,7 @@ const MailLabelBadges = ({
   size = "default",
 }: MailLabelBadgesProps) => {
   const { showSystemLabels } = useAccountSettings(accountId);
+  const colorsByName = useGmailLabelColors(accountId, labels);
 
   return visibleGmailLabels(labels, showSystemLabels).map((label) => {
     const displayLabel = formatGmailLabel(label);
@@ -28,6 +34,7 @@ const MailLabelBadges = ({
             : "h-5 max-w-32 px-2 text-xs"
         )}
         key={label}
+        style={gmailLabelColorStyle(colorsByName.get(label))}
         title={displayLabel}
         variant="secondary"
       >

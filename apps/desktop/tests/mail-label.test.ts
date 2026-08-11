@@ -2,10 +2,23 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   formatGmailLabel,
+  gmailLabelColorStyle,
   hasInboxLabel,
   isSystemGmailLabel,
   visibleGmailLabels,
 } from "../src/renderer/src/mail/label";
+
+describe(gmailLabelColorStyle, () => {
+  it("uses Gmail's paired foreground and background colors", () => {
+    expect(
+      gmailLabelColorStyle({ background: "#16a766", text: "#ffffff" })
+    ).toStrictEqual({
+      backgroundColor: "#16a766",
+      color: "#ffffff",
+    });
+    expect(gmailLabelColorStyle()).toBeUndefined();
+  });
+});
 
 describe(formatGmailLabel, () => {
   it("formats Gmail system labels in English", () => {

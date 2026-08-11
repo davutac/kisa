@@ -1,3 +1,7 @@
+import type { CSSProperties } from "react";
+
+import type { GmailLabelColor } from "@/shared/ipc/mail";
+
 const SYSTEM_LABEL_NAMES: Readonly<Record<string, string>> = {
   CATEGORY_FORUMS: "Forums",
   CATEGORY_PERSONAL: "Primary",
@@ -18,6 +22,13 @@ const SYSTEM_LABEL_NAMES: Readonly<Record<string, string>> = {
 
 export const formatGmailLabel = (label: string): string =>
   SYSTEM_LABEL_NAMES[label.toUpperCase()] ?? label;
+
+export const gmailLabelColorStyle = (
+  color?: GmailLabelColor
+): CSSProperties | undefined =>
+  color === undefined
+    ? undefined
+    : { backgroundColor: color.background, color: color.text };
 
 // Gmail reports its own labels by id, and user labels by the name their owner
 // typed, so an id that Gmail reserves is what marks a label as a system one.
