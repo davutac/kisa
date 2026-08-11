@@ -57,6 +57,39 @@ describe("hotkey command registry", () => {
     expect(getHotkeyAriaLabel("composer.stash", "windows")).toBe("Control+S");
   });
 
+  it("assigns template workspace shortcuts", () => {
+    expect(HOTKEY_COMMANDS["app.openTemplates"].bindings).toStrictEqual([
+      "Mod+Shift+T",
+    ]);
+    expect(HOTKEY_COMMANDS["templates.new"].bindings).toStrictEqual([
+      "Mod+Shift+N",
+    ]);
+    expect(HOTKEY_COMMANDS["templates.save"].bindings).toStrictEqual(["Mod+S"]);
+    expect(HOTKEY_COMMANDS["templates.focusSearch"].bindings).toStrictEqual([
+      "Mod+F",
+    ]);
+    expect(HOTKEY_COMMANDS["templates.save"].repeat).toBe("ignore-key-repeat");
+  });
+
+  it("assigns template navigation that works while editing", () => {
+    expect(HOTKEY_COMMANDS["templates.next"].bindings).toStrictEqual([
+      "Mod+Shift+]",
+    ]);
+    expect(HOTKEY_COMMANDS["templates.previous"].bindings).toStrictEqual([
+      "Mod+Shift+[",
+    ]);
+    expect(HOTKEY_COMMANDS["templates.next"].input).toBe("allow");
+    expect(HOTKEY_COMMANDS["templates.previous"].input).toBe("allow");
+    expect(getHotkeyAriaLabel("templates.next", "mac")).toBe("Meta+Shift+]");
+  });
+
+  it("assigns the composer attachment shortcut", () => {
+    expect(HOTKEY_COMMANDS["composer.attach"].bindings).toStrictEqual([
+      "Mod+Shift+A",
+    ]);
+    expect(getHotkeyAriaLabel("composer.attach", "mac")).toBe("Meta+Shift+A");
+  });
+
   it("allows repeated stash key presses while ignoring keydown auto-repeat", () => {
     expect(shouldRunHotkeyCommand("ignore-key-repeat", false)).toBeTruthy();
     expect(shouldRunHotkeyCommand("ignore-key-repeat", true)).toBeFalsy();
@@ -87,6 +120,15 @@ describe("hotkey command registry", () => {
     ]);
     expect(getHotkeyAriaLabel("thread.popout", "mac")).toBe("Shift+Enter");
     expect(getHotkeyAriaLabel("thread.popout", "windows")).toBe("Shift+Enter");
+  });
+
+  it("keeps thread quick actions consistent with the mailbox", () => {
+    expect(HOTKEY_COMMANDS["thread.toggleThreadRead"].bindings).toStrictEqual(
+      HOTKEY_COMMANDS["mailbox.toggleThreadRead"].bindings
+    );
+    expect(HOTKEY_COMMANDS["thread.trashThread"].bindings).toStrictEqual(
+      HOTKEY_COMMANDS["mailbox.trashThread"].bindings
+    );
   });
 
   it("assigns the unread filter", () => {

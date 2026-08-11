@@ -97,7 +97,7 @@
     cursor: pointer;
   }
 
-  ::selection {
+  *::selection {
     background: var(--foreground);
     color: var(--background);
   }

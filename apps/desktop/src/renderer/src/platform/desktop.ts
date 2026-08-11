@@ -74,6 +74,13 @@ export interface UpdateApi {
   onStatusChange: DesktopBridge["onUpdateStatus"];
 }
 
+export interface TemplateApi {
+  delete: DesktopBridge["deleteComposerTemplate"];
+  list: DesktopBridge["listComposerTemplates"];
+  onChanged: DesktopBridge["onComposerTemplateChanged"];
+  save: DesktopBridge["saveComposerTemplate"];
+}
+
 export interface RuntimeCapabilities {
   auth?: AuthApi;
   isWeb: boolean;
@@ -81,6 +88,7 @@ export interface RuntimeCapabilities {
   mail?: MailApi;
   settings?: SettingsApi;
   startup?: AppStartupApi;
+  templates?: TemplateApi;
   updates?: UpdateApi;
   versions?: ElectronVersions;
   window?: WindowApi;
@@ -92,6 +100,7 @@ interface DesktopCapabilities {
   mail: MailApi;
   settings: SettingsApi;
   startup: AppStartupApi;
+  templates: TemplateApi;
   updates: UpdateApi;
   versions: ElectronVersions;
   window: WindowApi;
@@ -159,6 +168,12 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       updateAccountSettings: bridge.updateAccountSettings,
     },
     startup: { start: bridge.startApp },
+    templates: {
+      delete: bridge.deleteComposerTemplate,
+      list: bridge.listComposerTemplates,
+      onChanged: bridge.onComposerTemplateChanged,
+      save: bridge.saveComposerTemplate,
+    },
     updates: {
       check: bridge.checkForUpdates,
       getStatus: bridge.getUpdateStatus,
@@ -188,6 +203,7 @@ export const getRuntimeCapabilities = (
       mail: undefined,
       settings: undefined,
       startup: undefined,
+      templates: undefined,
       updates: undefined,
       versions: undefined,
       window: undefined,
@@ -217,6 +233,9 @@ export const getSettingsApi = (): SettingsApi | undefined =>
 
 export const getUpdateApi = (): UpdateApi | undefined =>
   getRuntimeCapabilities().updates;
+
+export const getTemplateApi = (): TemplateApi | undefined =>
+  getRuntimeCapabilities().templates;
 
 export const getElectronVersions = (): ElectronVersions | undefined =>
   getRuntimeCapabilities().versions;

@@ -1,5 +1,6 @@
 // oxlint-disable oxc/no-barrel-file
 export { accountSettings } from "./account-settings";
+export { composerTemplates } from "./composer-templates";
 export { googleAccounts } from "./google-accounts";
 export { gmailBackfillState } from "./gmail-backfill-state";
 export type { GmailBackfillStatus } from "./gmail-backfill-state";

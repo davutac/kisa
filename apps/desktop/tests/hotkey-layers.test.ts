@@ -82,6 +82,12 @@ describe("hotkey interaction layers", () => {
     expect(isHotkeyScopeActive("app", "thread")).toBeTruthy();
   });
 
+  it("isolates template commands while keeping app navigation active", () => {
+    expect(isHotkeyScopeActive("templates", "templates")).toBeTruthy();
+    expect(isHotkeyScopeActive("app", "templates")).toBeTruthy();
+    expect(isHotkeyScopeActive("settings", "templates")).toBeFalsy();
+  });
+
   it("blocks product hotkeys while a modal operation is active", () => {
     expect(
       getTopHotkeyLayer([

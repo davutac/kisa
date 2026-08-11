@@ -40,8 +40,12 @@ const MailThreadHeader = ({
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
   const closeDisplay = getHotkeyDisplay("thread.close");
   const popOutDisplay = getHotkeyDisplay("thread.popout");
+  const toggleReadDisplay = getHotkeyDisplay("thread.toggleThreadRead");
+  const trashDisplay = getHotkeyDisplay("thread.trashThread");
 
   useAppCommand("thread.close", onClose);
+  useAppCommand("thread.toggleThreadRead", onToggleRead);
+  useAppCommand("thread.trashThread", onTrash);
 
   return (
     // Sticking at top-0 with an opaque pt-4 gutter reads as a top-4 offset
@@ -88,21 +92,23 @@ const MailThreadHeader = ({
             </Button>
           )}
           <Button
+            aria-keyshortcuts={getHotkeyAriaLabel("thread.toggleThreadRead")}
             aria-label={toggleReadLabel}
             onClick={onToggleRead}
             size="icon"
-            title={toggleReadLabel}
+            title={`${toggleReadLabel} (${toggleReadDisplay.bindings[0]?.join("+")})`}
             type="button"
             variant="ghost"
           >
             {isUnread ? <MailOpenIcon /> : <MailIcon />}
           </Button>
           <Button
-            aria-label="Move to trash"
+            aria-keyshortcuts={getHotkeyAriaLabel("thread.trashThread")}
+            aria-label={trashDisplay.label}
             className="hover:bg-destructive/10 hover:text-destructive"
             onClick={onTrash}
             size="icon"
-            title="Move to trash"
+            title={`${trashDisplay.label} (${trashDisplay.bindings[0]?.join("+")})`}
             type="button"
             variant="ghost"
           >

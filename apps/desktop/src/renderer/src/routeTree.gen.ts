@@ -10,7 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
+import { Route as TemplatesRouteRouteImport } from './routes/templates/route'
 import { Route as ThreadAccountIdThreadIdRouteImport } from './routes/thread.$accountId.$threadId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -18,9 +19,14 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
+const SettingsRouteRoute = SettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesRouteRoute = TemplatesRouteRouteImport.update({
+  id: '/templates',
+  path: '/templates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ThreadAccountIdThreadIdRoute = ThreadAccountIdThreadIdRouteImport.update({
@@ -31,31 +37,40 @@ const ThreadAccountIdThreadIdRoute = ThreadAccountIdThreadIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteRoute
+  '/templates': typeof TemplatesRouteRoute
   '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteRoute
+  '/templates': typeof TemplatesRouteRoute
   '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteRoute
+  '/templates': typeof TemplatesRouteRoute
   '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/thread/$accountId/$threadId'
+  fullPaths: '/' | '/settings' | '/templates' | '/thread/$accountId/$threadId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/thread/$accountId/$threadId'
-  id: '__root__' | '/' | '/settings' | '/thread/$accountId/$threadId'
+  to: '/' | '/settings' | '/templates' | '/thread/$accountId/$threadId'
+  id:
+    | '__root__'
+    | '/'
+    | '/settings'
+    | '/templates'
+    | '/thread/$accountId/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRouteRoute: typeof SettingsRouteRoute
+  TemplatesRouteRoute: typeof TemplatesRouteRoute
   ThreadAccountIdThreadIdRoute: typeof ThreadAccountIdThreadIdRoute
 }
 
@@ -72,7 +87,14 @@ declare module '@tanstack/react-router' {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
+      preLoaderRoute: typeof SettingsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/thread/$accountId/$threadId': {
@@ -87,7 +109,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRouteRoute: SettingsRouteRoute,
+  TemplatesRouteRoute: TemplatesRouteRoute,
   ThreadAccountIdThreadIdRoute: ThreadAccountIdThreadIdRoute,
 }
 export const routeTree = rootRouteImport

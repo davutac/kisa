@@ -14,10 +14,11 @@ command registry ──> useAppCommand ──> TanStack Hotkeys ──> keyboard
 
 The hotkey module owns commands that apply to an application screen or interaction mode:
 
-- App navigation, search, and message composition
+- App navigation, search, templates, and message composition
 - Mailbox selection, thread opening, read-state toggling, and trashing
-- Closing the active thread
-- Selecting the composer account, stashing a draft, and sending a message
+- Closing the active thread and acting on the conversation being read
+- Selecting the composer account, attaching files, stashing a draft, and sending a message
+- Creating, searching, and explicitly saving templates
 
 Focused widgets retain their native keyboard behavior. Recipient completion, search results, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused.
 
@@ -55,6 +56,12 @@ When a mailbox thread is selected, `M` toggles its read state. Both `Backspace` 
 
 While reading a conversation in the main window, `Shift+Enter` opens it in a thread window and closes the inline conversation. The command is disabled inside the resulting thread window because it is already popped out.
 
+While reading a conversation, `M`, `Backspace`, and `Delete` retain the same read-state and trash behavior as they have on the selected mailbox conversation.
+
+`Mod+Shift+A` opens the attachment picker while composing a new email.
+
+`Mod+Shift+T` opens Templates. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
+
 ## Interaction layers
 
 Mounted features declare their active layer with `useHotkeyLayer`:
@@ -65,15 +72,16 @@ useHotkeyLayer("composer", isOpen);
 
 The provider stores each declaration under a unique token. The highest-priority, most recently activated registration becomes the top layer.
 
-| Top layer  | Active scopes               |
-| ---------- | --------------------------- |
-| None       | `always`, `app`             |
-| `mailbox`  | `always`, `app`, `mailbox`  |
-| `thread`   | `always`, `app`, `thread`   |
-| `settings` | `always`, `app`, `settings` |
-| `composer` | `always`, `composer`        |
-| `search`   | `always`, `search`          |
-| `blocking` | `always`                    |
+| Top layer   | Active scopes                |
+| ----------- | ---------------------------- |
+| None        | `always`, `app`              |
+| `mailbox`   | `always`, `app`, `mailbox`   |
+| `thread`    | `always`, `app`, `thread`    |
+| `settings`  | `always`, `app`, `settings`  |
+| `templates` | `always`, `app`, `templates` |
+| `composer`  | `always`, `composer`         |
+| `search`    | `always`, `search`           |
+| `blocking`  | `always`                     |
 
 Composer and search overlays suppress every underlying application command. Removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
 
@@ -89,6 +97,7 @@ const LAYER_PRIORITY = {
   thread: 20,
   mailbox: 10,
   settings: 10,
+  templates: 10,
 } as const;
 ```
 

@@ -60,6 +60,14 @@ import type {
   DatabaseImportSessionReply,
   DatabaseRecoveryKeyExportReply,
 } from "./settings";
+import type {
+  ComposerTemplateChanged,
+  ComposerTemplateDeleteReply,
+  ComposerTemplateDeleteRequest,
+  ComposerTemplateInput,
+  ComposerTemplateListReply,
+  ComposerTemplateSaveReply,
+} from "./templates";
 
 export interface ElectronVersions {
   app: string;
@@ -74,6 +82,9 @@ export interface DesktopBridge {
     request: DatabaseImportSession
   ) => Promise<DatabaseImportCancelReply>;
   checkForUpdates: () => Promise<UpdateStatus>;
+  deleteComposerTemplate: (
+    request: ComposerTemplateDeleteRequest
+  ) => Promise<ComposerTemplateDeleteReply>;
   discardMailDraft: (
     request: MailDraftDiscardRequest
   ) => Promise<MailDraftDiscardReply>;
@@ -96,6 +107,7 @@ export interface DesktopBridge {
     request: DatabaseImportSession
   ) => Promise<DatabaseImportReply>;
   listAccountSettings: () => Promise<AccountSettingsReply>;
+  listComposerTemplates: () => Promise<ComposerTemplateListReply>;
   listCachedThreadPage: (
     request: GmailCachedThreadPageRequest
   ) => Promise<GmailCachedThreadPageReply>;
@@ -117,6 +129,9 @@ export interface DesktopBridge {
   ) => Promise<GmailAttachmentActionReply>;
   onAccountSettingsChanged: (
     listener: (reply: AccountSettingsReply) => void
+  ) => () => void;
+  onComposerTemplateChanged: (
+    listener: (change: ComposerTemplateChanged) => void
   ) => () => void;
   onDatabaseImportProgress: (
     listener: (progress: DatabaseImportProgress) => void
@@ -155,6 +170,9 @@ export interface DesktopBridge {
     request: GmailAttachmentRequest
   ) => Promise<GmailAttachmentSaveReply>;
   saveMailDraft: (request: MailDraftInput) => Promise<MailDraftReply>;
+  saveComposerTemplate: (
+    request: ComposerTemplateInput
+  ) => Promise<ComposerTemplateSaveReply>;
   selectDatabaseImportFile: (
     request: DatabaseImportFileSelectionRequest
   ) => Promise<DatabaseImportFileSelectionReply>;

@@ -61,6 +61,9 @@ catalogs:
     '@tanstack/router-plugin':
       specifier: ^1.168.28
       version: 1.168.28
+    '@tiptap/core':
+      specifier: ^3.29.2
+      version: 3.29.2
     '@tiptap/extensions':
       specifier: ^3.29.2
       version: 3.29.2
@@ -71,6 +74,9 @@ catalogs:
       specifier: ^3.29.2
       version: 3.29.2
     '@tiptap/starter-kit':
+      specifier: ^3.29.2
+      version: 3.29.2
+    '@tiptap/suggestion':
       specifier: ^3.29.2
       version: 3.29.2
     '@types/better-sqlite3':
@@ -313,6 +319,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: 'catalog:'
         version: 3.14.9(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tiptap/core':
+        specifier: 'catalog:'
+        version: 3.29.2(@tiptap/pm@3.29.2)
       '@tiptap/extensions':
         specifier: 'catalog:'
         version: 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
@@ -325,6 +334,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: 'catalog:'
         version: 3.29.2
+      '@tiptap/suggestion':
+        specifier: 'catalog:'
+        version: 3.29.2(@floating-ui/dom@1.8.0)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
       better-sqlite3:
         specifier: 'catalog:'
         version: better-sqlite3-multiple-ciphers@13.0.3
@@ -3487,6 +3499,13 @@ packages:
 
   '@tiptap/starter-kit@3.29.2':
     resolution: {integrity: sha512-oTu0tysiqk4zgjEtxRHjAQgxUKaAevZwueOWwSWubHdokqp7SpcbE5n9USJv89HKuTUDm3GjnQH6q8HNn/2DsA==}
+
+  '@tiptap/suggestion@3.29.2':
+    resolution: {integrity: sha512-ZEhRm0gnRCwCScR9IrnIBhm9sr6U8vpR9oeznYk3hiedZ48zsgohqvgoIYpWcwYWrT2Pb0NrfhCT8IuSzdJHzQ==}
+    peerDependencies:
+      '@floating-ui/dom': ^1.0.0
+      '@tiptap/core': 3.29.2
+      '@tiptap/pm': 3.29.2
 
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
@@ -10745,6 +10764,12 @@ snapshots:
       '@tiptap/extension-text': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
       '@tiptap/extension-underline': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
       '@tiptap/extensions': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
+      '@tiptap/pm': 3.29.2
+
+  '@tiptap/suggestion@3.29.2(@floating-ui/dom@1.8.0)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)':
+    dependencies:
+      '@floating-ui/dom': 1.8.0
+      '@tiptap/core': 3.29.2(@tiptap/pm@3.29.2)
       '@tiptap/pm': 3.29.2
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}

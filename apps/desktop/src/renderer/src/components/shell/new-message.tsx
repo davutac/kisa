@@ -1,7 +1,7 @@
 import { SquarePenIcon } from "lucide-react";
 import { useState } from "react";
 
-import NewMessageDialog from "@/components/mail/new-message-dialog";
+import NewMessageDialog from "@/components/mail/new-message";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
