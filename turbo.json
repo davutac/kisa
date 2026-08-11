@@ -3,7 +3,11 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["out/**", "dist/**"]
+      "outputs": ["out/**", "dist/**"],
+      "passThroughEnv": [
+        "MAIN_VITE_GOOGLE_OAUTH_CLIENT_ID",
+        "MAIN_VITE_GOOGLE_OAUTH_CLIENT_SECRET"
+      ]
     },
     "build:linux": {
       "dependsOn": ["build"],
