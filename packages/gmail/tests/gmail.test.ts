@@ -39,6 +39,11 @@ const INBOX_LABEL = new GmailLabel({
   type: "system",
 });
 const UNKNOWN_LABEL_ID = LabelId.make("Label_99");
+const USER_LABEL = new GmailLabel({
+  id: LabelId.make("Label_1"),
+  name: "Receipts",
+  type: "user",
+});
 
 interface TestState {
   readonly attachmentCalls: string[];
@@ -48,6 +53,11 @@ interface TestState {
     readonly pageToken?: string;
   }[];
   readonly labelGetCalls: LabelId[];
+  readonly labelMutationCalls: {
+    readonly addLabelIds: readonly string[];
+    readonly removeLabelIds: readonly string[];
+    readonly threadId: ThreadId;
+  }[];
   labelListCalls: number;
   labels: readonly GmailLabel[];
   readonly mutationCalls: {
@@ -59,6 +69,12 @@ interface TestState {
   readonly readStateChanges: {
     readonly accountId: AccountId;
     readonly isRead: boolean;
+    readonly threadId: ThreadId;
+  }[];
+  readonly threadLabelChanges: {
+    readonly accountId: AccountId;
+    readonly applied: boolean;
+    readonly labelId: LabelId;
     readonly threadId: ThreadId;
   }[];
   readonly indexedThreadIds: ThreadId[];
@@ -84,12 +100,14 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     indexedThreadIds: [],
     labelGetCalls: [],
     labelListCalls: 0,
+    labelMutationCalls: [],
     labels: options.cachedLabels ?? [],
     listThreadCalls: [],
     mutationCalls: [],
     readStateChanges: [],
     removedThreads: [],
     sendCalls: 0,
+    threadLabelChanges: [],
   };
 
   const store: GmailStoreService = {
@@ -122,6 +140,15 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
       }),
     saveSyncCursor: () => Effect.void,
     saveThread: () => Effect.void,
+    setThreadLabel: (accountId, threadId, label, applied) =>
+      Effect.sync(() => {
+        state.threadLabelChanges.push({
+          accountId,
+          applied,
+          labelId: label.id,
+          threadId,
+        });
+      }),
     setThreadReadState: (accountId, threadId, isRead) =>
       Effect.sync(() => {
         state.readStateChanges.push({ accountId, isRead, threadId });
@@ -259,6 +286,11 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     },
     modifyThreadLabels: (authorization, request) =>
       Effect.sync(() => {
+        state.labelMutationCalls.push({
+          addLabelIds: request.addLabelIds,
+          removeLabelIds: request.removeLabelIds,
+          threadId: request.threadId,
+        });
         state.mutationCalls.push({
           accountId: authorization.account.id,
           operation: "labels",
@@ -507,6 +539,77 @@ describe(Gmail, () => {
         { accountId: account.id, isRead: false, threadId: request.threadId },
       ]);
       expect(state.removedThreads).toStrictEqual([request.threadId]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("adds and removes user labels from threads", () => {
+    const { layer, state } = createTestLayer({ cachedLabels: [USER_LABEL] });
+
+    return Effect.gen(function* changesUserLabel() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount({
+        accessToken: "access-a",
+        scopes: [GMAIL_MODIFY_SCOPE],
+      });
+      const request = {
+        accountId: account.id,
+        labelId: USER_LABEL.id,
+        threadId: ThreadId.make("thread-1"),
+      };
+
+      yield* gmail.setThreadLabel({ ...request, applied: true });
+      yield* gmail.setThreadLabel({ ...request, applied: false });
+
+      expect(state.labelMutationCalls).toStrictEqual([
+        {
+          addLabelIds: ["Label_1"],
+          removeLabelIds: [],
+          threadId: request.threadId,
+        },
+        {
+          addLabelIds: [],
+          removeLabelIds: ["Label_1"],
+          threadId: request.threadId,
+        },
+      ]);
+      expect(state.threadLabelChanges).toStrictEqual([
+        {
+          accountId: account.id,
+          applied: true,
+          labelId: "Label_1",
+          threadId: request.threadId,
+        },
+        {
+          accountId: account.id,
+          applied: false,
+          labelId: "Label_1",
+          threadId: request.threadId,
+        },
+      ]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("rejects system labels as thread label mutations", () => {
+    const { layer, state } = createTestLayer({ cachedLabels: [INBOX_LABEL] });
+
+    return Effect.gen(function* rejectsSystemLabels() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount({
+        accessToken: "access-a",
+        scopes: [GMAIL_MODIFY_SCOPE],
+      });
+      const error = yield* gmail
+        .setThreadLabel({
+          accountId: account.id,
+          applied: false,
+          labelId: INBOX_LABEL.id,
+          threadId: ThreadId.make("thread-1"),
+        })
+        .pipe(Effect.flip);
+
+      expect(error._tag).toBe("GmailValidationError");
+      expect(state.labelMutationCalls).toStrictEqual([]);
+      expect(state.threadLabelChanges).toStrictEqual([]);
     }).pipe(Effect.provide(layer));
   });
 

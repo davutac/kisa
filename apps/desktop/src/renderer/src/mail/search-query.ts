@@ -4,7 +4,7 @@ import type {
   GmailSearchFilterField,
 } from "@/shared/ipc/mail";
 
-import { formatGmailLabel, isSystemGmailLabel } from "./label";
+import { compareGmailLabelDisplayNames, isSystemGmailLabel } from "./label";
 
 /**
  * `account` is the one operator the index does not answer: it scopes *which*
@@ -285,10 +285,6 @@ export const getSearchFilterLabel = (field: SearchFilterField): string =>
 export const hasInboxSearchScope = (query: SearchQuery): boolean =>
   query.filters.some(isInboxFilter);
 
-const LABEL_NAME_COLLATOR = new Intl.Collator(undefined, {
-  sensitivity: "base",
-});
-
 const UNINDEXED_SYSTEM_LABELS = new Set(["CHAT", "SPAM", "TRASH"]);
 
 export interface SearchLabelSuggestion {
@@ -347,12 +343,13 @@ export const toSearchLabelSuggestions = (
       isSystem: suggestion.isSystem,
       name: suggestion.name,
     }))
-    .toSorted((left, right) =>
-      LABEL_NAME_COLLATOR.compare(
-        formatGmailLabel(left.name),
-        formatGmailLabel(right.name)
-      )
-    );
+    .toSorted((left, right) => {
+      const systemOrder = Number(right.isSystem) - Number(left.isSystem);
+
+      return (
+        systemOrder || compareGmailLabelDisplayNames(left.name, right.name)
+      );
+    });
 };
 
 /**

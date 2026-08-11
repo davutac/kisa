@@ -48,6 +48,7 @@ export interface MailApi {
   saveDraft: DesktopBridge["saveMailDraft"];
   sendMessage: DesktopBridge["sendMessage"];
   sendThreadMessage: DesktopBridge["sendThreadMessage"];
+  setThreadLabel: DesktopBridge["setThreadLabel"];
   setThreadReadState: DesktopBridge["setThreadReadState"];
   syncLabels: DesktopBridge["syncGmailLabels"];
   trashThread: DesktopBridge["trashThread"];
@@ -150,6 +151,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       search: bridge.searchMail,
       sendMessage: bridge.sendMessage,
       sendThreadMessage: bridge.sendThreadMessage,
+      setThreadLabel: bridge.setThreadLabel,
       setThreadReadState: bridge.setThreadReadState,
       syncLabels: bridge.syncGmailLabels,
       trashThread: bridge.trashThread,

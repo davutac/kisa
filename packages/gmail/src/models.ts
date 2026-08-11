@@ -223,6 +223,11 @@ export interface ThreadMutationRequest {
   readonly threadId: ThreadId;
 }
 
+export interface ThreadLabelMutationRequest extends ThreadMutationRequest {
+  readonly applied: boolean;
+  readonly labelId: LabelId;
+}
+
 export interface GmailAttachment {
   readonly bytes: Uint8Array;
   readonly filename: string;

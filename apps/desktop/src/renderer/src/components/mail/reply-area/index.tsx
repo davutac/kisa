@@ -75,11 +75,13 @@ const MailReplyArea = ({
           />
         </>
       ) : null}
-      <div className="bg-card flex items-center gap-2 p-4">
+      <div className="bg-background flex shrink-0 items-stretch">
         <Button
           disabled={!workspace.canSend}
           onClick={handleSend}
+          size="footer"
           type="button"
+          variant="secondary"
         >
           {workspace.isSending ? (
             <LoaderCircleIcon
@@ -93,13 +95,13 @@ const MailReplyArea = ({
         </Button>
         <Button
           aria-label="Discard reply"
-          className="ml-auto"
+          className="border-background border-l"
           disabled={workspace.isSending}
           onClick={handleDiscard}
-          size="icon"
+          size="footer-icon"
           title="Discard reply"
           type="button"
-          variant="ghost"
+          variant="secondary"
         >
           <Trash2Icon />
         </Button>

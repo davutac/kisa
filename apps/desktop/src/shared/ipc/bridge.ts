@@ -39,9 +39,10 @@ import type {
   GmailThreadMutationReply,
   GmailThreadMessageSendReply,
   GmailThreadMessageSendRequest,
-  GmailThreadReadStateRequest,
+  GmailThreadLabelRequest,
   GmailThreadListUpdated,
   GmailThreadReply,
+  GmailThreadReadStateRequest,
   GmailThreadRequest,
   GmailThreadUpdated,
   GmailTrustedImageSenderRequest,
@@ -182,6 +183,9 @@ export interface DesktopBridge {
   sendThreadMessage: (
     request: GmailThreadMessageSendRequest
   ) => Promise<GmailThreadMessageSendReply>;
+  setThreadLabel: (
+    request: GmailThreadLabelRequest
+  ) => Promise<GmailThreadMutationReply>;
   setThreadReadState: (
     request: GmailThreadReadStateRequest
   ) => Promise<GmailThreadMutationReply>;

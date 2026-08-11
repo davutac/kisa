@@ -12,15 +12,10 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
-import { gmailLabelColorStyle } from "@/mail/label";
+import { gmailLabelColorStyle, listUserGmailLabels } from "@/mail/label";
 import type { MailApi } from "@/platform/desktop";
-import type { GmailLabelCatalog, GmailLabelSummary } from "@/shared/ipc/mail";
+import type { GmailLabelCatalog } from "@/shared/ipc/mail";
 import { useUpdateGmailLabelCatalog } from "@/state/gmail-labels";
-
-// Gmail owns the labels it names itself; the ones worth listing here are the
-// labels the account holder created.
-const isUserLabel = (label: GmailLabelSummary): boolean =>
-  label.type !== "system";
 
 interface SettingsAccountLabelsRowProps {
   accountId: string;
@@ -80,7 +75,7 @@ const SettingsAccountLabelsRow = ({
     }
   };
 
-  const labels = (catalog?.labels ?? []).filter(isUserLabel);
+  const labels = listUserGmailLabels(catalog?.labels ?? []);
 
   return (
     <SettingsRow>

@@ -11,7 +11,13 @@ import type {
   RemoteDatabaseClient,
 } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
-import { AccountId, GmailLabel, LabelColor, LabelId } from "@repo/gmail/models";
+import {
+  AccountId,
+  GmailLabel,
+  LabelColor,
+  LabelId,
+  ThreadId,
+} from "@repo/gmail/models";
 import { GmailStore } from "@repo/gmail/store";
 import { Effect } from "effect";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -69,6 +75,8 @@ vi.mock(import("../src/main/auth/auth"), () => ({
 
 describe("Gmail label store", () => {
   beforeEach(() => {
+    connection.prepare("DELETE FROM gmail_messages").run();
+    connection.prepare("DELETE FROM gmail_threads").run();
     connection.prepare("DELETE FROM gmail_labels").run();
   });
 
@@ -164,5 +172,92 @@ describe("Gmail label store", () => {
     expect(
       labels.toSorted((left, right) => left.id.localeCompare(right.id))
     ).toStrictEqual([inbox, updated, discovered]);
+  });
+
+  it("reconciles cached labels by id without crossing accounts", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const otherAccountId = "other@example.com";
+    const threadId = ThreadId.make("shared-thread");
+    const label = new GmailLabel({
+      id: LabelId.make("Label_1"),
+      name: "Receipts",
+      type: "user",
+    });
+    const insertThread = connection.prepare(
+      `INSERT INTO gmail_threads (
+         account_email, "from", is_in_inbox, is_unread, labels, latest_at,
+         message_count, snippet, subject, thread_id, updated_at
+       ) VALUES (?, 'sender@example.com', 1, 0, ?, 1, 1, '',
+         'Subject', 'shared-thread', 1)`
+    );
+    const insertMessage = connection.prepare(
+      `INSERT INTO gmail_messages (
+         account_email, from_address, internal_date, label_ids, message_id,
+         schema_version, subject, thread_id, updated_at
+       ) VALUES (?, 'sender@example.com', 1, ?, ?, 1, 'Subject',
+         'shared-thread', 1)`
+    );
+    const setLabel = (applied: boolean) =>
+      Effect.runPromise(
+        GmailStore.pipe(
+          Effect.flatMap((store) =>
+            store.setThreadLabel(accountId, threadId, label, applied)
+          ),
+          Effect.provide(GmailStoreLive)
+        )
+      );
+
+    insertThread.run(accountId, '["INBOX","Old receipts"]');
+    insertThread.run(otherAccountId, '["INBOX"]');
+    insertMessage.run(accountId, '["INBOX","Label_1"]', "message-a");
+    insertMessage.run(otherAccountId, '["INBOX"]', "message-b");
+
+    await setLabel(false);
+
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, labels
+           FROM gmail_threads
+           ORDER BY account_email`
+        )
+        .all()
+    ).toStrictEqual([
+      { account_email: otherAccountId, labels: '["INBOX"]' },
+      { account_email: accountId, labels: '["INBOX"]' },
+    ]);
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, label_ids
+           FROM gmail_messages
+           ORDER BY account_email`
+        )
+        .all()
+    ).toStrictEqual([
+      { account_email: otherAccountId, label_ids: '["INBOX"]' },
+      { account_email: accountId, label_ids: '["INBOX"]' },
+    ]);
+
+    await setLabel(true);
+
+    expect(
+      connection
+        .prepare(
+          `SELECT labels
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = 'shared-thread'`
+        )
+        .get(accountId)
+    ).toStrictEqual({ labels: '["INBOX","Receipts"]' });
+    expect(
+      connection
+        .prepare(
+          `SELECT label_ids
+           FROM gmail_messages
+           WHERE account_email = ? AND message_id = 'message-a'`
+        )
+        .get(accountId)
+    ).toStrictEqual({ label_ids: '["INBOX","Label_1"]' });
   });
 });

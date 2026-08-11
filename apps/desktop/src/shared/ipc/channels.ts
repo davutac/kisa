@@ -40,6 +40,7 @@ export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
 export const MAIL_SEND_MESSAGE_CHANNEL = "desktop:mail:send-message";
 export const MAIL_SEND_THREAD_MESSAGE_CHANNEL =
   "desktop:mail:send-thread-message";
+export const MAIL_SET_THREAD_LABEL_CHANNEL = "desktop:mail:set-thread-label";
 export const MAIL_SET_THREAD_READ_CHANNEL = "desktop:mail:set-thread-read";
 export const MAIL_SYNC_LABELS_CHANNEL = "desktop:mail:sync-labels";
 export const MAIL_SYNC_STATUS_CHANNEL = "desktop:mail:sync-status";

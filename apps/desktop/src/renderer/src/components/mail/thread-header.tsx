@@ -1,8 +1,8 @@
 import {
-  AppWindowIcon,
   ArrowLeftIcon,
   MailIcon,
   MailOpenIcon,
+  SquareArrowOutUpRightIcon,
   Trash2Icon,
 } from "lucide-react";
 
@@ -78,19 +78,6 @@ const MailThreadHeader = ({
           {subject}
         </h1>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {onPopOut === undefined ? null : (
-            <Button
-              aria-keyshortcuts={getHotkeyAriaLabel("thread.popout")}
-              aria-label={popOutDisplay.label}
-              onClick={onPopOut}
-              size="icon"
-              title={`${popOutDisplay.label} (${popOutDisplay.bindings[0]})`}
-              type="button"
-              variant="ghost"
-            >
-              <AppWindowIcon />
-            </Button>
-          )}
           <Button
             aria-keyshortcuts={getHotkeyAriaLabel("thread.toggleThreadRead")}
             aria-label={toggleReadLabel}
@@ -120,6 +107,19 @@ const MailThreadHeader = ({
             className="text-muted-foreground ml-2 shrink-0 text-sm"
             timestamp={latestAt}
           />
+        )}
+        {onPopOut === undefined ? null : (
+          <Button
+            aria-keyshortcuts={getHotkeyAriaLabel("thread.popout")}
+            aria-label={popOutDisplay.label}
+            onClick={onPopOut}
+            size="icon"
+            title={`${popOutDisplay.label} (${popOutDisplay.bindings[0]})`}
+            type="button"
+            variant="ghost"
+          >
+            <SquareArrowOutUpRightIcon />
+          </Button>
         )}
       </div>
     </header>

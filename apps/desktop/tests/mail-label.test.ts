@@ -5,7 +5,11 @@ import {
   gmailLabelColorStyle,
   hasInboxLabel,
   isSystemGmailLabel,
+  listUserGmailLabels,
+  sortGmailLabelCatalog,
+  sortGmailLabelNames,
   visibleGmailLabels,
+  withGmailLabelState,
 } from "../src/renderer/src/mail/label";
 
 describe(gmailLabelColorStyle, () => {
@@ -43,6 +47,61 @@ describe(isSystemGmailLabel, () => {
   it("leaves user-created labels alone", () => {
     expect(isSystemGmailLabel("Project Kisa")).toBeFalsy();
     expect(isSystemGmailLabel("constructor")).toBeFalsy();
+  });
+});
+
+describe(listUserGmailLabels, () => {
+  it("keeps only user labels and sorts them by name", () => {
+    expect(
+      listUserGmailLabels([
+        { id: "Label_2", name: "Travel", type: "user" },
+        { id: "INBOX", name: "INBOX", type: "system" },
+        { id: "Label_1", name: "Receipts", type: "user" },
+        { id: "Label_3", name: "Unknown type" },
+      ])
+    ).toStrictEqual([
+      { id: "Label_1", name: "Receipts", type: "user" },
+      { id: "Label_2", name: "Travel", type: "user" },
+    ]);
+  });
+});
+
+describe(sortGmailLabelNames, () => {
+  it("sorts system labels before user labels and each group by display name", () => {
+    expect(
+      sortGmailLabelNames(["test2", "Test", "CATEGORY_UPDATES", "INBOX"])
+    ).toStrictEqual(["INBOX", "CATEGORY_UPDATES", "Test", "test2"]);
+  });
+});
+
+describe(sortGmailLabelCatalog, () => {
+  it("uses catalog type to keep every system label ahead of user labels", () => {
+    expect(
+      sortGmailLabelCatalog([
+        { id: "Label_2", name: "Zulu", type: "user" },
+        { id: "SYSTEM_CUSTOM", name: "Alpha", type: "system" },
+        { id: "Label_1", name: "Alpha", type: "user" },
+      ])
+    ).toStrictEqual([
+      { id: "SYSTEM_CUSTOM", name: "Alpha", type: "system" },
+      { id: "Label_1", name: "Alpha", type: "user" },
+      { id: "Label_2", name: "Zulu", type: "user" },
+    ]);
+  });
+});
+
+describe(withGmailLabelState, () => {
+  it("optimistically adds and removes a label without duplicates", () => {
+    expect(withGmailLabelState(["INBOX"], "Receipts", true)).toStrictEqual([
+      "INBOX",
+      "Receipts",
+    ]);
+    expect(
+      withGmailLabelState(["INBOX", "Receipts"], "Receipts", true)
+    ).toStrictEqual(["INBOX", "Receipts"]);
+    expect(
+      withGmailLabelState(["INBOX", "Receipts"], "Receipts", false)
+    ).toStrictEqual(["INBOX"]);
   });
 });
 

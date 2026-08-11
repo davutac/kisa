@@ -130,6 +130,8 @@ describe(getRuntimeCapabilities, () => {
     sendMessage: () => Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    setThreadLabel: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     startApp: () => Promise.resolve({ ok: true as const }),
@@ -183,6 +185,7 @@ describe(getRuntimeCapabilities, () => {
         search: desktopBridge.searchMail,
         sendMessage: desktopBridge.sendMessage,
         sendThreadMessage: desktopBridge.sendThreadMessage,
+        setThreadLabel: desktopBridge.setThreadLabel,
         setThreadReadState: desktopBridge.setThreadReadState,
         syncLabels: desktopBridge.syncGmailLabels,
         trashThread: desktopBridge.trashThread,

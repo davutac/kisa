@@ -59,6 +59,7 @@ interface MailThreadViewProps {
   onPopOut?: (
     target: Pick<ThreadActionTarget, "accountId" | "threadId">
   ) => Promise<void>;
+  onSetLabel: ThreadActions["setLabel"];
   onToggleRead: ThreadActions["toggleRead"];
   onTrash: ThreadActions["trash"];
   showCloseButton?: boolean;
@@ -68,6 +69,7 @@ interface MailThreadViewProps {
 interface MailThreadContentProps {
   onClose: () => void;
   onPopOut?: MailThreadViewProps["onPopOut"];
+  onSetLabel: ThreadActions["setLabel"];
   onToggleRead: ThreadActions["toggleRead"];
   onTrash: ThreadActions["trash"];
   showCloseButton?: boolean;
@@ -77,6 +79,7 @@ interface MailThreadContentProps {
 const MailThreadContent = ({
   onClose,
   onPopOut,
+  onSetLabel,
   onToggleRead,
   onTrash,
   showCloseButton,
@@ -121,7 +124,12 @@ const MailThreadContent = ({
         showCloseButton={showCloseButton}
         subject={thread.subject}
       />
-      <ThreadLabels accountId={thread.accountId} labels={thread.labels} />
+      <ThreadLabels
+        accountId={accountId}
+        labels={thread.labels}
+        onSetLabel={onSetLabel}
+        threadId={threadId}
+      />
       <MailThreadConversation
         accountId={thread.accountId}
         messages={thread.messages}
@@ -136,6 +144,7 @@ const MailThreadView = ({
   closeLabel = "Back to inbox",
   onClose,
   onPopOut,
+  onSetLabel,
   onToggleRead,
   onTrash,
   showCloseButton,
@@ -161,6 +170,7 @@ const MailThreadView = ({
     <MailThreadContent
       onClose={onClose}
       onPopOut={onPopOut}
+      onSetLabel={onSetLabel}
       onToggleRead={onToggleRead}
       onTrash={onTrash}
       showCloseButton={showCloseButton}

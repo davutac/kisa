@@ -89,7 +89,7 @@ function HomeRoute() {
     loadNextPage,
     threads,
   } = useMailboxThreads(accountIds, showUnread, reloadRevision);
-  const { toggleRead, trash } = useThreadActions();
+  const { setLabel, toggleRead, trash } = useThreadActions();
   const indexProgress = useMailIndexProgress();
   const indexingMessage = getIndexingMessage(indexProgress, accountIds);
   const popOutThread = useCallback(
@@ -140,6 +140,7 @@ function HomeRoute() {
             key={`${openThread.accountId}:${openThread.threadId}`}
             onClose={closeThread}
             onPopOut={windowApi === undefined ? undefined : popOutThread}
+            onSetLabel={setLabel}
             onToggleRead={toggleRead}
             onTrash={trash}
             threadId={openThread.threadId}

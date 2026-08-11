@@ -56,7 +56,7 @@ When a mailbox thread is selected, `M` toggles its read state. Both `Backspace` 
 
 While reading a conversation in the main window, `Shift+Enter` opens it in a thread window and closes the inline conversation. The command is disabled inside the resulting thread window because it is already popped out.
 
-While reading a conversation, `M`, `Backspace`, and `Delete` retain the same read-state and trash behavior as they have on the selected mailbox conversation.
+While reading a conversation, `L` scrolls the label row into view and opens its picker. `M`, `Backspace`, and `Delete` retain the same read-state and trash behavior as they have on the selected mailbox conversation.
 
 `Mod+Shift+A` opens the attachment picker while composing a new email.
 

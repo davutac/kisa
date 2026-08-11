@@ -16,12 +16,14 @@ const MailMessageActions = ({
 }: MailMessageActionsProps) => (
   <fieldset
     aria-label="Message actions"
-    className="bg-card flex flex-wrap gap-1 p-4"
+    className="bg-background flex items-stretch gap-px overflow-hidden"
   >
     <Button
       disabled={disabled}
       onClick={() => onAction("reply")}
-      variant="ghost"
+      size="footer"
+      type="button"
+      variant="secondary"
     >
       <ReplyIcon data-icon="inline-start" />
       Reply
@@ -29,7 +31,9 @@ const MailMessageActions = ({
     <Button
       disabled={disabled}
       onClick={() => onAction("reply-all")}
-      variant="ghost"
+      size="footer"
+      type="button"
+      variant="secondary"
     >
       <ReplyAllIcon data-icon="inline-start" />
       Reply all
@@ -37,7 +41,9 @@ const MailMessageActions = ({
     <Button
       disabled={disabled}
       onClick={() => onAction("forward")}
-      variant="ghost"
+      size="footer"
+      type="button"
+      variant="secondary"
     >
       <ForwardIcon data-icon="inline-start" />
       Forward
