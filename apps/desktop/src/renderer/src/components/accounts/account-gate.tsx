@@ -6,6 +6,7 @@ import { getAuthApi } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { AuthGateState } from "@/startup/auth-gate";
 import { AccountSettingsProvider } from "@/state/account-settings";
+import { ComposerTemplatesProvider } from "@/state/composer-templates";
 import { GoogleAccountsProvider } from "@/state/google-accounts";
 import { useMailboxStore } from "@/state/mailbox";
 import { TrustedImageSendersProvider } from "@/state/trusted-image-senders";
@@ -109,7 +110,9 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   return (
     <GoogleAccountsProvider accounts={accounts} onReorder={reorderAccounts}>
       <AccountSettingsProvider>
-        <TrustedImageSendersProvider>{children}</TrustedImageSendersProvider>
+        <ComposerTemplatesProvider>
+          <TrustedImageSendersProvider>{children}</TrustedImageSendersProvider>
+        </ComposerTemplatesProvider>
       </AccountSettingsProvider>
     </GoogleAccountsProvider>
   );

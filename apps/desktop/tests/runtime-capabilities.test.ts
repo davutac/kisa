@@ -14,6 +14,7 @@ describe(getRuntimeCapabilities, () => {
       mail: undefined,
       settings: undefined,
       startup: undefined,
+      templates: undefined,
       updates: undefined,
       versions: undefined,
       window: undefined,
@@ -32,6 +33,7 @@ describe(getRuntimeCapabilities, () => {
       mail: undefined,
       settings: undefined,
       startup: undefined,
+      templates: undefined,
       updates: undefined,
       versions: undefined,
       window: undefined,
@@ -45,6 +47,8 @@ describe(getRuntimeCapabilities, () => {
     cancelDatabaseImport: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
+    deleteComposerTemplate: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     discardMailDraft: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     disconnectGoogleAccount: () =>
@@ -64,6 +68,8 @@ describe(getRuntimeCapabilities, () => {
     listAccountSettings: () => Promise.resolve({ data: [], ok: true as const }),
     listCachedThreadPage: () =>
       Promise.resolve({ data: { threads: [] }, ok: true as const }),
+    listComposerTemplates: () =>
+      Promise.resolve({ data: [], ok: true as const }),
     listGmailLabels: () =>
       Promise.resolve({ data: { labels: [] }, ok: true as const }),
     listGmailSenders: () =>
@@ -86,6 +92,7 @@ describe(getRuntimeCapabilities, () => {
     loadThreadDraft: () => Promise.resolve({ data: null, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
     onAppClosing: () => () => {},
+    onComposerTemplateChanged: () => () => {},
     onDatabaseImportProgress: () => () => {},
     onGoogleAccountsChanged: () => () => {},
     onMailDraftChanged: () => () => {},
@@ -103,6 +110,11 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     saveAttachment: () =>
       Promise.resolve({ data: "saved" as const, ok: true as const }),
+    saveComposerTemplate: (request) =>
+      Promise.resolve({
+        data: { ...request, createdAt: 1, updatedAt: 1 },
+        ok: true as const,
+      }),
     saveMailDraft: (request) =>
       Promise.resolve({
         data: { ...request, createdAt: 1, updatedAt: 1 },
@@ -189,6 +201,12 @@ describe(getRuntimeCapabilities, () => {
         updateAccountSettings: desktopBridge.updateAccountSettings,
       },
       startup: { start: desktopBridge.startApp },
+      templates: {
+        delete: desktopBridge.deleteComposerTemplate,
+        list: desktopBridge.listComposerTemplates,
+        onChanged: desktopBridge.onComposerTemplateChanged,
+        save: desktopBridge.saveComposerTemplate,
+      },
       updates: {
         check: desktopBridge.checkForUpdates,
         getStatus: desktopBridge.getUpdateStatus,
@@ -211,8 +229,9 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.mail === capabilities.mail,
       nextCapabilities.settings === capabilities.settings,
       nextCapabilities.startup === capabilities.startup,
+      nextCapabilities.templates === capabilities.templates,
       nextCapabilities.updates === capabilities.updates,
       nextCapabilities.window === capabilities.window,
-    ]).toStrictEqual([true, true, true, true, true, true, true]);
+    ]).toStrictEqual([true, true, true, true, true, true, true, true]);
   });
 });

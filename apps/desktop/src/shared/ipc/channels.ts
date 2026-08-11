@@ -12,6 +12,13 @@ export const AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL =
   "desktop:auth:google-reorder-accounts";
 export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";
 
+export const COMPOSER_TEMPLATE_CHANGED_CHANNEL =
+  "desktop:composer-template:changed";
+export const COMPOSER_TEMPLATE_DELETE_CHANNEL =
+  "desktop:composer-template:delete";
+export const COMPOSER_TEMPLATE_LIST_CHANNEL = "desktop:composer-template:list";
+export const COMPOSER_TEMPLATE_SAVE_CHANNEL = "desktop:composer-template:save";
+
 export const MAIL_INDEX_PROGRESS_CHANNEL = "desktop:mail:index-progress";
 export const MAIL_DRAFT_CHANGED_CHANNEL = "desktop:mail:draft-changed";
 export const MAIL_DISCARD_DRAFT_CHANNEL = "desktop:mail:discard-draft";

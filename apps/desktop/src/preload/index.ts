@@ -6,6 +6,7 @@ import { appApi } from "./app-api";
 import { authApi } from "./auth-api";
 import { mailApi } from "./mail-api";
 import { settingsApi } from "./settings-api";
+import { templateApi } from "./template-api";
 import { updateApi } from "./update-api";
 
 const desktopBridge = {
@@ -13,6 +14,7 @@ const desktopBridge = {
   ...authApi,
   ...mailApi,
   ...settingsApi,
+  ...templateApi,
   ...updateApi,
   getPathForFile: (file) => webUtils.getPathForFile(file),
   getVersions: () => ({

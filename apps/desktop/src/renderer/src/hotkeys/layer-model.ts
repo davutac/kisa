@@ -3,6 +3,7 @@ export const HOTKEY_LAYERS = [
   "mailbox",
   "thread",
   "settings",
+  "templates",
   "composer",
   "search",
 ] as const;
@@ -23,6 +24,7 @@ export const LAYER_PRIORITY = {
   mailbox: 10,
   search: 100,
   settings: 10,
+  templates: 10,
   thread: 20,
 } as const satisfies Record<HotkeyLayer, number>;
 

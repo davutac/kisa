@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import { getPathForFile } from "@/platform/desktop";
 import { MAX_GMAIL_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
@@ -88,28 +89,33 @@ export const NewMessageAttachmentButton = ({
   focusRef,
   inputRef,
   onFiles,
-}: NewMessageAttachmentButtonProps) => (
-  <>
-    <input
-      className="hidden"
-      multiple
-      onChange={(event) => onFiles(event.currentTarget.files)}
-      ref={inputRef}
-      type="file"
-    />
-    <Button
-      aria-label="Attach files"
-      onClick={() => inputRef.current?.click()}
-      ref={focusRef}
-      size="icon"
-      title="Attach files"
-      type="button"
-      variant="ghost"
-    >
-      <PaperclipIcon />
-    </Button>
-  </>
-);
+}: NewMessageAttachmentButtonProps) => {
+  const display = getHotkeyDisplay("composer.attach");
+
+  return (
+    <>
+      <input
+        className="hidden"
+        multiple
+        onChange={(event) => onFiles(event.currentTarget.files)}
+        ref={inputRef}
+        type="file"
+      />
+      <Button
+        aria-keyshortcuts={getHotkeyAriaLabel("composer.attach")}
+        aria-label={display.label}
+        onClick={() => inputRef.current?.click()}
+        ref={focusRef}
+        size="icon"
+        title={`${display.label} (${display.bindings[0]?.join("+")})`}
+        type="button"
+        variant="ghost"
+      >
+        <PaperclipIcon />
+      </Button>
+    </>
+  );
+};
 
 interface NewMessageAttachmentListProps {
   attachments: readonly MailDraftAttachment[];

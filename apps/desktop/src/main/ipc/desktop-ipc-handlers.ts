@@ -42,6 +42,11 @@ import {
   selectImportFile,
   updateSettings,
 } from "./methods/settings";
+import {
+  deleteTemplate,
+  listTemplates,
+  saveTemplate,
+} from "./methods/templates";
 import { check, getStatus, install } from "./methods/updates";
 
 export const installDesktopIpcHandlers = Effect.fn(
@@ -55,6 +60,9 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);
   yield* ipc.handle(disconnectAccount);
+  yield* ipc.handle(listTemplates);
+  yield* ipc.handle(saveTemplate);
+  yield* ipc.handle(deleteTemplate);
   yield* ipc.handle(getSyncStatus);
   yield* ipc.handle(getIndexProgress);
   yield* ipc.handle(listCachedPage);

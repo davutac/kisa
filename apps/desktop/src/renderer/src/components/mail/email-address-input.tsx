@@ -1,7 +1,8 @@
 import { XIcon } from "lucide-react";
-import type { KeyboardEvent, ReactNode, Ref } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
 import { useState } from "react";
 
+import FieldErrorIndicator from "@/components/forms/field-error-indicator";
 import { Badge } from "@/components/ui/badge";
 import {
   InputGroup,
@@ -106,8 +107,17 @@ const EmailAddressInput = ({
     onChange(value.filter((address) => address !== addressToRemove));
   };
 
+  const clearInvalidDraft = (event: MouseEvent<HTMLButtonElement>): void => {
+    const input = event.currentTarget
+      .closest('[data-slot="input-group"]')
+      ?.querySelector("input");
+    setDraft("");
+    setIsInvalid(false);
+    input?.focus();
+  };
+
   return (
-    <InputGroup className="bg-card dark:bg-card h-auto min-h-9 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0">
+    <InputGroup className="bg-card dark:bg-card h-auto min-h-9 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0">
       <InputGroupAddon className="w-10 justify-start p-0">
         <label htmlFor={id}>{label}</label>
       </InputGroupAddon>
@@ -143,11 +153,12 @@ const EmailAddressInput = ({
             )}
           </div>
           <InputGroupInput
+            aria-describedby={isInvalid ? `${id}-error` : undefined}
             aria-invalid={isInvalid || undefined}
             aria-label={label}
             autoComplete="off"
             autoFocus={autoFocus}
-            className="z-10 col-start-1 row-start-1 h-6 w-full px-0 text-sm md:text-sm"
+            className="aria-invalid:text-destructive z-10 col-start-1 row-start-1 h-6 w-full px-0 text-sm aria-invalid:border-0 md:text-sm"
             disabled={disabled}
             id={id}
             inputMode="email"
@@ -165,8 +176,25 @@ const EmailAddressInput = ({
           />
         </div>
       </div>
-      {actions === undefined ? null : (
+      {actions === undefined && !isInvalid ? null : (
         <InputGroupAddon align="inline-end" className="gap-0.5 p-0">
+          {isInvalid ? (
+            <>
+              <FieldErrorIndicator
+                id={`${id}-error`}
+                message="Invalid email address"
+              />
+              <button
+                aria-label="Clear invalid email address"
+                className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-ring/50 grid size-6 place-items-center rounded-md outline-none focus-visible:ring-2"
+                onClick={clearInvalidDraft}
+                title="Clear"
+                type="button"
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </>
+          ) : null}
           {actions}
         </InputGroupAddon>
       )}

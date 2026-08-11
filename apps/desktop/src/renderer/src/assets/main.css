@@ -217,3 +217,11 @@
   color: var(--muted-foreground);
   padding-left: 0.75rem;
 }
+
+.email-composer .tiptap .template-variable {
+  background: var(--muted);
+  border-radius: 0.35rem;
+  color: var(--muted-foreground);
+  padding: 0.05rem 0.3rem;
+  white-space: nowrap;
+}

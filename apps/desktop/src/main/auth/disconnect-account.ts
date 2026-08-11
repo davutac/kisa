@@ -8,6 +8,7 @@ import { forgetAccountDrafts } from "../mail/mail-drafts";
 import { forgetAccountMailData } from "../mail/mail-sync";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
 import { forgetAccountSettings } from "../settings/account-settings";
+import { notifyComposerTemplatesChanged } from "../templates/composer-templates";
 import {
   listGoogleAccounts,
   notifyGoogleAccountsChanged,
@@ -64,6 +65,11 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
       )
     );
     yield* forgetTrustedImageSenders(email).pipe(
+      Effect.mapError(
+        (error) => new GoogleAccountDisconnectError({ message: error.message })
+      )
+    );
+    yield* notifyComposerTemplatesChanged().pipe(
       Effect.mapError(
         (error) => new GoogleAccountDisconnectError({ message: error.message })
       )
