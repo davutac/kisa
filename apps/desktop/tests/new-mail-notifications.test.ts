@@ -32,8 +32,18 @@ const mocks = vi.hoisted(() => ({
     restore: vi.fn<() => void>(),
     show: vi.fn<() => void>(),
   },
+  markThreadRead:
+    vi.fn<
+      (request: {
+        readonly accountId: string;
+        readonly threadId: string;
+      }) => void
+    >(),
   messages: [] as TestMessageRow[],
-  notificationListeners: [] as Map<string, () => void>[],
+  notificationListeners: [] as Map<
+    string,
+    (...arguments_: unknown[]) => void
+  >[],
   notificationsEnabled: true,
   openThreadWindow:
     vi.fn<
@@ -57,7 +67,7 @@ vi.mock(import("electron"), () => {
       mocks.notificationListeners.push(this.listeners);
     }
 
-    once(event: string, listener: () => void): this {
+    once(event: string, listener: (...arguments_: unknown[]) => void): this {
       this.listeners.set(event, listener);
       return this;
     }
@@ -148,6 +158,7 @@ describe(showNewMailNotifications, () => {
     mocks.mainWindow.focus.mockClear();
     mocks.mainWindow.restore.mockClear();
     mocks.mainWindow.show.mockClear();
+    mocks.markThreadRead.mockClear();
     mocks.notificationsEnabled = true;
     mocks.openThreadWindow.mockReset();
     mocks.openThreadWindow.mockResolvedValue({
@@ -181,7 +192,12 @@ describe(showNewMailNotifications, () => {
     );
 
     await Effect.runPromise(
-      showNewMailNotifications("user@example.com", ["new"], resolveBrand)
+      showNewMailNotifications(
+        "user@example.com",
+        ["new"],
+        resolveBrand,
+        mocks.markThreadRead
+      )
     );
 
     expect(resolveBrand).not.toHaveBeenCalled();
@@ -203,14 +219,18 @@ describe(showNewMailNotifications, () => {
       showNewMailNotifications(
         "user@example.com",
         ["new", "read", "archived"],
-        resolveBrand
+        resolveBrand,
+        mocks.markThreadRead
       )
     );
 
     expect(resolveBrand).toHaveBeenCalledOnce();
     expect(mocks.createdNotifications).toHaveLength(1);
     expect(mocks.createdNotifications[0]).toMatchObject({
-      actions: [{ text: "Open", type: "button" }],
+      actions: [
+        { text: "Open", type: "button" },
+        { text: "Mark as read", type: "button" },
+      ],
       body: "A short preview",
       subtitle: "A subject",
       title: "Sender <sender@example.com>",
@@ -232,15 +252,19 @@ describe(showNewMailNotifications, () => {
       showNewMailNotifications(
         "user@example.com",
         ["first", "second", "other"],
-        () => Effect.succeed(null)
+        () => Effect.succeed(null),
+        mocks.markThreadRead
       )
     );
     mocks.messages = [
       { ...makeMessage("first", ["INBOX", "UNREAD"]), threadId: "shared" },
     ];
     await Effect.runPromise(
-      showNewMailNotifications("other@example.com", ["first"], () =>
-        Effect.succeed(null)
+      showNewMailNotifications(
+        "other@example.com",
+        ["first"],
+        () => Effect.succeed(null),
+        mocks.markThreadRead
       )
     );
 
@@ -252,19 +276,25 @@ describe(showNewMailNotifications, () => {
     ]);
   });
 
-  it.each(["action", "click"])(
+  it.each([
+    ["Open action", "action", { actionIndex: 0 }],
+    ["notification click", "click", undefined],
+  ])(
     "opens the account-scoped thread when the notification receives %s",
-    async (event) => {
+    async (_activation, event, details) => {
       mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
       mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
 
       await Effect.runPromise(
-        showNewMailNotifications("user@example.com", ["new"], () =>
-          Effect.succeed(null)
+        showNewMailNotifications(
+          "user@example.com",
+          ["new"],
+          () => Effect.succeed(null),
+          mocks.markThreadRead
         )
       );
 
-      mocks.notificationListeners[0]?.get(event)?.();
+      mocks.notificationListeners[0]?.get(event)?.(details);
 
       await vi.waitFor(() => {
         expect(mocks.openThreadWindow).toHaveBeenCalledWith({
@@ -276,14 +306,39 @@ describe(showNewMailNotifications, () => {
     }
   );
 
+  it("marks the account-scoped thread as read from the notification action", async () => {
+    mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
+    mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
+
+    await Effect.runPromise(
+      showNewMailNotifications(
+        "user@example.com",
+        ["new"],
+        () => Effect.succeed(null),
+        mocks.markThreadRead
+      )
+    );
+
+    mocks.notificationListeners[0]?.get("action")?.({ actionIndex: 1 });
+
+    expect(mocks.markThreadRead).toHaveBeenCalledWith({
+      accountId: "user@example.com",
+      threadId: "thread-new",
+    });
+    expect(mocks.openThreadWindow).not.toHaveBeenCalled();
+  });
+
   it("focuses the main window when the notification thread cannot open", async () => {
     mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
     mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
     mocks.openThreadWindow.mockRejectedValue(new Error("load failed"));
 
     await Effect.runPromise(
-      showNewMailNotifications("user@example.com", ["new"], () =>
-        Effect.succeed(null)
+      showNewMailNotifications(
+        "user@example.com",
+        ["new"],
+        () => Effect.succeed(null),
+        mocks.markThreadRead
       )
     );
 
@@ -302,12 +357,16 @@ describe(showNewMailNotifications, () => {
     ).toString("base64");
 
     await Effect.runPromise(
-      showNewMailNotifications("user@example.com", ["branded"], () =>
-        Effect.succeed({
-          domain: "example.com",
-          imageDataUrl: `data:image/svg+xml;base64,${svg}`,
-          source: "bimi" as const,
-        })
+      showNewMailNotifications(
+        "user@example.com",
+        ["branded"],
+        () =>
+          Effect.succeed({
+            domain: "example.com",
+            imageDataUrl: `data:image/svg+xml;base64,${svg}`,
+            source: "bimi" as const,
+          }),
+        mocks.markThreadRead
       )
     );
 

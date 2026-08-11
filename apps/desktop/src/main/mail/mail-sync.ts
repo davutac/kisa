@@ -1291,7 +1291,8 @@ const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
     yield* showNewMailNotifications(
       accountId,
       result.addedMessageIds,
-      loadNotificationSenderBrand
+      loadNotificationSenderBrand,
+      requestCachedThreadRead
     ).pipe(
       Effect.catch((error) =>
         Effect.logWarning(
