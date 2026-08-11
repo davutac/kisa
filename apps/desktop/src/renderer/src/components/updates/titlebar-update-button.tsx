@@ -21,11 +21,10 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
     return (
       <Button
         aria-live="polite"
-        className="app-titlebar-interactive"
+        className="app-titlebar-interactive bg-blue-400 text-white"
         disabled
         size="icon"
         type="button"
-        variant="secondary"
       >
         <LoaderCircleIcon className="animate-spin" />
         <span className="sr-only">Downloading {view.percent}%</span>
@@ -35,12 +34,11 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
 
   return (
     <Button
-      className="app-titlebar-interactive"
+      className="app-titlebar-interactive bg-blue-400 text-white"
       onClick={() => {
         void updateApi.install();
       }}
       type="button"
-      variant="secondary"
     >
       <DownloadIcon />
       <span>{view.label}</span>
