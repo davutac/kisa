@@ -4,18 +4,6 @@ import { IpcReply } from "./reply";
 
 export const MAX_GOOGLE_ACCOUNTS = 9;
 
-export type GoogleAuthCallback =
-  | {
-      readonly attempt: string;
-      readonly code: string;
-      readonly error?: never;
-    }
-  | {
-      readonly attempt: string;
-      readonly code?: never;
-      readonly error: string;
-    };
-
 export const GoogleAccount = Schema.Struct({
   avatarUrl: Schema.optional(Schema.String),
   displayName: Schema.optional(Schema.String),

@@ -5,9 +5,9 @@ import { app } from "electron";
 import icon from "../../build/icon.png?asset";
 import { AppClosingEvent } from "../shared/ipc/app";
 import { APP_CLOSING_CHANNEL } from "../shared/ipc/channels";
+import { registerAppActivation } from "./app/app-activation";
 import { setDevelopmentDockIcon } from "./app/app-icon";
-import { registerAppProtocol } from "./app/app-protocol";
-import { handleGoogleAuthCallback } from "./auth/auth";
+import { stopGoogleAuth } from "./auth/auth";
 import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
@@ -17,10 +17,7 @@ import { createWindow, getMainWindow } from "./window/create-window";
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (hasSingleInstanceLock) {
-  registerAppProtocol({
-    getWindow: getMainWindow,
-    onGoogleCallback: handleGoogleAuthCallback,
-  });
+  registerAppActivation(getMainWindow);
 
   // This method will be called when Electron has finished
   // initialization and is ready to create browser windows.
@@ -63,6 +60,7 @@ if (hasSingleInstanceLock) {
 let shutdownStarted = false;
 
 const finishShutdown = async (): Promise<void> => {
+  stopGoogleAuth();
   await Promise.allSettled([
     Effect.runPromise(closeDatabase()),
     stopDesktopIpc(),

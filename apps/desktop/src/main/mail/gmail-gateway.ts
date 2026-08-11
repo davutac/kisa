@@ -202,8 +202,8 @@ const toSendError = (
 const createClient = (credentials: GmailCredentials): gmail_v1.Gmail => {
   const auth = createOAuthClient();
 
-  // Refresh lives in the auth worker so the client secret stays server-side;
-  // this client only carries the access token and surfaces 401 upward.
+  // Credential refresh is serialized by the main-process auth service; this
+  // request-scoped client only carries the current access token.
   auth.setCredentials({
     access_token: Redacted.value(credentials.accessToken),
   });

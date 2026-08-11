@@ -26,7 +26,6 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 | Routing and state | [TanStack Router](https://github.com/TanStack/router), [Zustand](https://github.com/pmndrs/zustand) |
 | Local data | [better-sqlite3-multiple-ciphers](https://github.com/m4heshd/better-sqlite3-multiple-ciphers), [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm), FTS5 |
 | Gmail integration | [Gmail API client](https://github.com/googleapis/google-api-nodejs-client), OAuth 2.0 with PKCE |
-| OAuth handoff | [Cloudflare Workers](https://github.com/cloudflare/workers-sdk), [Alchemy](https://github.com/alchemy-run/alchemy-async) |
 | Tooling | [pnpm](https://github.com/pnpm/pnpm), [Turborepo](https://github.com/vercel/turborepo), [Vite](https://github.com/vitejs/vite), [Vitest](https://github.com/vitest-dev/vitest), [Ultracite](https://github.com/haydenbleasel/ultracite) |
 
 ## Architecture
@@ -50,7 +49,6 @@ See the [desktop architecture](docs/architecture/desktop.md) and [Gmail API capa
 ## Repository
 
 - `apps/desktop` — Electron main, preload, database process, and React renderer.
-- `apps/auth-worker` — Cloudflare OAuth handoff worker, deployed with Alchemy.
 - `packages/database` — database client, runtime, schemas, and migrations.
 - `packages/gmail` — Gmail domain models, services, and boundaries.
 - `docs/architecture` — current architecture and feature contracts.
@@ -72,7 +70,13 @@ pnpm --dir apps/desktop dev
 
 Development uses `<userData>/database/app.dev.sqlite` and its own sealed key, separate from the installed app's `app.sqlite` database and key.
 
-Configure the [OAuth worker](apps/auth-worker/README.md) before connecting an account.
+Google authorization uses a Desktop OAuth client, the system browser, PKCE, and a temporary loopback callback. For local development, copy the template and fill in the matching Desktop client credentials:
+
+```bash
+cp apps/desktop/.env.example apps/desktop/.env.local
+```
+
+electron-vite exposes both `MAIN_VITE_*` values only to the main-process bundle. Release builds receive the same values from the `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` secrets in GitHub's `Prod` environment.
 
 ## Verification
 

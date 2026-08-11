@@ -1,6 +1,6 @@
 # Kisa
 
-Kisa is a minimal, local-first Gmail desktop client built with Electron, React, TypeScript, Effect, SQLite, and a small Cloudflare Worker for OAuth handoff.
+Kisa is a minimal, local-first Gmail desktop client built with Electron, React, TypeScript, Effect, and SQLite.
 
 ## What Kisa Must Not Compromise
 
@@ -35,14 +35,14 @@ These are strong defaults, not a substitute for the developer's explicit directi
 - **cache**: the local SQLite representation used for fast mailbox reads.
 - **index** or **backfill**: the resumable background process that stores and indexes historical mail for local search.
 - **bridge**: the typed `window.desktopBridge` capability API exposed by preload.
-- **auth worker**: the Cloudflare Worker that completes OAuth handoff and token exchange; it is not a remote mailbox backend.
+- **OAuth callback**: the temporary loopback listener that receives Google's authorization response in Electron main.
 
 ## Sharp Edges
 
 1. **Do not damage live mail data.** `pnpm --dir apps/desktop dev` uses Electron's real `app.getPath("userData")`; the database is `<userData>/database/app.sqlite`. Never delete, reset, migrate by hand, or open that database read-write outside Kisa. Tests must use temporary databases. Do not connect or disconnect accounts, send mail, trash mail, or change read state in a real account unless the developer explicitly asks.
 2. **Do not expose secrets or message content.** Never print, commit, fixture, screenshot, or paste real OAuth codes, access tokens, refresh tokens, encrypted credential blobs, private email bodies, or the contents of local app data. Redact boundary errors and logs.
 3. **Do not kill by pattern.** Never use `pkill -f` or a name/path match that can select unrelated Electron, Vite, Codex, or worker processes. Stop only a PID captured from a process you started, or a verified listener owning the exact port you started.
-4. **Do not mutate external infrastructure casually.** Alchemy commands may provision Cloudflare resources. `deploy`, the release helper, tags, pushes, GitHub releases, OAuth configuration, and real Gmail mutations require an explicit request.
+4. **Do not mutate external infrastructure casually.** `deploy`, the release helper, tags, pushes, GitHub releases, OAuth configuration, and real Gmail mutations require an explicit request.
 
 ## Check Every Applicable Path
 
@@ -51,7 +51,7 @@ The common Kisa defect is a change that works in one view or account but leaves 
 - **Interaction paths.** Mouse controls, keyboard commands, focus behavior, accessible labels, tooltips, and settings must describe and invoke the same behavior. Central hotkey definitions live in `renderer/src/hotkeys`; do not add ad-hoc global key listeners for product commands.
 - **Account views.** Check one selected account, All Accounts, account switching, disconnected accounts, and two accounts with colliding Gmail IDs. Persisted and in-memory keys must include account identity where needed.
 - **Mail state.** Consider the local cache, FTS search, foreground Gmail result, history sync, background backfill, unread badge, renderer subscriptions, and optimistic UI. A mutation is incomplete if another mounted view stays stale.
-- **Runtime boundaries.** Renderer, preload, main, database utility process, and auth worker have different APIs and security properties. A cross-boundary change needs matching contracts, codecs, implementations, and tests.
+- **Runtime boundaries.** Renderer, preload, main, and the database utility process have different APIs and security properties. A cross-boundary change needs matching contracts, codecs, implementations, and tests.
 - **Lifecycle states.** Startup, no accounts, loading, empty, partial index, offline/error, retry, cancellation, disconnect, quit, restart, and packaged paths should remain coherent.
 - **Reverse states.** If a behavior can be entered, define how it is exited and observed. Mark read needs mark unread; trust sender needs account cleanup; optimistic state needs rollback or authoritative refresh.
 - **Privacy surfaces.** Treat sender-controlled headers, HTML, URLs, filenames, MIME structure, and image sources as untrusted at every boundary.
@@ -62,7 +62,6 @@ The common Kisa defect is a change that works in one view or account but leaves 
 Kisa is a pnpm/Turborepo workspace:
 
 - `apps/desktop` - Electron main, preload, database utility process, and React renderer.
-- `apps/auth-worker` - Cloudflare OAuth handoff worker deployed through Alchemy.
 - `packages/database` - Drizzle/SQLite schemas, clients, runtime, and migrations.
 - `packages/gmail` - reusable Gmail domain models, gateway/store interfaces, MIME utilities, errors, and service logic.
 - `docs/architecture` - current architectural contracts and feature designs.
@@ -108,7 +107,7 @@ React feature or hook
 
 Main-to-renderer events travel back through encoded renderer events and decoded preload subscriptions. Every subscription must return an exact unsubscribe function.
 
-The main process owns privileged capabilities. The renderer is sandboxed with context isolation and no Node integration; treat it as an untrusted web page. The database utility process owns synchronous `better-sqlite3` work so it cannot block Electron's main thread. The auth worker only handles the hosted OAuth boundary.
+The main process owns privileged capabilities, including the installed-app OAuth flow. The renderer is sandboxed with context isolation and no Node integration; treat it as an untrusted web page. The database utility process owns synchronous `better-sqlite3` work so it cannot block Electron's main thread.
 
 ## Desktop Code Rules
 
@@ -137,8 +136,7 @@ The main process owns privileged capabilities. The renderer is sandboxed with co
 - `packages/gmail` owns reusable domain models, service rules, ports, MIME contracts, and typed failures. Keep Electron, Google SDK, SQLite, and renderer concerns out of it.
 - `apps/desktop/src/main/mail` owns the Gmail SDK adapter, store adapter, synchronization, indexing, search, MIME presentation, quota, and sender trust. Renderer DTOs stay at the shared IPC boundary.
 - Keep Gmail work account-scoped. Foreground operations take priority over backfill; cursor and data writes that guarantee resume safety belong in the same transaction. Disconnect must cancel account work before deleting all account credentials, cached mail, index rows, progress, settings, and trust.
-- Preserve least-privilege OAuth scopes. Tokens stay in main and are encrypted with Electron `safeStorage`; reject insecure Linux `basic_text` storage. Never put an access token, refresh token, or credential blob in a redirect URL, IPC payload, log, renderer state, or test fixture. The current allowlisted, PKCE-bound callback may carry Google's short-lived authorization code and its attempt identifier; do not weaken or generalize that handoff.
-- The auth worker runs on workerd. Use Worker-compatible APIs and direct `fetch` where established; do not add Node-only OAuth libraries because they work in Electron.
+- Preserve least-privilege OAuth scopes. Tokens stay in main and are encrypted with Electron `safeStorage`; reject insecure Linux `basic_text` storage. Never put an access token, refresh token, or credential blob in a redirect URL, IPC payload, log, renderer state, or test fixture. Open Google authorization in the system browser, protect it with PKCE and validated OAuth state, and receive the response on a temporary listener bound only to `127.0.0.1` on an operating-system-assigned port.
 - Email HTML is not trusted application markup. Preserve iframe isolation and CSP, sender-controlled URL checks, remote-image stripping and opt-in flow, external navigation policy, safe filenames, and the on-demand attachment boundary.
 - Gmail failures such as reauthorization, rate limits, expired history, unknown send outcome, malformed MIME, and store failure remain distinct typed domain errors. Do not collapse them into a misleading generic success or retry loop.
 

@@ -2,10 +2,6 @@ appId: com.kisa.app
 productName: Kisa
 asar: true
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
-protocols:
-  - name: Kisa
-    schemes:
-      - kisa
 extraMetadata:
   dependencies:
     electron-updater: ^6.8.9

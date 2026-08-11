@@ -220,9 +220,9 @@ export const GmailStoreLive = Layer.succeed(
       }),
 
     /**
-     * Credentials stay owned by `auth/auth.ts`, which refreshes through the
-     * auth worker. Reading an authorization therefore mints a live access
-     * token rather than returning whatever was last persisted.
+     * Credentials stay owned by `auth/auth.ts`, which refreshes directly with
+     * Google. Reading an authorization therefore mints a live access token
+     * rather than returning whatever was last persisted.
      */
     getAuthorization: (accountId) =>
       withDatabase("Could not load Gmail account", (database) =>

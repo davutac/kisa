@@ -180,7 +180,7 @@ On `GmailRateLimitError` — which the gateway already classifies correctly, inc
 | Account disconnected | Cancel the fiber, then delete |
 | User pause | `paused`, resumable from settings |
 
-Access tokens expire hourly, but `withAuthorization` re-reads authorization per call and `getGoogleAccessToken` refreshes through the auth worker, so a multi-hour run needs no special handling.
+Access tokens expire hourly, but `withAuthorization` re-reads authorization per call and `getGoogleAccessToken` refreshes directly with Google from Electron main, so a multi-hour run needs no special handling.
 
 `forgetAccountMailData` must be extended to clear `gmail_messages`, the FTS rows, and `gmail_backfill_state` — it is the single place disconnect cleans up, and the invariant is that nothing survives a disconnect.
 

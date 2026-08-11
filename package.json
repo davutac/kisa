@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "build": "turbo run build --filter=kisa",
-    "build:auth-worker": "turbo run build --filter=@repo/auth-worker",
     "build:linux": "turbo run build:linux",
     "build:mac": "turbo run build:mac",
     "build:marketing": "turbo run build --filter=@kisa/marketing",

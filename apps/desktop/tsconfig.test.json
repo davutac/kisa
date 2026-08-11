@@ -5,7 +5,6 @@
     "src/main/app/unread-badge.ts",
     "src/main/app/mail-index-progress.ts",
     "src/main/updates/update-lifecycle.ts",
-    "src/shared/app-protocol.ts",
     "src/preload/*.ts",
     "src/preload/*.d.ts",
     "src/renderer/src/env.d.ts",

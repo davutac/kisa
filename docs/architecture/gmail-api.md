@@ -68,6 +68,8 @@ Request the narrowest set that implements the product. Google's current classifi
 
 Public applications using restricted Gmail scopes generally require OAuth verification. Storing or transmitting restricted-scope data through a server can add security-assessment requirements. Kisa's local-first design reduces that remote data exposure, but it does not remove the need for verification or careful local protection. Credentials remain encrypted in Electron's main process and never cross into the renderer.
 
+Kisa registers as a Google Desktop application. Electron main opens the system browser, receives the authorization response on a temporary `127.0.0.1` loopback listener, and protects the code exchange with PKCE and validated OAuth state. Code exchange and refresh requests go directly from the desktop process to Google; Kisa has no OAuth relay. The matching Desktop client ID and client secret are injected only into the main bundle at build time. As with every installed application, the distributed client secret is public application identity rather than a confidential authorization factor.
+
 ## Boundaries and limitations
 
 The Gmail API does not provide:

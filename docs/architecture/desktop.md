@@ -21,7 +21,7 @@ React feature / hook
 
 Events take the reverse path. `main/electron/renderer-events.ts` encodes the payload before sending it; `preload/subscribe.ts` decodes it before notifying a renderer listener. Every subscription returns an exact unsubscribe function.
 
-Conversation popouts use the same boundary. The main mailbox requests an account-scoped thread window through a schema-validated IPC method, and only closes its inline conversation after the new window's renderer has loaded. Each popout loads the dedicated `/thread/$accountId/$threadId` hash route, reuses the existing mail bridge, and has minimal window chrome. A second request for the same account and Gmail thread focuses the existing popout; the main window remains the explicit target for app activation, OAuth handoff, and notification-click fallback.
+Conversation popouts use the same boundary. The main mailbox requests an account-scoped thread window through a schema-validated IPC method, and only closes its inline conversation after the new window's renderer has loaded. Each popout loads the dedicated `/thread/$accountId/$threadId` hash route, reuses the existing mail bridge, and has minimal window chrome. A second request for the same account and Gmail thread focuses the existing popout; the main window remains the explicit target for app activation, the local OAuth callback, and notification-click fallback.
 
 The app-wide General setting "Always open threads in new windows" changes the default for mailbox clicks, the mailbox open command, and search results. It persists locally across restarts, while the explicit inline popout action remains available when the preference is off.
 
@@ -30,7 +30,7 @@ The app-wide General setting "Always open threads in new windows" changes the de
 ```text
 apps/desktop/src/
   main/
-    app/        lifecycle and protocol registration
+    app/        lifecycle and activation handling
     auth/       Google authorization and credential access
     electron/   Electron adapters used by capabilities
     ipc/        transport runtime, method definitions, central installer
@@ -80,6 +80,8 @@ As in t3code, route lifecycle code is reserved for navigation gates and initial 
 ## Security boundary
 
 The renderer is sandboxed with context isolation. Preload exposes only the application-owned `desktopBridge`; the generic Electron toolkit API is not available to page code. Unknown renderer inputs are decoded in main, and main-to-renderer event values are decoded again in preload.
+
+Google authorization is an installed-app flow owned by Electron main. Each attempt opens the system browser with PKCE and a random CSRF state, binds a temporary HTTP listener only to `127.0.0.1` on an operating-system-assigned port, and closes that listener after one valid callback or ten minutes. Main exchanges and refreshes tokens directly with Google. Matching Desktop OAuth client credentials are injected through main-only `MAIN_VITE_*` build variables: an ignored `.env.local` supplies development and GitHub's `Prod` environment supplies releases. An installed app cannot keep its bundled client secret confidential, so PKCE and validated state remain the security boundary. Access and refresh tokens remain encrypted behind `safeStorage` and never enter renderer IPC.
 
 The sandbox preload is emitted as CommonJS and bundles its non-Electron dependencies. Sandboxed Electron preloads cannot load the application's ESM entrypoint or resolve arbitrary package imports at runtime. If Electron starts without the bridge, the root route now reports a startup failure instead of silently rendering the browser fallback with an empty account list.
 

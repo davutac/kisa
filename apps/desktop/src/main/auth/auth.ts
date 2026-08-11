@@ -2,22 +2,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 
-import { is } from "@electron-toolkit/utils";
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
 import { count, eq as equals } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { app, safeStorage, shell } from "electron";
 
-import {
-  GOOGLE_AUTH_CALLBACK_URL,
-  GOOGLE_AUTH_DEV_CALLBACK_URL,
-} from "../../shared/app-protocol";
-import type {
-  GoogleAccount,
-  GoogleAccountsReply,
-  GoogleAuthCallback,
-} from "../../shared/ipc/auth";
+import type { GoogleAccount, GoogleAccountsReply } from "../../shared/ipc/auth";
 import {
   GoogleAccountsReply as GoogleAccountsReplySchema,
   MAX_GOOGLE_ACCOUNTS,
@@ -28,39 +19,62 @@ import { sendRendererEvent } from "../electron/renderer-events";
 import { toIpcReply } from "../ipc/reply";
 import { getMainWindow } from "../window/create-window";
 import { notifyGoogleAccountConnected } from "./account-events";
+import { renderGoogleAuthCallbackPage } from "./google-auth-callback-page";
 
-const AUTH_WORKER_URL =
-  process.env["AUTH_WORKER_URL"] ?? "https://auth.kisa.email";
+const GOOGLE_OAUTH_CLIENT_ID =
+  import.meta.env.MAIN_VITE_GOOGLE_OAUTH_CLIENT_ID?.trim() ||
+  process.env["MAIN_VITE_GOOGLE_OAUTH_CLIENT_ID"]?.trim();
+const GOOGLE_OAUTH_CLIENT_SECRET =
+  import.meta.env.MAIN_VITE_GOOGLE_OAUTH_CLIENT_SECRET?.trim() ||
+  process.env["MAIN_VITE_GOOGLE_OAUTH_CLIENT_SECRET"]?.trim();
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_PROFILE_URL =
   "https://gmail.googleapis.com/gmail/v1/users/me/profile";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const GOOGLE_USER_INFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
+const GOOGLE_AUTH_SCOPES = [
+  "openid",
+  "email",
+  "profile",
+  "https://www.googleapis.com/auth/gmail.modify",
+] as const;
 const GOOGLE_PROFILE_SCOPES = new Set([
   "profile",
   "https://www.googleapis.com/auth/userinfo.profile",
 ]);
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 const GOOGLE_REQUEST_TIMEOUT_MS = 5000;
+const GOOGLE_TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 const GOOGLE_AUTH_ATTEMPT_TTL_MS = 10 * 60 * 1000;
+const GOOGLE_AUTH_CALLBACK_PATH = "/oauth/google/callback";
 const GOOGLE_ACCOUNT_LIMIT_MESSAGE = `You can connect up to ${MAX_GOOGLE_ACCOUNTS} Google accounts.`;
 
-const AuthHandoff = Schema.Struct({
-  accessToken: Schema.NonEmptyString,
-  expiresAt: Schema.optional(Schema.Finite),
-  refreshToken: Schema.optional(Schema.NonEmptyString),
-  scopes: Schema.Array(Schema.NonEmptyString),
-});
 const GmailProfile = Schema.Struct({ emailAddress: Schema.NonEmptyString });
 const StoredCredentials = Schema.Struct({
   accessToken: Schema.NonEmptyString,
+  clientId: Schema.optional(Schema.NonEmptyString),
   expiresAt: Schema.optional(Schema.Finite),
   refreshToken: Schema.optional(Schema.NonEmptyString),
 });
 const StoredScopes = Schema.Array(Schema.NonEmptyString);
-const RefreshedCredentials = Schema.Struct({
-  accessToken: Schema.NonEmptyString,
-  expiresAt: Schema.optional(Schema.Finite),
-  refreshToken: Schema.optional(Schema.NonEmptyString),
+const GoogleTokenResponse = Schema.Struct({
+  access_token: Schema.NonEmptyString,
+  expires_in: Schema.Finite,
+  refresh_token: Schema.optional(Schema.NonEmptyString),
+  scope: Schema.NonEmptyString,
+  token_type: Schema.NonEmptyString,
+});
+const GoogleRefreshResponse = Schema.Struct({
+  access_token: Schema.NonEmptyString,
+  expires_in: Schema.Finite,
+  refresh_token: Schema.optional(Schema.NonEmptyString),
+  scope: Schema.optional(Schema.NonEmptyString),
+  token_type: Schema.NonEmptyString,
+});
+const GoogleOAuthErrorResponse = Schema.Struct({
+  error: Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9_]{0,63}$/u)),
+  error_description: Schema.optional(Schema.NonEmptyString),
 });
 const GoogleUserInfo = Schema.Struct({
   email: Schema.NonEmptyString,
@@ -68,7 +82,13 @@ const GoogleUserInfo = Schema.Struct({
   picture: Schema.optional(Schema.NonEmptyString),
 });
 
-type AuthHandoff = typeof AuthHandoff.Type;
+interface AuthHandoff {
+  readonly accessToken: string;
+  readonly clientId: string;
+  readonly expiresAt: number;
+  readonly refreshToken?: string;
+  readonly scopes: readonly string[];
+}
 
 // oxlint-disable-next-line unicorn/throw-new-error
 class GoogleAuthError extends Schema.TaggedErrorClass<GoogleAuthError>()(
@@ -78,19 +98,66 @@ class GoogleAuthError extends Schema.TaggedErrorClass<GoogleAuthError>()(
 
 interface PendingGoogleAuthAttempt {
   readonly createdAt: number;
+  readonly redirectUri: string;
+  readonly server: Server;
+  readonly timeout: NodeJS.Timeout;
   readonly verifier: string;
 }
 
 const pendingGoogleAuthAttempts = new Map<string, PendingGoogleAuthAttempt>();
-let callbackServer: Server | undefined;
 
-const decodeHandoff = Schema.decodeUnknownPromise(AuthHandoff);
 const decodeProfile = Schema.decodeUnknownPromise(GmailProfile);
 const decodeStoredCredentials = Schema.decodeUnknownSync(StoredCredentials);
 const decodeStoredScopes = Schema.decodeUnknownSync(StoredScopes);
-const decodeRefreshedCredentials =
-  Schema.decodeUnknownPromise(RefreshedCredentials);
+const decodeGoogleTokenResponse =
+  Schema.decodeUnknownPromise(GoogleTokenResponse);
+const decodeGoogleRefreshResponse = Schema.decodeUnknownPromise(
+  GoogleRefreshResponse
+);
+const decodeGoogleOAuthErrorResponse = Schema.decodeUnknownPromise(
+  GoogleOAuthErrorResponse
+);
 const decodeGoogleUserInfo = Schema.decodeUnknownPromise(GoogleUserInfo);
+
+const describeGoogleOAuthFailure = Effect.fn("describeGoogleOAuthFailure")(
+  function* describeGoogleOAuthFailure(response: Response, prefix: string) {
+    const payload = yield* Effect.promise(async () => {
+      try {
+        return await decodeGoogleOAuthErrorResponse(await response.json());
+      } catch {
+        return null;
+      }
+    });
+
+    if (payload === null) {
+      return `${prefix} (${response.status})`;
+    }
+
+    const description = payload.error_description;
+    const safeDescription =
+      description === "client_secret is missing." ? `: ${description}` : "";
+
+    return `${prefix} (${response.status}, ${payload.error})${safeDescription}`;
+  }
+);
+
+const requireGoogleOAuthCredentials = Effect.fn(
+  "requireGoogleOAuthCredentials"
+)(function* requireGoogleOAuthCredentials() {
+  if (
+    GOOGLE_OAUTH_CLIENT_ID === undefined ||
+    GOOGLE_OAUTH_CLIENT_SECRET === undefined
+  ) {
+    return yield* new GoogleAuthError({
+      message: "Google Desktop OAuth credentials are not configured",
+    });
+  }
+
+  return {
+    clientId: GOOGLE_OAUTH_CLIENT_ID,
+    clientSecret: GOOGLE_OAUTH_CLIENT_SECRET,
+  };
+});
 
 export const notifyGoogleAccountsChanged = (
   reply: GoogleAccountsReply
@@ -118,42 +185,48 @@ const focusAppWindow = (): void => {
   window.focus();
 };
 
-const closeCallbackServer = (): void => {
-  callbackServer?.close();
-  callbackServer = undefined;
+const closeServer = (server: Server): void => {
+  if (server.listening) {
+    server.close();
+  }
+};
+
+const disposeGoogleAuthAttempt = (state: string): void => {
+  const pending = pendingGoogleAuthAttempts.get(state);
+
+  if (pending === undefined) {
+    return;
+  }
+
+  pendingGoogleAuthAttempts.delete(state);
+  clearTimeout(pending.timeout);
+  closeServer(pending.server);
 };
 
 const pruneExpiredGoogleAuthAttempts = (now = Date.now()): void => {
-  for (const [attempt, pending] of pendingGoogleAuthAttempts) {
+  for (const [state, pending] of pendingGoogleAuthAttempts) {
     if (now - pending.createdAt >= GOOGLE_AUTH_ATTEMPT_TTL_MS) {
-      pendingGoogleAuthAttempts.delete(attempt);
+      disposeGoogleAuthAttempt(state);
     }
   }
 };
 
-const addPendingGoogleAuthAttempt = (
-  attempt: string,
-  verifier: string
-): void => {
-  const now = Date.now();
-  pruneExpiredGoogleAuthAttempts(now);
-  pendingGoogleAuthAttempts.set(attempt, {
-    createdAt: now,
-    verifier,
-  });
+const takePendingGoogleAuthAttempt = (
+  state: string
+): PendingGoogleAuthAttempt | undefined => {
+  pruneExpiredGoogleAuthAttempts();
+  const pending = pendingGoogleAuthAttempts.get(state);
+
+  if (pending !== undefined) {
+    disposeGoogleAuthAttempt(state);
+  }
+
+  return pending;
 };
 
-const takePendingGoogleAuthVerifier = (attempt: string): string | undefined => {
-  pruneExpiredGoogleAuthAttempts();
-  const pending = pendingGoogleAuthAttempts.get(attempt);
-  pendingGoogleAuthAttempts.delete(attempt);
-  return pending?.verifier;
-};
-
-const closeCallbackServerIfIdle = (): void => {
-  pruneExpiredGoogleAuthAttempts();
-  if (pendingGoogleAuthAttempts.size === 0) {
-    closeCallbackServer();
+export const stopGoogleAuth = (): void => {
+  for (const state of pendingGoogleAuthAttempts.keys()) {
+    disposeGoogleAuthAttempt(state);
   }
 };
 
@@ -216,37 +289,52 @@ const requireGoogleAccountCapacity = Effect.fn("requireGoogleAccountCapacity")(
 
 const exchangeCode = Effect.fn("exchangeCode")(function* exchangeCode(
   code: string,
-  attempt: string
+  pending: PendingGoogleAuthAttempt
 ) {
-  const verifier = takePendingGoogleAuthVerifier(attempt);
-
-  if (verifier === undefined) {
-    return yield* new GoogleAuthError({
-      message: "Google sign-in session expired. Please try again.",
-    });
-  }
-
+  const oauth = yield* requireGoogleOAuthCredentials();
   const response = yield* Effect.tryPromise({
     catch: () =>
       new GoogleAuthError({ message: "Could not complete Google sign-in" }),
     try: () =>
-      fetch(new URL("/oauth/google/exchange", AUTH_WORKER_URL), {
-        body: JSON.stringify({ code, codeVerifier: verifier }),
-        headers: { "content-type": "application/json" },
+      fetch(GOOGLE_TOKEN_URL, {
+        body: new URLSearchParams({
+          client_id: oauth.clientId,
+          client_secret: oauth.clientSecret,
+          code,
+          code_verifier: pending.verifier,
+          grant_type: "authorization_code",
+          redirect_uri: pending.redirectUri,
+        }),
+        headers: { "content-type": "application/x-www-form-urlencoded" },
         method: "POST",
+        signal: AbortSignal.timeout(GOOGLE_TOKEN_REQUEST_TIMEOUT_MS),
       }),
   });
 
   if (!response.ok) {
+    const message = yield* describeGoogleOAuthFailure(
+      response,
+      "Google sign-in exchange failed"
+    );
     return yield* new GoogleAuthError({
-      message: `Google sign-in exchange failed (${response.status})`,
+      message,
     });
   }
 
-  return yield* Effect.tryPromise({
+  const payload = yield* Effect.tryPromise({
     catch: () => new GoogleAuthError({ message: "Invalid sign-in response" }),
-    try: async () => decodeHandoff(await response.json()),
+    try: async () => decodeGoogleTokenResponse(await response.json()),
   });
+
+  return {
+    accessToken: payload.access_token,
+    clientId: oauth.clientId,
+    expiresAt: Date.now() + payload.expires_in * 1000,
+    ...(payload.refresh_token === undefined
+      ? {}
+      : { refreshToken: payload.refresh_token }),
+    scopes: payload.scope.split(" ").filter((scope) => scope.length > 0),
+  } satisfies AuthHandoff;
 });
 
 const identifyAccount = Effect.fn("identifyAccount")(function* identifyAccount(
@@ -296,12 +384,15 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
         const credentials = decodeStoredCredentials(
           JSON.parse(safeStorage.decryptString(existing.credentials))
         );
-        return credentials.refreshToken;
+        return credentials.clientId === handoff.clientId
+          ? credentials.refreshToken
+          : undefined;
       },
     });
     const encryptedCredentials = safeStorage.encryptString(
       JSON.stringify({
         accessToken: handoff.accessToken,
+        clientId: handoff.clientId,
         expiresAt: handoff.expiresAt,
         refreshToken: handoff.refreshToken ?? existingRefreshToken,
       })
@@ -363,39 +454,52 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
 
 const refreshCredentials = Effect.fn("refreshCredentials")(
   function* refreshCredentials(credentials: typeof StoredCredentials.Type) {
-    if (credentials.refreshToken === undefined) {
+    const { clientId, refreshToken } = credentials;
+    const oauth = yield* requireGoogleOAuthCredentials();
+
+    if (refreshToken === undefined || clientId !== oauth.clientId) {
       return yield* new GoogleAuthError({
         message: "Google account must be connected again",
       });
     }
-
     const response = yield* Effect.tryPromise({
       catch: () =>
         new GoogleAuthError({ message: "Could not refresh Google sign-in" }),
       try: () =>
-        fetch(new URL("/oauth/google/refresh", AUTH_WORKER_URL), {
-          body: JSON.stringify({ refreshToken: credentials.refreshToken }),
-          headers: { "content-type": "application/json" },
+        fetch(GOOGLE_TOKEN_URL, {
+          body: new URLSearchParams({
+            client_id: oauth.clientId,
+            client_secret: oauth.clientSecret,
+            grant_type: "refresh_token",
+            refresh_token: refreshToken,
+          }),
+          headers: { "content-type": "application/x-www-form-urlencoded" },
           method: "POST",
-          signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+          signal: AbortSignal.timeout(GOOGLE_TOKEN_REQUEST_TIMEOUT_MS),
         }),
     });
 
     if (!response.ok) {
+      const message = yield* describeGoogleOAuthFailure(
+        response,
+        "Google token refresh failed"
+      );
       return yield* new GoogleAuthError({
-        message: "Google account must be connected again",
+        message,
       });
     }
 
     const refreshed = yield* Effect.tryPromise({
       catch: () =>
         new GoogleAuthError({ message: "Invalid token refresh response" }),
-      try: async () => decodeRefreshedCredentials(await response.json()),
+      try: async () => decodeGoogleRefreshResponse(await response.json()),
     });
 
     return {
-      ...refreshed,
-      refreshToken: refreshed.refreshToken ?? credentials.refreshToken,
+      accessToken: refreshed.access_token,
+      clientId: oauth.clientId,
+      expiresAt: Date.now() + refreshed.expires_in * 1000,
+      refreshToken: refreshed.refresh_token ?? refreshToken,
     };
   }
 );
@@ -790,23 +894,46 @@ const revokeStoredCredentials = Effect.fn("revokeStoredCredentials")(
 export const revokeGoogleAccountAccess = (email: string): Effect.Effect<void> =>
   revokeStoredCredentials(email).pipe(Effect.ignore);
 
+type GoogleAuthCallback =
+  | {
+      readonly code: string;
+      readonly error?: never;
+      readonly state: string;
+    }
+  | {
+      readonly code?: never;
+      readonly error: string;
+      readonly state: string;
+    };
+
 export const handleGoogleAuthCallback = async (
   result: GoogleAuthCallback
 ): Promise<void> => {
   focusAppWindow();
+  const pending = takePendingGoogleAuthAttempt(result.state);
+
+  if (pending === undefined) {
+    notifyGoogleAccountsChanged({
+      error: "Google sign-in session expired. Please try again.",
+      ok: false,
+    });
+    return;
+  }
 
   if (result.error !== undefined) {
-    pendingGoogleAuthAttempts.delete(result.attempt);
-    closeCallbackServerIfIdle();
-    notifyGoogleAccountsChanged({ error: result.error, ok: false });
+    notifyGoogleAccountsChanged({
+      error:
+        result.error === "access_denied"
+          ? "Google sign-in was canceled."
+          : "Google sign-in failed. Please try again.",
+      ok: false,
+    });
     return;
   }
 
   try {
     const email = await Effect.runPromise(
-      exchangeCode(result.code, result.attempt).pipe(
-        Effect.flatMap(saveAuthorization)
-      )
+      exchangeCode(result.code, pending).pipe(Effect.flatMap(saveAuthorization))
     );
 
     // Reconnecting an already-indexed account is a no-op: the indexer ignores
@@ -823,37 +950,39 @@ export const handleGoogleAuthCallback = async (
         error instanceof Error ? error.message : "Google authentication failed",
       ok: false,
     });
-  } finally {
-    closeCallbackServerIfIdle();
   }
 };
 
-const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> => {
-  if (callbackServer !== undefined) {
-    return Effect.void;
-  }
-
-  return Effect.callback((resume) => {
-    const callbackUrl = new URL(GOOGLE_AUTH_DEV_CALLBACK_URL);
+const startCallbackServer = (
+  state: string,
+  verifier: string
+): Effect.Effect<string, GoogleAuthError> =>
+  Effect.callback((resume) => {
     const server = createServer((request, response) => {
-      const url = new URL(request.url ?? "/", callbackUrl);
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
 
-      if (url.pathname !== callbackUrl.pathname) {
+      if (
+        request.method !== "GET" ||
+        url.pathname !== GOOGLE_AUTH_CALLBACK_PATH
+      ) {
         response.writeHead(404).end();
         return;
       }
 
       const error = url.searchParams.get("error");
       const code = url.searchParams.get("code");
-      const attempt = url.searchParams.get("attempt");
+      const callbackState = url.searchParams.get("state");
       let result: GoogleAuthCallback | undefined;
 
-      if (attempt !== null && attempt.length > 0) {
-        if (error !== null) {
-          result = { attempt, error };
-        } else if (code !== null) {
-          result = { attempt, code };
-        }
+      if (callbackState !== state) {
+        response.writeHead(400).end("Invalid Google sign-in state");
+        return;
+      }
+
+      if (error !== null && error.length > 0) {
+        result = { error, state };
+      } else if (code !== null && code.length > 0) {
+        result = { code, state };
       }
 
       if (result === undefined) {
@@ -861,12 +990,19 @@ const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> => {
         return;
       }
 
-      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      response.end("You can close this window and return to Kisa.");
+      response.writeHead(200, {
+        "cache-control": "no-store",
+        "content-security-policy":
+          "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+      });
+      response.end(renderGoogleAuthCallbackPage(result.error));
       void handleGoogleAuthCallback(result);
     });
     const handleListenError = (): void => {
-      closeCallbackServer();
+      closeServer(server);
       resume(
         Effect.fail(
           new GoogleAuthError({
@@ -876,39 +1012,68 @@ const startDevCallbackServer = (): Effect.Effect<void, GoogleAuthError> => {
       );
     };
 
-    callbackServer = server;
     server.once("error", handleListenError);
-    server.listen(Number(callbackUrl.port), callbackUrl.hostname, () => {
+    server.listen(0, "127.0.0.1", () => {
       server.removeListener("error", handleListenError);
-      server.on("error", closeCallbackServer);
-      resume(Effect.void);
+      const address = server.address();
+
+      if (address === null || typeof address === "string") {
+        closeServer(server);
+        resume(
+          Effect.fail(
+            new GoogleAuthError({
+              message: "Could not start the local sign-in callback",
+            })
+          )
+        );
+        return;
+      }
+
+      const redirectUri = `http://127.0.0.1:${address.port}${GOOGLE_AUTH_CALLBACK_PATH}`;
+      const timeout = setTimeout(
+        () => disposeGoogleAuthAttempt(state),
+        GOOGLE_AUTH_ATTEMPT_TTL_MS
+      );
+      timeout.unref();
+      pruneExpiredGoogleAuthAttempts();
+      pendingGoogleAuthAttempts.set(state, {
+        createdAt: Date.now(),
+        redirectUri,
+        server,
+        timeout,
+        verifier,
+      });
+      server.on("error", () => disposeGoogleAuthAttempt(state));
+      server.unref();
+      resume(Effect.succeed(redirectUri));
     });
 
-    return Effect.sync(closeCallbackServer);
+    return Effect.sync(() => closeServer(server));
   });
-};
 
 export const startGoogleAuth = Effect.fn("startGoogleAuth")(
   function* startGoogleAuth() {
+    const oauth = yield* requireGoogleOAuthCredentials();
     yield* requireSecureStorage();
     yield* requireGoogleAccountCapacity();
 
-    if (is.dev) {
-      yield* startDevCallbackServer();
-    }
-
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
-    const url = new URL("/oauth/google/start", AUTH_WORKER_URL);
-    const callbackUrl = is.dev
-      ? GOOGLE_AUTH_DEV_CALLBACK_URL
-      : GOOGLE_AUTH_CALLBACK_URL;
+    const state = randomBytes(32).toString("base64url");
+    const callbackUrl = yield* startCallbackServer(state, verifier);
+    const url = new URL(GOOGLE_AUTH_URL);
     url.search = new URLSearchParams({
+      access_type: "offline",
+      client_id: oauth.clientId,
       code_challenge: challenge,
       code_challenge_method: "S256",
+      include_granted_scopes: "true",
+      prompt: "consent",
       redirect_uri: callbackUrl,
+      response_type: "code",
+      scope: GOOGLE_AUTH_SCOPES.join(" "),
+      state,
     }).toString();
-    addPendingGoogleAuthAttempt(challenge, verifier);
 
     yield* Effect.tryPromise({
       catch: () =>
@@ -917,8 +1082,7 @@ export const startGoogleAuth = Effect.fn("startGoogleAuth")(
     }).pipe(
       Effect.tapError(() =>
         Effect.sync(() => {
-          pendingGoogleAuthAttempts.delete(challenge);
-          closeCallbackServerIfIdle();
+          disposeGoogleAuthAttempt(state);
         })
       )
     );

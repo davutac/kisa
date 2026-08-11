@@ -46,7 +46,7 @@ import BaseLayout from "@/layouts/base-layout.astro";
         <section class="py-8">
           <h2 class="text-sm font-semibold">Kisa connects directly to your mail provider</h2>
           <p class="mt-3 text-sm leading-6 text-muted-foreground">
-            The app talks to your mail provider to sync and manage your mail. A small Cloudflare Worker processes OAuth data only to complete sign-in and token refresh. Kisa does not save your mail or tokens in that worker.
+            The app talks directly to your mail provider to sign in, refresh access, and sync and manage your mail. Kisa does not send your mail or OAuth tokens through a Kisa backend.
           </p>
         </section>
 
@@ -67,7 +67,7 @@ import BaseLayout from "@/layouts/base-layout.astro";
         </section>
       </div>
 
-      <p class="mt-8 text-xs text-muted-foreground">Last updated August 10, 2026.</p>
+      <p class="mt-8 text-xs text-muted-foreground">Last updated August 11, 2026.</p>
     </main>
   </div>
 </BaseLayout>
