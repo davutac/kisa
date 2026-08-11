@@ -101,6 +101,9 @@ export const visibleGmailLabels = (
 export const hasInboxLabel = (labels: readonly string[]): boolean =>
   labels.includes("INBOX");
 
+export const hasSpamLabel = (labels: readonly string[]): boolean =>
+  labels.includes("SPAM");
+
 export const withReadStateLabel = (
   labels: readonly string[],
   isUnread: boolean

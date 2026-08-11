@@ -285,7 +285,7 @@ export const getSearchFilterLabel = (field: SearchFilterField): string =>
 export const hasInboxSearchScope = (query: SearchQuery): boolean =>
   query.filters.some(isInboxFilter);
 
-const UNINDEXED_SYSTEM_LABELS = new Set(["CHAT", "SPAM", "TRASH"]);
+const UNINDEXED_SYSTEM_LABELS = new Set(["CHAT", "TRASH"]);
 
 export interface SearchLabelSuggestion {
   accountIds: readonly string[];

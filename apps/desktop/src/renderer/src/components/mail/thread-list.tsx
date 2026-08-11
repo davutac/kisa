@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { InboxIcon } from "lucide-react";
+import { InboxIcon, ShieldAlertIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useEffect, useRef } from "react";
 
@@ -20,11 +20,12 @@ import {
   getVisibleThreadSelectionIndex,
 } from "@/mail/thread-selection";
 import { useOpenThread } from "@/mail/use-open-thread";
-import type { GmailThreadSummary } from "@/shared/ipc/mail";
+import type { GmailMailbox, GmailThreadSummary } from "@/shared/ipc/mail";
 import { useMailboxStore, useSelectedThreadId } from "@/state/mailbox";
 
 interface MailThreadListProps {
   emptyMessage: string;
+  emptyTitle?: string;
   hasNextPage?: boolean;
   /**
    * Rendered in place of the paging row once the cache is exhausted but the
@@ -35,6 +36,8 @@ interface MailThreadListProps {
   isInitialLoading: boolean;
   isLoadingNextPage?: boolean;
   loadNextPage?: () => Promise<boolean>;
+  mailbox?: GmailMailbox;
+  onNotSpamThread?: (thread: GmailThreadSummary) => void;
   onToggleThreadRead?: (thread: GmailThreadSummary) => void;
   onTrashThread?: (thread: GmailThreadSummary) => void;
   reloadRevision: number;
@@ -46,11 +49,14 @@ const RAPID_SELECTION_INTERVAL_MS = 150;
 
 const MailThreadList = ({
   emptyMessage,
+  emptyTitle = "No email",
   hasNextPage = false,
   indexingMessage,
   isInitialLoading,
   isLoadingNextPage = false,
   loadNextPage,
+  mailbox = "inbox",
+  onNotSpamThread,
   onToggleThreadRead,
   onTrashThread,
   reloadRevision,
@@ -68,6 +74,7 @@ const MailThreadList = ({
   // notice — the auto-load effect below still keys off `hasNextPage` alone, so
   // showing the notice cannot start a paging loop against an exhausted cache.
   const hasTrailingRow = hasNextPage || indexingMessage !== undefined;
+  const emptyIcon = mailbox === "spam" ? <ShieldAlertIcon /> : <InboxIcon />;
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
     count: threads.length + (hasTrailingRow ? 1 : 0),
     estimateSize: () => 88,
@@ -229,7 +236,7 @@ const MailThreadList = ({
 
   return (
     <section
-      aria-label="Inbox"
+      aria-label={mailbox === "spam" ? "Spam" : "Inbox"}
       className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4"
       ref={scrollElementRef}
       tabIndex={-1}
@@ -238,10 +245,10 @@ const MailThreadList = ({
         <Empty aria-live="polite" className="absolute inset-4 w-auto border-0">
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              {isInitialLoading ? <Spinner /> : <InboxIcon />}
+              {isInitialLoading ? <Spinner /> : emptyIcon}
             </EmptyMedia>
             <EmptyTitle>
-              {isInitialLoading ? "Loading email…" : "No email"}
+              {isInitialLoading ? "Loading email…" : emptyTitle}
             </EmptyTitle>
             {isInitialLoading ? null : (
               <EmptyDescription>{emptyMessage}</EmptyDescription>
@@ -279,6 +286,7 @@ const MailThreadList = ({
                 isSelected={getThreadSelectionKey(thread) === selectedThreadKey}
                 key={virtualRow.key}
                 onOpen={openThread}
+                onNotSpam={onNotSpamThread}
                 onToggleRead={onToggleThreadRead}
                 onTrash={onTrashThread}
                 position={virtualRow.index + 1}

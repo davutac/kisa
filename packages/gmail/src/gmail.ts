@@ -140,6 +140,9 @@ export interface GmailService {
   readonly markThreadUnread: (
     request: ThreadMutationRequest
   ) => Effect.Effect<void, GmailError>;
+  readonly markThreadNotSpam: (
+    request: ThreadMutationRequest
+  ) => Effect.Effect<void, GmailError>;
   readonly setThreadLabel: (
     request: ThreadLabelMutationRequest
   ) => Effect.Effect<void, GmailError>;
@@ -520,6 +523,22 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         }
       );
 
+      const markThreadNotSpam = Effect.fn("Gmail.markThreadNotSpam")(
+        function* markThreadNotSpam(request: ThreadMutationRequest) {
+          yield* withAuthorization(
+            request.accountId,
+            "modify",
+            (authorization) =>
+              gateway.modifyThreadLabels(authorization, {
+                addLabelIds: ["INBOX"],
+                removeLabelIds: ["SPAM"],
+                threadId: request.threadId,
+              })
+          );
+          yield* store.markThreadNotSpam(request.accountId, request.threadId);
+        }
+      );
+
       const setThreadLabel = Effect.fn("Gmail.setThreadLabel")(
         function* setThreadLabel(request: ThreadLabelMutationRequest) {
           const label = (yield* store.getLabels(request.accountId)).find(
@@ -713,6 +732,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         listAccounts: store.listAccounts,
         listLabels,
         listThreads,
+        markThreadNotSpam,
         markThreadRead,
         markThreadUnread,
         reply,

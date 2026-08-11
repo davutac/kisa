@@ -1,8 +1,11 @@
 import { create } from "zustand";
 
+import type { GmailMailbox } from "@/shared/ipc/mail";
+
 interface MailboxState {
   /** The thread being read, over a mailbox that stays mounted underneath. */
   openThreadId: string | null;
+  mailbox: GmailMailbox;
   /** `null` shows every account. */
   selectedAccountId: string | null;
   /** A thread selection key, see `getThreadSelectionKey`. */
@@ -13,6 +16,7 @@ interface MailboxState {
   selectAccount: (accountId: string | null) => void;
   selectThread: (threadId: string | null) => void;
   setShowUnread: (showUnread: boolean) => void;
+  setMailbox: (mailbox: GmailMailbox) => void;
 }
 
 // Narrowing the mailbox strands a selection that is no longer in the list, so
@@ -21,6 +25,7 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
   closeThread: () => {
     set({ openThreadId: null });
   },
+  mailbox: "inbox",
   openThread: (openThreadId) => {
     set({ openThreadId, selectedThreadId: openThreadId });
   },
@@ -33,6 +38,9 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
   },
   selectedAccountId: null,
   selectedThreadId: null,
+  setMailbox: (mailbox) => {
+    set({ mailbox, openThreadId: null, selectedThreadId: null });
+  },
   setShowUnread: (showUnread) => {
     set({ openThreadId: null, selectedThreadId: null, showUnread });
   },
@@ -41,6 +49,9 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
 
 export const useOpenThreadId = (): string | null =>
   useMailboxStore((state) => state.openThreadId);
+
+export const useMailbox = (): GmailMailbox =>
+  useMailboxStore((state) => state.mailbox);
 
 export const useSelectedAccountId = (): string | null =>
   useMailboxStore((state) => state.selectedAccountId);

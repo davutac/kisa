@@ -35,6 +35,8 @@ import type {
   GmailSearchResultsReply,
   GmailSenderSuggestionRequest,
   GmailSenderSuggestionsReply,
+  GmailSpamStatusReply,
+  GmailSpamStatusRequest,
   GmailSyncStatus,
   GmailThreadMutationReply,
   GmailThreadMessageSendReply,
@@ -100,6 +102,9 @@ export interface DesktopBridge {
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
+  getSpamStatus: (
+    request: GmailSpamStatusRequest
+  ) => Promise<GmailSpamStatusReply>;
   getPathForFile: (file: File) => string;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
@@ -125,6 +130,12 @@ export interface DesktopBridge {
   listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
   loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
   loadThreadDraft: (request: GmailThreadRequest) => Promise<MailDraftLoadReply>;
+  markSpamSeen: (
+    request: GmailSpamStatusRequest
+  ) => Promise<GmailSpamStatusReply>;
+  markThreadNotSpam: (
+    request: GmailThreadRequest
+  ) => Promise<GmailThreadMutationReply>;
   openAttachmentPreview: (
     request: GmailAttachmentRequest
   ) => Promise<GmailAttachmentActionReply>;

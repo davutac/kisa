@@ -44,7 +44,7 @@ export const setMailboxThreadsSnapshot = (
 // one. That prevents a stale snapshot from restoring an old projection later
 // and lets incoming threads appear without reloading a whole first page.
 const getSnapshotAccountIds = (snapshot: MailboxThreadsSnapshot): string[] => {
-  const separatorIndex = snapshot.scopeKey.indexOf("\u0001");
+  const separatorIndex = snapshot.scopeKey.lastIndexOf("\u0001");
 
   return snapshot.scopeKey
     .slice(separatorIndex + 1)

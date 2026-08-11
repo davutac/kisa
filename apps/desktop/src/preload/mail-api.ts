@@ -3,6 +3,7 @@ import { ipcRenderer } from "electron";
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
   MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_DRAFT_CHANGED_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
@@ -12,6 +13,8 @@ import {
   MAIL_LIST_STASHED_DRAFTS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
+  MAIL_MARK_SPAM_SEEN_CHANNEL,
+  MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SAVE_DRAFT_CHANNEL,
@@ -43,6 +46,7 @@ export const mailApi: Pick<
   | "discardMailDraft"
   | "getMailIndexProgress"
   | "getMailSyncStatus"
+  | "getSpamStatus"
   | "listCachedThreadPage"
   | "listGmailLabels"
   | "listGmailSenders"
@@ -50,6 +54,8 @@ export const mailApi: Pick<
   | "listTrustedImageSenders"
   | "loadThread"
   | "loadThreadDraft"
+  | "markSpamSeen"
+  | "markThreadNotSpam"
   | "openAttachmentPreview"
   | "onMailDraftChanged"
   | "onMailIndexProgressChanged"
@@ -72,6 +78,8 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_DISCARD_DRAFT_CHANNEL, request),
   getMailIndexProgress: () => ipcRenderer.invoke(MAIL_INDEX_PROGRESS_CHANNEL),
   getMailSyncStatus: () => ipcRenderer.invoke(MAIL_SYNC_STATUS_CHANNEL),
+  getSpamStatus: (request) =>
+    ipcRenderer.invoke(MAIL_GET_SPAM_STATUS_CHANNEL, request),
   listCachedThreadPage: (request) =>
     ipcRenderer.invoke(MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL, request),
   listGmailLabels: (request) =>
@@ -86,6 +94,10 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_LOAD_THREAD_CHANNEL, request),
   loadThreadDraft: (request) =>
     ipcRenderer.invoke(MAIL_LOAD_THREAD_DRAFT_CHANNEL, request),
+  markSpamSeen: (request) =>
+    ipcRenderer.invoke(MAIL_MARK_SPAM_SEEN_CHANNEL, request),
+  markThreadNotSpam: (request) =>
+    ipcRenderer.invoke(MAIL_MARK_THREAD_NOT_SPAM_CHANNEL, request),
   onMailDraftChanged: (listener) =>
     subscribe(MAIL_DRAFT_CHANGED_CHANNEL, MailDraftChanged, listener),
   onMailIndexProgressChanged: (listener) =>

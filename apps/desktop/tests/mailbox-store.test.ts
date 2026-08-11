@@ -18,9 +18,10 @@ describe("mailbox store", () => {
   });
 
   it("starts on every account with no filters", () => {
-    const { selectedAccountId, selectedThreadId, showUnread } =
+    const { mailbox, selectedAccountId, selectedThreadId, showUnread } =
       useMailboxStore.getState();
 
+    expect(mailbox).toBe("inbox");
     expect(selectedAccountId).toBeNull();
     expect(selectedThreadId).toBeNull();
     expect(useMailboxStore.getState().openThreadId).toBeNull();
@@ -79,6 +80,14 @@ describe("mailbox store", () => {
     useMailboxStore.getState().setShowUnread(true);
 
     expect(useMailboxStore.getState().showUnread).toBeTruthy();
+    expect(useMailboxStore.getState().selectedThreadId).toBeNull();
+  });
+
+  it("drops the selection when switching to Spam", () => {
+    withSelection("person@example.com:thread-42");
+    useMailboxStore.getState().setMailbox("spam");
+
+    expect(useMailboxStore.getState().mailbox).toBe("spam");
     expect(useMailboxStore.getState().selectedThreadId).toBeNull();
   });
 });

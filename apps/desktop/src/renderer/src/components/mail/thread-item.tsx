@@ -32,6 +32,7 @@ const rowVariants = {
 interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   isSelected?: boolean;
   onOpen: (thread: GmailThreadSummary) => void;
+  onNotSpam?: (thread: GmailThreadSummary) => void;
   onToggleRead?: (thread: GmailThreadSummary) => void;
   onTrash?: (thread: GmailThreadSummary) => void;
   position: number;
@@ -40,9 +41,15 @@ interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   thread: GmailThreadSummary;
 }
 
+const bindThreadAction = (
+  action: ((thread: GmailThreadSummary) => void) | undefined,
+  thread: GmailThreadSummary
+): (() => void) | undefined => action?.bind(undefined, thread);
+
 const MailThreadItem = ({
   isSelected = false,
   onOpen,
+  onNotSpam,
   onToggleRead,
   onTrash,
   position,
@@ -64,6 +71,7 @@ const MailThreadItem = ({
   );
   const hiddenAttachmentCount =
     thread.attachments.length - visibleAttachments.length;
+  const handleNotSpam = bindThreadAction(onNotSpam, thread);
 
   return (
     <m.li
@@ -100,6 +108,7 @@ const MailThreadItem = ({
           hotkeysEnabled={isSelected}
           isRevealed={isRevealed}
           isUnread={thread.isUnread}
+          onNotSpam={handleNotSpam}
           onToggleRead={() => {
             onToggleRead?.(thread);
           }}

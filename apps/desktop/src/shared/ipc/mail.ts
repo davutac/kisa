@@ -288,13 +288,25 @@ export const GmailThreadCursor = Schema.Struct({
 });
 export type GmailThreadCursor = typeof GmailThreadCursor.Type;
 
+export const GmailMailbox = Schema.Literals(["inbox", "spam"]);
+export type GmailMailbox = typeof GmailMailbox.Type;
+
 export const GmailCachedThreadPageRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
   cursor: Schema.optional(GmailThreadCursor),
+  mailbox: Schema.optional(GmailMailbox),
   unreadOnly: Schema.optional(Schema.Boolean),
 });
 export type GmailCachedThreadPageRequest =
   typeof GmailCachedThreadPageRequest.Type;
+
+export const GmailSpamStatusRequest = Schema.Struct({
+  accountIds: Schema.Array(Schema.NonEmptyString),
+});
+export type GmailSpamStatusRequest = typeof GmailSpamStatusRequest.Type;
+
+export const GmailSpamStatus = Schema.Struct({ hasNewSpam: Schema.Boolean });
+export type GmailSpamStatus = typeof GmailSpamStatus.Type;
 
 export const GmailCachedThreadPage = Schema.Struct({
   nextCursor: Schema.optional(GmailThreadCursor),
@@ -440,6 +452,9 @@ export type GmailTrustedImageSendersReply =
 
 export const GmailThreadMutationReply = IpcReply(Schema.Void);
 export type GmailThreadMutationReply = typeof GmailThreadMutationReply.Type;
+
+export const GmailSpamStatusReply = IpcReply(GmailSpamStatus);
+export type GmailSpamStatusReply = typeof GmailSpamStatusReply.Type;
 
 export const GmailThreadMessageSendReply = IpcReply(Schema.Void);
 export type GmailThreadMessageSendReply =

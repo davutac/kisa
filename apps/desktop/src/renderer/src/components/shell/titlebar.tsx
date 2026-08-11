@@ -4,6 +4,7 @@ import { FilesIcon, HouseIcon, SettingsIcon } from "lucide-react";
 import TitlebarIndexButton from "@/components/mail/titlebar-index-button";
 import TitlebarMailSearch from "@/components/shell/mail-search";
 import TitlebarNewMessage from "@/components/shell/new-message";
+import TitlebarSpamToggle from "@/components/shell/spam-toggle";
 import TitlebarUnreadToggle from "@/components/shell/unread-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +82,7 @@ const Titlebar = () => {
         <TitlebarIndexButton />
         <TitlebarMailSearch />
         <TitlebarUnreadToggle />
+        <TitlebarSpamToggle />
         {updates === undefined ? null : (
           <TitlebarUpdateButton updateApi={updates} />
         )}

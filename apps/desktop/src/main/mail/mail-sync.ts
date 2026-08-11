@@ -2,7 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
-import { gmailThreads } from "@repo/database/schemas";
+import { gmailSyncState, gmailThreads } from "@repo/database/schemas";
 import type { gmailMessages } from "@repo/database/schemas";
 import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
@@ -12,7 +12,13 @@ import type {
   GmailThread as GmailDomainThread,
   Mailbox,
 } from "@repo/gmail/models";
-import { AccountId, LabelId, MessageId, ThreadId } from "@repo/gmail/models";
+import {
+  AccountId,
+  LabelId,
+  MessageId,
+  PageCursor,
+  ThreadId,
+} from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
 import { and as andSql, eq, inArray as inArraySql } from "drizzle-orm";
@@ -37,6 +43,8 @@ import type {
   GmailLabelSummary,
   GmailMessageSendRequest,
   GmailSenderBrand,
+  GmailSpamStatus,
+  GmailSpamStatusRequest,
   GmailThread as GmailThreadDto,
   GmailThreadMessage,
   GmailThreadMessageSendRequest,
@@ -48,6 +56,7 @@ import type {
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
+import { forgetCachedCorrespondents } from "./correspondent-cache";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
 import { parseMailbox } from "./gmail-payload";
@@ -63,19 +72,28 @@ import {
   dismissThreadNotifications,
   showNewMailNotifications,
 } from "./new-mail-notifications";
+import { mailQuotaGovernor, QUOTA_UNITS } from "./quota-governor";
 import { addUnreadLabel, removeUnreadLabel } from "./read-state";
 import type { MessageHeader } from "./sender-brand";
 import { getSenderBrand, hasCachedSenderBrand } from "./sender-brand";
+import {
+  hasNewSpamRemote,
+  markSpamSeenRemote,
+  resetSpamBackfillRemote,
+} from "./spam-mailbox";
 import { getThreadCacheState } from "./thread-cache-policy";
 import { refreshUnreadBadge } from "./unread-badge";
 
 const GMAIL_INBOX_LABEL = "INBOX";
+const GMAIL_SPAM_LABEL = "SPAM";
 const GMAIL_TRASH_LABEL = "TRASH";
 const GMAIL_READ_SCOPES = new Set([
   "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/gmail.readonly",
 ]);
 const THREAD_PAGE_SIZE = 50;
+const SPAM_PAGE_QUOTA_UNITS =
+  QUOTA_UNITS.threadsList + THREAD_PAGE_SIZE * QUOTA_UNITS.threadsGet;
 const INLINE_IMAGE_CONCURRENCY = 3;
 const POLL_INTERVAL_MS = 15_000;
 const MAX_SYNC_RETRIES = 5;
@@ -270,6 +288,7 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
       return { threads: [] } satisfies GmailCachedThreadPage;
     }
 
+    const mailbox = request.mailbox ?? "inbox";
     const rows = yield* withDatabase("Could not load email", (database) =>
       database.query.gmailThreads.findMany({
         limit: THREAD_PAGE_SIZE + 1,
@@ -286,7 +305,7 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
           // page below: the index stores archived mail in this table too,
           // so filtering afterwards would return near-empty pages while
           // paging through everything the user archived.
-          isInInbox: true,
+          ...(mailbox === "spam" ? { isInSpam: true } : { isInInbox: true }),
           ...(request.unreadOnly === true ? { isUnread: true } : {}),
           ...(request.cursor === undefined
             ? {}
@@ -323,6 +342,28 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
       : { threads };
   }
 );
+
+export const getSpamStatus = Effect.fn("getSpamStatus")(function* getSpamStatus(
+  request: GmailSpamStatusRequest
+) {
+  const hasNewSpam = yield* withDatabase("Could not check spam", (database) =>
+    hasNewSpamRemote(database, request.accountIds)
+  );
+
+  return { hasNewSpam } satisfies GmailSpamStatus;
+});
+
+export const markSpamSeen = Effect.fn("markSpamSeen")(function* markSpamSeen(
+  request: GmailSpamStatusRequest
+) {
+  const now = yield* Clock.currentTimeMillis;
+
+  yield* withDatabase("Could not update spam", (database) =>
+    markSpamSeenRemote(database, request.accountIds, now)
+  );
+
+  return { hasNewSpam: false } satisfies GmailSpamStatus;
+});
 
 const notifyThreadListUpdated = (
   changes: readonly GmailThreadListChange[]
@@ -935,6 +976,7 @@ const updateCachedThread = (
         // `is_in_inbox` is derived from the labels, so the two always move
         // together — the paging query reads the column, not the JSON.
         isInInbox: summary.labels.includes(GMAIL_INBOX_LABEL),
+        isInSpam: summary.labels.includes(GMAIL_SPAM_LABEL),
         isUnread: summary.isUnread,
         labels: summary.labels,
         updatedAt: Date.now(),
@@ -955,7 +997,10 @@ const toTrashedSummary = (summary: GmailThreadSummary): GmailThreadSummary => ({
   ...summary,
   labels: [
     ...summary.labels.filter(
-      (label) => label !== GMAIL_INBOX_LABEL && label !== GMAIL_TRASH_LABEL
+      (label) =>
+        label !== GMAIL_INBOX_LABEL &&
+        label !== GMAIL_SPAM_LABEL &&
+        label !== GMAIL_TRASH_LABEL
     ),
     GMAIL_TRASH_LABEL,
   ],
@@ -1010,6 +1055,32 @@ export const setThreadLabel = Effect.fn("setThreadLabel")(
             accountId: AccountId.make(request.accountId),
             applied: request.applied,
             labelId: LabelId.make(request.labelId),
+            threadId: ThreadId.make(request.threadId),
+          })
+        )
+      )
+    );
+
+    const row = yield* findCachedThread(request.accountId, request.threadId);
+
+    if (row === undefined) {
+      yield* reloadThreadList(request.accountId);
+      return;
+    }
+
+    yield* publishThreadListUpdated([
+      { kind: "upsert", thread: toCachedThreadSummary(row) },
+    ]);
+  }
+);
+
+export const markThreadNotSpam = Effect.fn("markThreadNotSpam")(
+  function* markThreadNotSpam(request: GmailThreadRequest) {
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.markThreadNotSpam({
+            accountId: AccountId.make(request.accountId),
             threadId: ThreadId.make(request.threadId),
           })
         )
@@ -1283,7 +1354,9 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
       // thread would otherwise keep its place in the list.
       const values = {
         isInInbox: false,
+        isInSpam: false,
         labels: summary.labels,
+        spamAddedAt: null,
         updatedAt: Date.now(),
       };
 
@@ -1336,6 +1409,86 @@ const requestCachedThreadTrash = (request: GmailThreadRequest): void => {
   void trash();
 };
 
+/**
+ * Seeds one bounded Spam page per normal sync until the account's current Spam
+ * mailbox is cached. Gmail history owns all later transitions, so this is a
+ * one-time, resumable bridge for accounts connected before Spam was visible.
+ */
+const syncSpamBackfillPage = Effect.fn("syncSpamBackfillPage")(
+  function* syncSpamBackfillPage(accountId: string) {
+    const state = yield* withDatabase(
+      "Could not read spam sync state",
+      (database) =>
+        database.query.gmailSyncState.findFirst({
+          columns: {
+            spamBackfillComplete: true,
+            spamBackfillCursor: true,
+          },
+          where: { accountEmail: accountId },
+        })
+    );
+
+    if (state === undefined || state.spamBackfillComplete) {
+      return [];
+    }
+
+    yield* Effect.promise(() =>
+      mailQuotaGovernor.awaitBudget(accountId, SPAM_PAGE_QUOTA_UNITS)
+    );
+
+    const page = yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.listThreads(
+            state.spamBackfillCursor === null
+              ? {
+                  accountId: AccountId.make(accountId),
+                  includeSpamTrash: true,
+                  labelIds: [LabelId.make(GMAIL_SPAM_LABEL)],
+                  pageSize: THREAD_PAGE_SIZE,
+                }
+              : {
+                  accountId: AccountId.make(accountId),
+                  cursor: PageCursor.make(state.spamBackfillCursor),
+                }
+          )
+        )
+      )
+    );
+    const now = yield* Clock.currentTimeMillis;
+
+    yield* withDatabase("Could not save spam sync state", (database) =>
+      database
+        .update(gmailSyncState)
+        .set({
+          spamBackfillComplete: !page.hasMore,
+          spamBackfillCursor: page.nextCursor ?? null,
+          updatedAt: now,
+        })
+        .where(eq(gmailSyncState.accountEmail, accountId))
+        .run()
+    );
+
+    return page.items.map((thread) => thread.id);
+  }
+);
+
+const resetSpamBackfill = Effect.fn("resetSpamBackfill")(
+  function* resetSpamBackfill(accountId: string) {
+    const now = yield* Clock.currentTimeMillis;
+    const threadIds = yield* withDatabase("Could not reset spam", (database) =>
+      resetSpamBackfillRemote(database, accountId, now)
+    );
+
+    if (threadIds.length > 0) {
+      // Keep suggestions aligned with the transaction's message deletions.
+      forgetCachedCorrespondents(accountId);
+    }
+
+    return threadIds.map((threadId) => ThreadId.make(threadId));
+  }
+);
+
 const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
   accountId: string
 ) {
@@ -1347,6 +1500,8 @@ const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
     )
   );
 
+  // Publish foreground history before the bounded Spam seed is allowed to
+  // wait for background quota.
   if (result.changedThreadIds.length > 0) {
     yield* publishCachedThreadListChanges(accountId, result.changedThreadIds);
   }
@@ -1365,6 +1520,31 @@ const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
         )
       )
     );
+  }
+
+  const resetSpamThreadIds =
+    result.type === "cursor-recovered"
+      ? yield* resetSpamBackfill(accountId).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Could not reset Spam sync: ${error.message}`
+            ).pipe(Effect.as([]))
+          )
+        )
+      : [];
+  const spamThreadIds = yield* syncSpamBackfillPage(accountId).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(`Could not seed Spam: ${error.message}`).pipe(
+        Effect.as([])
+      )
+    )
+  );
+  const changedThreadIds = [
+    ...new Set([...resetSpamThreadIds, ...spamThreadIds]),
+  ];
+
+  if (changedThreadIds.length > 0) {
+    yield* publishCachedThreadListChanges(accountId, changedThreadIds);
   }
 });
 

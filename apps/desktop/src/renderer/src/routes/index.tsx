@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 
 import MailThreadList from "@/components/mail/thread-list";
@@ -8,24 +8,47 @@ import { useHotkeyLayer } from "@/hotkeys";
 import { useMailboxReloadRevision } from "@/mail/mailbox-reload";
 import { parseThreadSelectionKey } from "@/mail/thread-selection";
 import { useMailIndexProgress } from "@/mail/use-mail-index-progress";
+import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
 import { useMailboxThreads } from "@/mail/use-mailbox-threads";
 import { useThreadActions } from "@/mail/use-thread-actions";
 import { getWindowApi } from "@/platform/desktop";
-import type { GmailIndexProgress } from "@/shared/ipc/mail";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import type { GmailIndexProgress, GmailMailbox } from "@/shared/ipc/mail";
 import {
-  useOpenThreadId,
+  useMailbox,
   useMailboxStore,
-  useSelectedAccountId,
+  useOpenThreadId,
   useShowUnread,
 } from "@/state/mailbox";
 
 export const Route = createFileRoute("/")({ component: HomeRoute });
 
-function getEmptyMessage(unreadOnly: boolean): string {
-  return unreadOnly
-    ? "No unread email."
-    : "No cached inbox messages yet. Email is fetched in the background.";
+interface MailboxEmptyState {
+  message: string;
+  title: string;
+}
+
+function getEmptyState(
+  mailbox: GmailMailbox,
+  unreadOnly: boolean
+): MailboxEmptyState {
+  if (mailbox === "spam") {
+    return unreadOnly
+      ? {
+          message: "You've caught up with the suspicious characters.",
+          title: "Nothing new to investigate",
+        }
+      : {
+          message: "The internet is behaving. For now.",
+          title: "Suspiciously quiet",
+        };
+  }
+
+  return {
+    message: unreadOnly
+      ? "No unread email."
+      : "No cached inbox messages yet. Email is fetched in the background.",
+    title: "No email",
+  };
 }
 
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -62,36 +85,33 @@ function getIndexingMessage(
 }
 
 function HomeRoute() {
-  const accounts = useGoogleAccounts();
+  const { accountIds, selectedAccountId } = useMailboxAccountScope();
+  const mailbox = useMailbox();
   const showUnread = useShowUnread();
-  const selectedAccountId = useSelectedAccountId();
   const reloadRevision = useMailboxReloadRevision();
   const openThreadId = useOpenThreadId();
   const closeThread = useMailboxStore((state) => state.closeThread);
   const windowApi = getWindowApi();
   const openThread = parseThreadSelectionKey(openThreadId ?? "");
-  const knownAccountId = accounts.some(
-    ({ email }) => email === selectedAccountId
-  )
-    ? selectedAccountId
-    : null;
-  const accountIds = useMemo(
-    () =>
-      knownAccountId === null
-        ? accounts.map(({ email }) => email)
-        : [knownAccountId],
-    [accounts, knownAccountId]
-  );
   const {
     hasNextPage,
     isInitialLoading,
     isLoadingNextPage,
     loadNextPage,
     threads,
-  } = useMailboxThreads(accountIds, showUnread, reloadRevision);
-  const { setLabel, toggleRead, trash } = useThreadActions();
+  } = useMailboxThreads({
+    accountIds,
+    mailbox,
+    reloadRevision,
+    unreadOnly: showUnread,
+  });
+  const { notSpam, setLabel, toggleRead, trash } = useThreadActions();
   const indexProgress = useMailIndexProgress();
-  const indexingMessage = getIndexingMessage(indexProgress, accountIds);
+  const emptyState = getEmptyState(mailbox, showUnread);
+  const indexingMessage =
+    mailbox === "inbox"
+      ? getIndexingMessage(indexProgress, accountIds)
+      : undefined;
   const popOutThread = useCallback(
     async (thread: { accountId: string; threadId: string }): Promise<void> => {
       if (windowApi === undefined) {
@@ -121,25 +141,30 @@ function HomeRoute() {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <MailThreadList
-        emptyMessage={getEmptyMessage(showUnread)}
+        emptyMessage={emptyState.message}
+        emptyTitle={emptyState.title}
         hasNextPage={hasNextPage}
         indexingMessage={indexingMessage}
         isInitialLoading={isInitialLoading}
         isLoadingNextPage={isLoadingNextPage}
         loadNextPage={loadNextPage}
+        mailbox={mailbox}
+        onNotSpamThread={mailbox === "spam" ? notSpam : undefined}
         onToggleThreadRead={toggleRead}
         onTrashThread={trash}
         reloadRevision={reloadRevision}
-        showAccount={knownAccountId === null}
+        showAccount={selectedAccountId === null}
         threads={threads}
       />
       {openThread === null ? null : (
         <div className="bg-background absolute inset-0 z-10 overflow-x-hidden overflow-y-auto">
           <MailThreadView
             accountId={openThread.accountId}
+            closeLabel={mailbox === "spam" ? "Back to spam" : undefined}
             key={`${openThread.accountId}:${openThread.threadId}`}
             onClose={closeThread}
             onPopOut={windowApi === undefined ? undefined : popOutThread}
+            onNotSpam={notSpam}
             onSetLabel={setLabel}
             onToggleRead={toggleRead}
             onTrash={trash}

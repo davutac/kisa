@@ -34,11 +34,17 @@ export const gmailThreads = sqliteTable(
     isInInbox: integer("is_in_inbox", { mode: "boolean" })
       .notNull()
       .default(false),
+    /** Indexed separately from Inbox so opening Spam never scans label JSON. */
+    isInSpam: integer("is_in_spam", { mode: "boolean" })
+      .notNull()
+      .default(false),
     isUnread: integer("is_unread", { mode: "boolean" }).notNull(),
     labels: text("labels", { mode: "json" }).$type<readonly string[]>(),
     latestAt: integer("latest_at").notNull(),
     messageCount: integer("message_count").notNull(),
     snippet: text("snippet").notNull(),
+    /** Local transition time used by the title-bar new-spam indicator. */
+    spamAddedAt: integer("spam_added_at"),
     subject: text("subject").notNull(),
     threadId: text("thread_id").notNull(),
     updatedAt: integer("updated_at").notNull(),
@@ -54,6 +60,12 @@ export const gmailThreads = sqliteTable(
      */
     index("gmail_threads_mailbox_idx").on(
       table.isInInbox,
+      sql`${table.latestAt} desc`,
+      table.accountEmail,
+      table.threadId
+    ),
+    index("gmail_threads_spam_mailbox_idx").on(
+      table.isInSpam,
       sql`${table.latestAt} desc`,
       table.accountEmail,
       table.threadId

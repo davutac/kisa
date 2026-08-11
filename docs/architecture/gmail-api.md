@@ -10,7 +10,7 @@ The Gmail API is broad enough to support a nearly complete desktop mail client. 
 | Search | Use most Gmail search syntax, including `from:`, `is:unread`, `after:`, and `has:attachment`. |
 | Message content | Retrieve headers, snippets, parsed MIME parts, HTML and plain-text bodies, or the original RFC-formatted message. |
 | Attachments | Discover attachments in MIME parts and download their contents on demand. |
-| Mail actions | Mark conversations read or unread, archive them, move them to or from trash, star them, and apply or remove supported labels. |
+| Mail actions | Mark conversations read or unread, archive them, recover them from spam, move them to or from trash, star them, and apply or remove supported labels. |
 | Bulk actions | Modify labels on multiple messages or permanently delete multiple messages when the granted scope permits it. |
 | Compose | Create, replace, delete, and send Gmail-hosted drafts. |
 | Send | Send new messages, replies, forwards, HTML mail, and attachments as MIME messages. |
@@ -37,6 +37,8 @@ Google recommends poll-based synchronization for installed applications. Gmail a
 ## Gmail semantics that affect Kisa
 
 - Gmail uses labels rather than conventional folders. Archiving removes `INBOX`, while marking unread adds `UNREAD`.
+- Spam is a separate cached mailbox. Existing accounts seed it one bounded page per normal sync and persist the page cursor; Gmail history owns later transitions. Spam stays out of Inbox, default search, unread badges, and OS notifications. The title-bar dot tracks threads newly moved into Spam since that account's Spam mailbox was last opened, so clearing the dot never changes read state.
+- **Not spam** performs one Gmail label mutation that removes `SPAM` and adds `INBOX`, preserves `UNREAD`, updates every cached message and the thread projection in one account-scoped transaction, and publishes the normal list event.
 - Labels belong to messages. Messages within one thread can have different label sets, and a thread's labels represent their union.
 - The thread label picker exposes only labels whose Gmail catalog type is `user`, applies changes optimistically, and rolls back on failure.
 - Rendered label collections place system labels first and user labels second, sorting each group by display name.

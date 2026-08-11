@@ -116,6 +116,11 @@ describe(toSearchLabelSuggestions, () => {
         name: "CATEGORY_PERSONAL",
       },
       {
+        accountIds: ["one@example.com"],
+        isSystem: true,
+        name: "SPAM",
+      },
+      {
         accountIds: ["two@example.com"],
         isSystem: false,
         name: "Personal",

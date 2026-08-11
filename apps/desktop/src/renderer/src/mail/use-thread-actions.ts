@@ -13,6 +13,10 @@ export interface ThreadActionTarget {
 type OnThreadActionSuccess = () => void;
 
 export interface ThreadActions {
+  notSpam: (
+    thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
+    onSuccess?: OnThreadActionSuccess
+  ) => void;
   setLabel: (
     thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
     label: { readonly applied: boolean; readonly labelId: string }
@@ -99,6 +103,28 @@ export const useThreadActions = (): ThreadActions => {
     [mailApi, runThreadAction]
   );
 
+  const notSpam = useCallback(
+    (
+      thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
+      onSuccess?: OnThreadActionSuccess
+    ): void => {
+      if (mailApi === undefined) {
+        return;
+      }
+
+      void runThreadAction(
+        () =>
+          mailApi.markThreadNotSpam({
+            accountId: thread.accountId,
+            threadId: thread.threadId,
+          }),
+        "Could not mark email as not spam",
+        onSuccess
+      );
+    },
+    [mailApi, runThreadAction]
+  );
+
   const trash = useCallback(
     (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
       if (mailApi === undefined) {
@@ -118,5 +144,5 @@ export const useThreadActions = (): ThreadActions => {
     [mailApi, runThreadAction]
   );
 
-  return { setLabel, toggleRead, trash };
+  return { notSpam, setLabel, toggleRead, trash };
 };

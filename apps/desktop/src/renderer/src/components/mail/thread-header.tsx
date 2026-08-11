@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon,
+  InboxIcon,
   MailIcon,
   MailOpenIcon,
   SquareArrowOutUpRightIcon,
@@ -17,9 +18,11 @@ import {
 import { cn } from "@/lib/utils";
 
 interface MailThreadHeaderProps {
+  isSpam: boolean;
   isUnread: boolean;
   latestAt?: number;
   onClose: () => void;
+  onNotSpam: () => void;
   onPopOut?: () => void;
   onToggleRead: () => void;
   onTrash: () => void;
@@ -28,9 +31,11 @@ interface MailThreadHeaderProps {
 }
 
 const MailThreadHeader = ({
+  isSpam,
   isUnread,
   latestAt,
   onClose,
+  onNotSpam,
   onPopOut,
   onToggleRead,
   onTrash,
@@ -78,6 +83,18 @@ const MailThreadHeader = ({
           {subject}
         </h1>
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          {isSpam ? (
+            <Button
+              aria-label="Not spam"
+              onClick={onNotSpam}
+              size="icon"
+              title="Not spam"
+              type="button"
+              variant="ghost"
+            >
+              <InboxIcon />
+            </Button>
+          ) : null}
           <Button
             aria-keyshortcuts={getHotkeyAriaLabel("thread.toggleThreadRead")}
             aria-label={toggleReadLabel}

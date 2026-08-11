@@ -48,6 +48,7 @@ const GMAIL_SCOPES = new Set<string>([
 const storeError = (message: string) => new GmailStoreError({ message });
 
 const INBOX_LABEL_ID = LabelId.make("INBOX");
+const SPAM_LABEL_ID = LabelId.make("SPAM");
 
 const setLabelMembership = (
   labels: readonly string[],
@@ -60,6 +61,15 @@ const setLabelMembership = (
 
   return labels.filter((candidate) => candidate !== label);
 };
+
+const withoutSpamAndWithInbox = (
+  labels: readonly string[]
+): readonly string[] => [
+  ...labels.filter(
+    (label) => label !== SPAM_LABEL_ID && label !== INBOX_LABEL_ID
+  ),
+  INBOX_LABEL_ID,
+];
 
 /**
  * Bumped when the stored representation of a body changes, so rows written by
@@ -290,6 +300,83 @@ export const GmailStoreLive = Layer.succeed(
       }
     ),
 
+    markThreadNotSpam: (accountId, threadId) =>
+      withDatabase(
+        "Could not recover Gmail thread from spam",
+        async (database) => {
+          const now = Date.now();
+
+          await database.transaction(async (transaction) => {
+            const messages = await transaction
+              .select({
+                labelIds: gmailMessages.labelIds,
+                messageId: gmailMessages.messageId,
+              })
+              .from(gmailMessages)
+              .where(
+                and(
+                  eq(gmailMessages.accountEmail, accountId),
+                  eq(gmailMessages.threadId, threadId)
+                )
+              )
+              .all();
+
+            for (const message of messages) {
+              // Gmail applies this system-label move to every message.
+              // oxlint-disable-next-line eslint/no-await-in-loop
+              await transaction
+                .update(gmailMessages)
+                .set({
+                  labelIds: withoutSpamAndWithInbox(message.labelIds ?? []),
+                  updatedAt: now,
+                })
+                .where(
+                  and(
+                    eq(gmailMessages.accountEmail, accountId),
+                    eq(gmailMessages.messageId, message.messageId)
+                  )
+                )
+                .run();
+            }
+
+            const thread = await transaction
+              .select({ labels: gmailThreads.labels })
+              .from(gmailThreads)
+              .where(
+                and(
+                  eq(gmailThreads.accountEmail, accountId),
+                  eq(gmailThreads.threadId, threadId)
+                )
+              )
+              .get();
+
+            if (thread === undefined) {
+              return;
+            }
+
+            await transaction
+              .update(gmailThreads)
+              .set({
+                isInInbox: true,
+                isInSpam: false,
+                labels: withoutSpamAndWithInbox(thread.labels ?? []),
+                spamAddedAt: null,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(gmailThreads.accountEmail, accountId),
+                  eq(gmailThreads.threadId, threadId)
+                )
+              )
+              .run();
+          });
+
+          // Rebuild lazily so the recovered sender can re-enter completion.
+          forgetCachedCorrespondents(accountId);
+        }
+      ),
+
     removeThreads: (accountId, threadIds) =>
       withDatabase("Could not remove Gmail threads", async (database) => {
         if (threadIds.length === 0) {
@@ -363,6 +450,7 @@ export const GmailStoreLive = Layer.succeed(
     saveThread: (accountId, thread) =>
       withDatabase("Could not save Gmail thread", async (database) => {
         const now = Date.now();
+        const isInSpam = thread.labelIds.includes(SPAM_LABEL_ID);
         const [firstMessage] = thread.messages;
         let latestMessage = firstMessage;
 
@@ -417,6 +505,7 @@ export const GmailStoreLive = Layer.succeed(
               from: latestMessage?.from.address ?? "Unknown sender",
               hasAttachments: attachments.length > 0,
               isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+              isInSpam,
               isUnread: thread.messages.some((message) =>
                 message.labelIds.includes(LabelId.make("UNREAD"))
               ),
@@ -425,6 +514,9 @@ export const GmailStoreLive = Layer.succeed(
               ),
               latestAt: Number(latestMessage?.sentAt ?? 0),
               messageCount: thread.messages.length,
+              spamAddedAt: isInSpam
+                ? sql`coalesce(${gmailThreads.spamAddedAt}, ${now})`
+                : null,
               subject: thread.messages[0]?.subject ?? "(No subject)",
               updatedAt: now,
             })
@@ -437,7 +529,11 @@ export const GmailStoreLive = Layer.succeed(
             .run();
         });
 
-        rememberCorrespondentMessages(accountId, thread.messages);
+        if (isInSpam) {
+          forgetCachedCorrespondents(accountId);
+        } else {
+          rememberCorrespondentMessages(accountId, thread.messages);
+        }
       }),
 
     setThreadLabel: (accountId, threadId, label, applied) =>
@@ -598,6 +694,7 @@ export const GmailStoreLive = Layer.succeed(
         // makes the indexer's per-page checkpoint atomic.
         await database.transaction(async (transaction) => {
           for (const thread of threads) {
+            const isInSpam = thread.labelIds.includes(SPAM_LABEL_ID);
             const values = {
               accountEmail: accountId,
               attachments: thread.attachments.map((attachment) => ({
@@ -614,6 +711,7 @@ export const GmailStoreLive = Layer.succeed(
               // mapping falls back to the id for unknown labels, so a stale
               // catalog would otherwise be able to change what counts as inbox.
               isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+              isInSpam,
               isUnread: thread.hasUnread,
               labels: thread.labelIds.map(
                 (labelId) => namesById.get(labelId) ?? labelId
@@ -621,6 +719,7 @@ export const GmailStoreLive = Layer.succeed(
               latestAt: Number(thread.latestAt),
               messageCount: thread.messageCount,
               snippet: thread.snippet,
+              spamAddedAt: isInSpam ? now : null,
               subject: thread.subject,
               threadId: thread.id,
               updatedAt: now,
@@ -632,7 +731,17 @@ export const GmailStoreLive = Layer.succeed(
               .insert(gmailThreads)
               .values(values)
               .onConflictDoUpdate({
-                set: values,
+                set: {
+                  ...values,
+                  // Preserve the first local SPAM transition across later
+                  // history refreshes; leaving Spam clears it, so a future
+                  // transition receives a fresh timestamp.
+                  spamAddedAt: sql`CASE
+                    WHEN excluded.is_in_spam = 0 THEN NULL
+                    WHEN ${gmailThreads.isInSpam} = 1 THEN ${gmailThreads.spamAddedAt}
+                    ELSE excluded.spam_added_at
+                  END`,
+                },
                 target: [gmailThreads.accountEmail, gmailThreads.threadId],
               })
               .run();
@@ -656,10 +765,14 @@ export const GmailStoreLive = Layer.succeed(
           }
         });
 
-        rememberCorrespondentMessages(
-          accountId,
-          details.flatMap(({ messages }) => messages)
-        );
+        if (threads.some((thread) => thread.labelIds.includes(SPAM_LABEL_ID))) {
+          forgetCachedCorrespondents(accountId);
+        } else {
+          rememberCorrespondentMessages(
+            accountId,
+            details.flatMap(({ messages }) => messages)
+          );
+        }
       }),
   })
 );

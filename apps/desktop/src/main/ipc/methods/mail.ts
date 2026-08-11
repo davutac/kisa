@@ -6,6 +6,7 @@ import {
   ATTACHMENT_PREVIEW_LOAD_CHANNEL,
   ATTACHMENT_PREVIEW_SAVE_CHANNEL,
   MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
@@ -14,6 +15,8 @@ import {
   MAIL_LIST_STASHED_DRAFTS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
+  MAIL_MARK_SPAM_SEEN_CHANNEL,
+  MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SAVE_DRAFT_CHANNEL,
@@ -43,6 +46,8 @@ import {
   GmailSearchResultsReply,
   GmailSenderSuggestionRequest,
   GmailSenderSuggestionsReply,
+  GmailSpamStatusReply,
+  GmailSpamStatusRequest,
   GmailSyncStatus,
   GmailThreadLabelRequest,
   GmailThreadMessageSendReply,
@@ -80,9 +85,12 @@ import {
 } from "../../mail/mail-search";
 import {
   getMailSyncStatus,
+  getSpamStatus as loadSpamStatus,
   listCachedThreadPage,
   listGmailLabelCatalog,
   loadFullThread,
+  markSpamSeen as recordSpamSeen,
+  markThreadNotSpam as recoverThreadFromSpam,
   sendNewMessage,
   sendThreadMessage,
   setThreadLabel,
@@ -167,6 +175,22 @@ export const getSyncStatus = makeIpcMethod({
   handler: () => Effect.sync(getMailSyncStatus),
   payload: Schema.Void,
   result: GmailSyncStatus,
+});
+
+export const getSpamStatus = makeIpcMethod({
+  channel: MAIL_GET_SPAM_STATUS_CHANNEL,
+  handler: (request) =>
+    toIpcReply(loadSpamStatus(request), "Could not check spam"),
+  payload: GmailSpamStatusRequest,
+  result: GmailSpamStatusReply,
+});
+
+export const markSpamSeen = makeIpcMethod({
+  channel: MAIL_MARK_SPAM_SEEN_CHANNEL,
+  handler: (request) =>
+    toIpcReply(recordSpamSeen(request), "Could not update spam"),
+  payload: GmailSpamStatusRequest,
+  result: GmailSpamStatusReply,
 });
 
 export const getIndexProgress = makeIpcMethod({
@@ -298,6 +322,17 @@ export const trash = makeIpcMethod({
   channel: MAIL_TRASH_THREAD_CHANNEL,
   handler: (request) =>
     toIpcReply(trashThread(request), "Could not move email to trash"),
+  payload: GmailThreadRequest,
+  result: GmailThreadMutationReply,
+});
+
+export const markThreadNotSpam = makeIpcMethod({
+  channel: MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
+  handler: (request) =>
+    toIpcReply(
+      recoverThreadFromSpam(request),
+      "Could not mark email as not spam"
+    ),
   payload: GmailThreadRequest,
   result: GmailThreadMutationReply,
 });

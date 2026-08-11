@@ -93,6 +93,11 @@ const createLegacyDatabase = () => {
       updated_at integer NOT NULL,
       PRIMARY KEY (account_email, thread_id)
     );
+    CREATE TABLE gmail_sync_state (
+      account_email text PRIMARY KEY NOT NULL,
+      history_id text NOT NULL,
+      updated_at integer NOT NULL
+    );
     INSERT INTO gmail_threads (
       account_email,
       "from",
@@ -106,7 +111,8 @@ const createLegacyDatabase = () => {
       updated_at
     ) VALUES
       ('user@example.com', 'a@example.com', 0, '["INBOX","IMPORTANT"]', 20, 1, 's', 'Inbox thread', 't-inbox', 1),
-      ('user@example.com', 'b@example.com', 0, '["ARCHIVE"]', 10, 1, 's', 'Archived thread', 't-archived', 1);
+      ('user@example.com', 'b@example.com', 0, '["ARCHIVE"]', 10, 1, 's', 'Archived thread', 't-archived', 1),
+      ('user@example.com', 'c@example.com', 1, '["SPAM","UNREAD"]', 30, 1, 's', 'Spam thread', 't-spam', 1);
     CREATE TABLE gmail_sender_brands (
       authority_url text,
       domain text PRIMARY KEY NOT NULL,
@@ -188,7 +194,31 @@ describe("database migrations", () => {
       ).toStrictEqual([
         { is_in_inbox: 0, thread_id: "t-archived" },
         { is_in_inbox: 1, thread_id: "t-inbox" },
+        { is_in_inbox: 0, thread_id: "t-spam" },
       ]);
+    } finally {
+      connection.close();
+    }
+  });
+
+  it("derives the Spam mailbox state for previously cached threads", () => {
+    const connection = createLegacyDatabase();
+
+    try {
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      expect(
+        connection
+          .prepare(
+            `SELECT is_in_spam, spam_added_at
+             FROM gmail_threads
+             WHERE thread_id = 't-spam'`
+          )
+          .get()
+      ).toStrictEqual({ is_in_spam: 1, spam_added_at: 1 });
     } finally {
       connection.close();
     }

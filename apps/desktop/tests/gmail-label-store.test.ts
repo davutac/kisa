@@ -16,11 +16,21 @@ import {
   GmailLabel,
   LabelColor,
   LabelId,
+  MessageId,
   ThreadId,
+  ThreadSummary,
 } from "@repo/gmail/models";
 import { GmailStore } from "@repo/gmail/store";
 import { Effect } from "effect";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import type { getGoogleAccessToken } from "../src/main/auth/auth";
 import type { withDatabaseClient } from "../src/main/database";
@@ -79,6 +89,8 @@ describe("Gmail label store", () => {
     connection.prepare("DELETE FROM gmail_threads").run();
     connection.prepare("DELETE FROM gmail_labels").run();
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   afterAll(() => connection.close());
 
@@ -259,5 +271,158 @@ describe("Gmail label store", () => {
         )
         .get(accountId)
     ).toStrictEqual({ label_ids: '["INBOX","Label_1"]' });
+  });
+
+  it("moves a Spam thread and all cached messages back to Inbox", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const otherAccountId = AccountId.make("other@example.com");
+    const threadId = ThreadId.make("spam-thread");
+    const insertThread = connection.prepare(
+      `INSERT INTO gmail_threads (
+        account_email, "from", is_in_inbox, is_in_spam, is_unread, labels,
+        latest_at, message_count, snippet, spam_added_at, subject, thread_id,
+        updated_at
+      ) VALUES (?, 'sender@example.com', 0, 1, 1, '["SPAM","UNREAD"]',
+        1, ?, '', 1, 'Subject', ?, 1)`
+    );
+    const insertMessage = connection.prepare(
+      `INSERT INTO gmail_messages (
+        account_email, from_address, internal_date, label_ids, message_id,
+        schema_version, subject, thread_id, updated_at
+      ) VALUES (?, 'sender@example.com', 1, '["SPAM","UNREAD"]',
+        ?, 1, 'Subject', ?, 1)`
+    );
+
+    insertThread.run(accountId, 2, threadId);
+    insertThread.run(otherAccountId, 1, threadId);
+    insertMessage.run(accountId, "spam-message-1", threadId);
+    insertMessage.run(accountId, "spam-message-2", threadId);
+    insertMessage.run(otherAccountId, "other-message", threadId);
+
+    await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) => store.markThreadNotSpam(accountId, threadId)),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
+    expect(
+      connection
+        .prepare(
+          `SELECT is_in_inbox, is_in_spam, labels, spam_added_at
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = ?`
+        )
+        .get(accountId, threadId)
+    ).toStrictEqual({
+      is_in_inbox: 1,
+      is_in_spam: 0,
+      labels: '["UNREAD","INBOX"]',
+      spam_added_at: null,
+    });
+    expect(
+      connection
+        .prepare(
+          `SELECT label_ids, message_id
+           FROM gmail_messages
+           WHERE account_email = ? AND thread_id = ?
+           ORDER BY message_id ASC`
+        )
+        .all(accountId, threadId)
+    ).toStrictEqual([
+      { label_ids: '["UNREAD","INBOX"]', message_id: "spam-message-1" },
+      { label_ids: '["UNREAD","INBOX"]', message_id: "spam-message-2" },
+    ]);
+    expect(
+      connection
+        .prepare(
+          `SELECT is_in_inbox, is_in_spam, labels
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = ?`
+        )
+        .get(otherAccountId, threadId)
+    ).toStrictEqual({
+      is_in_inbox: 0,
+      is_in_spam: 1,
+      labels: '["SPAM","UNREAD"]',
+    });
+    expect(
+      connection
+        .prepare(
+          `SELECT label_ids
+           FROM gmail_messages
+           WHERE account_email = ? AND message_id = 'other-message'`
+        )
+        .get(otherAccountId)
+    ).toStrictEqual({ label_ids: '["SPAM","UNREAD"]' });
+  });
+
+  it("timestamps only transitions into Spam", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const threadId = ThreadId.make("spam-transition");
+    const now = vi.spyOn(Date, "now");
+    const upsert = (labels: readonly LabelId[]) =>
+      Effect.runPromise(
+        GmailStore.pipe(
+          Effect.flatMap((store) =>
+            store.upsertThreadDetails(
+              accountId,
+              [
+                new ThreadSummary({
+                  attachments: [],
+                  hasAttachments: false,
+                  hasUnread: true,
+                  id: threadId,
+                  labelIds: labels,
+                  latestAt: "1000",
+                  latestMessageId: MessageId.make("message-1"),
+                  messageCount: 1,
+                  participants: [],
+                  snippet: "Snippet",
+                  subject: "Subject",
+                }),
+              ],
+              []
+            )
+          ),
+          Effect.provide(GmailStoreLive)
+        )
+      );
+    const readTransition = () =>
+      connection
+        .prepare(
+          `SELECT is_in_spam, spam_added_at
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = ?`
+        )
+        .get(accountId, threadId);
+
+    now.mockReturnValue(100);
+    await upsert([LabelId.make("SPAM"), LabelId.make("UNREAD")]);
+    expect(readTransition()).toStrictEqual({
+      is_in_spam: 1,
+      spam_added_at: 100,
+    });
+
+    now.mockReturnValue(200);
+    await upsert([LabelId.make("SPAM"), LabelId.make("UNREAD")]);
+    expect(readTransition()).toStrictEqual({
+      is_in_spam: 1,
+      spam_added_at: 100,
+    });
+
+    now.mockReturnValue(300);
+    await upsert([LabelId.make("INBOX"), LabelId.make("UNREAD")]);
+    expect(readTransition()).toStrictEqual({
+      is_in_spam: 0,
+      spam_added_at: null,
+    });
+
+    now.mockReturnValue(400);
+    await upsert([LabelId.make("SPAM"), LabelId.make("UNREAD")]);
+    expect(readTransition()).toStrictEqual({
+      is_in_spam: 1,
+      spam_added_at: 400,
+    });
   });
 });

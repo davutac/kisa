@@ -71,6 +71,10 @@ interface TestState {
     readonly isRead: boolean;
     readonly threadId: ThreadId;
   }[];
+  readonly spamStateChanges: {
+    readonly accountId: AccountId;
+    readonly threadId: ThreadId;
+  }[];
   readonly threadLabelChanges: {
     readonly accountId: AccountId;
     readonly applied: boolean;
@@ -107,6 +111,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     readStateChanges: [],
     removedThreads: [],
     sendCalls: 0,
+    spamStateChanges: [],
     threadLabelChanges: [],
   };
 
@@ -126,6 +131,10 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     listAccounts: Effect.sync(() =>
       [...state.authorizations.values()].map(({ account }) => account)
     ),
+    markThreadNotSpam: (accountId, threadId) =>
+      Effect.sync(() => {
+        state.spamStateChanges.push({ accountId, threadId });
+      }),
     removeThreads: (_accountId, threadIds) =>
       Effect.sync(() => {
         state.removedThreads.push(...threadIds);
@@ -539,6 +548,35 @@ describe(Gmail, () => {
         { accountId: account.id, isRead: false, threadId: request.threadId },
       ]);
       expect(state.removedThreads).toStrictEqual([request.threadId]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("moves a thread from Spam to Inbox", () => {
+    const { layer, state } = createTestLayer();
+
+    return Effect.gen(function* recoversSpam() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount({
+        accessToken: "access-a",
+        scopes: [GMAIL_MODIFY_SCOPE],
+      });
+      const request = {
+        accountId: account.id,
+        threadId: ThreadId.make("thread-1"),
+      };
+
+      yield* gmail.markThreadNotSpam(request);
+
+      expect(state.labelMutationCalls).toStrictEqual([
+        {
+          addLabelIds: ["INBOX"],
+          removeLabelIds: ["SPAM"],
+          threadId: request.threadId,
+        },
+      ]);
+      expect(state.spamStateChanges).toStrictEqual([
+        { accountId: account.id, threadId: request.threadId },
+      ]);
     }).pipe(Effect.provide(layer));
   });
 

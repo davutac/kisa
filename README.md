@@ -11,6 +11,7 @@ Kisa caches and indexes mail locally for fast search, handles multiple Google ac
 I started Kisa when Notion announced that [Notion Mail will shut down on September 22, 2026](https://www.notion.com/help/notion-mail-inbox-is-going-away-what-to-do-next). Rather than return to Gmail in a browser, I began building the fast, keyboard-first client I wanted.
 
 - **Mailbox-scale performance.** Local caching, full-text search, virtualized lists, and resumable indexing keep large mailboxes responsive.
+- **Recoverable spam.** A dedicated Spam mailbox surfaces newly classified mail without adding notifications or Inbox noise, and **Not spam** returns false positives to Inbox.
 - **Keyboard-first workflow.** Switch accounts, search, compose, and navigate without the mouse.
 - **Privacy by default.** OAuth credentials stay in the main process, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
 - **Built for multiple accounts.** Caches, indexes, sync state, and mutations stay account-scoped, with an All Accounts view across them.

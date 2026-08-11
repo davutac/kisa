@@ -8,5 +8,6 @@ export const accountSettings = sqliteTable("account_settings", {
   showSystemLabels: integer("show_system_labels", { mode: "boolean" })
     .notNull()
     .default(true),
+  spamLastCheckedAt: integer("spam_last_checked_at").notNull().default(0),
   updatedAt: integer("updated_at").notNull(),
 });

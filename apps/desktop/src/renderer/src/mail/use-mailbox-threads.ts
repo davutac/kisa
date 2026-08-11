@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getMailApi } from "@/platform/desktop";
-import type { GmailThreadCursor, GmailThreadSummary } from "@/shared/ipc/mail";
+import type {
+  GmailMailbox,
+  GmailThreadCursor,
+  GmailThreadSummary,
+} from "@/shared/ipc/mail";
 
 import type { MailboxThreadsSnapshot } from "./mailbox-cache";
 import {
@@ -27,20 +31,28 @@ interface MailboxThreadsState {
   threads: readonly GmailThreadSummary[];
 }
 
+interface MailboxThreadsOptions {
+  accountIds: readonly string[];
+  mailbox?: GmailMailbox;
+  reloadRevision?: number;
+  unreadOnly?: boolean;
+}
+
 type MailboxThreadsResult = MailboxThreadsSnapshot;
 
 /**
- * The mailbox list is the cached inbox and nothing else. Searching lives in the
- * palette, over the local index — this hook never queries Gmail, so a mailbox
- * is one keyset walk through rows that are already on disk.
+ * Mailbox lists come only from the local cache. Searching lives in the palette,
+ * over the local index — this hook never queries Gmail, so each mailbox is one
+ * keyset walk through rows that are already on disk.
  */
-export const useMailboxThreads = (
-  accountIds: readonly string[],
+export const useMailboxThreads = ({
+  accountIds,
+  mailbox = "inbox",
+  reloadRevision = 0,
   unreadOnly = false,
-  reloadRevision = 0
-): MailboxThreadsState => {
+}: MailboxThreadsOptions): MailboxThreadsState => {
   const mailApi = getMailApi();
-  const scopeKey = getMailboxScopeKey(accountIds, unreadOnly);
+  const scopeKey = getMailboxScopeKey(accountIds, unreadOnly, mailbox);
   const createStartingResult = (): MailboxThreadsResult =>
     getMailboxThreadsSnapshot(scopeKey) ?? {
       cacheCursor: null,
@@ -92,7 +104,7 @@ export const useMailboxThreads = (
     let isActive = true;
     const loadCachedFirstPage = async (merge: boolean): Promise<void> => {
       const reply = await mailApi.listCachedThreadPage(
-        createCachedThreadPageRequest(accountIds, unreadOnly)
+        createCachedThreadPageRequest(accountIds, unreadOnly, mailbox)
       );
 
       if (!(isActive && generationRef.current === generation)) {
@@ -160,13 +172,14 @@ export const useMailboxThreads = (
       isActive = false;
       unsubscribeThreadList();
     };
-  }, [accountIds, mailApi, reloadRevision, scopeKey, unreadOnly]);
+  }, [accountIds, mailApi, mailbox, reloadRevision, scopeKey, unreadOnly]);
 
   const isCurrentScope = result.scopeKey === scopeKey;
   const scopedThreads = filterThreadsByScope(
     result.threads,
     accountIds,
-    unreadOnly
+    unreadOnly,
+    mailbox
   );
   const currentResult = {
     ...result,
@@ -215,6 +228,7 @@ export const useMailboxThreads = (
       createCachedThreadPageRequest(
         accountIds,
         unreadOnly,
+        mailbox,
         tailThread === undefined ? cacheCursor : toThreadCursor(tailThread)
       )
     );
@@ -242,7 +256,7 @@ export const useMailboxThreads = (
         : current
     );
     return reply.ok;
-  }, [accountIds, mailApi, scopeKey, unreadOnly]);
+  }, [accountIds, mailApi, mailbox, scopeKey, unreadOnly]);
 
   return {
     hasNextPage: currentResult.cacheCursor !== null,

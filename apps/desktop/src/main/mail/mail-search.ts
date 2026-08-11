@@ -200,8 +200,14 @@ const toThreadConditions = (
     }
 
     if (filter.field === "label") {
-      if (filter.value.toLowerCase() === "inbox") {
+      const value = filter.value.toLowerCase();
+
+      if (value === "inbox") {
         return [sql`t.is_in_inbox = 1`];
+      }
+
+      if (value === "spam") {
+        return [sql`t.is_in_spam = 1`];
       }
 
       return [
@@ -328,12 +334,31 @@ const toThreadSearchQuery = (
   }
 
   const filters = request.filters ?? [];
-  const accounts = toAccountList(request.accountIds);
-  const matched = toMatchedThreadsCte(
-    accounts,
-    toFtsMatchQuery(request.text ?? ""),
-    toMessageConditions(filters)
+  const explicitlySearchesSpam = filters.some(
+    (filter) =>
+      filter.field === "label" && filter.value.toLowerCase() === "spam"
   );
+  const accounts = toAccountList(request.accountIds);
+  const matchQuery = toFtsMatchQuery(request.text ?? "");
+  const messageConditions = toMessageConditions(filters);
+  const needsMatchedMessages =
+    matchQuery !== undefined || messageConditions.length > 0;
+  const messageScopeConditions =
+    explicitlySearchesSpam || !needsMatchedMessages
+      ? []
+      : [
+          sql`EXISTS (
+          SELECT 1
+          FROM gmail_threads message_thread
+          WHERE message_thread.account_email = m.account_email
+            AND message_thread.thread_id = m.thread_id
+            AND message_thread.is_in_spam = 0
+        )`,
+        ];
+  const matched = toMatchedThreadsCte(accounts, matchQuery, [
+    ...messageScopeConditions,
+    ...messageConditions,
+  ]);
   // Words are a question about relevance, answered by rank against a mild age
   // penalty; filters alone are a question about a mailbox, answered by date.
   const order =
@@ -354,7 +379,10 @@ const toThreadSearchQuery = (
           : sql`JOIN matched ON matched.account_email = t.account_email
                 AND matched.thread_id = t.thread_id`
       }
-      WHERE t.account_email IN (${accounts})${andAll(toThreadConditions(filters))}
+      WHERE t.account_email IN (${accounts})${andAll([
+        ...(explicitlySearchesSpam ? [] : [sql`t.is_in_spam = 0`]),
+        ...toThreadConditions(filters),
+      ])}
       ORDER BY ${order}, t.account_email ASC, t.thread_id ASC
       LIMIT ${limit + 1}
     `,

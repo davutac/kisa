@@ -36,6 +36,10 @@ export const MAIL_LIST_SENDERS_CHANNEL = "desktop:mail:list-senders";
 export const MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL =
   "desktop:mail:list-trusted-image-senders";
 export const MAIL_LOAD_THREAD_CHANNEL = "desktop:mail:load-thread";
+export const MAIL_GET_SPAM_STATUS_CHANNEL = "desktop:mail:get-spam-status";
+export const MAIL_MARK_SPAM_SEEN_CHANNEL = "desktop:mail:mark-spam-seen";
+export const MAIL_MARK_THREAD_NOT_SPAM_CHANNEL =
+  "desktop:mail:mark-thread-not-spam";
 export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
 export const MAIL_SEND_MESSAGE_CHANNEL = "desktop:mail:send-message";
 export const MAIL_SEND_THREAD_MESSAGE_CHANNEL =

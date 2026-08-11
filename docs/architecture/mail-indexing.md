@@ -13,7 +13,7 @@ Design for indexing an entire Gmail account on connect: every thread outside spa
 ## Non-goals
 
 - Attachment bytes. Only attachment metadata is indexed; bodies of attachments stay on demand.
-- Spam, trash, and chats.
+- Full historical indexing of spam, trash, and chats. Spam has its own smaller, resumable cache seed for the dedicated Spam mailbox; it is not part of the all-mail backfill or default search.
 - Server-side search. Local FTS replaces the `q=` round trip for indexed mail; Gmail search stays as the fallback for anything not yet indexed.
 
 ## Where the current code stands
@@ -196,7 +196,7 @@ WAL, bounded page transactions, and yielding between pages still matter for writ
 
 ### Search scope
 
-The search palette opens with a visible `label:inbox` pill, plus an `account:` pill when one account is selected. Search therefore inherits the mailbox scope by default; removing the Inbox pill widens it to every indexed thread for the selected accounts. `label:` matches the resolved thread label name case-insensitively, including Gmail system labels and user labels. Its completions come from the selected account's cached catalog, or merge every connected account's catalog when no account pill is present. Merged rows retain their owning account emails, and Gmail-owned labels use a distinct system icon and friendly display name while preserving the raw label id as the filter value. Spam, Trash, and Chats are omitted because those messages are not indexed.
+The search palette opens with a visible `label:inbox` pill, plus an `account:` pill when one account is selected. Search therefore inherits the mailbox scope by default; removing the Inbox pill widens it to every indexed non-Spam thread for the selected accounts. `label:` matches the resolved thread label name case-insensitively, including Gmail system labels and user labels. Its completions come from the selected account's cached catalog, or merge every connected account's catalog when no account pill is present. Merged rows retain their owning account emails, and Gmail-owned labels use a distinct system icon and friendly display name while preserving the raw label id as the filter value. Spam is searchable only with an explicit `label:spam` filter; Trash and Chats remain omitted because those messages are not indexed.
 
 ### Compose address completion
 

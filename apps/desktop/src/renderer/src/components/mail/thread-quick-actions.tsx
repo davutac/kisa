@@ -1,4 +1,4 @@
-import { MailIcon, MailOpenIcon, Trash2Icon } from "lucide-react";
+import { InboxIcon, MailIcon, MailOpenIcon, Trash2Icon } from "lucide-react";
 import { m, useReducedMotion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ interface MailThreadQuickActionsProps {
   hotkeysEnabled: boolean;
   isRevealed: boolean;
   isUnread: boolean;
+  onNotSpam?: () => void;
   onToggleRead?: () => void;
   onTrash?: () => void;
 }
@@ -39,6 +40,7 @@ const MailThreadQuickActions = ({
   hotkeysEnabled,
   isRevealed,
   isUnread,
+  onNotSpam,
   onToggleRead,
   onTrash,
 }: MailThreadQuickActionsProps) => {
@@ -84,24 +86,40 @@ const MailThreadQuickActions = ({
       >
         {isUnread ? <MailOpenIcon /> : <MailIcon />}
       </Button>
-      <Button
-        aria-keyshortcuts={
-          hotkeysEnabled ? getHotkeyAriaLabel("mailbox.trashThread") : undefined
-        }
-        aria-label="Move to trash"
-        className={`${quickActionClassName} hover:bg-destructive/10 hover:text-destructive`}
-        onClick={onTrash}
-        size="icon"
-        style={quickActionStyle}
-        title={
-          hotkeysEnabled
-            ? `${trashKeys.label} (${trashShortcutLabel})`
-            : trashKeys.label
-        }
-        variant="ghost"
-      >
-        <Trash2Icon />
-      </Button>
+      {onNotSpam === undefined ? (
+        <Button
+          aria-keyshortcuts={
+            hotkeysEnabled
+              ? getHotkeyAriaLabel("mailbox.trashThread")
+              : undefined
+          }
+          aria-label="Move to trash"
+          className={`${quickActionClassName} hover:bg-destructive/10 hover:text-destructive`}
+          onClick={onTrash}
+          size="icon"
+          style={quickActionStyle}
+          title={
+            hotkeysEnabled
+              ? `${trashKeys.label} (${trashShortcutLabel})`
+              : trashKeys.label
+          }
+          variant="ghost"
+        >
+          <Trash2Icon />
+        </Button>
+      ) : (
+        <Button
+          aria-label="Not spam"
+          className={`${quickActionClassName} hover:text-foreground`}
+          onClick={onNotSpam}
+          size="icon"
+          style={quickActionStyle}
+          title="Not spam"
+          variant="ghost"
+        >
+          <InboxIcon />
+        </Button>
+      )}
     </m.div>
   );
 };

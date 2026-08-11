@@ -65,15 +65,16 @@ describe("mail search", () => {
     );
     const insert = connection.prepare(`
       INSERT INTO gmail_threads (
-        account_email, "from", is_in_inbox, is_unread, labels, latest_at,
-        message_count, snippet, subject, thread_id, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        account_email, "from", is_in_inbox, is_in_spam, is_unread, labels,
+        latest_at, message_count, snippet, subject, thread_id, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     insert.run(
       "one@example.com",
       "inbox@example.com",
       1,
+      0,
       1,
       '["INBOX","Important"]',
       2,
@@ -87,6 +88,7 @@ describe("mail search", () => {
       "one@example.com",
       "archive@example.com",
       0,
+      0,
       1,
       '["Important"]',
       1,
@@ -96,7 +98,20 @@ describe("mail search", () => {
       "archived-thread",
       1
     );
-
+    insert.run(
+      "one@example.com",
+      "spam@example.com",
+      0,
+      1,
+      1,
+      '["SPAM","UNREAD"]',
+      3,
+      1,
+      "Spam thread",
+      "Spam thread",
+      "spam-thread",
+      3
+    );
     const insertMessage = connection.prepare(`
       INSERT INTO gmail_messages (
         account_email, bcc_addresses, cc_addresses, from_address, from_name,
@@ -147,6 +162,20 @@ describe("mail search", () => {
       '["bob@example.com"]',
       3
     );
+    insertMessage.run(
+      "one@example.com",
+      "[]",
+      "[]",
+      "spam@example.com",
+      "Spam Sender",
+      3,
+      "spam-message",
+      1,
+      "Spam needle",
+      "spam-thread",
+      "[]",
+      3
+    );
   });
 
   beforeEach(() => forgetCachedCorrespondents());
@@ -172,6 +201,36 @@ describe("mail search", () => {
     expect(important.threads.map(({ threadId }) => threadId)).toStrictEqual([
       "inbox-thread",
       "archived-thread",
+    ]);
+  });
+
+  it("keeps Spam out of default results unless explicitly requested", async () => {
+    const defaultResults = await runIndexedThreadSearchRemote(remoteDatabase, {
+      accountIds: ["one@example.com"],
+    });
+    const spam = await runIndexedThreadSearchRemote(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      filters: [{ field: "label", value: "spam" }],
+    });
+    const defaultText = await runIndexedThreadSearchRemote(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      text: "needle",
+    });
+    const spamText = await runIndexedThreadSearchRemote(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      filters: [{ field: "label", value: "spam" }],
+      text: "needle",
+    });
+
+    expect(
+      defaultResults.threads.map(({ threadId }) => threadId)
+    ).not.toContain("spam-thread");
+    expect(spam.threads.map(({ threadId }) => threadId)).toStrictEqual([
+      "spam-thread",
+    ]);
+    expect(defaultText.threads).toStrictEqual([]);
+    expect(spamText.threads.map(({ threadId }) => threadId)).toStrictEqual([
+      "spam-thread",
     ]);
   });
 

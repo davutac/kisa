@@ -11,6 +11,7 @@ import {
 import {
   discardDraft,
   getIndexProgress,
+  getSpamStatus,
   getSyncStatus,
   loadAttachmentPreview,
   listCachedPage,
@@ -21,6 +22,8 @@ import {
   loadThread,
   loadThreadDraft,
   openAttachmentPreview,
+  markSpamSeen,
+  markThreadNotSpam,
   searchThreads,
   saveAttachment,
   saveAttachmentPreview,
@@ -66,6 +69,8 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(deleteTemplate);
   yield* ipc.handle(getSyncStatus);
   yield* ipc.handle(getIndexProgress);
+  yield* ipc.handle(getSpamStatus);
+  yield* ipc.handle(markSpamSeen);
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);
   yield* ipc.handle(syncLabels);
@@ -85,6 +90,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(setLabel);
   yield* ipc.handle(setReadState);
   yield* ipc.handle(trash);
+  yield* ipc.handle(markThreadNotSpam);
   yield* ipc.handle(listImageSenders);
   yield* ipc.handle(trustImages);
   yield* ipc.handle(beginImport);

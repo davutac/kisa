@@ -60,6 +60,8 @@ describe(getRuntimeCapabilities, () => {
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
     getPathForFile: () => "/tmp/attachment.txt",
+    getSpamStatus: () =>
+      Promise.resolve({ data: { hasNewSpam: false }, ok: true as const }),
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
     getVersions: () => versions,
     importDatabase: () =>
@@ -90,6 +92,10 @@ describe(getRuntimeCapabilities, () => {
         ok: true as const,
       }),
     loadThreadDraft: () => Promise.resolve({ data: null, ok: true as const }),
+    markSpamSeen: () =>
+      Promise.resolve({ data: { hasNewSpam: false }, ok: true as const }),
+    markThreadNotSpam: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
     onAppClosing: () => () => {},
     onComposerTemplateChanged: () => () => {},
@@ -164,6 +170,7 @@ describe(getRuntimeCapabilities, () => {
       mail: {
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
+        getSpamStatus: desktopBridge.getSpamStatus,
         getSyncStatus: desktopBridge.getMailSyncStatus,
         listCachedThreadPage: desktopBridge.listCachedThreadPage,
         listLabels: desktopBridge.listGmailLabels,
@@ -172,6 +179,8 @@ describe(getRuntimeCapabilities, () => {
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
         loadThread: desktopBridge.loadThread,
         loadThreadDraft: desktopBridge.loadThreadDraft,
+        markSpamSeen: desktopBridge.markSpamSeen,
+        markThreadNotSpam: desktopBridge.markThreadNotSpam,
         onDraftChanged: desktopBridge.onMailDraftChanged,
         onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,
         onSyncStatusChanged: desktopBridge.onMailSyncStatusChanged,

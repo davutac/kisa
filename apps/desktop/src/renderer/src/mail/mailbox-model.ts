@@ -1,11 +1,12 @@
 import type {
   GmailCachedThreadPageRequest,
+  GmailMailbox,
   GmailThreadListChange,
   GmailThreadCursor,
   GmailThreadSummary,
 } from "@/shared/ipc/mail";
 
-import { hasInboxLabel } from "./label";
+import { hasInboxLabel, hasSpamLabel } from "./label";
 
 export const getThreadListChangeAccountId = (
   change: GmailThreadListChange
@@ -49,12 +50,13 @@ export const mergeAndSortThreads = (
 export const filterThreadsByScope = (
   threads: readonly GmailThreadSummary[],
   accountIds: readonly string[],
-  unreadOnly: boolean
+  unreadOnly: boolean,
+  mailbox: GmailMailbox = "inbox"
 ): readonly GmailThreadSummary[] =>
   threads.filter(
     ({ accountId, isUnread, labels }) =>
       accountIds.includes(accountId) &&
-      hasInboxLabel(labels) &&
+      (mailbox === "spam" ? hasSpamLabel(labels) : hasInboxLabel(labels)) &&
       (!unreadOnly || isUnread)
   );
 
@@ -95,15 +97,18 @@ export const toThreadCursor = (
 export const createCachedThreadPageRequest = (
   accountIds: readonly string[],
   unreadOnly: boolean,
+  mailbox: GmailMailbox = "inbox",
   cursor?: GmailThreadCursor
 ): GmailCachedThreadPageRequest => ({
   accountIds,
   ...(cursor === undefined ? {} : { cursor }),
+  mailbox,
   ...(unreadOnly ? { unreadOnly: true } : {}),
 });
 
 export const getMailboxScopeKey = (
   accountIds: readonly string[],
-  unreadOnly: boolean
+  unreadOnly: boolean,
+  mailbox: GmailMailbox = "inbox"
 ): string =>
-  `${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}`;
+  `${mailbox}\u0001${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}`;

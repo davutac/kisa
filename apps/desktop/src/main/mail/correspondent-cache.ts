@@ -49,32 +49,40 @@ const loadAccountSnapshots = async (
 ): Promise<void> => {
   const accounts = toAccountList(accountIds);
   const tuples = await database.values<CorrespondentTuple>(sql`
-    WITH correspondent_addresses AS (
+    WITH visible_messages AS (
+      SELECT m.account_email, m.from_address, m.from_name,
+             m.to_addresses, m.cc_addresses, m.bcc_addresses
+      FROM gmail_messages m
+      WHERE m.account_email IN (${accounts})
+        AND NOT EXISTS (
+          SELECT 1
+          FROM gmail_threads t
+          WHERE t.account_email = m.account_email
+            AND t.thread_id = m.thread_id
+            AND t.is_in_spam = 1
+        )
+    ), correspondent_addresses AS (
       SELECT m.account_email, m.from_address AS address,
              coalesce(m.from_name, '') AS name
-      FROM gmail_messages m
-      WHERE m.account_email IN (${accounts})
+      FROM visible_messages m
 
       UNION ALL
 
       SELECT m.account_email, recipient.value AS address, '' AS name
-      FROM gmail_messages m
+      FROM visible_messages m
       JOIN json_each(coalesce(m.to_addresses, '[]')) AS recipient
-      WHERE m.account_email IN (${accounts})
 
       UNION ALL
 
       SELECT m.account_email, recipient.value AS address, '' AS name
-      FROM gmail_messages m
+      FROM visible_messages m
       JOIN json_each(coalesce(m.cc_addresses, '[]')) AS recipient
-      WHERE m.account_email IN (${accounts})
 
       UNION ALL
 
       SELECT m.account_email, recipient.value AS address, '' AS name
-      FROM gmail_messages m
+      FROM visible_messages m
       JOIN json_each(coalesce(m.bcc_addresses, '[]')) AS recipient
-      WHERE m.account_email IN (${accounts})
     ), grouped AS (
       SELECT account_email, address, max(name) AS name,
              count(*) AS message_count

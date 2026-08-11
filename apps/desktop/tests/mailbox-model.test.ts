@@ -63,4 +63,21 @@ describe(filterThreadsByScope, () => {
       )
     ).toStrictEqual([unread]);
   });
+
+  it("keeps Spam separate from Inbox for colliding thread ids", () => {
+    const inbox = makeThread("one@example.com", "shared", 300);
+    const spam = makeThread("two@example.com", "shared", 200, {
+      isUnread: true,
+      labels: ["SPAM", "UNREAD"],
+    });
+
+    expect(
+      filterThreadsByScope(
+        [inbox, spam],
+        ["one@example.com", "two@example.com"],
+        false,
+        "spam"
+      )
+    ).toStrictEqual([spam]);
+  });
 });

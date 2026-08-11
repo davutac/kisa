@@ -12,6 +12,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { hasSpamLabel } from "@/mail/label";
 import { useMailThread } from "@/mail/use-mail-thread";
 import type {
   ThreadActions,
@@ -59,6 +60,7 @@ interface MailThreadViewProps {
   onPopOut?: (
     target: Pick<ThreadActionTarget, "accountId" | "threadId">
   ) => Promise<void>;
+  onNotSpam: ThreadActions["notSpam"];
   onSetLabel: ThreadActions["setLabel"];
   onToggleRead: ThreadActions["toggleRead"];
   onTrash: ThreadActions["trash"];
@@ -68,6 +70,7 @@ interface MailThreadViewProps {
 
 interface MailThreadContentProps {
   onClose: () => void;
+  onNotSpam: ThreadActions["notSpam"];
   onPopOut?: MailThreadViewProps["onPopOut"];
   onSetLabel: ThreadActions["setLabel"];
   onToggleRead: ThreadActions["toggleRead"];
@@ -78,6 +81,7 @@ interface MailThreadContentProps {
 
 const MailThreadContent = ({
   onClose,
+  onNotSpam,
   onPopOut,
   onSetLabel,
   onToggleRead,
@@ -86,6 +90,7 @@ const MailThreadContent = ({
   thread,
 }: MailThreadContentProps) => {
   const { accountId, threadId } = thread;
+  const isSpam = hasSpamLabel(thread.labels);
   const isUnread = thread.labels.includes("UNREAD");
   const handleToggleRead = useCallback((): void => {
     onToggleRead({
@@ -100,6 +105,9 @@ const MailThreadContent = ({
       onClose
     );
   }, [accountId, isUnread, onClose, onTrash, threadId]);
+  const handleNotSpam = useCallback((): void => {
+    onNotSpam({ accountId, threadId }, onClose);
+  }, [accountId, onClose, onNotSpam, threadId]);
   const handlePopOut = useCallback((): void => {
     if (onPopOut === undefined) {
       return;
@@ -115,9 +123,11 @@ const MailThreadContent = ({
     // behind it.
     <section className="relative flex w-full min-w-0 flex-col gap-px px-4 pb-4 *:last:rounded-b-lg">
       <MailThreadHeader
+        isSpam={isSpam}
         isUnread={isUnread}
         latestAt={latestMessage?.sentAt}
         onClose={onClose}
+        onNotSpam={handleNotSpam}
         onPopOut={onPopOut === undefined ? undefined : handlePopOut}
         onToggleRead={handleToggleRead}
         onTrash={handleTrash}
@@ -143,6 +153,7 @@ const MailThreadView = ({
   accountId,
   closeLabel = "Back to inbox",
   onClose,
+  onNotSpam,
   onPopOut,
   onSetLabel,
   onToggleRead,
@@ -169,6 +180,7 @@ const MailThreadView = ({
   return (
     <MailThreadContent
       onClose={onClose}
+      onNotSpam={onNotSpam}
       onPopOut={onPopOut}
       onSetLabel={onSetLabel}
       onToggleRead={onToggleRead}

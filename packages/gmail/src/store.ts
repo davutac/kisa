@@ -35,6 +35,10 @@ export interface GmailStoreService {
     readonly GmailAccount[],
     GmailStoreError
   >;
+  readonly markThreadNotSpam: (
+    accountId: AccountId,
+    threadId: ThreadId
+  ) => Effect.Effect<void, GmailStoreError>;
   readonly removeThreads: (
     accountId: AccountId,
     threadIds: readonly ThreadId[]
