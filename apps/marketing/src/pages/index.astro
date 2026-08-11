@@ -6,6 +6,7 @@ import {
   DatabaseIcon,
   DownloadIcon,
   EyeIcon,
+  FilesIcon,
   HouseIcon,
   KeyboardIcon,
   LockKeyholeIcon,
@@ -28,6 +29,12 @@ import { cn } from "@/lib/utils";
 const repositoryUrl = "https://github.com/davutac/kisa";
 
 const features = [
+  {
+    description:
+      "Save the sender, recipients, subject, and body together. Type / in a new email to insert it with variables resolved.",
+    icon: FilesIcon,
+    title: "Reusable templates",
+  },
   {
     description:
       "Clear new mail without losing track. Stash a message and Kisa brings it back when you choose.",
@@ -113,7 +120,7 @@ const threads = [
 ---
 
 <BaseLayout
-  description="Kisa is a fast, local-first desktop email client with keyboard-first navigation, private on-device search, and a calm, focused inbox."
+  description="Kisa is a fast, local-first desktop email client with reusable templates, keyboard-first navigation, private on-device search, and a calm, focused inbox."
   title="Kisa"
 >
   <div class="page-shell relative overflow-x-clip">
@@ -229,6 +236,9 @@ const threads = [
               <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
                 <MailIcon className="size-3.5" />
               </span>
+              <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Templates">
+                <FilesIcon className="size-3.5" />
+              </span>
               <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
                 <SettingsIcon className="size-3.5" />
               </span>
@@ -298,9 +308,15 @@ const threads = [
             <h2 class="mt-4 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-5xl">Everything you need. Less of everything else.</h2>
           </div>
 
-          <div class="mt-14 grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-2 lg:grid-cols-4">
-            {features.map(({ icon: Icon, title, description }) => (
-              <article class="bg-background p-7 sm:p-8">
+          <div class="mt-14 grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-2 lg:grid-cols-6">
+            {features.map(({ icon: Icon, title, description }, index) => (
+              <article
+                class:list={[
+                  "bg-background p-7 sm:p-8",
+                  index === 0 ? "sm:col-span-2" : "sm:col-span-1",
+                  index >= 3 ? "lg:col-span-3" : "lg:col-span-2",
+                ]}
+              >
                 <div class="grid size-9 place-items-center rounded-lg border bg-card shadow-xs">
                   <Icon className="size-4" />
                 </div>
