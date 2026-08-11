@@ -44,10 +44,7 @@ The successful response matches `@repo/gmail`'s authorization handoff:
   "accessToken": "...",
   "expiresAt": 1786032000000,
   "refreshToken": "...",
-  "scopes": [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.send"
-  ]
+  "scopes": ["https://www.googleapis.com/auth/gmail.modify"]
 }
 ```
 

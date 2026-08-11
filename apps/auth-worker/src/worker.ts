@@ -14,7 +14,6 @@ const GOOGLE_SCOPES = [
   "email",
   "profile",
   "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/gmail.send",
 ] as const;
 const PKCE_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
 
