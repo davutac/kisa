@@ -107,7 +107,7 @@ export const NewMessageAttachmentButton = ({
         onClick={() => inputRef.current?.click()}
         ref={focusRef}
         size="icon"
-        title={`${display.label} (${display.bindings[0]?.join("+")})`}
+        title={`${display.label} (${display.bindings[0]})`}
         type="button"
         variant="ghost"
       >

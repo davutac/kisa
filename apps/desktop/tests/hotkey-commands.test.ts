@@ -105,13 +105,13 @@ describe("hotkey command registry", () => {
     ]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "mac").bindings
-    ).toStrictEqual([["⌫"], ["⌦"]]);
+    ).toStrictEqual(["⌫", "⌦"]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "windows").bindings
-    ).toStrictEqual([["⌫"], ["⌦"]]);
+    ).toStrictEqual(["⌫", "⌦"]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "linux").bindings
-    ).toStrictEqual([["⌫"], ["⌦"]]);
+    ).toStrictEqual(["⌫", "⌦"]);
   });
 
   it("assigns the thread popout shortcut", () => {
@@ -137,13 +137,13 @@ describe("hotkey command registry", () => {
 
   it("formats display keys for each platform", () => {
     expect(getHotkeyDisplay("app.searchMail", "mac").bindings).toStrictEqual([
-      ["⌘", "K"],
+      "⌘ K",
     ]);
     expect(
       getHotkeyDisplay("app.searchMail", "windows").bindings
-    ).toStrictEqual([["Ctrl", "K"]]);
+    ).toStrictEqual(["Ctrl+K"]);
     expect(getHotkeyDisplay("app.searchMail", "linux").bindings).toStrictEqual([
-      ["Ctrl", "K"],
+      "Ctrl+K",
     ]);
     expect(getHotkeyDisplay("mailbox.nextThread", "mac").bindings).toHaveLength(
       3

@@ -68,7 +68,7 @@ const MailThreadHeader = ({
             className="shrink-0"
             onClick={onClose}
             size="icon"
-            title={`${closeDisplay.label} (${closeDisplay.bindings[0]?.join("+")})`}
+            title={`${closeDisplay.label} (${closeDisplay.bindings[0]})`}
             variant="secondary"
           >
             <ArrowLeftIcon />
@@ -84,7 +84,7 @@ const MailThreadHeader = ({
               aria-label={popOutDisplay.label}
               onClick={onPopOut}
               size="icon"
-              title={`${popOutDisplay.label} (${popOutDisplay.bindings[0]?.join("+")})`}
+              title={`${popOutDisplay.label} (${popOutDisplay.bindings[0]})`}
               type="button"
               variant="ghost"
             >
@@ -96,7 +96,7 @@ const MailThreadHeader = ({
             aria-label={toggleReadLabel}
             onClick={onToggleRead}
             size="icon"
-            title={`${toggleReadLabel} (${toggleReadDisplay.bindings[0]?.join("+")})`}
+            title={`${toggleReadLabel} (${toggleReadDisplay.bindings[0]})`}
             type="button"
             variant="ghost"
           >
@@ -108,7 +108,7 @@ const MailThreadHeader = ({
             className="hover:bg-destructive/10 hover:text-destructive"
             onClick={onTrash}
             size="icon"
-            title={`${trashDisplay.label} (${trashDisplay.bindings[0]?.join("+")})`}
+            title={`${trashDisplay.label} (${trashDisplay.bindings[0]})`}
             type="button"
             variant="ghost"
           >

@@ -99,7 +99,7 @@ const TemplatesSidebar = ({
           aria-label={newTemplateDisplay.label}
           onClick={onCreate}
           size="icon"
-          title={`${newTemplateDisplay.label} (${newTemplateDisplay.bindings[0]?.join("+")})`}
+          title={`${newTemplateDisplay.label} (${newTemplateDisplay.bindings[0]})`}
           type="button"
         >
           <PlusIcon />

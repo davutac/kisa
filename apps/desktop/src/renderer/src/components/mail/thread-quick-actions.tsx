@@ -46,9 +46,7 @@ const MailThreadQuickActions = ({
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
   const toggleReadKeys = getHotkeyDisplay("mailbox.toggleThreadRead");
   const trashKeys = getHotkeyDisplay("mailbox.trashThread");
-  const trashShortcutLabel = trashKeys.bindings
-    .map((keys) => keys.join("+"))
-    .join(" / ");
+  const trashShortcutLabel = trashKeys.bindings.join(" / ");
 
   return (
     // Parked behind the row: the row slides off it rather than the other way
@@ -79,7 +77,7 @@ const MailThreadQuickActions = ({
         style={quickActionStyle}
         title={
           hotkeysEnabled
-            ? `${toggleReadLabel} (${toggleReadKeys.bindings[0]?.join("+")})`
+            ? `${toggleReadLabel} (${toggleReadKeys.bindings[0]})`
             : toggleReadLabel
         }
         variant="ghost"

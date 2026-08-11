@@ -30,7 +30,7 @@ const NewMessageDialogContent = ({
 }: Omit<NewMessageDialogProps, "initialAccountId">) => {
   const isSending = useNewMessageStore((state) => state.isSending);
   const workspace = useNewMessageWorkspace({ accounts, isOpen, onOpenChange });
-  const sendBinding = workspace.sendDisplay.bindings[0]?.join("+");
+  const [sendBinding] = workspace.sendDisplay.bindings;
   const handleFiles = workspace.addAttachments;
   const handleSelectDraft = workspace.switchDraft;
   const handleSend = workspace.send;

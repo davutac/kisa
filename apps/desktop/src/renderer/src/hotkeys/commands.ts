@@ -347,10 +347,8 @@ export const COMPOSER_ACCOUNT_COMMAND_IDS = [
   "composer.useAccount9",
 ] as const satisfies readonly HotkeyCommandId[];
 
-const DISPLAY_KEY_SEPARATOR = "\0";
-
 export interface HotkeyCommandDisplay {
-  readonly bindings: readonly (readonly string[])[];
+  readonly bindings: readonly string[];
   readonly label: string;
 }
 
@@ -376,8 +374,7 @@ export const getHotkeyDisplay = (
     bindings: command.bindings.map((binding) =>
       formatForDisplay(binding, {
         platform: resolvedPlatform,
-        separatorToken: DISPLAY_KEY_SEPARATOR,
-      }).split(DISPLAY_KEY_SEPARATOR)
+      })
     ),
     label: command.label,
   };

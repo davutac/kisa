@@ -171,7 +171,7 @@ const TemplateEditor = ({
           aria-keyshortcuts={getHotkeyAriaLabel("templates.save")}
           className="relative h-auto min-w-0 flex-1 rounded-none border-0 px-4 py-2 text-lg"
           disabled={!isDirty || isSaving}
-          title={`${saveDisplay.label} (${saveDisplay.bindings[0]?.join("+")})`}
+          title={`${saveDisplay.label} (${saveDisplay.bindings[0]})`}
           type="submit"
           variant="secondary"
         >
