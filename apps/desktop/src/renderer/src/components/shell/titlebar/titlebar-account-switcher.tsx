@@ -24,7 +24,7 @@ import {
 
 const delayedAccountPointerSensor = PointerSensor.configure({
   activationConstraints: [
-    new PointerActivationConstraints.Delay({ tolerance: 6, value: 200 }),
+    new PointerActivationConstraints.Distance({ value: 15 }),
   ],
 });
 
