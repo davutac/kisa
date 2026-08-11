@@ -293,6 +293,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "thread",
   },
+  "thread.manageLabels": {
+    bindings: ["L"],
+    input: "ignore",
+    label: "Manage labels",
+    repeat: "once",
+    scope: "thread",
+  },
   "thread.popout": {
     bindings: ["Shift+Enter"],
     input: "ignore",

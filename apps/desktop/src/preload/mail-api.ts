@@ -18,6 +18,7 @@ import {
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
+  MAIL_SET_THREAD_LABEL_CHANNEL,
   MAIL_SET_THREAD_READ_CHANNEL,
   MAIL_SYNC_LABELS_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
@@ -61,6 +62,7 @@ export const mailApi: Pick<
   | "saveMailDraft"
   | "sendMessage"
   | "sendThreadMessage"
+  | "setThreadLabel"
   | "setThreadReadState"
   | "syncGmailLabels"
   | "trashThread"
@@ -116,6 +118,8 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_SEND_MESSAGE_CHANNEL, request),
   sendThreadMessage: (request) =>
     ipcRenderer.invoke(MAIL_SEND_THREAD_MESSAGE_CHANNEL, request),
+  setThreadLabel: (request) =>
+    ipcRenderer.invoke(MAIL_SET_THREAD_LABEL_CHANNEL, request),
   setThreadReadState: (request) =>
     ipcRenderer.invoke(MAIL_SET_THREAD_READ_CHANNEL, request),
   syncGmailLabels: (request) =>

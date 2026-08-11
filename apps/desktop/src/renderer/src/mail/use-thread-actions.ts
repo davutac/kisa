@@ -13,6 +13,10 @@ export interface ThreadActionTarget {
 type OnThreadActionSuccess = () => void;
 
 export interface ThreadActions {
+  setLabel: (
+    thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
+    label: { readonly applied: boolean; readonly labelId: string }
+  ) => Promise<void>;
   toggleRead: (
     thread: ThreadActionTarget,
     onSuccess?: OnThreadActionSuccess
@@ -31,25 +35,23 @@ export interface ThreadActions {
 export const useThreadActions = (): ThreadActions => {
   const mailApi = getMailApi();
   const runThreadAction = useCallback(
-    (
+    async (
       send: () => Promise<GmailThreadMutationReply>,
       fallbackMessage: string,
       onSuccess?: OnThreadActionSuccess
-    ): void => {
-      void (async () => {
-        try {
-          const reply = await send();
+    ): Promise<void> => {
+      try {
+        const reply = await send();
 
-          if (!reply.ok) {
-            toast.error(reply.error);
-            return;
-          }
-
-          onSuccess?.();
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : fallbackMessage);
+        if (!reply.ok) {
+          toast.error(reply.error);
+          return;
         }
-      })();
+
+        onSuccess?.();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : fallbackMessage);
+      }
     },
     []
   );
@@ -60,7 +62,7 @@ export const useThreadActions = (): ThreadActions => {
         return;
       }
 
-      runThreadAction(
+      void runThreadAction(
         () =>
           mailApi.setThreadReadState({
             accountId: thread.accountId,
@@ -74,13 +76,36 @@ export const useThreadActions = (): ThreadActions => {
     [mailApi, runThreadAction]
   );
 
+  const setLabel = useCallback(
+    (
+      thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
+      label: { readonly applied: boolean; readonly labelId: string }
+    ): Promise<void> => {
+      if (mailApi === undefined) {
+        return Promise.resolve();
+      }
+
+      return runThreadAction(
+        () =>
+          mailApi.setThreadLabel({
+            accountId: thread.accountId,
+            applied: label.applied,
+            labelId: label.labelId,
+            threadId: thread.threadId,
+          }),
+        "Could not update email labels"
+      );
+    },
+    [mailApi, runThreadAction]
+  );
+
   const trash = useCallback(
     (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
       if (mailApi === undefined) {
         return;
       }
 
-      runThreadAction(
+      void runThreadAction(
         () =>
           mailApi.trashThread({
             accountId: thread.accountId,
@@ -93,5 +118,5 @@ export const useThreadActions = (): ThreadActions => {
     [mailApi, runThreadAction]
   );
 
-  return { toggleRead, trash };
+  return { setLabel, toggleRead, trash };
 };

@@ -122,6 +122,13 @@ describe("hotkey command registry", () => {
     expect(getHotkeyAriaLabel("thread.popout", "windows")).toBe("Shift+Enter");
   });
 
+  it("opens the thread label picker with L", () => {
+    expect(HOTKEY_COMMANDS["thread.manageLabels"].bindings).toStrictEqual([
+      "L",
+    ]);
+    expect(getHotkeyAriaLabel("thread.manageLabels", "mac")).toBe("L");
+  });
+
   it("keeps thread quick actions consistent with the mailbox", () => {
     expect(HOTKEY_COMMANDS["thread.toggleThreadRead"].bindings).toStrictEqual(
       HOTKEY_COMMANDS["mailbox.toggleThreadRead"].bindings

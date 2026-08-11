@@ -111,14 +111,14 @@ describe(toSearchLabelSuggestions, () => {
         name: "INBOX",
       },
       {
-        accountIds: ["two@example.com"],
-        isSystem: false,
-        name: "Personal",
-      },
-      {
         accountIds: ["one@example.com"],
         isSystem: true,
         name: "CATEGORY_PERSONAL",
+      },
+      {
+        accountIds: ["two@example.com"],
+        isSystem: false,
+        name: "Personal",
       },
       {
         accountIds: ["one@example.com", "two@example.com"],

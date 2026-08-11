@@ -27,6 +27,7 @@ import {
   saveDraft,
   sendNew,
   sendThread,
+  setLabel,
   setReadState,
   syncLabels,
   trash,
@@ -81,6 +82,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(sendNew);
   yield* ipc.handle(sendThread);
   yield* ipc.handle(listSenders);
+  yield* ipc.handle(setLabel);
   yield* ipc.handle(setReadState);
   yield* ipc.handle(trash);
   yield* ipc.handle(listImageSenders);

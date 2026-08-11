@@ -54,6 +54,12 @@ export interface GmailStoreService {
     accountId: AccountId,
     thread: GmailThread
   ) => Effect.Effect<void, GmailStoreError>;
+  readonly setThreadLabel: (
+    accountId: AccountId,
+    threadId: ThreadId,
+    label: GmailLabel,
+    applied: boolean
+  ) => Effect.Effect<void, GmailStoreError>;
   readonly setThreadReadState: (
     accountId: AccountId,
     threadId: ThreadId,

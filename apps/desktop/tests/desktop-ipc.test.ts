@@ -7,6 +7,11 @@ import type { IpcMainInvokeEvent } from "electron";
 
 import * as DesktopIpc from "../src/main/ipc/desktop-ipc";
 import { DesktopIpcRegistrationError } from "../src/main/ipc/desktop-ipc-registration-error";
+import { MAIL_SET_THREAD_LABEL_CHANNEL } from "../src/shared/ipc/channels";
+import {
+  GmailThreadLabelRequest,
+  GmailThreadMutationReply,
+} from "../src/shared/ipc/mail";
 
 const createIpcMain = () => {
   const listeners = new Map<string, DesktopIpc.DesktopIpcHandleListener>();
@@ -100,6 +105,38 @@ describe(DesktopIpc.DesktopIpc, () => {
       });
 
       expect(result).toStrictEqual([1, 2, 3]);
+    })
+  );
+
+  it.effect("validates and encodes the thread label mutation boundary", () =>
+    Effect.gen(function* validatesThreadLabelMutation() {
+      const requests: unknown[] = [];
+      const method = DesktopIpc.makeIpcMethod({
+        channel: MAIL_SET_THREAD_LABEL_CHANNEL,
+        handler: (request) =>
+          Effect.sync(() => {
+            requests.push(request);
+            return { data: undefined, ok: true as const };
+          }),
+        payload: GmailThreadLabelRequest,
+        result: GmailThreadMutationReply,
+      });
+      const request = {
+        accountId: "person@example.com",
+        applied: true,
+        labelId: "Label_1",
+        threadId: "thread-1",
+      };
+
+      expect(method.channel).toBe("desktop:mail:set-thread-label");
+      expect(yield* method.handler(request)).toStrictEqual({
+        data: undefined,
+        ok: true,
+      });
+      expect(requests).toStrictEqual([request]);
+      expect(
+        (yield* Effect.exit(method.handler({ ...request, labelId: "" })))._tag
+      ).toBe("Failure");
     })
   );
 

@@ -49,6 +49,18 @@ const storeError = (message: string) => new GmailStoreError({ message });
 
 const INBOX_LABEL_ID = LabelId.make("INBOX");
 
+const setLabelMembership = (
+  labels: readonly string[],
+  label: string,
+  applied: boolean
+): readonly string[] => {
+  if (applied) {
+    return labels.includes(label) ? labels : [...labels, label];
+  }
+
+  return labels.filter((candidate) => candidate !== label);
+};
+
 /**
  * Bumped when the stored representation of a body changes, so rows written by
  * an older parser can be told apart and re-indexed rather than silently served.
@@ -426,6 +438,98 @@ export const GmailStoreLive = Layer.succeed(
         });
 
         rememberCorrespondentMessages(accountId, thread.messages);
+      }),
+
+    setThreadLabel: (accountId, threadId, label, applied) =>
+      withDatabase("Could not update Gmail thread labels", async (database) => {
+        const now = Date.now();
+
+        await database.transaction(async (transaction) => {
+          const labelRows = await transaction
+            .select({ labelId: gmailLabels.labelId, name: gmailLabels.name })
+            .from(gmailLabels)
+            .where(eq(gmailLabels.accountEmail, accountId))
+            .all();
+          const namesById = new Map([
+            ...labelRows.map((row) => [row.labelId, row.name] as const),
+            [label.id, label.name] as const,
+          ]);
+          const messageRows = await transaction
+            .select({
+              labelIds: gmailMessages.labelIds,
+              messageId: gmailMessages.messageId,
+            })
+            .from(gmailMessages)
+            .where(
+              and(
+                eq(gmailMessages.accountEmail, accountId),
+                eq(gmailMessages.threadId, threadId)
+              )
+            )
+            .all();
+          const updatedMessageLabels = messageRows.map((row) => ({
+            labelIds: setLabelMembership(row.labelIds ?? [], label.id, applied),
+            messageId: row.messageId,
+          }));
+
+          for (const message of updatedMessageLabels) {
+            // A Gmail thread label mutation applies to every message. Keep the
+            // normalized cache in lockstep inside the same transaction.
+            // oxlint-disable-next-line eslint/no-await-in-loop
+            await transaction
+              .update(gmailMessages)
+              .set({ labelIds: message.labelIds, updatedAt: now })
+              .where(
+                and(
+                  eq(gmailMessages.accountEmail, accountId),
+                  eq(gmailMessages.messageId, message.messageId)
+                )
+              )
+              .run();
+          }
+
+          const cachedThread = await transaction
+            .select({ labels: gmailThreads.labels })
+            .from(gmailThreads)
+            .where(
+              and(
+                eq(gmailThreads.accountEmail, accountId),
+                eq(gmailThreads.threadId, threadId)
+              )
+            )
+            .get();
+
+          if (cachedThread === undefined) {
+            return;
+          }
+
+          const labels =
+            updatedMessageLabels.length === 0
+              ? setLabelMembership(
+                  cachedThread.labels ?? [],
+                  label.name,
+                  applied
+                )
+              : [
+                  ...new Set(
+                    updatedMessageLabels.flatMap((message) => message.labelIds)
+                  ),
+                ].map((labelId) => namesById.get(labelId) ?? labelId);
+
+          await transaction
+            .update(gmailThreads)
+            .set({
+              labels,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(gmailThreads.accountEmail, accountId),
+                eq(gmailThreads.threadId, threadId)
+              )
+            )
+            .run();
+        });
       }),
 
     setThreadReadState: (accountId, threadId, isRead) =>

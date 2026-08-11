@@ -20,6 +20,7 @@ import {
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
+  MAIL_SET_THREAD_LABEL_CHANNEL,
   MAIL_SET_THREAD_READ_CHANNEL,
   MAIL_SYNC_LABELS_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
@@ -43,9 +44,10 @@ import {
   GmailSenderSuggestionRequest,
   GmailSenderSuggestionsReply,
   GmailSyncStatus,
-  GmailThreadMutationReply,
+  GmailThreadLabelRequest,
   GmailThreadMessageSendReply,
   GmailThreadMessageSendRequest,
+  GmailThreadMutationReply,
   GmailThreadReadStateRequest,
   GmailThreadReply,
   GmailThreadRequest,
@@ -83,6 +85,7 @@ import {
   loadFullThread,
   sendNewMessage,
   sendThreadMessage,
+  setThreadLabel,
   setThreadReadState,
   syncGmailLabelCatalog,
   trashThread,
@@ -264,6 +267,14 @@ export const setReadState = makeIpcMethod({
   handler: (request) =>
     toIpcReply(setThreadReadState(request), "Could not update email"),
   payload: GmailThreadReadStateRequest,
+  result: GmailThreadMutationReply,
+});
+
+export const setLabel = makeIpcMethod({
+  channel: MAIL_SET_THREAD_LABEL_CHANNEL,
+  handler: (request) =>
+    toIpcReply(setThreadLabel(request), "Could not update email labels"),
+  payload: GmailThreadLabelRequest,
   result: GmailThreadMutationReply,
 });
 

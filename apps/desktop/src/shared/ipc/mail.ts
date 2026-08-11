@@ -139,6 +139,14 @@ export const GmailThreadListUpdated = Schema.Struct({
 });
 export type GmailThreadListUpdated = typeof GmailThreadListUpdated.Type;
 
+export const GmailThreadLabelRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  applied: Schema.Boolean,
+  labelId: Schema.NonEmptyString,
+  threadId: Schema.NonEmptyString,
+});
+export type GmailThreadLabelRequest = typeof GmailThreadLabelRequest.Type;
+
 export const GmailThreadReadStateRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   /** The state to move to, not the state the thread is in. */

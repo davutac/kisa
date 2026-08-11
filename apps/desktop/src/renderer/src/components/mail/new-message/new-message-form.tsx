@@ -158,10 +158,11 @@ const NewMessageForm = ({
         <Button
           aria-label="Stash draft"
           aria-keyshortcuts={getHotkeyAriaLabel("composer.stash")}
-          className="border-background size-12 shrink-0 rounded-none border-0 border-r p-0"
+          className="border-background border-r"
           disabled={!canStash}
           onClick={onStash}
           onMouseDown={(event) => event.preventDefault()}
+          size="footer-icon"
           title="Stash draft"
           type="button"
           variant="secondary"
@@ -170,8 +171,9 @@ const NewMessageForm = ({
         </Button>
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel("composer.send")}
-          className="relative h-auto min-w-0 flex-1 rounded-none border-0 px-4 py-2 text-lg"
+          className="relative"
           disabled={!canSend}
+          size="footer"
           title={sendShortcutLabel}
           type="submit"
           variant="secondary"

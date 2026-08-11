@@ -9,11 +9,17 @@ import {
   useState,
 } from "react";
 
+import { sortGmailLabelCatalog } from "@/mail/label";
 import { getMailApi } from "@/platform/desktop";
-import type { GmailLabelCatalog, GmailLabelColor } from "@/shared/ipc/mail";
+import type {
+  GmailLabelCatalog,
+  GmailLabelColor,
+  GmailLabelSummary,
+} from "@/shared/ipc/mail";
 
 interface GmailLabelCatalogState {
   readonly colorsByName: ReadonlyMap<string, GmailLabelColor>;
+  readonly labels: readonly GmailLabelSummary[];
   readonly names: ReadonlySet<string>;
 }
 
@@ -56,9 +62,11 @@ export const GmailLabelsProvider = ({
   const updateCatalog = useCallback(
     (accountId: string, catalog: GmailLabelCatalog): void => {
       setCatalogs((current) => {
+        const labels = sortGmailLabelCatalog(catalog.labels);
         const state = {
           colorsByName: toGmailLabelColors(catalog),
-          names: new Set(catalog.labels.map((label) => label.name)),
+          labels,
+          names: new Set(labels.map((label) => label.name)),
         };
         return new Map([...current, [accountId, state]]);
       });
@@ -157,6 +165,11 @@ export const useGmailLabelColors = (
 
   return context.catalogs.get(accountId)?.colorsByName ?? EMPTY_COLORS;
 };
+
+export const useGmailLabelCatalog = (
+  accountId: string
+): readonly GmailLabelSummary[] | undefined =>
+  useGmailLabelsContext().catalogs.get(accountId)?.labels;
 
 export const useUpdateGmailLabelCatalog =
   (): GmailLabelsContextValue["updateCatalog"] => {

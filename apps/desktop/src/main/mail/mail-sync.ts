@@ -40,6 +40,7 @@ import type {
   GmailThread as GmailThreadDto,
   GmailThreadMessage,
   GmailThreadMessageSendRequest,
+  GmailThreadLabelRequest,
   GmailThreadReadStateRequest,
   GmailThreadRequest,
   GmailThreadListChange,
@@ -938,7 +939,12 @@ const updateCachedThread = (
         labels: summary.labels,
         updatedAt: Date.now(),
       })
-      .where(eq(gmailThreads.threadId, summary.threadId))
+      .where(
+        andSql(
+          eq(gmailThreads.accountEmail, summary.accountId),
+          eq(gmailThreads.threadId, summary.threadId)
+        )
+      )
       .run();
   });
 
@@ -992,6 +998,34 @@ export const setThreadReadState = Effect.fn("setThreadReadState")(
 
     yield* updateCachedThread(summary);
     yield* publishThreadListUpdated([{ kind: "upsert", thread: summary }]);
+  }
+);
+
+export const setThreadLabel = Effect.fn("setThreadLabel")(
+  function* setThreadLabel(request: GmailThreadLabelRequest) {
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.setThreadLabel({
+            accountId: AccountId.make(request.accountId),
+            applied: request.applied,
+            labelId: LabelId.make(request.labelId),
+            threadId: ThreadId.make(request.threadId),
+          })
+        )
+      )
+    );
+
+    const row = yield* findCachedThread(request.accountId, request.threadId);
+
+    if (row === undefined) {
+      yield* reloadThreadList(request.accountId);
+      return;
+    }
+
+    yield* publishThreadListUpdated([
+      { kind: "upsert", thread: toCachedThreadSummary(row) },
+    ]);
   }
 );
 

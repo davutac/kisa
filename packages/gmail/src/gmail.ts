@@ -13,6 +13,7 @@ import type { GmailError } from "./errors";
 import {
   AccountNotFoundError,
   GmailPermissionError,
+  GmailValidationError,
   InvalidAuthHandoffError,
 } from "./errors";
 import type {
@@ -41,6 +42,7 @@ import type {
   SentMessage,
   SyncRequest,
   SyncResult,
+  ThreadLabelMutationRequest,
   ThreadMutationRequest,
   ThreadPage,
   ThreadSummary,
@@ -137,6 +139,9 @@ export interface GmailService {
   ) => Effect.Effect<void, GmailError>;
   readonly markThreadUnread: (
     request: ThreadMutationRequest
+  ) => Effect.Effect<void, GmailError>;
+  readonly setThreadLabel: (
+    request: ThreadLabelMutationRequest
   ) => Effect.Effect<void, GmailError>;
   readonly forward: (
     input: ForwardInput
@@ -515,6 +520,37 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         }
       );
 
+      const setThreadLabel = Effect.fn("Gmail.setThreadLabel")(
+        function* setThreadLabel(request: ThreadLabelMutationRequest) {
+          const label = (yield* store.getLabels(request.accountId)).find(
+            (candidate) => candidate.id === request.labelId
+          );
+
+          if (label?.type !== "user") {
+            return yield* new GmailValidationError({
+              message: "Only user-created Gmail labels can be changed here",
+            });
+          }
+
+          yield* withAuthorization(
+            request.accountId,
+            "modify",
+            (authorization) =>
+              gateway.modifyThreadLabels(authorization, {
+                addLabelIds: request.applied ? [request.labelId] : [],
+                removeLabelIds: request.applied ? [] : [request.labelId],
+                threadId: request.threadId,
+              })
+          );
+          yield* store.setThreadLabel(
+            request.accountId,
+            request.threadId,
+            label,
+            request.applied
+          );
+        }
+      );
+
       const trashThread = Effect.fn("Gmail.trashThread")(function* trashThread(
         request: ThreadMutationRequest
       ) {
@@ -681,6 +717,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         markThreadUnread,
         reply,
         sendMessage,
+        setThreadLabel,
         sync,
         trashThread,
       });

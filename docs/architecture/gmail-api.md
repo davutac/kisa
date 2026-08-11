@@ -38,6 +38,9 @@ Google recommends poll-based synchronization for installed applications. Gmail a
 
 - Gmail uses labels rather than conventional folders. Archiving removes `INBOX`, while marking unread adds `UNREAD`.
 - Labels belong to messages. Messages within one thread can have different label sets, and a thread's labels represent their union.
+- The thread label picker exposes only labels whose Gmail catalog type is `user`, applies changes optimistically, and rolls back on failure.
+- Rendered label collections place system labels first and user labels second, sorting each group by display name.
+- The main process rejects unknown and system label IDs. Successful changes update every cached message and the thread summary in one account-scoped transaction, then publish the normal thread-list update.
 - `labels.list` returns only the basic catalog, so label synchronization follows it with bounded `labels.get` calls for user labels. Full remote label synchronization runs only when an account is first added or the user explicitly chooses Label Sync. Startup, history polling, cursor recovery, and background indexing otherwise read the account-scoped cache; if a fetched thread references an unknown label ID, those paths repair only the missing catalog entries with targeted `labels.get` calls before storing the thread. Kisa stores Gmail's optional foreground/background color pair there and uses it for label badges; system and uncolored labels retain the neutral application style.
 - List operations generally return identifiers and thread identifiers. Fetching message content requires additional `get` operations.
 - Search supports most, but not all, behavior from Gmail's web interface. Results are paginated with at most 500 messages per page. See [listing messages](https://developers.google.com/workspace/gmail/api/guides/list-messages) and [search differences](https://developers.google.com/workspace/gmail/api/guides/filtering).

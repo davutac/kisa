@@ -158,9 +158,9 @@ const TemplateEditor = ({
       <div className="bg-background flex shrink-0 items-stretch gap-px">
         <Button
           aria-label="Delete template"
-          className="size-12 shrink-0 rounded-none border-0 p-0"
           disabled={isCreating || isSaving}
           onClick={onDelete}
+          size="footer-icon"
           title="Delete template"
           type="button"
           variant="secondary"
@@ -169,8 +169,9 @@ const TemplateEditor = ({
         </Button>
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel("templates.save")}
-          className="relative h-auto min-w-0 flex-1 rounded-none border-0 px-4 py-2 text-lg"
+          className="relative"
           disabled={!isDirty || isSaving}
+          size="footer"
           title={`${saveDisplay.label} (${saveDisplay.bindings[0]})`}
           type="submit"
           variant="secondary"
