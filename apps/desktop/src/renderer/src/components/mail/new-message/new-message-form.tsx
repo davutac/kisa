@@ -134,6 +134,7 @@ const NewMessageForm = ({
         onChange={setComposer}
         placeholder="Write a message"
         templateFallbackAccountId={selectedAccountId}
+        templateAccounts={accounts}
         templates={templates}
         toolbarActions={
           <NewMessageAttachmentButton

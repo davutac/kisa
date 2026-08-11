@@ -5,6 +5,11 @@ import {
   createTemplateVariableContext,
 } from "../src/renderer/src/templates/apply-composer-template";
 
+const accounts = [
+  { displayName: "Current Person", email: "current@example.com" },
+  { displayName: "Template Person", email: "template@example.com" },
+];
+
 describe(applyComposerTemplate, () => {
   it("fully replaces template-owned fields while preserving the current account and attachments", () => {
     const result = applyComposerTemplate(
@@ -86,6 +91,7 @@ describe(applyComposerTemplate, () => {
     expect(
       createTemplateVariableContext(
         "current@example.com",
+        accounts,
         {
           accountId: null,
           bcc: [],
@@ -100,8 +106,33 @@ describe(applyComposerTemplate, () => {
       )
     ).toStrictEqual({
       accountEmail: "current@example.com",
+      accountName: "Current Person",
       now: 123,
       toEmail: "friend@example.com",
+    });
+  });
+
+  it("builds account variables from the account selected by the template", () => {
+    expect(
+      createTemplateVariableContext(
+        "current@example.com",
+        accounts,
+        {
+          accountId: "template@example.com",
+          bcc: [],
+          body: { html: "", text: "" },
+          cc: [],
+          id: "template-1",
+          name: "Introduction",
+          subject: "",
+          to: [],
+        },
+        123
+      )
+    ).toStrictEqual({
+      accountEmail: "template@example.com",
+      accountName: "Template Person",
+      now: 123,
     });
   });
 });

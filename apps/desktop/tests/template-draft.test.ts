@@ -1,6 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { templatesAreEqual } from "../src/renderer/src/routes/templates/-components/template-draft";
+import {
+  getVariablePreviewContext,
+  templatesAreEqual,
+} from "../src/renderer/src/routes/templates/-components/template-draft";
 import type { ComposerTemplateInput } from "../src/shared/ipc/templates";
 
 // oxlint-disable sort-keys -- insertion order is deliberate regression input
@@ -14,6 +17,8 @@ const emptyTemplate: ComposerTemplateInput = {
   subject: "",
   to: [],
 };
+
+const accounts = [{ displayName: "Me Person", email: "me@example.com" }];
 
 describe(templatesAreEqual, () => {
   it("compares template fields instead of object insertion order", () => {
@@ -57,5 +62,34 @@ describe(templatesAreEqual, () => {
         to: ["b@example.com", "a@example.com"],
       })
     ).toBeFalsy();
+  });
+});
+
+describe(getVariablePreviewContext, () => {
+  it("includes the selected account display name", () => {
+    expect(
+      getVariablePreviewContext(
+        { ...emptyTemplate, accountId: "me@example.com" },
+        accounts
+      )
+    ).toStrictEqual({
+      accountEmail: "me@example.com",
+      accountName: "Me Person",
+    });
+  });
+
+  it("defers account values when the template keeps the current account", () => {
+    expect(getVariablePreviewContext(emptyTemplate, accounts)).toStrictEqual(
+      {}
+    );
+  });
+
+  it("keeps the selected account email without cached profile metadata", () => {
+    expect(
+      getVariablePreviewContext(
+        { ...emptyTemplate, accountId: "me@example.com" },
+        []
+      )
+    ).toStrictEqual({ accountEmail: "me@example.com" });
   });
 });

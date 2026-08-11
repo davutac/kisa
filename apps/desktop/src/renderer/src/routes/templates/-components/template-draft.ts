@@ -1,3 +1,4 @@
+import type { GoogleAccount } from "@/shared/ipc/auth";
 import type {
   ComposerTemplate,
   ComposerTemplateInput,
@@ -59,11 +60,22 @@ export const getTemplateSummary = (template: ComposerTemplate): string =>
   "Empty template";
 
 export const getVariablePreviewContext = (
-  template: ComposerTemplateInput
-): Omit<TemplateVariableContext, "now"> => ({
-  ...(template.accountId === null ? {} : { accountEmail: template.accountId }),
-  ...(template.to.length === 1 ? { toEmail: template.to[0] } : {}),
-});
+  template: ComposerTemplateInput,
+  accounts: readonly Pick<GoogleAccount, "displayName" | "email">[]
+): Omit<TemplateVariableContext, "now"> => {
+  const accountName =
+    template.accountId === null
+      ? undefined
+      : accounts.find(({ email }) => email === template.accountId)?.displayName;
+
+  return {
+    ...(template.accountId === null
+      ? {}
+      : { accountEmail: template.accountId }),
+    ...(accountName === undefined ? {} : { accountName }),
+    ...(template.to.length === 1 ? { toEmail: template.to[0] } : {}),
+  };
+};
 
 export const getTemplateNameError = (
   draft: ComposerTemplateInput,

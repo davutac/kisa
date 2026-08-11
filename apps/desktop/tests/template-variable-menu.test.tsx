@@ -15,6 +15,7 @@ describe("template variable menu", () => {
           <TemplateVariableCommandItems
             context={{
               accountEmail: "me@example.com",
+              accountName: "Me Person",
               locale: "en-US",
               now: new Date(2026, 7, 10, 12).getTime(),
               toEmail: "you@example.com",
@@ -28,7 +29,7 @@ describe("template variable menu", () => {
     expect(markup).toContain("Date with format");
     expect(markup).toContain("{{date:dd.MM.yyyy}}");
     expect(markup).toContain("10.08.2026");
-    expect(markup).toContain("me@example.com");
+    expect(markup).toContain("Me Person");
     expect(markup).toContain("you@example.com");
   });
 
@@ -45,6 +46,7 @@ describe("template variable menu", () => {
     );
 
     expect(markup).toContain("Current account when applied");
+    expect(markup).toContain("Current account name when applied");
     expect(markup).toContain("Requires one To recipient");
   });
 });

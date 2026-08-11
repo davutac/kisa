@@ -9,6 +9,7 @@ import EmailComposerToolbar from "@/components/mail/email-composer-toolbar";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
 import { resetEditorHistory } from "@/editor/reset-history";
 import { cn } from "@/lib/utils";
+import type { GoogleAccount } from "@/shared/ipc/auth";
 import type {
   ComposerTemplate,
   ComposerTemplateInput,
@@ -48,6 +49,7 @@ interface EmailComposerProps {
   onChange?: (value: EmailComposerValue) => void;
   placeholder?: string;
   templateFallbackAccountId?: string;
+  templateAccounts?: readonly GoogleAccount[];
   templateVariablePreviewContext?: Omit<TemplateVariableContext, "now">;
   templates?: readonly ComposerTemplate[];
   toolbarActions?: ReactNode;
@@ -74,6 +76,7 @@ const toComposerValue = (
 });
 
 const NO_TEMPLATES: readonly ComposerTemplate[] = [];
+const NO_ACCOUNTS: readonly GoogleAccount[] = [];
 
 const resolveComposerTemplate = (
   editor: NonNullable<ReturnType<typeof useEditor>>,
@@ -126,6 +129,7 @@ const EmailComposer = ({
   onChange,
   placeholder = "Write a message",
   templateFallbackAccountId = "",
+  templateAccounts = NO_ACCOUNTS,
   templateVariablePreviewContext,
   templates = NO_TEMPLATES,
   toolbarActions,
@@ -193,6 +197,7 @@ const EmailComposer = ({
         currentEditor.chain().focus().deleteRange(range).run();
         const context = createTemplateVariableContext(
           templateFallbackAccountId,
+          templateAccounts,
           template,
           Date.now()
         );
@@ -211,6 +216,7 @@ const EmailComposer = ({
     enableTemplateSlashMenu,
     onApplyTemplate,
     templateFallbackAccountId,
+    templateAccounts,
     templates,
   ]);
 

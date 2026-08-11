@@ -1,5 +1,6 @@
 export interface TemplateVariableContext {
   readonly accountEmail?: string;
+  readonly accountName?: string;
   readonly locale?: string;
   readonly now: number;
   readonly toEmail?: string;

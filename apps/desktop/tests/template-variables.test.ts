@@ -67,18 +67,25 @@ describe("template variables", () => {
 
   it("resolves final account and single-recipient context", () => {
     expect(
-      resolveTemplateText("From {{account.email}} to {{to.email}}", {
-        ...context,
-        accountEmail: "me@example.com",
-        toEmail: "friend@example.com",
-      })
+      resolveTemplateText(
+        "From {{account.name}} <{{account.email}}> to {{to.email}}",
+        {
+          ...context,
+          accountEmail: "me@example.com",
+          accountName: "Me Person",
+          toEmail: "friend@example.com",
+        }
+      )
     ).toStrictEqual({
       ok: true,
-      value: "From me@example.com to friend@example.com",
+      value: "From Me Person <me@example.com> to friend@example.com",
     });
     expect(
-      resolveTemplateText("{{account.email}}/{{to.email}}", context)
-    ).toStrictEqual({ ok: true, value: "/" });
+      resolveTemplateText(
+        "{{account.name}}/{{account.email}}/{{to.email}}",
+        context
+      )
+    ).toStrictEqual({ ok: true, value: "//" });
   });
 
   it.each([

@@ -15,7 +15,7 @@ The renderer captures one timestamp for the application. It resolves Subject and
 Variables are lowercase expressions. The automatic registry contains:
 
 - `{{date}}`, `{{time}}`, and `{{datetime}}`, each with an optional date-fns format such as `{{date:dd.MM.yyyy}}` or `{{time:HH:mm}}`.
-- `{{account.email}}`, resolved from the template Account or, when that is null, the account already selected in the composer.
+- `{{account.email}}` and `{{account.name}}`, resolved from the template Account or, when that is null, the account already selected in the composer. The name is the connected Google profile's display name and resolves to an empty value when unavailable.
 - `{{to.email}}`, resolved only when the template contains exactly one To recipient. It is empty for zero or multiple recipients.
 
 Custom temporal formats use date-fns tokens, where `MM` is month and `mm` is minute. Default forms use the operating system's locale, and all temporal forms use its local time zone. Unknown variables, malformed expressions, and unsupported formats prevent an explicit save.

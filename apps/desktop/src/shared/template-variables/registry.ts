@@ -5,6 +5,7 @@ import type {
   TemplateVariableInsertionChoice,
 } from "./types";
 import { accountEmailVariable } from "./variables/account-email";
+import { accountNameVariable } from "./variables/account-name";
 import { dateVariable } from "./variables/date";
 import { datetimeVariable } from "./variables/datetime";
 import { timeVariable } from "./variables/time";
@@ -15,6 +16,7 @@ export const templateVariableRegistry = [
   timeVariable,
   datetimeVariable,
   accountEmailVariable,
+  accountNameVariable,
   toEmailVariable,
 ] satisfies readonly TemplateVariableDefinition[];
 

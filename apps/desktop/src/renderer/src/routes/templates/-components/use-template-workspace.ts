@@ -276,7 +276,7 @@ export const useTemplateWorkspace = () => {
             onSave: save,
             onSubjectChange: (subject: string) =>
               updateDraft((current) => ({ ...current, subject })),
-            variablePreviewContext: getVariablePreviewContext(draft),
+            variablePreviewContext: getVariablePreviewContext(draft, accounts),
           },
     sidebar: {
       isLoading,
