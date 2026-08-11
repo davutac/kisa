@@ -40,7 +40,8 @@ interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
 const bindThreadAction = (
   action: ((thread: GmailThreadSummary) => void) | undefined,
   thread: GmailThreadSummary
-): (() => void) | undefined => action?.bind(undefined, thread);
+): (() => void) | undefined =>
+  action === undefined ? undefined : () => action(thread);
 
 const MailThreadItem = ({
   isSelected = false,
