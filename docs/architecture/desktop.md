@@ -77,6 +77,8 @@ renderer/src/
 
 As in t3code, route lifecycle code is reserved for navigation gates and initial bootstrap state. The root route's `beforeLoad` starts the desktop runtime and resolves the initial authentication state; its pending and error components own the startup splash. Live product data remains in renderer state modules and feature hooks: the mailbox list uses `useMailboxThreads`, and the thread route uses `useMailThread`. This keeps routes declarative while allowing IPC events to update mounted screens without invalidating router loaders.
 
+Destructive and interrupting actions use the renderer-wide `ConfirmDialogProvider`. Features call `useConfirm()` with their copy and await a boolean result instead of owning dialog-open state. The provider serializes overlapping requests, restores focus after the queue drains, resolves pending requests as cancelled when it unmounts, and can require exact confirmation text for especially destructive actions. The shared view owns the confirmation layout and keyboard behavior: Escape cancels, while Enter confirms once any required text matches. The operation itself starts only after the dialog resolves.
+
 ## Security boundary
 
 The renderer is sandboxed with context isolation. Preload exposes only the application-owned `desktopBridge`; the generic Electron toolkit API is not available to page code. Unknown renderer inputs are decoded in main, and main-to-renderer event values are decoded again in preload.

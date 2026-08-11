@@ -1,7 +1,8 @@
 import { MailOpenIcon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
-import PermanentDeleteDialog from "@/components/mail/permanent-delete-dialog";
+import { useConfirm } from "@/components/confirm-dialog";
+import { getDeleteSpamConfirmation } from "@/components/mail/delete-spam-confirmation";
 import MailThreadConversation from "@/components/mail/thread-conversation";
 import MailThreadHeader from "@/components/mail/thread-header";
 import ThreadLabels from "@/components/mail/thread-labels";
@@ -93,11 +94,10 @@ const MailThreadContent = ({
   showCloseButton,
   thread,
 }: MailThreadContentProps) => {
+  const confirm = useConfirm();
   const { accountId, threadId } = thread;
   const isSpam = hasSpamLabel(thread.labels);
   const isUnread = thread.labels.includes("UNREAD");
-  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
-    useState(false);
   const handleToggleRead = useCallback((): void => {
     onToggleRead({
       accountId,
@@ -111,9 +111,16 @@ const MailThreadContent = ({
       onClose
     );
   }, [accountId, isUnread, onClose, onTrash, threadId]);
+  const requestDeleteSpam = useCallback(async (): Promise<void> => {
+    const confirmed = await confirm(getDeleteSpamConfirmation(thread.subject));
+
+    if (confirmed) {
+      onDeleteSpam({ accountId, threadId }, onClose);
+    }
+  }, [accountId, confirm, onClose, onDeleteSpam, thread.subject, threadId]);
   const handleDeleteSpam = useCallback((): void => {
-    setIsDeleteConfirmationOpen(true);
-  }, []);
+    void requestDeleteSpam();
+  }, [requestDeleteSpam]);
   const handleNotSpam = useCallback((): void => {
     onNotSpam({ accountId, threadId }, onClose);
   }, [accountId, onClose, onNotSpam, threadId]);
@@ -154,13 +161,6 @@ const MailThreadContent = ({
         accountId={thread.accountId}
         messages={thread.messages}
         threadId={thread.threadId}
-      />
-      <PermanentDeleteDialog
-        onConfirm={() => {
-          onDeleteSpam({ accountId, threadId }, onClose);
-        }}
-        onOpenChange={setIsDeleteConfirmationOpen}
-        open={isDeleteConfirmationOpen}
       />
     </section>
   );

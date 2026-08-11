@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { useHotkeyLayer } from "@/hotkeys";
 
-import TemplateDialogs from "./-components/template-dialogs";
 import TemplateEditor from "./-components/template-editor";
 import TemplateEmptyState from "./-components/template-empty-state";
 import TemplatesSidebar from "./-components/templates-sidebar";
@@ -27,7 +26,6 @@ function TemplatesRoute() {
       ) : (
         <TemplateEditor {...workspace.editor} />
       )}
-      <TemplateDialogs {...workspace.dialogs} />
     </section>
   );
 }

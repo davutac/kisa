@@ -1,9 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { InboxIcon, ShieldAlertIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
-import PermanentDeleteDialog from "@/components/mail/permanent-delete-dialog";
+import { useConfirm } from "@/components/confirm-dialog";
+import { getDeleteSpamConfirmation } from "@/components/mail/delete-spam-confirmation";
 import MailThreadItem from "@/components/mail/thread-item";
 import {
   Empty,
@@ -66,6 +67,7 @@ const MailThreadList = ({
   showAccount = false,
   threads,
 }: MailThreadListProps) => {
+  const confirm = useConfirm();
   const scrollElementRef = useRef<HTMLElement>(null);
   const listElementRef = useRef<HTMLOListElement>(null);
   const selectedThreadKey = useSelectedThreadId();
@@ -73,9 +75,6 @@ const MailThreadList = ({
   const selectThread = useMailboxStore((state) => state.selectThread);
   const lastSelectionMoveAtRef = useRef<number | null>(null);
   const previousReloadRevisionRef = useRef(reloadRevision);
-  const [pendingDelete, setPendingDelete] = useState<GmailThreadSummary | null>(
-    null
-  );
   // The trailing row is the paging trigger, but it also carries the indexing
   // notice — the auto-load effect below still keys off `hasNextPage` alone, so
   // showing the notice cannot start a paging loop against an exhausted cache.
@@ -100,6 +99,18 @@ const MailThreadList = ({
     (thread) => getThreadSelectionKey(thread) === selectedThreadKey
   );
   const selectedThread = threads[selectedThreadIndex];
+  const requestDeleteSpam = useCallback(
+    async (thread: GmailThreadSummary): Promise<void> => {
+      const confirmed = await confirm(
+        getDeleteSpamConfirmation(thread.subject)
+      );
+
+      if (confirmed) {
+        onDeleteSpamThread?.(thread);
+      }
+    },
+    [confirm, onDeleteSpamThread]
+  );
   const getVisibleSelectionIndex = (
     direction: ThreadSelectionDirection
   ): number | null => {
@@ -206,7 +217,7 @@ const MailThreadList = ({
     () => {
       if (selectedThread !== undefined) {
         if (mailbox === "spam") {
-          setPendingDelete(selectedThread);
+          void requestDeleteSpam(selectedThread);
         } else {
           onTrashThread?.(selectedThread);
         }
@@ -301,7 +312,13 @@ const MailThreadList = ({
                 data-index={virtualRow.index}
                 isSelected={getThreadSelectionKey(thread) === selectedThreadKey}
                 key={virtualRow.key}
-                onDeleteSpam={mailbox === "spam" ? setPendingDelete : undefined}
+                onDeleteSpam={
+                  mailbox === "spam"
+                    ? (target) => {
+                        void requestDeleteSpam(target);
+                      }
+                    : undefined
+                }
                 onOpen={openThread}
                 onNotSpam={onNotSpamThread}
                 onToggleRead={onToggleThreadRead}
@@ -317,19 +334,6 @@ const MailThreadList = ({
           })}
         </AnimatePresence>
       </ol>
-      <PermanentDeleteDialog
-        onConfirm={() => {
-          if (pendingDelete !== null) {
-            onDeleteSpamThread?.(pendingDelete);
-          }
-        }}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingDelete(null);
-          }
-        }}
-        open={pendingDelete !== null}
-      />
     </section>
   );
 };

@@ -1,19 +1,8 @@
-import { LoaderCircleIcon, TriangleAlertIcon } from "lucide-react";
+import { LoaderCircleIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmMessage, useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
   SettingsRow,
@@ -34,7 +23,7 @@ const SettingsAccountDisconnectRow = ({
   account,
   authApi,
 }: SettingsAccountDisconnectRowProps) => {
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const confirm = useConfirm();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const titleId = `account-${account.email}-disconnect-title`;
 
@@ -48,7 +37,6 @@ const SettingsAccountDisconnectRow = ({
         toast.error(reply.error);
         return;
       }
-      setIsConfirmOpen(false);
       toast.success(`Disconnected ${account.email}`, {
         description: "Its downloaded mail was deleted from this device.",
       });
@@ -58,6 +46,30 @@ const SettingsAccountDisconnectRow = ({
       });
     } finally {
       setIsDisconnecting(false);
+    }
+  };
+
+  const requestDisconnect = async (): Promise<void> => {
+    if (isDisconnecting) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      confirmLabel: "Disconnect",
+      confirmVariant: "destructive",
+      description: (
+        <ConfirmMessage subject={account.email}>
+          Access will be revoked and everything stored for this account on this
+          device will be deleted: saved sign-in, downloaded mail, labels,
+          settings, and sync state. Nothing will be deleted from Gmail, and you
+          can connect the account again at any time.
+        </ConfirmMessage>
+      ),
+      title: "Disconnect account?",
+    });
+
+    if (confirmed) {
+      await handleDisconnect();
     }
   };
 
@@ -71,51 +83,20 @@ const SettingsAccountDisconnectRow = ({
         </SettingsRowDescription>
       </SettingsRowContent>
       <SettingsRowActions>
-        <AlertDialog onOpenChange={setIsConfirmOpen} open={isConfirmOpen}>
-          <AlertDialogTrigger
-            render={
-              <Button
-                aria-labelledby={titleId}
-                type="button"
-                variant="secondary"
-              >
-                Disconnect
-              </Button>
-            }
-          />
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogMedia>
-                <TriangleAlertIcon aria-hidden="true" />
-              </AlertDialogMedia>
-              <AlertDialogTitle>Disconnect {account.email}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This revokes access to the account and deletes everything stored
-                for it on this device: saved sign-in, downloaded mail, labels,
-                settings, and sync state. Nothing is deleted from Gmail, and you
-                can connect the account again at any time.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDisconnecting}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                disabled={isDisconnecting}
-                onClick={() => {
-                  void handleDisconnect();
-                }}
-                type="button"
-                variant="destructive"
-              >
-                {isDisconnecting ? (
-                  <LoaderCircleIcon className="animate-spin" />
-                ) : null}
-                <span>Disconnect</span>
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          aria-labelledby={titleId}
+          disabled={isDisconnecting}
+          onClick={() => {
+            void requestDisconnect();
+          }}
+          type="button"
+          variant="secondary"
+        >
+          {isDisconnecting ? (
+            <LoaderCircleIcon className="animate-spin" />
+          ) : null}
+          Disconnect
+        </Button>
       </SettingsRowActions>
     </SettingsRow>
   );

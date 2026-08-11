@@ -1,6 +1,5 @@
-// The local edit buffer intentionally follows persisted template events while clean.
+// The local edit buffer follows persisted template events while it remains clean.
 // oxlint-disable react/react-compiler
-import { useBlocker } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -25,6 +24,7 @@ import {
 } from "./template-draft";
 import { getNextTemplateSelectionIndex } from "./template-selection";
 import type { TemplateSelectionDirection } from "./template-selection";
+import { useTemplateConfirmations } from "./use-template-confirmations";
 
 export const useTemplateWorkspace = () => {
   const accounts = useGoogleAccounts();
@@ -38,12 +38,8 @@ export const useTemplateWorkspace = () => {
   const [original, setOriginal] = useState<ComposerTemplateInput | null>(null);
   const [query, setQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [nameError, setNameError] = useState<string | undefined>();
   const [editorVersion, setEditorVersion] = useState(0);
-  const [pendingDiscardAction, setPendingDiscardAction] = useState<
-    (() => void) | null
-  >(null);
   const draftRef = useRef(draft);
   const searchInputRef = useRef<HTMLInputElement>(null);
   draftRef.current = draft;
@@ -57,10 +53,9 @@ export const useTemplateWorkspace = () => {
       name.toLocaleLowerCase().includes(normalizedQuery)
     );
   }, [query, templates]);
-  const blocker = useBlocker({
-    enableBeforeUnload: () => isDirty,
-    shouldBlockFn: () => isDirty,
-    withResolver: true,
+  const { confirmDelete, confirmDiscard } = useTemplateConfirmations({
+    isDirty,
+    templateName: draft?.name,
   });
 
   // The editor buffer follows account-cascade and cross-window changes until
@@ -86,16 +81,19 @@ export const useTemplateWorkspace = () => {
     }
   }, [accountIds, draft, isDirty, original, templates]);
 
-  const requestDiscard = (action: () => void): void => {
-    if (isDirty) {
-      setPendingDiscardAction(() => action);
+  const requestDiscard = async (action: () => void): Promise<void> => {
+    if (!isDirty) {
+      action();
       return;
     }
-    action();
+
+    if (await confirmDiscard()) {
+      action();
+    }
   };
 
   const chooseTemplate = (template: ComposerTemplate): void => {
-    requestDiscard(() => {
+    void requestDiscard(() => {
       const input = toTemplateInput(template, accountIds);
       setDraft(input);
       setOriginal(input);
@@ -104,7 +102,7 @@ export const useTemplateWorkspace = () => {
   };
 
   const createTemplate = (): void => {
-    requestDiscard(() => {
+    void requestDiscard(() => {
       setDraft(createEmptyTemplate());
       setOriginal(null);
       setNameError(undefined);
@@ -204,27 +202,22 @@ export const useTemplateWorkspace = () => {
       }
       setDraft(null);
       setOriginal(null);
-      setIsDeleteOpen(false);
       toast.success("Template deleted");
     } catch {
       toast.error("Could not delete template");
     }
   };
 
-  const cancelDiscard = (): void => {
-    if (blocker.status === "blocked") {
-      blocker.reset();
+  const requestDelete = async (): Promise<void> => {
+    if (original === null) {
+      return;
     }
-    setPendingDiscardAction(null);
-  };
 
-  const discardChanges = (): void => {
-    if (blocker.status === "blocked") {
-      blocker.proceed();
-    } else {
-      pendingDiscardAction?.();
+    const confirmed = await confirmDelete(original.name);
+
+    if (confirmed) {
+      await remove();
     }
-    setPendingDiscardAction(null);
   };
 
   useAppCommand("templates.new", createTemplate);
@@ -243,16 +236,6 @@ export const useTemplateWorkspace = () => {
   });
 
   return {
-    dialogs: {
-      deleteOpen: isDeleteOpen,
-      deleteTemplateName: original?.name,
-      discardOpen:
-        blocker.status === "blocked" || pendingDiscardAction !== null,
-      onCancelDiscard: cancelDiscard,
-      onConfirmDelete: remove,
-      onConfirmDiscard: discardChanges,
-      onDeleteOpenChange: setIsDeleteOpen,
-    },
     editor:
       draft === null
         ? null
@@ -267,7 +250,9 @@ export const useTemplateWorkspace = () => {
             onAccountChange: (accountId: string | null) =>
               updateDraft((current) => ({ ...current, accountId })),
             onBodyChange: updateBody,
-            onDelete: () => setIsDeleteOpen(true),
+            onDelete: () => {
+              void requestDelete();
+            },
             onNameChange: (name: string) => {
               setNameError(undefined);
               updateDraft((current) => ({ ...current, name }));

@@ -1,5 +1,6 @@
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 
+import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { ThemeProvider } from "@/components/shell/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -19,10 +20,12 @@ const Providers = ({ children }: { children: React.ReactNode }) => (
   <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
     <HotkeysProvider defaultOptions={TANSTACK_HOTKEY_DEFAULTS}>
       <AppHotkeysProvider>
-        <TooltipProvider>
-          {children}
-          <Toaster />
-        </TooltipProvider>
+        <ConfirmDialogProvider>
+          <TooltipProvider>
+            {children}
+            <Toaster />
+          </TooltipProvider>
+        </ConfirmDialogProvider>
       </AppHotkeysProvider>
     </HotkeysProvider>
   </ThemeProvider>
