@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 
+import { MAX_GMAIL_SUBJECT_LENGTH } from "../gmail-subject";
 import { IpcReply } from "./reply";
 
 export const GmailAttachmentSummary = Schema.Struct({
@@ -165,6 +166,10 @@ export type GmailThreadMessageSendRequest =
 
 export const MAX_GMAIL_ATTACHMENT_BYTES = 25_000_000;
 
+const GmailOutgoingSubject = Schema.String.check(
+  Schema.isMaxLength(MAX_GMAIL_SUBJECT_LENGTH)
+);
+
 export const GmailOutgoingAttachment = Schema.Struct({
   filename: Schema.NonEmptyString,
   mediaType: Schema.NonEmptyString,
@@ -181,7 +186,7 @@ export const GmailMessageSendRequest = Schema.Struct({
     text: Schema.String,
   }),
   cc: Schema.Array(Schema.NonEmptyString),
-  subject: Schema.String,
+  subject: GmailOutgoingSubject,
   to: Schema.Array(Schema.NonEmptyString),
 });
 export type GmailMessageSendRequest = typeof GmailMessageSendRequest.Type;

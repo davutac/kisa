@@ -1,3 +1,4 @@
+import { truncateGmailSubject } from "@/shared/gmail-subject";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type {
   ComposerTemplate,
@@ -29,7 +30,7 @@ export const toTemplateInput = (
   cc: template.cc,
   id: template.id,
   name: template.name,
-  subject: template.subject,
+  subject: truncateGmailSubject(template.subject),
   to: template.to,
 });
 

@@ -28,6 +28,8 @@ describe("account picker", () => {
     expect(markup).toContain('aria-label="From account"');
     expect(markup).toContain("Select first@example.com");
     expect(markup).toContain("Select second@example.com");
+    expect(markup).not.toContain("max-w-48");
+    expect(markup).toMatch(/min-w-7 shrink.*min-w-0 overflow-hidden/u);
   });
 
   it("renders a selected null option for inheriting an account", () => {

@@ -5,6 +5,7 @@ import { createStore } from "zustand/vanilla";
 
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
+import { truncateGmailSubject } from "@/shared/gmail-subject";
 import type { MailDraft } from "@/shared/ipc/mail";
 
 export const EMPTY_COMPOSER_VALUE: EmailComposerValue = {
@@ -57,7 +58,7 @@ export const createNewMessageStore = (accountId: string) =>
     setIsSending: (isSending) => set({ isSending }),
     setRecipients: (recipients) => set({ recipients }),
     setStashes: (stashes) => set({ stashes }),
-    setSubject: (subject) => set({ subject }),
+    setSubject: (subject) => set({ subject: truncateGmailSubject(subject) }),
     stashes: [],
     subject: "",
     updateStashes: (update) =>

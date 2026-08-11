@@ -34,4 +34,16 @@ describe("email composer lifecycle", () => {
     expect(tiptap.hasOnUpdate).toBeTruthy();
     expect(tiptap.shouldRerenderOnTransaction).toBeFalsy();
   });
+
+  it("extends the editable surface through the available body height", () => {
+    const markup = renderToString(<EmailComposer />);
+
+    expect(markup).toContain(
+      'class="flex min-h-0 flex-1 flex-col overflow-y-auto"'
+    );
+    expect(
+      vi.mocked(TiptapReact.useEditor).mock.lastCall?.[0]?.editorProps
+        ?.attributes
+    ).toMatchObject({ class: expect.stringContaining("flex-1") });
+  });
 });

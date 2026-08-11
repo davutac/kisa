@@ -141,7 +141,7 @@ const EmailComposer = ({
       attributes: {
         "aria-label": ariaLabel,
         class:
-          "min-h-full px-4 py-2 text-sm leading-relaxed outline-none select-text",
+          "flex-1 px-4 py-2 text-sm leading-relaxed outline-none select-text",
       },
     }),
     [ariaLabel]
@@ -256,7 +256,7 @@ const EmailComposer = ({
       )}
     >
       <EditorContent
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto"
         editor={editor}
       />
       <EmailComposerToolbar

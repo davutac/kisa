@@ -16,6 +16,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { getHotkeyAriaLabel, HotkeyHint, useAppCommand } from "@/hotkeys";
+import { MAX_GMAIL_SUBJECT_LENGTH } from "@/shared/gmail-subject";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
 import type {
@@ -117,6 +118,7 @@ const NewMessageForm = ({
         <InputGroupInput
           className="h-8 px-0 text-sm md:text-sm"
           id="new-message-subject"
+          maxLength={MAX_GMAIL_SUBJECT_LENGTH}
           onChange={(event) => setSubject(event.currentTarget.value)}
           ref={focus.refFor("subject")}
           value={subject}
@@ -124,7 +126,7 @@ const NewMessageForm = ({
       </InputGroup>
       <EmailComposer
         ariaLabel="Message"
-        className="min-h-32 flex-1 border-0"
+        className="min-h-40 flex-1 border-0"
         consumeModEnter
         contentKey={draftId}
         defaultValue={composer.html}

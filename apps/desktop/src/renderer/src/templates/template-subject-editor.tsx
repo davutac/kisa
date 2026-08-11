@@ -13,6 +13,11 @@ import {
 } from "@/templates/template-variable";
 import { TemplateVariablePicker } from "@/templates/template-variable-picker";
 
+import {
+  TemplateSubjectLimit,
+  truncateTemplateSubjectPaste,
+} from "./template-subject-limit";
+
 const SUBJECT_EXTENSIONS = [
   StarterKit.configure({
     blockquote: false,
@@ -35,6 +40,7 @@ const SUBJECT_EXTENSIONS = [
     underline: false,
   }),
   TemplateVariable,
+  TemplateSubjectLimit,
 ];
 
 const normalizePastedSubject = (value: string): string =>
@@ -44,7 +50,7 @@ const SUBJECT_EDITOR_PROPS = {
   attributes: {
     "aria-labelledby": "template-subject-label",
     class:
-      "flex h-8 min-w-0 flex-1 items-center overflow-x-auto whitespace-pre text-xs/relaxed outline-none [&>p]:min-w-max",
+      "no-scrollbar flex h-8 min-w-0 flex-1 items-center overflow-x-auto whitespace-pre text-xs/relaxed outline-none [&>p]:min-w-max [&>p]:pl-0.5",
     "data-slot": "input-group-control",
     role: "textbox",
   },
@@ -56,7 +62,15 @@ const SUBJECT_EDITOR_PROPS = {
     view.dom.closest("form")?.requestSubmit();
     return true;
   },
-  transformPastedText: normalizePastedSubject,
+  transformPastedText: (value, _plain, view) => {
+    const { from, to } = view.state.selection;
+    return truncateTemplateSubjectPaste(
+      normalizePastedSubject(value),
+      view.state.doc,
+      from,
+      to
+    );
+  },
 } satisfies EditorProps;
 
 interface TemplateSubjectEditorProps {

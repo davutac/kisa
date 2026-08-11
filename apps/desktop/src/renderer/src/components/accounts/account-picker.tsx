@@ -90,7 +90,7 @@ const AccountOptionButton = ({
             }
             aria-label={ariaLabel}
             aria-pressed={isSelected}
-            className="h-7 min-w-7 justify-start gap-0 overflow-visible rounded-full p-0"
+            className="h-7 min-w-7 shrink justify-start gap-0 overflow-visible rounded-full p-0"
             onClick={onSelect}
             ref={focusRef}
             type="button"
@@ -106,13 +106,11 @@ const AccountOptionButton = ({
                   : { opacity: 0, width: 0 }
               }
               aria-hidden="true"
-              className="block overflow-hidden"
+              className="block min-w-0 overflow-hidden"
               initial={false}
               transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.22)}
             >
-              <span className="block max-w-48 truncate px-2.5 pl-1.5">
-                {label}
-              </span>
+              <span className="block truncate px-2.5 pl-1.5">{label}</span>
             </m.span>
           </Button>
         }
