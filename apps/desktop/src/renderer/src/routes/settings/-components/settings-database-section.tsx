@@ -62,7 +62,7 @@ const SettingsDatabaseSection = ({
                 disabled={workflow.pendingAction !== undefined}
                 onClick={handleOpenImport}
                 type="button"
-                variant="outline"
+                variant="secondary"
               >
                 <UploadIcon />
                 <span>Import</span>
@@ -86,7 +86,7 @@ const SettingsDatabaseSection = ({
                 disabled={workflow.pendingAction !== undefined}
                 onClick={handleExportRecoveryKey}
                 type="button"
-                variant="outline"
+                variant="secondary"
               >
                 {workflow.pendingAction === "export" ? (
                   <LoaderCircleIcon className="animate-spin" />

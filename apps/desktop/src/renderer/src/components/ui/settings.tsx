@@ -73,7 +73,7 @@ function SettingsRows({ className, ...props }: SettingsRowsProps) {
       role="list"
       data-slot="settings-rows"
       className={cn(
-        "flex w-full flex-col divide-y divide-border overflow-hidden rounded-lg border bg-card text-card-foreground",
+        "flex w-full flex-col gap-px overflow-hidden rounded-lg bg-background text-card-foreground",
         className,
       )}
       {...props}
@@ -82,7 +82,7 @@ function SettingsRows({ className, ...props }: SettingsRowsProps) {
 }
 
 const settingsRowVariants = cva(
-  "flex min-h-20 w-full flex-col gap-3 px-4 py-4 outline-none transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-6 md:px-5",
+  "flex min-h-20 w-full flex-col gap-3 bg-card px-4 py-4 outline-none transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-6 md:px-5",
   {
     variants: {
       variant: {

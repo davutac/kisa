@@ -98,6 +98,7 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
             aria-labelledby="updates-title"
             onClick={handleInstallUpdate}
             type="button"
+            variant="secondary"
           >
             <DownloadIcon />
             <span>{view.label}</span>
@@ -111,7 +112,7 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
               void handleCheckForUpdates();
             }}
             type="button"
-            variant="outline"
+            variant="secondary"
           >
             {view.isBusy ? (
               <LoaderCircleIcon className="animate-spin" />

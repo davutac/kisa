@@ -74,7 +74,11 @@ const SettingsAccountDisconnectRow = ({
         <AlertDialog onOpenChange={setIsConfirmOpen} open={isConfirmOpen}>
           <AlertDialogTrigger
             render={
-              <Button aria-labelledby={titleId} type="button" variant="outline">
+              <Button
+                aria-labelledby={titleId}
+                type="button"
+                variant="secondary"
+              >
                 Disconnect
               </Button>
             }

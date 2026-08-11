@@ -115,7 +115,7 @@ const SettingsAccountLabelsRow = ({
             void handleSync();
           }}
           type="button"
-          variant="outline"
+          variant="secondary"
         >
           {isSyncing ? (
             <LoaderCircleIcon className="animate-spin" />

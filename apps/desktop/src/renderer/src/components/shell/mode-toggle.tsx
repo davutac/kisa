@@ -35,7 +35,7 @@ const ModeToggle = () => {
         render={
           <Button
             aria-label={`Change theme, current theme is ${themeLabel}`}
-            variant="outline"
+            variant="secondary"
           />
         }
       >
