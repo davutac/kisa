@@ -6,7 +6,7 @@ import MailAttachmentList from "@/components/mail/attachment-list";
 import MailLabelBadges from "@/components/mail/label-badges";
 import MailRelativeTime from "@/components/mail/relative-time";
 import MailThreadQuickActions, {
-  MAIL_THREAD_QUICK_ACTIONS_WIDTH,
+  getMailThreadQuickActionsWidth,
 } from "@/components/mail/thread-quick-actions";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,11 +23,6 @@ import { parseMailboxAddress } from "@/mail/address";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
-
-const rowVariants = {
-  idle: { marginRight: 0 },
-  revealed: { marginRight: MAIL_THREAD_QUICK_ACTIONS_WIDTH },
-};
 
 interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   isSelected?: boolean;
@@ -74,6 +69,17 @@ const MailThreadItem = ({
   const hiddenAttachmentCount =
     thread.attachments.length - visibleAttachments.length;
   const handleNotSpam = bindThreadAction(onNotSpam, thread);
+  const hasDestructiveAction = [onDeleteSpam, onTrash].some(
+    (action) => action !== undefined
+  );
+  const quickActionsWidth = getMailThreadQuickActionsWidth(
+    handleNotSpam !== undefined,
+    hasDestructiveAction
+  );
+  const rowVariants = {
+    idle: { marginRight: 0 },
+    revealed: { marginRight: quickActionsWidth },
+  };
 
   return (
     <m.li
@@ -112,12 +118,8 @@ const MailThreadItem = ({
           isUnread={thread.isUnread}
           onDeleteSpam={bindThreadAction(onDeleteSpam, thread)}
           onNotSpam={handleNotSpam}
-          onToggleRead={() => {
-            onToggleRead?.(thread);
-          }}
-          onTrash={() => {
-            onTrash?.(thread);
-          }}
+          onToggleRead={bindThreadAction(onToggleRead, thread)}
+          onTrash={bindThreadAction(onTrash, thread)}
         />
         {/* Opaque, so the row hides the panel edge it overlaps. */}
         <m.div
