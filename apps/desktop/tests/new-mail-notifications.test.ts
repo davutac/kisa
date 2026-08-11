@@ -9,6 +9,7 @@ import {
   showNewMailNotifications,
   toNewMailNotificationCopy,
 } from "../src/main/mail/new-mail-notifications";
+import type { GmailThreadRequest } from "../src/shared/ipc/mail";
 
 interface TestMessageRow {
   readonly fromAddress: string;
@@ -32,13 +33,7 @@ const mocks = vi.hoisted(() => ({
     restore: vi.fn<() => void>(),
     show: vi.fn<() => void>(),
   },
-  markThreadRead:
-    vi.fn<
-      (request: {
-        readonly accountId: string;
-        readonly threadId: string;
-      }) => void
-    >(),
+  markThreadRead: vi.fn<(request: GmailThreadRequest) => void>(),
   messages: [] as TestMessageRow[],
   notificationListeners: [] as Map<
     string,
@@ -53,6 +48,7 @@ const mocks = vi.hoisted(() => ({
       }) => Promise<Electron.BrowserWindow>
     >(),
   threads: [] as { readonly snippet: string; readonly threadId: string }[],
+  trashThread: vi.fn<(request: GmailThreadRequest) => void>(),
 }));
 
 vi.mock(import("electron"), () => {
@@ -144,6 +140,19 @@ const makeMessage = (
   threadId: `thread-${messageId}`,
 });
 
+const showNotifications = (
+  accountId: string,
+  addedMessageIds: readonly string[],
+  resolveSenderBrand: Parameters<typeof showNewMailNotifications>[2]
+) =>
+  showNewMailNotifications(
+    accountId,
+    addedMessageIds,
+    resolveSenderBrand,
+    mocks.markThreadRead,
+    mocks.trashThread
+  );
+
 describe(showNewMailNotifications, () => {
   beforeEach(() => {
     for (const listeners of mocks.notificationListeners) {
@@ -167,6 +176,7 @@ describe(showNewMailNotifications, () => {
       show: vi.fn<() => void>(),
     } as unknown as Electron.BrowserWindow);
     mocks.threads = [];
+    mocks.trashThread.mockClear();
   });
 
   it("bounds and strips control characters from sender-owned text", () => {
@@ -192,12 +202,7 @@ describe(showNewMailNotifications, () => {
     );
 
     await Effect.runPromise(
-      showNewMailNotifications(
-        "user@example.com",
-        ["new"],
-        resolveBrand,
-        mocks.markThreadRead
-      )
+      showNotifications("user@example.com", ["new"], resolveBrand)
     );
 
     expect(resolveBrand).not.toHaveBeenCalled();
@@ -216,11 +221,10 @@ describe(showNewMailNotifications, () => {
     );
 
     await Effect.runPromise(
-      showNewMailNotifications(
+      showNotifications(
         "user@example.com",
         ["new", "read", "archived"],
-        resolveBrand,
-        mocks.markThreadRead
+        resolveBrand
       )
     );
 
@@ -230,6 +234,7 @@ describe(showNewMailNotifications, () => {
       actions: [
         { text: "Open", type: "button" },
         { text: "Mark as read", type: "button" },
+        { text: "Trash", type: "button" },
       ],
       body: "A short preview",
       subtitle: "A subject",
@@ -249,22 +254,16 @@ describe(showNewMailNotifications, () => {
     ];
 
     await Effect.runPromise(
-      showNewMailNotifications(
-        "user@example.com",
-        ["first", "second", "other"],
-        () => Effect.succeed(null),
-        mocks.markThreadRead
+      showNotifications("user@example.com", ["first", "second", "other"], () =>
+        Effect.succeed(null)
       )
     );
     mocks.messages = [
       { ...makeMessage("first", ["INBOX", "UNREAD"]), threadId: "shared" },
     ];
     await Effect.runPromise(
-      showNewMailNotifications(
-        "other@example.com",
-        ["first"],
-        () => Effect.succeed(null),
-        mocks.markThreadRead
+      showNotifications("other@example.com", ["first"], () =>
+        Effect.succeed(null)
       )
     );
 
@@ -286,11 +285,8 @@ describe(showNewMailNotifications, () => {
       mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
 
       await Effect.runPromise(
-        showNewMailNotifications(
-          "user@example.com",
-          ["new"],
-          () => Effect.succeed(null),
-          mocks.markThreadRead
+        showNotifications("user@example.com", ["new"], () =>
+          Effect.succeed(null)
         )
       );
 
@@ -311,12 +307,7 @@ describe(showNewMailNotifications, () => {
     mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
 
     await Effect.runPromise(
-      showNewMailNotifications(
-        "user@example.com",
-        ["new"],
-        () => Effect.succeed(null),
-        mocks.markThreadRead
-      )
+      showNotifications("user@example.com", ["new"], () => Effect.succeed(null))
     );
 
     mocks.notificationListeners[0]?.get("action")?.({ actionIndex: 1 });
@@ -328,18 +319,31 @@ describe(showNewMailNotifications, () => {
     expect(mocks.openThreadWindow).not.toHaveBeenCalled();
   });
 
+  it("moves the account-scoped thread to trash from the notification action", async () => {
+    mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
+    mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
+
+    await Effect.runPromise(
+      showNotifications("user@example.com", ["new"], () => Effect.succeed(null))
+    );
+
+    mocks.notificationListeners[0]?.get("action")?.({ actionIndex: 2 });
+
+    expect(mocks.trashThread).toHaveBeenCalledWith({
+      accountId: "user@example.com",
+      threadId: "thread-new",
+    });
+    expect(mocks.markThreadRead).not.toHaveBeenCalled();
+    expect(mocks.openThreadWindow).not.toHaveBeenCalled();
+  });
+
   it("focuses the main window when the notification thread cannot open", async () => {
     mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
     mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
     mocks.openThreadWindow.mockRejectedValue(new Error("load failed"));
 
     await Effect.runPromise(
-      showNewMailNotifications(
-        "user@example.com",
-        ["new"],
-        () => Effect.succeed(null),
-        mocks.markThreadRead
-      )
+      showNotifications("user@example.com", ["new"], () => Effect.succeed(null))
     );
 
     mocks.notificationListeners[0]?.get("click")?.();
@@ -357,16 +361,12 @@ describe(showNewMailNotifications, () => {
     ).toString("base64");
 
     await Effect.runPromise(
-      showNewMailNotifications(
-        "user@example.com",
-        ["branded"],
-        () =>
-          Effect.succeed({
-            domain: "example.com",
-            imageDataUrl: `data:image/svg+xml;base64,${svg}`,
-            source: "bimi" as const,
-          }),
-        mocks.markThreadRead
+      showNotifications("user@example.com", ["branded"], () =>
+        Effect.succeed({
+          domain: "example.com",
+          imageDataUrl: `data:image/svg+xml;base64,${svg}`,
+          source: "bimi" as const,
+        })
       )
     );
 

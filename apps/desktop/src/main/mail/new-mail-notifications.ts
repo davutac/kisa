@@ -25,6 +25,7 @@ const MAX_ACTIVE_NOTIFICATIONS = 50;
 const BRAND_ICON_SIZE = 128;
 const OPEN_ACTION_INDEX = 0;
 const MARK_AS_READ_ACTION_INDEX = 1;
+const TRASH_ACTION_INDEX = 2;
 const UNSAFE_RASTER_SVG_PATTERN =
   /<image|<style|@import|\b(?:href|src)\s*=|url\(/iu;
 
@@ -251,7 +252,8 @@ const toBrandIcon = Effect.fn("toBrandIcon")(function* toBrandIcon(
 const showNotification = (
   message: NewMailNotificationMessage,
   brandIcon: NativeImage | null,
-  markThreadRead: (request: GmailThreadRequest) => void
+  markThreadRead: (request: GmailThreadRequest) => void,
+  trashThread: (request: GmailThreadRequest) => void
 ): void => {
   const copy = toNewMailNotificationCopy(message);
   const accountTitle = truncateNotificationText(
@@ -262,6 +264,7 @@ const showNotification = (
     actions: [
       { text: "Open", type: "button" },
       { text: "Mark as read", type: "button" },
+      { text: "Trash", type: "button" },
     ],
     body: copy.body,
     groupId: message.accountId,
@@ -274,30 +277,38 @@ const showNotification = (
   const release = (): void => {
     activeNotifications.delete(notification);
   };
+  const request = {
+    accountId: message.accountId,
+    threadId: message.threadId,
+  };
   let wasActivated = false;
-  const activate = (): void => {
+  const runOnce = (action: () => void): void => {
     if (wasActivated) {
       return;
     }
 
     wasActivated = true;
     release();
-    void Effect.runPromise(openNotificationThread(message));
+    action();
+  };
+  const activate = (): void => {
+    runOnce(() => {
+      void Effect.runPromise(openNotificationThread(message));
+    });
   };
   const markAsRead = (): void => {
-    if (wasActivated) {
-      return;
-    }
-
-    wasActivated = true;
-    release();
-    markThreadRead({
-      accountId: message.accountId,
-      threadId: message.threadId,
-    });
+    runOnce(() => markThreadRead(request));
+  };
+  const trash = (): void => {
+    runOnce(() => trashThread(request));
   };
 
   notification.once("action", ({ actionIndex }) => {
+    if (actionIndex === TRASH_ACTION_INDEX) {
+      trash();
+      return;
+    }
+
     if (actionIndex === MARK_AS_READ_ACTION_INDEX) {
       markAsRead();
       return;
@@ -406,7 +417,8 @@ export const showNewMailNotifications = Effect.fn("showNewMailNotifications")(
     accountId: string,
     addedMessageIds: readonly string[],
     resolveSenderBrand: ResolveSenderBrand,
-    markThreadRead: (request: GmailThreadRequest) => void
+    markThreadRead: (request: GmailThreadRequest) => void,
+    trashThread: (request: GmailThreadRequest) => void
   ) {
     if (!Notification.isSupported()) {
       return;
@@ -430,7 +442,8 @@ export const showNewMailNotifications = Effect.fn("showNewMailNotifications")(
           new NewMailNotificationError({
             message: "Could not show a new email notification",
           }),
-        try: () => showNotification(message, brandIcon, markThreadRead),
+        try: () =>
+          showNotification(message, brandIcon, markThreadRead, trashThread),
       }).pipe(Effect.ignore);
     }
   }

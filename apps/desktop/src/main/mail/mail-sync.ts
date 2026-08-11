@@ -1234,6 +1234,9 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
       )
     )
   );
+  yield* Effect.sync(() =>
+    dismissThreadNotifications(request.accountId, request.threadId)
+  );
 
   // `Gmail.trashThread` deletes the cached row; re-insert it with TRASH so the
   // list keeps rendering the thread until the next sync reconciles it.
@@ -1273,6 +1276,32 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
   ]);
 });
 
+const activeTrashMutations = new Set<string>();
+
+const requestCachedThreadTrash = (request: GmailThreadRequest): void => {
+  const key = `${request.accountId}:${request.threadId}`;
+
+  if (activeTrashMutations.has(key)) {
+    return;
+  }
+
+  activeTrashMutations.add(key);
+
+  const trash = async (): Promise<void> => {
+    try {
+      await Effect.runPromise(trashThread(request));
+    } catch (error) {
+      await Effect.runPromise(
+        Effect.logWarning("Could not trash cached Gmail thread", error)
+      );
+    } finally {
+      activeTrashMutations.delete(key);
+    }
+  };
+
+  void trash();
+};
+
 const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
   accountId: string
 ) {
@@ -1293,7 +1322,8 @@ const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
       accountId,
       result.addedMessageIds,
       loadNotificationSenderBrand,
-      requestCachedThreadRead
+      requestCachedThreadRead,
+      requestCachedThreadTrash
     ).pipe(
       Effect.catch((error) =>
         Effect.logWarning(
