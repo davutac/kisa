@@ -158,7 +158,7 @@ export const TemplateVariablePicker = ({
           <Command key={isOpen ? "open" : "closed"} loop>
             <CommandInput placeholder="Search variables" ref={searchInputRef} />
             <CommandList className="max-h-96 px-1 py-2">
-              <CommandEmpty>No matching variables</CommandEmpty>
+              <CommandEmpty>No variable answers to that name.</CommandEmpty>
               <TemplateVariableCommandItems
                 context={{ ...previewContext, now: previewNow }}
                 onSelect={insert}

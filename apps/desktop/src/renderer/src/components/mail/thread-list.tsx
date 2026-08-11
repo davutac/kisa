@@ -275,7 +275,7 @@ const MailThreadList = ({
               {isInitialLoading ? <Spinner /> : emptyIcon}
             </EmptyMedia>
             <EmptyTitle>
-              {isInitialLoading ? "Loading email…" : emptyTitle}
+              {isInitialLoading ? "Checking the post…" : emptyTitle}
             </EmptyTitle>
             {isInitialLoading ? null : (
               <EmptyDescription>{emptyMessage}</EmptyDescription>
@@ -304,7 +304,7 @@ const MailThreadList = ({
                   aria-live="polite"
                   className="text-muted-foreground text-center text-sm"
                 >
-                  {hasNextPage ? "Loading more email…" : indexingMessage}
+                  {hasNextPage ? "Fetching the next chapter…" : indexingMessage}
                 </p>
               </li>
             ) : (

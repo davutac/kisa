@@ -58,7 +58,9 @@ const ThreadLabelPicker = ({
       <DropdownMenuContent align="start" className="w-56">
         {labels.length === 0 ? (
           <DropdownMenuLabel>
-            {isLoading ? "Loading labels…" : "No user labels"}
+            {isLoading
+              ? "Consulting the label maker…"
+              : "No labels. This thread travels light."}
           </DropdownMenuLabel>
         ) : (
           labels.map((label) => {

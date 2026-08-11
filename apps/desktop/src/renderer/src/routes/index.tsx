@@ -45,9 +45,9 @@ function getEmptyState(
 
   return {
     message: unreadOnly
-      ? "No unread email."
-      : "No cached inbox messages yet. Email is fetched in the background.",
-    title: "No email",
+      ? "Nothing unread. The tiny red badge has been defeated."
+      : "No mail here yet. Kisa is checking the post in the background.",
+    title: unreadOnly ? "Inbox zero, achieved" : "A rare sight: inbox zero",
   };
 }
 

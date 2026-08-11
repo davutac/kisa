@@ -104,7 +104,7 @@ const TemplateSlashMenu = forwardRef<
     >
       {items.length === 0 ? (
         <p className="text-muted-foreground px-2 py-1.5 text-xs">
-          No matching templates
+          No template answers to that name.
         </p>
       ) : (
         items.map((template, index) => (

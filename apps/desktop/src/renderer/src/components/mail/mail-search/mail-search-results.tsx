@@ -99,7 +99,9 @@ const MailSearchResults = ({
     <CommandGroup heading={hasMore ? "Results (top matches)" : "Results"}>
       {threads.length === 0 ? (
         <p className="text-muted-foreground px-2.5 py-6 text-center">
-          {isLoading ? "Searching…" : "No indexed mail matches this search."}
+          {isLoading
+            ? "Interrogating the index…"
+            : "No indexed mail matches. Even the search bar is stumped."}
         </p>
       ) : (
         <div

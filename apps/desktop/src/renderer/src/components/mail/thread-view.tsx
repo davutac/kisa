@@ -28,7 +28,7 @@ const ThreadPending = () => (
       <EmptyMedia variant="icon">
         <Spinner />
       </EmptyMedia>
-      <EmptyTitle>Loading conversation…</EmptyTitle>
+      <EmptyTitle>Untangling the conversation…</EmptyTitle>
     </EmptyHeader>
   </Empty>
 );

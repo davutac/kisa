@@ -36,9 +36,9 @@ const AppClosingOverlay = () => {
         </EmptyMedia>
         <output aria-live="assertive">
           <EmptyHeader className="gap-1.5">
-            <EmptyTitle>Closing Kisa</EmptyTitle>
+            <EmptyTitle>Tucking Kisa in</EmptyTitle>
             <EmptyDescription className="text-xs/5">
-              Finishing up
+              Saving your place before lights out
             </EmptyDescription>
           </EmptyHeader>
         </output>

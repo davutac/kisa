@@ -45,15 +45,15 @@ const TemplatesSidebar = ({
   if (isLoading) {
     content = (
       <div className="text-muted-foreground flex items-center gap-2 p-3 text-sm">
-        <LoaderCircleIcon className="animate-spin" /> Loading templates…
+        <LoaderCircleIcon className="animate-spin" /> Dusting off templates…
       </div>
     );
   } else if (templates.length === 0) {
     content = (
       <p className="text-muted-foreground p-3 text-sm">
         {totalTemplateCount === 0
-          ? "No templates yet"
-          : "No matching templates"}
+          ? "No templates yet. Future You is still waiting."
+          : "No template answers to that name."}
       </p>
     );
   } else {

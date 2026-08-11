@@ -83,7 +83,7 @@ const AttachmentPreviewApp = () => {
   const attachment = state.status === "ready" ? state.data : undefined;
   let content;
   if (state.status === "loading") {
-    content = <PreviewPending label="Loading attachment…" />;
+    content = <PreviewPending label="Opening the envelope…" />;
   } else if (state.status === "error") {
     content = <PreviewError message={state.message} />;
   } else if (state.data.kind === "image") {

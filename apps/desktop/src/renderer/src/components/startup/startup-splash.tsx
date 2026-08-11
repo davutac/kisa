@@ -23,7 +23,7 @@ const getStatusLabel = (errorMessage: string | undefined): string => {
     return "Startup failed";
   }
 
-  return "Starting";
+  return "Waking Kisa";
 };
 
 const getStatusDescription = (errorMessage: string | undefined): string => {
@@ -31,7 +31,7 @@ const getStatusDescription = (errorMessage: string | undefined): string => {
     return errorMessage;
   }
 
-  return "Getting things ready";
+  return "Sorting the mail before anyone notices";
 };
 
 const StartupSplash = ({ errorMessage, onRetry }: StartupSplashProps) => {

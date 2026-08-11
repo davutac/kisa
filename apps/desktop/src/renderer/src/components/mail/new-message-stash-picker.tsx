@@ -117,7 +117,7 @@ const NewMessageStashPicker = ({
         <Command key={isOpen ? "open" : "closed"}>
           <CommandInput placeholder="Search stashes" ref={searchInputRef} />
           <CommandList>
-            <CommandEmpty>No matching stashes</CommandEmpty>
+            <CommandEmpty>No stash answers to that name.</CommandEmpty>
             <CommandGroup>
               {drafts.map((draft) => (
                 <StashItem

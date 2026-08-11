@@ -71,8 +71,8 @@ const FILTER_EXAMPLES: Record<SearchFilterField, string> = {
 const NUMBER_FORMAT = new Intl.NumberFormat();
 const ADDRESS_HEADINGS = { from: "From user", to: "Sent to" } as const;
 const ADDRESS_EMPTY = {
-  from: "No indexed sender matches.",
-  to: "No recipient of your sent mail matches.",
+  from: "No indexed sender answers to that name.",
+  to: "No sent-mail recipient answers to that name.",
 } as const;
 
 export const getMailSearchAddressRole = (
@@ -185,7 +185,10 @@ export const getMailSearchCompletions = ({
         formatGmailLabel(label.name).toLowerCase() === normalizedValue
     );
     return {
-      empty: labels === undefined ? "Loading labels…" : "No labels match.",
+      empty:
+        labels === undefined
+          ? "Consulting the label drawer…"
+          : "No label answers to that name.",
       heading: "Label",
       items: [
         ...matches.map((label) => ({

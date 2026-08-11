@@ -14,9 +14,9 @@ const TemplateEmptyState = () => (
       <EmptyMedia variant="icon">
         <FileTextIcon />
       </EmptyMedia>
-      <EmptyTitle>Select a template</EmptyTitle>
+      <EmptyTitle>No template in the spotlight</EmptyTitle>
       <EmptyDescription>
-        Open a template to edit it, or create a new one.
+        Pick one to edit, or make a new one for Future You.
       </EmptyDescription>
     </EmptyHeader>
   </Empty>
