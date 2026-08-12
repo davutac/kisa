@@ -165,3 +165,7 @@ The main process owns privileged capabilities, including the installed-app OAuth
 - Never create a pull request, deploy, tag, publish, or run a release unless the developer explicitly asks.
 - `pnpm release [major|minor|patch|x.y.z]` requires a clean tree, updates only `apps/desktop/package.json`, runs `pnpm check` unless `--skip-check`, commits `Release vX.Y.Z`, tags it, and pushes unless `--no-push` is supplied.
 - Keep commits focused and written in plain language. UI changes should include before/after evidence when a pull request is requested; animation or timing changes are better demonstrated with a short recording.
+
+## Local Effect Source
+
+The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect` for reference. Use this to explore APIs, find usage examples, and understand implementation details when the documentation isn't enough.

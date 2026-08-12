@@ -12,17 +12,7 @@
   "editor.formatOnPaste": true,
   "editor.formatOnSave": true,
   "emmet.showExpandedAbbreviation": "never",
-  "files.exclude": {
-    "repos/**": true
-  },
-  "files.watcherExclude": {
-    "repos/**": true
-  },
-  "js/ts.preferences.autoImportFileExcludePatterns": ["repos/**"],
   "js/ts.experimental.useTsgo": true,
-  "search.exclude": {
-    "repos/**": true
-  },
   "[css]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
@@ -63,7 +53,7 @@
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
   "editor.codeActionsOnSave": {
-    "source.fixAll.oxc": "explicit"
+    "source.fixAll.oxc": "always"
   },
   "[tailwindcss]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
