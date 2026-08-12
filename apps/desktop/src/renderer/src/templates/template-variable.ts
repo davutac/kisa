@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import { Node, nodeInputRule, nodePasteRule } from "@tiptap/core";
+import { Predicate } from "effect";
 
 import type {
   TemplateTextResult,
@@ -27,7 +28,7 @@ const attributesFromToken = (token: string) => ({
 });
 
 const expressionFromAttributes = (attributes: JSONContent["attrs"]): string =>
-  typeof attributes?.expression === "string" ? attributes.expression : "date";
+  Predicate.isString(attributes?.expression) ? attributes.expression : "date";
 
 export const templateTextToVariableDocument = (source: string): JSONContent => {
   const content: JSONContent[] = [];
@@ -49,13 +50,13 @@ export const templateTextToVariableDocument = (source: string): JSONContent => {
     content.push({ text: source.slice(index), type: "text" });
   }
 
+  const paragraph =
+    content.length === 0
+      ? { type: "paragraph" }
+      : { content, type: "paragraph" };
+
   return {
-    content: [
-      {
-        ...(content.length === 0 ? {} : { content }),
-        type: "paragraph",
-      },
-    ],
+    content: [paragraph],
     type: "doc",
   };
 };
@@ -143,21 +144,25 @@ export const resolveTemplateVariableContent = (
       expressionFromAttributes(content.attrs)
     );
     const resolved: TemplateTextResult = resolveTemplateText(token, context);
-    return resolved.ok
-      ? {
-          ok: true,
-          value:
-            resolved.value.length === 0
-              ? null
-              : {
-                  ...(content.marks === undefined
-                    ? {}
-                    : { marks: content.marks }),
-                  text: resolved.value,
-                  type: "text",
-                },
-        }
-      : resolved;
+    if (!resolved.ok) {
+      return resolved;
+    }
+    if (resolved.value.length === 0) {
+      return { ok: true, value: null };
+    }
+
+    const resolvedContent = {
+      text: resolved.value,
+      type: "text",
+    };
+
+    return {
+      ok: true,
+      value:
+        content.marks === undefined
+          ? resolvedContent
+          : { ...resolvedContent, marks: content.marks },
+    };
   }
 
   if (

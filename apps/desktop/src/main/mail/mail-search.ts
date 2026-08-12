@@ -492,9 +492,7 @@ const toSenderSuggestions = (
       ({
         address: row.address,
         messageCount: row.message_count,
-        ...(row.name === null || row.name.length === 0
-          ? {}
-          : { name: row.name }),
+        name: row.name === null || row.name.length === 0 ? undefined : row.name,
       }) satisfies GmailSenderSuggestion
   ),
 });

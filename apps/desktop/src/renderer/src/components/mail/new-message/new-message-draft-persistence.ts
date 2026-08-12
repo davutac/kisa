@@ -57,9 +57,7 @@ export const useDraftPersistence = (mailApi: MailApi | undefined) => {
       }
       try {
         const reply = await mailApi.discardDraft({
-          ...(draft.accountId === undefined
-            ? {}
-            : { accountId: draft.accountId }),
+          accountId: draft.accountId,
           draftId: draft.id,
         });
         if (!reply.ok) {

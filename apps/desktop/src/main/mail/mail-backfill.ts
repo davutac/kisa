@@ -178,16 +178,12 @@ const toProgress = (
   state: BackfillState
 ): GmailIndexProgress => ({
   accountId,
+  error: state.lastError ?? undefined,
+  estimatedThreads: state.estimatedThreads ?? undefined,
   indexedMessages: state.indexedMessages,
   indexedThreads: state.indexedThreads,
+  oldestIndexedAt: state.oldestIndexedAt ?? undefined,
   status: state.status,
-  ...(state.lastError === null ? {} : { error: state.lastError }),
-  ...(state.estimatedThreads === null
-    ? {}
-    : { estimatedThreads: state.estimatedThreads }),
-  ...(state.oldestIndexedAt === null
-    ? {}
-    : { oldestIndexedAt: state.oldestIndexedAt }),
 });
 
 const progressByAccount = new Map<string, GmailIndexProgress>();
@@ -360,11 +356,9 @@ const runPage = async (
         Effect.map(
           (page) =>
             ({
+              cursor: page.nextCursor,
               oldest: oldestOf(page),
               type: "page",
-              ...(page.nextCursor === undefined
-                ? {}
-                : { cursor: page.nextCursor }),
             }) as PageOutcome
         ),
         Effect.catch((error) =>
@@ -469,9 +463,9 @@ const runBackfill = async (accountId: string): Promise<void> => {
 
     // oxlint-disable-next-line eslint/no-await-in-loop
     await settle(accountId, isDone ? "complete" : "running", {
+      completedAt: isDone ? Date.now() : undefined,
+      oldestIndexedAt: oldestIndexedAt ?? undefined,
       pageToken: cursor ?? null,
-      ...(oldestIndexedAt === null ? {} : { oldestIndexedAt }),
-      ...(isDone ? { completedAt: Date.now() } : {}),
     });
 
     if (isDone) {

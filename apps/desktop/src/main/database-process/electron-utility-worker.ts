@@ -29,21 +29,26 @@ const layerPlatform: Layer.Layer<Worker.WorkerPlatform> = Layer.succeed(
         )
       ).pipe(
         Effect.as({
-          postMessage: (message: unknown): void => worker.postMessage(message),
+          postMessage: <Message>(message: Message): void =>
+            worker.postMessage(message),
           worker,
         })
       );
     },
     listen({ deferred, emit, port, scope }) {
-      const onMessage = (message: unknown): void => {
+      const onMessage = <Message>(message: Message): void => {
         emit(message);
       };
-      const onError = (cause: unknown): void => {
+      const onError = (
+        type: "FatalError",
+        location: string,
+        report: string
+      ): void => {
         Deferred.doneUnsafe(
           deferred,
           new WorkerError({
             reason: new WorkerReceiveError({
-              cause,
+              cause: { location, report, type },
               message: "Database utility process emitted an error",
             }),
           })

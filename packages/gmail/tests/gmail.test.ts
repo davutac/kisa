@@ -391,7 +391,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
   };
 };
 
-const authHandoff = (accessToken: string, refreshToken?: string): unknown => ({
+const authHandoff = (accessToken: string, refreshToken?: string) => ({
   accessToken,
   refreshToken,
   scopes: [GMAIL_FULL_ACCESS_SCOPE],

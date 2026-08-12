@@ -205,17 +205,17 @@ const toCachedThreadMessage = (
       messageId: attachment.messageId,
       size: attachment.size,
     })),
+    bcc: bcc.length === 0 ? undefined : bcc,
     body,
+    cc: cc.length === 0 ? undefined : cc,
     from: row.fromAddress,
     id: row.messageId,
     labelIds: removeUnreadLabel(row.labelIds ?? []),
+    replyTo: row.replyToAddress ?? undefined,
     sentAt: row.internalDate,
     snippet: "",
     subject: row.subject.length === 0 ? "(No subject)" : row.subject,
-    ...(bcc.length === 0 ? {} : { bcc }),
-    ...(cc.length === 0 ? {} : { cc }),
-    ...(row.replyToAddress === null ? {} : { replyTo: row.replyToAddress }),
-    ...(to.length === 0 ? {} : { to }),
+    to: to.length === 0 ? undefined : to,
   };
 };
 
@@ -297,17 +297,10 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
           threadId: "asc",
         },
         where: {
-          accountEmail: { in: [...request.accountIds] },
-          // The inbox predicate has to be in SQL, not a filter over the
-          // page below: the index stores archived mail in this table too,
-          // so filtering afterwards would return near-empty pages while
-          // paging through everything the user archived.
-          ...(mailbox === "spam" ? { isInSpam: true } : { isInInbox: true }),
-          ...(request.unreadOnly === true ? { isUnread: true } : {}),
-          ...(request.cursor === undefined
-            ? {}
-            : {
-                OR: [
+          OR:
+            request.cursor === undefined
+              ? undefined
+              : [
                   { latestAt: { lt: request.cursor.latestAt } },
                   {
                     accountEmail: { gt: request.cursor.accountId },
@@ -319,7 +312,14 @@ export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
                     threadId: { gt: request.cursor.threadId },
                   },
                 ],
-              }),
+          accountEmail: { in: [...request.accountIds] },
+          // The inbox predicate has to be in SQL, not a filter over the
+          // page below: the index stores archived mail in this table too,
+          // so filtering afterwards would return near-empty pages while
+          // paging through everything the user archived.
+          isInInbox: mailbox === "spam" ? undefined : true,
+          isInSpam: mailbox === "spam" ? true : undefined,
+          isUnread: request.unreadOnly === true ? true : undefined,
         },
       })
     );
@@ -427,7 +427,7 @@ export const forgetAccountMailData = Effect.fn("forgetAccountMailData")(
 );
 
 const toGmailLabelSummary = (label: GmailLabel): GmailLabelSummary => ({
-  ...(label.color === undefined ? {} : { color: label.color }),
+  color: label.color,
   id: label.id,
   name: label.name,
   type: label.type,
@@ -540,23 +540,21 @@ const toThreadMessage = (
       messageId: attachment.messageId,
       size: attachment.size,
     })),
+    bcc: bcc.length === 0 ? undefined : bcc,
     body:
       message.body.type === "html"
         ? { html: message.body.sanitizedHtml }
         : { text: message.body.text },
+    cc: cc.length === 0 ? undefined : cc,
     from: message.from.address,
     id: message.id,
     labelIds: [...message.labelIds],
+    replyTo: message.replyTo?.address,
+    senderBrand: senderBrand ?? undefined,
     sentAt: Number(message.sentAt),
     snippet: "",
     subject: message.subject.length === 0 ? "(No subject)" : message.subject,
-    ...(bcc.length === 0 ? {} : { bcc }),
-    ...(cc.length === 0 ? {} : { cc }),
-    ...(message.replyTo === undefined
-      ? {}
-      : { replyTo: message.replyTo.address }),
-    ...(senderBrand === null ? {} : { senderBrand }),
-    ...(to.length === 0 ? {} : { to }),
+    to: to.length === 0 ? undefined : to,
   };
 };
 

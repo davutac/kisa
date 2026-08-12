@@ -47,7 +47,7 @@ export const parseMailbox = (value: string): Mailbox | undefined => {
 
   return new Mailbox({
     address: address.trim(),
-    ...(name === undefined || name.length === 0 ? {} : { name }),
+    name: name === undefined || name.length === 0 ? undefined : name,
   });
 };
 
@@ -80,11 +80,12 @@ export const collectAttachments = (
   return [
     new AttachmentSummary({
       attachmentId: AttachmentId.make(attachmentId),
+      contentId:
+        isPresent(contentId) && contentId.length > 0 ? contentId : undefined,
       filename,
       mediaType: part.mimeType ?? "application/octet-stream",
       messageId: MessageId.make(messageId),
       size: part.body?.size ?? 0,
-      ...(isPresent(contentId) && contentId.length > 0 ? { contentId } : {}),
     }),
     ...nested,
   ];

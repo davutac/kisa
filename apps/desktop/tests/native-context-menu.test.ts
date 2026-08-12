@@ -16,8 +16,9 @@ const electronState = vi.hoisted(() => ({
   popup: vi.fn<(options?: PopupOptions) => void>(),
 }));
 
-vi.mock(import("electron"), () => ({
-  BrowserWindow: class BrowserWindow {
+vi.mock(import("electron"), async (importOriginal) => {
+  const original = await importOriginal();
+  class BrowserWindow {
     webContents = {
       getURL: vi.fn<() => string>(() => "file:///index.html"),
       on: vi.fn<(event: string, handler: (...args: never[]) => void) => void>(
@@ -25,7 +26,12 @@ vi.mock(import("electron"), () => ({
           electronState.handlers.set(event, handler);
         }
       ),
-      setWindowOpenHandler: vi.fn<(handler: unknown) => void>(),
+      setWindowOpenHandler:
+        vi.fn<
+          (
+            handler: Parameters<Electron.WebContents["setWindowOpenHandler"]>[0]
+          ) => void
+        >(),
     };
 
     loadFile = vi.fn<(filePath: string) => void>();
@@ -33,35 +39,41 @@ vi.mock(import("electron"), () => ({
     maximize = vi.fn<() => void>();
     on = vi.fn<(event: string, listener: () => void) => void>();
     show = vi.fn<() => void>();
-  } as unknown as typeof Electron.BrowserWindow,
-  Menu: {
-    buildFromTemplate: vi.fn<
-      (template: MenuItemConstructorOptions[]) => {
-        popup: typeof electronState.popup;
-      }
-    >((template) => {
-      electronState.builtTemplates.push(template);
-      return { popup: electronState.popup };
+  }
+
+  return {
+    ...original,
+    BrowserWindow: Object.assign(BrowserWindow, original.BrowserWindow),
+    Menu: Object.assign(vi.fn(), original.Menu, {
+      buildFromTemplate: vi.fn<
+        (template: MenuItemConstructorOptions[]) => {
+          popup: typeof electronState.popup;
+        }
+      >((template) => {
+        electronState.builtTemplates.push(template);
+        return { popup: electronState.popup };
+      }),
     }),
-  } as unknown as typeof Electron.Menu,
-}));
+  };
+});
 
 vi.mock(import("@electron-toolkit/utils"), () => ({ is: { dev: false } }));
 vi.mock(import("../src/main/app/native-mail-index-progress"), () => ({
-  applyNativeMailIndexProgress: vi.fn<(window: unknown) => void>(),
+  applyNativeMailIndexProgress:
+    vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 vi.mock(import("../src/main/electron/shell"), () => ({
-  openExternalUrl: vi.fn<(url: unknown) => boolean>(),
+  openExternalUrl: vi.fn<(url: string) => boolean>(),
 }));
 vi.mock(import("../src/main/updates/updater"), () => ({
-  initializeAutoUpdates: vi.fn<(window: unknown) => void>(),
+  initializeAutoUpdates: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 vi.mock(import("../src/main/window/window-state"), () => ({
   MIN_WINDOW_SIZE: { height: 560, width: 860 } as const,
   readWindowState: vi.fn<
     () => { height: number; isMaximized: boolean; width: number }
   >(() => ({ height: 670, isMaximized: false, width: 900 })),
-  writeWindowState: vi.fn<(window: unknown) => void>(),
+  writeWindowState: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 
 const contextMenuParams = (

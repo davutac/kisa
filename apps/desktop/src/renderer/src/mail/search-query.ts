@@ -269,7 +269,7 @@ export const removeFilterDraft = (draft: string): string => {
   return rest.length === 0 ? "" : `${rest.join(" ")} `;
 };
 
-const FILTER_LABELS: Record<SearchFilterField, string> = {
+const FILTER_LABELS = {
   account: "Account",
   from: "From",
   has: "Has",
@@ -277,7 +277,7 @@ const FILTER_LABELS: Record<SearchFilterField, string> = {
   label: "Label",
   subject: "Subject",
   to: "To",
-};
+} satisfies Record<SearchFilterField, string>;
 
 export const getSearchFilterLabel = (field: SearchFilterField): string =>
   FILTER_LABELS[field];

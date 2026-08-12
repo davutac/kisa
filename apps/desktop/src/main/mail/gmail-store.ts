@@ -156,15 +156,20 @@ const toGmailAccount = (row: {
   readonly scopes: string;
 }): GmailAccount => {
   const scopes = decodeScopes(row.scopes);
-
-  return new GmailAccount({
+  const account = {
     capabilities: getGmailCapabilities(scopes),
     email: row.email,
     id: AccountId.make(row.email),
     scopes,
-    ...(row.avatarUrl === null ? {} : { avatarUrl: row.avatarUrl }),
-    ...(row.displayName === null ? {} : { displayName: row.displayName }),
-  });
+  };
+  const accountWithAvatar =
+    row.avatarUrl === null ? account : { ...account, avatarUrl: row.avatarUrl };
+  const accountWithProfile =
+    row.displayName === null
+      ? accountWithAvatar
+      : { ...accountWithAvatar, displayName: row.displayName };
+
+  return new GmailAccount(accountWithProfile);
 };
 
 export const GmailStoreLive = Layer.succeed(
@@ -235,22 +240,25 @@ export const GmailStoreLive = Layer.succeed(
         const rows = await database.query.gmailLabels.findMany({
           where: { accountEmail: accountId },
         });
-        return rows.map(
-          (row) =>
-            new GmailLabel({
-              id: LabelId.make(row.labelId),
-              name: row.name,
-              type: row.type === "system" ? "system" : "user",
-              ...(row.backgroundColor === null || row.textColor === null
-                ? {}
-                : {
-                    color: new LabelColor({
-                      background: row.backgroundColor,
-                      text: row.textColor,
-                    }),
+        return rows.map((row) => {
+          const label = {
+            id: LabelId.make(row.labelId),
+            name: row.name,
+            type: row.type === "system" ? "system" : "user",
+          } as const;
+
+          return new GmailLabel(
+            row.backgroundColor === null || row.textColor === null
+              ? label
+              : {
+                  ...label,
+                  color: new LabelColor({
+                    background: row.backgroundColor,
+                    text: row.textColor,
                   }),
-            })
-        );
+                }
+          );
+        });
       }),
 
     getSyncCursor: (accountId) =>

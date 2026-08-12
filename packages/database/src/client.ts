@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { Predicate } from "effect";
 
 import { databaseRelations } from "./relations";
 
@@ -18,8 +19,8 @@ const callCipherMethod = (
   methodName: "key" | "rekey",
   encryptionKey: Buffer
 ): void => {
-  const method: unknown = Reflect.get(connection, methodName);
-  if (typeof method !== "function") {
+  const method = Reflect.get(connection, methodName);
+  if (!Predicate.isFunction(method)) {
     throw new TypeError("SQLite cipher support is unavailable");
   }
 

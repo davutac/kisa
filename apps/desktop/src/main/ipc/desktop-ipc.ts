@@ -8,9 +8,9 @@ import type { IpcMainInvokeEvent } from "electron";
 import { DesktopIpcRegistrationError } from "./desktop-ipc-registration-error";
 import { DesktopIpcUnregistrationError } from "./desktop-ipc-unregistration-error";
 
-export type DesktopIpcHandleListener = (
+export type DesktopIpcHandleListener = <Payload>(
   event: IpcMainInvokeEvent,
-  raw: unknown
+  raw: Payload
 ) => unknown | Promise<unknown>;
 
 export interface DesktopIpcMain {
@@ -20,8 +20,8 @@ export interface DesktopIpcMain {
 
 export interface DesktopIpcMethod<E, R> {
   readonly channel: string;
-  readonly handler: (
-    raw: unknown,
+  readonly handler: <Payload>(
+    raw: Payload,
     event?: IpcMainInvokeEvent
   ) => Effect.Effect<unknown, E, R>;
 }

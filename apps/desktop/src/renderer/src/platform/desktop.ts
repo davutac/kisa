@@ -115,8 +115,7 @@ interface DesktopCapabilities {
 
 const capabilitiesByBridge = new WeakMap<DesktopBridge, DesktopCapabilities>();
 
-const getRuntimeWindow = (): RuntimeWindow =>
-  window as unknown as RuntimeWindow;
+const getRuntimeWindow = (): RuntimeWindow => window;
 
 const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
   const cached = capabilitiesByBridge.get(bridge);

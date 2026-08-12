@@ -1,4 +1,5 @@
 import { is } from "@electron-toolkit/utils";
+import { Predicate } from "effect";
 import type { BrowserWindow } from "electron";
 import { app } from "electron";
 import electronUpdater from "electron-updater";
@@ -21,7 +22,7 @@ const canSelfUpdate = (): boolean => {
   }
 
   if (process.platform === "linux") {
-    return typeof process.env["APPIMAGE"] === "string";
+    return Predicate.isString(process.env["APPIMAGE"]);
   }
 
   return process.platform === "darwin" || process.platform === "win32";

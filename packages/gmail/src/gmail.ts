@@ -65,6 +65,7 @@ const AuthHandoff = Schema.Struct({
 });
 
 const decodeAuthHandoff = Schema.decodeUnknownEffect(AuthHandoff);
+type AuthHandoffInput = typeof AuthHandoff.Encoded;
 
 const selectScopes = (scopes: readonly string[]): readonly GmailScope[] =>
   scopes.filter(isGmailScope);
@@ -106,7 +107,7 @@ const requireCapability = (
 
 export interface GmailService {
   readonly authorizeAccount: (
-    handoff: unknown
+    handoff: AuthHandoffInput
   ) => Effect.Effect<GmailAccount, GmailError>;
   readonly disconnectAccount: (
     options: DisconnectAccountOptions
@@ -212,15 +213,9 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           if (result.credentialPatch !== undefined) {
             const patch = result.credentialPatch;
             const definedPatch: GmailCredentialPatch = {
-              ...(patch.accessToken === undefined
-                ? {}
-                : { accessToken: patch.accessToken }),
-              ...(patch.expiresAt === undefined
-                ? {}
-                : { expiresAt: patch.expiresAt }),
-              ...(patch.refreshToken === undefined
-                ? {}
-                : { refreshToken: patch.refreshToken }),
+              accessToken: patch.accessToken,
+              expiresAt: patch.expiresAt,
+              refreshToken: patch.refreshToken,
             };
 
             yield* store.updateCredentials(accountId, definedPatch);
@@ -240,7 +235,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         withAccountPermit(accountId, runAuthorized(accountId, capability, run));
 
       const authorizeAccount = Effect.fn("Gmail.authorizeAccount")(
-        function* authorizeAccount(input: unknown) {
+        function* authorizeAccount(input: AuthHandoffInput) {
           const handoff = yield* decodeAuthHandoff(input).pipe(
             Effect.mapError(
               (error) => new InvalidAuthHandoffError({ message: error.message })
@@ -622,9 +617,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
                   ).pipe(
                     Effect.map((loaded) => ({
                       ...loaded,
-                      ...(attachment.contentId === undefined
-                        ? {}
-                        : { contentId: attachment.contentId }),
+                      contentId: attachment.contentId,
                     }))
                   ),
                 { concurrency: 3 }

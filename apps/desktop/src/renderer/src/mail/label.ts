@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 import type { GmailLabelColor, GmailLabelSummary } from "@/shared/ipc/mail";
 
-const SYSTEM_LABEL_NAMES: Readonly<Record<string, string>> = {
+const SYSTEM_LABEL_NAMES = {
   CATEGORY_FORUMS: "Forums",
   CATEGORY_PERSONAL: "Primary",
   CATEGORY_PROMOTIONS: "Promotions",
@@ -18,7 +18,7 @@ const SYSTEM_LABEL_NAMES: Readonly<Record<string, string>> = {
   STARRED: "Starred",
   TRASH: "Trash",
   UNREAD: "Unread",
-};
+} satisfies Readonly<Record<string, string>>;
 
 const LABEL_NAME_COLLATOR = new Intl.Collator(undefined, {
   numeric: true,

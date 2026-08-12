@@ -101,9 +101,9 @@ export const createCachedThreadPageRequest = (
   cursor?: GmailThreadCursor
 ): GmailCachedThreadPageRequest => ({
   accountIds,
-  ...(cursor === undefined ? {} : { cursor }),
+  cursor,
   mailbox,
-  ...(unreadOnly ? { unreadOnly: true } : {}),
+  unreadOnly: unreadOnly || undefined,
 });
 
 export const getMailboxScopeKey = (

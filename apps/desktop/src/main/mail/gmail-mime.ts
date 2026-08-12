@@ -140,11 +140,11 @@ const toGmailMessage = (
     from: from ?? new Mailbox({ address: "unknown@invalid" }),
     id: MessageId.make(message.id),
     labelIds: (message.labelIds ?? []).map((id) => LabelId.make(id)),
+    replyTo,
     sentAt: message.internalDate ?? "0",
     subject: readHeader(message, "subject") ?? "",
     threadId,
     to: parseMailboxList(readHeader(message, "to")),
-    ...(replyTo === undefined ? {} : { replyTo }),
   });
 };
 
@@ -234,9 +234,14 @@ const getComposerText = (body: ComposerBody): string =>
 const getComposerHtml = (body: ComposerBody): string =>
   body.type === "html" ? body.html : `<div>${textToHtml(body.text)}</div>`;
 
+interface OriginalBody {
+  readonly html: string;
+  readonly text: string;
+}
+
 const getOriginalBody = (
   message: RawMessagePayload | undefined
-): { readonly html: string; readonly text: string } => {
+): OriginalBody => {
   const htmlParts: string[] = [];
   const textParts: string[] = [];
 
@@ -387,12 +392,12 @@ export const GmailMimeLive = Layer.succeed(
           raw: toRaw(
             composeRaw(
               {
+                bcc: input.bcc,
+                cc: input.cc,
                 subject: subject.toLowerCase().startsWith("fwd:")
                   ? subject
                   : `Fwd: ${subject}`,
                 to: input.to,
-                ...(input.bcc === undefined ? {} : { bcc: input.bcc }),
-                ...(input.cc === undefined ? {} : { cc: input.cc }),
               },
               composeForwardBody(input.body, forwarded),
               input.attachments ?? [],
@@ -407,10 +412,10 @@ export const GmailMimeLive = Layer.succeed(
         raw: toRaw(
           composeRaw(
             {
+              bcc: input.bcc,
+              cc: input.cc,
               subject: input.subject,
               to: input.to,
-              ...(input.bcc === undefined ? {} : { bcc: input.bcc }),
-              ...(input.cc === undefined ? {} : { cc: input.cc }),
             },
             input.body,
             input.attachments ?? [],
@@ -435,26 +440,27 @@ export const GmailMimeLive = Layer.succeed(
             : parseMailboxList(
                 readHeader(replied, "reply-to") ?? readHeader(replied, "from")
               ));
+        let references: string | undefined;
+
+        if (messageIdHeader !== undefined) {
+          references =
+            existingReferences === undefined
+              ? messageIdHeader
+              : `${existingReferences} ${messageIdHeader}`;
+        }
 
         return {
           raw: toRaw(
             composeRaw(
               {
+                bcc: input.bcc,
+                cc: input.cc,
+                inReplyTo: messageIdHeader,
+                references,
                 subject: subject.toLowerCase().startsWith("re:")
                   ? subject
                   : `Re: ${subject}`,
                 to,
-                ...(input.bcc === undefined ? {} : { bcc: input.bcc }),
-                ...(input.cc === undefined ? {} : { cc: input.cc }),
-                ...(messageIdHeader === undefined
-                  ? {}
-                  : {
-                      inReplyTo: messageIdHeader,
-                      references:
-                        existingReferences === undefined
-                          ? messageIdHeader
-                          : `${existingReferences} ${messageIdHeader}`,
-                    }),
               },
               composeReplyBody(input.body, replied),
               input.attachments ?? [],

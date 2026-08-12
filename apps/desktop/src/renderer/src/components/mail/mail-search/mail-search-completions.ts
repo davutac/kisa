@@ -51,14 +51,12 @@ interface CompletionInputs {
   typedWord: string;
 }
 
-const FIXED_FILTER_VALUES: Partial<
-  Record<SearchFilterField, readonly string[]>
-> = {
+const FIXED_FILTER_VALUES = {
   has: ["attachment"],
   is: ["unread", "read"],
-};
+} satisfies Partial<Record<SearchFilterField, readonly string[]>>;
 
-const FILTER_EXAMPLES: Record<SearchFilterField, string> = {
+const FILTER_EXAMPLES = {
   account: "you@example.com",
   from: "person@example.com",
   has: "attachment",
@@ -66,7 +64,7 @@ const FILTER_EXAMPLES: Record<SearchFilterField, string> = {
   label: "inbox",
   subject: "invoice",
   to: "person@example.com",
-};
+} satisfies Record<SearchFilterField, string>;
 
 const NUMBER_FORMAT = new Intl.NumberFormat();
 const ADDRESS_HEADINGS = { from: "From user", to: "Sent to" } as const;
@@ -98,10 +96,11 @@ const toAddressItems = (
       label: sender.name ?? sender.address,
       onSelect: () => onSelectFilter({ field, value: sender.address }),
       shortcut: NUMBER_FORMAT.format(sender.messageCount),
-      ...(sender.name === undefined ||
-      sender.name.toLowerCase() === sender.address.toLowerCase()
-        ? {}
-        : { sublabel: sender.address }),
+      sublabel:
+        sender.name === undefined ||
+        sender.name.toLowerCase() === sender.address.toLowerCase()
+          ? undefined
+          : sender.address,
       value: `address:${sender.address}`,
     })),
     ...(typedValue.length === 0
@@ -195,9 +194,7 @@ export const getMailSearchCompletions = ({
           icon: label.isSystem ? ("system-label" as const) : ("label" as const),
           label: formatGmailLabel(label.name),
           onSelect: () => onSelectFilter({ field: "label", value: label.name }),
-          ...(showLabelAccounts
-            ? { trailing: label.accountIds.join(", ") }
-            : {}),
+          trailing: showLabelAccounts ? label.accountIds.join(", ") : undefined,
           value: `label:${label.name}`,
         })),
         ...(typedValue.length === 0 || hasExactMatch

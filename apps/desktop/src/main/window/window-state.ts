@@ -157,9 +157,10 @@ const normalizeWindowState = (
 
   return {
     height: normalizedHeight,
-    ...(isMaximized === true ? { isMaximized: true } : {}),
+    isMaximized: isMaximized || undefined,
     width: normalizedWidth,
-    ...(hasVisiblePosition ? { x, y } : {}),
+    x: hasVisiblePosition ? x : undefined,
+    y: hasVisiblePosition ? y : undefined,
   };
 };
 

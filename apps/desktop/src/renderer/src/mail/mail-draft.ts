@@ -56,17 +56,20 @@ export const isThreadMailDraftEmpty = (
   sameAddresses(draft.cc, initialRecipients.cc) &&
   sameAddresses(draft.to, initialRecipients.to);
 
-export const createNewMailDraft = (accountId?: string): MailDraftInput => ({
-  ...(accountId === undefined ? {} : { accountId }),
-  attachments: [],
-  bcc: [],
-  body: { html: "", text: "" },
-  cc: [],
-  id: crypto.randomUUID(),
-  kind: "new",
-  subject: "",
-  to: [],
-});
+export const createNewMailDraft = (accountId?: string): MailDraftInput => {
+  const draft = {
+    attachments: [],
+    bcc: [],
+    body: { html: "", text: "" },
+    cc: [],
+    id: crypto.randomUUID(),
+    kind: "new",
+    subject: "",
+    to: [],
+  } as const;
+
+  return accountId === undefined ? draft : { ...draft, accountId };
+};
 
 export const createThreadMailDraft = (input: {
   readonly accountId: string;

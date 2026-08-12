@@ -21,28 +21,39 @@ interface CreateBrowserWindowOptions {
 }
 
 export const createBrowserWindow = ({
+  height,
+  minHeight,
+  minWidth,
   preload = path.join(import.meta.dirname, "../preload/index.cjs"),
-  ...options
+  title,
+  width,
+  x,
+  y,
 }: CreateBrowserWindowOptions): BrowserWindow =>
   new BrowserWindow({
     autoHideMenuBar: true,
     backgroundColor: "#121212",
-    ...options,
-    ...(process.platform === "darwin"
-      ? { trafficLightPosition: TRAFFIC_LIGHT_POSITION }
-      : {}),
-    ...(process.platform === "linux" ? { icon } : {}),
+    height,
+    icon: process.platform === "linux" ? icon : undefined,
+    minHeight,
+    minWidth,
     show: false,
+    title,
     titleBarOverlay: {
       color: "#ffffff00",
       height: TITLEBAR_HEIGHT,
       symbolColor: "#f5f5f5",
     },
     titleBarStyle: "hidden",
+    trafficLightPosition:
+      process.platform === "darwin" ? TRAFFIC_LIGHT_POSITION : undefined,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload,
       sandbox: true,
     },
+    width,
+    x,
+    y,
   });

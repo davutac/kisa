@@ -4,7 +4,7 @@ import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 
 import { gmailSenderBrands } from "@repo/database/schemas";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { getDomain } from "tldts";
 
 import type { GmailSenderBrand } from "../../shared/ipc/mail";
@@ -14,6 +14,8 @@ const AVAILABLE_TTL_MS = 24 * 60 * 60 * 1000;
 const MISSING_TTL_MS = 60 * 60 * 1000;
 const MAX_INDICATOR_BYTES = 512 * 1024;
 const MAX_REDIRECTS = 2;
+const DnsError = Schema.Struct({ code: Schema.optional(Schema.String) });
+const decodeDnsError = Schema.decodeUnknownOption(DnsError);
 
 export interface MessageHeader {
   readonly name: string;
@@ -115,10 +117,15 @@ const isAlignedDomain = (
 ): boolean =>
   domain === authenticatedDomain || domain.endsWith(`.${authenticatedDomain}`);
 
+interface BimiAuthentication {
+  readonly bimiPassed: boolean;
+  readonly selector: string;
+}
+
 const getBimiAuthentication = (
   authentication: string,
   senderDomain: string
-): { bimiPassed: boolean; selector: string } => {
+): BimiAuthentication => {
   const bimiProperties = authentication.match(
     /\bbimi=pass\b(?<properties>[^;]*)/iu
   )?.groups?.properties;
@@ -699,13 +706,9 @@ const discoverSenderBrand = Effect.fn("discoverSenderBrand")(
     if (indicator !== null) {
       return {
         resolved: {
+          authorityUrl: location?.authorityUrl,
           logoData: indicator,
-          ...(location?.authorityUrl === undefined
-            ? {}
-            : { authorityUrl: location.authorityUrl }),
-          ...(location?.logoUrl === undefined
-            ? {}
-            : { logoUrl: location.logoUrl }),
+          logoUrl: location?.logoUrl,
         },
         status: "available",
       } satisfies SenderBrandDiscovery;
@@ -718,10 +721,7 @@ const discoverSenderBrand = Effect.fn("discoverSenderBrand")(
         try {
           return await resolveTxt(`${target.selector}._bimi.${domain}`);
         } catch (error) {
-          const code =
-            typeof error === "object" && error !== null && "code" in error
-              ? error.code
-              : undefined;
+          const code = Option.getOrUndefined(decodeDnsError(error))?.code;
 
           if (code === "ENODATA" || code === "ENOTFOUND") {
             return [];

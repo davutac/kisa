@@ -117,8 +117,8 @@ export const authorizeOutgoingAttachmentFiles = async (
   return records;
 };
 
-export const decodeStoredOutgoingAttachments = (
-  input: unknown
+export const decodeStoredOutgoingAttachments = <Input>(
+  input: Input
 ): readonly StoredMailDraftAttachment[] => {
   const values = decodeStoredAttachmentArray(input);
   if (Option.isNone(values)) {

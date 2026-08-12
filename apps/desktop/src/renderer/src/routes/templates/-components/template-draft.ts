@@ -68,14 +68,14 @@ export const getVariablePreviewContext = (
     template.accountId === null
       ? undefined
       : accounts.find(({ email }) => email === template.accountId)?.displayName;
+  const context =
+    template.accountId === null ? {} : { accountEmail: template.accountId };
+  const contextWithName =
+    accountName === undefined ? context : { ...context, accountName };
 
-  return {
-    ...(template.accountId === null
-      ? {}
-      : { accountEmail: template.accountId }),
-    ...(accountName === undefined ? {} : { accountName }),
-    ...(template.to.length === 1 ? { toEmail: template.to[0] } : {}),
-  };
+  return template.to.length === 1
+    ? { ...contextWithName, toEmail: template.to[0] }
+    : contextWithName;
 };
 
 export const getTemplateNameError = (

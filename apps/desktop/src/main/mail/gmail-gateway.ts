@@ -37,7 +37,7 @@ import {
   ThreadId,
   ThreadSummary,
 } from "@repo/gmail/models";
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, Option, Redacted, Schema } from "effect";
 
 import {
   collectAttachments,
@@ -94,62 +94,56 @@ const RATE_LIMIT_REASONS = new Set([
 ]);
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 
-interface GaxiosLikeError {
-  readonly code?: number | string;
-  readonly errors?: readonly { readonly reason?: string }[];
-  readonly message?: string;
-  readonly status?: number;
-}
+const GaxiosLikeError = Schema.Struct({
+  code: Schema.optional(Schema.Union([Schema.Finite, Schema.String])),
+  errors: Schema.optional(
+    Schema.Array(Schema.Struct({ reason: Schema.optional(Schema.String) }))
+  ),
+  message: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.Finite),
+});
+type GaxiosLikeError = typeof GaxiosLikeError.Type;
+const decodeGaxiosLikeError = Schema.decodeUnknownOption(GaxiosLikeError);
+const parseGaxiosLikeError = <Input>(
+  input: Input
+): GaxiosLikeError | undefined =>
+  Option.getOrUndefined(decodeGaxiosLikeError(input));
 
-const readErrorStatus = (error: unknown): number | undefined => {
-  const candidate = error as GaxiosLikeError | null;
+const readErrorStatus = (
+  candidate: GaxiosLikeError | undefined
+): number | undefined => {
+  const status = candidate?.status ?? candidate?.code;
+  const numericStatus = Math.trunc(Number(status ?? ""));
 
-  if (candidate === null || typeof candidate !== "object") {
-    return undefined;
-  }
-
-  const status = candidate.status ?? candidate.code;
-
-  return typeof status === "number"
-    ? status
-    : Math.trunc(Number(status ?? "")) || undefined;
+  return numericStatus || undefined;
 };
 
-const readErrorReasons = (error: unknown): readonly string[] => {
-  const candidate = error as GaxiosLikeError | null;
-
-  if (candidate === null || typeof candidate !== "object") {
-    return [];
-  }
-
-  return (candidate.errors ?? [])
+const readErrorReasons = (
+  candidate: GaxiosLikeError | undefined
+): readonly string[] =>
+  (candidate?.errors ?? [])
     .map((entry) => entry.reason)
     .filter((reason): reason is string => reason !== undefined);
-};
 
-const readErrorMessage = (error: unknown, fallback: string): string => {
-  const candidate = error as GaxiosLikeError | null;
-
-  return candidate !== null &&
-    typeof candidate === "object" &&
-    typeof candidate.message === "string"
-    ? candidate.message
-    : fallback;
-};
+const readErrorMessage = (
+  candidate: GaxiosLikeError | undefined,
+  fallback: string
+): string => candidate?.message ?? fallback;
 
 /**
  * Translates a `@googleapis/gmail` rejection into the domain errors that
  * `GmailService` already branches on. `history.list` is the one caller that
  * treats 404 as a recoverable cursor expiry, so it opts in explicitly.
  */
-const toGatewayError = (
+const toGatewayError = <ErrorInput>(
   accountId: AccountId,
-  error: unknown,
+  error: ErrorInput,
   options: { readonly historyExpiredOnNotFound?: boolean } = {}
 ): GmailGatewayError => {
-  const status = readErrorStatus(error);
-  const reasons = readErrorReasons(error);
-  const message = readErrorMessage(error, "Gmail request failed");
+  const candidate = parseGaxiosLikeError(error);
+  const status = readErrorStatus(candidate);
+  const reasons = readErrorReasons(candidate);
+  const message = readErrorMessage(candidate, "Gmail request failed");
 
   if (status === 401) {
     return new GmailReauthorizationRequiredError({ accountId, message });
@@ -179,15 +173,16 @@ const toGatewayError = (
   });
 };
 
-const toSendError = (
+const toSendError = <ErrorInput>(
   accountId: AccountId,
-  error: unknown
+  error: ErrorInput
 ): GmailGatewayError | GmailSendOutcomeUnknownError => {
   const gatewayError = toGatewayError(accountId, error);
+  const candidate = parseGaxiosLikeError(error);
 
   if (
     gatewayError._tag === "GmailApiError" &&
-    (gatewayError.retryable || readErrorStatus(error) === undefined)
+    (gatewayError.retryable || readErrorStatus(candidate) === undefined)
   ) {
     return new GmailSendOutcomeUnknownError({
       accountId,
@@ -284,23 +279,20 @@ export const toGmailLabel = (
   const text = label.color?.textColor;
 
   return new GmailLabel({
+    color:
+      isPresent(background) && isPresent(text)
+        ? new LabelColor({ background, text })
+        : undefined,
     id: LabelId.make(label.id),
+    messageCount: label.messagesTotal ?? undefined,
     messageListVisibility:
       label.messageListVisibility === "hide" ||
       label.messageListVisibility === "show"
         ? label.messageListVisibility
         : undefined,
     name: label.name,
+    threadCount: label.threadsTotal ?? undefined,
     type: label.type === "system" ? "system" : "user",
-    ...(isPresent(background) && isPresent(text)
-      ? { color: new LabelColor({ background, text }) }
-      : {}),
-    ...(isPresent(label.messagesTotal)
-      ? { messageCount: label.messagesTotal }
-      : {}),
-    ...(isPresent(label.threadsTotal)
-      ? { threadCount: label.threadsTotal }
-      : {}),
   });
 };
 
@@ -427,7 +419,7 @@ const fetchThreadSummaries = async (
           ? undefined
           : { detail: toGatewayThread(detail.data), summary };
       } catch (error) {
-        if (readErrorStatus(error) === 404) {
+        if (readErrorStatus(parseGaxiosLikeError(error)) === 404) {
           return;
         }
 
@@ -621,9 +613,9 @@ export const GmailGatewayLive = Layer.succeed(
             const response = await client.users.history.list({
               historyTypes: HISTORY_TYPES,
               maxResults: HISTORY_PAGE_SIZE,
+              pageToken,
               startHistoryId: historyId,
               userId: "me",
-              ...(pageToken === undefined ? {} : { pageToken }),
             });
 
             latestHistoryId = HistoryId.make(
@@ -706,11 +698,9 @@ export const GmailGatewayLive = Layer.succeed(
             includeSpamTrash: request.includeSpamTrash,
             labelIds: [...request.labelIds],
             maxResults: request.pageSize,
+            pageToken: request.pageToken,
+            q: request.search,
             userId: "me",
-            ...(request.pageToken === undefined
-              ? {}
-              : { pageToken: request.pageToken }),
-            ...(request.search === undefined ? {} : { q: request.search }),
           });
           const threadIds = (listed.data.threads ?? [])
             .map((entry) => entry.id)
@@ -724,10 +714,8 @@ export const GmailGatewayLive = Layer.succeed(
 
           return succeed({
             details: fetched.details,
+            nextPageToken: listed.data.nextPageToken ?? undefined,
             threads: fetched.summaries,
-            ...(isPresent(listed.data.nextPageToken)
-              ? { nextPageToken: listed.data.nextPageToken }
-              : {}),
           });
         },
       }),
@@ -762,7 +750,10 @@ export const GmailGatewayLive = Layer.succeed(
           new GmailApiError({
             accountId: authorization.account.id,
             cause: error,
-            message: readErrorMessage(error, "Could not revoke Gmail access"),
+            message: readErrorMessage(
+              parseGaxiosLikeError(error),
+              "Could not revoke Gmail access"
+            ),
             retryable: false,
           }),
         try: async () => {
@@ -787,9 +778,7 @@ export const GmailGatewayLive = Layer.succeed(
           const response = await client.users.messages.send({
             requestBody: {
               raw: message.raw,
-              ...(message.threadId === undefined
-                ? {}
-                : { threadId: message.threadId }),
+              threadId: message.threadId,
             },
             userId: "me",
           });

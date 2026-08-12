@@ -24,8 +24,9 @@ const electronState = vi.hoisted(() => ({
   loadFailure: undefined as Error | undefined,
 }));
 
-vi.mock(import("electron"), () => ({
-  BrowserWindow: class BrowserWindow {
+vi.mock(import("electron"), async (importOriginal) => {
+  const original = await importOriginal();
+  class BrowserWindow {
     readonly focus = vi.fn<() => void>();
     readonly isMinimized = vi.fn<() => boolean>(() => false);
     readonly loadFile = vi.fn<() => Promise<void>>(async () => {
@@ -75,8 +76,13 @@ vi.mock(import("electron"), () => ({
       handlers.push(handler);
       this.handlers.set(event, handlers);
     }
-  } as unknown as typeof Electron.BrowserWindow,
-}));
+  }
+
+  return {
+    ...original,
+    BrowserWindow: Object.assign(BrowserWindow, original.BrowserWindow),
+  };
+});
 
 vi.mock(import("@electron-toolkit/utils"), () => ({ is: { dev: false } }));
 vi.mock(import("../src/main/app/native-mail-index-progress"), () => ({
@@ -84,7 +90,7 @@ vi.mock(import("../src/main/app/native-mail-index-progress"), () => ({
     vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
 vi.mock(import("../src/main/electron/shell"), () => ({
-  openExternalUrl: vi.fn<(rawUrl: unknown) => boolean>(() => true),
+  openExternalUrl: vi.fn<(rawUrl: string) => boolean>(() => true),
 }));
 vi.mock(import("../src/main/updates/updater"), () => ({
   initializeAutoUpdates: vi.fn<(window: Electron.BrowserWindow) => void>(),
@@ -120,10 +126,14 @@ describe(openThreadWindow, () => {
   });
 
   it("loads an account-scoped thread route in a sandboxed window", async () => {
-    const window = (await openThreadWindow({
+    await openThreadWindow({
       accountId: "person+mail@example.com",
       threadId: "thread/1",
-    })) as unknown as TestWindow;
+    });
+    const [window] = electronState.createdWindows;
+    if (window === undefined) {
+      throw new Error("Expected a thread window to be created");
+    }
 
     expect(window.options).toMatchObject({
       height: 720,
@@ -160,10 +170,7 @@ describe(openThreadWindow, () => {
     expect(electronState.createdWindows).toHaveLength(1);
     loadBarrier.resolve(null);
 
-    const [first, second] = (await Promise.all([
-      firstWindow,
-      secondWindow,
-    ])) as unknown as [TestWindow, TestWindow];
+    const [first, second] = await Promise.all([firstWindow, secondWindow]);
 
     expect(second).toBe(first);
     expect(first.focus).toHaveBeenCalledOnce();

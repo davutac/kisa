@@ -215,7 +215,6 @@ export const ConfirmDialogProvider = ({
 
         const request: ConfirmRequest = {
           focusTarget:
-            typeof document !== "undefined" &&
             document.activeElement instanceof HTMLElement
               ? document.activeElement
               : null,

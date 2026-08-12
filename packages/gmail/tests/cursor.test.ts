@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import { resolvePageRequest } from "../src/cursor";
 import { AccountId, PageCursor } from "../src/models";
 
-const encodePayload = (payload: unknown): PageCursor =>
+const encodePayload = <Payload>(payload: Payload): PageCursor =>
   PageCursor.make(
     Buffer.from(JSON.stringify(payload), "utf-8").toString("base64url")
   );

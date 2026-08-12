@@ -5,6 +5,7 @@ import { Effect, Semaphore } from "effect";
 import type {
   DatabaseExecutePayload,
   DatabaseExecuteResult,
+  DatabaseRow,
 } from "../../shared/database-rpc";
 
 export type ExecuteDatabase = (
@@ -17,14 +18,23 @@ export interface DatabaseProcessClient {
   ) => Effect.Effect<A, E, R>;
 }
 
-const restoreBuffers = (value: unknown): unknown => {
+type DatabaseValue = DatabaseRow[number];
+
+const restoreBuffer = (value: DatabaseValue): DatabaseValue => {
   if (value instanceof Uint8Array) {
     return Buffer.from(value);
   }
-  if (Array.isArray(value)) {
-    return value.map(restoreBuffers);
-  }
   return value;
+};
+
+const restoreBuffers = (value: DatabaseExecuteResult): unknown[] => {
+  if (value === undefined) {
+    return [];
+  }
+
+  return value.map((entry) =>
+    Array.isArray(entry) ? entry.map(restoreBuffer) : restoreBuffer(entry)
+  );
 };
 
 export const createDatabaseProcessClient = (
@@ -44,7 +54,7 @@ export const createDatabaseProcessClient = (
     const database = createRemoteDatabaseClient(async (sql, params, method) => {
       const rows = await runPromise(execute({ method, params, sql }));
 
-      return { rows: restoreBuffers(rows) as never[] };
+      return { rows: restoreBuffers(rows) };
     });
 
     return yield* semaphore.withPermits(1)(run(database));

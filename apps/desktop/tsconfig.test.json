@@ -2,20 +2,11 @@
   "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "extends": "./tsconfig.web.json",
   "include": [
-    "src/main/app/unread-badge.ts",
-    "src/main/app/mail-index-progress.ts",
-    "src/main/updates/update-lifecycle.ts",
-    "src/preload/*.ts",
-    "src/preload/*.d.ts",
-    "src/renderer/src/env.d.ts",
-    "src/renderer/src/mail/**/*",
-    "src/renderer/src/platform/**/*",
-    "src/renderer/src/state/general-settings.ts",
-    "src/renderer/src/startup/**/*",
-    "src/renderer/src/updates/**/*",
-    "src/shared/**/*",
-    "tests/**/*",
-    "../../packages/database/src/**/*"
+    "src/main/**/*.ts",
+    "src/renderer/src/**/*.ts",
+    "src/shared/**/*.ts",
+    "tests/**/*.ts",
+    "../../packages/database/src/**/*.ts"
   ],
   "compilerOptions": {
     "composite": true,

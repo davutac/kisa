@@ -1,4 +1,3 @@
-// oxlint-disable typescript/no-unsafe-type-assertion
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { Effect } from "effect";
 import type * as Electron from "electron";
@@ -6,9 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   dismissThreadNotifications,
+  selectNewMailNotificationMessages,
   showNewMailNotifications,
   toNewMailNotificationCopy,
 } from "../src/main/mail/new-mail-notifications";
+import type { NewMailNotificationDependencies } from "../src/main/mail/new-mail-notifications";
 import type { GmailThreadRequest } from "../src/shared/ipc/mail";
 
 interface TestMessageRow {
@@ -21,11 +22,19 @@ interface TestMessageRow {
   readonly threadId: string;
 }
 
+interface TestWindow {
+  readonly focus: ReturnType<typeof vi.fn<() => void>>;
+  readonly isDestroyed: () => boolean;
+  readonly isMinimized?: () => boolean;
+  readonly restore?: ReturnType<typeof vi.fn<() => void>>;
+  readonly show: ReturnType<typeof vi.fn<() => void>>;
+}
+
 const mocks = vi.hoisted(() => ({
   appFocus: vi.fn<typeof Electron.app.focus>(),
   brandIcon: { isEmpty: () => false },
   closedNotificationIds: [] as string[],
-  createdNotifications: [] as Record<string, unknown>[],
+  createdNotifications: [] as Electron.NotificationConstructorOptions[],
   mainWindow: {
     focus: vi.fn<() => void>(),
     isDestroyed: () => false,
@@ -35,35 +44,36 @@ const mocks = vi.hoisted(() => ({
   },
   markThreadRead: vi.fn<(request: GmailThreadRequest) => void>(),
   messages: [] as TestMessageRow[],
-  notificationListeners: [] as Map<
-    string,
-    (...arguments_: unknown[]) => void
-  >[],
+  notificationListeners: [] as Map<string, (...arguments_: never[]) => void>[],
   notificationsEnabled: true,
   openThreadWindow:
     vi.fn<
       (request: {
         readonly accountId: string;
         readonly threadId: string;
-      }) => Promise<Electron.BrowserWindow>
+      }) => Promise<TestWindow>
     >(),
   threads: [] as { readonly snippet: string; readonly threadId: string }[],
   trashThread: vi.fn<(request: GmailThreadRequest) => void>(),
 }));
 
-vi.mock(import("electron"), () => {
+vi.mock(import("electron"), async (importOriginal) => {
+  const original = await importOriginal();
   class TestNotification {
     static isSupported = (): boolean => true;
     readonly id: string;
     readonly listeners = new Map<string, () => void>();
 
-    constructor(options: Record<string, unknown>) {
-      this.id = String(options.id);
+    constructor(options: Electron.NotificationConstructorOptions) {
+      this.id = options.id ?? "";
       mocks.createdNotifications.push(options);
       mocks.notificationListeners.push(this.listeners);
     }
 
-    once(event: string, listener: (...arguments_: unknown[]) => void): this {
+    once<Listener extends (...arguments_: never[]) => void>(
+      event: string,
+      listener: Listener
+    ): this {
       this.listeners.set(event, listener);
       return this;
     }
@@ -77,55 +87,66 @@ vi.mock(import("electron"), () => {
   }
 
   return {
-    BrowserWindow: {
+    ...original,
+    BrowserWindow: Object.assign(vi.fn(), original.BrowserWindow, {
       getAllWindows: vi.fn<() => never[]>(() => []),
-    } as unknown as typeof Electron.BrowserWindow,
-    Notification: TestNotification as unknown as typeof Electron.Notification,
+    }),
+    Notification: Object.assign(TestNotification, original.Notification, {
+      isSupported: TestNotification.isSupported,
+    }),
     app: {
+      ...original.app,
       focus: mocks.appFocus,
-    } as unknown as typeof Electron.app,
-    nativeImage: {
+    },
+    nativeImage: Object.assign(vi.fn(), original.nativeImage, {
       createFromBuffer: vi.fn<() => typeof mocks.brandIcon>(
         () => mocks.brandIcon
       ),
-    } as unknown as typeof Electron.nativeImage,
+    }),
   };
 });
 
-vi.mock(import("../src/main/database"), async () => {
+vi.mock(import("../src/main/database-query"), async () => {
   const { Effect: EffectModule } = await import("effect");
-  const database = {
-    query: {
-      accountSettings: {
-        findFirst: () =>
-          Promise.resolve({
-            notificationsEnabled: mocks.notificationsEnabled,
-          }),
-      },
-      gmailMessages: { findMany: () => Promise.resolve(mocks.messages) },
-      gmailThreads: { findMany: () => Promise.resolve(mocks.threads) },
-    },
-  };
 
   return {
     withDatabaseClient: <A>(
-      run: (client: RemoteDatabaseClient) => Promise<A>
-    ) =>
-      EffectModule.promise(() =>
-        run(database as unknown as RemoteDatabaseClient)
-      ),
+      _run: (database: RemoteDatabaseClient) => Promise<A>
+    ) => EffectModule.die("Unexpected notification database query"),
   };
 });
 
 vi.mock(import("../src/main/window/create-window"), () => ({
-  createWindow: vi.fn<() => Electron.BrowserWindow>(() => {
-    throw new Error("Unexpected window creation");
-  }),
-  getMainWindow: vi.fn<() => Electron.BrowserWindow | undefined>(
-    () => mocks.mainWindow as unknown as Electron.BrowserWindow
-  ),
-  openThreadWindow: mocks.openThreadWindow,
+  createWindow: () => {
+    throw new Error("Unexpected live notification window creation");
+  },
+  getMainWindow: () => {
+    throw new Error("Unexpected live notification window lookup");
+  },
+  openThreadWindow: () =>
+    Promise.reject(new Error("Unexpected live notification thread open")),
 }));
+
+const notificationDependencies = {
+  createWindow: () => {
+    throw new Error("Unexpected window creation");
+  },
+  focusApplication: () => {
+    mocks.appFocus({ steal: true });
+  },
+  getMainWindow: () => mocks.mainWindow,
+  loadMessages: (accountId: string) =>
+    Effect.succeed(
+      mocks.notificationsEnabled
+        ? selectNewMailNotificationMessages(
+            accountId,
+            mocks.messages,
+            mocks.threads
+          )
+        : []
+    ),
+  openThreadWindow: mocks.openThreadWindow,
+} satisfies NewMailNotificationDependencies;
 
 const makeMessage = (
   messageId: string,
@@ -150,8 +171,21 @@ const showNotifications = (
     addedMessageIds,
     resolveSenderBrand,
     mocks.markThreadRead,
-    mocks.trashThread
+    mocks.trashThread,
+    notificationDependencies
   );
+
+const emitNotification = (
+  notificationIndex: number,
+  event: string,
+  details?: { readonly actionIndex: number }
+): void => {
+  const listener = mocks.notificationListeners[notificationIndex]?.get(event);
+  if (listener === undefined) {
+    return;
+  }
+  Reflect.apply(listener, undefined, details === undefined ? [] : [details]);
+};
 
 describe(showNewMailNotifications, () => {
   beforeEach(() => {
@@ -174,7 +208,7 @@ describe(showNewMailNotifications, () => {
       focus: vi.fn<() => void>(),
       isDestroyed: () => false,
       show: vi.fn<() => void>(),
-    } as unknown as Electron.BrowserWindow);
+    });
     mocks.threads = [];
     mocks.trashThread.mockClear();
   });
@@ -290,7 +324,7 @@ describe(showNewMailNotifications, () => {
         )
       );
 
-      mocks.notificationListeners[0]?.get(event)?.(details);
+      emitNotification(0, event, details);
 
       await vi.waitFor(() => {
         expect(mocks.openThreadWindow).toHaveBeenCalledWith({
@@ -310,7 +344,7 @@ describe(showNewMailNotifications, () => {
       showNotifications("user@example.com", ["new"], () => Effect.succeed(null))
     );
 
-    mocks.notificationListeners[0]?.get("action")?.({ actionIndex: 1 });
+    emitNotification(0, "action", { actionIndex: 1 });
 
     expect(mocks.markThreadRead).toHaveBeenCalledWith({
       accountId: "user@example.com",
@@ -327,7 +361,7 @@ describe(showNewMailNotifications, () => {
       showNotifications("user@example.com", ["new"], () => Effect.succeed(null))
     );
 
-    mocks.notificationListeners[0]?.get("action")?.({ actionIndex: 2 });
+    emitNotification(0, "action", { actionIndex: 2 });
 
     expect(mocks.trashThread).toHaveBeenCalledWith({
       accountId: "user@example.com",

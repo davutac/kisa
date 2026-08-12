@@ -7,7 +7,7 @@ import type {
   GmailSenderBrand,
   GmailThreadRequest,
 } from "../../shared/ipc/mail";
-import { withDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database-query";
 import {
   createWindow,
   getMainWindow,
@@ -43,6 +43,48 @@ export interface NewMailNotificationCopy {
   readonly body: string;
   readonly subtitle: string;
   readonly title: string;
+}
+
+interface NewMailNotificationWindow {
+  readonly focus: () => void;
+  readonly isDestroyed: () => boolean;
+  readonly show: () => void;
+}
+
+interface NewMailNotificationMainWindow extends NewMailNotificationWindow {
+  readonly isMinimized: () => boolean;
+  readonly restore: () => void;
+}
+
+export interface NewMailNotificationDependencies {
+  readonly createWindow: () => NewMailNotificationMainWindow;
+  readonly focusApplication: () => void;
+  readonly getMainWindow: () => NewMailNotificationMainWindow | undefined;
+  readonly loadMessages: (
+    accountId: string,
+    addedMessageIds: readonly string[]
+  ) => Effect.Effect<
+    readonly NewMailNotificationMessage[],
+    NewMailNotificationError
+  >;
+  readonly openThreadWindow: (
+    request: GmailThreadRequest
+  ) => Promise<NewMailNotificationWindow>;
+}
+
+export interface NewMailNotificationMessageRow {
+  readonly fromAddress: string;
+  readonly fromName: string | null;
+  readonly internalDate: number;
+  readonly labelIds: readonly string[] | null;
+  readonly messageId: string;
+  readonly subject: string;
+  readonly threadId: string;
+}
+
+export interface NewMailNotificationThreadRow {
+  readonly snippet: string;
+  readonly threadId: string;
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
@@ -115,8 +157,10 @@ export const toNewMailNotificationCopy = (
   };
 };
 
-const focusMainWindow = (): void => {
-  const window = getMainWindow() ?? createWindow();
+const focusMainWindow = (
+  dependencies: NewMailNotificationDependencies
+): void => {
+  const window = dependencies.getMainWindow() ?? dependencies.createWindow();
 
   if (window.isDestroyed()) {
     return;
@@ -127,19 +171,22 @@ const focusMainWindow = (): void => {
   }
 
   window.show();
-  app.focus({ steal: true });
+  dependencies.focusApplication();
   window.focus();
 };
 
 const openNotificationThread = Effect.fn("openNotificationThread")(
-  function* openNotificationThread(message: NewMailNotificationMessage) {
+  function* openNotificationThread(
+    message: NewMailNotificationMessage,
+    dependencies: NewMailNotificationDependencies
+  ) {
     const window = yield* Effect.tryPromise({
       catch: () =>
         new NewMailNotificationError({
           message: "Could not open a notification conversation",
         }),
       try: () =>
-        openThreadWindow({
+        dependencies.openThreadWindow({
           accountId: message.accountId,
           threadId: message.threadId,
         }),
@@ -152,19 +199,9 @@ const openNotificationThread = Effect.fn("openNotificationThread")(
     }
 
     window.show();
-    app.focus({ steal: true });
+    dependencies.focusApplication();
     window.focus();
-  },
-  // oxlint-disable-next-line promise/prefer-await-to-then -- This is Effect error recovery, not Promise.prototype.catch.
-  Effect.catch(() =>
-    Effect.try({
-      catch: () =>
-        new NewMailNotificationError({
-          message: "Could not focus the application window",
-        }),
-      try: focusMainWindow,
-    }).pipe(Effect.ignore)
-  )
+  }
 );
 
 const activeNotifications = new Map<
@@ -253,7 +290,8 @@ const showNotification = (
   message: NewMailNotificationMessage,
   brandIcon: NativeImage | null,
   markThreadRead: (request: GmailThreadRequest) => void,
-  trashThread: (request: GmailThreadRequest) => void
+  trashThread: (request: GmailThreadRequest) => void,
+  dependencies: NewMailNotificationDependencies
 ): void => {
   const copy = toNewMailNotificationCopy(message);
   const accountTitle = truncateNotificationText(
@@ -269,10 +307,10 @@ const showNotification = (
     body: copy.body,
     groupId: message.accountId,
     groupTitle: accountTitle,
+    icon: brandIcon ?? undefined,
     id: `${message.accountId}:${message.messageId}`,
     subtitle: copy.subtitle,
     title: copy.title,
-    ...(brandIcon === null ? {} : { icon: brandIcon }),
   });
   const release = (): void => {
     activeNotifications.delete(notification);
@@ -293,7 +331,19 @@ const showNotification = (
   };
   const activate = (): void => {
     runOnce(() => {
-      void Effect.runPromise(openNotificationThread(message));
+      void Effect.runPromise(
+        openNotificationThread(message, dependencies).pipe(
+          Effect.catchTag("NewMailNotificationError", () =>
+            Effect.try({
+              catch: () =>
+                new NewMailNotificationError({
+                  message: "Could not focus the application window",
+                }),
+              try: () => focusMainWindow(dependencies),
+            }).pipe(Effect.ignore)
+          )
+        )
+      );
     });
   };
   const markAsRead = (): void => {
@@ -333,6 +383,38 @@ const showNotification = (
 
   activeNotifications.set(notification, message);
   notification.show();
+};
+
+export const selectNewMailNotificationMessages = (
+  accountId: string,
+  messages: readonly NewMailNotificationMessageRow[],
+  threads: readonly NewMailNotificationThreadRow[]
+): readonly NewMailNotificationMessage[] => {
+  const eligible = messages
+    .filter(
+      (message) =>
+        message.labelIds?.includes(GMAIL_INBOX_LABEL) === true &&
+        message.labelIds.includes(GMAIL_UNREAD_LABEL)
+    )
+    .slice(0, MAX_NOTIFICATIONS_PER_SYNC);
+  const snippetsByThread = new Map(
+    threads.map((thread) => [thread.threadId, thread.snippet] as const)
+  );
+
+  return eligible.map((message) => {
+    const notification = {
+      accountId,
+      fromAddress: message.fromAddress,
+      messageId: message.messageId,
+      snippet: snippetsByThread.get(message.threadId) ?? "",
+      subject: message.subject,
+      threadId: message.threadId,
+    };
+
+    return message.fromName === null
+      ? notification
+      : { ...notification, fromName: message.fromName };
+  });
 };
 
 const loadNotificationMessages = Effect.fn("loadNotificationMessages")(
@@ -384,19 +466,8 @@ const loadNotificationMessages = Effect.fn("loadNotificationMessages")(
           },
         },
       });
-      const snippetsByThread = new Map(
-        threads.map((thread) => [thread.threadId, thread.snippet] as const)
-      );
 
-      return eligible.map((message): NewMailNotificationMessage => ({
-        accountId,
-        fromAddress: message.fromAddress,
-        messageId: message.messageId,
-        snippet: snippetsByThread.get(message.threadId) ?? "",
-        subject: message.subject,
-        threadId: message.threadId,
-        ...(message.fromName === null ? {} : { fromName: message.fromName }),
-      }));
+      return selectNewMailNotificationMessages(accountId, eligible, threads);
     }).pipe(
       Effect.mapError(
         () =>
@@ -408,6 +479,14 @@ const loadNotificationMessages = Effect.fn("loadNotificationMessages")(
   }
 );
 
+const liveNotificationDependencies: NewMailNotificationDependencies = {
+  createWindow,
+  focusApplication: () => app.focus({ steal: true }),
+  getMainWindow,
+  loadMessages: loadNotificationMessages,
+  openThreadWindow,
+};
+
 type ResolveSenderBrand = (
   message: NewMailNotificationMessage
 ) => Effect.Effect<GmailSenderBrand | null, unknown>;
@@ -418,13 +497,14 @@ export const showNewMailNotifications = Effect.fn("showNewMailNotifications")(
     addedMessageIds: readonly string[],
     resolveSenderBrand: ResolveSenderBrand,
     markThreadRead: (request: GmailThreadRequest) => void,
-    trashThread: (request: GmailThreadRequest) => void
+    trashThread: (request: GmailThreadRequest) => void,
+    dependencies: NewMailNotificationDependencies = liveNotificationDependencies
   ) {
     if (!Notification.isSupported()) {
       return;
     }
 
-    const messages = yield* loadNotificationMessages(
+    const messages = yield* dependencies.loadMessages(
       accountId,
       addedMessageIds
     );
@@ -443,7 +523,13 @@ export const showNewMailNotifications = Effect.fn("showNewMailNotifications")(
             message: "Could not show a new email notification",
           }),
         try: () =>
-          showNotification(message, brandIcon, markThreadRead, trashThread),
+          showNotification(
+            message,
+            brandIcon,
+            markThreadRead,
+            trashThread,
+            dependencies
+          ),
       }).pipe(Effect.ignore);
     }
   }

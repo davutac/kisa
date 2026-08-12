@@ -3,7 +3,7 @@ const IMAGE_FILENAME_PATTERN =
 const PDF_FILENAME_PATTERN = /\.pdf$/iu;
 const FILENAME_EXTENSION_PATTERN = /\.(?<extension>[a-z\d]{1,8})$/iu;
 
-const MEDIA_TYPE_LABELS: Readonly<Record<string, string>> = {
+const MEDIA_TYPE_LABELS = {
   "application/gzip": "GZIP",
   "application/msword": "DOC",
   "application/pdf": "PDF",
@@ -21,7 +21,7 @@ const MEDIA_TYPE_LABELS: Readonly<Record<string, string>> = {
   "image/svg+xml": "SVG",
   "text/csv": "CSV",
   "text/plain": "TXT",
-};
+} satisfies Readonly<Record<string, string>>;
 
 export type AttachmentPreviewKind = "image" | "pdf";
 

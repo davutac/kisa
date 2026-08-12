@@ -37,6 +37,12 @@ interface TemplateEditorProps {
   readonly variablePreviewContext: Omit<TemplateVariableContext, "now">;
 }
 
+interface SaveAction {
+  readonly icon: ReactNode;
+  readonly label: string;
+  readonly status: string;
+}
+
 const getSaveAction = ({
   isCreating,
   isDirty,
@@ -45,7 +51,7 @@ const getSaveAction = ({
   isCreating: boolean;
   isDirty: boolean;
   isSaving: boolean;
-}): { icon: ReactNode; label: string; status: string } => {
+}): SaveAction => {
   if (isSaving) {
     return {
       icon: <LoaderCircleIcon className="animate-spin" />,

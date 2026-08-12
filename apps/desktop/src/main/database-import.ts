@@ -72,10 +72,10 @@ const importError = (): DatabaseImportError =>
 const getImportManifestPath = (databasePath: string): string =>
   `${databasePath}.pending-import.json`;
 
-const isMissingFileError = (error: unknown): boolean =>
+const isMissingFileError = <ErrorInput>(error: ErrorInput): boolean =>
   error instanceof Error && "code" in error && error.code === "ENOENT";
 
-const isExistingFileError = (error: unknown): boolean =>
+const isExistingFileError = <ErrorInput>(error: ErrorInput): boolean =>
   error instanceof Error && "code" in error && error.code === "EEXIST";
 
 const readManifest = async (

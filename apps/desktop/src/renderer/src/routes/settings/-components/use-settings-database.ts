@@ -15,15 +15,12 @@ interface ImportSession {
   readonly sessionId?: string;
 }
 
-export const DATABASE_IMPORT_PROGRESS_LABELS: Record<
-  DatabaseImportProgress,
-  string
-> = {
+export const DATABASE_IMPORT_PROGRESS_LABELS = {
   copying: "Copying the database into a safe staging area…",
   preparing: "Preparing the restart-safe handoff…",
   ready: "Ready—restart Kisa to activate the imported database.",
   validating: "Checking the database and recovery key…",
-};
+} satisfies Record<DatabaseImportProgress, string>;
 
 export const useSettingsDatabase = (settingsApi: SettingsApi) => {
   const importGeneration = useRef(0);

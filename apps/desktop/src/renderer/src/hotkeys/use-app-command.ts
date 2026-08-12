@@ -37,7 +37,7 @@ export const useAppCommand = (
           options: {
             ignoreInputs: command.input === "ignore",
             requireReset: command.repeat === "once",
-            ...(options.target === undefined ? {} : { target: options.target }),
+            target: options.target,
           },
         }))
       : [];

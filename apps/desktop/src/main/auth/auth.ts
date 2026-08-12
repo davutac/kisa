@@ -6,7 +6,7 @@ import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
 import { GMAIL_FULL_ACCESS_SCOPE } from "@repo/gmail/models";
 import { count, eq as equals } from "drizzle-orm";
-import { Effect, Schema } from "effect";
+import { Effect, Predicate, Schema } from "effect";
 import { app, safeStorage, shell } from "electron";
 
 import type { GoogleAccount, GoogleAccountsReply } from "../../shared/ipc/auth";
@@ -15,7 +15,7 @@ import {
   MAX_GOOGLE_ACCOUNTS,
 } from "../../shared/ipc/auth";
 import { AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
-import { withDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database-query";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { toIpcReply } from "../ipc/reply";
 import { getMainWindow } from "../window/create-window";
@@ -331,9 +331,7 @@ const exchangeCode = Effect.fn("exchangeCode")(function* exchangeCode(
     accessToken: payload.access_token,
     clientId: oauth.clientId,
     expiresAt: Date.now() + payload.expires_in * 1000,
-    ...(payload.refresh_token === undefined
-      ? {}
-      : { refreshToken: payload.refresh_token }),
+    refreshToken: payload.refresh_token,
     scopes: payload.scope.split(" ").filter((scope) => scope.length > 0),
   } satisfies AuthHandoff;
 });
@@ -675,8 +673,8 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
     const scopes = decodeStoredScopes(JSON.parse(row.scopes));
     const cachedAvatar = toAvatarDataUrl(row.avatarData, row.avatarMediaType);
     const cached: GoogleAccount = {
-      ...(cachedAvatar === undefined ? {} : { avatarUrl: cachedAvatar }),
-      ...(row.displayName === null ? {} : { displayName: row.displayName }),
+      avatarUrl: cachedAvatar,
+      displayName: row.displayName ?? undefined,
       email: row.email,
       scopes,
     };
@@ -749,8 +747,8 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
     const displayName = profile.name ?? row.displayName ?? undefined;
 
     return {
-      ...(avatarUrl === undefined ? {} : { avatarUrl }),
-      ...(displayName === undefined ? {} : { displayName }),
+      avatarUrl,
+      displayName,
       email: row.email,
       scopes,
     } satisfies GoogleAccount;
@@ -786,25 +784,18 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
 
     return yield* Effect.forEach(
       rows,
-      (row) =>
-        refreshAccountProfile(row).pipe(
+      (row) => {
+        const avatarUrl = toAvatarDataUrl(row.avatarData, row.avatarMediaType);
+
+        return refreshAccountProfile(row).pipe(
           Effect.orElseSucceed(() => ({
-            ...(toAvatarDataUrl(row.avatarData, row.avatarMediaType) ===
-            undefined
-              ? {}
-              : {
-                  avatarUrl: toAvatarDataUrl(
-                    row.avatarData,
-                    row.avatarMediaType
-                  ) as string,
-                }),
-            ...(row.displayName === null
-              ? {}
-              : { displayName: row.displayName }),
+            avatarUrl,
+            displayName: row.displayName ?? undefined,
             email: row.email,
             scopes: decodeStoredScopes(JSON.parse(row.scopes)),
           }))
-        ),
+        );
+      },
       { concurrency: 4 }
     );
   }
@@ -1018,7 +1009,7 @@ const startCallbackServer = (
       server.removeListener("error", handleListenError);
       const address = server.address();
 
-      if (address === null || typeof address === "string") {
+      if (address === null || Predicate.isString(address)) {
         closeServer(server);
         resume(
           Effect.fail(

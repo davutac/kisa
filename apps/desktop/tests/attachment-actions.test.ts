@@ -82,7 +82,7 @@ vi.mock("electron", () => ({
         handler();
       }
     }
-  } as unknown as typeof Electron.BrowserWindow,
+  },
   dialog: { showSaveDialog: state.saveDialog },
 }));
 

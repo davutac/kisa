@@ -56,7 +56,7 @@ export const installNativeContextMenu = (window: BrowserWindow): void => {
     }
 
     Menu.buildFromTemplate(template).popup({
-      ...(params.frame === null ? {} : { frame: params.frame }),
+      frame: params.frame ?? undefined,
       window,
     });
   });

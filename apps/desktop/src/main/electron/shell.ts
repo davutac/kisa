@@ -2,11 +2,7 @@ import { shell } from "electron";
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:"]);
 
-export const parseSafeExternalUrl = (rawUrl: unknown): string | undefined => {
-  if (typeof rawUrl !== "string") {
-    return undefined;
-  }
-
+export const parseSafeExternalUrl = (rawUrl: string): string | undefined => {
   try {
     const url = new URL(rawUrl);
 
@@ -16,7 +12,7 @@ export const parseSafeExternalUrl = (rawUrl: unknown): string | undefined => {
   }
 };
 
-export const openExternalUrl = (rawUrl: unknown): boolean => {
+export const openExternalUrl = (rawUrl: string): boolean => {
   const url = parseSafeExternalUrl(rawUrl);
 
   if (url === undefined) {

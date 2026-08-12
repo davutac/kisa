@@ -1,4 +1,3 @@
-// oxlint-disable typescript/no-unsafe-type-assertion
 import { fileURLToPath } from "node:url";
 
 import {
@@ -11,12 +10,13 @@ import type {
   RemoteDatabaseClient,
 } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
-import { Effect } from "effect";
-import type { WebContents } from "electron";
+import { Effect, Option, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { withDatabaseClient } from "../src/main/database";
-import type { sendRendererEventToEachWindow } from "../src/main/electron/renderer-events";
+import type {
+  sendRendererEvent,
+  sendRendererEventToEachWindow,
+} from "../src/main/electron/renderer-events";
 import {
   discardMailDraft,
   listStashedDrafts,
@@ -24,14 +24,20 @@ import {
   saveMailDraft,
 } from "../src/main/mail/mail-drafts";
 import { outgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-attachment-authorizations";
-import type { MailDraftChanged } from "../src/shared/ipc/mail";
+import { MailDraftChanged } from "../src/shared/ipc/mail";
 
 const rendererEvents = vi.hoisted(() => ({
   owners: [
-    { id: 7, once: vi.fn<() => void>() } as unknown as WebContents,
-    { id: 8, once: vi.fn<() => void>() } as unknown as WebContents,
+    {
+      id: 7,
+      once: vi.fn<(event: "destroyed", listener: () => void) => void>(),
+    },
+    {
+      id: 8,
+      once: vi.fn<(event: "destroyed", listener: () => void) => void>(),
+    },
   ],
-  send: vi.fn<(...arguments_: unknown[]) => void>(),
+  payloads: [] as unknown[],
 }));
 
 const connection = openDatabaseConnection(":memory:");
@@ -55,7 +61,7 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
   const dataStatement = statement.raw(true);
   if (method === "get") {
     const row = dataStatement.get(...parameters);
-    return Promise.resolve({ rows: row as never[] });
+    return Promise.resolve({ rows: Array.isArray(row) ? row : [] });
   }
 
   return Promise.resolve({ rows: dataStatement.all(...parameters) });
@@ -63,28 +69,39 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
 
 const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
 
-vi.mock(import("../src/main/database"), async () => {
+vi.mock(import("../src/main/database-query"), async () => {
   const { DatabaseError } = await import("@repo/database/runtime");
   const { Effect: EffectModule } = await import("effect");
-  const useTestDatabase = (<A>(
+  const useTestDatabase = <A>(
     run: (database: RemoteDatabaseClient) => Promise<A>
   ) =>
     EffectModule.tryPromise({
       catch: (cause) => DatabaseError.new({ cause, reason: "query" }),
       try: () => run(remoteDatabase),
-    })) as typeof withDatabaseClient;
+    });
 
   return { withDatabaseClient: useTestDatabase };
 });
 
-vi.mock(import("../src/main/electron/renderer-events"), () => ({
-  sendRendererEvent: rendererEvents.send,
-  sendRendererEventToEachWindow: ((channel, schema, makePayload) => {
+vi.mock(import("../src/main/electron/renderer-events"), () => {
+  const sendEvent: typeof sendRendererEvent = (_channel, _schema, payload) => {
+    rendererEvents.payloads.push(payload);
+  };
+  const sendEventToEachWindow: typeof sendRendererEventToEachWindow = (
+    _channel,
+    _schema,
+    makePayload
+  ) => {
     for (const owner of rendererEvents.owners) {
-      rendererEvents.send(channel, schema, makePayload(owner));
+      rendererEvents.payloads.push(makePayload(owner));
     }
-  }) as typeof sendRendererEventToEachWindow,
-}));
+  };
+
+  return {
+    sendRendererEvent: sendEvent,
+    sendRendererEventToEachWindow: sendEventToEachWindow,
+  };
+});
 
 connection
   .prepare(
@@ -119,13 +136,19 @@ const replyDraft = {
   to: ["friend@example.com"],
 };
 
+const decodeMailDraftChanged = Schema.decodeUnknownOption(MailDraftChanged);
 const emittedChanges = (): MailDraftChanged[] =>
-  rendererEvents.send.mock.calls.map((call) => call[2] as MailDraftChanged);
+  rendererEvents.payloads.flatMap((payload) =>
+    Option.match(decodeMailDraftChanged(payload), {
+      onNone: () => [],
+      onSome: (change) => [change],
+    })
+  );
 
 describe("mail drafts", () => {
   beforeEach(() => {
     connection.prepare("DELETE FROM mail_drafts").run();
-    rendererEvents.send.mockClear();
+    rendererEvents.payloads.length = 0;
   });
 
   afterAll(() => connection.close());

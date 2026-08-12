@@ -1,6 +1,10 @@
 import * as Schema from "effect/Schema";
 import { BrowserWindow } from "electron";
-import type { WebContents } from "electron";
+
+export interface RendererEventOwner {
+  readonly id: number;
+  readonly once: (event: "destroyed", listener: () => void) => unknown;
+}
 
 const canReceiveEvents = (window: BrowserWindow): boolean =>
   !(window.isDestroyed() || window.webContents.isDestroyed());
@@ -25,7 +29,7 @@ export const sendRendererEvent = <A, I>(
 export const sendRendererEventToEachWindow = <A, I>(
   channel: string,
   schema: Schema.Codec<A, I, never, never>,
-  makePayload: (webContents: WebContents) => A
+  makePayload: (owner: RendererEventOwner) => A
 ): void => {
   for (const window of BrowserWindow.getAllWindows()) {
     if (canReceiveEvents(window)) {

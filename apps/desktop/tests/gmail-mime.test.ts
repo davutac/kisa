@@ -63,7 +63,7 @@ const decodeTransferBodies = (raw: string): readonly string[] => {
   );
 };
 
-const parse = (payload: unknown) =>
+const parse = <Payload>(payload: Payload) =>
   Effect.runSync(
     GmailMime.pipe(
       Effect.flatMap((mime) =>

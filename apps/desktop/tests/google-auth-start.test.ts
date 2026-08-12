@@ -1,10 +1,26 @@
 /// <reference types="electron-vite/node" />
 
-import { Effect } from "effect";
-import type * as Electron from "electron";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fileURLToPath } from "node:url";
 
-import type { RemoteDatabaseClient } from "../../../packages/database/src/remote-client";
+import {
+  applyDatabaseMigrations,
+  createDatabaseClient,
+  openDatabaseConnection,
+} from "@repo/database/client";
+import type { DatabaseRemoteCallback } from "@repo/database/remote-client";
+import { createRemoteDatabaseClient } from "@repo/database/remote-client";
+import { Effect, Schema } from "effect";
+import type * as Electron from "electron";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+
 import type { notifyGoogleAccountConnected } from "../src/main/auth/account-events";
 import {
   getGoogleAccessToken,
@@ -12,7 +28,6 @@ import {
   startGoogleAuth,
   stopGoogleAuth,
 } from "../src/main/auth/auth";
-import { withDatabaseClient } from "../src/main/database";
 import { sendRendererEvent } from "../src/main/electron/renderer-events";
 import type { getMainWindow } from "../src/main/window/create-window";
 
@@ -23,47 +38,78 @@ const electronState = vi.hoisted(() => {
   process.env["MAIN_VITE_GOOGLE_OAUTH_CLIENT_SECRET"] = clientSecret;
 
   return {
-    accountCount: 0,
     clientId,
     clientSecret,
     openedUrls: [] as string[],
   };
 });
 
-vi.mock(import("electron"), () => ({
-  BrowserWindow: {
-    getAllWindows: vi.fn<typeof Electron.BrowserWindow.getAllWindows>(() => []),
-  } as unknown as typeof Electron.BrowserWindow,
-  app: {
-    focus: vi.fn<typeof Electron.app.focus>(),
-  } as unknown as typeof Electron.app,
-  safeStorage: {
-    decryptString: vi.fn<typeof Electron.safeStorage.decryptString>((value) =>
-      value.toString("utf-8")
-    ),
-    encryptString: vi.fn<typeof Electron.safeStorage.encryptString>((value) =>
-      Buffer.from(value)
-    ),
-    getSelectedStorageBackend: vi.fn<
-      typeof Electron.safeStorage.getSelectedStorageBackend
-    >(() => "gnome_libsecret"),
-    isEncryptionAvailable: vi.fn<
-      typeof Electron.safeStorage.isEncryptionAvailable
-    >(() => true),
-  } as unknown as typeof Electron.safeStorage,
-  shell: {
-    openExternal: vi.fn<typeof Electron.shell.openExternal>((url) => {
-      electronState.openedUrls.push(url);
-      return Promise.resolve();
-    }),
-  } as unknown as typeof Electron.shell,
-}));
+interface TestDatabaseState {
+  client?: ReturnType<typeof createRemoteDatabaseClient>;
+}
 
-vi.mock(import("../src/main/database"), () => ({
-  withDatabaseClient: vi.fn<
-    () => never
-  >() as unknown as typeof withDatabaseClient,
-}));
+const databaseState = vi.hoisted((): TestDatabaseState => ({}));
+
+vi.mock(import("electron"), async (importOriginal) => {
+  const original = await importOriginal();
+
+  return {
+    ...original,
+    BrowserWindow: Object.assign(vi.fn(), original.BrowserWindow, {
+      getAllWindows: vi.fn<typeof Electron.BrowserWindow.getAllWindows>(
+        () => []
+      ),
+    }),
+    app: {
+      ...original.app,
+      focus: vi.fn<typeof Electron.app.focus>(),
+    },
+    safeStorage: {
+      ...original.safeStorage,
+      decryptString: vi.fn<typeof Electron.safeStorage.decryptString>((value) =>
+        value.toString("utf-8")
+      ),
+      encryptString: vi.fn<typeof Electron.safeStorage.encryptString>((value) =>
+        Buffer.from(value)
+      ),
+      getSelectedStorageBackend: vi.fn<
+        typeof Electron.safeStorage.getSelectedStorageBackend
+      >(() => "gnome_libsecret"),
+      isEncryptionAvailable: vi.fn<
+        typeof Electron.safeStorage.isEncryptionAvailable
+      >(() => true),
+    },
+    shell: {
+      ...original.shell,
+      openExternal: vi.fn<typeof Electron.shell.openExternal>((url) => {
+        electronState.openedUrls.push(url);
+        return Promise.resolve();
+      }),
+    },
+  };
+});
+
+vi.mock(import("../src/main/database-query"), async () => {
+  const { DatabaseError } = await import("@repo/database/runtime");
+  const { Effect: EffectModule } = await import("effect");
+
+  return {
+    withDatabaseClient: <A>(
+      run: (
+        database: ReturnType<typeof createRemoteDatabaseClient>
+      ) => Promise<A>
+    ) =>
+      EffectModule.tryPromise({
+        catch: (cause) => DatabaseError.new({ cause, reason: "query" }),
+        try: () => {
+          if (databaseState.client === undefined) {
+            throw new Error("Test database client is not initialized");
+          }
+          return run(databaseState.client);
+        },
+      }),
+  };
+});
 
 vi.mock(import("../src/main/electron/renderer-events"), () => ({
   sendRendererEvent: vi.fn<typeof sendRendererEvent>(),
@@ -74,8 +120,55 @@ vi.mock(import("../src/main/auth/account-events"), () => ({
 }));
 
 vi.mock(import("../src/main/window/create-window"), () => ({
-  getMainWindow: vi.fn<typeof getMainWindow>(() => {}),
+  getMainWindow: vi.fn<typeof getMainWindow>(),
 }));
+
+const connection = openDatabaseConnection(":memory:");
+applyDatabaseMigrations(
+  createDatabaseClient(connection),
+  fileURLToPath(new URL("../../../packages/database/drizzle", import.meta.url))
+);
+
+const executeRemoteQuery: DatabaseRemoteCallback = (
+  query,
+  parameters,
+  method
+) => {
+  const statement = connection.prepare(query);
+
+  if (method === "run") {
+    statement.run(...parameters);
+    return Promise.resolve({ rows: [] });
+  }
+
+  const dataStatement = statement.raw(true);
+  if (method === "get") {
+    const row = dataStatement.get(...parameters);
+    return Promise.resolve({ rows: Array.isArray(row) ? row : [] });
+  }
+
+  return Promise.resolve({ rows: dataStatement.all(...parameters) });
+};
+
+databaseState.client = createRemoteDatabaseClient(executeRemoteQuery);
+
+const SavedCredentials = Schema.Struct({
+  accessToken: Schema.String,
+  clientId: Schema.String,
+  expiresAt: Schema.Finite,
+  refreshToken: Schema.String,
+});
+const decodeSavedCredentials = Schema.decodeUnknownSync(SavedCredentials);
+
+const insertAccount = (email: string, credentials = Buffer.from([1])): void => {
+  connection
+    .prepare(
+      `INSERT INTO google_accounts (
+        created_at, credentials, email, scopes, sort_order, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(1, credentials, email, "[]", 1, 1);
+};
 
 const startAuthorization = async () => {
   await Effect.runPromise(startGoogleAuth());
@@ -96,25 +189,18 @@ describe("Google authentication startup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stopGoogleAuth();
-    electronState.accountCount = 0;
     electronState.openedUrls = [];
-    vi.mocked(withDatabaseClient).mockImplementation(((run) =>
-      Effect.promise(() =>
-        run({
-          select: () => ({
-            from: () => ({
-              all: () =>
-                Promise.resolve([{ value: electronState.accountCount }]),
-            }),
-          }),
-        } as unknown as RemoteDatabaseClient)
-      )) as typeof withDatabaseClient);
+    connection.prepare("DELETE FROM google_accounts").run();
   });
 
   afterEach(() => {
     stopGoogleAuth();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  afterAll(() => {
+    connection.close();
   });
 
   it("opens Google's desktop authorization flow with PKCE and loopback", async () => {
@@ -186,7 +272,9 @@ describe("Google authentication startup", () => {
   });
 
   it("does not open OAuth after nine accounts are connected", async () => {
-    electronState.accountCount = 9;
+    for (let index = 0; index < 9; index += 1) {
+      insertAccount(`person-${index}@example.com`);
+    }
 
     await expect(Effect.runPromise(startGoogleAuth())).rejects.toThrow(
       "You can connect up to 9 Google accounts."
@@ -270,21 +358,7 @@ describe("Google authentication startup", () => {
       sortOrder: 1,
       updatedAt: 1,
     };
-    const save = vi.fn<() => Promise<void>>(() => Promise.resolve());
-    const database = {
-      insert: () => ({
-        values: () => ({
-          onConflictDoUpdate: () => ({ run: save }),
-        }),
-      }),
-      query: {
-        googleAccounts: {
-          findFirst: () => Promise.resolve(account),
-        },
-      },
-    } as unknown as RemoteDatabaseClient;
-    vi.mocked(withDatabaseClient).mockImplementation(((run) =>
-      Effect.promise(() => run(database))) as typeof withDatabaseClient);
+    insertAccount(account.email, account.credentials);
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
         access_token: "fresh-access-token",
@@ -313,6 +387,21 @@ describe("Google authentication startup", () => {
       grantType: "refresh_token",
       refreshToken: "refresh-token",
     });
-    expect(save).toHaveBeenCalledOnce();
+    const savedCredentials = connection
+      .prepare("SELECT credentials FROM google_accounts WHERE email = ?")
+      .pluck()
+      .get(account.email);
+    if (!Buffer.isBuffer(savedCredentials)) {
+      throw new TypeError(
+        "Expected encrypted credentials to be stored as bytes"
+      );
+    }
+    expect(
+      decodeSavedCredentials(JSON.parse(savedCredentials.toString("utf-8")))
+    ).toMatchObject({
+      accessToken: "fresh-access-token",
+      clientId: electronState.clientId,
+      refreshToken: "refresh-token",
+    });
   });
 });

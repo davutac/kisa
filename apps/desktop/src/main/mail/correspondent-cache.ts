@@ -110,11 +110,18 @@ const loadAccountSnapshots = async (
   );
 
   for (const [accountId, address, name, messageCount] of tuples) {
-    nextByAccount.get(accountId)?.set(toCacheKey(address), {
+    const suggestion = {
       address,
       messageCount,
-      ...(name === null || name.length === 0 ? {} : { name }),
-    });
+    };
+    nextByAccount
+      .get(accountId)
+      ?.set(
+        toCacheKey(address),
+        name === null || name.length === 0
+          ? suggestion
+          : { ...suggestion, name }
+      );
   }
 
   for (const [accountId, correspondents] of nextByAccount) {
@@ -177,12 +184,15 @@ export const listCachedCorrespondents = (
       }
 
       const name = existing.name ?? suggestion.name;
-
-      merged.set(key, {
+      const mergedSuggestion = {
         address: existing.address,
         messageCount: existing.messageCount + suggestion.messageCount,
-        ...(name === undefined ? {} : { name }),
-      });
+      };
+
+      merged.set(
+        key,
+        name === undefined ? mergedSuggestion : { ...mergedSuggestion, name }
+      );
     }
   }
 
@@ -223,11 +233,16 @@ export const rememberCorrespondentMessages = (
       return;
     }
 
-    cached.set(key, {
+    const suggestion = {
       address: mailbox.address,
       messageCount: 1,
-      ...(mailbox.name === undefined ? {} : { name: mailbox.name }),
-    });
+    };
+    cached.set(
+      key,
+      mailbox.name === undefined
+        ? suggestion
+        : { ...suggestion, name: mailbox.name }
+    );
   };
 
   for (const message of messages) {

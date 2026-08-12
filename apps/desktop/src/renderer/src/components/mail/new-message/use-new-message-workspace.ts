@@ -71,9 +71,7 @@ export const useNewMessageWorkspace = ({
     : "";
   const currentDraft = useMemo<MailDraftInput>(
     () => ({
-      ...(selectedAccountId.length === 0
-        ? {}
-        : { accountId: selectedAccountId }),
+      accountId: selectedAccountId.length === 0 ? undefined : selectedAccountId,
       attachments,
       bcc: recipients.bcc,
       body: { html: composer.html, text: composer.text },

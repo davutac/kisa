@@ -11,7 +11,7 @@ import type {
   MailDraftListRequest,
 } from "../../shared/ipc/mail";
 import { MailDraftChanged } from "../../shared/ipc/mail";
-import { withDatabaseClient } from "../database";
+import { withDatabaseClient } from "../database-query";
 import {
   sendRendererEvent,
   sendRendererEventToEachWindow,
@@ -33,7 +33,7 @@ const toMailDraft = (
   row: MailDraftRow,
   ownerWebContentsId: number
 ): MailDraft => ({
-  ...(row.accountEmail === null ? {} : { accountId: row.accountEmail }),
+  accountId: row.accountEmail ?? undefined,
   attachments: outgoingAttachmentAuthorizations.restoreDraftAttachments(
     ownerWebContentsId,
     row.attachments
@@ -120,7 +120,7 @@ export const loadThreadDraft = Effect.fn("loadThreadDraft")(
     threadId: string,
     ownerWebContentsId: number
   ) {
-    const row = yield* withDatabaseClient((database) =>
+    const rows = yield* withDatabaseClient((database) =>
       database
         .select()
         .from(mailDrafts)
@@ -132,12 +132,13 @@ export const loadThreadDraft = Effect.fn("loadThreadDraft")(
         )
         .orderBy(desc(mailDrafts.updatedAt))
         .limit(1)
-        .get()
+        .all()
     ).pipe(
       Effect.mapError(
         () => new MailDraftError({ message: "Could not load saved reply" })
       )
     );
+    const [row] = rows;
 
     return row === undefined ? null : toMailDraft(row, ownerWebContentsId);
   }
@@ -278,7 +279,7 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
   function* discardMailDraft(request: MailDraftDiscardRequest) {
     const removed = yield* withDatabaseClient((database) =>
       database.transaction(async (transaction) => {
-        const draft = await transaction
+        const drafts = await transaction
           .select()
           .from(mailDrafts)
           .where(
@@ -289,7 +290,8 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
                 : eq(mailDrafts.accountEmail, request.accountId)
             )
           )
-          .get();
+          .all();
+        const [draft] = drafts;
 
         if (draft !== undefined) {
           await transaction
@@ -308,9 +310,7 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
 
     if (removed !== undefined) {
       notifyDraftChanged({
-        ...(removed.accountEmail === null
-          ? {}
-          : { accountId: removed.accountEmail }),
+        accountId: removed.accountEmail ?? undefined,
         draftId: request.draftId,
         kind: "remove",
         threadId: removed.threadId ?? undefined,

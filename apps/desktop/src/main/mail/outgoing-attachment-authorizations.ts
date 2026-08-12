@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
-import type { WebContents } from "electron";
 
 import { MAX_GMAIL_ATTACHMENT_BYTES } from "../../shared/ipc/mail";
 import type {
@@ -81,9 +80,9 @@ export class OutgoingAttachmentAuthorizations {
     return records.map((record) => this.#registerReference(ownerId, record));
   }
 
-  restoreDraftAttachments(
+  restoreDraftAttachments<Input>(
     ownerId: number,
-    input: unknown
+    input: Input
   ): readonly MailDraftAttachment[] {
     return decodeStoredOutgoingAttachments(input).map((record) =>
       this.#registerReference(ownerId, record)
@@ -273,9 +272,14 @@ export class OutgoingAttachmentAuthorizations {
 export const outgoingAttachmentAuthorizations =
   new OutgoingAttachmentAuthorizations();
 
-const boundAttachmentOwners = new WeakSet<WebContents>();
+interface AttachmentOwner {
+  readonly id: number;
+  readonly once: (event: "destroyed", listener: () => void) => unknown;
+}
 
-export const bindOutgoingAttachmentOwner = (owner: WebContents): number => {
+const boundAttachmentOwners = new WeakSet<AttachmentOwner>();
+
+export const bindOutgoingAttachmentOwner = (owner: AttachmentOwner): number => {
   const ownerId = owner.id;
   if (!boundAttachmentOwners.has(owner)) {
     boundAttachmentOwners.add(owner);

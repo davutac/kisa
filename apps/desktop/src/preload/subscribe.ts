@@ -6,9 +6,9 @@ export const subscribe = <A, I>(
   schema: Schema.Codec<A, I, never, never>,
   listener: (payload: A) => void
 ): (() => void) => {
-  const subscription = (
+  const subscription = <Payload>(
     _event: Electron.IpcRendererEvent,
-    payload: unknown
+    payload: Payload
   ): void => {
     listener(Schema.decodeUnknownSync(schema)(payload));
   };

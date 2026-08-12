@@ -5,7 +5,7 @@ const DIGIT_WIDTH = 3;
 const DIGIT_GAP = 1;
 const DIGIT_SCALE = 2;
 
-const DIGITS: Readonly<Record<string, readonly string[]>> = {
+const DIGITS = {
   "0": ["111", "101", "101", "101", "111"],
   "1": ["010", "110", "010", "010", "111"],
   "2": ["111", "001", "111", "100", "111"],
@@ -16,7 +16,7 @@ const DIGITS: Readonly<Record<string, readonly string[]>> = {
   "7": ["111", "001", "010", "010", "010"],
   "8": ["111", "101", "111", "101", "111"],
   "9": ["111", "101", "111", "001", "111"],
-};
+} satisfies Readonly<Record<string, readonly string[]>>;
 
 interface BadgeCountTarget {
   readonly setBadgeCount: (count: number) => boolean;

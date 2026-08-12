@@ -39,11 +39,11 @@ export const createTemplateVariableContext = (
   const accountName = accounts.find(
     (account) => account.email === accountEmail
   )?.displayName;
+  const context = { accountEmail, now };
+  const contextWithName =
+    accountName === undefined ? context : { ...context, accountName };
 
-  return {
-    accountEmail,
-    ...(accountName === undefined ? {} : { accountName }),
-    now,
-    ...(template.to.length === 1 ? { toEmail: template.to[0] } : {}),
-  };
+  return template.to.length === 1
+    ? { ...contextWithName, toEmail: template.to[0] }
+    : contextWithName;
 };

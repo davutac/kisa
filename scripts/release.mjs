@@ -43,11 +43,13 @@ const readAppPackage = () =>
   JSON.parse(readFileSync(APP_PACKAGE_PATH, "utf-8"));
 
 const parseVersion = (version) => {
-  if (typeof version !== "string" || !VERSION_PATTERN.test(version)) {
+  const normalizedVersion = String(version);
+
+  if (!VERSION_PATTERN.test(normalizedVersion)) {
     fail(`Expected a semantic version like 1.2.3, got "${version}".`);
   }
 
-  return version.split(".").map((part) => Math.trunc(Number(part)));
+  return normalizedVersion.split(".").map((part) => Math.trunc(Number(part)));
 };
 
 const compareVersions = (left, right) => {

@@ -12,6 +12,9 @@ export default defineConfig({
     "packages/database/drizzle/**/snapshot.json",
     "repos/**",
   ],
+  jsPlugins: [
+    { name: "anti-slop", specifier: "./tools/oxlint/anti-slop/index.ts" },
+  ],
   overrides: [
     {
       excludeFiles: [
@@ -31,4 +34,16 @@ export default defineConfig({
       },
     },
   ],
+  rules: {
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-known-value-widening": "error",
+    "anti-slop/no-object-parameters": "error",
+    "anti-slop/no-runtime-typeof": "error",
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-unknown-parameters": "error",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-unsafe-dictionary-type": "error",
+    "anti-slop/no-widen-then-assert": "error",
+  },
 });
