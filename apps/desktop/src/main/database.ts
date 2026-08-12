@@ -19,6 +19,10 @@ import { DatabaseImportProgress } from "../shared/ipc/settings";
 // oxlint-disable-next-line import/default
 import databaseProcessPath from "../utility/database-process/entry?modulePath";
 import {
+  getLinuxSecretStorageErrorMessage,
+  isSecureLinuxStorageBackend,
+} from "./app/linux-secret-storage";
+import {
   activatePendingDatabaseImport,
   attachDatabaseImportFile,
   cancelDatabaseImportSelection,
@@ -58,9 +62,11 @@ const requireSecureDatabaseKeyStorage = async (): Promise<void> => {
 
   if (
     process.platform === "linux" &&
-    safeStorage.getSelectedStorageBackend() === "basic_text"
+    !isSecureLinuxStorageBackend(safeStorage.getSelectedStorageBackend())
   ) {
-    throw new Error("A secure Linux credential store is required");
+    throw new Error(
+      getLinuxSecretStorageErrorMessage(process.env["XDG_CURRENT_DESKTOP"])
+    );
   }
 };
 

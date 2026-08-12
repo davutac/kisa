@@ -7,12 +7,19 @@ import { AppClosingEvent } from "../shared/ipc/app";
 import { APP_CLOSING_CHANNEL } from "../shared/ipc/channels";
 import { registerAppActivation } from "./app/app-activation";
 import { setDevelopmentDockIcon } from "./app/app-icon";
+import { configureLinuxSecretStorage } from "./app/linux-secret-storage";
 import { stopGoogleAuth } from "./auth/auth";
 import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailSync } from "./mail/mail-sync";
 import { createWindow, getMainWindow } from "./window/create-window";
+
+configureLinuxSecretStorage({
+  commandLine: app.commandLine,
+  currentDesktop: process.env["XDG_CURRENT_DESKTOP"],
+  platform: process.platform,
+});
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 

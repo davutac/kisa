@@ -15,6 +15,10 @@ import {
   MAX_GOOGLE_ACCOUNTS,
 } from "../../shared/ipc/auth";
 import { AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
+import {
+  getLinuxSecretStorageErrorMessage,
+  isSecureLinuxStorageBackend,
+} from "../app/linux-secret-storage";
 import { withDatabaseClient } from "../database-query";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { toIpcReply } from "../ipc/reply";
@@ -242,7 +246,7 @@ const requireSecureStorage = (): Effect.Effect<void, GoogleAuthError> =>
 
       if (
         process.platform === "linux" &&
-        safeStorage.getSelectedStorageBackend() === "basic_text"
+        !isSecureLinuxStorageBackend(safeStorage.getSelectedStorageBackend())
       ) {
         throw new Error("insecure storage backend");
       }
@@ -253,7 +257,9 @@ const requireSecureStorage = (): Effect.Effect<void, GoogleAuthError> =>
         new GoogleAuthError({
           message:
             process.platform === "linux"
-              ? "A secure Linux credential store is required for Google sign-in"
+              ? getLinuxSecretStorageErrorMessage(
+                  process.env["XDG_CURRENT_DESKTOP"]
+                )
               : "Secure credential storage is unavailable on this device",
         })
     )
