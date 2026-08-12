@@ -1,7 +1,7 @@
 appId: com.kisa.app
 productName: Kisa
 asar: true
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+artifactName: ${productName}-${os}-${arch}.${ext}
 extraMetadata:
   dependencies:
     electron-updater: ^6.8.9
@@ -27,7 +27,7 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: ${productName}-windows-setup.${ext}
 mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist

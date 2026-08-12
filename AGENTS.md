@@ -163,5 +163,5 @@ The main process owns privileged capabilities, including the installed-app OAuth
 - Keep architecture docs aligned with implementation. `docs/research` preserves dated investigation; do not silently rewrite historical facts to describe a later design.
 - macOS packages are signed and notarized when credentials are present; Windows and Linux artifacts are unsigned. See `docs/releasing/macos-signing.md`.
 - Never create a pull request, deploy, tag, publish, or run a release unless the developer explicitly asks.
-- `pnpm release [major|minor|patch|x.y.z]` requires a clean tree, updates `apps/desktop/package.json` and the README download links, runs `pnpm check` unless `--skip-check`, commits `Release vX.Y.Z`, tags it, and pushes unless `--no-push` is supplied.
+- `pnpm release [major|minor|patch|x.y.z]` requires a clean tree, updates only `apps/desktop/package.json`, runs `pnpm check` unless `--skip-check`, commits `Release vX.Y.Z`, tags it, and pushes unless `--no-push` is supplied.
 - Keep commits focused and written in plain language. UI changes should include before/after evidence when a pull request is requested; animation or timing changes are better demonstrated with a short recording.

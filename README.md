@@ -8,13 +8,13 @@ Kisa caches and indexes mail locally for fast search, handles multiple Google ac
 
 ## Download
 
-Download the latest release, **v0.1.33**:
+Download the latest release:
 
 | Platform | Download |
 | --- | --- |
-| macOS (Apple silicon) | [DMG](https://github.com/davutac/kisa/releases/download/v0.1.33/Kisa-0.1.33-mac-arm64.dmg) |
-| Windows | [Installer](https://github.com/davutac/kisa/releases/download/v0.1.33/Kisa-0.1.33-setup.exe) |
-| Linux | [AppImage](https://github.com/davutac/kisa/releases/download/v0.1.33/Kisa-0.1.33-linux-x86_64.AppImage) · [Debian package](https://github.com/davutac/kisa/releases/download/v0.1.33/Kisa-0.1.33-linux-amd64.deb) · [Snap](https://github.com/davutac/kisa/releases/download/v0.1.33/Kisa-0.1.33-linux-amd64.snap) |
+| macOS (Apple silicon) | [DMG](https://github.com/davutac/kisa/releases/latest/download/Kisa-mac-arm64.dmg) |
+| Windows | [Installer](https://github.com/davutac/kisa/releases/latest/download/Kisa-windows-setup.exe) |
+| Linux | [AppImage](https://github.com/davutac/kisa/releases/latest/download/Kisa-linux-x86_64.AppImage) · [Debian package](https://github.com/davutac/kisa/releases/latest/download/Kisa-linux-amd64.deb) · [Snap](https://github.com/davutac/kisa/releases/latest/download/Kisa-linux-amd64.snap) |
 
 See the [latest release](https://github.com/davutac/kisa/releases/latest) for release notes and checksums.
 
@@ -112,7 +112,7 @@ pnpm release patch
 pnpm release 0.1.0
 ```
 
-The helper requires a clean tree, runs checks, updates the app version and README download links, commits, tags, and pushes unless `--no-push` is supplied.
+The helper requires a clean tree, runs checks, updates `apps/desktop/package.json`, commits, tags, and pushes unless `--no-push` is supplied.
 
 ## Inspiration
 

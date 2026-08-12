@@ -60,7 +60,7 @@ codesign --verify --deep --strict --verbose=2 /Applications/Kisa.app
 spctl --assess --type execute --verbose /Applications/Kisa.app
 ```
 
-The second command should print `accepted` and `source=Notarized Developer ID`. On a `.dmg`, `xcrun stapler validate Kisa-<version>-mac-arm64.dmg` confirms the notarization ticket was stapled.
+The second command should print `accepted` and `source=Notarized Developer ID`. On a `.dmg`, `xcrun stapler validate Kisa-mac-arm64.dmg` confirms the notarization ticket was stapled.
 
 ## Entitlements
 
