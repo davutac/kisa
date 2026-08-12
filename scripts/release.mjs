@@ -13,6 +13,9 @@ const APP_PACKAGE_PATH = path.join(
   "desktop",
   "package.json"
 );
+const README_PATH = path.join(import.meta.dirname, "..", "README.md");
+const RELEASE_DOWNLOAD_URL =
+  "https://github.com/davutac/kisa/releases/download";
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
 const USAGE =
@@ -133,6 +136,27 @@ const writeAppPackageVersion = (nextVersion) => {
   writeFileSync(APP_PACKAGE_PATH, `${JSON.stringify(appPackage, null, 2)}\n`);
 };
 
+const getUpdatedReadme = (currentVersion, nextVersion) => {
+  const readme = readFileSync(README_PATH, "utf-8");
+  const currentHeading = `Download the latest release, **v${currentVersion}**:`;
+  const nextHeading = `Download the latest release, **v${nextVersion}**:`;
+  const currentDownloadPrefix = `${RELEASE_DOWNLOAD_URL}/v${currentVersion}/Kisa-${currentVersion}-`;
+  const nextDownloadPrefix = `${RELEASE_DOWNLOAD_URL}/v${nextVersion}/Kisa-${nextVersion}-`;
+
+  if (
+    !readme.includes(currentHeading) ||
+    !readme.includes(currentDownloadPrefix)
+  ) {
+    fail(
+      `README download links must match the current app version, ${currentVersion}.`
+    );
+  }
+
+  return readme
+    .replace(currentHeading, nextHeading)
+    .replaceAll(currentDownloadPrefix, nextDownloadPrefix);
+};
+
 const promptForRelease = async () => {
   if (input.isTTY !== true) {
     fail(USAGE);
@@ -176,19 +200,25 @@ assertTagAvailable(tagName);
 
 writeLine(`Releasing ${tagName}`);
 
+const updatedReadme = getUpdatedReadme(currentVersion, nextVersion);
+
 if (isDryRun) {
   writeLine(
     `Would update ${APP_PACKAGE_PATH} from ${currentVersion} to ${nextVersion}.`
   );
+  writeLine(
+    `Would update ${README_PATH} download links from v${currentVersion} to v${nextVersion}.`
+  );
 } else {
   writeAppPackageVersion(nextVersion);
+  writeFileSync(README_PATH, updatedReadme);
 }
 
 if (shouldCheck) {
   run("pnpm", ["run", "check"], { dryRun: isDryRun, inherit: true });
 }
 
-run("git", ["add", APP_PACKAGE_PATH], { dryRun: isDryRun });
+run("git", ["add", APP_PACKAGE_PATH, README_PATH], { dryRun: isDryRun });
 run("git", ["commit", "-m", `Release ${tagName}`], {
   dryRun: isDryRun,
   inherit: true,
