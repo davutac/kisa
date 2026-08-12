@@ -66,7 +66,7 @@ const TitlebarAccountButton = ({
               command === undefined ? undefined : getHotkeyAriaLabel(command)
             }
             aria-label={`${account.email}${hasUnreadMail ? ", unread email" : ""}`}
-            className="h-7 min-w-7 justify-start gap-0 overflow-visible rounded-full p-0"
+            className="h-7 min-w-7 justify-start gap-0 overflow-visible rounded-md p-0"
             onClick={() => {
               openAccount(account.email);
             }}
@@ -75,7 +75,7 @@ const TitlebarAccountButton = ({
             variant="secondary"
           >
             <span className="relative size-7 shrink-0" ref={targetRef}>
-              <span className="relative grid size-7 place-items-center overflow-hidden rounded-full">
+              <span className="relative grid size-7 place-items-center overflow-hidden rounded-md">
                 {account.avatarUrl === undefined ? (
                   <UserRoundIcon aria-hidden="true" className="size-3.5" />
                 ) : (
@@ -91,29 +91,25 @@ const TitlebarAccountButton = ({
                   </span>
                 ) : null}
                 {/*
-                  Indexing runs for minutes, so it gets a ring rather than the
-                  sync spinner: a determinate arc reads as "still working, this
-                  far along" instead of an animation that never seems to end. It
-                  paints over the sync overlay rather than yielding to it, so the
-                  indicator does not blink out every fifteen seconds.
-
-                  `closest-side` is load-bearing. The default `farthest-corner`
-                  puts the gradient's 100% at the box corner — 19.8px on a 28px
-                  avatar — so a 72% stop lands at 14.3px, outside the 14px circle
-                  the parent clips to, and the ring renders entirely invisible.
+                  Indexing runs for minutes, so it gets a determinate ring
+                  rather than a spinner. The mask cuts out the center so the
+                  conic gradient follows the avatar's rounded rectangle.
                 */}
                 {isIndexing ? (
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 rounded-full"
+                    className="pointer-events-none absolute inset-0 rounded-md"
                     style={{
                       WebkitMask:
-                        "radial-gradient(circle closest-side, transparent 74%, black 76%)",
+                        "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+                      WebkitMaskComposite: "xor",
                       background:
                         indexedRatio === undefined
                           ? "conic-gradient(var(--color-primary) 90deg, transparent 90deg)"
                           : `conic-gradient(var(--color-primary) ${indexedRatio * 360}deg, transparent 0deg)`,
-                      mask: "radial-gradient(circle closest-side, transparent 74%, black 76%)",
+                      mask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+                      maskComposite: "exclude",
+                      padding: "1px",
                     }}
                   />
                 ) : null}
