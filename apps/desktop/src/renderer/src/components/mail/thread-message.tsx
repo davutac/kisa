@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import MailMessageAttachments from "@/components/mail/message-attachments";
 import MailMessageBody from "@/components/mail/message-body";
 import MailMessageHeader from "@/components/mail/message-header";
 import MailRemoteImageNotice from "@/components/mail/remote-image-notice";
+import { useThreadConversationStore } from "@/components/mail/thread-conversation-store";
 import { parseMailboxAddress } from "@/mail/address";
 import { containsRemoteImages } from "@/mail/remote-images";
 import type { GmailThreadMessage } from "@/shared/ipc/mail";
@@ -14,19 +15,27 @@ import {
 
 interface MailThreadMessageProps {
   accountId: string;
-  defaultExpanded: boolean;
   fallbackRecipient: string;
   message: GmailThreadMessage;
+  onHeaderRef?: (messageId: string, header: HTMLButtonElement | null) => void;
 }
 
 const MailThreadMessage = ({
   accountId,
-  defaultExpanded,
   fallbackRecipient,
   message,
+  onHeaderRef,
 }: MailThreadMessageProps) => {
-  const [expanded, setExpanded] = useState(defaultExpanded);
   const [showRemoteImages, setShowRemoteImages] = useState(false);
+  const expanded = useThreadConversationStore(
+    (state) => state.expandedMessageId === message.id
+  );
+  const selected = useThreadConversationStore(
+    (state) => state.selectedMessageId === message.id
+  );
+  const toggleMessage = useThreadConversationStore(
+    (state) => state.toggleMessage
+  );
   const senderEmail = parseMailboxAddress(message.from).email;
   const isTrustedSender = useIsTrustedImageSender(accountId, senderEmail);
   const hasRemoteImages = useMemo(
@@ -34,14 +43,22 @@ const MailThreadMessage = ({
     [message.body.html]
   );
   const allowRemoteImages = isTrustedSender || showRemoteImages;
+  const setHeaderRef = useCallback(
+    (header: HTMLButtonElement | null): void => {
+      onHeaderRef?.(message.id, header);
+    },
+    [message.id, onHeaderRef]
+  );
 
   return (
-    <article className="flex flex-col gap-px overflow-hidden">
+    <article className="flex scroll-mt-20 flex-col gap-px overflow-hidden">
       <MailMessageHeader
+        buttonRef={setHeaderRef}
         expanded={expanded}
         fallbackRecipient={fallbackRecipient}
         message={message}
-        onToggle={() => setExpanded((current) => !current)}
+        onToggle={() => toggleMessage(message.id)}
+        selected={selected}
       />
       {expanded ? (
         <>
@@ -74,4 +91,4 @@ const MailThreadMessage = ({
   );
 };
 
-export default MailThreadMessage;
+export default memo(MailThreadMessage);

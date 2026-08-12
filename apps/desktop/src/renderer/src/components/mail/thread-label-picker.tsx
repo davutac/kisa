@@ -8,7 +8,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { getHotkeyAriaLabel, getHotkeyDisplay, HotkeyHint } from "@/hotkeys";
 import type { GmailLabelSummary } from "@/shared/ipc/mail";
 
 export interface ThreadLabelChange {
@@ -40,21 +45,30 @@ const ThreadLabelPicker = ({
 
   return (
     <DropdownMenu onOpenChange={onOpenChange} open={isOpen}>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            aria-keyshortcuts={getHotkeyAriaLabel("thread.manageLabels")}
-            aria-label={display.label}
-            className="rounded-full"
-            size="icon-sm"
-            title={`${display.label} (${display.bindings[0]})`}
-            type="button"
-            variant="secondary"
-          />
-        }
-      >
-        <PlusIcon />
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  aria-keyshortcuts={getHotkeyAriaLabel("thread.manageLabels")}
+                  aria-label={display.label}
+                  className="rounded-full"
+                  size="icon-sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  <PlusIcon />
+                </Button>
+              }
+            />
+          }
+        />
+        <TooltipContent className="flex items-center gap-2" side="bottom">
+          {display.label}
+          <HotkeyHint command="thread.manageLabels" />
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" className="w-56">
         {labels.length === 0 ? (
           <DropdownMenuLabel>

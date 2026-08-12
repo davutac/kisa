@@ -240,7 +240,8 @@ const EmailComposer = ({
         ? null
         : {
             element,
-            focus: () => editor.commands.focus("end"),
+            focus: () =>
+              editor.commands.focus("end", { scrollIntoView: false }),
           }
     );
 

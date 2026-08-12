@@ -17,6 +17,7 @@ The hotkey module owns commands that apply to an application screen or interacti
 - App navigation, search, templates, and message composition
 - Mailbox selection, thread opening, read-state toggling, and trashing
 - Closing the active thread and acting on the conversation being read
+- Selecting messages within a conversation and replying to or forwarding the selected message
 - Selecting the composer account, attaching files, stashing a draft, and sending a message
 - Creating, searching, and explicitly saving templates
 
@@ -44,6 +45,8 @@ useAppCommand("mailbox.nextThread", () => moveSelection(1), {
 
 The hook expands alternative bindings and unregisters inactive commands. It intentionally exposes only `enabled` and an optional element target; callers cannot override registry policy.
 
+Reversible state toggles use `ignore-key-repeat`: each distinct keydown is accepted without depending on a later keyup, while operating-system repeats from holding the key are ignored. One-way commands may use `once` when suppressing another invocation until the chord is released is part of the interaction.
+
 Dynamic lists use the renderless `AppCommand` component, which delegates to the same hook without calling hooks inside a loop.
 
 Account commands are static and cover the supported maximum of nine accounts. The app uses `1` through `9` for account navigation and the composer uses `Mod+1` through `Mod+9` for its From account.
@@ -52,11 +55,15 @@ In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, a
 
 `U` toggles the unread-only mailbox filter. `S` toggles the Spam mailbox.
 
-When a mailbox thread is selected, `M` toggles its read state. In Inbox, both `Backspace` and `Delete` move it to trash; in Spam, they open the permanent-delete confirmation. This covers the Mac key labeled `⌫`, Mac forward-delete, and the Windows/Linux Delete key. These commands are not registered for hover-only quick actions.
+When a mailbox thread is selected, `Mod+Shift+M` toggles its read state. In Inbox, `Mod+D` moves it to trash; in Spam, it opens the permanent-delete confirmation. These commands are not registered for hover-only quick actions.
 
-While reading a conversation in the main window, `Shift+Enter` opens it in a thread window and closes the inline conversation. The command is disabled inside the resulting thread window because it is already popped out.
+While reading a conversation in the main window, `Mod+Enter` opens it in a thread window and closes the inline conversation. The command is disabled inside the resulting thread window because it is already popped out. Once a thread composer is open, its higher-priority layer owns `Mod+Enter` for sending instead.
 
-While reading a conversation, `L` scrolls the label row into view and opens its picker. `M`, `Backspace`, and `Delete` retain the same read-state and mailbox-context behavior as they have on the selected mailbox conversation.
+While reading a conversation, `Mod+L` scrolls the label row into view and opens its picker. `Mod+Shift+M` and `Mod+D` retain the same read-state and mailbox-context behavior as they have on the selected mailbox conversation.
+
+Within a conversation, `J` or `ArrowDown` selects and opens the next newer message, while `K` or `ArrowUp` selects and opens the previous older message. Navigation stops at the thread edges and closes the previously expanded message. Plain `Tab` remains native so headers, links, attachments, and footer actions stay keyboard-accessible.
+
+`R` replies to the selected message, `Shift+R` replies to everyone on it, and `F` forwards it. Reply all is available only when the selected message has at least two distinct non-self reply targets across its sender, To, and Cc fields; otherwise its footer button is omitted and `Shift+R` is inactive. Bcc recipients never count toward reply all. A draft captures that message as its immutable target. When a saved draft is resumed, its target becomes the selected message again. The footer buttons derive their shortcut labels and ARIA metadata from these commands.
 
 `Mod+Shift+A` opens the attachment picker while composing a new email.
 
@@ -72,18 +79,21 @@ useHotkeyLayer("composer", isOpen);
 
 The provider stores each declaration under a unique token. The highest-priority, most recently activated registration becomes the top layer.
 
-| Top layer   | Active scopes                |
-| ----------- | ---------------------------- |
-| None        | `always`, `app`              |
-| `mailbox`   | `always`, `app`, `mailbox`   |
-| `thread`    | `always`, `app`, `thread`    |
-| `settings`  | `always`, `app`, `settings`  |
-| `templates` | `always`, `app`, `templates` |
-| `composer`  | `always`, `composer`         |
-| `search`    | `always`, `search`           |
-| `blocking`  | `always`                     |
+| Top layer         | Active scopes                      |
+| ----------------- | ---------------------------------- |
+| None              | `always`, `app`                    |
+| `mailbox`         | `always`, `app`, `mailbox`         |
+| `thread`          | `always`, `app`, `thread`          |
+| `thread-composer` | `always`, `app`, `thread-composer` |
+| `settings`        | `always`, `app`, `settings`        |
+| `templates`       | `always`, `app`, `templates`       |
+| `composer`        | `always`, `composer`               |
+| `search`          | `always`, `search`                 |
+| `blocking`        | `always`                           |
 
 Composer and search overlays suppress every underlying application command. Removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
+
+The inline thread composer uses the intermediate `thread-composer` layer. It suppresses thread navigation and message actions while keeping app commands available. A new-message composer or search overlay supersedes it.
 
 Blocking operations, such as database import, and app-wide confirmation dialogs activate the highest-priority `blocking` layer. It suspends every product command while the modal owns the window; only commands in the reserved `always` scope remain active.
 
@@ -95,6 +105,7 @@ const LAYER_PRIORITY = {
   composer: 100,
   search: 100,
   thread: 20,
+  "thread-composer": 50,
   mailbox: 10,
   settings: 10,
   templates: 10,
@@ -122,6 +133,8 @@ Buttons and tooltips should derive labels and shortcut metadata from the registr
 
 Tiptap's StarterKit maps `Mod+Enter` to a hard break, while Kisa maps it to Send. `EmailComposer` can install a high-priority Tiptap extension that consumes the editor command without stopping DOM propagation. TanStack then handles Send at the document layer. `Mod+S` remains an application command while the composer layer is active, and `Shift+Enter` remains owned by Tiptap.
 
+The same `Mod+Enter` guard is active in a thread draft. In that mode `Mod+Enter` sends, while `Escape` closes the editor and preserves the resumable draft. Discard remains an explicit button action.
+
 ## Validation
 
 The pure registry validator normalizes bindings for macOS, Windows, and Linux. It rejects duplicate or sequence-prefix bindings in scopes that can be active together, while allowing the same binding in mutually exclusive layers.
@@ -132,6 +145,7 @@ Focused tests cover:
 - Registry conflicts and platform formatting
 - Account command coverage through the nine-account limit
 - Tiptap's `Mod+Enter` guard
+- Thread message selection, expansion, navigation edges, and restoration
 
 Run the desktop checks with:
 

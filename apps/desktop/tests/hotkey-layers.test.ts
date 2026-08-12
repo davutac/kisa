@@ -88,6 +88,27 @@ describe("hotkey interaction layers", () => {
     expect(isHotkeyScopeActive("settings", "templates")).toBeFalsy();
   });
 
+  it("puts the inline composer above the thread while keeping app commands", () => {
+    const thread = registration("thread", 1);
+    const threadComposer = registration("thread-composer", 2);
+
+    expect(getTopHotkeyLayer([thread, threadComposer])).toBe("thread-composer");
+    expect(
+      isHotkeyScopeActive("thread-composer", "thread-composer")
+    ).toBeTruthy();
+    expect(isHotkeyScopeActive("thread", "thread-composer")).toBeFalsy();
+    expect(isHotkeyScopeActive("app", "thread-composer")).toBeTruthy();
+  });
+
+  it("lets an overlay composer supersede the inline composer", () => {
+    expect(
+      getTopHotkeyLayer([
+        registration("thread-composer", 1),
+        registration("composer", 2),
+      ])
+    ).toBe("composer");
+  });
+
   it("blocks product hotkeys while a modal operation is active", () => {
     expect(
       getTopHotkeyLayer([

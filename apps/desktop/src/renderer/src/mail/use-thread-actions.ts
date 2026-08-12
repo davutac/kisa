@@ -78,7 +78,12 @@ export const useThreadActions = (): ThreadActions => {
             threadId: thread.threadId,
           }),
         "Could not update email",
-        onSuccess
+        () => {
+          toast.success(
+            thread.isUnread ? "Marked as read" : "Marked as unread"
+          );
+          onSuccess?.();
+        }
       );
     },
     [mailApi, runThreadAction]

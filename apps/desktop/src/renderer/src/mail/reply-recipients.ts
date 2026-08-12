@@ -78,3 +78,12 @@ export const getInitialReplyRecipients = (
     to: replyAllToAddresses,
   };
 };
+
+export const shouldShowReplyAll = (
+  accountId: string,
+  message: GmailThreadMessage
+): boolean => {
+  const recipients = getInitialReplyRecipients(accountId, "reply-all", message);
+
+  return recipients.to.length + recipients.cc.length > 1;
+};

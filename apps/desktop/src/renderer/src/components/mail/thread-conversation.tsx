@@ -1,13 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+// The scoped store intentionally lives for one keyed conversation instance.
+// oxlint-disable react/react-compiler
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import MailMessageActions from "@/components/mail/message-actions";
 import MailReplyArea from "@/components/mail/reply-area";
+import {
+  createThreadConversationStore,
+  ThreadConversationStoreProvider,
+} from "@/components/mail/thread-conversation-store";
+import MailThreadDraftActions from "@/components/mail/thread-draft-actions";
 import MailThreadMessage from "@/components/mail/thread-message";
-import { getThreadEmailAddresses } from "@/mail/address";
-import { createThreadMailDraft } from "@/mail/mail-draft";
-import { getInitialReplyRecipients } from "@/mail/reply-recipients";
-import { getMailApi } from "@/platform/desktop";
+import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
+import {
+  getThreadDraftAction,
+  useThreadDraft,
+} from "@/components/mail/use-thread-draft";
+import { useThreadMessageNavigation } from "@/components/mail/use-thread-message-navigation";
+import { useAppCommand } from "@/hotkeys";
+import { getThreadEmailAddresses, parseMailboxAddress } from "@/mail/address";
+import { shouldShowReplyAll } from "@/mail/reply-recipients";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 interface MailThreadConversationProps {
@@ -16,91 +28,172 @@ interface MailThreadConversationProps {
   threadId: string;
 }
 
-const MailThreadConversation = ({
+interface NonEmptyMailThreadConversationProps extends MailThreadConversationProps {
+  initialMessageId: string;
+  latestMessage: GmailThreadMessage;
+}
+
+const MailThreadConversationContent = ({
   accountId,
+  latestMessage,
   messages,
   threadId,
-}: MailThreadConversationProps) => {
-  const mailApi = useMemo(() => getMailApi(), []);
-  const [draft, setDraft] = useState<MailDraftInput | null>(null);
-  const [isLoadingDraft, setIsLoadingDraft] = useState(mailApi !== undefined);
-  const latestMessage = messages.at(-1);
-  const draftMessage = messages.find(
-    (message) => message.id === draft?.messageId
-  );
+}: Omit<NonEmptyMailThreadConversationProps, "initialMessageId">) => {
+  const replyComposerFocusRef = useRef<ComposerFocusHandle | null>(null);
+  const replyAreaRef = useRef<HTMLElement>(null);
+  const { focusSelectedMessage, registerMessageHeader, selectedMessageId } =
+    useThreadMessageNavigation(messages);
+  const selectedMessage =
+    messages.find((message) => message.id === selectedMessageId) ??
+    latestMessage;
+  const isReplyAllAvailable = shouldShowReplyAll(accountId, selectedMessage);
+  const {
+    clearDraft,
+    closeComposer: closeDraftComposer,
+    continueDraft,
+    discardDraft,
+    draft,
+    draftMessage,
+    isComposerOpen,
+    isDiscardingDraft,
+    isLoadingDraft,
+    startAction,
+  } = useThreadDraft({
+    accountId,
+    messages,
+    selectedMessage,
+    threadId,
+  });
   const suggestedAddresses = getThreadEmailAddresses(messages, [accountId]);
 
   useEffect(() => {
-    let active = true;
-
-    if (mailApi === undefined) {
+    if (!isComposerOpen) {
       return;
     }
 
-    const load = async (): Promise<void> => {
-      try {
-        const reply = await mailApi.loadThreadDraft({ accountId, threadId });
-        if (!active) {
-          return;
-        }
-
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
-        }
-
-        setDraft(reply.data);
-      } catch {
-        if (active) {
-          toast.error("Could not load saved reply");
-        }
-      } finally {
-        if (active) {
-          setIsLoadingDraft(false);
-        }
+    const frame = requestAnimationFrame(() => {
+      const replyArea = replyAreaRef.current;
+      if (replyArea !== null) {
+        replyArea.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-    };
-    void load();
-
-    const unsubscribe = mailApi.onDraftChanged((change) => {
-      if (change.kind === "remove") {
-        if (change.accountId === accountId && change.threadId === threadId) {
-          setDraft((current) =>
-            current?.id === change.draftId ? null : current
-          );
-        }
-        return;
-      }
-
-      if (
-        change.draft.accountId === accountId &&
-        change.draft.threadId === threadId
-      ) {
-        setDraft((current) => current ?? change.draft);
-      }
+      replyComposerFocusRef.current?.focus();
     });
 
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [accountId, mailApi, threadId]);
+    return () => cancelAnimationFrame(frame);
+  }, [isComposerOpen]);
 
-  const createDraft = async (created: MailDraftInput): Promise<void> => {
-    setDraft(created);
-    if (mailApi === undefined) {
-      return;
-    }
+  const closeComposer = useCallback(
+    (currentDraft: MailDraftInput): void => {
+      closeDraftComposer(currentDraft);
+      focusSelectedMessage();
+    },
+    [closeDraftComposer, focusSelectedMessage]
+  );
+  useAppCommand(
+    "thread.replyToMessage",
+    () => {
+      startAction("reply");
+    },
+    { enabled: !isLoadingDraft }
+  );
+  useAppCommand(
+    "thread.replyAllToMessage",
+    () => {
+      startAction("reply-all");
+    },
+    { enabled: isReplyAllAvailable && !isLoadingDraft }
+  );
+  useAppCommand(
+    "thread.forwardMessage",
+    () => {
+      startAction("forward");
+    },
+    { enabled: !isLoadingDraft }
+  );
 
-    try {
-      const reply = await mailApi.saveDraft(created);
-      if (!reply.ok) {
-        toast.error(reply.error);
-      }
-    } catch {
-      toast.error("Could not save draft");
-    }
-  };
+  const selectedSender = parseMailboxAddress(selectedMessage.from);
+  const selectedTargetLabel = selectedSender.name ?? selectedSender.email;
+  let conversationFooter: ReactNode;
+
+  if (draft === null) {
+    conversationFooter = (
+      <MailMessageActions
+        disabled={isLoadingDraft}
+        onAction={startAction}
+        showReplyAll={isReplyAllAvailable}
+        targetLabel={selectedTargetLabel}
+      />
+    );
+  } else if (isComposerOpen && draftMessage !== undefined) {
+    conversationFooter = (
+      <MailReplyArea
+        accountId={accountId}
+        action={getThreadDraftAction(draft)}
+        draft={draft}
+        key={draft.id}
+        message={draftMessage}
+        onCancel={clearDraft}
+        onClose={closeComposer}
+        onComposerReady={(handle) => {
+          replyComposerFocusRef.current = handle;
+        }}
+        onSent={clearDraft}
+        sectionRef={replyAreaRef}
+        suggestedAddresses={suggestedAddresses}
+        threadId={threadId}
+      />
+    );
+  } else {
+    conversationFooter = (
+      <MailThreadDraftActions
+        action={getThreadDraftAction(draft)}
+        disabled={isDiscardingDraft}
+        onContinue={continueDraft}
+        onDiscard={() => {
+          void discardDraft();
+        }}
+        targetAvailable={draftMessage !== undefined}
+      />
+    );
+  }
+
+  return (
+    <>
+      {messages.map((message) => (
+        <MailThreadMessage
+          accountId={accountId}
+          fallbackRecipient={accountId}
+          key={message.id}
+          message={message}
+          onHeaderRef={registerMessageHeader}
+        />
+      ))}
+      {conversationFooter}
+    </>
+  );
+};
+
+const NonEmptyMailThreadConversation = ({
+  initialMessageId,
+  ...props
+}: NonEmptyMailThreadConversationProps) => {
+  const store = useMemo(
+    () => createThreadConversationStore(initialMessageId),
+    // The parent key changes with the account and thread. New messages must not
+    // replace this store and reset an existing selection.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  return (
+    <ThreadConversationStoreProvider store={store}>
+      <MailThreadConversationContent {...props} />
+    </ThreadConversationStoreProvider>
+  );
+};
+
+const MailThreadConversation = (props: MailThreadConversationProps) => {
+  const latestMessage = props.messages.at(-1);
 
   if (latestMessage === undefined) {
     return (
@@ -111,49 +204,12 @@ const MailThreadConversation = ({
   }
 
   return (
-    <>
-      {messages.map((message) => (
-        <MailThreadMessage
-          accountId={accountId}
-          defaultExpanded={message.id === latestMessage.id}
-          fallbackRecipient={accountId}
-          key={message.id}
-          message={message}
-        />
-      ))}
-      {draft === null ? (
-        <MailMessageActions
-          disabled={isLoadingDraft}
-          onAction={(action) => {
-            const created = createThreadMailDraft({
-              accountId,
-              action,
-              messageId: latestMessage.id,
-              recipients: getInitialReplyRecipients(
-                accountId,
-                action,
-                latestMessage
-              ),
-              threadId,
-            });
-
-            void createDraft(created);
-          }}
-        />
-      ) : (
-        <MailReplyArea
-          accountId={accountId}
-          action={draft.kind === "new" ? "reply" : draft.kind}
-          draft={draft}
-          key={draft.id}
-          message={draftMessage ?? latestMessage}
-          onCancel={() => setDraft(null)}
-          onSent={() => setDraft(null)}
-          suggestedAddresses={suggestedAddresses}
-          threadId={threadId}
-        />
-      )}
-    </>
+    <NonEmptyMailThreadConversation
+      {...props}
+      initialMessageId={latestMessage.id}
+      key={`${props.accountId}:${props.threadId}`}
+      latestMessage={latestMessage}
+    />
   );
 };
 

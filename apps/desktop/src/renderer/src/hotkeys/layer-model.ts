@@ -2,6 +2,7 @@ export const HOTKEY_LAYERS = [
   "blocking",
   "mailbox",
   "thread",
+  "thread-composer",
   "settings",
   "templates",
   "composer",
@@ -26,6 +27,7 @@ export const LAYER_PRIORITY = {
   settings: 10,
   templates: 10,
   thread: 20,
+  "thread-composer": 50,
 } as const satisfies Record<HotkeyLayer, number>;
 
 export const registerHotkeyLayer = (

@@ -179,6 +179,7 @@ export const useReplyWorkspace = ({
   return {
     canSend: mailApi !== undefined && !isSending,
     composer,
+    currentDraft,
     discard,
     isSending,
     recipients,

@@ -91,6 +91,19 @@ describe("hotkey command registry", () => {
     }
   });
 
+  it("does not make reversible state toggles depend on keyup", () => {
+    for (const commandId of [
+      "app.openSettings",
+      "app.openTemplates",
+      "app.toggleSpam",
+      "app.toggleUnread",
+      "mailbox.toggleThreadRead",
+      "thread.toggleThreadRead",
+    ] as const) {
+      expect(HOTKEY_COMMANDS[commandId].repeat).toBe("ignore-key-repeat");
+    }
+  });
+
   it("assigns template navigation that works while editing", () => {
     expect(HOTKEY_COMMANDS["templates.next"].bindings).toStrictEqual([
       "Mod+Shift+]",
@@ -117,45 +130,94 @@ describe("hotkey command registry", () => {
 
   it("assigns selected-thread quick actions", () => {
     expect(HOTKEY_COMMANDS["mailbox.toggleThreadRead"].bindings).toStrictEqual([
-      "M",
+      "Mod+Shift+M",
     ]);
+    expect(HOTKEY_COMMANDS["mailbox.toggleThreadRead"].repeat).toBe(
+      "ignore-key-repeat"
+    );
     expect(HOTKEY_COMMANDS["mailbox.trashThread"].bindings).toStrictEqual([
-      "Backspace",
-      "Delete",
+      "Mod+D",
     ]);
+  });
+
+  it("formats selected-thread quick actions", () => {
+    expect(
+      getHotkeyDisplay("mailbox.toggleThreadRead", "mac").bindings
+    ).toStrictEqual(["⌘ ⇧ M"]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "mac").bindings
-    ).toStrictEqual(["⌫", "⌦"]);
+    ).toStrictEqual(["⌘ D"]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "windows").bindings
-    ).toStrictEqual(["⌫", "⌦"]);
+    ).toStrictEqual(["Ctrl+D"]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "linux").bindings
-    ).toStrictEqual(["⌫", "⌦"]);
+    ).toStrictEqual(["Ctrl+D"]);
   });
 
   it("assigns the thread popout shortcut", () => {
     expect(HOTKEY_COMMANDS["thread.popout"].bindings).toStrictEqual([
-      "Shift+Enter",
+      "Mod+Enter",
     ]);
-    expect(getHotkeyAriaLabel("thread.popout", "mac")).toBe("Shift+Enter");
-    expect(getHotkeyAriaLabel("thread.popout", "windows")).toBe("Shift+Enter");
+    expect(getHotkeyAriaLabel("thread.popout", "mac")).toBe("Meta+Enter");
+    expect(getHotkeyAriaLabel("thread.popout", "windows")).toBe(
+      "Control+Enter"
+    );
   });
 
-  it("opens the thread label picker with L", () => {
+  it("opens the thread label picker with Mod+L", () => {
     expect(HOTKEY_COMMANDS["thread.manageLabels"].bindings).toStrictEqual([
-      "L",
+      "Mod+L",
     ]);
-    expect(getHotkeyAriaLabel("thread.manageLabels", "mac")).toBe("L");
+    expect(getHotkeyAriaLabel("thread.manageLabels", "mac")).toBe("Meta+L");
+    expect(getHotkeyAriaLabel("thread.manageLabels", "windows")).toBe(
+      "Control+L"
+    );
   });
 
   it("keeps thread quick actions consistent with the mailbox", () => {
     expect(HOTKEY_COMMANDS["thread.toggleThreadRead"].bindings).toStrictEqual(
       HOTKEY_COMMANDS["mailbox.toggleThreadRead"].bindings
     );
+    expect(HOTKEY_COMMANDS["thread.toggleThreadRead"].repeat).toBe(
+      HOTKEY_COMMANDS["mailbox.toggleThreadRead"].repeat
+    );
     expect(HOTKEY_COMMANDS["thread.trashThread"].bindings).toStrictEqual(
       HOTKEY_COMMANDS["mailbox.trashThread"].bindings
     );
+  });
+
+  it("assigns thread message navigation and actions", () => {
+    expect(HOTKEY_COMMANDS["thread.nextMessage"].bindings).toStrictEqual([
+      "ArrowDown",
+      "J",
+    ]);
+    expect(HOTKEY_COMMANDS["thread.previousMessage"].bindings).toStrictEqual([
+      "ArrowUp",
+      "K",
+    ]);
+    expect(HOTKEY_COMMANDS["thread.replyToMessage"].bindings).toStrictEqual([
+      "R",
+    ]);
+    expect(HOTKEY_COMMANDS["thread.replyAllToMessage"].bindings).toStrictEqual([
+      "Shift+R",
+    ]);
+    expect(HOTKEY_COMMANDS["thread.forwardMessage"].bindings).toStrictEqual([
+      "F",
+    ]);
+  });
+
+  it("gives the inline thread composer its own commands", () => {
+    expect(HOTKEY_COMMANDS["threadComposer.close"]).toMatchObject({
+      bindings: ["Escape"],
+      input: "allow",
+      scope: "thread-composer",
+    });
+    expect(HOTKEY_COMMANDS["threadComposer.send"]).toMatchObject({
+      bindings: ["Mod+Enter"],
+      input: "allow",
+      scope: "thread-composer",
+    });
   });
 
   it("assigns the mailbox filters", () => {
