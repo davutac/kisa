@@ -46,6 +46,11 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: [], ok: true as const }),
     beginDatabaseImport: () =>
       Promise.resolve({ data: { sessionId: "import-1" }, ok: true as const }),
+    bulkMutateThreads: () =>
+      Promise.resolve({
+        data: { failed: [], succeeded: [] },
+        ok: true as const,
+      }),
     cancelDatabaseImport: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
@@ -64,7 +69,7 @@ describe(getRuntimeCapabilities, () => {
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
     getSpamStatus: () =>
-      Promise.resolve({ data: { hasNewSpam: false }, ok: true as const }),
+      Promise.resolve({ data: { hasUnreadSpam: false }, ok: true as const }),
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
     getVersions: () => versions,
     importDatabase: () =>
@@ -95,8 +100,6 @@ describe(getRuntimeCapabilities, () => {
         ok: true as const,
       }),
     loadThreadDraft: () => Promise.resolve({ data: null, ok: true as const }),
-    markSpamSeen: () =>
-      Promise.resolve({ data: { hasNewSpam: false }, ok: true as const }),
     markThreadNotSpam: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
@@ -175,6 +178,7 @@ describe(getRuntimeCapabilities, () => {
       mail: {
         authorizeOutgoingAttachments:
           desktopBridge.authorizeOutgoingAttachments,
+        bulkMutateThreads: desktopBridge.bulkMutateThreads,
         deleteSpamThread: desktopBridge.deleteSpamThread,
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
@@ -187,7 +191,6 @@ describe(getRuntimeCapabilities, () => {
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
         loadThread: desktopBridge.loadThread,
         loadThreadDraft: desktopBridge.loadThreadDraft,
-        markSpamSeen: desktopBridge.markSpamSeen,
         markThreadNotSpam: desktopBridge.markThreadNotSpam,
         onDraftChanged: desktopBridge.onMailDraftChanged,
         onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,

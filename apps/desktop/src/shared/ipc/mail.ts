@@ -156,6 +156,36 @@ export const GmailThreadReadStateRequest = Schema.Struct({
 export type GmailThreadReadStateRequest =
   typeof GmailThreadReadStateRequest.Type;
 
+export const GmailBulkThreadMutationOperation = Schema.Union([
+  Schema.Struct({
+    isUnread: Schema.Boolean,
+    kind: Schema.Literal("setReadState"),
+  }),
+  Schema.Struct({
+    applied: Schema.Boolean,
+    kind: Schema.Literal("setLabel"),
+    labelId: Schema.NonEmptyString,
+  }),
+  Schema.Struct({ kind: Schema.Literal("trash") }),
+  Schema.Struct({ kind: Schema.Literal("deleteSpam") }),
+]);
+export type GmailBulkThreadMutationOperation =
+  typeof GmailBulkThreadMutationOperation.Type;
+
+export const GmailBulkThreadMutationRequest = Schema.Struct({
+  operation: GmailBulkThreadMutationOperation,
+  threads: Schema.Array(GmailThreadRequest),
+});
+export type GmailBulkThreadMutationRequest =
+  typeof GmailBulkThreadMutationRequest.Type;
+
+export const GmailBulkThreadMutationResult = Schema.Struct({
+  failed: Schema.Array(GmailThreadRequest),
+  succeeded: Schema.Array(GmailThreadRequest),
+});
+export type GmailBulkThreadMutationResult =
+  typeof GmailBulkThreadMutationResult.Type;
+
 export const GmailThreadMessageAction = Schema.Literals([
   "forward",
   "reply",
@@ -321,7 +351,7 @@ export const GmailSpamStatusRequest = Schema.Struct({
 });
 export type GmailSpamStatusRequest = typeof GmailSpamStatusRequest.Type;
 
-export const GmailSpamStatus = Schema.Struct({ hasNewSpam: Schema.Boolean });
+export const GmailSpamStatus = Schema.Struct({ hasUnreadSpam: Schema.Boolean });
 export type GmailSpamStatus = typeof GmailSpamStatus.Type;
 
 export const GmailCachedThreadPage = Schema.Struct({
@@ -468,6 +498,12 @@ export type GmailTrustedImageSendersReply =
 
 export const GmailThreadMutationReply = IpcReply(Schema.Void);
 export type GmailThreadMutationReply = typeof GmailThreadMutationReply.Type;
+
+export const GmailBulkThreadMutationReply = IpcReply(
+  GmailBulkThreadMutationResult
+);
+export type GmailBulkThreadMutationReply =
+  typeof GmailBulkThreadMutationReply.Type;
 
 export const GmailSpamStatusReply = IpcReply(GmailSpamStatus);
 export type GmailSpamStatusReply = typeof GmailSpamStatusReply.Type;

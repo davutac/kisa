@@ -223,6 +223,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "mailbox",
   },
+  "mailbox.manageLabels": {
+    bindings: ["Mod+L"],
+    input: "ignore",
+    label: "Manage selected labels",
+    repeat: "once",
+    scope: "mailbox",
+  },
   "mailbox.nextThread": {
     bindings: ["Tab", "ArrowDown", "J"],
     input: "ignore",
@@ -245,9 +252,16 @@ export const HOTKEY_COMMANDS = {
     scope: "mailbox",
   },
   "mailbox.toggleThreadRead": {
-    bindings: ["Mod+Shift+M"],
+    bindings: ["Mod+Shift+U"],
     input: "ignore",
     label: "Toggle read status",
+    repeat: "ignore-key-repeat",
+    scope: "mailbox",
+  },
+  "mailbox.toggleThreadSelection": {
+    bindings: ["X"],
+    input: "ignore",
+    label: "Select conversation",
     repeat: "ignore-key-repeat",
     scope: "mailbox",
   },
@@ -350,7 +364,7 @@ export const HOTKEY_COMMANDS = {
     scope: "thread",
   },
   "thread.toggleThreadRead": {
-    bindings: ["Mod+Shift+M"],
+    bindings: ["Mod+Shift+U"],
     input: "ignore",
     label: "Toggle read status",
     repeat: "ignore-key-repeat",

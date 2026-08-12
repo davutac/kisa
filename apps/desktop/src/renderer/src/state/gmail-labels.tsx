@@ -171,6 +171,21 @@ export const useGmailLabelCatalog = (
 ): readonly GmailLabelSummary[] | undefined =>
   useGmailLabelsContext().catalogs.get(accountId)?.labels;
 
+export const useGmailLabelCatalogs = (): ReadonlyMap<
+  string,
+  readonly GmailLabelSummary[]
+> => {
+  const { catalogs } = useGmailLabelsContext();
+
+  return useMemo(
+    () =>
+      new Map(
+        [...catalogs].map(([accountId, catalog]) => [accountId, catalog.labels])
+      ),
+    [catalogs]
+  );
+};
+
 export const useUpdateGmailLabelCatalog =
   (): GmailLabelsContextValue["updateCatalog"] => {
     const context = useGmailLabelsContext();

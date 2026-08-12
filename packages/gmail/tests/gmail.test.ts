@@ -45,6 +45,12 @@ const USER_LABEL = new GmailLabel({
 interface TestState {
   readonly attachmentCalls: string[];
   readonly authorizations: Map<AccountId, GmailAuthorization>;
+  readonly batchLabelMutationCalls: {
+    readonly accountId: AccountId;
+    readonly addLabelIds: readonly string[];
+    readonly messageIds: readonly MessageId[];
+    readonly removeLabelIds: readonly string[];
+  }[];
   readonly listThreadCalls: {
     readonly accountId: AccountId;
     readonly pageToken?: string;
@@ -97,6 +103,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
   const state: TestState = {
     attachmentCalls: [],
     authorizations: new Map(),
+    batchLabelMutationCalls: [],
     forwardAttachmentContentIds: [],
     indexedThreadIds: [],
     labelGetCalls: [],
@@ -190,6 +197,16 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
   };
 
   const gateway: GmailGatewayService = {
+    batchModifyMessageLabels: (authorization, request) =>
+      Effect.sync(() => {
+        state.batchLabelMutationCalls.push({
+          accountId: authorization.account.id,
+          addLabelIds: request.addLabelIds,
+          messageIds: request.messageIds,
+          removeLabelIds: request.removeLabelIds,
+        });
+        return { value: undefined };
+      }),
     deleteThread: (authorization, threadId) =>
       Effect.sync(() => {
         state.mutationCalls.push({
@@ -531,6 +548,83 @@ describe(Gmail, () => {
       expect(state.removedThreads).toStrictEqual([request.threadId]);
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect(
+    "batches message mutations while updating each cached thread",
+    () => {
+      const { layer, state } = createTestLayer({ cachedLabels: [USER_LABEL] });
+
+      return Effect.gen(function* batchesMessageMutations() {
+        const gmail = yield* Gmail;
+        const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+        const targets = [
+          {
+            messageIds: [MessageId.make("message-1")],
+            threadId: ThreadId.make("thread-1"),
+          },
+          {
+            messageIds: [
+              MessageId.make("message-2"),
+              MessageId.make("message-3"),
+            ],
+            threadId: ThreadId.make("thread-2"),
+          },
+        ];
+
+        yield* gmail.batchSetThreadReadState(
+          { accountId: account.id, targets },
+          true
+        );
+        yield* gmail.batchSetThreadLabel({
+          accountId: account.id,
+          applied: true,
+          labelId: USER_LABEL.id,
+          targets,
+        });
+        yield* gmail.batchTrashThreads({ accountId: account.id, targets });
+
+        expect(state.batchLabelMutationCalls).toStrictEqual([
+          {
+            accountId: account.id,
+            addLabelIds: [],
+            messageIds: ["message-1", "message-2", "message-3"],
+            removeLabelIds: ["UNREAD"],
+          },
+          {
+            accountId: account.id,
+            addLabelIds: ["Label_1"],
+            messageIds: ["message-1", "message-2", "message-3"],
+            removeLabelIds: [],
+          },
+          {
+            accountId: account.id,
+            addLabelIds: ["TRASH"],
+            messageIds: ["message-1", "message-2", "message-3"],
+            removeLabelIds: ["INBOX", "SPAM"],
+          },
+        ]);
+        expect(state.readStateChanges).toStrictEqual([
+          { accountId: account.id, isRead: true, threadId: "thread-1" },
+          { accountId: account.id, isRead: true, threadId: "thread-2" },
+        ]);
+        expect(state.threadLabelChanges).toStrictEqual([
+          {
+            accountId: account.id,
+            applied: true,
+            labelId: "Label_1",
+            threadId: "thread-1",
+          },
+          {
+            accountId: account.id,
+            applied: true,
+            labelId: "Label_1",
+            threadId: "thread-2",
+          },
+        ]);
+        expect(state.removedThreads).toStrictEqual(["thread-1", "thread-2"]);
+      }).pipe(Effect.provide(layer));
+    }
+  );
 
   it.effect("permanently deletes threads only with full Gmail access", () => {
     const { layer, state } = createTestLayer();

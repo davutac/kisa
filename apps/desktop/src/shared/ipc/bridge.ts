@@ -16,6 +16,8 @@ import type {
   GmailAttachmentActionReply,
   GmailAttachmentRequest,
   GmailAttachmentSaveReply,
+  GmailBulkThreadMutationReply,
+  GmailBulkThreadMutationRequest,
   GmailCachedThreadPageReply,
   GmailCachedThreadPageRequest,
   GmailLabelCatalogReply,
@@ -87,6 +89,9 @@ export interface DesktopBridge {
     files: readonly File[]
   ) => Promise<GmailOutgoingAttachmentSelectionReply>;
   beginDatabaseImport: () => Promise<DatabaseImportSessionReply>;
+  bulkMutateThreads: (
+    request: GmailBulkThreadMutationRequest
+  ) => Promise<GmailBulkThreadMutationReply>;
   cancelDatabaseImport: (
     request: DatabaseImportSession
   ) => Promise<DatabaseImportCancelReply>;
@@ -138,9 +143,6 @@ export interface DesktopBridge {
   listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
   loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
   loadThreadDraft: (request: GmailThreadRequest) => Promise<MailDraftLoadReply>;
-  markSpamSeen: (
-    request: GmailSpamStatusRequest
-  ) => Promise<GmailSpamStatusReply>;
   markThreadNotSpam: (
     request: GmailThreadRequest
   ) => Promise<GmailThreadMutationReply>;

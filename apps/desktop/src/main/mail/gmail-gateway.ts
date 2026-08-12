@@ -23,6 +23,7 @@ import type {
   GmailAttachment,
   GmailCredentials,
   HistoryId as HistoryIdType,
+  MessageId as MessageIdType,
   ThreadId as ThreadIdType,
   Mailbox,
 } from "@repo/gmail/models";
@@ -203,7 +204,10 @@ const createClient = (credentials: GmailCredentials): gmail_v1.Gmail => {
     access_token: Redacted.value(credentials.accessToken),
   });
 
-  return gmail({ auth, version: "v1" });
+  // The official client reuses one HTTP/2 session per Google host, so bursts
+  // of typed thread mutations are multiplexed without a custom multipart
+  // transport. Quota is still charged per Gmail operation.
+  return gmail({ auth, http2: true, version: "v1" });
 };
 
 const getHeader = (
@@ -440,6 +444,31 @@ const fetchThreadSummaries = async (
 export const GmailGatewayLive = Layer.succeed(
   GmailGateway,
   GmailGateway.of({
+    batchModifyMessageLabels: (authorization, request) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<void>> => {
+          const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.messagesBatchModify
+          );
+
+          await client.users.messages.batchModify({
+            requestBody: {
+              addLabelIds: [...request.addLabelIds],
+              ids: request.messageIds.map(
+                (messageId: MessageIdType) => messageId
+              ),
+              removeLabelIds: [...request.removeLabelIds],
+            },
+            userId: "me",
+          });
+
+          return VOID_RESULT;
+        },
+      }),
     deleteThread: (authorization, threadId: ThreadIdType) =>
       Effect.tryPromise({
         catch: (error) => toGatewayError(authorization.account.id, error),

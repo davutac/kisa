@@ -20,6 +20,8 @@ export const COMPOSER_TEMPLATE_LIST_CHANNEL = "desktop:composer-template:list";
 export const COMPOSER_TEMPLATE_SAVE_CHANNEL = "desktop:composer-template:save";
 
 export const MAIL_INDEX_PROGRESS_CHANNEL = "desktop:mail:index-progress";
+export const MAIL_BULK_MUTATE_THREADS_CHANNEL =
+  "desktop:mail:bulk-mutate-threads";
 export const MAIL_DRAFT_CHANGED_CHANNEL = "desktop:mail:draft-changed";
 export const MAIL_DISCARD_DRAFT_CHANNEL = "desktop:mail:discard-draft";
 export const MAIL_DELETE_SPAM_THREAD_CHANNEL =
@@ -41,7 +43,6 @@ export const MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL =
   "desktop:mail:list-trusted-image-senders";
 export const MAIL_LOAD_THREAD_CHANNEL = "desktop:mail:load-thread";
 export const MAIL_GET_SPAM_STATUS_CHANNEL = "desktop:mail:get-spam-status";
-export const MAIL_MARK_SPAM_SEEN_CHANNEL = "desktop:mail:mark-spam-seen";
 export const MAIL_MARK_THREAD_NOT_SPAM_CHANNEL =
   "desktop:mail:mark-thread-not-spam";
 export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";

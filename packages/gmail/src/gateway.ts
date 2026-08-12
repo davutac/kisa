@@ -146,6 +146,14 @@ export interface GmailGatewayService {
       readonly threadId: ThreadId;
     }
   ) => Effect.Effect<GatewayResult<void>, GmailGatewayError>;
+  readonly batchModifyMessageLabels: (
+    authorization: GmailAuthorization,
+    request: {
+      readonly addLabelIds: readonly string[];
+      readonly messageIds: readonly MessageId[];
+      readonly removeLabelIds: readonly string[];
+    }
+  ) => Effect.Effect<GatewayResult<void>, GmailGatewayError>;
   readonly revoke: (
     authorization: GmailAuthorization
   ) => Effect.Effect<void, GmailApiError>;

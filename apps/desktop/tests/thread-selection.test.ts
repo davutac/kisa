@@ -2,8 +2,11 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   getNextThreadSelectionIndex,
+  getThreadSelectionAutoScrollDelta,
+  getThreadSelectionRangeChanges,
   getThreadSelectionKey,
   getVisibleThreadSelectionIndex,
+  hasThreadSelectionDragStarted,
   parseThreadSelectionKey,
 } from "../src/renderer/src/mail/thread-selection";
 
@@ -65,6 +68,93 @@ describe(getVisibleThreadSelectionIndex, () => {
   it("has no anchor when nothing is in view", () => {
     expect(getVisibleThreadSelectionIndex([], 0, 500, 1)).toBeNull();
     expect(getVisibleThreadSelectionIndex(rows, 5000, 5400, 1)).toBeNull();
+  });
+});
+
+describe(hasThreadSelectionDragStarted, () => {
+  it("keeps movement below 15px as a normal click", () => {
+    expect(
+      hasThreadSelectionDragStarted({ x: 10, y: 10 }, { x: 19, y: 21 })
+    ).toBeFalsy();
+  });
+
+  it("starts selection at the 15px tolerance", () => {
+    expect(
+      hasThreadSelectionDragStarted({ x: 10, y: 10 }, { x: 19, y: 22 })
+    ).toBeTruthy();
+  });
+});
+
+describe(getThreadSelectionRangeChanges, () => {
+  const rangeThreadKeys = ["a", "b", "c", "d", "e"];
+
+  it("selects every row crossed while extending the drag", () => {
+    expect(
+      getThreadSelectionRangeChanges(rangeThreadKeys, new Set(), 1, 1, 4, true)
+    ).toStrictEqual([
+      { checked: true, threadKey: "c" },
+      { checked: true, threadKey: "d" },
+      { checked: true, threadKey: "e" },
+    ]);
+  });
+
+  it("restores original row states when the drag reverses", () => {
+    expect(
+      getThreadSelectionRangeChanges(
+        rangeThreadKeys,
+        new Set(["d"]),
+        1,
+        4,
+        2,
+        true
+      )
+    ).toStrictEqual([
+      { checked: true, threadKey: "d" },
+      { checked: false, threadKey: "e" },
+    ]);
+  });
+
+  it("restores checked rows while reversing a deselection drag", () => {
+    expect(
+      getThreadSelectionRangeChanges(
+        rangeThreadKeys,
+        new Set(rangeThreadKeys),
+        1,
+        4,
+        2,
+        false
+      )
+    ).toStrictEqual([
+      { checked: true, threadKey: "d" },
+      { checked: true, threadKey: "e" },
+    ]);
+  });
+
+  it("switches sides of the anchor in one movement", () => {
+    expect(
+      getThreadSelectionRangeChanges(rangeThreadKeys, new Set(), 2, 4, 0, true)
+    ).toStrictEqual([
+      { checked: true, threadKey: "a" },
+      { checked: true, threadKey: "b" },
+      { checked: false, threadKey: "d" },
+      { checked: false, threadKey: "e" },
+    ]);
+  });
+});
+
+describe(getThreadSelectionAutoScrollDelta, () => {
+  it("scrolls toward the nearest viewport edge", () => {
+    expect(getThreadSelectionAutoScrollDelta(110, 100, 600)).toBeLessThan(0);
+    expect(getThreadSelectionAutoScrollDelta(590, 100, 600)).toBeGreaterThan(0);
+  });
+
+  it("stays still away from the edge", () => {
+    expect(getThreadSelectionAutoScrollDelta(300, 100, 600)).toBe(0);
+  });
+
+  it("caps the speed outside the viewport", () => {
+    expect(getThreadSelectionAutoScrollDelta(0, 100, 600)).toBe(-18);
+    expect(getThreadSelectionAutoScrollDelta(700, 100, 600)).toBe(18);
   });
 });
 

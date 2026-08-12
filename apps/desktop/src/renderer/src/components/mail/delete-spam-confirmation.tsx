@@ -12,3 +12,22 @@ export const getDeleteSpamConfirmation = (subject: string): ConfirmOptions => ({
   ),
   title: "Delete conversation?",
 });
+
+const conversationCount = (count: number): string =>
+  `${count} conversation${count === 1 ? "" : "s"}`;
+
+export const getBulkDeleteSpamConfirmation = (
+  count: number
+): ConfirmOptions => ({
+  confirmLabel: "Delete forever",
+  confirmVariant: "destructive",
+  description: `${conversationCount(count)} will be permanently deleted from Gmail. This action cannot be undone.`,
+  title: `Delete ${conversationCount(count)}?`,
+});
+
+export const getBulkTrashConfirmation = (count: number): ConfirmOptions => ({
+  confirmLabel: "Move to trash",
+  confirmVariant: "destructive",
+  description: `${conversationCount(count)} will be moved to Gmail Trash.`,
+  title: `Move ${conversationCount(count)} to trash?`,
+});

@@ -1,6 +1,5 @@
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { ShieldAlertIcon } from "lucide-react";
-import { useEffect } from "react";
 
 import { Toggle } from "@/components/ui/toggle";
 import {
@@ -15,7 +14,7 @@ import {
   useAppCommand,
 } from "@/hotkeys";
 import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
-import { useSpamStatus } from "@/mail/use-spam-status";
+import { useHasUnreadSpam } from "@/mail/use-spam-status";
 import { useMailbox, useMailboxStore } from "@/state/mailbox";
 
 const TitlebarSpamToggle = () => {
@@ -24,15 +23,8 @@ const TitlebarSpamToggle = () => {
   const setMailbox = useMailboxStore((state) => state.setMailbox);
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { hasNewSpam, markSeen } = useSpamStatus(accountIds);
-  const showBadge = mailbox !== "spam" && hasNewSpam;
+  const hasUnreadSpam = useHasUnreadSpam(accountIds);
   const display = getHotkeyDisplay("app.toggleSpam");
-
-  useEffect(() => {
-    if (mailbox === "spam") {
-      void markSeen();
-    }
-  }, [mailbox, markSeen]);
 
   const updateMailbox = (pressed: boolean): void => {
     setMailbox(pressed ? "spam" : "inbox");
@@ -52,14 +44,14 @@ const TitlebarSpamToggle = () => {
         render={
           <Toggle
             aria-keyshortcuts={getHotkeyAriaLabel("app.toggleSpam")}
-            aria-label={showBadge ? "Spam, new messages" : "Spam"}
+            aria-label={hasUnreadSpam ? "Spam, unread messages" : "Spam"}
             className="relative"
             onPressedChange={updateMailbox}
             pressed={mailbox === "spam"}
             size="icon"
           >
             <ShieldAlertIcon />
-            {showBadge ? (
+            {hasUnreadSpam ? (
               <span
                 aria-hidden="true"
                 className="bg-destructive absolute top-1.5 right-1.5 size-1.5 rounded-full"

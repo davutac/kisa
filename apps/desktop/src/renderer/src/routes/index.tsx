@@ -105,8 +105,8 @@ function HomeRoute() {
     reloadRevision,
     unreadOnly: showUnread,
   });
-  const { deleteSpam, notSpam, setLabel, toggleRead, trash } =
-    useThreadActions();
+  const threadActions = useThreadActions();
+  const { deleteSpam, notSpam, setLabel, toggleRead, trash } = threadActions;
   const indexProgress = useMailIndexProgress();
   const emptyState = getEmptyState(mailbox, showUnread);
   const indexingMessage =
@@ -142,6 +142,7 @@ function HomeRoute() {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <MailThreadList
+        actions={threadActions}
         emptyMessage={emptyState.message}
         emptyTitle={emptyState.title}
         hasNextPage={hasNextPage}
@@ -150,10 +151,6 @@ function HomeRoute() {
         isLoadingNextPage={isLoadingNextPage}
         loadNextPage={loadNextPage}
         mailbox={mailbox}
-        onDeleteSpamThread={mailbox === "spam" ? deleteSpam : undefined}
-        onNotSpamThread={mailbox === "spam" ? notSpam : undefined}
-        onToggleThreadRead={toggleRead}
-        onTrashThread={trash}
         reloadRevision={reloadRevision}
         showAccount={selectedAccountId === null}
         threads={threads}

@@ -3,6 +3,7 @@ import { ipcRenderer, webUtils } from "electron";
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
   MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_BULK_MUTATE_THREADS_CHANNEL,
   MAIL_DELETE_SPAM_THREAD_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
@@ -14,7 +15,6 @@ import {
   MAIL_LIST_STASHED_DRAFTS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
-  MAIL_MARK_SPAM_SEEN_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
@@ -47,6 +47,7 @@ import { subscribe } from "./subscribe";
 export const mailApi: Pick<
   DesktopBridge,
   | "discardMailDraft"
+  | "bulkMutateThreads"
   | "authorizeOutgoingAttachments"
   | "deleteSpamThread"
   | "getMailIndexProgress"
@@ -59,7 +60,6 @@ export const mailApi: Pick<
   | "listTrustedImageSenders"
   | "loadThread"
   | "loadThreadDraft"
-  | "markSpamSeen"
   | "markThreadNotSpam"
   | "openAttachmentPreview"
   | "prepareOutgoingAttachments"
@@ -89,6 +89,8 @@ export const mailApi: Pick<
         path: webUtils.getPathForFile(file),
       })),
     }),
+  bulkMutateThreads: (request) =>
+    ipcRenderer.invoke(MAIL_BULK_MUTATE_THREADS_CHANNEL, request),
   deleteSpamThread: (request) =>
     ipcRenderer.invoke(MAIL_DELETE_SPAM_THREAD_CHANNEL, request),
   discardMailDraft: (request) =>
@@ -111,8 +113,6 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_LOAD_THREAD_CHANNEL, request),
   loadThreadDraft: (request) =>
     ipcRenderer.invoke(MAIL_LOAD_THREAD_DRAFT_CHANNEL, request),
-  markSpamSeen: (request) =>
-    ipcRenderer.invoke(MAIL_MARK_SPAM_SEEN_CHANNEL, request),
   markThreadNotSpam: (request) =>
     ipcRenderer.invoke(MAIL_MARK_THREAD_NOT_SPAM_CHANNEL, request),
   onMailDraftChanged: (listener) =>

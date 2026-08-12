@@ -1,31 +1,13 @@
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import {
-  accountSettings,
   gmailMessages,
   gmailSyncState,
   gmailThreads,
   googleAccounts,
 } from "@repo/database/schemas";
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-const listConnectedAccountIds = async (
-  database: RemoteDatabaseClient,
-  requestedAccountIds: readonly string[]
-): Promise<readonly string[]> => {
-  if (requestedAccountIds.length === 0) {
-    return [];
-  }
-
-  const accounts = await database
-    .select({ accountId: googleAccounts.email })
-    .from(googleAccounts)
-    .where(inArray(googleAccounts.email, [...new Set(requestedAccountIds)]))
-    .all();
-
-  return accounts.map(({ accountId }) => accountId);
-};
-
-export const hasNewSpamRemote = async (
+export const hasUnreadSpamRemote = async (
   database: RemoteDatabaseClient,
   requestedAccountIds: readonly string[]
 ): Promise<boolean> => {
@@ -40,54 +22,17 @@ export const hasNewSpamRemote = async (
       googleAccounts,
       eq(googleAccounts.email, gmailThreads.accountEmail)
     )
-    .leftJoin(
-      accountSettings,
-      eq(accountSettings.accountEmail, gmailThreads.accountEmail)
-    )
     .where(
       and(
         inArray(gmailThreads.accountEmail, [...new Set(requestedAccountIds)]),
         eq(gmailThreads.isInSpam, true),
-        gt(
-          gmailThreads.spamAddedAt,
-          sql`coalesce(${accountSettings.spamLastCheckedAt}, 0)`
-        )
+        eq(gmailThreads.isUnread, true)
       )
     )
     .limit(1)
     .get();
 
   return thread !== undefined;
-};
-
-export const markSpamSeenRemote = async (
-  database: RemoteDatabaseClient,
-  requestedAccountIds: readonly string[],
-  now: number
-): Promise<void> => {
-  const accountIds = await listConnectedAccountIds(
-    database,
-    requestedAccountIds
-  );
-
-  if (accountIds.length === 0) {
-    return;
-  }
-
-  await database
-    .insert(accountSettings)
-    .values(
-      accountIds.map((accountEmail) => ({
-        accountEmail,
-        spamLastCheckedAt: now,
-        updatedAt: now,
-      }))
-    )
-    .onConflictDoUpdate({
-      set: { spamLastCheckedAt: now, updatedAt: now },
-      target: accountSettings.accountEmail,
-    })
-    .run();
 };
 
 export const resetSpamBackfillRemote = (

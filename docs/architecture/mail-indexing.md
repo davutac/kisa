@@ -44,6 +44,7 @@ Read from the project's own quota page, not the docs. Google's published default
 
 | Call                       | Units |
 | -------------------------- | ----- |
+| `messages.batchModify`     | 50    |
 | `threads.get`              | 40    |
 | `threads.trash`            | 20    |
 | `messages.get`             | 20    |

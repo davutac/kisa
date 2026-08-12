@@ -1,6 +1,8 @@
+import { CheckIcon } from "lucide-react";
 import type { HTMLMotionProps } from "motion/react";
 import { m, useReducedMotion } from "motion/react";
 import { useState } from "react";
+import type { MouseEvent, PointerEvent } from "react";
 
 import MailAttachmentList from "@/components/mail/attachment-list";
 import MailLabelBadges from "@/components/mail/label-badges";
@@ -25,11 +27,26 @@ import type { GmailThreadSummary } from "@/shared/ipc/mail";
 const VISIBLE_ATTACHMENT_COUNT = 3;
 
 interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
+  hasCheckedThreads?: boolean;
+  isChecked?: boolean;
   isSelected?: boolean;
   onDeleteSpam?: (thread: GmailThreadSummary) => void;
-  onOpen: (thread: GmailThreadSummary) => void;
+  onOpen: (
+    thread: GmailThreadSummary,
+    event: MouseEvent<HTMLButtonElement>
+  ) => void;
+  onRowPointerDown: (
+    thread: GmailThreadSummary,
+    event: PointerEvent<HTMLButtonElement>
+  ) => void;
+  onSelectionPointerDown: (
+    thread: GmailThreadSummary,
+    event: PointerEvent<HTMLInputElement>
+  ) => void;
+  onSelectionPointerEnter: (thread: GmailThreadSummary) => void;
   onNotSpam?: (thread: GmailThreadSummary) => void;
   onToggleRead?: (thread: GmailThreadSummary) => void;
+  onToggleSelection: (thread: GmailThreadSummary) => void;
   onTrash?: (thread: GmailThreadSummary) => void;
   position: number;
   setSize: number;
@@ -43,12 +60,139 @@ const bindThreadAction = (
 ): (() => void) | undefined =>
   action === undefined ? undefined : () => action(thread);
 
+const getThreadItemRevealState = (
+  hasCheckedThreads: boolean,
+  isChecked: boolean,
+  isSelected: boolean,
+  isHovered: boolean
+) => ({
+  areQuickActionsRevealed: isHovered || (isSelected && !hasCheckedThreads),
+  isActive: isChecked || isSelected || isHovered,
+});
+
+const ThreadSelectionCheckbox = ({
+  isChecked,
+  isRevealed,
+  onPointerDown,
+  onToggle,
+  subject,
+}: {
+  isChecked: boolean;
+  isRevealed: boolean;
+  onPointerDown: (event: PointerEvent<HTMLInputElement>) => void;
+  onToggle: () => void;
+  subject: string;
+}) => {
+  const shouldReduceMotion = useReducedMotion();
+
+  return (
+    <m.span
+      animate={{
+        marginRight: isRevealed ? 2 : -8,
+        opacity: isRevealed ? 1 : 0,
+        width: isRevealed ? 16 : 0,
+      }}
+      className="pointer-events-auto relative flex shrink-0 overflow-visible"
+      inert={!isRevealed}
+      transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+    >
+      <span className="relative flex size-4">
+        <input
+          aria-label={`${isChecked ? "Deselect" : "Select"} ${subject}`}
+          checked={isChecked}
+          className="border-input bg-background checked:border-primary checked:bg-primary focus-visible:border-ring focus-visible:ring-ring/30 size-4 appearance-none rounded-[4px] border transition-colors outline-none focus-visible:ring-2"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggle();
+            }
+          }}
+          onPointerDown={onPointerDown}
+          readOnly
+          tabIndex={isRevealed ? 0 : -1}
+          type="checkbox"
+        />
+        {isChecked ? (
+          <CheckIcon className="text-primary-foreground pointer-events-none absolute inset-0 size-4 p-0.5" />
+        ) : null}
+      </span>
+    </m.span>
+  );
+};
+
+const ThreadSenderHeader = ({
+  isChecked,
+  isSelectionRevealed,
+  onSelectionPointerDown,
+  onToggleSelection,
+  showAccount,
+  thread,
+}: {
+  isChecked: boolean;
+  isSelectionRevealed: boolean;
+  onSelectionPointerDown: (event: PointerEvent<HTMLInputElement>) => void;
+  onToggleSelection: () => void;
+  showAccount: boolean;
+  thread: GmailThreadSummary;
+}) => {
+  const senderMailbox = parseMailboxAddress(thread.from);
+
+  return (
+    <ItemHeader className="min-w-0 flex-wrap justify-start gap-2">
+      <ThreadSelectionCheckbox
+        isChecked={isChecked}
+        isRevealed={isSelectionRevealed}
+        onPointerDown={onSelectionPointerDown}
+        onToggle={onToggleSelection}
+        subject={thread.subject}
+      />
+      <ItemTitle
+        className="max-w-full min-w-0 gap-1.5 overflow-hidden text-xs"
+        title={thread.from}
+      >
+        {senderMailbox?.name === undefined ? null : (
+          <span className="min-w-0 truncate font-medium">
+            {senderMailbox.name}
+          </span>
+        )}
+        <span className="text-muted-foreground min-w-0 truncate">
+          {senderMailbox?.email}
+        </span>
+      </ItemTitle>
+      <MailLabelBadges
+        accountId={thread.accountId}
+        labels={thread.labels}
+        size="compact"
+      />
+      {showAccount ? (
+        <Badge
+          className="bg-muted text-muted-foreground ml-auto h-auto shrink-0 rounded-sm px-1.5 text-[10px] leading-none"
+          variant="secondary"
+        >
+          {thread.accountId}
+        </Badge>
+      ) : null}
+    </ItemHeader>
+  );
+};
+
 const MailThreadItem = ({
+  hasCheckedThreads = false,
+  isChecked = false,
   isSelected = false,
   onDeleteSpam,
   onOpen,
+  onRowPointerDown,
+  onSelectionPointerDown,
+  onSelectionPointerEnter,
   onNotSpam,
   onToggleRead,
+  onToggleSelection,
   onTrash,
   position,
   setSize,
@@ -58,11 +202,13 @@ const MailThreadItem = ({
 }: MailThreadItemProps) => {
   const shouldReduceMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
-  // Hovering the uncovered strip still counts as hovering the row, so the
-  // actions cannot be chased away by the pointer that is reaching for them.
-  const isRevealed = isSelected || isHovered;
+  const { areQuickActionsRevealed, isActive } = getThreadItemRevealState(
+    hasCheckedThreads,
+    isChecked,
+    isSelected,
+    isHovered
+  );
   const revealTransition = shouldReduceMotion ? NO_MOTION : easeInOut(0.26);
-  const senderMailbox = parseMailboxAddress(thread.from);
   const visibleAttachments = thread.attachments.slice(
     0,
     VISIBLE_ATTACHMENT_COUNT
@@ -70,17 +216,12 @@ const MailThreadItem = ({
   const hiddenAttachmentCount =
     thread.attachments.length - visibleAttachments.length;
   const handleNotSpam = bindThreadAction(onNotSpam, thread);
-  const hasDestructiveAction = [onDeleteSpam, onTrash].some(
-    (action) => action !== undefined
-  );
+  const hasDestructiveAction =
+    onDeleteSpam !== undefined || onTrash !== undefined;
   const quickActionsWidth = getMailThreadQuickActionsWidth(
     handleNotSpam !== undefined,
     hasDestructiveAction
   );
-  const rowVariants = {
-    idle: { marginRight: 0 },
-    revealed: { marginRight: quickActionsWidth },
-  };
 
   return (
     <m.li
@@ -100,10 +241,12 @@ const MailThreadItem = ({
         layout: easeInOut(0.24),
         opacity: easeInOut(0.16),
       }}
+      onPointerEnter={() => {
+        onSelectionPointerEnter(thread);
+      }}
       {...props}
     >
       <m.div
-        animate={isRevealed ? "revealed" : "idle"}
         className="relative"
         initial={false}
         onHoverEnd={() => {
@@ -115,7 +258,7 @@ const MailThreadItem = ({
       >
         <MailThreadQuickActions
           hotkeysEnabled={isSelected}
-          isRevealed={isRevealed}
+          isRevealed={areQuickActionsRevealed}
           isUnread={thread.isUnread}
           onDeleteSpam={bindThreadAction(onDeleteSpam, thread)}
           onNotSpam={handleNotSpam}
@@ -124,56 +267,47 @@ const MailThreadItem = ({
         />
         {/* Opaque, so the row hides the panel edge it overlaps. */}
         <m.div
+          animate={{
+            marginRight: areQuickActionsRevealed ? quickActionsWidth : 0,
+          }}
           className="bg-background relative z-10 rounded-md"
+          initial={false}
           transition={revealTransition}
-          variants={rowVariants}
         >
           <Item
             className={cn(
               "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3 data-[active=true]:opacity-100",
               thread.isUnread ? "bg-muted/30" : "opacity-60"
             )}
-            data-active={isRevealed}
+            data-active={isActive}
+            data-checked={isChecked}
             data-selected={isSelected}
           >
             <button
               aria-current={isSelected}
               aria-label={`${thread.subject}, from ${thread.from}`}
               className="absolute inset-0 z-0 rounded-md text-left outline-none"
-              onClick={() => {
-                onOpen(thread);
+              onClick={(event) => {
+                onOpen(thread, event);
+              }}
+              onPointerDown={(event) => {
+                onRowPointerDown(thread, event);
               }}
               type="button"
             />
             <ItemContent className="pointer-events-none relative z-10 min-w-0 gap-1">
-              <ItemHeader className="min-w-0 flex-wrap justify-start gap-2">
-                <ItemTitle
-                  className="max-w-full min-w-0 gap-1.5 overflow-hidden text-xs"
-                  title={thread.from}
-                >
-                  {senderMailbox?.name === undefined ? null : (
-                    <span className="min-w-0 truncate font-medium">
-                      {senderMailbox.name}
-                    </span>
-                  )}
-                  <span className="text-muted-foreground min-w-0 truncate">
-                    {senderMailbox.email}
-                  </span>
-                </ItemTitle>
-                <MailLabelBadges
-                  accountId={thread.accountId}
-                  labels={thread.labels}
-                  size="compact"
-                />
-                {showAccount ? (
-                  <Badge
-                    className="bg-muted text-muted-foreground ml-auto h-auto shrink-0 rounded-sm px-1.5 text-[10px] leading-none"
-                    variant="secondary"
-                  >
-                    {thread.accountId}
-                  </Badge>
-                ) : null}
-              </ItemHeader>
+              <ThreadSenderHeader
+                isChecked={isChecked}
+                isSelectionRevealed={isActive}
+                onSelectionPointerDown={(event) => {
+                  onSelectionPointerDown(thread, event);
+                }}
+                onToggleSelection={() => {
+                  onToggleSelection(thread);
+                }}
+                showAccount={showAccount}
+                thread={thread}
+              />
               <div className="flex min-w-0 items-center gap-1.5">
                 <ItemTitle
                   className={cn(

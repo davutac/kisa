@@ -2,7 +2,11 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { getMailApi } from "@/platform/desktop";
-import type { GmailThreadMutationReply } from "@/shared/ipc/mail";
+import type {
+  GmailBulkThreadMutationOperation,
+  GmailThreadMutationReply,
+  GmailThreadRequest,
+} from "@/shared/ipc/mail";
 
 export interface ThreadActionTarget {
   accountId: string;
@@ -12,7 +16,22 @@ export interface ThreadActionTarget {
 
 type OnThreadActionSuccess = () => void;
 
+const labelSuccessMessage = (applied: boolean): string =>
+  applied ? "Label added to conversations" : "Label removed from conversations";
+
 export interface ThreadActions {
+  bulkDeleteSpam: (
+    threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[]
+  ) => Promise<void>;
+  bulkSetLabel: (
+    threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[],
+    label: { readonly applied: boolean; readonly labelId: string }
+  ) => Promise<void>;
+  bulkSetReadState: (
+    threads: readonly ThreadActionTarget[],
+    isUnread: boolean
+  ) => Promise<void>;
+  bulkTrash: (threads: readonly ThreadActionTarget[]) => Promise<void>;
   deleteSpam: (
     thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
     onSuccess?: OnThreadActionSuccess
@@ -64,6 +83,100 @@ export const useThreadActions = (): ThreadActions => {
     []
   );
 
+  const runBulkAction = useCallback(
+    async (
+      threads: readonly GmailThreadRequest[],
+      operation: GmailBulkThreadMutationOperation,
+      successMessage: string,
+      failureMessage: string
+    ): Promise<void> => {
+      if (mailApi === undefined || threads.length === 0) {
+        return;
+      }
+
+      try {
+        const reply = await mailApi.bulkMutateThreads({ operation, threads });
+
+        if (!reply.ok) {
+          toast.error(reply.error);
+          return;
+        }
+
+        if (reply.data.failed.length === 0) {
+          toast.success(successMessage);
+          return;
+        }
+
+        toast.error(failureMessage, {
+          description: `${reply.data.failed.length} of ${threads.length} conversations could not be updated.`,
+        });
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not update emails"
+        );
+      }
+    },
+    [mailApi]
+  );
+
+  const bulkSetReadState = useCallback(
+    (
+      threads: readonly ThreadActionTarget[],
+      isUnread: boolean
+    ): Promise<void> =>
+      runBulkAction(
+        threads.map(({ accountId, threadId }) => ({ accountId, threadId })),
+        { isUnread, kind: "setReadState" },
+        isUnread
+          ? "Marked conversations as unread"
+          : "Marked conversations as read",
+        "Some conversations were not updated"
+      ),
+    [runBulkAction]
+  );
+
+  const bulkTrash = useCallback(
+    (threads: readonly ThreadActionTarget[]): Promise<void> =>
+      runBulkAction(
+        threads.map(({ accountId, threadId }) => ({ accountId, threadId })),
+        { kind: "trash" },
+        "Moved conversations to trash",
+        "Some conversations were not moved to trash"
+      ),
+    [runBulkAction]
+  );
+
+  const bulkDeleteSpam = useCallback(
+    (
+      threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[]
+    ): Promise<void> =>
+      runBulkAction(
+        threads,
+        { kind: "deleteSpam" },
+        "Conversations permanently deleted",
+        "Some conversations were not deleted"
+      ),
+    [runBulkAction]
+  );
+
+  const bulkSetLabel = useCallback(
+    (
+      threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[],
+      label: { readonly applied: boolean; readonly labelId: string }
+    ): Promise<void> =>
+      runBulkAction(
+        threads,
+        {
+          applied: label.applied,
+          kind: "setLabel",
+          labelId: label.labelId,
+        },
+        labelSuccessMessage(label.applied),
+        "Some labels were not updated"
+      ),
+    [runBulkAction]
+  );
+
   const toggleRead = useCallback(
     (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
       if (mailApi === undefined) {
@@ -90,15 +203,15 @@ export const useThreadActions = (): ThreadActions => {
   );
 
   const setLabel = useCallback(
-    (
+    async (
       thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
       label: { readonly applied: boolean; readonly labelId: string }
     ): Promise<void> => {
       if (mailApi === undefined) {
-        return Promise.resolve();
+        return;
       }
 
-      return runThreadAction(
+      await runThreadAction(
         () =>
           mailApi.setThreadLabel({
             accountId: thread.accountId,
@@ -178,5 +291,15 @@ export const useThreadActions = (): ThreadActions => {
     [mailApi, runThreadAction]
   );
 
-  return { deleteSpam, notSpam, setLabel, toggleRead, trash };
+  return {
+    bulkDeleteSpam,
+    bulkSetLabel,
+    bulkSetReadState,
+    bulkTrash,
+    deleteSpam,
+    notSpam,
+    setLabel,
+    toggleRead,
+    trash,
+  };
 };

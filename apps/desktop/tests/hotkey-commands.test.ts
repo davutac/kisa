@@ -98,6 +98,7 @@ describe("hotkey command registry", () => {
       "app.toggleSpam",
       "app.toggleUnread",
       "mailbox.toggleThreadRead",
+      "mailbox.toggleThreadSelection",
       "thread.toggleThreadRead",
     ] as const) {
       expect(HOTKEY_COMMANDS[commandId].repeat).toBe("ignore-key-repeat");
@@ -129,8 +130,11 @@ describe("hotkey command registry", () => {
   });
 
   it("assigns selected-thread quick actions", () => {
+    expect(
+      HOTKEY_COMMANDS["mailbox.toggleThreadSelection"].bindings
+    ).toStrictEqual(["X"]);
     expect(HOTKEY_COMMANDS["mailbox.toggleThreadRead"].bindings).toStrictEqual([
-      "Mod+Shift+M",
+      "Mod+Shift+U",
     ]);
     expect(HOTKEY_COMMANDS["mailbox.toggleThreadRead"].repeat).toBe(
       "ignore-key-repeat"
@@ -143,7 +147,7 @@ describe("hotkey command registry", () => {
   it("formats selected-thread quick actions", () => {
     expect(
       getHotkeyDisplay("mailbox.toggleThreadRead", "mac").bindings
-    ).toStrictEqual(["⌘ ⇧ M"]);
+    ).toStrictEqual(["⌘ ⇧ U"]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "mac").bindings
     ).toStrictEqual(["⌘ D"]);
@@ -166,9 +170,13 @@ describe("hotkey command registry", () => {
   });
 
   it("opens the thread label picker with Mod+L", () => {
+    expect(HOTKEY_COMMANDS["mailbox.manageLabels"].bindings).toStrictEqual([
+      "Mod+L",
+    ]);
     expect(HOTKEY_COMMANDS["thread.manageLabels"].bindings).toStrictEqual([
       "Mod+L",
     ]);
+    expect(getHotkeyAriaLabel("mailbox.manageLabels", "mac")).toBe("Meta+L");
     expect(getHotkeyAriaLabel("thread.manageLabels", "mac")).toBe("Meta+L");
     expect(getHotkeyAriaLabel("thread.manageLabels", "windows")).toBe(
       "Control+L"

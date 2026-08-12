@@ -1,17 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { getMailApi } from "@/platform/desktop";
 
-interface SpamStatus {
-  hasNewSpam: boolean;
-  markSeen: () => Promise<void>;
-}
-
-/** Account-scoped new-Spam state, refreshed by the shared thread event stream. */
-export const useSpamStatus = (accountIds: readonly string[]): SpamStatus => {
+/** Account-scoped unread Spam state, refreshed by the thread event stream. */
+export const useHasUnreadSpam = (accountIds: readonly string[]): boolean => {
   const scopeKey = accountIds.join("\u0000");
   const [status, setStatus] = useState({
-    hasNewSpam: false,
+    hasUnreadSpam: false,
     scopeKey,
   });
 
@@ -30,7 +25,7 @@ export const useSpamStatus = (accountIds: readonly string[]): SpamStatus => {
       const reply = await mailApi.getSpamStatus({ accountIds });
 
       if (isActive && requestRevision === revision && reply.ok) {
-        setStatus({ hasNewSpam: reply.data.hasNewSpam, scopeKey });
+        setStatus({ hasUnreadSpam: reply.data.hasUnreadSpam, scopeKey });
       }
     };
     const unsubscribe = mailApi.onThreadListUpdated(({ changes }) => {
@@ -56,22 +51,5 @@ export const useSpamStatus = (accountIds: readonly string[]): SpamStatus => {
     };
   }, [accountIds, scopeKey]);
 
-  const markSeen = useCallback(async (): Promise<void> => {
-    const mailApi = getMailApi();
-
-    if (mailApi === undefined) {
-      return;
-    }
-
-    const reply = await mailApi.markSpamSeen({ accountIds });
-
-    if (reply.ok) {
-      setStatus({ hasNewSpam: reply.data.hasNewSpam, scopeKey });
-    }
-  }, [accountIds, scopeKey]);
-
-  return {
-    hasNewSpam: status.scopeKey === scopeKey && status.hasNewSpam,
-    markSeen,
-  };
+  return status.scopeKey === scopeKey && status.hasUnreadSpam;
 };

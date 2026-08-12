@@ -11,8 +11,7 @@ import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  hasNewSpamRemote,
-  markSpamSeenRemote,
+  hasUnreadSpamRemote,
   resetSpamBackfillRemote,
 } from "../src/main/mail/spam-mailbox";
 
@@ -55,7 +54,7 @@ const insertThread = connection.prepare(
     account_email, "from", is_in_inbox, is_in_spam, is_unread, labels,
     latest_at, message_count, snippet, spam_added_at, subject, thread_id,
     updated_at
-  ) VALUES (?, 'sender@example.com', ?, ?, 1, ?, 1, 1, '', ?, 'Subject', ?, 1)`
+  ) VALUES (?, 'sender@example.com', ?, ?, ?, ?, 1, 1, '', ?, 'Subject', ?, 1)`
 );
 const insertMessage = connection.prepare(
   `INSERT INTO gmail_messages (
@@ -77,10 +76,11 @@ describe("Spam mailbox persistence", () => {
 
   afterAll(() => connection.close());
 
-  it("tracks newly observed Spam independently for each connected account", async () => {
+  it("tracks unread Spam independently for each connected account", async () => {
     insertThread.run(
       "one@example.com",
       0,
+      1,
       1,
       '["SPAM","UNREAD"]',
       100,
@@ -88,29 +88,22 @@ describe("Spam mailbox persistence", () => {
     );
 
     await expect(
-      hasNewSpamRemote(database, ["one@example.com"])
+      hasUnreadSpamRemote(database, ["one@example.com"])
     ).resolves.toBeTruthy();
     await expect(
-      hasNewSpamRemote(database, ["two@example.com"])
+      hasUnreadSpamRemote(database, ["two@example.com"])
     ).resolves.toBeFalsy();
     await expect(
-      hasNewSpamRemote(database, ["missing@example.com"])
+      hasUnreadSpamRemote(database, ["missing@example.com"])
     ).resolves.toBeFalsy();
 
-    await markSpamSeenRemote(database, ["one@example.com"], 200);
+    connection
+      .prepare("UPDATE gmail_threads SET is_unread = 0 WHERE account_email = ?")
+      .run("one@example.com");
 
     await expect(
-      hasNewSpamRemote(database, ["one@example.com"])
+      hasUnreadSpamRemote(database, ["one@example.com"])
     ).resolves.toBeFalsy();
-    expect(
-      connection
-        .prepare(
-          "SELECT account_email, spam_last_checked_at FROM account_settings"
-        )
-        .all()
-    ).toStrictEqual([
-      { account_email: "one@example.com", spam_last_checked_at: 200 },
-    ]);
   });
 
   it("resets the Spam cache and cursor in one account-scoped transaction", async () => {
@@ -126,6 +119,7 @@ describe("Spam mailbox persistence", () => {
       "one@example.com",
       0,
       1,
+      1,
       '["SPAM","UNREAD"]',
       100,
       "spam-1"
@@ -134,6 +128,7 @@ describe("Spam mailbox persistence", () => {
       "one@example.com",
       1,
       0,
+      1,
       '["INBOX","UNREAD"]',
       null,
       "inbox-1"

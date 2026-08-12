@@ -10,6 +10,7 @@ import {
 } from "./methods/auth";
 import {
   authorizeOutgoingAttachments,
+  bulkMutate,
   deleteSpam,
   discardDraft,
   getIndexProgress,
@@ -24,7 +25,6 @@ import {
   loadThread,
   loadThreadDraft,
   openAttachmentPreview,
-  markSpamSeen,
   markThreadNotSpam,
   prepareOutgoingAttachments,
   searchThreads,
@@ -73,7 +73,6 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(getSyncStatus);
   yield* ipc.handle(getIndexProgress);
   yield* ipc.handle(getSpamStatus);
-  yield* ipc.handle(markSpamSeen);
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);
   yield* ipc.handle(syncLabels);
@@ -92,6 +91,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(sendNew);
   yield* ipc.handle(sendThread);
   yield* ipc.handle(listSenders);
+  yield* ipc.handle(bulkMutate);
   yield* ipc.handle(setLabel);
   yield* ipc.handle(setReadState);
   yield* ipc.handle(trash);

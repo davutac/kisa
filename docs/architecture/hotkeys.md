@@ -15,7 +15,7 @@ command registry ──> useAppCommand ──> TanStack Hotkeys ──> keyboard
 The hotkey module owns commands that apply to an application screen or interaction mode:
 
 - App navigation, search, templates, and message composition
-- Mailbox selection, thread opening, read-state toggling, and trashing
+- Mailbox focus and multi-selection, thread opening, read-state toggling, and trashing
 - Closing the active thread and acting on the conversation being read
 - Selecting messages within a conversation and replying to or forwarding the selected message
 - Selecting the composer account, attaching files, stashing a draft, and sending a message
@@ -55,11 +55,15 @@ In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, a
 
 `U` toggles the unread-only mailbox filter. `S` toggles the Spam mailbox.
 
-When a mailbox thread is selected, `Mod+Shift+M` toggles its read state. In Inbox, `Mod+D` moves it to trash; in Spam, it opens the permanent-delete confirmation. These commands are not registered for hover-only quick actions.
+`J`, `K`, and the arrow keys move mailbox focus. `X` adds or removes the focused conversation from the bulk selection. A revealed row checkbox provides the same action with the mouse. Pressing and dragging anywhere across a conversation row paints that row's checked or unchecked state across every row crossed; reversing the drag restores the rows crossed on the way back. A 15-pixel movement tolerance keeps ordinary clicks opening the conversation. `Escape` clears both bulk selection and mailbox focus.
+
+When conversations are checked, Apple Mail-style `Mod+Shift+U` applies to the full selection: it marks the selection unread only when every selected conversation is currently read; otherwise it marks the selection read. `Mod+D` moves the selection to trash, or opens the permanent-delete confirmation in Spam. Without a bulk selection these commands continue to target the focused conversation. These commands are not registered for hover-only quick actions.
+
+The floating selection toolbar exposes explicit mark-read and mark-unread actions. `Mod+L` opens its label dropdown while a bulk selection exists. The dropdown groups selected conversations by account because Gmail label ids are account-owned; toggling a label only changes selected conversations in that account group.
 
 While reading a conversation in the main window, `Mod+Enter` opens it in a thread window and closes the inline conversation. The command is disabled inside the resulting thread window because it is already popped out. Once a thread composer is open, its higher-priority layer owns `Mod+Enter` for sending instead.
 
-While reading a conversation, `Mod+L` scrolls the label row into view and opens its picker. `Mod+Shift+M` and `Mod+D` retain the same read-state and mailbox-context behavior as they have on the selected mailbox conversation.
+While reading a conversation, `Mod+L` scrolls the label row into view and opens its picker. `Mod+Shift+U` and `Mod+D` retain the same read-state and mailbox-context behavior as they have on the selected mailbox conversation.
 
 Within a conversation, `J` or `ArrowDown` selects and opens the next newer message, while `K` or `ArrowUp` selects and opens the previous older message. Navigation stops at the thread edges and closes the previously expanded message. Plain `Tab` remains native so headers, links, attachments, and footer actions stay keyboard-accessible.
 

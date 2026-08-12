@@ -6,6 +6,7 @@ import {
   ATTACHMENT_PREVIEW_LOAD_CHANNEL,
   ATTACHMENT_PREVIEW_SAVE_CHANNEL,
   MAIL_DELETE_SPAM_THREAD_CHANNEL,
+  MAIL_BULK_MUTATE_THREADS_CHANNEL,
   MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
@@ -16,7 +17,6 @@ import {
   MAIL_LIST_STASHED_DRAFTS_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
-  MAIL_MARK_SPAM_SEEN_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
@@ -38,6 +38,8 @@ import {
   GmailAttachmentPreviewReply,
   GmailAttachmentRequest,
   GmailAttachmentSaveReply,
+  GmailBulkThreadMutationReply,
+  GmailBulkThreadMutationRequest,
   GmailCachedThreadPageReply,
   GmailCachedThreadPageRequest,
   GmailIndexProgressList,
@@ -91,13 +93,13 @@ import {
   searchIndexedThreads,
 } from "../../mail/mail-search";
 import {
+  bulkMutateThreads,
   deleteSpamThread,
   getMailSyncStatus,
   getSpamStatus as loadSpamStatus,
   listCachedThreadPage,
   listGmailLabelCatalog,
   loadFullThread,
-  markSpamSeen as recordSpamSeen,
   markThreadNotSpam as recoverThreadFromSpam,
   sendNewMessage,
   sendThreadMessage,
@@ -254,14 +256,6 @@ export const getSpamStatus = makeIpcMethod({
   result: GmailSpamStatusReply,
 });
 
-export const markSpamSeen = makeIpcMethod({
-  channel: MAIL_MARK_SPAM_SEEN_CHANNEL,
-  handler: (request) =>
-    toIpcReply(recordSpamSeen(request), "Could not update spam"),
-  payload: GmailSpamStatusRequest,
-  result: GmailSpamStatusReply,
-});
-
 export const getIndexProgress = makeIpcMethod({
   channel: MAIL_INDEX_PROGRESS_CHANNEL,
   handler: () => Effect.sync(() => ({ accounts: getMailIndexProgress() })),
@@ -386,6 +380,14 @@ export const setReadState = makeIpcMethod({
     toIpcReply(setThreadReadState(request), "Could not update email"),
   payload: GmailThreadReadStateRequest,
   result: GmailThreadMutationReply,
+});
+
+export const bulkMutate = makeIpcMethod({
+  channel: MAIL_BULK_MUTATE_THREADS_CHANNEL,
+  handler: (request) =>
+    toIpcReply(bulkMutateThreads(request), "Could not update selected emails"),
+  payload: GmailBulkThreadMutationRequest,
+  result: GmailBulkThreadMutationReply,
 });
 
 export const setLabel = makeIpcMethod({

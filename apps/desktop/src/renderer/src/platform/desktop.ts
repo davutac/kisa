@@ -27,6 +27,7 @@ export interface AuthApi {
 
 export interface MailApi {
   authorizeOutgoingAttachments: DesktopBridge["authorizeOutgoingAttachments"];
+  bulkMutateThreads: DesktopBridge["bulkMutateThreads"];
   deleteSpamThread: DesktopBridge["deleteSpamThread"];
   discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
@@ -39,7 +40,6 @@ export interface MailApi {
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
   loadThread: DesktopBridge["loadThread"];
   loadThreadDraft: DesktopBridge["loadThreadDraft"];
-  markSpamSeen: DesktopBridge["markSpamSeen"];
   markThreadNotSpam: DesktopBridge["markThreadNotSpam"];
   onDraftChanged: DesktopBridge["onMailDraftChanged"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
@@ -135,6 +135,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     lifecycle: { onClosing: bridge.onAppClosing },
     mail: {
       authorizeOutgoingAttachments: bridge.authorizeOutgoingAttachments,
+      bulkMutateThreads: bridge.bulkMutateThreads,
       deleteSpamThread: bridge.deleteSpamThread,
       discardDraft: bridge.discardMailDraft,
       getIndexProgress: bridge.getMailIndexProgress,
@@ -147,7 +148,6 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       listTrustedImageSenders: bridge.listTrustedImageSenders,
       loadThread: bridge.loadThread,
       loadThreadDraft: bridge.loadThreadDraft,
-      markSpamSeen: bridge.markSpamSeen,
       markThreadNotSpam: bridge.markThreadNotSpam,
       onDraftChanged: bridge.onMailDraftChanged,
       onIndexProgressChanged: bridge.onMailIndexProgressChanged,

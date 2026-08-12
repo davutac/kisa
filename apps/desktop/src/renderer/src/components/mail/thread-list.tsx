@@ -1,11 +1,16 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { InboxIcon, ShieldAlertIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
-import { getDeleteSpamConfirmation } from "@/components/mail/delete-spam-confirmation";
+import {
+  getBulkDeleteSpamConfirmation,
+  getBulkTrashConfirmation,
+  getDeleteSpamConfirmation,
+} from "@/components/mail/delete-spam-confirmation";
 import MailThreadItem from "@/components/mail/thread-item";
+import ThreadSelectionBar from "@/components/mail/thread-selection-bar";
 import {
   Empty,
   EmptyDescription,
@@ -22,10 +27,17 @@ import {
   getVisibleThreadSelectionIndex,
 } from "@/mail/thread-selection";
 import { useOpenThread } from "@/mail/use-open-thread";
+import type { ThreadActions } from "@/mail/use-thread-actions";
+import { useThreadDragSelection } from "@/mail/use-thread-drag-selection";
 import type { GmailMailbox, GmailThreadSummary } from "@/shared/ipc/mail";
-import { useMailboxStore, useSelectedThreadId } from "@/state/mailbox";
+import {
+  useCheckedThreadIds,
+  useMailboxStore,
+  useSelectedThreadId,
+} from "@/state/mailbox";
 
 interface MailThreadListProps {
+  actions: ThreadActions;
   emptyMessage: string;
   emptyTitle?: string;
   hasNextPage?: boolean;
@@ -39,10 +51,6 @@ interface MailThreadListProps {
   isLoadingNextPage?: boolean;
   loadNextPage?: () => Promise<boolean>;
   mailbox?: GmailMailbox;
-  onDeleteSpamThread?: (thread: GmailThreadSummary) => void;
-  onNotSpamThread?: (thread: GmailThreadSummary) => void;
-  onToggleThreadRead?: (thread: GmailThreadSummary) => void;
-  onTrashThread?: (thread: GmailThreadSummary) => void;
   reloadRevision: number;
   showAccount?: boolean;
   threads: readonly GmailThreadSummary[];
@@ -51,6 +59,7 @@ interface MailThreadListProps {
 const RAPID_SELECTION_INTERVAL_MS = 150;
 
 const MailThreadList = ({
+  actions,
   emptyMessage,
   emptyTitle = "No email",
   hasNextPage = false,
@@ -59,10 +68,6 @@ const MailThreadList = ({
   isLoadingNextPage = false,
   loadNextPage,
   mailbox = "inbox",
-  onDeleteSpamThread,
-  onNotSpamThread,
-  onToggleThreadRead,
-  onTrashThread,
   reloadRevision,
   showAccount = false,
   threads,
@@ -71,10 +76,29 @@ const MailThreadList = ({
   const scrollElementRef = useRef<HTMLElement>(null);
   const listElementRef = useRef<HTMLOListElement>(null);
   const selectedThreadKey = useSelectedThreadId();
+  const checkedThreadIds = useCheckedThreadIds();
   const openThread = useOpenThread();
+  const checkThread = useMailboxStore((state) => state.checkThread);
+  const clearCheckedThreads = useMailboxStore(
+    (state) => state.clearCheckedThreads
+  );
+  const retainCheckedThreads = useMailboxStore(
+    (state) => state.retainCheckedThreads
+  );
   const selectThread = useMailboxStore((state) => state.selectThread);
   const lastSelectionMoveAtRef = useRef<number | null>(null);
   const previousReloadRevisionRef = useRef(reloadRevision);
+  const threadKeys = useMemo(
+    () => threads.map((thread) => getThreadSelectionKey(thread)),
+    [threads]
+  );
+  const dragSelection = useThreadDragSelection({
+    checkThread,
+    checkedThreadIds,
+    scrollElementRef,
+    selectThread,
+    threadKeys,
+  });
   // The trailing row is the paging trigger, but it also carries the indexing
   // notice — the auto-load effect below still keys off `hasNextPage` alone, so
   // showing the notice cannot start a paging loop against an exhausted cache.
@@ -99,6 +123,15 @@ const MailThreadList = ({
     (thread) => getThreadSelectionKey(thread) === selectedThreadKey
   );
   const selectedThread = threads[selectedThreadIndex];
+  const checkedThreads = useMemo(
+    () =>
+      threads.filter((thread) =>
+        checkedThreadIds.has(getThreadSelectionKey(thread))
+      ),
+    [checkedThreadIds, threads]
+  );
+  const handleToggleRead = actions.toggleRead;
+  const handleTrash = mailbox === "spam" ? undefined : actions.trash;
   const requestDeleteSpam = useCallback(
     async (thread: GmailThreadSummary): Promise<void> => {
       const confirmed = await confirm(
@@ -106,11 +139,32 @@ const MailThreadList = ({
       );
 
       if (confirmed) {
-        onDeleteSpamThread?.(thread);
+        actions.deleteSpam(thread);
       }
     },
-    [confirm, onDeleteSpamThread]
+    [actions, confirm]
   );
+  const requestBulkTrash = useCallback(async (): Promise<void> => {
+    if (mailbox === "spam") {
+      const confirmed = await confirm(
+        getBulkDeleteSpamConfirmation(checkedThreads.length)
+      );
+
+      if (confirmed) {
+        await actions.bulkDeleteSpam(checkedThreads);
+      }
+      return;
+    }
+
+    if (
+      checkedThreads.length > 1 &&
+      !(await confirm(getBulkTrashConfirmation(checkedThreads.length)))
+    ) {
+      return;
+    }
+
+    await actions.bulkTrash(checkedThreads);
+  }, [actions, checkedThreads, confirm, mailbox]);
   const getVisibleSelectionIndex = (
     direction: ThreadSelectionDirection
   ): number | null => {
@@ -141,11 +195,7 @@ const MailThreadList = ({
       (selectedThreadIndex === -1
         ? getVisibleSelectionIndex(direction)
         : null) ??
-      getNextThreadSelectionIndex(
-        threads.map(getThreadSelectionKey),
-        selectedThreadKey,
-        direction
-      );
+      getNextThreadSelectionIndex(threadKeys, selectedThreadKey, direction);
 
     if (nextIndex === null) {
       return;
@@ -188,9 +238,20 @@ const MailThreadList = ({
   useAppCommand(
     "mailbox.clearSelection",
     () => {
+      clearCheckedThreads();
       selectThread(null);
     },
-    { enabled: selectedThreadKey !== null }
+    { enabled: selectedThreadKey !== null || checkedThreadIds.size > 0 }
+  );
+  useAppCommand(
+    "mailbox.toggleThreadSelection",
+    () => {
+      if (selectedThread !== undefined) {
+        const key = getThreadSelectionKey(selectedThread);
+        checkThread(key, !checkedThreadIds.has(key));
+      }
+    },
+    { enabled: selectedThread !== undefined }
   );
   useAppCommand(
     "mailbox.openThread",
@@ -199,38 +260,43 @@ const MailThreadList = ({
         openThread(selectedThread);
       }
     },
-    { enabled: selectedThread !== undefined }
+    { enabled: selectedThread !== undefined && checkedThreads.length === 0 }
   );
   useAppCommand(
     "mailbox.toggleThreadRead",
     () => {
-      if (selectedThread !== undefined) {
-        onToggleThreadRead?.(selectedThread);
+      if (checkedThreads.length > 0) {
+        const markUnread = checkedThreads.every((thread) => !thread.isUnread);
+        void actions.bulkSetReadState(checkedThreads, markUnread);
+      } else if (selectedThread !== undefined) {
+        actions.toggleRead(selectedThread);
       }
     },
     {
-      enabled: selectedThread !== undefined && onToggleThreadRead !== undefined,
+      enabled: selectedThread !== undefined || checkedThreads.length > 0,
     }
   );
   useAppCommand(
     "mailbox.trashThread",
     () => {
-      if (selectedThread !== undefined) {
+      if (checkedThreads.length > 0) {
+        void requestBulkTrash();
+      } else if (selectedThread !== undefined) {
         if (mailbox === "spam") {
           void requestDeleteSpam(selectedThread);
         } else {
-          onTrashThread?.(selectedThread);
+          actions.trash(selectedThread);
         }
       }
     },
     {
-      enabled:
-        selectedThread !== undefined &&
-        (mailbox === "spam"
-          ? onDeleteSpamThread !== undefined
-          : onTrashThread !== undefined),
+      enabled: selectedThread !== undefined || checkedThreads.length > 0,
     }
   );
+
+  useEffect(() => {
+    retainCheckedThreads(new Set(threadKeys));
+  }, [retainCheckedThreads, threadKeys]);
 
   useEffect(() => {
     if (previousReloadRevisionRef.current === reloadRevision) {
@@ -262,79 +328,140 @@ const MailThreadList = ({
   ]);
 
   return (
-    <section
-      aria-label={mailbox === "spam" ? "Spam" : "Inbox"}
-      className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4"
-      ref={scrollElementRef}
-      tabIndex={-1}
-    >
-      {threads.length === 0 ? (
-        <Empty aria-live="polite" className="absolute inset-4 w-auto border-0">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              {isInitialLoading ? <Spinner /> : emptyIcon}
-            </EmptyMedia>
-            <EmptyTitle>
-              {isInitialLoading ? "Checking the post…" : emptyTitle}
-            </EmptyTitle>
-            {isInitialLoading ? null : (
-              <EmptyDescription>{emptyMessage}</EmptyDescription>
-            )}
-          </EmptyHeader>
-        </Empty>
-      ) : null}
-      <ol
-        className="relative"
-        ref={listElementRef}
-        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+    <>
+      <section
+        aria-label={mailbox === "spam" ? "Spam" : "Inbox"}
+        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4"
+        ref={scrollElementRef}
+        tabIndex={-1}
       >
-        <AnimatePresence initial={false}>
-          {virtualRows.map((virtualRow) => {
-            const thread = threads[virtualRow.index];
+        {threads.length === 0 ? (
+          <Empty
+            aria-live="polite"
+            className="absolute inset-4 w-auto border-0"
+          >
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                {isInitialLoading ? <Spinner /> : emptyIcon}
+              </EmptyMedia>
+              <EmptyTitle>
+                {isInitialLoading ? "Checking the post…" : emptyTitle}
+              </EmptyTitle>
+              {isInitialLoading ? null : (
+                <EmptyDescription>{emptyMessage}</EmptyDescription>
+              )}
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+        <ol
+          className="relative"
+          ref={listElementRef}
+          style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+        >
+          <AnimatePresence initial={false}>
+            {virtualRows.map((virtualRow) => {
+              const thread = threads[virtualRow.index];
 
-            return thread === undefined ? (
-              <li
-                className="absolute top-0 left-0 w-full py-4"
-                data-index={virtualRow.index}
-                key={virtualRow.key}
-                ref={rowVirtualizer.measureElement}
-                style={{ transform: `translateY(${virtualRow.start}px)` }}
-              >
-                <p
-                  aria-live="polite"
-                  className="text-muted-foreground text-center text-sm"
+              return thread === undefined ? (
+                <li
+                  className="absolute top-0 left-0 w-full py-4"
+                  data-index={virtualRow.index}
+                  key={virtualRow.key}
+                  ref={rowVirtualizer.measureElement}
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  {hasNextPage ? "Fetching the next chapter…" : indexingMessage}
-                </p>
-              </li>
-            ) : (
-              <MailThreadItem
-                data-index={virtualRow.index}
-                isSelected={getThreadSelectionKey(thread) === selectedThreadKey}
-                key={virtualRow.key}
-                onDeleteSpam={
-                  mailbox === "spam"
-                    ? (target) => {
-                        void requestDeleteSpam(target);
-                      }
-                    : undefined
-                }
-                onOpen={openThread}
-                onNotSpam={onNotSpamThread}
-                onToggleRead={onToggleThreadRead}
-                onTrash={onTrashThread}
-                position={virtualRow.index + 1}
-                ref={rowVirtualizer.measureElement}
-                setSize={threads.length}
-                showAccount={showAccount}
-                style={{ top: virtualRow.start }}
-                thread={thread}
-              />
-            );
-          })}
-        </AnimatePresence>
-      </ol>
-    </section>
+                  <p
+                    aria-live="polite"
+                    className="text-muted-foreground text-center text-sm"
+                  >
+                    {hasNextPage
+                      ? "Fetching the next chapter…"
+                      : indexingMessage}
+                  </p>
+                </li>
+              ) : (
+                <MailThreadItem
+                  data-index={virtualRow.index}
+                  data-thread-selection-key={getThreadSelectionKey(thread)}
+                  hasCheckedThreads={checkedThreadIds.size > 0}
+                  isChecked={checkedThreadIds.has(
+                    getThreadSelectionKey(thread)
+                  )}
+                  isSelected={
+                    getThreadSelectionKey(thread) === selectedThreadKey
+                  }
+                  key={virtualRow.key}
+                  onDeleteSpam={
+                    mailbox === "spam"
+                      ? (target) => {
+                          void requestDeleteSpam(target);
+                        }
+                      : undefined
+                  }
+                  onOpen={(target, event) => {
+                    if (dragSelection.consumeSuppressedOpen(event.detail)) {
+                      return;
+                    }
+
+                    if (checkedThreadIds.size === 0) {
+                      openThread(target);
+                      return;
+                    }
+
+                    const key = getThreadSelectionKey(target);
+                    checkThread(key, !checkedThreadIds.has(key));
+                    selectThread(key);
+                  }}
+                  onRowPointerDown={(target, event) => {
+                    dragSelection.onRowPointerDown(
+                      getThreadSelectionKey(target),
+                      event
+                    );
+                  }}
+                  onNotSpam={mailbox === "spam" ? actions.notSpam : undefined}
+                  onSelectionPointerDown={(target, event) => {
+                    dragSelection.onSelectionPointerDown(
+                      getThreadSelectionKey(target),
+                      event
+                    );
+                  }}
+                  onSelectionPointerEnter={(target) => {
+                    dragSelection.onSelectionPointerEnter(
+                      getThreadSelectionKey(target)
+                    );
+                  }}
+                  onToggleRead={handleToggleRead}
+                  onToggleSelection={(target) => {
+                    const key = getThreadSelectionKey(target);
+                    checkThread(key, !checkedThreadIds.has(key));
+                    selectThread(key);
+                  }}
+                  onTrash={handleTrash}
+                  position={virtualRow.index + 1}
+                  ref={rowVirtualizer.measureElement}
+                  setSize={threads.length}
+                  showAccount={showAccount}
+                  style={{ top: virtualRow.start }}
+                  thread={thread}
+                />
+              );
+            })}
+          </AnimatePresence>
+        </ol>
+      </section>
+      <AnimatePresence initial={false}>
+        {checkedThreads.length === 0 ? null : (
+          <ThreadSelectionBar
+            actions={actions}
+            key="thread-selection-bar"
+            mailbox={mailbox}
+            onClear={clearCheckedThreads}
+            onTrash={requestBulkTrash}
+            threads={checkedThreads}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 

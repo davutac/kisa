@@ -25,6 +25,8 @@ import { GmailGateway } from "./gateway";
 import { GmailMime } from "./mime";
 import type {
   AccountId,
+  BatchThreadLabelMutationRequest,
+  BatchThreadMutationRequest,
   DisconnectAccountOptions,
   ForwardInput,
   GetAttachmentRequest,
@@ -114,6 +116,16 @@ export interface GmailService {
   ) => Effect.Effect<void, GmailError>;
   readonly deleteThread: (
     request: ThreadMutationRequest
+  ) => Effect.Effect<void, GmailError>;
+  readonly batchSetThreadLabel: (
+    request: BatchThreadLabelMutationRequest
+  ) => Effect.Effect<void, GmailError>;
+  readonly batchSetThreadReadState: (
+    request: BatchThreadMutationRequest,
+    isRead: boolean
+  ) => Effect.Effect<void, GmailError>;
+  readonly batchTrashThreads: (
+    request: BatchThreadMutationRequest
   ) => Effect.Effect<void, GmailError>;
   readonly getAccount: (
     accountId: AccountId
@@ -497,6 +509,58 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         }
       );
 
+      const getBatchMessageIds = Effect.fn("Gmail.getBatchMessageIds")(
+        function* getBatchMessageIds(request: BatchThreadMutationRequest) {
+          const messageIds = [
+            ...new Set(request.targets.flatMap((target) => target.messageIds)),
+          ];
+
+          if (messageIds.length === 0 || messageIds.length > 1000) {
+            return yield* new GmailValidationError({
+              message: "A Gmail batch must contain between 1 and 1000 messages",
+            });
+          }
+
+          return messageIds;
+        }
+      );
+
+      const batchModifyMessageLabels = Effect.fn(
+        "Gmail.batchModifyMessageLabels"
+      )(function* batchModifyMessageLabels(
+        request: BatchThreadMutationRequest,
+        addLabelIds: readonly string[],
+        removeLabelIds: readonly string[]
+      ) {
+        const messageIds = yield* getBatchMessageIds(request);
+
+        yield* withAuthorization(request.accountId, "modify", (authorization) =>
+          gateway.batchModifyMessageLabels(authorization, {
+            addLabelIds,
+            messageIds,
+            removeLabelIds,
+          })
+        );
+      });
+
+      const batchSetThreadReadState = Effect.fn(
+        "Gmail.batchSetThreadReadState"
+      )(function* batchSetThreadReadState(
+        request: BatchThreadMutationRequest,
+        isRead: boolean
+      ) {
+        yield* batchModifyMessageLabels(
+          request,
+          isRead ? [] : ["UNREAD"],
+          isRead ? ["UNREAD"] : []
+        );
+        yield* Effect.all(
+          request.targets.map((target) =>
+            store.setThreadReadState(request.accountId, target.threadId, isRead)
+          )
+        );
+      });
+
       const markThreadRead = Effect.fn("Gmail.markThreadRead")(
         function* markThreadRead(request: ThreadMutationRequest) {
           yield* setThreadReadState(request, true);
@@ -556,6 +620,38 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         }
       );
 
+      const batchSetThreadLabel = Effect.fn("Gmail.batchSetThreadLabel")(
+        function* batchSetThreadLabel(
+          request: BatchThreadLabelMutationRequest
+        ) {
+          const label = (yield* store.getLabels(request.accountId)).find(
+            (candidate) => candidate.id === request.labelId
+          );
+
+          if (label?.type !== "user") {
+            return yield* new GmailValidationError({
+              message: "Only user-created Gmail labels can be changed here",
+            });
+          }
+
+          yield* batchModifyMessageLabels(
+            request,
+            request.applied ? [request.labelId] : [],
+            request.applied ? [] : [request.labelId]
+          );
+          yield* Effect.all(
+            request.targets.map((target) =>
+              store.setThreadLabel(
+                request.accountId,
+                target.threadId,
+                label,
+                request.applied
+              )
+            )
+          );
+        }
+      );
+
       const trashThread = Effect.fn("Gmail.trashThread")(function* trashThread(
         request: ThreadMutationRequest
       ) {
@@ -564,6 +660,20 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         );
         yield* store.removeThreads(request.accountId, [request.threadId]);
       });
+
+      const batchTrashThreads = Effect.fn("Gmail.batchTrashThreads")(
+        function* batchTrashThreads(request: BatchThreadMutationRequest) {
+          yield* batchModifyMessageLabels(
+            request,
+            ["TRASH"],
+            ["INBOX", "SPAM"]
+          );
+          yield* store.removeThreads(
+            request.accountId,
+            request.targets.map((target) => target.threadId)
+          );
+        }
+      );
 
       const deleteThread = Effect.fn("Gmail.deleteThread")(
         function* deleteThread(request: ThreadMutationRequest) {
@@ -720,6 +830,9 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
 
       return Gmail.of({
         authorizeAccount,
+        batchSetThreadLabel,
+        batchSetThreadReadState,
+        batchTrashThreads,
         deleteThread,
         disconnectAccount,
         forward,
