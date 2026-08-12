@@ -61,7 +61,7 @@ type DatabaseImportState =
 let databaseImportState: DatabaseImportState;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class DatabaseImportError extends Schema.TaggedErrorClass<DatabaseImportError>()(
+class DatabaseImportError extends Schema.TaggedError<DatabaseImportError>()(
   "DatabaseImportError",
   { message: Schema.String }
 ) {}

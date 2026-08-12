@@ -6,7 +6,7 @@ import { setNativeUnreadBadgeCount } from "../app/native-unread-badge";
 import { withDatabaseClient } from "../database";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class UnreadBadgeError extends Schema.TaggedErrorClass<UnreadBadgeError>()(
+class UnreadBadgeError extends Schema.TaggedError<UnreadBadgeError>()(
   "UnreadBadgeError",
   {
     cause: Schema.optional(Schema.Defect()),

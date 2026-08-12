@@ -31,6 +31,9 @@ catalogs:
     '@effect/tsgo':
       specifier: 0.36.4
       version: 0.36.4
+    '@effect/vitest':
+      specifier: 4.0.0-rc.108
+      version: 4.0.0-rc.108
     '@electron-toolkit/tsconfig':
       specifier: ^2.0.0
       version: 2.0.0
@@ -121,6 +124,9 @@ catalogs:
     drizzle-orm:
       specifier: 1.0.0-rc.4
       version: 1.0.0-rc.4
+    effect:
+      specifier: 4.0.0-rc.108
+      version: 4.0.0-rc.108
     electron:
       specifier: ^43.3.0
       version: 43.3.0
@@ -227,15 +233,6 @@ catalogs:
       specifier: ^5.0.14
       version: 5.0.14
 
-overrides:
-  '@effect/platform-bun': 4.0.0-beta.103
-  '@effect/platform-node': 4.0.0-beta.103
-  '@effect/platform-node-shared': 4.0.0-beta.103
-  '@effect/sql-d1': 4.0.0-beta.103
-  '@effect/sql-sqlite-do': 4.0.0-beta.103
-  '@effect/vitest': 4.0.0-beta.103
-  effect: 4.0.0-beta.103
-
 importers:
 
   .:
@@ -335,10 +332,10 @@ importers:
         version: 4.4.0
       drizzle-orm:
         specifier: 'catalog:'
-        version: 1.0.0-rc.4(@cloudflare/workers-types@5.20260808.1)(@effect/sql-d1@4.0.0-beta.103(effect@4.0.0-beta.103))(@effect/sql-sqlite-do@4.0.0-beta.103(effect@4.0.0-beta.103))(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.4)(@types/better-sqlite3@9.6.0)(better-sqlite3-multiple-ciphers@13.0.3)(effect@4.0.0-beta.103)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3)
+        version: 1.0.0-rc.4(@cloudflare/workers-types@5.20260808.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.4)(@types/better-sqlite3@9.6.0)(better-sqlite3-multiple-ciphers@13.0.3)(effect@4.0.0-rc.108)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3)
       effect:
-        specifier: 4.0.0-beta.103
-        version: 4.0.0-beta.103
+        specifier: 4.0.0-rc.108
+        version: 4.0.0-rc.108
       electron-updater:
         specifier: 'catalog:'
         version: 6.8.9(supports-color@10.2.2)
@@ -398,8 +395,8 @@ importers:
         version: 5.0.14(@types/react@19.2.18)(immer@11.1.16)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
     devDependencies:
       '@effect/vitest':
-        specifier: 4.0.0-beta.103
-        version: 4.0.0-beta.103(effect@4.0.0-beta.103)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0)))
+        specifier: 'catalog:'
+        version: 4.0.0-rc.108(effect@4.0.0-rc.108)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0)))
       '@electron-toolkit/tsconfig':
         specifier: 'catalog:'
         version: 2.0.0(@types/node@26.2.0)
@@ -520,10 +517,10 @@ importers:
         version: better-sqlite3-multiple-ciphers@13.0.3
       drizzle-orm:
         specifier: 'catalog:'
-        version: 1.0.0-rc.4(@cloudflare/workers-types@5.20260808.1)(@effect/sql-d1@4.0.0-beta.103(effect@4.0.0-beta.103))(@effect/sql-sqlite-do@4.0.0-beta.103(effect@4.0.0-beta.103))(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.4)(@types/better-sqlite3@9.6.0)(better-sqlite3-multiple-ciphers@13.0.3)(effect@4.0.0-beta.103)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3)
+        version: 1.0.0-rc.4(@cloudflare/workers-types@5.20260808.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.4)(@types/better-sqlite3@9.6.0)(better-sqlite3-multiple-ciphers@13.0.3)(effect@4.0.0-rc.108)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3)
       effect:
-        specifier: 4.0.0-beta.103
-        version: 4.0.0-beta.103
+        specifier: 'catalog:'
+        version: 4.0.0-rc.108
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -541,12 +538,12 @@ importers:
   packages/gmail:
     dependencies:
       effect:
-        specifier: 4.0.0-beta.103
-        version: 4.0.0-beta.103
+        specifier: 'catalog:'
+        version: 4.0.0-rc.108
     devDependencies:
       '@effect/vitest':
-        specifier: 4.0.0-beta.103
-        version: 4.0.0-beta.103(effect@4.0.0-beta.103)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0)))
+        specifier: 'catalog:'
+        version: 4.0.0-rc.108(effect@4.0.0-rc.108)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0)))
       '@types/node':
         specifier: 'catalog:'
         version: 26.2.0
@@ -997,16 +994,6 @@ packages:
   '@drizzle-team/brocli@0.12.0':
     resolution: {integrity: sha512-mlUE+rZ8CatQekLhnaiN91Iemdd+e2gFKooGlnRB3oPTL3VghLfX24dx7HrzMNeC1JrIB/0kpsfyty3f5HNfxQ==}
 
-  '@effect/sql-d1@4.0.0-beta.103':
-    resolution: {integrity: sha512-rCt6rL6HX5T8OftQN4l5pI3hqahdakVgcbbR1Oir+AsfttSn3qB6sU4cmYm2q6XdknzMWdE+yt469t/8fIBXDw==}
-    peerDependencies:
-      effect: 4.0.0-beta.103
-
-  '@effect/sql-sqlite-do@4.0.0-beta.103':
-    resolution: {integrity: sha512-j5LIAJK2ozwz2FNJzR48oM5Q9KBv9qNmCFCvAmDC5UbMuX222D76QCpPkJVjActq6o8IS5TD5Ft+F0FxjspwwQ==}
-    peerDependencies:
-      effect: 4.0.0-beta.103
-
   '@effect/tsgo-darwin-arm64@0.36.4':
     resolution: {integrity: sha512-oOcWdKQucNch6G4CvidHEzmfgeKEPMvFcz+DXuKGonBLwVHX+i1VYGbZwccEOoiitOg7eWVl4e8S0qKMXg3/gg==}
     cpu: [arm64]
@@ -1046,11 +1033,11 @@ packages:
     resolution: {integrity: sha512-fNmdUV6FgXnvIcG18AVS1SRXt7z9jsyBh5CKuJYmTsE+DgbLaWF0CevKHx7hQPcidDWRVmdJYfU66Jvc/ZEt6w==}
     hasBin: true
 
-  '@effect/vitest@4.0.0-beta.103':
-    resolution: {integrity: sha512-Kz3gemVuJNAZ3e4V6A7BwAP87x2Av8LyHOlCjy9jbZzlncwJXO7Olk1Sje3hdKaet3wEl51A/0/89xJ2IYSgNg==}
+  '@effect/vitest@4.0.0-rc.108':
+    resolution: {integrity: sha512-XD2GP1JATN28wnIeFGsBqYMuQDCHIodKKgFulGyG91GvuHqgf2gz+WxR2LPdyNoKMtr7lsbRzVj07niSYtIKzA==}
     peerDependencies:
-      effect: 4.0.0-beta.103
-      vitest: ^4.1.0
+      effect: ^4.0.0-rc.108
+      vitest: '>=4.1.0 <5.0.0'
 
   '@electric-sql/pglite@0.3.15':
     resolution: {integrity: sha512-Cj++n1Mekf9ETfdc16TlDi+cDDQF0W7EcbyRHYOAeZdsAe8M/FJg18itDTSwyHfar2WIezawM9o0EKaRGVKygQ==}
@@ -4252,13 +4239,13 @@ packages:
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
       '@cloudflare/workers-types': '>=4'
-      '@effect/sql-d1': 4.0.0-beta.103
+      '@effect/sql-d1': '>=4.0.0-beta.83 || >=4.0.0'
       '@effect/sql-libsql': '>=4.0.0-beta.83 || >=4.0.0'
       '@effect/sql-mysql2': '>=4.0.0-beta.83 || >=4.0.0'
       '@effect/sql-pg': '>=4.0.0-beta.83 || >=4.0.0'
       '@effect/sql-pglite': '>=4.0.0-beta.83 || >=4.0.0'
       '@effect/sql-sqlite-bun': '>=4.0.0-beta.83 || >=4.0.0'
-      '@effect/sql-sqlite-do': 4.0.0-beta.103
+      '@effect/sql-sqlite-do': '>=4.0.0-beta.83 || >=4.0.0'
       '@effect/sql-sqlite-node': '>=4.0.0-beta.83 || >=4.0.0'
       '@effect/sql-sqlite-wasm': '>=4.0.0-beta.83 || >=4.0.0'
       '@electric-sql/pglite': '>=0.2.0'
@@ -4286,7 +4273,7 @@ packages:
       arktype: '>=2.0.0'
       better-sqlite3: '>=9.3.0'
       bun-types: '*'
-      effect: 4.0.0-beta.103
+      effect: '>=4.0.0-beta.83 || >=4.0.0'
       expo-sqlite: '>=14.0.0'
       mssql: ^11.0.1
       mysql2: '>=2'
@@ -4413,8 +4400,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  effect@4.0.0-beta.103:
-    resolution: {integrity: sha512-pE8TxF4m2tQzVI+77dIlm3s+81TACV1AiX1JEkvY+zVuxgQQ8aGSkqXNJF6b/ST+coCSk5cUdbULpQ7sm4oHyw==}
+  effect@4.0.0-rc.108:
+    resolution: {integrity: sha512-KmI3DlKZWPvCL4QQ2FMaPOuxMt/7DrKMENCY/gQ+MkDR5QYw25wgU5Zmh/wVLboNjIci1gNOgNCFe4xqgxli3A==}
 
   ejs@3.1.10:
     resolution: {integrity: sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==}
@@ -4682,9 +4669,6 @@ packages:
   finalhandler@2.1.1:
     resolution: {integrity: sha512-S8KoZgRZN+a5rNwqTxlZZePjT/4cnm0ROV70LedRHZ0p8u9fRID0hJUZQpkKLzro8LfmC8sx23bY6tVNxv8pQA==}
     engines: {node: '>= 18.0.0'}
-
-  find-my-way-ts@0.1.6:
-    resolution: {integrity: sha512-a85L9ZoXtNAey3Y6Z+eBWW658kO/MwR7zIafkIUPUMf3isZG0NCs2pjW2wtjxAKuJPxMAsHUIP4ZPGv0o5gyTA==}
 
   find-up@3.0.0:
     resolution: {integrity: sha512-1yD6RmLI1XBfxugvORwlck6f75tYL+iR0jqwsOrOxMZyGYqUuDhJ0l4AXdO1iX/FTs9cBAMEk1gWSEx1kSbylg==}
@@ -4995,10 +4979,6 @@ packages:
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
-
-  ini@7.0.0:
-    resolution: {integrity: sha512-ifK0CgjALofS5bkrcTy4RaQ9Vx2Knf/eLeIO+NaswQEpH1UblrtTSCIvN71qQDMq0PeQ/SSPojvEJp9vvvfr+w==}
-    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
   input-otp@1.4.2:
     resolution: {integrity: sha512-l3jWwYNvrEa6NTCt7BECfCm48GvwuZzkoeG3gBL2w4CHeOXW3eKFmf9UNYkNfYc3mxMrthMnxjIE07MT0zLBQA==}
@@ -5603,9 +5583,6 @@ packages:
 
   muggle-string@0.4.1:
     resolution: {integrity: sha512-VNTrAak/KhO2i8dqqnqnAHOa3cYBwXEZe9h+D5h/1ZqFSTEFHdM65lR7RoIqq3tBBYavsOXV84NoHXZ0AkPyqQ==}
-
-  multipasta@0.2.8:
-    resolution: {integrity: sha512-ZPWuMKyv0cSO29f7hozp+k6+crZbQijV8ipMvxNxRf2SwtYGTX1ZX89Kd20VV4H9Znonx+EQn+iy1wGQsJ+b+Q==}
 
   nanoid@3.3.18:
     resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
@@ -6607,10 +6584,6 @@ packages:
   toidentifier@1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
-
-  toml@4.3.0:
-    resolution: {integrity: sha512-lVb8X9BsPVuH0M4BKeS91tXAmJvCjQ5UIyAbQFaxkKGyUFK2RPkhwaFSQH8vbpl1d23eu/IBH+dwVMHWaq9A5A==}
-    engines: {node: '>=20'}
 
   trim-lines@3.0.1:
     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}
@@ -7851,17 +7824,6 @@ snapshots:
 
   '@drizzle-team/brocli@0.12.0': {}
 
-  '@effect/sql-d1@4.0.0-beta.103(effect@4.0.0-beta.103)':
-    dependencies:
-      '@cloudflare/workers-types': 5.20260808.1
-      effect: 4.0.0-beta.103
-    optional: true
-
-  '@effect/sql-sqlite-do@4.0.0-beta.103(effect@4.0.0-beta.103)':
-    dependencies:
-      effect: 4.0.0-beta.103
-    optional: true
-
   '@effect/tsgo-darwin-arm64@0.36.4':
     optional: true
 
@@ -7893,9 +7855,9 @@ snapshots:
       '@effect/tsgo-win32-arm64': 0.36.4
       '@effect/tsgo-win32-x64': 0.36.4
 
-  '@effect/vitest@4.0.0-beta.103(effect@4.0.0-beta.103)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0)))':
+  '@effect/vitest@4.0.0-rc.108(effect@4.0.0-rc.108)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0)))':
     dependencies:
-      effect: 4.0.0-beta.103
+      effect: 4.0.0-rc.108
       vitest: 4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0))
 
   '@electric-sql/pglite@0.3.15':
@@ -10638,16 +10600,14 @@ snapshots:
       get-tsconfig: 4.14.1
       jiti: 2.7.0
 
-  drizzle-orm@1.0.0-rc.4(@cloudflare/workers-types@5.20260808.1)(@effect/sql-d1@4.0.0-beta.103(effect@4.0.0-beta.103))(@effect/sql-sqlite-do@4.0.0-beta.103(effect@4.0.0-beta.103))(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.4)(@types/better-sqlite3@9.6.0)(better-sqlite3-multiple-ciphers@13.0.3)(effect@4.0.0-beta.103)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3):
+  drizzle-orm@1.0.0-rc.4(@cloudflare/workers-types@5.20260808.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.4)(@types/better-sqlite3@9.6.0)(better-sqlite3-multiple-ciphers@13.0.3)(effect@4.0.0-rc.108)(valibot@1.2.0(typescript@7.0.2))(zod@4.4.3):
     optionalDependencies:
       '@cloudflare/workers-types': 5.20260808.1
-      '@effect/sql-d1': 4.0.0-beta.103(effect@4.0.0-beta.103)
-      '@effect/sql-sqlite-do': 4.0.0-beta.103(effect@4.0.0-beta.103)
       '@electric-sql/pglite': 0.3.15
       '@libsql/client': 0.17.4
       '@types/better-sqlite3': 9.6.0
       better-sqlite3: better-sqlite3-multiple-ciphers@13.0.3
-      effect: 4.0.0-beta.103
+      effect: 4.0.0-rc.108
       valibot: 1.2.0(typescript@7.0.2)
       zod: 4.4.3
 
@@ -10671,18 +10631,13 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@4.0.0-beta.103:
+  effect@4.0.0-rc.108:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 4.9.0
-      find-my-way-ts: 0.1.6
-      ini: 7.0.0
       kubernetes-types: 1.30.0
       msgpackr: 2.0.5
-      multipasta: 0.2.8
-      toml: 4.3.0
       uuid: 14.0.1
-      yaml: 2.9.0
 
   ejs@3.1.10:
     dependencies:
@@ -11099,8 +11054,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  find-my-way-ts@0.1.6: {}
-
   find-up@3.0.0:
     dependencies:
       locate-path: 3.0.0
@@ -11504,8 +11457,6 @@ snapshots:
       wrappy: 1.0.2
 
   inherits@2.0.4: {}
-
-  ini@7.0.0: {}
 
   input-otp@1.4.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
@@ -12002,8 +11953,6 @@ snapshots:
       msgpackr-extract: 3.0.4
 
   muggle-string@0.4.1: {}
-
-  multipasta@0.2.8: {}
 
   nanoid@3.3.18: {}
 
@@ -13153,8 +13102,6 @@ snapshots:
       is-number: 7.0.0
 
   toidentifier@1.0.1: {}
-
-  toml@4.3.0: {}
 
   trim-lines@3.0.1: {}
 

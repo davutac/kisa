@@ -46,7 +46,7 @@ export interface NewMailNotificationCopy {
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class NewMailNotificationError extends Schema.TaggedErrorClass<NewMailNotificationError>()(
+class NewMailNotificationError extends Schema.TaggedError<NewMailNotificationError>()(
   "NewMailNotificationError",
   { message: Schema.String }
 ) {}

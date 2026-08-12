@@ -72,9 +72,9 @@ Workspace packages are only `apps/*` and `packages/*`. Use `pnpm-lock.yaml` as t
 
 ## Vendored Repositories
 
-- Treat everything under `repos/` as read-only reference material. Do not edit it or import application code from it unless explicitly asked.
+- Treat everything under `~/.local/share/effect-solutions/effect/` as read-only reference material. Do not edit it or import application code from it unless explicitly asked.
 - Prefer the vendored version's APIs and patterns over memory or generic web examples.
-- Before writing Effect code, read `repos/effect/LLMS.md` completely and inspect nearby Effect v4 source and tests for the relevant API.
+- Before writing Effect code, read `~/.local/share/effect-solutions/effect/LLMS.md` completely and inspect nearby Effect v4 source and tests for the relevant API.
 
 ## Commands
 
@@ -165,7 +165,3 @@ The main process owns privileged capabilities, including the installed-app OAuth
 - Never create a pull request, deploy, tag, publish, or run a release unless the developer explicitly asks.
 - `pnpm release [major|minor|patch|x.y.z]` requires a clean tree, updates only `apps/desktop/package.json`, runs `pnpm check` unless `--skip-check`, commits `Release vX.Y.Z`, tags it, and pushes unless `--no-push` is supplied.
 - Keep commits focused and written in plain language. UI changes should include before/after evidence when a pull request is requested; animation or timing changes are better demonstrated with a short recording.
-
-## Local Effect Source
-
-The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect` for reference. Use this to explore APIs, find usage examples, and understand implementation details when the documentation isn't enough.

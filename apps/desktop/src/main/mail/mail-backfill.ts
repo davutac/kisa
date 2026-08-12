@@ -77,7 +77,7 @@ const MAX_PAGE_ATTEMPTS = 5;
 const RETRY_BASE_DELAY_MS = 2000;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class MailBackfillError extends Schema.TaggedErrorClass<MailBackfillError>()(
+class MailBackfillError extends Schema.TaggedError<MailBackfillError>()(
   "MailBackfillError",
   { message: Schema.String }
 ) {}

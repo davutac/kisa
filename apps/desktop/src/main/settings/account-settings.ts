@@ -16,7 +16,7 @@ import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class AccountSettingsError extends Schema.TaggedErrorClass<AccountSettingsError>()(
+class AccountSettingsError extends Schema.TaggedError<AccountSettingsError>()(
   "AccountSettingsError",
   { message: Schema.String }
 ) {}

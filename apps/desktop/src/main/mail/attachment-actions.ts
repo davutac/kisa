@@ -59,7 +59,7 @@ interface PreviewSession {
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class AttachmentActionError extends Schema.TaggedErrorClass<AttachmentActionError>()(
+class AttachmentActionError extends Schema.TaggedError<AttachmentActionError>()(
   "AttachmentActionError",
   { message: Schema.String }
 ) {}

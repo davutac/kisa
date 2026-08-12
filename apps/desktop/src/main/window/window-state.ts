@@ -84,7 +84,7 @@ const getWindowStateErrorMessage = (args: {
 };
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class WindowStateError extends Schema.TaggedErrorClass<WindowStateError>()(
+class WindowStateError extends Schema.TaggedError<WindowStateError>()(
   "WindowStateError",
   {
     cause: Schema.optional(Schema.Defect()),

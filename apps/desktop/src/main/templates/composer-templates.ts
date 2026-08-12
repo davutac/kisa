@@ -13,7 +13,8 @@ import { validateTemplateText } from "../../shared/template-variables";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
-class ComposerTemplateError extends Schema.TaggedErrorClass<ComposerTemplateError>()(
+// oxlint-disable-next-line unicorn/throw-new-error
+class ComposerTemplateError extends Schema.TaggedError<ComposerTemplateError>()(
   "ComposerTemplateError",
   { message: Schema.String }
 ) {}

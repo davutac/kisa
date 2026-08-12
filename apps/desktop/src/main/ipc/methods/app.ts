@@ -19,7 +19,7 @@ const THREAD_WINDOW_OPEN_ERROR_MESSAGE =
   "Could not open the conversation in a new window";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class ThreadWindowOpenError extends Schema.TaggedErrorClass<ThreadWindowOpenError>()(
+class ThreadWindowOpenError extends Schema.TaggedError<ThreadWindowOpenError>()(
   "ThreadWindowOpenError",
   { message: Schema.String }
 ) {}

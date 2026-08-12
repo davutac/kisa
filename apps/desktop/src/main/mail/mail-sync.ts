@@ -96,7 +96,7 @@ const POLL_INTERVAL_MS = 15_000;
 const MAX_SYNC_RETRIES = 5;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class MailSyncError extends Schema.TaggedErrorClass<MailSyncError>()(
+class MailSyncError extends Schema.TaggedError<MailSyncError>()(
   "MailSyncError",
   {
     message: Schema.String,

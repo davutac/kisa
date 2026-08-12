@@ -17,7 +17,7 @@ import {
 } from "./auth";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class GoogleAccountDisconnectError extends Schema.TaggedErrorClass<GoogleAccountDisconnectError>()(
+class GoogleAccountDisconnectError extends Schema.TaggedError<GoogleAccountDisconnectError>()(
   "GoogleAccountDisconnectError",
   { message: Schema.String }
 ) {}

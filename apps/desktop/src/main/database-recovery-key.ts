@@ -14,7 +14,7 @@ const DatabaseRecoveryKeyFile = Schema.Struct({
 type DatabaseRecoveryKeyFile = typeof DatabaseRecoveryKeyFile.Type;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class DatabaseRecoveryKeyError extends Schema.TaggedErrorClass<DatabaseRecoveryKeyError>()(
+class DatabaseRecoveryKeyError extends Schema.TaggedError<DatabaseRecoveryKeyError>()(
   "DatabaseRecoveryKeyError",
   { message: Schema.String }
 ) {}

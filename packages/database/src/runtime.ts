@@ -21,7 +21,7 @@ const formatErrorCause = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class DatabaseError extends Schema.TaggedErrorClass<DatabaseError>()(
+export class DatabaseError extends Schema.TaggedError<DatabaseError>()(
   "DatabaseError",
   {
     cause: Schema.optional(Schema.Defect()),

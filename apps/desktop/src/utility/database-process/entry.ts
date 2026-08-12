@@ -9,7 +9,7 @@ import * as ElectronUtilityRunner from "./electron-utility-runner";
 const DatabasePaths = Schema.Tuple([Schema.String, Schema.String]);
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class DatabaseUnlockError extends Schema.TaggedErrorClass<DatabaseUnlockError>()(
+class DatabaseUnlockError extends Schema.TaggedError<DatabaseUnlockError>()(
   "DatabaseUnlockError",
   { message: Schema.String }
 ) {}

@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
-export class DesktopIpcRegistrationError extends Schema.TaggedErrorClass<DesktopIpcRegistrationError>()(
+// oxlint-disable-next-line unicorn/throw-new-error
+export class DesktopIpcRegistrationError extends Schema.TaggedError<DesktopIpcRegistrationError>()(
   "DesktopIpcRegistrationError",
   {
     cause: Schema.Defect(),

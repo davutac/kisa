@@ -54,7 +54,7 @@ type SenderBrandDiscovery =
     };
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class SenderBrandError extends Schema.TaggedErrorClass<SenderBrandError>()(
+export class SenderBrandError extends Schema.TaggedError<SenderBrandError>()(
   "SenderBrandError",
   { message: Schema.String }
 ) {}

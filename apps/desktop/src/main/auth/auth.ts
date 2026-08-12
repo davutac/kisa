@@ -92,7 +92,7 @@ interface AuthHandoff {
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class GoogleAuthError extends Schema.TaggedErrorClass<GoogleAuthError>()(
+class GoogleAuthError extends Schema.TaggedError<GoogleAuthError>()(
   "GoogleAuthError",
   { message: Schema.String }
 ) {}

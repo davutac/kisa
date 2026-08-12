@@ -22,7 +22,7 @@ import {
 } from "./outgoing-attachment-authorizations";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class MailDraftError extends Schema.TaggedErrorClass<MailDraftError>()(
+class MailDraftError extends Schema.TaggedError<MailDraftError>()(
   "MailDraftError",
   { message: Schema.String }
 ) {}

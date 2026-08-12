@@ -5,17 +5,17 @@ import { AccountId } from "./models";
 
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
-export class InvalidAuthHandoffError extends Schema.TaggedErrorClass<InvalidAuthHandoffError>()(
+export class InvalidAuthHandoffError extends Schema.TaggedError<InvalidAuthHandoffError>()(
   "InvalidAuthHandoffError",
   { message: Schema.String }
 ) {}
 
-export class AccountNotFoundError extends Schema.TaggedErrorClass<AccountNotFoundError>()(
+export class AccountNotFoundError extends Schema.TaggedError<AccountNotFoundError>()(
   "AccountNotFoundError",
   { accountId: AccountId, message: Schema.String }
 ) {}
 
-export class GmailPermissionError extends Schema.TaggedErrorClass<GmailPermissionError>()(
+export class GmailPermissionError extends Schema.TaggedError<GmailPermissionError>()(
   "GmailPermissionError",
   {
     accountId: AccountId,
@@ -24,12 +24,12 @@ export class GmailPermissionError extends Schema.TaggedErrorClass<GmailPermissio
   }
 ) {}
 
-export class GmailReauthorizationRequiredError extends Schema.TaggedErrorClass<GmailReauthorizationRequiredError>()(
+export class GmailReauthorizationRequiredError extends Schema.TaggedError<GmailReauthorizationRequiredError>()(
   "GmailReauthorizationRequiredError",
   { accountId: AccountId, message: Schema.String }
 ) {}
 
-export class GmailApiError extends Schema.TaggedErrorClass<GmailApiError>()(
+export class GmailApiError extends Schema.TaggedError<GmailApiError>()(
   "GmailApiError",
   {
     accountId: Schema.optional(AccountId),
@@ -39,7 +39,7 @@ export class GmailApiError extends Schema.TaggedErrorClass<GmailApiError>()(
   }
 ) {}
 
-export class GmailRateLimitError extends Schema.TaggedErrorClass<GmailRateLimitError>()(
+export class GmailRateLimitError extends Schema.TaggedError<GmailRateLimitError>()(
   "GmailRateLimitError",
   {
     accountId: AccountId,
@@ -48,17 +48,17 @@ export class GmailRateLimitError extends Schema.TaggedErrorClass<GmailRateLimitE
   }
 ) {}
 
-export class GmailMimeError extends Schema.TaggedErrorClass<GmailMimeError>()(
+export class GmailMimeError extends Schema.TaggedError<GmailMimeError>()(
   "GmailMimeError",
   { cause: Schema.optional(Schema.Defect()), message: Schema.String }
 ) {}
 
-export class GmailValidationError extends Schema.TaggedErrorClass<GmailValidationError>()(
+export class GmailValidationError extends Schema.TaggedError<GmailValidationError>()(
   "GmailValidationError",
   { message: Schema.String }
 ) {}
 
-export class GmailSendOutcomeUnknownError extends Schema.TaggedErrorClass<GmailSendOutcomeUnknownError>()(
+export class GmailSendOutcomeUnknownError extends Schema.TaggedError<GmailSendOutcomeUnknownError>()(
   "GmailSendOutcomeUnknownError",
   {
     accountId: AccountId,
@@ -66,12 +66,12 @@ export class GmailSendOutcomeUnknownError extends Schema.TaggedErrorClass<GmailS
   }
 ) {}
 
-export class GmailStoreError extends Schema.TaggedErrorClass<GmailStoreError>()(
+export class GmailStoreError extends Schema.TaggedError<GmailStoreError>()(
   "GmailStoreError",
   { cause: Schema.optional(Schema.Defect()), message: Schema.String }
 ) {}
 
-export class GmailHistoryExpiredError extends Schema.TaggedErrorClass<GmailHistoryExpiredError>()(
+export class GmailHistoryExpiredError extends Schema.TaggedError<GmailHistoryExpiredError>()(
   "GmailHistoryExpiredError",
   { accountId: AccountId, message: Schema.String }
 ) {}

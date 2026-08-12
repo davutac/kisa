@@ -11,7 +11,7 @@ allowBuilds:
   sharp: true
   workerd: true
 
-catalogMode: strict
+catalogMode: prefer
 cleanupUnusedCatalogs: true
 
 catalog:
@@ -22,7 +22,7 @@ catalog:
   "@dnd-kit/dom": ^0.5.0
   "@dnd-kit/react": ^0.5.0
   "@effect/tsgo": 0.36.4
-  "@effect/vitest": 4.0.0-beta.103
+  "@effect/vitest": 4.0.0-rc.108
   "@electron-toolkit/tsconfig": ^2.0.0
   "@electron-toolkit/utils": ^4.0.0
   "@fontsource-variable/geist": ^5.3.0
@@ -58,7 +58,7 @@ catalog:
   electron-updater: ^6.8.9
   electron-vite: 6.0.0-beta.1
   embla-carousel-react: ^8.6.0
-  effect: 4.0.0-beta.103
+  effect: 4.0.0-rc.108
   husky: ^9.1.7
   input-otp: ^1.4.2
   lucide-react: ^1.31.0
@@ -93,15 +93,6 @@ catalog:
 catalogs:
   astro:
     typescript: 6.0.3
-
-overrides:
-  "@effect/platform-bun": 4.0.0-beta.103
-  "@effect/platform-node": 4.0.0-beta.103
-  "@effect/platform-node-shared": 4.0.0-beta.103
-  "@effect/sql-d1": 4.0.0-beta.103
-  "@effect/sql-sqlite-do": 4.0.0-beta.103
-  "@effect/vitest": 4.0.0-beta.103
-  effect: 4.0.0-beta.103
 
 minimumReleaseAgeExclude:
   - "@effect/*"
