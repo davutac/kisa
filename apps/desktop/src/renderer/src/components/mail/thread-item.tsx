@@ -139,7 +139,7 @@ const MailThreadItem = ({
             <button
               aria-current={isSelected}
               aria-label={`${thread.subject}, from ${thread.from}`}
-              className="focus-visible:ring-ring/50 absolute inset-0 z-0 rounded-md text-left outline-none focus-visible:ring-[3px]"
+              className="absolute inset-0 z-0 rounded-md text-left outline-none"
               onClick={() => {
                 onOpen(thread);
               }}
