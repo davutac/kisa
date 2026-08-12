@@ -50,7 +50,7 @@ Account commands are static and cover the supported maximum of nine accounts. Th
 
 In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, and keeps the dialog open. On a blank form, it opens the stash picker when saved stashes are available. The command can be pressed again without releasing `Mod`, while operating-system key repeat from holding `S` is ignored. The same command definition drives the Stash button hint and ARIA metadata.
 
-`U` toggles the unread-only mailbox filter.
+`U` toggles the unread-only mailbox filter. `S` toggles the Spam mailbox.
 
 When a mailbox thread is selected, `M` toggles its read state. In Inbox, both `Backspace` and `Delete` move it to trash; in Spam, they open the permanent-delete confirmation. This covers the Mac key labeled `⌫`, Mac forward-delete, and the Windows/Linux Delete key. These commands are not registered for hover-only quick actions.
 
@@ -60,7 +60,7 @@ While reading a conversation, `L` scrolls the label row into view and opens its 
 
 `Mod+Shift+A` opens the attachment picker while composing a new email.
 
-`Mod+Shift+T` opens Templates. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
+`Mod+,` and `Mod+Shift+T` toggle Settings and Templates. Pressing the active workspace's shortcut again restores the previous titlebar view. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
 
 ## Interaction layers
 

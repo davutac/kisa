@@ -118,6 +118,10 @@ describe(visibleGmailLabels, () => {
       visibleGmailLabels(["INBOX", "UNREAD", "Project Kisa"], false)
     ).toStrictEqual(["Project Kisa"]);
   });
+
+  it("is empty when a thread only has hidden system labels", () => {
+    expect(visibleGmailLabels(["INBOX", "UNREAD"], false)).toStrictEqual([]);
+  });
 });
 
 describe(hasInboxLabel, () => {

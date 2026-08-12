@@ -8,6 +8,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  getHotkeyAriaLabel,
+  getHotkeyDisplay,
+  HotkeyHint,
+  useAppCommand,
+} from "@/hotkeys";
 import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
 import { useSpamStatus } from "@/mail/use-spam-status";
 import { useMailbox, useMailboxStore } from "@/state/mailbox";
@@ -20,6 +26,7 @@ const TitlebarSpamToggle = () => {
   const navigate = useNavigate();
   const { hasNewSpam, markSeen } = useSpamStatus(accountIds);
   const showBadge = mailbox !== "spam" && hasNewSpam;
+  const display = getHotkeyDisplay("app.toggleSpam");
 
   useEffect(() => {
     if (mailbox === "spam") {
@@ -35,11 +42,16 @@ const TitlebarSpamToggle = () => {
     }
   };
 
+  useAppCommand("app.toggleSpam", () => {
+    updateMailbox(mailbox !== "spam");
+  });
+
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Toggle
+            aria-keyshortcuts={getHotkeyAriaLabel("app.toggleSpam")}
             aria-label={showBadge ? "Spam, new messages" : "Spam"}
             className="relative"
             onPressedChange={updateMailbox}
@@ -56,7 +68,10 @@ const TitlebarSpamToggle = () => {
           </Toggle>
         }
       />
-      <TooltipContent side="bottom">Spam</TooltipContent>
+      <TooltipContent className="flex items-center gap-2" side="bottom">
+        {display.label}
+        <HotkeyHint command="app.toggleSpam" />
+      </TooltipContent>
     </Tooltip>
   );
 };

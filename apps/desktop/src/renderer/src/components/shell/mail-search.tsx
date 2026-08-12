@@ -4,6 +4,11 @@ import { useState } from "react";
 import MailSearchDialog from "@/components/mail/mail-search-dialog";
 import { Button } from "@/components/ui/button";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   getHotkeyAriaLabel,
   getHotkeyDisplay,
   HotkeyHint,
@@ -30,20 +35,29 @@ const TitlebarMailSearch = () => {
 
   return (
     <>
-      <Button
-        aria-keyshortcuts={getHotkeyAriaLabel("app.searchMail")}
-        aria-label={display.label}
-        className="app-titlebar-interactive"
-        onClick={() => {
-          setIsOpen(true);
-        }}
-        type="button"
-        variant="secondary"
-      >
-        <SearchIcon className="size-3.5 shrink-0" />
-        <span>Search</span>
-        <HotkeyHint command="app.searchMail" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              aria-keyshortcuts={getHotkeyAriaLabel("app.searchMail")}
+              aria-label={display.label}
+              className="app-titlebar-interactive"
+              onClick={() => {
+                setIsOpen(true);
+              }}
+              size="icon"
+              type="button"
+              variant="secondary"
+            >
+              <SearchIcon />
+            </Button>
+          }
+        />
+        <TooltipContent className="flex items-center gap-2" side="bottom">
+          {display.label}
+          <HotkeyHint command="app.searchMail" />
+        </TooltipContent>
+      </Tooltip>
       <MailSearchDialog isOpen={isOpen} onOpenChange={setIsOpen} />
     </>
   );

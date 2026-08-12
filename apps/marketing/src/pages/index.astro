@@ -201,50 +201,45 @@ const threads = [
               <span class="size-2.5 rounded-full bg-foreground/15"></span>
             </div>
 
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-2 sm:gap-3">
               <span class="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground shadow-xs">
                 <SquarePenIcon className="size-3.5" />
               </span>
-              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
-                <HouseIcon className="size-3.5" />
-              </span>
-              <span class="flex h-7 items-center rounded-full bg-secondary text-[10px] font-medium sm:pe-2.5">
-                <span class="grid size-7 place-items-center rounded-full bg-muted">
-                  <UserRoundIcon className="size-3.5" />
+              <span class="flex items-center gap-1">
+                <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
+                  <HouseIcon className="size-3.5" />
                 </span>
-                <span class="hidden ps-1.5 sm:block">davut@example.com</span>
-              </span>
-              <span class="hidden size-7 place-items-center rounded-full bg-secondary text-[9px] font-semibold text-muted-foreground sm:grid">
-                W
-              </span>
-              <span class="hidden size-7 place-items-center rounded-full bg-secondary text-[9px] font-semibold text-muted-foreground sm:grid">
-                P
-              </span>
-              <span class="hidden size-7 place-items-center rounded-full bg-secondary text-[9px] font-semibold text-muted-foreground sm:grid">
-                M
-              </span>
-              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
-                <PlusIcon className="size-3.5" />
+                <span class="flex h-7 items-center rounded-full bg-secondary text-[10px] font-medium sm:pe-2.5">
+                  <span class="grid size-7 place-items-center rounded-full bg-muted">
+                    <UserRoundIcon className="size-3.5" />
+                  </span>
+                  <span class="hidden ps-1.5 sm:block">davut@example.com</span>
+                </span>
+                <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
+                  <PlusIcon className="size-3.5" />
+                </span>
               </span>
             </div>
 
-            <div class="flex items-center gap-1">
-              <span class="flex h-7 items-center gap-1.5 rounded-md bg-secondary px-2 text-[10px] font-medium">
-                <SearchIcon className="size-3.5" />
-                <span class="hidden sm:inline">Search</span>
-                <span class="hidden rounded-sm border border-border bg-background/60 px-1 py-0.5 font-mono text-[8px] text-muted-foreground sm:inline">⌘ K</span>
+            <div class="flex items-center gap-2 sm:gap-3">
+              <span class="flex items-center gap-1">
+                <span class="grid size-7 place-items-center rounded-md bg-secondary" title="Search mail (⌘ K)">
+                  <SearchIcon className="size-3.5" />
+                </span>
+                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Unread (U)">
+                  <MailIcon className="size-3.5" />
+                </span>
+                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Spam (S)">
+                  <ShieldAlertIcon className="size-3.5" />
+                </span>
               </span>
-              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
-                <MailIcon className="size-3.5" />
-              </span>
-              <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Spam">
-                <ShieldAlertIcon className="size-3.5" />
-              </span>
-              <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Templates">
-                <FilesIcon className="size-3.5" />
-              </span>
-              <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
-                <SettingsIcon className="size-3.5" />
+              <span class="flex items-center gap-1">
+                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Templates (⌘ ⇧ T)">
+                  <FilesIcon className="size-3.5" />
+                </span>
+                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Settings (⌘ ,)">
+                  <SettingsIcon className="size-3.5" />
+                </span>
               </span>
             </div>
           </div>

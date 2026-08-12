@@ -1,5 +1,6 @@
-import { useMatchRoute, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { FilesIcon, HouseIcon, SettingsIcon } from "lucide-react";
+import { useRef } from "react";
 
 import TitlebarIndexButton from "@/components/mail/titlebar-index-button";
 import TitlebarMailSearch from "@/components/shell/mail-search";
@@ -23,113 +24,115 @@ import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 import { getRuntimeCapabilities } from "@/platform/desktop";
 import { useSelectedAccountId } from "@/state/mailbox";
 
+import {
+  resolveTitlebarViewToggle,
+  toTitlebarViewPath,
+} from "./titlebar-view-toggle";
+import type {
+  TitlebarViewPath,
+  TitlebarWorkspacePath,
+} from "./titlebar-view-toggle";
 import TitlebarAccountSwitcher from "./titlebar/titlebar-account-switcher";
+import TitlebarWorkspaceButton from "./titlebar/titlebar-workspace-button";
 
 const Titlebar = () => {
   const { updates } = getRuntimeCapabilities();
   const selectedAccountId = useSelectedAccountId();
-  const matchRoute = useMatchRoute();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
+  const previousPathsRef = useRef<
+    Record<TitlebarWorkspacePath, TitlebarViewPath | null>
+  >({
+    "/settings": null,
+    "/templates": null,
+  });
   const { openAllAccounts } = useMailboxNavigation();
   const allAccountsDisplay = getHotkeyDisplay("app.openAllAccounts");
-  const settingsDisplay = getHotkeyDisplay("app.openSettings");
-  const templatesDisplay = getHotkeyDisplay("app.openTemplates");
+  const currentPath = toTitlebarViewPath(pathname);
+  const isSettingsOpen = currentPath === "/settings";
+  const isTemplatesOpen = currentPath === "/templates";
 
-  const openSettings = (): void => {
-    void navigate({ to: "/settings" });
+  const toggleView = (targetPath: TitlebarWorkspacePath): void => {
+    const previousPath = previousPathsRef.current[targetPath];
+    const nextPath = resolveTitlebarViewToggle({
+      currentPath,
+      previousPath,
+      targetPath,
+    });
+
+    if (currentPath !== targetPath) {
+      previousPathsRef.current[targetPath] = currentPath;
+    }
+
+    void navigate({ to: nextPath });
   };
 
-  const openTemplates = (): void => {
-    void navigate({ to: "/templates" });
-  };
+  const toggleSettings = (): void => toggleView("/settings");
+  const toggleTemplates = (): void => toggleView("/templates");
 
   useAppCommand("app.openAllAccounts", openAllAccounts);
-  useAppCommand("app.openSettings", openSettings);
-  useAppCommand("app.openTemplates", openTemplates);
 
   return (
     <header className="app-titlebar bg-background fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-2">
-      <div className="app-titlebar-interactive flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <TitlebarNewMessage />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-keyshortcuts={getHotkeyAriaLabel("app.openAllAccounts")}
-                className="text-muted-foreground hover:text-foreground"
-                onClick={openAllAccounts}
-                size="icon"
-                type="button"
-                variant={
-                  matchRoute({ to: "/" }) && selectedAccountId === null
-                    ? "secondary"
-                    : "ghost"
-                }
-              >
-                <HouseIcon className="size-4 stroke-[1.8]" />
-                <span className="sr-only">All accounts</span>
-              </Button>
-            }
-          />
-          <TooltipContent className="flex items-center gap-2" side="bottom">
-            {allAccountsDisplay.label}
-            <HotkeyHint command="app.openAllAccounts" />
-          </TooltipContent>
-        </Tooltip>
-        <TitlebarAccountSwitcher />
+        <div className="app-titlebar-interactive flex min-w-0 items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  aria-keyshortcuts={getHotkeyAriaLabel("app.openAllAccounts")}
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={openAllAccounts}
+                  size="icon"
+                  type="button"
+                  variant={
+                    currentPath === "/" && selectedAccountId === null
+                      ? "secondary"
+                      : "ghost"
+                  }
+                >
+                  <HouseIcon className="size-4 stroke-[1.8]" />
+                  <span className="sr-only">All accounts</span>
+                </Button>
+              }
+            />
+            <TooltipContent className="flex items-center gap-2" side="bottom">
+              {allAccountsDisplay.label}
+              <HotkeyHint command="app.openAllAccounts" />
+            </TooltipContent>
+          </Tooltip>
+          <TitlebarAccountSwitcher />
+        </div>
       </div>
-      <div className="app-titlebar-interactive flex items-center gap-1">
-        <TitlebarIndexButton />
-        <TitlebarMailSearch />
-        <TitlebarUnreadToggle />
-        <TitlebarSpamToggle />
-        {updates === undefined ? null : (
-          <TitlebarUpdateButton updateApi={updates} />
-        )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-keyshortcuts={getHotkeyAriaLabel("app.openTemplates")}
-                aria-label={templatesDisplay.label}
-                onClick={openTemplates}
-                size="icon"
-                type="button"
-                variant={
-                  matchRoute({ to: "/templates" }) ? "secondary" : "ghost"
-                }
-              >
-                <FilesIcon />
-              </Button>
-            }
-          />
-          <TooltipContent className="flex items-center gap-2" side="bottom">
-            {templatesDisplay.label}
-            <HotkeyHint command="app.openTemplates" />
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-keyshortcuts={getHotkeyAriaLabel("app.openSettings")}
-                aria-label="Settings"
-                onClick={openSettings}
-                size="icon"
-                type="button"
-                variant={
-                  matchRoute({ to: "/settings" }) ? "secondary" : "ghost"
-                }
-              >
-                <SettingsIcon />
-              </Button>
-            }
-          />
-          <TooltipContent className="flex items-center gap-2" side="bottom">
-            {settingsDisplay.label}
-            <HotkeyHint command="app.openSettings" />
-          </TooltipContent>
-        </Tooltip>
+      <div className="flex items-center gap-3">
+        <div className="app-titlebar-interactive flex items-center gap-1">
+          <TitlebarIndexButton />
+          {updates === undefined ? null : (
+            <TitlebarUpdateButton updateApi={updates} />
+          )}
+        </div>
+        <div className="app-titlebar-interactive flex min-w-0 items-center gap-1">
+          <TitlebarMailSearch />
+          <TitlebarUnreadToggle />
+          <TitlebarSpamToggle />
+        </div>
+        <div className="app-titlebar-interactive flex min-w-0 items-center gap-1">
+          <TitlebarWorkspaceButton
+            command="app.openTemplates"
+            isOpen={isTemplatesOpen}
+            onToggle={toggleTemplates}
+          >
+            <FilesIcon />
+          </TitlebarWorkspaceButton>
+          <TitlebarWorkspaceButton
+            command="app.openSettings"
+            isOpen={isSettingsOpen}
+            onToggle={toggleSettings}
+          >
+            <SettingsIcon />
+          </TitlebarWorkspaceButton>
+        </div>
       </div>
     </header>
   );

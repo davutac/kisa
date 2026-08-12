@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import MailLabelBadges from "@/components/mail/label-badges";
 import ThreadLabelPicker from "@/components/mail/thread-label-picker";
 import type { ThreadLabelChange } from "@/components/mail/thread-label-picker";
+import { Badge } from "@/components/ui/badge";
 import { useAppCommand } from "@/hotkeys";
 import { listUserGmailLabels, withGmailLabelState } from "@/mail/label";
 import type { ThreadActions } from "@/mail/use-thread-actions";
@@ -94,6 +95,14 @@ const ThreadLabels = ({
     >
       <MailLabelBadges
         accountId={accountId}
+        empty={
+          <Badge
+            className="border-muted-foreground/30 text-muted-foreground h-5 border-dashed bg-transparent"
+            variant="outline"
+          >
+            No labels
+          </Badge>
+        }
         labels={displayedLabels}
         onRemoveLabel={(labelName) => {
           const label = userLabelsByName.get(labelName);

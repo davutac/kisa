@@ -16,6 +16,17 @@ describe("hotkey command registry", () => {
     expect(validateHotkeyCommands()).toStrictEqual([]);
   });
 
+  it("keeps every titlebar command in the app scope", () => {
+    const titlebarCommands = Object.entries(HOTKEY_COMMANDS).filter(
+      ([commandId]) => commandId.startsWith("app.")
+    );
+
+    expect(titlebarCommands.length).toBeGreaterThan(0);
+    expect(
+      titlebarCommands.every(([, command]) => command.scope === "app")
+    ).toBeTruthy();
+  });
+
   it("assigns the number row to navigation commands", () => {
     expect(HOTKEY_COMMANDS["app.openAllAccounts"].bindings).toStrictEqual([
       "A",
@@ -69,6 +80,15 @@ describe("hotkey command registry", () => {
       "Mod+F",
     ]);
     expect(HOTKEY_COMMANDS["templates.save"].repeat).toBe("ignore-key-repeat");
+  });
+
+  it("keeps workspace toggles usable when navigation consumes keyup", () => {
+    for (const commandId of [
+      "app.openSettings",
+      "app.openTemplates",
+    ] as const) {
+      expect(HOTKEY_COMMANDS[commandId].repeat).toBe("ignore-key-repeat");
+    }
   });
 
   it("assigns template navigation that works while editing", () => {
@@ -138,8 +158,13 @@ describe("hotkey command registry", () => {
     );
   });
 
-  it("assigns the unread filter", () => {
+  it("assigns the mailbox filters", () => {
     expect(HOTKEY_COMMANDS["app.toggleUnread"].bindings).toStrictEqual(["U"]);
+    expect(HOTKEY_COMMANDS["app.toggleSpam"].bindings).toStrictEqual(["S"]);
+    expect(HOTKEY_COMMANDS["app.toggleUnread"].repeat).toBe(
+      "ignore-key-repeat"
+    );
+    expect(HOTKEY_COMMANDS["app.toggleSpam"].repeat).toBe("ignore-key-repeat");
   });
 
   it("formats display keys for each platform", () => {

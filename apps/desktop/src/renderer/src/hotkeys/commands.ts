@@ -101,14 +101,14 @@ export const HOTKEY_COMMANDS = {
     bindings: ["Mod+,"],
     input: "allow",
     label: "Settings",
-    repeat: "once",
+    repeat: "ignore-key-repeat",
     scope: "app",
   },
   "app.openTemplates": {
     bindings: ["Mod+Shift+T"],
     input: "allow",
     label: "Templates",
-    repeat: "once",
+    repeat: "ignore-key-repeat",
     scope: "app",
   },
   "app.searchMail": {
@@ -118,11 +118,18 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "app",
   },
+  "app.toggleSpam": {
+    bindings: ["S"],
+    input: "ignore",
+    label: "Spam",
+    repeat: "ignore-key-repeat",
+    scope: "app",
+  },
   "app.toggleUnread": {
     bindings: ["U"],
     input: "ignore",
     label: "Toggle unread filter",
-    repeat: "once",
+    repeat: "ignore-key-repeat",
     scope: "app",
   },
   "composer.attach": {
