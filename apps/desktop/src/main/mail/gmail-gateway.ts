@@ -204,10 +204,7 @@ const createClient = (credentials: GmailCredentials): gmail_v1.Gmail => {
     access_token: Redacted.value(credentials.accessToken),
   });
 
-  // The official client reuses one HTTP/2 session per Google host, so bursts
-  // of typed thread mutations are multiplexed without a custom multipart
-  // transport. Quota is still charged per Gmail operation.
-  return gmail({ auth, http2: true, version: "v1" });
+  return gmail({ auth, version: "v1" });
 };
 
 const getHeader = (
