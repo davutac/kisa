@@ -44,11 +44,12 @@ mac:
     - zip
 linux:
   executableName: Kisa
+  syncDesktopName: true
   target:
     - AppImage
     - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: Davut Caliskan
   category: Utility
 npmRebuild: false
 publish:
