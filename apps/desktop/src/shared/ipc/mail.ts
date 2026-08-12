@@ -185,16 +185,32 @@ const GmailOutgoingSubject = Schema.String.check(
   Schema.isMaxLength(MAX_GMAIL_SUBJECT_LENGTH)
 );
 
-export const GmailOutgoingAttachment = Schema.Struct({
-  filename: Schema.NonEmptyString,
-  mediaType: Schema.NonEmptyString,
-  path: Schema.NonEmptyString,
+export const GmailOutgoingAttachmentCapability = Schema.Struct({
+  capability: Schema.NonEmptyString,
 });
-export type GmailOutgoingAttachment = typeof GmailOutgoingAttachment.Type;
+export type GmailOutgoingAttachmentCapability =
+  typeof GmailOutgoingAttachmentCapability.Type;
+
+export const GmailOutgoingAttachmentPrepareRequest = Schema.Struct({
+  referenceIds: Schema.Array(Schema.NonEmptyString),
+});
+export type GmailOutgoingAttachmentPrepareRequest =
+  typeof GmailOutgoingAttachmentPrepareRequest.Type;
+
+export const GmailOutgoingAttachmentSelectionRequest = Schema.Struct({
+  files: Schema.Array(
+    Schema.Struct({
+      mediaType: Schema.String,
+      path: Schema.NonEmptyString,
+    })
+  ),
+});
+export type GmailOutgoingAttachmentSelectionRequest =
+  typeof GmailOutgoingAttachmentSelectionRequest.Type;
 
 export const GmailMessageSendRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
-  attachments: Schema.Array(GmailOutgoingAttachment),
+  attachments: Schema.Array(GmailOutgoingAttachmentCapability),
   bcc: Schema.Array(Schema.NonEmptyString),
   body: Schema.Struct({
     html: Schema.String,
@@ -218,7 +234,7 @@ export const MailDraftAttachment = Schema.Struct({
   filename: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
   mediaType: Schema.NonEmptyString,
-  path: Schema.NonEmptyString,
+  referenceId: Schema.NonEmptyString,
   size: Schema.Finite,
 });
 export type MailDraftAttachment = typeof MailDraftAttachment.Type;
@@ -462,6 +478,18 @@ export type GmailThreadMessageSendReply =
 
 export const GmailMessageSendReply = IpcReply(Schema.Void);
 export type GmailMessageSendReply = typeof GmailMessageSendReply.Type;
+
+export const GmailOutgoingAttachmentPrepareReply = IpcReply(
+  Schema.Array(GmailOutgoingAttachmentCapability)
+);
+export type GmailOutgoingAttachmentPrepareReply =
+  typeof GmailOutgoingAttachmentPrepareReply.Type;
+
+export const GmailOutgoingAttachmentSelectionReply = IpcReply(
+  Schema.Array(MailDraftAttachment)
+);
+export type GmailOutgoingAttachmentSelectionReply =
+  typeof GmailOutgoingAttachmentSelectionReply.Type;
 export const MailDraftReply = IpcReply(MailDraft);
 export type MailDraftReply = typeof MailDraftReply.Type;
 export const MailDraftListReply = IpcReply(Schema.Array(MailDraft));

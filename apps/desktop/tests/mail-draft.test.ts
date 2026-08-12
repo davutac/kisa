@@ -84,7 +84,7 @@ describe("mail draft lifecycle", () => {
             filename: "notes.txt",
             id: "attachment-1",
             mediaType: "text/plain",
-            path: "/tmp/notes.txt",
+            referenceId: "reference-1",
             size: 5,
           },
         ],

@@ -1,4 +1,4 @@
-import { ipcRenderer } from "electron";
+import { ipcRenderer, webUtils } from "electron";
 
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
@@ -17,9 +17,11 @@ import {
   MAIL_MARK_SPAM_SEEN_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
+  MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SAVE_DRAFT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
+  MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
@@ -45,6 +47,7 @@ import { subscribe } from "./subscribe";
 export const mailApi: Pick<
   DesktopBridge,
   | "discardMailDraft"
+  | "authorizeOutgoingAttachments"
   | "deleteSpamThread"
   | "getMailIndexProgress"
   | "getMailSyncStatus"
@@ -59,6 +62,7 @@ export const mailApi: Pick<
   | "markSpamSeen"
   | "markThreadNotSpam"
   | "openAttachmentPreview"
+  | "prepareOutgoingAttachments"
   | "onMailDraftChanged"
   | "onMailIndexProgressChanged"
   | "onMailSyncStatusChanged"
@@ -76,6 +80,15 @@ export const mailApi: Pick<
   | "trashThread"
   | "trustImageSender"
 > = {
+  authorizeOutgoingAttachments: (files) =>
+    ipcRenderer.invoke(MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL, {
+      // Renderer-created File objects have no Electron-backed path. Only files
+      // selected or dropped by the user can cross this narrow preload boundary.
+      files: files.map((file) => ({
+        mediaType: file.type,
+        path: webUtils.getPathForFile(file),
+      })),
+    }),
   deleteSpamThread: (request) =>
     ipcRenderer.invoke(MAIL_DELETE_SPAM_THREAD_CHANNEL, request),
   discardMailDraft: (request) =>
@@ -124,6 +137,8 @@ export const mailApi: Pick<
     ),
   openAttachmentPreview: (request) =>
     ipcRenderer.invoke(MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL, request),
+  prepareOutgoingAttachments: (request) =>
+    ipcRenderer.invoke(MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL, request),
   saveAttachment: (request) =>
     ipcRenderer.invoke(MAIL_SAVE_ATTACHMENT_CHANNEL, request),
   saveMailDraft: (request) =>

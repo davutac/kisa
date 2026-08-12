@@ -1,4 +1,3 @@
-import { readFile, stat } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
@@ -34,7 +33,6 @@ import {
   GmailSyncStatus,
   GmailThreadListUpdated,
   GmailThreadUpdated,
-  MAX_GMAIL_ATTACHMENT_BYTES,
 } from "../../shared/ipc/mail";
 import type {
   GmailCachedThreadPage,
@@ -57,6 +55,7 @@ import type {
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
+import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
 import { forgetCachedCorrespondents } from "./correspondent-cache";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
@@ -73,6 +72,7 @@ import {
   dismissThreadNotifications,
   showNewMailNotifications,
 } from "./new-mail-notifications";
+import { outgoingAttachmentAuthorizations } from "./outgoing-attachment-authorizations";
 import { mailQuotaGovernor, QUOTA_UNITS } from "./quota-governor";
 import { addUnreadLabel, removeUnreadLabel } from "./read-state";
 import type { MessageHeader } from "./sender-brand";
@@ -1175,7 +1175,10 @@ const refreshAfterNewMessage = Effect.fn("refreshAfterNewMessage")(
 );
 
 export const sendNewMessage = Effect.fn("sendNewMessage")(
-  function* sendNewMessage(request: GmailMessageSendRequest) {
+  function* sendNewMessage(
+    request: GmailMessageSendRequest,
+    ownerWebContentsId: number
+  ) {
     const [to, cc, bcc] = yield* Effect.all([
       parseRecipients(request.to),
       parseRecipients(request.cc),
@@ -1189,65 +1192,20 @@ export const sendNewMessage = Effect.fn("sendNewMessage")(
       });
     }
 
-    const attachmentStats = yield* Effect.forEach(
-      request.attachments,
-      (attachment) =>
-        Effect.tryPromise({
-          catch: () =>
-            new MailSyncError({
-              message: `Could not read attachment: ${attachment.filename}`,
-            }),
-          try: () => stat(attachment.path),
+    const attachments = yield* Effect.tryPromise({
+      catch: (error) =>
+        new MailSyncError({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not read attachments",
         }),
-      { concurrency: 3 }
-    );
-    const invalidAttachmentIndex = attachmentStats.findIndex(
-      (attachmentStat) => !attachmentStat.isFile()
-    );
-
-    if (invalidAttachmentIndex !== -1) {
-      return yield* new MailSyncError({
-        message: `Could not read attachment: ${request.attachments[invalidAttachmentIndex]?.filename ?? "Unknown file"}`,
-      });
-    }
-
-    const attachmentBytes = attachmentStats.reduce(
-      (total, attachmentStat) => total + attachmentStat.size,
-      0
-    );
-
-    if (attachmentBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
-      return yield* new MailSyncError({
-        message: "Attachments can total up to 25 MB",
-      });
-    }
-
-    const attachments = yield* Effect.forEach(
-      request.attachments,
-      (attachment) =>
-        Effect.tryPromise({
-          catch: () =>
-            new MailSyncError({
-              message: `Could not read attachment: ${attachment.filename}`,
-            }),
-          try: async () => ({
-            bytes: await readFile(attachment.path),
-            filename: attachment.filename,
-            mediaType: attachment.mediaType,
-          }),
-        }),
-      { concurrency: 1 }
-    );
-    const loadedAttachmentBytes = attachments.reduce(
-      (total, attachment) => total + attachment.bytes.byteLength,
-      0
-    );
-
-    if (loadedAttachmentBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
-      return yield* new MailSyncError({
-        message: "Attachments can total up to 25 MB",
-      });
-    }
+      try: () =>
+        outgoingAttachmentAuthorizations.consume(
+          ownerWebContentsId,
+          request.attachments.map(({ capability }) => capability)
+        ),
+    });
 
     yield* runGmail(
       Gmail.pipe(
@@ -1593,22 +1551,36 @@ const syncAllAccounts = Effect.fn("syncAllAccounts")(
       return Array.isArray(granted) && granted.some(isGmailScope);
     });
     const retrySchedule = Schedule.exponential(1000).pipe(Schedule.jittered);
+    const context = yield* Effect.context<never>();
+    const runPromise = Effect.runPromiseWith(context);
 
     yield* Effect.forEach(
       readableAccounts,
       ({ email }) =>
-        Effect.gen(function* syncAccountWithStatus() {
-          yield* Effect.sync(() => setAccountSyncing(email, true));
-          yield* syncAccount(email).pipe(
-            Effect.retry({
-              schedule: retrySchedule,
-              times: MAX_SYNC_RETRIES,
-              while: (error) => error.retryable === true,
-            }),
-            Effect.ignore,
-            Effect.ensuring(Effect.sync(() => setAccountSyncing(email, false)))
-          );
-        }),
+        Effect.promise((parentSignal) =>
+          accountMailWorkSupervisor.run(
+            email,
+            (signal) =>
+              runPromise(
+                Effect.gen(function* syncAccountWithStatus() {
+                  yield* Effect.sync(() => setAccountSyncing(email, true));
+                  yield* syncAccount(email).pipe(
+                    Effect.retry({
+                      schedule: retrySchedule,
+                      times: MAX_SYNC_RETRIES,
+                      while: (error) => error.retryable === true,
+                    }),
+                    Effect.ignore,
+                    Effect.ensuring(
+                      Effect.sync(() => setAccountSyncing(email, false))
+                    )
+                  );
+                }),
+                { signal }
+              ),
+            parentSignal
+          )
+        ),
       { concurrency: 2, discard: true }
     );
   }

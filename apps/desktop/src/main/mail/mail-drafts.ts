@@ -1,4 +1,5 @@
 import { mailDrafts } from "@repo/database/schemas";
+import type { StoredMailDraftAttachment } from "@repo/database/schemas";
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { Clock, Effect, Schema } from "effect";
 
@@ -11,7 +12,14 @@ import type {
 } from "../../shared/ipc/mail";
 import { MailDraftChanged } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
-import { sendRendererEvent } from "../electron/renderer-events";
+import {
+  sendRendererEvent,
+  sendRendererEventToEachWindow,
+} from "../electron/renderer-events";
+import {
+  bindOutgoingAttachmentOwner,
+  outgoingAttachmentAuthorizations,
+} from "./outgoing-attachment-authorizations";
 
 // oxlint-disable-next-line unicorn/throw-new-error
 class MailDraftError extends Schema.TaggedErrorClass<MailDraftError>()(
@@ -21,9 +29,15 @@ class MailDraftError extends Schema.TaggedErrorClass<MailDraftError>()(
 
 type MailDraftRow = typeof mailDrafts.$inferSelect;
 
-const toMailDraft = (row: MailDraftRow): MailDraft => ({
+const toMailDraft = (
+  row: MailDraftRow,
+  ownerWebContentsId: number
+): MailDraft => ({
   ...(row.accountEmail === null ? {} : { accountId: row.accountEmail }),
-  attachments: row.attachments,
+  attachments: outgoingAttachmentAuthorizations.restoreDraftAttachments(
+    ownerWebContentsId,
+    row.attachments
+  ),
   bcc: row.bcc,
   body: { html: row.bodyHtml, text: row.bodyText },
   cc: row.cc,
@@ -41,8 +55,38 @@ const notifyDraftChanged = (change: MailDraftChanged): void => {
   sendRendererEvent(MAIL_DRAFT_CHANGED_CHANNEL, MailDraftChanged, change);
 };
 
+const notifyDraftUpserted = (
+  draft: MailDraft,
+  sourceOwnerId: number,
+  storedAttachments: readonly StoredMailDraftAttachment[]
+): void => {
+  sendRendererEventToEachWindow(
+    MAIL_DRAFT_CHANGED_CHANNEL,
+    MailDraftChanged,
+    (webContents) => {
+      const ownerId = bindOutgoingAttachmentOwner(webContents);
+      return {
+        draft: {
+          ...draft,
+          attachments:
+            ownerId === sourceOwnerId
+              ? draft.attachments
+              : outgoingAttachmentAuthorizations.restoreDraftAttachments(
+                  ownerId,
+                  storedAttachments
+                ),
+        },
+        kind: "upsert" as const,
+      };
+    }
+  );
+};
+
 export const listStashedDrafts = Effect.fn("listStashedDrafts")(
-  function* listStashedDrafts(request: MailDraftListRequest) {
+  function* listStashedDrafts(
+    request: MailDraftListRequest,
+    ownerWebContentsId: number
+  ) {
     const rows = yield* withDatabaseClient((database) =>
       database
         .select()
@@ -66,12 +110,16 @@ export const listStashedDrafts = Effect.fn("listStashedDrafts")(
       )
     );
 
-    return rows.map(toMailDraft);
+    return rows.map((row) => toMailDraft(row, ownerWebContentsId));
   }
 );
 
 export const loadThreadDraft = Effect.fn("loadThreadDraft")(
-  function* loadThreadDraft(accountId: string, threadId: string) {
+  function* loadThreadDraft(
+    accountId: string,
+    threadId: string,
+    ownerWebContentsId: number
+  ) {
     const row = yield* withDatabaseClient((database) =>
       database
         .select()
@@ -91,14 +139,27 @@ export const loadThreadDraft = Effect.fn("loadThreadDraft")(
       )
     );
 
-    return row === undefined ? null : toMailDraft(row);
+    return row === undefined ? null : toMailDraft(row, ownerWebContentsId);
   }
 );
 
 export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
-  input: MailDraftInput
+  input: MailDraftInput,
+  ownerWebContentsId: number
 ) {
   const updatedAt = yield* Clock.currentTimeMillis;
+  const storedAttachments = yield* Effect.try({
+    catch: (error) =>
+      new MailDraftError({
+        message:
+          error instanceof Error ? error.message : "Could not save draft",
+      }),
+    try: () =>
+      outgoingAttachmentAuthorizations.serializeDraftAttachments(
+        ownerWebContentsId,
+        input.attachments
+      ),
+  });
   const saved = yield* withDatabaseClient((database) =>
     database.transaction(async (transaction) => {
       if (
@@ -135,7 +196,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
             });
       const values: typeof mailDrafts.$inferInsert = {
         accountEmail: input.accountId ?? null,
-        attachments: input.attachments,
+        attachments: storedAttachments,
         bcc: input.bcc,
         bodyHtml: input.body.html,
         bodyText: input.body.text,
@@ -209,7 +270,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
       threadId: input.threadId,
     });
   }
-  notifyDraftChanged({ draft, kind: "upsert" });
+  notifyDraftUpserted(draft, ownerWebContentsId, storedAttachments);
   return draft;
 });
 

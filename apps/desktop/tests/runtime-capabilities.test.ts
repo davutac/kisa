@@ -42,6 +42,8 @@ describe(getRuntimeCapabilities, () => {
 
   const versions = { app: "0", chrome: "1", electron: "2", node: "3" };
   const createDesktopBridge = (): DesktopBridge => ({
+    authorizeOutgoingAttachments: () =>
+      Promise.resolve({ data: [], ok: true as const }),
     beginDatabaseImport: () =>
       Promise.resolve({ data: { sessionId: "import-1" }, ok: true as const }),
     cancelDatabaseImport: () =>
@@ -61,7 +63,6 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: "saved" as const, ok: true as const }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
-    getPathForFile: () => "/tmp/attachment.txt",
     getSpamStatus: () =>
       Promise.resolve({ data: { hasNewSpam: false }, ok: true as const }),
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
@@ -114,6 +115,8 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     openThreadWindow: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    prepareOutgoingAttachments: () =>
+      Promise.resolve({ data: [], ok: true as const }),
     reorderGoogleAccounts: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     saveAttachment: () =>
@@ -170,6 +173,8 @@ describe(getRuntimeCapabilities, () => {
         onClosing: desktopBridge.onAppClosing,
       },
       mail: {
+        authorizeOutgoingAttachments:
+          desktopBridge.authorizeOutgoingAttachments,
         deleteSpamThread: desktopBridge.deleteSpamThread,
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
@@ -192,6 +197,7 @@ describe(getRuntimeCapabilities, () => {
         onTrustedImageSendersChanged:
           desktopBridge.onTrustedImageSendersChanged,
         openAttachmentPreview: desktopBridge.openAttachmentPreview,
+        prepareOutgoingAttachments: desktopBridge.prepareOutgoingAttachments,
         saveAttachment: desktopBridge.saveAttachment,
         saveDraft: desktopBridge.saveMailDraft,
         search: desktopBridge.searchMail,

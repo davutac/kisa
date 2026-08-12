@@ -1,4 +1,4 @@
-import { contextBridge, webUtils } from "electron";
+import { contextBridge } from "electron";
 
 import { version as appVersion } from "../../package.json";
 import type { DesktopBridge } from "../shared/ipc/bridge";
@@ -16,7 +16,6 @@ const desktopBridge = {
   ...settingsApi,
   ...templateApi,
   ...updateApi,
-  getPathForFile: (file) => webUtils.getPathForFile(file),
   getVersions: () => ({
     app: appVersion,
     chrome: process.versions.chrome,

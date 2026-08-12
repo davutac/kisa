@@ -12,18 +12,25 @@ import type {
 } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { Effect } from "effect";
+import type { WebContents } from "electron";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { withDatabaseClient } from "../src/main/database";
+import type { sendRendererEventToEachWindow } from "../src/main/electron/renderer-events";
 import {
   discardMailDraft,
   listStashedDrafts,
   loadThreadDraft,
   saveMailDraft,
 } from "../src/main/mail/mail-drafts";
+import { outgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-attachment-authorizations";
 import type { MailDraftChanged } from "../src/shared/ipc/mail";
 
 const rendererEvents = vi.hoisted(() => ({
+  owners: [
+    { id: 7, once: vi.fn<() => void>() } as unknown as WebContents,
+    { id: 8, once: vi.fn<() => void>() } as unknown as WebContents,
+  ],
   send: vi.fn<(...arguments_: unknown[]) => void>(),
 }));
 
@@ -72,6 +79,11 @@ vi.mock(import("../src/main/database"), async () => {
 
 vi.mock(import("../src/main/electron/renderer-events"), () => ({
   sendRendererEvent: rendererEvents.send,
+  sendRendererEventToEachWindow: ((channel, schema, makePayload) => {
+    for (const owner of rendererEvents.owners) {
+      rendererEvents.send(channel, schema, makePayload(owner));
+    }
+  }) as typeof sendRendererEventToEachWindow,
 }));
 
 connection
@@ -119,23 +131,26 @@ describe("mail drafts", () => {
   afterAll(() => connection.close());
 
   it("stores and lists assigned and unassigned new-email stashes", async () => {
-    const unassigned = await Effect.runPromise(saveMailDraft(newDraft));
+    const unassigned = await Effect.runPromise(saveMailDraft(newDraft, 7));
     const assigned = await Effect.runPromise(
-      saveMailDraft({
-        ...newDraft,
-        accountId: "person@example.com",
-        id: "assigned-draft",
-      })
+      saveMailDraft(
+        {
+          ...newDraft,
+          accountId: "person@example.com",
+          id: "assigned-draft",
+        },
+        7
+      )
     );
 
     expect(unassigned).not.toHaveProperty("accountId");
     expect(assigned.accountId).toBe("person@example.com");
     await expect(
-      Effect.runPromise(listStashedDrafts({ accountIds: [] }))
+      Effect.runPromise(listStashedDrafts({ accountIds: [] }, 7))
     ).resolves.toMatchObject([{ id: "new-draft" }]);
     await expect(
       Effect.runPromise(
-        listStashedDrafts({ accountIds: ["person@example.com"] })
+        listStashedDrafts({ accountIds: ["person@example.com"] }, 7)
       )
     ).resolves.toStrictEqual(
       expect.arrayContaining([
@@ -148,31 +163,99 @@ describe("mail drafts", () => {
   it("rejects invalid draft ownership and conversation context", async () => {
     await expect(
       Effect.runPromise(
-        saveMailDraft({
-          ...newDraft,
-          accountId: "missing@example.com",
-        })
+        saveMailDraft(
+          {
+            ...newDraft,
+            accountId: "missing@example.com",
+          },
+          7
+        )
       )
     ).rejects.toMatchObject({ message: "Could not save draft" });
     await expect(
       Effect.runPromise(
-        saveMailDraft({
-          ...newDraft,
-          messageId: "message-1",
-          threadId: "thread-1",
-        })
+        saveMailDraft(
+          {
+            ...newDraft,
+            messageId: "message-1",
+            threadId: "thread-1",
+          },
+          7
+        )
       )
     ).rejects.toMatchObject({ message: "Could not save draft" });
   });
 
-  it("replaces, loads, and account-scopes a conversation draft", async () => {
-    await Effect.runPromise(saveMailDraft(replyDraft));
+  it("broadcasts attachment references scoped to each window", async () => {
+    const [attachment] =
+      outgoingAttachmentAuthorizations.restoreDraftAttachments(7, [
+        {
+          authorizationVersion: 1,
+          birthtimeMs: 1,
+          device: "1",
+          filename: "notes.txt",
+          id: "attachment-1",
+          inode: "1",
+          mediaType: "text/plain",
+          mtimeMs: 1,
+          path: "/validated/notes.txt",
+          size: 5,
+        },
+      ]);
+    if (attachment === undefined) {
+      throw new Error("Expected an authorized attachment");
+    }
+
     await Effect.runPromise(
-      saveMailDraft({ ...replyDraft, id: "replacement-draft", kind: "forward" })
+      saveMailDraft({ ...newDraft, attachments: [attachment] }, 7)
+    );
+    const upserts = emittedChanges().filter(
+      (change) => change.kind === "upsert"
+    );
+    expect(upserts).toHaveLength(2);
+    const [sourceUpsert, otherWindowUpsert] = upserts;
+    if (
+      sourceUpsert?.kind !== "upsert" ||
+      otherWindowUpsert?.kind !== "upsert"
+    ) {
+      throw new Error("Expected one attachment upsert per window");
+    }
+    const [sourceAttachment] = sourceUpsert.draft.attachments;
+    const [otherWindowAttachment] = otherWindowUpsert.draft.attachments;
+    if (sourceAttachment === undefined || otherWindowAttachment === undefined) {
+      throw new Error("Expected each upsert to include the attachment");
+    }
+    expect(sourceAttachment.referenceId).not.toBe(
+      otherWindowAttachment.referenceId
+    );
+    expect(() =>
+      outgoingAttachmentAuthorizations.serializeDraftAttachments(8, [
+        sourceAttachment,
+      ])
+    ).toThrow("no longer authorized");
+    expect(
+      outgoingAttachmentAuthorizations.serializeDraftAttachments(8, [
+        otherWindowAttachment,
+      ])
+    ).toHaveLength(1);
+
+    await Promise.all([
+      outgoingAttachmentAuthorizations.releaseOwner(7),
+      outgoingAttachmentAuthorizations.releaseOwner(8),
+    ]);
+  });
+
+  it("replaces, loads, and account-scopes a conversation draft", async () => {
+    await Effect.runPromise(saveMailDraft(replyDraft, 7));
+    await Effect.runPromise(
+      saveMailDraft(
+        { ...replyDraft, id: "replacement-draft", kind: "forward" },
+        7
+      )
     );
 
     await expect(
-      Effect.runPromise(loadThreadDraft("person@example.com", "thread-1"))
+      Effect.runPromise(loadThreadDraft("person@example.com", "thread-1", 7))
     ).resolves.toMatchObject({ id: "replacement-draft", kind: "forward" });
     expect(emittedChanges()).toStrictEqual(
       expect.arrayContaining([
@@ -187,7 +270,7 @@ describe("mail drafts", () => {
       })
     );
     await expect(
-      Effect.runPromise(loadThreadDraft("person@example.com", "thread-1"))
+      Effect.runPromise(loadThreadDraft("person@example.com", "thread-1", 7))
     ).resolves.toMatchObject({ id: "replacement-draft" });
 
     await Effect.runPromise(
@@ -197,7 +280,7 @@ describe("mail drafts", () => {
       })
     );
     await expect(
-      Effect.runPromise(loadThreadDraft("person@example.com", "thread-1"))
+      Effect.runPromise(loadThreadDraft("person@example.com", "thread-1", 7))
     ).resolves.toBeNull();
   });
 });

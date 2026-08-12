@@ -27,6 +27,7 @@ import { setNativeMailIndexProgress } from "../app/native-mail-index-progress";
 import { onGoogleAccountConnected } from "../auth/account-events";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
+import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
 import { GmailStoreLive } from "./gmail-store";
@@ -502,24 +503,43 @@ const drainQueue = (): void => {
     // its own slot and re-drains when it settles, so a finished account is
     // replaced immediately rather than waiting for something else to poke the
     // queue.
-    void (async () => {
+    const runQueuedBackfill = async (): Promise<void> => {
       try {
-        await runBackfill(next);
-      } catch {
-        // `runBackfill` records its own terminal state; a throw here must not
-        // take the rest of the queue down with it.
+        await accountMailWorkSupervisor.run(next, async (signal) => {
+          const cancel = (): void => {
+            cancellations.add(next);
+          };
+          signal.addEventListener("abort", cancel, { once: true });
+          if (signal.aborted) {
+            cancel();
+          }
+
+          try {
+            await runBackfill(next);
+          } catch {
+            // `runBackfill` records its own terminal state; a throw here must not
+            // take the rest of the queue down with it.
+          } finally {
+            signal.removeEventListener("abort", cancel);
+          }
+        });
       } finally {
         active.delete(next);
         cancellations.delete(next);
+        drainQueue();
       }
+    };
 
-      drainQueue();
-    })();
+    void runQueuedBackfill();
   }
 };
 
 export const requestMailBackfill = (accountId: string): void => {
-  if (queued.includes(accountId) || active.has(accountId)) {
+  if (
+    accountMailWorkSupervisor.isSuspended(accountId) ||
+    queued.includes(accountId) ||
+    active.has(accountId)
+  ) {
     return;
   }
 
@@ -539,6 +559,11 @@ export const requestMailBackfill = (accountId: string): void => {
 /** Disconnect path: stop the run before `clearAccount` deletes its rows. */
 export const cancelMailBackfill = (accountId: string): void => {
   cancellations.add(accountId);
+  for (let index = queued.length - 1; index >= 0; index -= 1) {
+    if (queued[index] === accountId) {
+      queued.splice(index, 1);
+    }
+  }
   progressByAccount.delete(accountId);
   sendProgress();
 };

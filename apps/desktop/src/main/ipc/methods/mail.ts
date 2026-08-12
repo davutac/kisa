@@ -19,9 +19,11 @@ import {
   MAIL_MARK_SPAM_SEEN_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
+  MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SAVE_DRAFT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
+  MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
@@ -43,6 +45,10 @@ import {
   GmailLabelCatalogRequest,
   GmailMessageSendReply,
   GmailMessageSendRequest,
+  GmailOutgoingAttachmentPrepareReply,
+  GmailOutgoingAttachmentPrepareRequest,
+  GmailOutgoingAttachmentSelectionReply,
+  GmailOutgoingAttachmentSelectionRequest,
   GmailSearchRequest,
   GmailSearchResultsReply,
   GmailSenderSuggestionRequest,
@@ -101,11 +107,72 @@ import {
   trashThread,
 } from "../../mail/mail-sync";
 import {
+  bindOutgoingAttachmentOwner,
+  OutgoingAttachmentAuthorizationError,
+  outgoingAttachmentAuthorizations,
+} from "../../mail/outgoing-attachment-authorizations";
+import {
   listTrustedImageSenders,
   trustImageSender,
 } from "../../mail/trusted-image-senders";
 import { makeIpcMethod } from "../desktop-ipc";
 import { toIpcReply } from "../reply";
+
+export const authorizeOutgoingAttachments = makeIpcMethod({
+  channel: MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL,
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Attachment selection is unavailable",
+          ok: false as const,
+        })
+      : toIpcReply(
+          Effect.tryPromise({
+            catch: (error) =>
+              error instanceof OutgoingAttachmentAuthorizationError
+                ? error
+                : new OutgoingAttachmentAuthorizationError({
+                    message: "Could not authorize attachments",
+                  }),
+            try: () =>
+              outgoingAttachmentAuthorizations.authorizeSelections(
+                bindOutgoingAttachmentOwner(event.sender),
+                request
+              ),
+          }),
+          "Could not authorize attachments"
+        ),
+  payload: GmailOutgoingAttachmentSelectionRequest,
+  result: GmailOutgoingAttachmentSelectionReply,
+});
+
+export const prepareOutgoingAttachments = makeIpcMethod({
+  channel: MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Attachment preparation is unavailable",
+          ok: false as const,
+        })
+      : toIpcReply(
+          Effect.tryPromise({
+            catch: (error) =>
+              error instanceof OutgoingAttachmentAuthorizationError
+                ? error
+                : new OutgoingAttachmentAuthorizationError({
+                    message: "Could not prepare attachments",
+                  }),
+            try: () =>
+              outgoingAttachmentAuthorizations.prepare(
+                bindOutgoingAttachmentOwner(event.sender),
+                request.referenceIds
+              ),
+          }),
+          "Could not prepare attachments"
+        ),
+  payload: GmailOutgoingAttachmentPrepareRequest,
+  result: GmailOutgoingAttachmentPrepareReply,
+});
 
 export const openAttachmentPreview = makeIpcMethod({
   channel: MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
@@ -252,30 +319,55 @@ export const loadThread = makeIpcMethod({
 
 export const listStashedDrafts = makeIpcMethod({
   channel: MAIL_LIST_STASHED_DRAFTS_CHANNEL,
-  handler: (request) =>
-    toIpcReply(
-      listStashedDraftsAction(request),
-      "Could not load stashed drafts"
-    ),
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Could not identify this window",
+          ok: false as const,
+        })
+      : toIpcReply(
+          listStashedDraftsAction(
+            request,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
+          "Could not load stashed drafts"
+        ),
   payload: MailDraftListRequest,
   result: MailDraftListReply,
 });
 
 export const loadThreadDraft = makeIpcMethod({
   channel: MAIL_LOAD_THREAD_DRAFT_CHANNEL,
-  handler: (request) =>
-    toIpcReply(
-      loadSavedThreadDraft(request.accountId, request.threadId),
-      "Could not load saved reply"
-    ),
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Could not identify this window",
+          ok: false as const,
+        })
+      : toIpcReply(
+          loadSavedThreadDraft(
+            request.accountId,
+            request.threadId,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
+          "Could not load saved reply"
+        ),
   payload: GmailThreadRequest,
   result: MailDraftLoadReply,
 });
 
 export const saveDraft = makeIpcMethod({
   channel: MAIL_SAVE_DRAFT_CHANNEL,
-  handler: (request) =>
-    toIpcReply(saveMailDraft(request), "Could not save draft"),
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Could not identify this window",
+          ok: false as const,
+        })
+      : toIpcReply(
+          saveMailDraft(request, bindOutgoingAttachmentOwner(event.sender)),
+          "Could not save draft"
+        ),
   payload: MailDraftInput,
   result: MailDraftReply,
 });
@@ -306,8 +398,16 @@ export const setLabel = makeIpcMethod({
 
 export const sendNew = makeIpcMethod({
   channel: MAIL_SEND_MESSAGE_CHANNEL,
-  handler: (request) =>
-    toIpcReply(sendNewMessage(request), "Could not send message"),
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Could not identify this window",
+          ok: false as const,
+        })
+      : toIpcReply(
+          sendNewMessage(request, bindOutgoingAttachmentOwner(event.sender)),
+          "Could not send message"
+        ),
   payload: GmailMessageSendRequest,
   result: GmailMessageSendReply,
 });

@@ -58,12 +58,12 @@ export const useNewMessageWorkspace = ({
   const incrementRecipientResetVersion = useNewMessageStore(
     (state) => state.incrementRecipientResetVersion
   );
-  const { addAttachments, attachments, inputRef, setAttachments } =
-    useNewMessageAttachments();
   const { templates } = useComposerTemplates();
   const draftOperationQueueRef = useRef(Promise.resolve());
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const mailApi = useMemo(() => getMailApi(), []);
+  const { addAttachments, attachments, inputRef, setAttachments } =
+    useNewMessageAttachments(mailApi);
   const { persistDraft, popDraft } = useDraftPersistence(mailApi);
   const focus = useComposerFocus();
   const selectedAccountId = accounts.some(({ email }) => email === accountId)
@@ -269,13 +269,16 @@ export const useNewMessageWorkspace = ({
     }
     setIsSending(true);
     try {
+      const prepared = await mailApi.prepareOutgoingAttachments({
+        referenceIds: attachments.map(({ referenceId }) => referenceId),
+      });
+      if (!prepared.ok) {
+        toast.error(prepared.error);
+        return;
+      }
       const reply = await mailApi.sendMessage({
         accountId: selectedAccountId,
-        attachments: attachments.map(({ filename, mediaType, path }) => ({
-          filename,
-          mediaType,
-          path,
-        })),
+        attachments: prepared.data,
         bcc: recipients.bcc,
         body: currentDraft.body,
         cc: recipients.cc,

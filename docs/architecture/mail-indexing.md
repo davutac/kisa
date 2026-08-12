@@ -177,12 +177,14 @@ On `GmailRateLimitError` — which the gateway already classifies correctly, inc
 | Network loss | Pause, retry with backoff |
 | 401 / reauth required | Pause, surface a reauth prompt, resume after |
 | Rate limit | Governor absorbs it; no status change |
-| Account disconnected | Cancel the fiber, then delete |
+| Account disconnected | Suspend the account, abort and join all mail work, then delete |
 | User pause | `paused`, resumable from settings |
 
 Access tokens expire hourly, but `withAuthorization` re-reads authorization per call and `getGoogleAccessToken` refreshes directly with Google from Electron main, so a multi-hour run needs no special handling.
 
 `forgetAccountMailData` must be extended to clear `gmail_messages`, the FTS rows, and `gmail_backfill_state` — it is the single place disconnect cleans up, and the invariant is that nothing survives a disconnect.
+
+Foreground polling and historical backfill register with one account-scoped work supervisor. Disconnect suspends that account before cleanup, which rejects new poll and queued-backfill work, aborts active work, and waits for every run to settle. Scheduling resumes only after cleanup finishes so reconnecting the same address in the current process remains supported.
 
 ## Database process isolation
 

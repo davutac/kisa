@@ -62,6 +62,27 @@ describe("Gmail subject limit", () => {
     );
   });
 
+  it("accepts only opaque attachment capabilities at the send boundary", () => {
+    expect(() =>
+      Schema.decodeSync(GmailMessageSendRequest)({
+        ...sendRequest("Subject"),
+        attachments: [{ capability: "main-issued-capability" }],
+      })
+    ).not.toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(GmailMessageSendRequest)({
+        ...sendRequest("Subject"),
+        attachments: [
+          {
+            filename: "secrets.txt",
+            mediaType: "text/plain",
+            path: "/renderer-controlled/secrets.txt",
+          },
+        ],
+      })
+    ).toThrow("capability");
+  });
+
   it("keeps stored drafts tolerant for backward compatibility", () => {
     expect(() =>
       Schema.decodeSync(MailDraftInput)({

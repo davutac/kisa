@@ -10,9 +10,14 @@ import {
 export type MailDraftKind = "forward" | "new" | "reply" | "reply-all";
 
 export interface StoredMailDraftAttachment {
+  readonly authorizationVersion: 1;
+  readonly birthtimeMs: number;
+  readonly device: string;
   readonly filename: string;
   readonly id: string;
+  readonly inode: string;
   readonly mediaType: string;
+  readonly mtimeMs: number;
   readonly path: string;
   readonly size: number;
 }

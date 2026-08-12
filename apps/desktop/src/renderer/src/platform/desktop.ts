@@ -26,6 +26,7 @@ export interface AuthApi {
 }
 
 export interface MailApi {
+  authorizeOutgoingAttachments: DesktopBridge["authorizeOutgoingAttachments"];
   deleteSpamThread: DesktopBridge["deleteSpamThread"];
   discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
@@ -47,6 +48,7 @@ export interface MailApi {
   onThreadUpdated: DesktopBridge["onMailThreadUpdated"];
   onTrustedImageSendersChanged: DesktopBridge["onTrustedImageSendersChanged"];
   openAttachmentPreview: DesktopBridge["openAttachmentPreview"];
+  prepareOutgoingAttachments: DesktopBridge["prepareOutgoingAttachments"];
   search: DesktopBridge["searchMail"];
   saveAttachment: DesktopBridge["saveAttachment"];
   saveDraft: DesktopBridge["saveMailDraft"];
@@ -133,6 +135,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     },
     lifecycle: { onClosing: bridge.onAppClosing },
     mail: {
+      authorizeOutgoingAttachments: bridge.authorizeOutgoingAttachments,
       deleteSpamThread: bridge.deleteSpamThread,
       discardDraft: bridge.discardMailDraft,
       getIndexProgress: bridge.getMailIndexProgress,
@@ -154,6 +157,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       onThreadUpdated: bridge.onMailThreadUpdated,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       openAttachmentPreview: bridge.openAttachmentPreview,
+      prepareOutgoingAttachments: bridge.prepareOutgoingAttachments,
       saveAttachment: bridge.saveAttachment,
       saveDraft: bridge.saveMailDraft,
       search: bridge.searchMail,
@@ -234,9 +238,6 @@ export const getAuthApi = (): AuthApi | undefined =>
 
 export const getMailApi = (): MailApi | undefined =>
   getRuntimeCapabilities().mail;
-
-export const getPathForFile = (file: File): string | undefined =>
-  getRuntimeWindow().desktopBridge?.getPathForFile(file);
 
 export const getSettingsApi = (): SettingsApi | undefined =>
   getRuntimeCapabilities().settings;

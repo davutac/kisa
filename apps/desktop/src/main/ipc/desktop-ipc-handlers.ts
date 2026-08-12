@@ -9,6 +9,7 @@ import {
   startGoogle,
 } from "./methods/auth";
 import {
+  authorizeOutgoingAttachments,
   deleteSpam,
   discardDraft,
   getIndexProgress,
@@ -25,6 +26,7 @@ import {
   openAttachmentPreview,
   markSpamSeen,
   markThreadNotSpam,
+  prepareOutgoingAttachments,
   searchThreads,
   saveAttachment,
   saveAttachmentPreview,
@@ -81,6 +83,8 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(saveDraft);
   yield* ipc.handle(discardDraft);
   yield* ipc.handle(openAttachmentPreview);
+  yield* ipc.handle(authorizeOutgoingAttachments);
+  yield* ipc.handle(prepareOutgoingAttachments);
   yield* ipc.handle(saveAttachment);
   yield* ipc.handle(loadAttachmentPreview);
   yield* ipc.handle(saveAttachmentPreview);

@@ -24,7 +24,9 @@ Changing the From account changes where the composition is stored the next time 
 
 ## Attachments
 
-New-email drafts retain the existing narrow attachment metadata and local path references. Kisa does not copy attachment bytes into the database. A missing or inaccessible path therefore remains a send-time attachment error rather than granting the renderer a broader filesystem capability.
+The renderer receives only attachment display metadata and opaque references. Preload resolves paths only from Electron `File` objects produced by an actual file selection, and main opens each selection to record its canonical path and file identity. Draft storage keeps that main-validated record so stashes remain usable after restart; records written by older versions without the authorization marker are not reopened and must be attached again.
+
+Immediately before send, main verifies that each reference belongs to the invoking `WebContents`, reopens the canonical file, checks its identity and aggregate size, and returns a short-lived capability. Send consumes every capability once and reads through the descriptor that was already opened during preparation. The renderer cannot submit a path, reuse a consumed capability, use another window's reference, or swap the selected path to a different file. Kisa still does not copy attachment bytes into the database, so a missing, replaced, or changed file remains a send-time attachment error.
 
 ## Multi-window behavior
 

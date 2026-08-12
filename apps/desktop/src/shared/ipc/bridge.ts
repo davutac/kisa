@@ -31,6 +31,9 @@ import type {
   MailDraftReply,
   GmailMessageSendReply,
   GmailMessageSendRequest,
+  GmailOutgoingAttachmentPrepareReply,
+  GmailOutgoingAttachmentPrepareRequest,
+  GmailOutgoingAttachmentSelectionReply,
   GmailSearchRequest,
   GmailSearchResultsReply,
   GmailSenderSuggestionRequest,
@@ -80,6 +83,9 @@ export interface ElectronVersions {
 }
 
 export interface DesktopBridge {
+  authorizeOutgoingAttachments: (
+    files: readonly File[]
+  ) => Promise<GmailOutgoingAttachmentSelectionReply>;
   beginDatabaseImport: () => Promise<DatabaseImportSessionReply>;
   cancelDatabaseImport: (
     request: DatabaseImportSession
@@ -108,7 +114,6 @@ export interface DesktopBridge {
   getSpamStatus: (
     request: GmailSpamStatusRequest
   ) => Promise<GmailSpamStatusReply>;
-  getPathForFile: (file: File) => string;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
   installUpdate: () => Promise<void>;
@@ -177,6 +182,9 @@ export interface DesktopBridge {
   openThreadWindow: (
     request: ThreadWindowOpenRequest
   ) => Promise<ThreadWindowOpenReply>;
+  prepareOutgoingAttachments: (
+    request: GmailOutgoingAttachmentPrepareRequest
+  ) => Promise<GmailOutgoingAttachmentPrepareReply>;
   reorderGoogleAccounts: (
     request: GoogleAccountReorderRequest
   ) => Promise<GoogleAccountReorderReply>;

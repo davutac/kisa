@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
-import { getPathForFile } from "@/platform/desktop";
+import type { MailApi } from "@/platform/desktop";
 import { MAX_GMAIL_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
 
@@ -22,47 +22,40 @@ const formatAttachmentSize = (bytes: number): string => {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 };
 
-export const useNewMessageAttachments = () => {
+export const useNewMessageAttachments = (mailApi: MailApi | undefined) => {
   const [attachments, setAttachments] = useState<
     readonly MailDraftAttachment[]
   >([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addAttachments = useCallback(
-    (fileList: FileList | null): void => {
+    async (fileList: FileList | null): Promise<void> => {
       const files = [...(fileList ?? [])];
-      if (files.length === 0) {
-        return;
-      }
-
-      const currentBytes = attachments.reduce(
-        (total, attachment) => total + attachment.size,
-        0
-      );
-      const selectedBytes = files.reduce((total, file) => total + file.size, 0);
-      if (currentBytes + selectedBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
-        toast.error("Attachments can total up to 25 MB");
+      if (files.length === 0 || mailApi === undefined) {
         return;
       }
 
       try {
-        const loaded = files.map((file): MailDraftAttachment => {
-          const path = getPathForFile(file);
-          if (path === undefined || path.length === 0) {
-            throw new Error(`Could not access ${file.name || "attachment"}`);
+        const reply = await mailApi.authorizeOutgoingAttachments(files);
+        if (!reply.ok) {
+          toast.error(reply.error);
+          return;
+        }
+        setAttachments((current) => {
+          const currentBytes = current.reduce(
+            (total, attachment) => total + attachment.size,
+            0
+          );
+          const selectedBytes = reply.data.reduce(
+            (total, attachment) => total + attachment.size,
+            0
+          );
+          if (currentBytes + selectedBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+            toast.error("Attachments can total up to 25 MB");
+            return current;
           }
-
-          return {
-            filename: file.name.length === 0 ? "attachment" : file.name,
-            id: crypto.randomUUID(),
-            mediaType:
-              file.type.length === 0 ? "application/octet-stream" : file.type,
-            path,
-            size: file.size,
-          };
+          return [...current, ...reply.data];
         });
-
-        setAttachments((current) => [...current, ...loaded]);
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "Could not attach files"
@@ -73,7 +66,7 @@ export const useNewMessageAttachments = () => {
         }
       }
     },
-    [attachments]
+    [mailApi]
   );
 
   return { addAttachments, attachments, inputRef, setAttachments };
@@ -97,7 +90,9 @@ export const NewMessageAttachmentButton = ({
       <input
         className="hidden"
         multiple
-        onChange={(event) => onFiles(event.currentTarget.files)}
+        onChange={(event) => {
+          onFiles(event.currentTarget.files);
+        }}
         ref={inputRef}
         type="file"
       />

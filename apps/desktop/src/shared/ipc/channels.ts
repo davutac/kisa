@@ -29,6 +29,8 @@ export const MAIL_LIST_STASHED_DRAFTS_CHANNEL =
 export const MAIL_LOAD_THREAD_DRAFT_CHANNEL = "desktop:mail:load-thread-draft";
 export const MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL =
   "desktop:mail:open-attachment-preview";
+export const MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL =
+  "desktop:mail:prepare-outgoing-attachments";
 export const MAIL_SAVE_ATTACHMENT_CHANNEL = "desktop:mail:save-attachment";
 export const MAIL_SAVE_DRAFT_CHANNEL = "desktop:mail:save-draft";
 export const MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL =
@@ -43,6 +45,8 @@ export const MAIL_MARK_SPAM_SEEN_CHANNEL = "desktop:mail:mark-spam-seen";
 export const MAIL_MARK_THREAD_NOT_SPAM_CHANNEL =
   "desktop:mail:mark-thread-not-spam";
 export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
+export const MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL =
+  "desktop:mail:authorize-outgoing-attachments";
 export const MAIL_SEND_MESSAGE_CHANNEL = "desktop:mail:send-message";
 export const MAIL_SEND_THREAD_MESSAGE_CHANNEL =
   "desktop:mail:send-thread-message";

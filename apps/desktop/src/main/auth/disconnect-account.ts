@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import { withDatabaseClient } from "../database";
+import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor";
 import { cancelMailBackfill } from "../mail/mail-backfill";
 import { forgetAccountDrafts } from "../mail/mail-drafts";
 import { forgetAccountMailData } from "../mail/mail-sync";
@@ -20,6 +21,9 @@ class GoogleAccountDisconnectError extends Schema.TaggedErrorClass<GoogleAccount
   "GoogleAccountDisconnectError",
   { message: Schema.String }
 ) {}
+
+const toDisconnectError = (error: { readonly message: string }) =>
+  new GoogleAccountDisconnectError({ message: error.message });
 
 const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
   function* deleteAccountRecord(email: string) {
@@ -39,50 +43,43 @@ const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
   }
 );
 
-// The stored account goes first: a sync that is still in flight loses its
-// credentials before the cached mail is deleted, so it cannot write rows back.
 export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
   function* disconnectGoogleAccount(email: string) {
-    // Stop the indexer before the rows go: it writes a page at a time, and one
-    // already in flight would otherwise re-create mail for a disconnected
-    // account moments after `forgetAccountMailData` cleared it.
+    // Prevent another poll or queued index run from starting, then wait until
+    // every already-authorized writer has stopped before deleting local data.
     cancelMailBackfill(email);
-    yield* revokeGoogleAccountAccess(email);
-    yield* deleteAccountRecord(email);
-    yield* forgetAccountMailData(email).pipe(
-      Effect.mapError(
-        (error) => new GoogleAccountDisconnectError({ message: error.message })
-      )
-    );
-    yield* forgetAccountSettings(email).pipe(
-      Effect.mapError(
-        (error) => new GoogleAccountDisconnectError({ message: error.message })
-      )
-    );
-    yield* forgetAccountDrafts(email).pipe(
-      Effect.mapError(
-        (error) => new GoogleAccountDisconnectError({ message: error.message })
-      )
-    );
-    yield* forgetTrustedImageSenders(email).pipe(
-      Effect.mapError(
-        (error) => new GoogleAccountDisconnectError({ message: error.message })
-      )
-    );
-    yield* notifyComposerTemplatesChanged().pipe(
-      Effect.mapError(
-        (error) => new GoogleAccountDisconnectError({ message: error.message })
-      )
-    );
+    return yield* Effect.acquireUseRelease(
+      accountMailWorkSupervisor.suspend(email),
+      () =>
+        Effect.gen(function* disconnectSuspendedAccount() {
+          yield* revokeGoogleAccountAccess(email);
+          yield* deleteAccountRecord(email);
+          yield* forgetAccountMailData(email).pipe(
+            Effect.mapError(toDisconnectError)
+          );
+          yield* forgetAccountSettings(email).pipe(
+            Effect.mapError(toDisconnectError)
+          );
+          yield* forgetAccountDrafts(email).pipe(
+            Effect.mapError(toDisconnectError)
+          );
+          yield* forgetTrustedImageSenders(email).pipe(
+            Effect.mapError(toDisconnectError)
+          );
+          yield* notifyComposerTemplatesChanged().pipe(
+            Effect.mapError(toDisconnectError)
+          );
 
-    const accounts = yield* listGoogleAccounts().pipe(
-      Effect.mapError(
-        (error) => new GoogleAccountDisconnectError({ message: error.message })
-      )
+          const accounts = yield* listGoogleAccounts().pipe(
+            Effect.mapError(toDisconnectError)
+          );
+          notifyGoogleAccountsChanged({ data: accounts, ok: true });
+          return accounts;
+        }),
+      () =>
+        Effect.sync(() => {
+          accountMailWorkSupervisor.resume(email);
+        })
     );
-
-    notifyGoogleAccountsChanged({ data: accounts, ok: true });
-
-    return accounts;
   }
 );
