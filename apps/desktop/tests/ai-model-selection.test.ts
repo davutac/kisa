@@ -4,13 +4,13 @@ import { getAiModelSelection } from "../src/renderer/src/ai";
 
 const settings = {
   activeProvider: "codex",
-  cleanupInstructions: "Clean up drafts",
+  cleanupUserInstructions: "Clean up drafts",
   providerModels: {
     claude: "claude-sonnet-5",
     codex: "gpt-5.6-luna",
     opencode: null,
   },
-  replyInstructions: "Write replies",
+  replyUserInstructions: "Write replies",
 } as const;
 
 describe("AI model selection", () => {

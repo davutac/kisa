@@ -45,13 +45,13 @@ describe(getRuntimeCapabilities, () => {
   const versions = { app: "0", chrome: "1", electron: "2", node: "3" };
   const aiSettings = {
     activeProvider: null,
-    cleanupInstructions: "Cleanup",
+    cleanupUserInstructions: "Cleanup",
     providerModels: {
       claude: "claude-sonnet-5",
       codex: "gpt-5.6-luna",
       opencode: null,
     },
-    replyInstructions: "Reply",
+    replyUserInstructions: "Reply",
   } as const;
   const createDesktopBridge = (): DesktopBridge => ({
     authorizeOutgoingAttachments: () =>

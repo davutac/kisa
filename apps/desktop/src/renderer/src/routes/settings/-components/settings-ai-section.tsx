@@ -15,6 +15,10 @@ import {
   SettingsSectionTitle,
 } from "@/components/ui/settings";
 import type { AiApi } from "@/platform/desktop";
+import {
+  DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
+  DEFAULT_AI_REPLY_USER_INSTRUCTIONS,
+} from "@/shared/ai-instructions";
 
 import AiInstructionsDialog from "./ai-instructions-dialog";
 import AiProviderRow from "./ai-provider-row";
@@ -71,8 +75,8 @@ const SettingsAiSection = ({ aiApi }: SettingsAiSectionProps) => {
   const providersById = new Map(
     workflow.providers.map((provider) => [provider.provider, provider])
   );
-  const handleReplyInstructionsSave = workflow.setReplyInstructions;
-  const handleCleanupInstructionsSave = workflow.setCleanupInstructions;
+  const handleReplyInstructionsSave = workflow.setReplyUserInstructions;
+  const handleCleanupInstructionsSave = workflow.setCleanupUserInstructions;
 
   return (
     <SettingsSection aria-labelledby="ai-settings-title">
@@ -144,15 +148,16 @@ const SettingsAiSection = ({ aiApi }: SettingsAiSectionProps) => {
             <SettingsRowContent>
               <SettingsRowTitle>Reply instructions</SettingsRowTitle>
               <SettingsRowDescription>
-                Controls how AI drafts replies from the messages in a thread.
+                Controls how AI-drafted replies should be written.
               </SettingsRowDescription>
             </SettingsRowContent>
             <SettingsRowActions>
               <AiInstructionsDialog
-                description="Customize the system instructions used when Kisa drafts a reply. Thread content is supplied separately."
+                description="Set user instructions for writing replies. Kisa's task and output format are fixed system instructions."
                 onSave={handleReplyInstructionsSave}
+                placeholder={DEFAULT_AI_REPLY_USER_INSTRUCTIONS}
                 title="Reply instructions"
-                value={draft.replyInstructions}
+                value={draft.replyUserInstructions}
               />
             </SettingsRowActions>
           </SettingsRow>
@@ -160,15 +165,16 @@ const SettingsAiSection = ({ aiApi }: SettingsAiSectionProps) => {
             <SettingsRowContent>
               <SettingsRowTitle>Draft cleanup instructions</SettingsRowTitle>
               <SettingsRowDescription>
-                Controls how AI improves a new email&apos;s subject and body.
+                Controls how AI should improve a draft.
               </SettingsRowDescription>
             </SettingsRowContent>
             <SettingsRowActions>
               <AiInstructionsDialog
-                description="Customize the system instructions used when Kisa cleans up a new email draft. Draft content is supplied separately."
+                description="Set user instructions for cleaning up drafts. Kisa's task and output format are fixed system instructions."
                 onSave={handleCleanupInstructionsSave}
+                placeholder={DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS}
                 title="Draft cleanup instructions"
-                value={draft.cleanupInstructions}
+                value={draft.cleanupUserInstructions}
               />
             </SettingsRowActions>
           </SettingsRow>

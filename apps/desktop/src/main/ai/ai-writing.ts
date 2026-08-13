@@ -1,5 +1,9 @@
 import * as Effect from "effect/Effect";
 
+import {
+  DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
+  DEFAULT_AI_REPLY_USER_INSTRUCTIONS,
+} from "../../shared/ai-instructions";
 import { MAX_GMAIL_SUBJECT_LENGTH } from "../../shared/gmail-subject";
 import { AiReply } from "../../shared/ipc/ai";
 import type {
@@ -11,7 +15,8 @@ import { getAiSettings } from "./ai-settings";
 import { AiModelSelectionError } from "./errors";
 import { AiCleanupGeneration } from "./generation-schemas";
 import {
-  BASE_AI_SYSTEM_INSTRUCTIONS,
+  AI_DRAFT_CLEANUP_SYSTEM_INSTRUCTIONS,
+  AI_REPLY_SYSTEM_INSTRUCTIONS,
   buildCleanupPrompt,
   buildReplyPrompt,
 } from "./prompts";
@@ -38,13 +43,23 @@ const loadGenerationSettings = Effect.fn("loadAiGenerationSettings")(
         message: "Choose an AI model before generating email text",
       });
     }
-    const operationInstructions =
+    const instructions =
       operation === "reply"
-        ? settings.replyInstructions
-        : settings.cleanupInstructions;
+        ? {
+            systemPrompt: AI_REPLY_SYSTEM_INSTRUCTIONS,
+            userInstructions:
+              settings.replyUserInstructions.trim() ||
+              DEFAULT_AI_REPLY_USER_INSTRUCTIONS,
+          }
+        : {
+            systemPrompt: AI_DRAFT_CLEANUP_SYSTEM_INSTRUCTIONS,
+            userInstructions:
+              settings.cleanupUserInstructions.trim() ||
+              DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
+          };
     return {
+      ...instructions,
       model,
-      systemPrompt: `${BASE_AI_SYSTEM_INSTRUCTIONS}\n\nWriting task instructions:\n${operationInstructions}`,
     };
   }
 );
@@ -70,7 +85,8 @@ export const generateAiReply = Effect.fn("generateAiReply")(
       userPrompt: buildReplyPrompt({
         accountId: request.accountId,
         context,
-        instructions: request.instructions,
+        requestInstructions: request.instructions,
+        userInstructions: generation.userInstructions,
       }),
     }).pipe(Effect.scoped);
 
@@ -85,7 +101,12 @@ export const cleanupAiDraft = Effect.fn("cleanupAiDraft")(
       model: generation.model,
       outputSchema: AiCleanupGeneration,
       systemPrompt: generation.systemPrompt,
-      userPrompt: buildCleanupPrompt(request),
+      userPrompt: buildCleanupPrompt({
+        body: request.body,
+        requestInstructions: request.instructions,
+        subject: request.subject,
+        userInstructions: generation.userInstructions,
+      }),
     }).pipe(Effect.scoped);
 
     return {

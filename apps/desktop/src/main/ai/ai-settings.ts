@@ -7,10 +7,6 @@ import { AiProvider, DEFAULT_AI_PROVIDER_MODELS } from "../../shared/ipc/ai";
 import type { AiSettings, AiSettingsUpdateRequest } from "../../shared/ipc/ai";
 import { withDatabaseClient } from "../database";
 import { AiSettingsError } from "./errors";
-import {
-  DEFAULT_AI_CLEANUP_INSTRUCTIONS,
-  DEFAULT_AI_REPLY_INSTRUCTIONS,
-} from "./prompts";
 
 const AI_SETTINGS_ROW_ID = 1;
 
@@ -19,20 +15,19 @@ const decodeProvider = Schema.decodeUnknownOption(AiProvider);
 const toAiSettings = (row: {
   readonly activeProvider: string | null;
   readonly claudeModel: string;
-  readonly cleanupInstructions: string;
+  readonly cleanupUserInstructions: string;
   readonly codexModel: string;
   readonly openCodeModel: string | null;
-  readonly replyInstructions: string;
+  readonly replyUserInstructions: string;
 }): AiSettings => ({
   activeProvider: Option.getOrNull(decodeProvider(row.activeProvider)),
-  cleanupInstructions:
-    row.cleanupInstructions || DEFAULT_AI_CLEANUP_INSTRUCTIONS,
+  cleanupUserInstructions: row.cleanupUserInstructions,
   providerModels: {
     claude: row.claudeModel || DEFAULT_AI_PROVIDER_MODELS.claude,
     codex: row.codexModel || DEFAULT_AI_PROVIDER_MODELS.codex,
     opencode: row.openCodeModel,
   },
-  replyInstructions: row.replyInstructions || DEFAULT_AI_REPLY_INSTRUCTIONS,
+  replyUserInstructions: row.replyUserInstructions,
 });
 
 export const getAiSettings = Effect.fn("getAiSettings")(
@@ -50,9 +45,9 @@ export const getAiSettings = Effect.fn("getAiSettings")(
     return row === undefined
       ? {
           activeProvider: null,
-          cleanupInstructions: DEFAULT_AI_CLEANUP_INSTRUCTIONS,
+          cleanupUserInstructions: "",
           providerModels: DEFAULT_AI_PROVIDER_MODELS,
-          replyInstructions: DEFAULT_AI_REPLY_INSTRUCTIONS,
+          replyUserInstructions: "",
         }
       : toAiSettings(row);
   }
@@ -68,21 +63,21 @@ export const updateAiSettings = Effect.fn("updateAiSettings")(
         .values({
           activeProvider: request.activeProvider,
           claudeModel: request.providerModels.claude,
-          cleanupInstructions: request.cleanupInstructions,
+          cleanupUserInstructions: request.cleanupUserInstructions,
           codexModel: request.providerModels.codex,
           id: AI_SETTINGS_ROW_ID,
           openCodeModel: request.providerModels.opencode,
-          replyInstructions: request.replyInstructions,
+          replyUserInstructions: request.replyUserInstructions,
           updatedAt: now,
         })
         .onConflictDoUpdate({
           set: {
             activeProvider: request.activeProvider,
             claudeModel: request.providerModels.claude,
-            cleanupInstructions: request.cleanupInstructions,
+            cleanupUserInstructions: request.cleanupUserInstructions,
             codexModel: request.providerModels.codex,
             openCodeModel: request.providerModels.opencode,
-            replyInstructions: request.replyInstructions,
+            replyUserInstructions: request.replyUserInstructions,
             updatedAt: now,
           },
           target: aiSettings.id,

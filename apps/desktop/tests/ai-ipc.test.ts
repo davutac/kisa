@@ -20,13 +20,13 @@ const state = vi.hoisted(() => ({
   getAiSettings: vi.fn(() =>
     Effect.succeed({
       activeProvider: "codex" as const,
-      cleanupInstructions: "Cleanup",
+      cleanupUserInstructions: "Cleanup",
       providerModels: {
         claude: "claude-sonnet-5",
         codex: "gpt-5.6-luna",
         opencode: "openai/gpt-5",
       },
-      replyInstructions: "Reply",
+      replyUserInstructions: "Reply",
     })
   ),
   listAiProviderStatuses: vi.fn(() =>
@@ -45,13 +45,13 @@ const state = vi.hoisted(() => ({
   updateAiSettings: vi.fn(() =>
     Effect.succeed({
       activeProvider: "codex" as const,
-      cleanupInstructions: "Cleanup",
+      cleanupUserInstructions: "Cleanup",
       providerModels: {
         claude: "claude-sonnet-5",
         codex: "gpt-5.6-luna",
         opencode: "openai/gpt-5",
       },
-      replyInstructions: "Reply",
+      replyUserInstructions: "Reply",
     })
   ),
 }));
@@ -108,13 +108,13 @@ describe("AI IPC", () => {
         expect(yield* getAiWritingSettings.handler(undefined)).toStrictEqual({
           data: {
             activeProvider: "codex",
-            cleanupInstructions: "Cleanup",
+            cleanupUserInstructions: "Cleanup",
             providerModels: {
               claude: "claude-sonnet-5",
               codex: "gpt-5.6-luna",
               opencode: "openai/gpt-5",
             },
-            replyInstructions: "Reply",
+            replyUserInstructions: "Reply",
           },
           ok: true,
         });

@@ -1,6 +1,6 @@
 # AI writing
 
-Kisa exposes an AI writing capability for generating a reply from cached thread context and cleaning up draft text. The settings screen lets the user save a model for each provider, choose one active provider for generation, inspect provider availability, and customize separate reply and draft cleanup instructions in dialogs. New email compose exposes draft cleanup next to attachments. Reply and reply-all composers can create a reply from thread context or clean text already in the editor; forward composers expose cleanup only. Each AI action tooltip identifies the provider and model that will handle the request.
+Kisa exposes an AI writing capability for generating a reply from cached thread context and cleaning up draft text. The settings screen lets the user save a model for each provider, choose one active provider for generation, inspect provider availability, and customize separate reply and draft cleanup user instructions in dialogs. New email compose exposes draft cleanup next to attachments. Reply and reply-all composers can create a reply from thread context or clean text already in the editor; forward composers expose cleanup only. Each AI action tooltip identifies the provider and model that will handle the request.
 
 Settings changes save automatically. Codex starts with `gpt-5.6-luna`, Claude starts with `claude-sonnet-5`, and OpenCode has no preset model.
 
@@ -21,8 +21,8 @@ This provider design is adapted from [T3 Code](https://github.com/pingdotgg/t3co
 The typed `desktopBridge` exposes five methods:
 
 - `listAiProviders()` reports installation, authentication state, and models for Codex, Claude, and OpenCode.
-- `getAiSettings()` returns the reply and cleanup instructions, active provider, and saved model for each provider.
-- `updateAiSettings(request)` persists both instruction templates, the active provider, and all provider model selections.
+- `getAiSettings()` returns the reply and cleanup user instructions, active provider, and saved model for each provider.
+- `updateAiSettings(request)` persists both user-instruction fields, the active provider, and all provider model selections.
 - `generateEmailReply(request)` generates a body from an account-scoped cached thread plus optional request-specific instructions.
 - `cleanupEmailDraft(request)` rewrites a supplied subject/body pair plus optional request-specific instructions.
 
@@ -30,13 +30,15 @@ Every IPC input is decoded in main and every result is encoded before it is retu
 
 ## Prompt and mail boundaries
 
-The application-owned safety instructions are compiled into Kisa. The two operation-specific instruction templates have application defaults, are editable in settings, and are persisted independently. Dynamic thread and draft data never becomes part of the editable templates. Optional instructions supplied for a single generation request are separate and are not persisted.
+Reply generation and draft cleanup each receive a complete, independently hardcoded system prompt that cannot be changed in settings. These prompts own the safety boundary, operation contract, and required output format. Claude receives them through its `--system-prompt` option and OpenCode through the SDK system field. Codex CLI does not expose a separate system-prompt option on this generation path, so Kisa places the selected hardcoded system prompt and user prompt in explicit labeled sections of one prompt.
+
+The editable reply and cleanup fields contain all instructions about how the result should be written, including tone, style, perspective, preservation, concision, grammar, and formatting. Each operation's default user instructions appear as textarea placeholder text rather than stored values; an empty field applies those defaults. The system prompts contain only provider identity, the operation, the untrusted-data boundary, and the required return type. Kisa wraps effective user instructions and the explicitly untrusted mail-data section in the user prompt; user instructions cannot replace the hardcoded system task or return type. Optional instructions supplied for a single generation request join the same user-instruction section and are not persisted.
 
 Reply context is loaded only from Kisa's local cache using the composite account and Gmail thread identity. It is bounded to the latest 50 messages, 12,000 body characters per message, and 60,000 body characters overall. Sender-controlled headers and plain-text bodies are serialized inside an explicitly untrusted data section. Loading context never calls Gmail and never marks, drafts, sends, or otherwise mutates mail.
 
 Generation necessarily transmits the supplied draft or bounded thread context to the provider selected by the user, under that provider's subscription and data terms. Kisa runs each provider from an empty temporary directory and deletes temporary output afterward. Claude tools are disabled, and OpenCode sessions deny every permission. Codex is restricted to a read-only sandbox in the empty directory; the Codex CLI does not currently offer Kisa a complete switch for removing every built-in read capability. Provider-facing cleanup schemas use plain strings for compatibility with restricted structured-output schema subsets; Kisa sanitizes and truncates the subject before encoding the constrained IPC result.
 
-AI settings live in the encrypted application database. The safety instructions are not persisted, so application updates can improve the safety baseline without overwriting the user's reply or cleanup instructions.
+AI settings live in the encrypted application database. System instructions are not persisted, so application updates can improve the safety and output-format contract without overwriting the user's reply or cleanup preferences.
 
 ## Lifecycle
 

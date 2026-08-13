@@ -61,15 +61,15 @@ export const MAX_AI_INSTRUCTIONS_LENGTH = 10_000;
 export const MAX_AI_OPERATION_INSTRUCTIONS_LENGTH = 4000;
 export const MAX_AI_DRAFT_BODY_LENGTH = 200_000;
 
-const AiInstructions = Schema.NonEmptyString.check(
+const AiInstructions = Schema.String.check(
   Schema.isMaxLength(MAX_AI_INSTRUCTIONS_LENGTH)
 );
 
 export const AiSettings = Schema.Struct({
   activeProvider: Schema.NullOr(AiProvider),
-  cleanupInstructions: AiInstructions,
+  cleanupUserInstructions: AiInstructions,
   providerModels: AiProviderModels,
-  replyInstructions: AiInstructions,
+  replyUserInstructions: AiInstructions,
 });
 export type AiSettings = typeof AiSettings.Type;
 

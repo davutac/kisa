@@ -126,15 +126,15 @@ export const useAiSettings = (aiApi: AiApi) => {
     };
   }, [aiApi]);
 
-  const setCleanupInstructions = (cleanupInstructions: string) => {
+  const setCleanupUserInstructions = (cleanupUserInstructions: string) => {
     setDraft((current) =>
-      current === null ? null : { ...current, cleanupInstructions }
+      current === null ? null : { ...current, cleanupUserInstructions }
     );
   };
 
-  const setReplyInstructions = (replyInstructions: string) => {
+  const setReplyUserInstructions = (replyUserInstructions: string) => {
     setDraft((current) =>
-      current === null ? null : { ...current, replyInstructions }
+      current === null ? null : { ...current, replyUserInstructions }
     );
   };
 
@@ -159,8 +159,8 @@ export const useAiSettings = (aiApi: AiApi) => {
     settings !== null &&
     draft !== null &&
     (settings.activeProvider !== draft.activeProvider ||
-      settings.cleanupInstructions !== draft.cleanupInstructions ||
-      settings.replyInstructions !== draft.replyInstructions ||
+      settings.cleanupUserInstructions !== draft.cleanupUserInstructions ||
+      settings.replyUserInstructions !== draft.replyUserInstructions ||
       !areAiProviderModelsEqual(settings.providerModels, draft.providerModels));
 
   useEffect(() => {
@@ -203,9 +203,9 @@ export const useAiSettings = (aiApi: AiApi) => {
     providersError,
     refreshProviders,
     setActiveProvider,
-    setCleanupInstructions,
+    setCleanupUserInstructions,
     setProviderModel,
-    setReplyInstructions,
+    setReplyUserInstructions,
     settings,
     settingsError,
   };

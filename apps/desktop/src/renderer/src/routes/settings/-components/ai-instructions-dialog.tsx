@@ -17,6 +17,7 @@ import { MAX_AI_INSTRUCTIONS_LENGTH } from "@/shared/ipc/ai";
 interface AiInstructionsDialogProps {
   readonly description: string;
   readonly onSave: (instructions: string) => void;
+  readonly placeholder: string;
   readonly title: string;
   readonly value: string;
 }
@@ -24,6 +25,7 @@ interface AiInstructionsDialogProps {
 const AiInstructionsDialog = ({
   description,
   onSave,
+  placeholder,
   title,
   value,
 }: AiInstructionsDialogProps) => {
@@ -56,6 +58,7 @@ const AiInstructionsDialog = ({
           onChange={(event) => {
             setDraft(event.currentTarget.value);
           }}
+          placeholder={placeholder}
           value={draft}
         />
         <DialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">
@@ -65,7 +68,7 @@ const AiInstructionsDialog = ({
             Cancel
           </DialogClose>
           <Button
-            disabled={trimmedDraft.length === 0 || trimmedDraft === value}
+            disabled={trimmedDraft === value}
             onClick={() => {
               onSave(trimmedDraft);
               setIsOpen(false);
