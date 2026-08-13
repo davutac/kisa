@@ -41,6 +41,7 @@ const storeError = (message: string) => new GmailStoreError({ message });
 
 const INBOX_LABEL_ID = LabelId.make("INBOX");
 const SPAM_LABEL_ID = LabelId.make("SPAM");
+const UNREAD_LABEL_ID = LabelId.make("UNREAD");
 
 const setLabelMembership = (
   labels: readonly string[],
@@ -329,7 +330,7 @@ export const GmailStoreLive = Layer.succeed(
                 .run();
             }
 
-            const thread = await transaction
+            const [thread] = await transaction
               .select({ labels: gmailThreads.labels })
               .from(gmailThreads)
               .where(
@@ -338,7 +339,8 @@ export const GmailStoreLive = Layer.succeed(
                   eq(gmailThreads.threadId, threadId)
                 )
               )
-              .get();
+              .limit(1)
+              .all();
 
             if (thread === undefined) {
               return;
@@ -574,7 +576,7 @@ export const GmailStoreLive = Layer.succeed(
               .run();
           }
 
-          const cachedThread = await transaction
+          const [cachedThread] = await transaction
             .select({ labels: gmailThreads.labels })
             .from(gmailThreads)
             .where(
@@ -583,7 +585,8 @@ export const GmailStoreLive = Layer.succeed(
                 eq(gmailThreads.threadId, threadId)
               )
             )
-            .get();
+            .limit(1)
+            .all();
 
           if (cachedThread === undefined) {
             return;
@@ -622,16 +625,55 @@ export const GmailStoreLive = Layer.succeed(
       withDatabase(
         "Could not update Gmail thread read state",
         async (database) => {
-          await database
-            .update(gmailThreads)
-            .set({ isUnread: !isRead, updatedAt: Date.now() })
-            .where(
-              and(
-                eq(gmailThreads.accountEmail, accountId),
-                eq(gmailThreads.threadId, threadId)
+          const now = Date.now();
+
+          await database.transaction(async (transaction) => {
+            const messages = await transaction
+              .select({
+                labelIds: gmailMessages.labelIds,
+                messageId: gmailMessages.messageId,
+              })
+              .from(gmailMessages)
+              .where(
+                and(
+                  eq(gmailMessages.accountEmail, accountId),
+                  eq(gmailMessages.threadId, threadId)
+                )
               )
-            )
-            .run();
+              .all();
+
+            for (const message of messages) {
+              // oxlint-disable-next-line eslint/no-await-in-loop
+              await transaction
+                .update(gmailMessages)
+                .set({
+                  labelIds: setLabelMembership(
+                    message.labelIds ?? [],
+                    UNREAD_LABEL_ID,
+                    !isRead
+                  ),
+                  updatedAt: now,
+                })
+                .where(
+                  and(
+                    eq(gmailMessages.accountEmail, accountId),
+                    eq(gmailMessages.messageId, message.messageId)
+                  )
+                )
+                .run();
+            }
+
+            await transaction
+              .update(gmailThreads)
+              .set({ isUnread: !isRead, updatedAt: now })
+              .where(
+                and(
+                  eq(gmailThreads.accountEmail, accountId),
+                  eq(gmailThreads.threadId, threadId)
+                )
+              )
+              .run();
+          });
         }
       ),
 

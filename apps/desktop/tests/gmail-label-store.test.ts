@@ -35,6 +35,7 @@ import {
 import type { getGoogleAccessToken } from "../src/main/auth/auth";
 import type { withDatabaseClient } from "../src/main/database";
 import { GmailStoreLive } from "../src/main/mail/gmail-store";
+import { hasUnreadSpamRemote } from "../src/main/mail/spam-mailbox";
 
 const connection = openDatabaseConnection(":memory:");
 applyDatabaseMigrations(
@@ -88,6 +89,7 @@ describe("Gmail label store", () => {
     connection.prepare("DELETE FROM gmail_messages").run();
     connection.prepare("DELETE FROM gmail_threads").run();
     connection.prepare("DELETE FROM gmail_labels").run();
+    connection.prepare("DELETE FROM google_accounts").run();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -355,6 +357,64 @@ describe("Gmail label store", () => {
         )
         .get(otherAccountId)
     ).toStrictEqual({ label_ids: '["SPAM","UNREAD"]' });
+  });
+
+  it("removes cached unread labels when marking a Spam thread read", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const threadId = ThreadId.make("spam-thread");
+    connection
+      .prepare(
+        `INSERT INTO google_accounts (
+          created_at, credentials, email, scopes, sort_order, updated_at
+        ) VALUES (1, x'01', ?, '[]', 1, 1)`
+      )
+      .run(accountId);
+    connection
+      .prepare(
+        `INSERT INTO gmail_threads (
+          account_email, "from", is_in_inbox, is_in_spam, is_unread, labels,
+          latest_at, message_count, snippet, spam_added_at, subject, thread_id,
+          updated_at
+        ) VALUES (?, 'sender@example.com', 0, 1, 1, '["SPAM","UNREAD"]',
+          1, 2, '', 1, 'Subject', ?, 1)`
+      )
+      .run(accountId, threadId);
+    const insertMessage = connection.prepare(
+      `INSERT INTO gmail_messages (
+        account_email, from_address, internal_date, label_ids, message_id,
+        schema_version, subject, thread_id, updated_at
+      ) VALUES (?, 'sender@example.com', 1, '["SPAM","UNREAD"]',
+        ?, 1, 'Subject', ?, 1)`
+    );
+    insertMessage.run(accountId, "spam-message-1", threadId);
+    insertMessage.run(accountId, "spam-message-2", threadId);
+
+    await expect(
+      hasUnreadSpamRemote(remoteDatabase, [accountId])
+    ).resolves.toBeTruthy();
+
+    await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) =>
+          store.setThreadReadState(accountId, threadId, true)
+        ),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
+    expect(
+      connection
+        .prepare(
+          `SELECT label_ids
+           FROM gmail_messages
+           WHERE account_email = ? AND thread_id = ?
+           ORDER BY message_id ASC`
+        )
+        .all(accountId, threadId)
+    ).toStrictEqual([{ label_ids: '["SPAM"]' }, { label_ids: '["SPAM"]' }]);
+    await expect(
+      hasUnreadSpamRemote(remoteDatabase, [accountId])
+    ).resolves.toBeFalsy();
   });
 
   it("timestamps only transitions into Spam", async () => {

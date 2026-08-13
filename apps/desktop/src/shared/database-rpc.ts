@@ -46,15 +46,12 @@ const DatabaseValue = Schema.Union([
 export const DatabaseRow = Schema.Array(DatabaseValue);
 export type DatabaseRow = typeof DatabaseRow.Type;
 
-export const DatabaseExecuteResult = Schema.Union([
-  Schema.Undefined,
-  DatabaseRow,
-  Schema.Array(DatabaseRow),
-]);
+/** Database RPC reads always return row arrays; callers select at most one. */
+export const DatabaseExecuteResult = Schema.Array(DatabaseRow);
 export type DatabaseExecuteResult = typeof DatabaseExecuteResult.Type;
 
 export const DatabaseExecutePayload = Schema.Struct({
-  method: Schema.Literals(["all", "get", "run", "values"]),
+  method: Schema.Literals(["all", "run", "values"]),
   params: Schema.Array(DatabaseValue),
   sql: Schema.String,
 });

@@ -97,7 +97,7 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
         const existing = await transaction.query.composerTemplates.findFirst({
           where: { id: input.id },
         });
-        const duplicate = await transaction
+        const [duplicate] = await transaction
           .select({ id: composerTemplates.id })
           .from(composerTemplates)
           .where(
@@ -106,7 +106,8 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
               ne(composerTemplates.id, input.id)
             )
           )
-          .get();
+          .limit(1)
+          .all();
         if (duplicate !== undefined) {
           throw new Error("Template name already exists");
         }

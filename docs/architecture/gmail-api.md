@@ -37,7 +37,7 @@ Google recommends poll-based synchronization for installed applications. Gmail a
 ## Gmail semantics that affect Kisa
 
 - Gmail uses labels rather than conventional folders. Archiving removes `INBOX`, while marking unread adds `UNREAD`.
-- Spam is a separate cached mailbox. Existing accounts seed it one bounded page per normal sync and persist the page cursor; Gmail history owns later transitions. Spam stays out of Inbox, default search, the native unread badge, and OS notifications. The title-bar dot remains visible while the current account scope contains unread Spam.
+- Spam is a separate cached mailbox. Existing accounts seed it one bounded page per normal sync and persist the page cursor; Gmail history owns later transitions. Spam stays out of Inbox, default search, the native unread badge, and OS notifications. The title-bar dot remains visible while the current account scope contains a message with both `SPAM` and `UNREAD`; Spam mailbox membership and general thread unread state remain thread-level projections.
 - **Not spam** performs one Gmail label mutation that removes `SPAM` and adds `INBOX`, preserves `UNREAD`, updates every cached message and the thread projection in one account-scoped transaction, and publishes the normal list event.
 - **Delete forever** is available only for a cached Spam conversation, requires confirmation, permanently deletes the Gmail thread with full-mail access, removes its account-scoped thread and message cache rows, and publishes the normal list removal event.
 - Labels belong to messages. Messages within one thread can have different label sets, and a thread's labels represent their union.

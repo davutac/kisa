@@ -42,11 +42,6 @@ export const makeDatabaseExecutor = (
               return [];
             }
             const rawStatement = statement.raw(true);
-            if (payload.method === "get") {
-              return rawStatement.get(...payload.params) as
-                | DatabaseRow
-                | undefined;
-            }
             return rawStatement.all(...payload.params) as DatabaseRow[];
           },
         });

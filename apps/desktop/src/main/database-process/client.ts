@@ -27,15 +27,8 @@ const restoreBuffer = (value: DatabaseValue): DatabaseValue => {
   return value;
 };
 
-const restoreBuffers = (value: DatabaseExecuteResult): unknown[] => {
-  if (value === undefined) {
-    return [];
-  }
-
-  return value.map((entry) =>
-    Array.isArray(entry) ? entry.map(restoreBuffer) : restoreBuffer(entry)
-  );
-};
+const restoreBuffers = (value: DatabaseExecuteResult): unknown[][] =>
+  value.map((row) => row.map(restoreBuffer));
 
 export const createDatabaseProcessClient = (
   execute: ExecuteDatabase
@@ -52,6 +45,10 @@ export const createDatabaseProcessClient = (
     const context = yield* Effect.context<R>();
     const runPromise = Effect.runPromiseWith(context);
     const database = createRemoteDatabaseClient(async (sql, params, method) => {
+      if (method === "get") {
+        throw new TypeError("Remote database get queries are unsupported");
+      }
+
       const rows = await runPromise(execute({ method, params, sql }));
 
       return { rows: restoreBuffers(rows) };

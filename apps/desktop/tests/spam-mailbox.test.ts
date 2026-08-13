@@ -76,7 +76,52 @@ describe("Spam mailbox persistence", () => {
 
   afterAll(() => connection.close());
 
-  it("tracks unread Spam independently for each connected account", async () => {
+  it("does not combine Spam and unread labels from different messages", async () => {
+    insertThread.run(
+      "one@example.com",
+      0,
+      1,
+      1,
+      '["SPAM","UNREAD"]',
+      100,
+      "spam-1"
+    );
+    insertMessage.run("one@example.com", '["SPAM"]', "message-a", "spam-1");
+    insertMessage.run(
+      "one@example.com",
+      '["INBOX","UNREAD"]',
+      "message-b",
+      "spam-1"
+    );
+
+    await expect(
+      hasUnreadSpamRemote(database, ["one@example.com"])
+    ).resolves.toBeFalsy();
+  });
+
+  it("finds Spam and unread labels on the same message", async () => {
+    insertThread.run(
+      "one@example.com",
+      0,
+      1,
+      1,
+      '["SPAM","UNREAD"]',
+      100,
+      "spam-1"
+    );
+    insertMessage.run(
+      "one@example.com",
+      '["SPAM","UNREAD"]',
+      "message-a",
+      "spam-1"
+    );
+
+    await expect(
+      hasUnreadSpamRemote(database, ["one@example.com"])
+    ).resolves.toBeTruthy();
+  });
+
+  it("does not treat thread projection flags as badge eligibility", async () => {
     insertThread.run(
       "one@example.com",
       0,
@@ -89,20 +134,49 @@ describe("Spam mailbox persistence", () => {
 
     await expect(
       hasUnreadSpamRemote(database, ["one@example.com"])
-    ).resolves.toBeTruthy();
-    await expect(
-      hasUnreadSpamRemote(database, ["two@example.com"])
     ).resolves.toBeFalsy();
-    await expect(
-      hasUnreadSpamRemote(database, ["missing@example.com"])
-    ).resolves.toBeFalsy();
+  });
 
-    connection
-      .prepare("UPDATE gmail_threads SET is_unread = 0 WHERE account_email = ?")
-      .run("one@example.com");
+  it("tracks unread Spam independently for each connected account", async () => {
+    insertThread.run(
+      "one@example.com",
+      0,
+      1,
+      1,
+      '["SPAM","UNREAD"]',
+      100,
+      "shared-thread"
+    );
+    insertThread.run(
+      "two@example.com",
+      0,
+      1,
+      1,
+      '["SPAM","UNREAD"]',
+      100,
+      "shared-thread"
+    );
+    insertMessage.run(
+      "one@example.com",
+      '["SPAM"]',
+      "message-a",
+      "shared-thread"
+    );
+    insertMessage.run(
+      "two@example.com",
+      '["SPAM","UNREAD"]',
+      "message-b",
+      "shared-thread"
+    );
 
     await expect(
       hasUnreadSpamRemote(database, ["one@example.com"])
+    ).resolves.toBeFalsy();
+    await expect(
+      hasUnreadSpamRemote(database, ["two@example.com"])
+    ).resolves.toBeTruthy();
+    await expect(
+      hasUnreadSpamRemote(database, ["missing@example.com"])
     ).resolves.toBeFalsy();
   });
 

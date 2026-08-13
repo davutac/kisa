@@ -5,7 +5,7 @@ import {
   gmailThreads,
   googleAccounts,
 } from "@repo/database/schemas";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 export const hasUnreadSpamRemote = async (
   database: RemoteDatabaseClient,
@@ -15,9 +15,16 @@ export const hasUnreadSpamRemote = async (
     return false;
   }
 
-  const thread = await database
-    .select({ threadId: gmailThreads.threadId })
+  const [message] = await database
+    .select({ messageId: gmailMessages.messageId })
     .from(gmailThreads)
+    .innerJoin(
+      gmailMessages,
+      and(
+        eq(gmailMessages.accountEmail, gmailThreads.accountEmail),
+        eq(gmailMessages.threadId, gmailThreads.threadId)
+      )
+    )
     .innerJoin(
       googleAccounts,
       eq(googleAccounts.email, gmailThreads.accountEmail)
@@ -26,13 +33,21 @@ export const hasUnreadSpamRemote = async (
       and(
         inArray(gmailThreads.accountEmail, [...new Set(requestedAccountIds)]),
         eq(gmailThreads.isInSpam, true),
-        eq(gmailThreads.isUnread, true)
+        eq(gmailThreads.isUnread, true),
+        sql<boolean>`EXISTS (
+          SELECT 1 FROM json_each(${gmailMessages.labelIds}) AS spam_label
+          WHERE spam_label.value = 'SPAM'
+        )`,
+        sql<boolean>`EXISTS (
+          SELECT 1 FROM json_each(${gmailMessages.labelIds}) AS unread_label
+          WHERE unread_label.value = 'UNREAD'
+        )`
       )
     )
     .limit(1)
-    .get();
+    .all();
 
-  return thread !== undefined;
+  return message !== undefined;
 };
 
 export const resetSpamBackfillRemote = (

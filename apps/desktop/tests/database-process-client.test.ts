@@ -2,7 +2,8 @@
 // oxlint-disable vitest/no-standalone-expect sonarjs/no-empty-test-file
 import { describe, expect, it } from "@effect/vitest";
 import { openDatabaseConnection } from "@repo/database/client";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { integer, sqliteTable } from "drizzle-orm/sqlite-core";
 import { Deferred, Effect, Fiber, Schema } from "effect";
 
 import { createDatabaseProcessClient } from "../src/main/database-process/client";
@@ -12,32 +13,39 @@ import {
 } from "../src/shared/database-rpc";
 import { makeDatabaseExecutor } from "../src/utility/database-process/database-executor";
 
+const examples = sqliteTable("examples", {
+  id: integer("id"),
+});
+
+const makeTestClient = Effect.fn("makeTestClient")(function* makeTestClient() {
+  const connection = yield* Effect.acquireRelease(
+    Effect.sync(() => openDatabaseConnection(":memory:")),
+    (databaseConnection) => Effect.sync(() => databaseConnection.close())
+  );
+  const executor = makeDatabaseExecutor(connection);
+  const payloadCodec = Schema.toCodecJson(DatabaseExecutePayload);
+  const resultCodec = Schema.toCodecJson(DatabaseExecuteResult);
+
+  return createDatabaseProcessClient((payload) =>
+    Effect.gen(function* crossesRpcCodec() {
+      const encodedPayload = yield* Schema.encodeEffect(payloadCodec)(payload);
+      const decodedPayload = yield* Schema.decodeEffect(payloadCodec)(
+        structuredClone(encodedPayload)
+      );
+      const result = yield* executor.execute(decodedPayload);
+      const encodedResult = yield* Schema.encodeEffect(resultCodec)(result);
+      return yield* Schema.decodeEffect(resultCodec)(
+        structuredClone(encodedResult)
+      );
+    })
+  );
+});
+
 describe(createDatabaseProcessClient, () => {
   it.effect("executes remote Drizzle queries against the database owner", () =>
     Effect.scoped(
       Effect.gen(function* executesQueries() {
-        const connection = yield* Effect.acquireRelease(
-          Effect.sync(() => openDatabaseConnection(":memory:")),
-          (databaseConnection) => Effect.sync(() => databaseConnection.close())
-        );
-        const executor = makeDatabaseExecutor(connection);
-        const payloadCodec = Schema.toCodecJson(DatabaseExecutePayload);
-        const resultCodec = Schema.toCodecJson(DatabaseExecuteResult);
-        const client = createDatabaseProcessClient((payload) =>
-          Effect.gen(function* crossesRpcCodec() {
-            const encodedPayload =
-              yield* Schema.encodeEffect(payloadCodec)(payload);
-            const decodedPayload = yield* Schema.decodeEffect(payloadCodec)(
-              structuredClone(encodedPayload)
-            );
-            const result = yield* executor.execute(decodedPayload);
-            const encodedResult =
-              yield* Schema.encodeEffect(resultCodec)(result);
-            return yield* Schema.decodeEffect(resultCodec)(
-              structuredClone(encodedResult)
-            );
-          })
-        );
+        const client = yield* makeTestClient();
 
         const rows = yield* client.use((database) =>
           Effect.tryPromise(async () => {
@@ -57,6 +65,28 @@ describe(createDatabaseProcessClient, () => {
         );
 
         expect(rows).toStrictEqual([[1, "Kisa", Buffer.from([1, 2, 3])]]);
+      })
+    )
+  );
+
+  it.effect("rejects scalar get queries across the database boundary", () =>
+    Effect.scoped(
+      Effect.gen(function* rejectsScalarGetQueries() {
+        const client = yield* makeTestClient();
+
+        yield* client.use((database) =>
+          Effect.promise(async () => {
+            await database.run(sql.raw("CREATE TABLE examples (id INTEGER)"));
+
+            await expect(
+              database
+                .select({ id: examples.id })
+                .from(examples)
+                .where(eq(examples.id, 1))
+                .get()
+            ).rejects.toThrow("Failed query");
+          })
+        );
       })
     )
   );
