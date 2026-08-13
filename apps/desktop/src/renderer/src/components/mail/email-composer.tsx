@@ -242,6 +242,10 @@ const EmailComposer = ({
             element,
             focus: () =>
               editor.commands.focus("end", { scrollIntoView: false }),
+            replaceContent: (content) => {
+              editor.commands.setContent(content);
+              editor.commands.focus("end", { scrollIntoView: false });
+            },
           }
     );
 

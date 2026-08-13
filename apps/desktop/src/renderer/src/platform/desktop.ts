@@ -13,6 +13,14 @@ export interface AppLifecycleApi {
   onClosing: DesktopBridge["onAppClosing"];
 }
 
+export interface AiApi {
+  cleanupDraft: DesktopBridge["cleanupEmailDraft"];
+  generateReply: DesktopBridge["generateEmailReply"];
+  getSettings: DesktopBridge["getAiSettings"];
+  listProviders: DesktopBridge["listAiProviders"];
+  updateSettings: DesktopBridge["updateAiSettings"];
+}
+
 export interface WindowApi {
   openThread: DesktopBridge["openThreadWindow"];
 }
@@ -89,6 +97,7 @@ export interface TemplateApi {
 }
 
 export interface RuntimeCapabilities {
+  ai?: AiApi;
   auth?: AuthApi;
   isWeb: boolean;
   lifecycle?: AppLifecycleApi;
@@ -102,6 +111,7 @@ export interface RuntimeCapabilities {
 }
 
 interface DesktopCapabilities {
+  ai: AiApi;
   auth: AuthApi;
   lifecycle: AppLifecycleApi;
   mail: MailApi;
@@ -125,6 +135,13 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
   }
 
   const capabilities: DesktopCapabilities = {
+    ai: {
+      cleanupDraft: bridge.cleanupEmailDraft,
+      generateReply: bridge.generateEmailReply,
+      getSettings: bridge.getAiSettings,
+      listProviders: bridge.listAiProviders,
+      updateSettings: bridge.updateAiSettings,
+    },
     auth: {
       disconnectGoogleAccount: bridge.disconnectGoogleAccount,
       listGoogleAccounts: bridge.listGoogleAccounts,
@@ -210,6 +227,7 @@ export const getRuntimeCapabilities = (
 
   if (bridge === undefined) {
     return {
+      ai: undefined,
       auth: undefined,
       isWeb: !isElectron,
       lifecycle: undefined,
@@ -234,6 +252,8 @@ export const getAppLifecycleApi = (): AppLifecycleApi | undefined =>
 
 export const getAuthApi = (): AuthApi | undefined =>
   getRuntimeCapabilities().auth;
+
+export const getAiApi = (): AiApi | undefined => getRuntimeCapabilities().ai;
 
 export const getMailApi = (): MailApi | undefined =>
   getRuntimeCapabilities().mail;

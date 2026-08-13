@@ -278,6 +278,60 @@ describe("database migrations", () => {
     }
   });
 
+  it("adds a singleton store for customizable AI writing settings", () => {
+    const connection = createLegacyDatabase();
+
+    try {
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+      connection
+        .prepare(
+          `INSERT INTO ai_settings (
+            active_provider,
+            claude_model,
+            cleanup_instructions,
+            codex_model,
+            id,
+            opencode_model,
+            reply_instructions,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          "codex",
+          "claude-sonnet-5",
+          "Cleanup",
+          "gpt-5.6-luna",
+          1,
+          "openai/gpt-5",
+          "Reply",
+          1
+        );
+
+      expect(
+        connection
+          .prepare(
+            `SELECT active_provider, claude_model, codex_model,
+                    cleanup_instructions, opencode_model, reply_instructions
+             FROM ai_settings
+             WHERE id = 1`
+          )
+          .get()
+      ).toStrictEqual({
+        active_provider: "codex",
+        claude_model: "claude-sonnet-5",
+        cleanup_instructions: "Cleanup",
+        codex_model: "gpt-5.6-luna",
+        opencode_model: "openai/gpt-5",
+        reply_instructions: "Reply",
+      });
+    } finally {
+      connection.close();
+    }
+  });
+
   it("adds label colors without losing the existing catalog", () => {
     const connection = createLegacyDatabase();
 

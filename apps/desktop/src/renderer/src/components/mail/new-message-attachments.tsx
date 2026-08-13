@@ -73,12 +73,14 @@ export const useNewMessageAttachments = (mailApi: MailApi | undefined) => {
 };
 
 interface NewMessageAttachmentButtonProps {
+  disabled?: boolean;
   focusRef?: Ref<HTMLButtonElement>;
   inputRef: RefObject<HTMLInputElement | null>;
   onFiles: (files: FileList | null) => void;
 }
 
 export const NewMessageAttachmentButton = ({
+  disabled = false,
   focusRef,
   inputRef,
   onFiles,
@@ -99,6 +101,7 @@ export const NewMessageAttachmentButton = ({
       <Button
         aria-keyshortcuts={getHotkeyAriaLabel("composer.attach")}
         aria-label={display.label}
+        disabled={disabled}
         onClick={() => inputRef.current?.click()}
         ref={focusRef}
         size="icon"

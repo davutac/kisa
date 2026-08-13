@@ -2,6 +2,12 @@ export const APP_START_CHANNEL = "desktop:app:start";
 export const APP_CLOSING_CHANNEL = "desktop:app:closing";
 export const APP_OPEN_THREAD_WINDOW_CHANNEL = "desktop:app:open-thread-window";
 
+export const AI_CLEANUP_DRAFT_CHANNEL = "desktop:ai:cleanup-draft";
+export const AI_GENERATE_REPLY_CHANNEL = "desktop:ai:generate-reply";
+export const AI_GET_SETTINGS_CHANNEL = "desktop:ai:get-settings";
+export const AI_LIST_PROVIDERS_CHANNEL = "desktop:ai:list-providers";
+export const AI_UPDATE_SETTINGS_CHANNEL = "desktop:ai:update-settings";
+
 export const AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL =
   "desktop:auth:google-accounts-changed";
 export const AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL =

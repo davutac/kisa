@@ -2,6 +2,7 @@ import { contextBridge } from "electron";
 
 import { version as appVersion } from "../../package.json";
 import type { DesktopBridge } from "../shared/ipc/bridge";
+import { aiApi } from "./ai-api";
 import { appApi } from "./app-api";
 import { authApi } from "./auth-api";
 import { mailApi } from "./mail-api";
@@ -10,6 +11,7 @@ import { templateApi } from "./template-api";
 import { updateApi } from "./update-api";
 
 const desktopBridge = {
+  ...aiApi,
   ...appApi,
   ...authApi,
   ...mailApi,

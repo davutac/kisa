@@ -13,6 +13,7 @@ import { useNewMessageStore } from "./new-message-store";
 interface NewMessageHeaderProps {
   accountsCount: number;
   drafts: readonly MailDraft[];
+  isCleaning: boolean;
   getReturnFocus: () => HTMLElement | null;
   onSelectDraft: (draft: MailDraft) => void;
   stashPickerTriggerRef: RefObject<HTMLButtonElement | null>;
@@ -21,6 +22,7 @@ interface NewMessageHeaderProps {
 const NewMessageHeader = ({
   accountsCount,
   drafts,
+  isCleaning,
   getReturnFocus,
   onSelectDraft,
   stashPickerTriggerRef,
@@ -35,7 +37,7 @@ const NewMessageHeader = ({
           {drafts.length > 0 ? (
             <NewMessageStashPicker
               accountsCount={accountsCount}
-              disabled={isSending}
+              disabled={isCleaning || isSending}
               drafts={drafts}
               getReturnFocus={getReturnFocus}
               onSelect={onSelectDraft}

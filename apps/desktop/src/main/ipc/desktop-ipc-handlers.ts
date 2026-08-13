@@ -1,6 +1,13 @@
 import * as Effect from "effect/Effect";
 
 import { DesktopIpc } from "./desktop-ipc";
+import {
+  cleanupDraft,
+  generateReply,
+  getAiWritingSettings,
+  listAiProviders,
+  updateAiWritingSettings,
+} from "./methods/ai";
 import { openThreadWindow, startApp } from "./methods/app";
 import {
   disconnectAccount,
@@ -61,6 +68,11 @@ export const installDesktopIpcHandlers = Effect.fn(
 )(function* installDesktopIpcHandlers() {
   const ipc = yield* DesktopIpc;
 
+  yield* ipc.handle(listAiProviders);
+  yield* ipc.handle(getAiWritingSettings);
+  yield* ipc.handle(updateAiWritingSettings);
+  yield* ipc.handle(generateReply);
+  yield* ipc.handle(cleanupDraft);
   yield* ipc.handle(startApp);
   yield* ipc.handle(openThreadWindow);
   yield* ipc.handle(startGoogle);

@@ -8,6 +8,7 @@ describe(getRuntimeCapabilities, () => {
     const capabilities = getRuntimeCapabilities({});
 
     expect(capabilities).toStrictEqual({
+      ai: undefined,
       auth: undefined,
       isWeb: true,
       lifecycle: undefined,
@@ -27,6 +28,7 @@ describe(getRuntimeCapabilities, () => {
     });
 
     expect(capabilities).toStrictEqual({
+      ai: undefined,
       auth: undefined,
       isWeb: false,
       lifecycle: undefined,
@@ -41,6 +43,16 @@ describe(getRuntimeCapabilities, () => {
   });
 
   const versions = { app: "0", chrome: "1", electron: "2", node: "3" };
+  const aiSettings = {
+    activeProvider: null,
+    cleanupUserInstructions: "Cleanup",
+    providerModels: {
+      claude: "claude-sonnet-5",
+      codex: "gpt-5.6-luna",
+      opencode: null,
+    },
+    replyUserInstructions: "Reply",
+  } as const;
   const createDesktopBridge = (): DesktopBridge => ({
     authorizeOutgoingAttachments: () =>
       Promise.resolve({ data: [], ok: true as const }),
@@ -54,6 +66,8 @@ describe(getRuntimeCapabilities, () => {
     cancelDatabaseImport: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
+    cleanupEmailDraft: () =>
+      Promise.resolve({ data: { body: "Body", subject: "Subject" }, ok: true }),
     deleteComposerTemplate: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     deleteSpamThread: () =>
@@ -66,6 +80,13 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
     exportDatabaseRecoveryKey: () =>
       Promise.resolve({ data: "saved" as const, ok: true as const }),
+    generateEmailReply: () =>
+      Promise.resolve({ data: { body: "Reply" }, ok: true }),
+    getAiSettings: () =>
+      Promise.resolve({
+        data: aiSettings,
+        ok: true,
+      }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
     getSpamStatus: () =>
@@ -76,6 +97,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: "restart-pending" as const, ok: true as const }),
     installUpdate: () => Promise.resolve(),
     listAccountSettings: () => Promise.resolve({ data: [], ok: true as const }),
+    listAiProviders: () => Promise.resolve({ data: [], ok: true }),
     listCachedThreadPage: () =>
       Promise.resolve({ data: { threads: [] }, ok: true as const }),
     listComposerTemplates: () =>
@@ -157,6 +179,11 @@ describe(getRuntimeCapabilities, () => {
     trustImageSender: () => Promise.resolve({ data: [], ok: true as const }),
     updateAccountSettings: () =>
       Promise.resolve({ data: [], ok: true as const }),
+    updateAiSettings: () =>
+      Promise.resolve({
+        data: aiSettings,
+        ok: true,
+      }),
   });
 
   it("returns capability values from the runtime window", () => {
@@ -164,6 +191,13 @@ describe(getRuntimeCapabilities, () => {
     const capabilities = getRuntimeCapabilities({ desktopBridge });
 
     expect(capabilities).toStrictEqual({
+      ai: {
+        cleanupDraft: desktopBridge.cleanupEmailDraft,
+        generateReply: desktopBridge.generateEmailReply,
+        getSettings: desktopBridge.getAiSettings,
+        listProviders: desktopBridge.listAiProviders,
+        updateSettings: desktopBridge.updateAiSettings,
+      },
       auth: {
         disconnectGoogleAccount: desktopBridge.disconnectGoogleAccount,
         listGoogleAccounts: desktopBridge.listGoogleAccounts,
@@ -248,6 +282,7 @@ describe(getRuntimeCapabilities, () => {
     const nextCapabilities = getRuntimeCapabilities({ desktopBridge });
 
     expect([
+      nextCapabilities.ai === capabilities.ai,
       nextCapabilities.auth === capabilities.auth,
       nextCapabilities.lifecycle === capabilities.lifecycle,
       nextCapabilities.mail === capabilities.mail,
@@ -256,6 +291,6 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.templates === capabilities.templates,
       nextCapabilities.updates === capabilities.updates,
       nextCapabilities.window === capabilities.window,
-    ]).toStrictEqual([true, true, true, true, true, true, true, true]);
+    ]).toStrictEqual([true, true, true, true, true, true, true, true, true]);
   });
 });

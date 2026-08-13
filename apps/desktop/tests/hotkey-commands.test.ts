@@ -124,6 +124,16 @@ describe("hotkey command registry", () => {
     expect(getHotkeyAriaLabel("composer.attach", "mac")).toBe("Meta+Shift+A");
   });
 
+  it("assigns the composer cleanup shortcut", () => {
+    expect(HOTKEY_COMMANDS["composer.clean"]).toMatchObject({
+      bindings: ["Mod+Shift+C"],
+      input: "allow",
+      repeat: "once",
+      scope: "composer",
+    });
+    expect(getHotkeyAriaLabel("composer.clean", "mac")).toBe("Meta+Shift+C");
+  });
+
   it("allows repeated stash key presses while ignoring keydown auto-repeat", () => {
     expect(shouldRunHotkeyCommand("ignore-key-repeat", false)).toBeTruthy();
     expect(shouldRunHotkeyCommand("ignore-key-repeat", true)).toBeFalsy();
@@ -218,6 +228,16 @@ describe("hotkey command registry", () => {
   it("gives the inline thread composer its own commands", () => {
     expect(HOTKEY_COMMANDS["threadComposer.close"]).toMatchObject({
       bindings: ["Escape"],
+      input: "allow",
+      scope: "thread-composer",
+    });
+    expect(HOTKEY_COMMANDS["threadComposer.clean"]).toMatchObject({
+      bindings: ["Mod+Shift+C"],
+      input: "allow",
+      scope: "thread-composer",
+    });
+    expect(HOTKEY_COMMANDS["threadComposer.createReply"]).toMatchObject({
+      bindings: ["Mod+Shift+R"],
       input: "allow",
       scope: "thread-composer",
     });
