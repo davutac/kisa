@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 
 import { MAX_GMAIL_SUBJECT_LENGTH } from "../../shared/gmail-subject";
-import { AiCleanedDraft, AiReply } from "../../shared/ipc/ai";
+import { AiReply } from "../../shared/ipc/ai";
 import type {
   AiCleanupDraftRequest,
   AiModelSelection,
@@ -9,6 +9,7 @@ import type {
 } from "../../shared/ipc/ai";
 import { getAiSettings } from "./ai-settings";
 import { AiModelSelectionError } from "./errors";
+import { AiCleanupGeneration } from "./generation-schemas";
 import {
   BASE_AI_SYSTEM_INSTRUCTIONS,
   buildCleanupPrompt,
@@ -82,7 +83,7 @@ export const cleanupAiDraft = Effect.fn("cleanupAiDraft")(
     const generation = yield* loadGenerationSettings(request.model, "cleanup");
     const generated = yield* generateStructuredText({
       model: generation.model,
-      outputSchema: AiCleanedDraft,
+      outputSchema: AiCleanupGeneration,
       systemPrompt: generation.systemPrompt,
       userPrompt: buildCleanupPrompt(request),
     }).pipe(Effect.scoped);

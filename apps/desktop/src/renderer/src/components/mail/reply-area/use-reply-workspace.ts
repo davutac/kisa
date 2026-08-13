@@ -3,10 +3,11 @@ import { toast } from "sonner";
 
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
+import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import { isThreadMailDraftEmpty } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
-import { getMailApi } from "@/platform/desktop";
+import { getAiApi, getMailApi } from "@/platform/desktop";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 export const useReplyWorkspace = ({
@@ -16,6 +17,7 @@ export const useReplyWorkspace = ({
   message,
   onCancel,
   onSent,
+  replaceComposerContent,
   threadId,
 }: {
   accountId: string;
@@ -24,14 +26,18 @@ export const useReplyWorkspace = ({
   message: GmailThreadMessage;
   onCancel: () => void;
   onSent: () => void;
+  replaceComposerContent: (content: string) => boolean;
   threadId: string;
 }) => {
+  const aiApi = useMemo(() => getAiApi(), []);
+  const aiModel = useAiModelSelection(aiApi);
   const mailApi = useMemo(() => getMailApi(), []);
   const [composer, setComposer] = useState<EmailComposerValue>(() => ({
     html: draft.body.html,
     isEmpty: draft.body.text.trim().length === 0,
     text: draft.body.text,
   }));
+  const [aiAction, setAiAction] = useState<"clean" | "create" | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [recipients, setRecipients] = useState<EmailRecipients>(() => ({
     bcc: draft.bcc,
@@ -55,6 +61,13 @@ export const useReplyWorkspace = ({
     [composer.html, composer.text, draft, recipients]
   );
   const currentDraftRef = useRef(currentDraft);
+  const isBusy = aiAction !== null || isSending;
+  const canClean = aiModel.selection !== null && !composer.isEmpty && !isBusy;
+  const canCreateReply =
+    aiModel.selection !== null &&
+    action !== "forward" &&
+    composer.isEmpty &&
+    !isBusy;
 
   useEffect(() => {
     currentDraftRef.current = currentDraft;
@@ -112,7 +125,7 @@ export const useReplyWorkspace = ({
   }, [initialRecipients, mailApi]);
 
   const send = async (): Promise<void> => {
-    if (mailApi === undefined || isSending) {
+    if (mailApi === undefined || isBusy) {
       return;
     }
     setIsSending(true);
@@ -155,7 +168,7 @@ export const useReplyWorkspace = ({
   };
 
   const discard = async (): Promise<void> => {
-    if (mailApi === undefined) {
+    if (mailApi === undefined || isBusy) {
       return;
     }
     finalizedRef.current = true;
@@ -176,11 +189,90 @@ export const useReplyWorkspace = ({
     }
   };
 
+  const applyGeneratedBody = (body: string, successMessage: string): void => {
+    if (!replaceComposerContent(body)) {
+      toast.error("Could not update the reply draft");
+      return;
+    }
+    toast.success(successMessage);
+  };
+
+  const clean = async (): Promise<void> => {
+    if (!(aiApi && aiModel.selection && canClean)) {
+      return;
+    }
+    setAiAction("clean");
+    try {
+      const reply = await aiApi.cleanupDraft({
+        body: composer.html,
+        model: aiModel.selection,
+        subject: draft.subject,
+      });
+      if (!mountedRef.current) {
+        return;
+      }
+      if (!reply.ok) {
+        toast.error(reply.error);
+        return;
+      }
+      applyGeneratedBody(reply.data.body, "Reply cleaned up");
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not clean up reply"
+        );
+      }
+    } finally {
+      if (mountedRef.current) {
+        setAiAction(null);
+      }
+    }
+  };
+
+  const createReply = async (): Promise<void> => {
+    if (!(aiApi && aiModel.selection && canCreateReply)) {
+      return;
+    }
+    setAiAction("create");
+    try {
+      const reply = await aiApi.generateReply({
+        accountId,
+        model: aiModel.selection,
+        threadId,
+      });
+      if (!mountedRef.current) {
+        return;
+      }
+      if (!reply.ok) {
+        toast.error(reply.error);
+        return;
+      }
+      applyGeneratedBody(reply.data.body, "Reply created");
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not create reply"
+        );
+      }
+    } finally {
+      if (mountedRef.current) {
+        setAiAction(null);
+      }
+    }
+  };
+
   return {
-    canSend: mailApi !== undefined && !isSending,
+    aiAction,
+    aiModelLabel: aiModel.label,
+    canClean,
+    canCreateReply,
+    canSend: mailApi !== undefined && !isBusy,
+    clean,
     composer,
+    createReply,
     currentDraft,
     discard,
+    isBusy,
     isSending,
     recipients,
     send,

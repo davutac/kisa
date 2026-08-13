@@ -10,12 +10,6 @@ export const AI_PROVIDER_ORDER = [
   "opencode",
 ] as const satisfies readonly AiProvider[];
 
-export const AI_PROVIDER_NAMES = {
-  claude: "Claude",
-  codex: "Codex",
-  opencode: "OpenCode",
-} satisfies Record<AiProvider, string>;
-
 export interface AiProviderPresentation {
   readonly detail: string | null;
   readonly dotClassName: string;

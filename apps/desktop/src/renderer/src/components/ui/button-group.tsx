@@ -2,8 +2,9 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils";
+import { aiSurfaceClassName } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 const buttonGroupVariants = cva(
   "flex w-fit items-stretch *:focus-visible:relative *:focus-visible:z-10 has-[>[data-slot=button-group]]:gap-2 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-md [&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit [&>input]:flex-1",
@@ -15,9 +16,17 @@ const buttonGroupVariants = cva(
         vertical:
           "flex-col *:data-slot:rounded-b-none [&>[data-slot]:not(:has(~[data-slot]))]:rounded-b-md! [&>[data-slot]~[data-slot]]:rounded-t-none [&>[data-slot]~[data-slot]]:border-t-0",
       },
+      variant: {
+        default: "",
+        ai: cn(
+          aiSurfaceClassName,
+          "rounded-md [&_[data-slot=button]]:relative [&_[data-slot=button]]:z-10",
+        ),
+      },
     },
     defaultVariants: {
       orientation: "horizontal",
+      variant: "default",
     },
   },
 );
@@ -25,6 +34,7 @@ const buttonGroupVariants = cva(
 function ButtonGroup({
   className,
   orientation,
+  variant,
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>) {
   return (
@@ -32,7 +42,7 @@ function ButtonGroup({
       role="group"
       data-slot="button-group"
       data-orientation={orientation}
-      className={cn(buttonGroupVariants({ orientation }), className)}
+      className={cn(buttonGroupVariants({ orientation, variant }), className)}
       {...props}
     />
   );

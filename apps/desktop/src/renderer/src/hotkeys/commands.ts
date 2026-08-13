@@ -139,6 +139,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "composer",
   },
+  "composer.clean": {
+    bindings: ["Mod+Shift+C"],
+    input: "allow",
+    label: "Clean up draft",
+    repeat: "once",
+    scope: "composer",
+  },
   "composer.send": {
     bindings: ["Mod+Enter"],
     input: "allow",
@@ -377,10 +384,24 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "thread",
   },
+  "threadComposer.clean": {
+    bindings: ["Mod+Shift+C"],
+    input: "allow",
+    label: "Clean up reply",
+    repeat: "once",
+    scope: "thread-composer",
+  },
   "threadComposer.close": {
     bindings: ["Escape"],
     input: "allow",
     label: "Close draft",
+    repeat: "once",
+    scope: "thread-composer",
+  },
+  "threadComposer.createReply": {
+    bindings: ["Mod+Shift+R"],
+    input: "allow",
+    label: "Create reply",
     repeat: "once",
     scope: "thread-composer",
   },

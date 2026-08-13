@@ -18,6 +18,7 @@ type FocusRef = (element: HTMLElement | null) => void;
 export interface ComposerFocusHandle {
   readonly element: HTMLElement;
   readonly focus: () => void;
+  readonly replaceContent?: (content: string) => void;
 }
 
 type FocusHandleRef = (handle: ComposerFocusHandle | null) => void;
@@ -156,6 +157,18 @@ export const useComposerFocus = () => {
     []
   );
 
+  const replaceContent = useCallback(
+    (target: ComposerFocusTarget, content: string): boolean => {
+      const replace = handlesRef.current.get(target)?.replaceContent;
+      if (replace === undefined) {
+        return false;
+      }
+      replace(content);
+      return true;
+    },
+    []
+  );
+
   return {
     getCurrentTarget,
     getElement,
@@ -163,6 +176,7 @@ export const useComposerFocus = () => {
     handleRefFor,
     onFocusCapture,
     refFor,
+    replaceContent,
     requestRestore,
     restorePending,
   };

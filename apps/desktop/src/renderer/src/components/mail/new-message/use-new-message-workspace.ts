@@ -4,11 +4,13 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { toast } from "sonner";
 
 import { useNewMessageAttachments } from "@/components/mail/new-message-attachments";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
+import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import {
   createNewMailDraft,
@@ -16,7 +18,7 @@ import {
   getNewMailStashCommandAction,
   isNewMailDraftEmpty,
 } from "@/mail/mail-draft";
-import { getMailApi } from "@/platform/desktop";
+import { getAiApi, getMailApi } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
@@ -59,7 +61,11 @@ export const useNewMessageWorkspace = ({
     (state) => state.incrementRecipientResetVersion
   );
   const { templates } = useComposerTemplates();
+  const aiApi = useMemo(() => getAiApi(), []);
+  const cleanupModel = useAiModelSelection(aiApi);
+  const [isCleaning, setIsCleaning] = useState(false);
   const draftOperationQueueRef = useRef(Promise.resolve());
+  const isOpenRef = useRef(false);
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const mailApi = useMemo(() => getMailApi(), []);
   const { addAttachments, attachments, inputRef, setAttachments } =
@@ -109,6 +115,13 @@ export const useNewMessageWorkspace = ({
     currentDraftRef.current = currentDraft;
   }, [currentDraft]);
 
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+    return () => {
+      isOpenRef.current = false;
+    };
+  }, [isOpen]);
+
   useLayoutEffect(() => {
     focus.restorePending();
   }, [draftId, focus]);
@@ -118,14 +131,19 @@ export const useNewMessageWorkspace = ({
     currentDraft,
     availableStashes.length > 0
   );
-  const canStash = stashCommandAction === "stash" && !isSending;
+  const isBusy = isCleaning || isSending;
+  const canStash = stashCommandAction === "stash" && !isBusy;
+  const canClean =
+    cleanupModel.selection !== null &&
+    (subject.trim().length > 0 || !composer.isEmpty) &&
+    !isBusy;
   const canSend =
     mailApi !== undefined &&
     selectedAccountId.length > 0 &&
     currentDraft.to.length > 0 &&
     currentDraft.subject.trim().length > 0 &&
     !composer.isEmpty &&
-    !isSending;
+    !isBusy;
 
   useEffect(() => {
     if (mailApi === undefined) {
@@ -218,7 +236,7 @@ export const useNewMessageWorkspace = ({
 
   const stashCurrentDraft = (): void => {
     const draft = currentDraftRef.current;
-    if (isSending || isNewMailDraftEmpty(draft)) {
+    if (isBusy || isNewMailDraftEmpty(draft)) {
       return;
     }
     const optimisticStash = toOptimisticStash(draft);
@@ -247,7 +265,7 @@ export const useNewMessageWorkspace = ({
   };
 
   const switchDraft = (next: MailDraft): void => {
-    if (next.id === draftId || isSending) {
+    if (next.id === draftId || isBusy) {
       return;
     }
     updateStashes((current) => current.filter(({ id }) => id !== next.id));
@@ -259,6 +277,57 @@ export const useNewMessageWorkspace = ({
         updateStashes((current) => upsertStash(current, next));
       }
     });
+  };
+
+  const cleanDraft = async (): Promise<void> => {
+    if (!(canClean && aiApi && cleanupModel.selection)) {
+      return;
+    }
+    const snapshot = {
+      body: composer.html,
+      draftId,
+      subject,
+    };
+    setIsCleaning(true);
+    try {
+      const reply = await aiApi.cleanupDraft({
+        body: snapshot.body,
+        model: cleanupModel.selection,
+        subject: snapshot.subject,
+      });
+      if (!isOpenRef.current) {
+        return;
+      }
+      if (!reply.ok) {
+        toast.error(reply.error);
+        return;
+      }
+      const { current } = currentDraftRef;
+      if (
+        current.id !== snapshot.draftId ||
+        current.body.html !== snapshot.body ||
+        current.subject !== snapshot.subject
+      ) {
+        toast.info("Draft changed while cleaning. Try again when ready.");
+        return;
+      }
+      if (!focus.replaceContent("message", reply.data.body)) {
+        toast.error("Could not update the email draft");
+        return;
+      }
+      setSubject(reply.data.subject);
+      toast.success("Draft cleaned up");
+    } catch (error) {
+      if (isOpenRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not clean up the draft"
+        );
+      }
+    } finally {
+      setIsCleaning(false);
+    }
   };
 
   const send = async (): Promise<void> => {
@@ -303,6 +372,13 @@ export const useNewMessageWorkspace = ({
 
   useAppCommand("composer.send", send, { enabled: isOpen && canSend });
   useAppCommand(
+    "composer.clean",
+    () => {
+      void cleanDraft();
+    },
+    { enabled: isOpen && canClean }
+  );
+  useAppCommand(
     "composer.stash",
     () => {
       if (stashCommandAction === "open-picker") {
@@ -311,7 +387,9 @@ export const useNewMessageWorkspace = ({
         stashCurrentDraft();
       }
     },
-    { enabled: isOpen && !isSending && stashCommandAction !== "none" }
+    {
+      enabled: isOpen && !isBusy && stashCommandAction !== "none",
+    }
   );
 
   return {
@@ -319,10 +397,14 @@ export const useNewMessageWorkspace = ({
     applyTemplate,
     attachments,
     availableStashes,
+    canClean,
     canSend,
     canStash,
+    cleanDraft,
+    cleanupModelLabel: cleanupModel.label,
     focus,
     inputRef,
+    isCleaning,
     selectedAccountId,
     send,
     sendDisplay: getHotkeyDisplay("composer.send"),

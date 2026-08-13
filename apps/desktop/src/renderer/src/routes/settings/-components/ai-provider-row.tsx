@@ -2,6 +2,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { Fragment } from "react";
 import type { ComponentType, SVGProps } from "react";
 
+import { AI_PROVIDER_NAMES } from "@/ai";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -28,7 +29,6 @@ import {
   OpenCodeProviderIcon,
 } from "./ai-provider-icons";
 import {
-  AI_PROVIDER_NAMES,
   getAiProviderModelOptions,
   getAiProviderPresentation,
   groupOpenCodeModelOptions,

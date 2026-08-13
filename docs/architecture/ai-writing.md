@@ -1,6 +1,6 @@
 # AI writing
 
-Kisa exposes an AI writing capability for generating a reply from cached thread context and cleaning up the subject and body of a new email. The settings screen lets the user save a model for each provider, choose one active provider for generation, inspect provider availability, and customize separate reply and draft cleanup instructions in dialogs. Compose and thread writing controls are not implemented yet.
+Kisa exposes an AI writing capability for generating a reply from cached thread context and cleaning up draft text. The settings screen lets the user save a model for each provider, choose one active provider for generation, inspect provider availability, and customize separate reply and draft cleanup instructions in dialogs. New email compose exposes draft cleanup next to attachments. Reply and reply-all composers can create a reply from thread context or clean text already in the editor; forward composers expose cleanup only. Each AI action tooltip identifies the provider and model that will handle the request.
 
 Settings changes save automatically. Codex starts with `gpt-5.6-luna`, Claude starts with `claude-sonnet-5`, and OpenCode has no preset model.
 
@@ -34,7 +34,7 @@ The application-owned safety instructions are compiled into Kisa. The two operat
 
 Reply context is loaded only from Kisa's local cache using the composite account and Gmail thread identity. It is bounded to the latest 50 messages, 12,000 body characters per message, and 60,000 body characters overall. Sender-controlled headers and plain-text bodies are serialized inside an explicitly untrusted data section. Loading context never calls Gmail and never marks, drafts, sends, or otherwise mutates mail.
 
-Generation necessarily transmits the supplied draft or bounded thread context to the provider selected by the user, under that provider's subscription and data terms. Kisa runs each provider from an empty temporary directory and deletes temporary output afterward. Claude tools are disabled, and OpenCode sessions deny every permission. Codex is restricted to a read-only sandbox in the empty directory; the Codex CLI does not currently offer Kisa a complete switch for removing every built-in read capability.
+Generation necessarily transmits the supplied draft or bounded thread context to the provider selected by the user, under that provider's subscription and data terms. Kisa runs each provider from an empty temporary directory and deletes temporary output afterward. Claude tools are disabled, and OpenCode sessions deny every permission. Codex is restricted to a read-only sandbox in the empty directory; the Codex CLI does not currently offer Kisa a complete switch for removing every built-in read capability. Provider-facing cleanup schemas use plain strings for compatibility with restricted structured-output schema subsets; Kisa sanitizes and truncates the subject before encoding the constrained IPC result.
 
 AI settings live in the encrypted application database. The safety instructions are not persisted, so application updates can improve the safety baseline without overwriting the user's reply or cleanup instructions.
 

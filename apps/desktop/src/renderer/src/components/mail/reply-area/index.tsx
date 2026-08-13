@@ -1,6 +1,14 @@
-import { LoaderCircleIcon, SendIcon, Trash2Icon } from "lucide-react";
+import {
+  LoaderCircleIcon,
+  MessageSquarePlusIcon,
+  SendIcon,
+  SparklesIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useCallback, useRef } from "react";
 import type { Ref } from "react";
 
+import AiComposerButton from "@/components/mail/ai-composer-button";
 import EmailComposer from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import MailForwardedMessage from "@/components/mail/forwarded-message";
@@ -8,6 +16,7 @@ import MailMessageAttachments from "@/components/mail/message-attachments";
 import MailRelativeTime from "@/components/mail/relative-time";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import {
   getHotkeyAriaLabel,
   HotkeyHint,
@@ -47,6 +56,15 @@ const MailReplyArea = ({
   suggestedAddresses,
   threadId,
 }: MailReplyAreaProps) => {
+  const composerHandleRef = useRef<ComposerFocusHandle | null>(null);
+  const replaceComposerContent = useCallback((content: string): boolean => {
+    const replaceContent = composerHandleRef.current?.replaceContent;
+    if (replaceContent === undefined) {
+      return false;
+    }
+    replaceContent(content);
+    return true;
+  }, []);
   const workspace = useReplyWorkspace({
     accountId,
     action,
@@ -54,6 +72,7 @@ const MailReplyArea = ({
     message,
     onCancel,
     onSent,
+    replaceComposerContent,
     threadId,
   });
   const isForward = action === "forward";
@@ -61,13 +80,27 @@ const MailReplyArea = ({
   const handleComposerChange = workspace.setComposer;
   const handleRecipientsChange = workspace.setRecipients;
   const handleSend = workspace.send;
+  const handleComposerReady = useCallback(
+    (handle: ComposerFocusHandle | null): void => {
+      composerHandleRef.current = handle;
+      onComposerReady?.(handle);
+    },
+    [onComposerReady]
+  );
   const handleClose = () => onClose(workspace.currentDraft);
+  const hasEnabledAiAction = workspace.canCreateReply || workspace.canClean;
   const sender = parseMailboxAddress(message.from);
   const targetLabel = sender.name ?? sender.email;
 
   useHotkeyLayer("thread-composer", true);
   useAppCommand("threadComposer.close", handleClose, {
-    enabled: !workspace.isSending,
+    enabled: !workspace.isBusy,
+  });
+  useAppCommand("threadComposer.clean", workspace.clean, {
+    enabled: workspace.canClean,
+  });
+  useAppCommand("threadComposer.createReply", workspace.createReply, {
+    enabled: workspace.canCreateReply,
   });
   useAppCommand("threadComposer.send", handleSend, {
     enabled: workspace.canSend,
@@ -88,7 +121,7 @@ const MailReplyArea = ({
       </div>
       <EmailRecipientFields
         accountId={accountId}
-        disabled={workspace.isSending}
+        disabled={workspace.isBusy}
         onChange={handleRecipientsChange}
         suggestedAddresses={suggestedAddresses}
         value={workspace.recipients}
@@ -98,10 +131,45 @@ const MailReplyArea = ({
         className="min-h-48"
         consumeModEnter
         defaultValue={draft.body.html}
-        disabled={workspace.isSending}
-        focusHandleRef={onComposerReady}
+        disabled={workspace.isBusy}
+        focusHandleRef={handleComposerReady}
         onChange={handleComposerChange}
         placeholder={isForward ? "Add a message" : "Write a reply"}
+        toolbarActions={
+          <ButtonGroup
+            aria-label="AI reply actions"
+            variant={hasEnabledAiAction ? "ai" : "default"}
+          >
+            {isForward ? null : (
+              <AiComposerButton
+                command="threadComposer.createReply"
+                disabled={!workspace.canCreateReply}
+                grouped
+                icon={MessageSquarePlusIcon}
+                isWorking={workspace.aiAction === "create"}
+                label="Create reply"
+                modelLabel={workspace.aiModelLabel}
+                onClick={() => {
+                  void workspace.createReply();
+                }}
+                workingLabel="Creating…"
+              />
+            )}
+            <AiComposerButton
+              command="threadComposer.clean"
+              disabled={!workspace.canClean}
+              grouped
+              icon={SparklesIcon}
+              isWorking={workspace.aiAction === "clean"}
+              label="Clean"
+              modelLabel={workspace.aiModelLabel}
+              onClick={() => {
+                void workspace.clean();
+              }}
+              workingLabel="Cleaning…"
+            />
+          </ButtonGroup>
+        }
       />
       {isForward ? (
         <>
@@ -135,7 +203,7 @@ const MailReplyArea = ({
         <Button
           aria-label="Discard draft"
           className="border-background border-l"
-          disabled={workspace.isSending}
+          disabled={workspace.isBusy}
           onClick={handleDiscard}
           size="footer-icon"
           title="Discard draft"

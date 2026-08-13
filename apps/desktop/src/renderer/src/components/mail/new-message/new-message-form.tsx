@@ -1,7 +1,13 @@
-import { ArchiveIcon, LoaderCircleIcon, SendIcon } from "lucide-react";
+import {
+  ArchiveIcon,
+  LoaderCircleIcon,
+  SendIcon,
+  SparklesIcon,
+} from "lucide-react";
 import type { RefObject } from "react";
 
 import AccountPicker from "@/components/accounts/account-picker";
+import AiComposerButton from "@/components/mail/ai-composer-button";
 import EmailComposer from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import {
@@ -31,10 +37,14 @@ interface NewMessageFormProps {
   addAttachments: (files: FileList | null) => void;
   applyTemplate: (template: ComposerTemplateInput) => void;
   attachments: readonly MailDraftAttachment[];
+  canClean: boolean;
   canSend: boolean;
   canStash: boolean;
+  cleanupModelLabel: string;
   focus: ReturnType<typeof useComposerFocus>;
   inputRef: RefObject<HTMLInputElement | null>;
+  isCleaning: boolean;
+  onClean: () => Promise<void>;
   onSend: () => Promise<void>;
   onStash: () => void;
   selectedAccountId: string;
@@ -54,10 +64,14 @@ const NewMessageForm = ({
   addAttachments,
   applyTemplate,
   attachments,
+  canClean,
   canSend,
   canStash,
+  cleanupModelLabel,
   focus,
   inputRef,
+  isCleaning,
+  onClean,
   onSend,
   onStash,
   selectedAccountId,
@@ -78,9 +92,10 @@ const NewMessageForm = ({
   const setComposer = useNewMessageStore((state) => state.setComposer);
   const setRecipients = useNewMessageStore((state) => state.setRecipients);
   const setSubject = useNewMessageStore((state) => state.setSubject);
+  const isBusy = isCleaning || isSending;
 
   useAppCommand("composer.attach", () => inputRef.current?.click(), {
-    enabled: !isSending,
+    enabled: !isBusy,
   });
 
   return (
@@ -118,6 +133,7 @@ const NewMessageForm = ({
         <InputGroupInput
           className="h-8 px-0 text-sm md:text-sm"
           id="new-message-subject"
+          disabled={isCleaning}
           maxLength={MAX_GMAIL_SUBJECT_LENGTH}
           onChange={(event) => setSubject(event.currentTarget.value)}
           ref={focus.refFor("subject")}
@@ -130,6 +146,7 @@ const NewMessageForm = ({
         consumeModEnter
         contentKey={draftId}
         defaultValue={composer.html}
+        disabled={isCleaning}
         enableTemplateSlashMenu
         focusHandleRef={focus.handleRefFor("message")}
         onApplyTemplate={applyTemplate}
@@ -139,11 +156,26 @@ const NewMessageForm = ({
         templateAccounts={accounts}
         templates={templates}
         toolbarActions={
-          <NewMessageAttachmentButton
-            focusRef={focus.refFor("attachment")}
-            inputRef={inputRef}
-            onFiles={addAttachments}
-          />
+          <>
+            <AiComposerButton
+              command="composer.clean"
+              disabled={!canClean}
+              icon={SparklesIcon}
+              isWorking={isCleaning}
+              label="Clean"
+              modelLabel={cleanupModelLabel}
+              onClick={() => {
+                void onClean();
+              }}
+              workingLabel="Cleaning…"
+            />
+            <NewMessageAttachmentButton
+              disabled={isBusy}
+              focusRef={focus.refFor("attachment")}
+              inputRef={inputRef}
+              onFiles={addAttachments}
+            />
+          </>
         }
       />
       <NewMessageAttachmentList

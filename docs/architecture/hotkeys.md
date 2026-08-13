@@ -71,6 +71,8 @@ Within a conversation, `J` or `ArrowDown` selects and opens the next newer messa
 
 `Mod+Shift+A` opens the attachment picker while composing a new email.
 
+`Mod+Shift+C` cleans up the current new-email draft using the provider and model shown in the Clean button tooltip. The command remains available while focus is in the subject or message editor and is disabled for an empty draft or while another compose action is running.
+
 `Mod+,` and `Mod+Shift+T` toggle Settings and Templates. Pressing the active workspace's shortcut again restores the previous titlebar view. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
 
 ## Interaction layers
@@ -138,6 +140,8 @@ Buttons and tooltips should derive labels and shortcut metadata from the registr
 Tiptap's StarterKit maps `Mod+Enter` to a hard break, while Kisa maps it to Send. `EmailComposer` can install a high-priority Tiptap extension that consumes the editor command without stopping DOM propagation. TanStack then handles Send at the document layer. `Mod+S` remains an application command while the composer layer is active, and `Shift+Enter` remains owned by Tiptap.
 
 The same `Mod+Enter` guard is active in a thread draft. In that mode `Mod+Enter` sends, while `Escape` closes the editor and preserves the resumable draft. Discard remains an explicit button action.
+
+In a reply or reply-all composer, `Mod+Shift+R` creates a reply from thread context while the editor is empty. `Mod+Shift+C` cleans the current reply. Forward composers expose cleanup but not reply generation. Both commands work while focus is inside the rich-text editor and are disabled while another composer operation is running.
 
 ## Validation
 

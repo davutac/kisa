@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { AiCleanupGeneration } from "../src/main/ai/generation-schemas";
 import { buildCleanupPrompt, buildReplyPrompt } from "../src/main/ai/prompts";
 import {
   extractJsonObject,
   parseOpenCodeModels,
 } from "../src/main/ai/providers/opencode";
-import { parseCliVersion } from "../src/main/ai/providers/shared";
+import {
+  parseCliVersion,
+  toJsonSchemaObject,
+} from "../src/main/ai/providers/shared";
 
 describe("AI writing prompts", () => {
   it("marks thread messages as untrusted context", () => {
@@ -49,6 +53,12 @@ describe("AI writing prompts", () => {
 });
 
 describe("AI provider output parsing", () => {
+  it("uses a provider-compatible schema for cleanup generation", () => {
+    const schema = toJsonSchemaObject(AiCleanupGeneration);
+
+    expect(JSON.stringify(schema)).not.toContain('"allOf"');
+  });
+
   it("extracts a semantic version from provider CLI output", () => {
     expect(parseCliVersion("codex-cli 0.147.0 beta")).toBe("0.147.0");
     expect(parseCliVersion("version unknown")).toBeUndefined();
