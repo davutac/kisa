@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { getAiModelSelection } from "../src/renderer/src/ai";
+import {
+  getAiModelSelection,
+  getAvailableAiModelSelection,
+} from "../src/renderer/src/ai";
+import type {
+  AiModelSelection,
+  AiProviderStatus,
+  AiSettings,
+} from "../src/shared/ipc/ai";
 
 const settings = {
   activeProvider: "codex",
@@ -11,7 +19,25 @@ const settings = {
     opencode: null,
   },
   replyUserInstructions: "Write replies",
-} as const;
+} satisfies AiSettings;
+
+const selection = {
+  model: "gpt-5.6-luna",
+  provider: "codex",
+} satisfies AiModelSelection;
+
+const codex = {
+  authentication: "authenticated",
+  installed: true,
+  models: [
+    {
+      id: "gpt-5.6-luna",
+      isDefault: true,
+      name: "GPT-5.6 Luna",
+    },
+  ],
+  provider: "codex",
+} satisfies AiProviderStatus;
 
 describe("AI model selection", () => {
   it("resolves the active provider and model", () => {
@@ -27,6 +53,25 @@ describe("AI model selection", () => {
     ).toBeNull();
     expect(
       getAiModelSelection({ ...settings, activeProvider: "opencode" })
+    ).toBeNull();
+  });
+
+  it("resolves an available active provider and model", () => {
+    expect(getAvailableAiModelSelection(selection, [codex])).toStrictEqual(
+      selection
+    );
+  });
+
+  it("rejects a configured provider that is not available", () => {
+    expect(getAvailableAiModelSelection(selection, [])).toBeNull();
+    expect(
+      getAvailableAiModelSelection(selection, [{ ...codex, installed: false }])
+    ).toBeNull();
+    expect(
+      getAvailableAiModelSelection(
+        { ...selection, model: "model-not-reported" },
+        [codex]
+      )
     ).toBeNull();
   });
 });

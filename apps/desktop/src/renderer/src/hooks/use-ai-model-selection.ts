@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { AI_PROVIDER_NAMES, getAiModelSelection } from "@/ai";
+import {
+  AI_PROVIDER_NAMES,
+  getAiModelSelection,
+  getAvailableAiModelSelection,
+} from "@/ai";
 import type { AiApi } from "@/platform/desktop";
 import type { AiModelSelection } from "@/shared/ipc/ai";
 
@@ -15,10 +19,31 @@ export const useAiModelSelection = (aiApi: AiApi | undefined) => {
     let active = true;
     const load = async (): Promise<void> => {
       try {
-        const reply = await aiApi.getSettings();
-        if (active && reply.ok) {
-          setSelection(getAiModelSelection(reply.data));
+        const settingsReply = await aiApi.getSettings();
+        if (!active) {
+          return;
         }
+        if (!settingsReply.ok) {
+          setSelection(null);
+          return;
+        }
+        const configuredSelection = getAiModelSelection(settingsReply.data);
+        if (configuredSelection === null) {
+          setSelection(null);
+          return;
+        }
+        const providersReply = await aiApi.listProviders();
+        if (!active) {
+          return;
+        }
+        setSelection(
+          providersReply.ok
+            ? getAvailableAiModelSelection(
+                configuredSelection,
+                providersReply.data
+              )
+            : null
+        );
       } catch {
         if (active) {
           setSelection(null);
