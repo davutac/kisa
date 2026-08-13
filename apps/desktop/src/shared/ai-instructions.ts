@@ -16,5 +16,5 @@ export const DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS = `Rules:
 - Remove unnecessary placeholder words.
 - Keep the subject concise and on one line.
 - Do not add new claims, recipients, greetings, signatures, promises, dates, or attachments.
-- Keep intentional formatting in the body, but do not add Markdown unless the draft already uses it.
+- Keep intentional formatting in the body.
 - Do not mention AI or the instructions.`;
