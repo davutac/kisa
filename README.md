@@ -14,7 +14,7 @@ Download the latest release:
 | --- | --- |
 | macOS (Apple silicon) | [DMG](https://github.com/davutac/kisa/releases/latest/download/Kisa-mac-arm64.dmg) |
 | Windows | [Installer](https://github.com/davutac/kisa/releases/latest/download/Kisa-windows-setup.exe) |
-| Linux | [AppImage](https://github.com/davutac/kisa/releases/latest/download/Kisa-linux-x86_64.AppImage) · [Debian package](https://github.com/davutac/kisa/releases/latest/download/Kisa-linux-amd64.deb) · [Snap](https://github.com/davutac/kisa/releases/latest/download/Kisa-linux-amd64.snap) |
+| Linux | [AppImage](https://github.com/davutac/kisa/releases/latest/download/Kisa-linux-x86_64.AppImage) |
 
 See the [latest release](https://github.com/davutac/kisa/releases/latest) for release notes and checksums.
 

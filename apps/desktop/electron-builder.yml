@@ -47,8 +47,6 @@ linux:
   syncDesktopName: true
   target:
     - AppImage
-    - snap
-    - deb
   maintainer: Davut Caliskan
   category: Utility
 npmRebuild: false

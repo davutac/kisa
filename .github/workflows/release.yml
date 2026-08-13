@@ -55,13 +55,6 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: Install Linux packaging tools
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm
-          sudo snap install snapcraft --classic
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -92,10 +85,8 @@ jobs:
           path: |
             apps/desktop/dist/*.AppImage
             apps/desktop/dist/*.blockmap
-            apps/desktop/dist/*.deb
             apps/desktop/dist/*.dmg
             apps/desktop/dist/*.exe
-            apps/desktop/dist/*.snap
             apps/desktop/dist/*.zip
             apps/desktop/dist/latest*.yml
 
