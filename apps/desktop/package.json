@@ -29,12 +29,14 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "catalog:",
     "@base-ui/react": "catalog:",
     "@dnd-kit/dom": "catalog:",
     "@dnd-kit/react": "catalog:",
     "@electron-toolkit/utils": "catalog:",
     "@fontsource-variable/geist": "catalog:",
     "@googleapis/gmail": "catalog:",
+    "@opencode-ai/sdk": "catalog:",
     "@repo/database": "workspace:*",
     "@repo/gmail": "workspace:*",
     "@tanstack/react-hotkeys": "catalog:",

@@ -23,6 +23,7 @@ import {
 } from "@/state/general-settings";
 
 import SettingsAccountsSection from "./-components/settings-accounts-section";
+import SettingsAiSection from "./-components/settings-ai-section";
 import SettingsDatabaseSection from "./-components/settings-database-section";
 import SettingsUpdateRow from "./-components/settings-update-row";
 
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsRoute() {
   const {
+    ai,
     auth,
     mail,
     settings,
@@ -96,6 +98,8 @@ function SettingsRoute() {
             )}
           </SettingsRows>
         </SettingsSection>
+
+        {ai === undefined ? null : <SettingsAiSection aiApi={ai} />}
 
         {settings === undefined ? null : (
           <SettingsDatabaseSection settingsApi={settings} />

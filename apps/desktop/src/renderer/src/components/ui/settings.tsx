@@ -11,7 +11,7 @@ function Settings({ className, ...props }: SettingsProps) {
   return (
     <div
       data-slot="settings"
-      className={cn("mx-auto flex w-full max-w-2xl flex-col gap-8", className)}
+      className={cn("mx-auto flex w-full max-w-3xl flex-col gap-8", className)}
       {...props}
     />
   );

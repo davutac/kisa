@@ -1,5 +1,14 @@
 import type { UpdateStatus } from "../update-status";
 import type {
+  AiCleanupDraftReply,
+  AiCleanupDraftRequest,
+  AiProviderStatusListReply,
+  AiReplyGenerationReply,
+  AiReplyRequest,
+  AiSettingsReply,
+  AiSettingsUpdateRequest,
+} from "./ai";
+import type {
   AppStartupReply,
   ThreadWindowOpenReply,
   ThreadWindowOpenRequest,
@@ -85,6 +94,9 @@ export interface ElectronVersions {
 }
 
 export interface DesktopBridge {
+  cleanupEmailDraft: (
+    request: AiCleanupDraftRequest
+  ) => Promise<AiCleanupDraftReply>;
   authorizeOutgoingAttachments: (
     files: readonly File[]
   ) => Promise<GmailOutgoingAttachmentSelectionReply>;
@@ -115,6 +127,7 @@ export interface DesktopBridge {
   }) => Promise<DatabaseImportFileSelectionReply>;
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
+  getAiSettings: () => Promise<AiSettingsReply>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
   getSpamStatus: (
     request: GmailSpamStatusRequest
@@ -126,6 +139,7 @@ export interface DesktopBridge {
     request: DatabaseImportSession
   ) => Promise<DatabaseImportReply>;
   listAccountSettings: () => Promise<AccountSettingsReply>;
+  listAiProviders: () => Promise<AiProviderStatusListReply>;
   listComposerTemplates: () => Promise<ComposerTemplateListReply>;
   listCachedThreadPage: (
     request: GmailCachedThreadPageRequest
@@ -190,6 +204,9 @@ export interface DesktopBridge {
   reorderGoogleAccounts: (
     request: GoogleAccountReorderRequest
   ) => Promise<GoogleAccountReorderReply>;
+  generateEmailReply: (
+    request: AiReplyRequest
+  ) => Promise<AiReplyGenerationReply>;
   searchMail: (request: GmailSearchRequest) => Promise<GmailSearchResultsReply>;
   saveAttachment: (
     request: GmailAttachmentRequest
@@ -227,6 +244,9 @@ export interface DesktopBridge {
   updateAccountSettings: (
     request: AccountSettingsUpdateRequest
   ) => Promise<AccountSettingsReply>;
+  updateAiSettings: (
+    request: AiSettingsUpdateRequest
+  ) => Promise<AiSettingsReply>;
 }
 
 export type GoogleAccountsChangedListener = (
