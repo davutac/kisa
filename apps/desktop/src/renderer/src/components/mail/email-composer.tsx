@@ -52,6 +52,7 @@ interface EmailComposerProps {
   templateAccounts?: readonly GoogleAccount[];
   templateVariablePreviewContext?: Omit<TemplateVariableContext, "now">;
   templates?: readonly ComposerTemplate[];
+  toolbarHeader?: ReactNode;
   toolbarActions?: ReactNode;
 }
 
@@ -132,6 +133,7 @@ const EmailComposer = ({
   templateAccounts = NO_ACCOUNTS,
   templateVariablePreviewContext,
   templates = NO_TEMPLATES,
+  toolbarHeader,
   toolbarActions,
 }: EmailComposerProps) => {
   const contentKeyRef = useRef(contentKey);
@@ -264,6 +266,7 @@ const EmailComposer = ({
         className="flex min-h-0 flex-1 flex-col overflow-y-auto"
         editor={editor}
       />
+      {toolbarHeader}
       <EmailComposerToolbar
         actions={
           enableTemplateVariables ? (

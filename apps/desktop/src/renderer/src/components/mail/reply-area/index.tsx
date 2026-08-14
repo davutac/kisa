@@ -9,6 +9,7 @@ import { useCallback, useRef } from "react";
 import type { Ref } from "react";
 
 import AiComposerButton from "@/components/mail/ai-composer-button";
+import CleanDraftHistoryStrip from "@/components/mail/clean-draft-history-strip";
 import EmailComposer from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import MailForwardedMessage from "@/components/mail/forwarded-message";
@@ -77,9 +78,11 @@ const MailReplyArea = ({
   });
   const isForward = action === "forward";
   const handleDiscard = workspace.discard;
+  const handleDismissCleanVersion = workspace.dismissCleanVersion;
   const handleComposerChange = workspace.setComposer;
   const handleRecipientsChange = workspace.setRecipients;
   const handleSend = workspace.send;
+  const handleSelectCleanVersion = workspace.selectCleanVersion;
   const handleComposerReady = useCallback(
     (handle: ComposerFocusHandle | null): void => {
       composerHandleRef.current = handle;
@@ -121,7 +124,7 @@ const MailReplyArea = ({
       </div>
       <EmailRecipientFields
         accountId={accountId}
-        disabled={workspace.isBusy}
+        disabled={workspace.isInputDisabled}
         onChange={handleRecipientsChange}
         suggestedAddresses={suggestedAddresses}
         value={workspace.recipients}
@@ -131,10 +134,19 @@ const MailReplyArea = ({
         className="min-h-48"
         consumeModEnter
         defaultValue={draft.body.html}
-        disabled={workspace.isBusy}
+        disabled={workspace.isInputDisabled}
         focusHandleRef={handleComposerReady}
         onChange={handleComposerChange}
         placeholder={isForward ? "Add a message" : "Write a reply"}
+        toolbarHeader={
+          <CleanDraftHistoryStrip
+            disabled={workspace.isInputDisabled}
+            onDismiss={handleDismissCleanVersion}
+            onSelect={handleSelectCleanVersion}
+            selectedVersionId={workspace.selectedCleanVersionId}
+            versions={workspace.cleanHistory}
+          />
+        }
         toolbarActions={
           <ButtonGroup
             aria-label="AI reply actions"
@@ -146,7 +158,7 @@ const MailReplyArea = ({
                 disabled={!workspace.canCreateReply}
                 grouped
                 icon={MessageSquarePlusIcon}
-                isWorking={workspace.aiAction === "create"}
+                isWorking={workspace.isCreatingReply}
                 label="Create reply"
                 modelLabel={workspace.aiModelLabel}
                 onClick={() => {
@@ -160,7 +172,7 @@ const MailReplyArea = ({
               disabled={!workspace.canClean}
               grouped
               icon={SparklesIcon}
-              isWorking={workspace.aiAction === "clean"}
+              isWorking={false}
               label="Clean"
               modelLabel={workspace.aiModelLabel}
               onClick={() => {

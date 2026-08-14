@@ -8,6 +8,9 @@ import type { RefObject } from "react";
 
 import AccountPicker from "@/components/accounts/account-picker";
 import AiComposerButton from "@/components/mail/ai-composer-button";
+import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
+import CleanDraftHistoryStrip from "@/components/mail/clean-draft-history-strip";
+import type { EmailComposerValue } from "@/components/mail/email-composer";
 import EmailComposer from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import {
@@ -43,8 +46,10 @@ interface NewMessageFormProps {
   cleanupModelLabel: string;
   focus: ReturnType<typeof useComposerFocus>;
   inputRef: RefObject<HTMLInputElement | null>;
-  isCleaning: boolean;
   onClean: () => Promise<void>;
+  onComposerChange: (composer: EmailComposerValue) => void;
+  onDismissCleanVersion: (version: CleanDraftVersion) => void;
+  onSelectCleanVersion: (version: CleanDraftVersion) => void;
   onSend: () => Promise<void>;
   onStash: () => void;
   selectedAccountId: string;
@@ -56,6 +61,7 @@ interface NewMessageFormProps {
           current: readonly MailDraftAttachment[]
         ) => readonly MailDraftAttachment[])
   ) => void;
+  onSubjectChange: (subject: string) => void;
   templates: readonly ComposerTemplate[];
 }
 
@@ -70,32 +76,35 @@ const NewMessageForm = ({
   cleanupModelLabel,
   focus,
   inputRef,
-  isCleaning,
   onClean,
+  onComposerChange,
+  onDismissCleanVersion,
+  onSelectCleanVersion,
   onSend,
   onStash,
   selectedAccountId,
   sendShortcutLabel,
   setAttachments,
+  onSubjectChange,
   templates,
 }: NewMessageFormProps) => {
   const handleFocusCapture = focus.onFocusCapture;
   const composer = useNewMessageStore((state) => state.composer);
+  const cleanHistory = useNewMessageStore((state) => state.cleanHistory);
   const draftId = useNewMessageStore((state) => state.draftId);
   const isSending = useNewMessageStore((state) => state.isSending);
   const recipientResetVersion = useNewMessageStore(
     (state) => state.recipientResetVersion
   );
   const recipients = useNewMessageStore((state) => state.recipients);
+  const selectedCleanVersionId = useNewMessageStore(
+    (state) => state.selectedCleanVersionId
+  );
   const subject = useNewMessageStore((state) => state.subject);
   const setAccountId = useNewMessageStore((state) => state.setAccountId);
-  const setComposer = useNewMessageStore((state) => state.setComposer);
   const setRecipients = useNewMessageStore((state) => state.setRecipients);
-  const setSubject = useNewMessageStore((state) => state.setSubject);
-  const isBusy = isCleaning || isSending;
-
   useAppCommand("composer.attach", () => inputRef.current?.click(), {
-    enabled: !isBusy,
+    enabled: !isSending,
   });
 
   return (
@@ -133,9 +142,9 @@ const NewMessageForm = ({
         <InputGroupInput
           className="h-8 px-0 text-sm md:text-sm"
           id="new-message-subject"
-          disabled={isCleaning}
+          disabled={isSending}
           maxLength={MAX_GMAIL_SUBJECT_LENGTH}
-          onChange={(event) => setSubject(event.currentTarget.value)}
+          onChange={(event) => onSubjectChange(event.currentTarget.value)}
           ref={focus.refFor("subject")}
           value={subject}
         />
@@ -146,22 +155,31 @@ const NewMessageForm = ({
         consumeModEnter
         contentKey={draftId}
         defaultValue={composer.html}
-        disabled={isCleaning}
+        disabled={isSending}
         enableTemplateSlashMenu
         focusHandleRef={focus.handleRefFor("message")}
         onApplyTemplate={applyTemplate}
-        onChange={setComposer}
+        onChange={onComposerChange}
         placeholder="Write a message"
         templateFallbackAccountId={selectedAccountId}
         templateAccounts={accounts}
         templates={templates}
+        toolbarHeader={
+          <CleanDraftHistoryStrip
+            disabled={isSending}
+            onDismiss={onDismissCleanVersion}
+            onSelect={onSelectCleanVersion}
+            selectedVersionId={selectedCleanVersionId}
+            versions={cleanHistory}
+          />
+        }
         toolbarActions={
           <>
             <AiComposerButton
               command="composer.clean"
               disabled={!canClean}
               icon={SparklesIcon}
-              isWorking={isCleaning}
+              isWorking={false}
               label="Clean"
               modelLabel={cleanupModelLabel}
               onClick={() => {
@@ -170,7 +188,7 @@ const NewMessageForm = ({
               workingLabel="Cleaning…"
             />
             <NewMessageAttachmentButton
-              disabled={isBusy}
+              disabled={isSending}
               focusRef={focus.refFor("attachment")}
               inputRef={inputRef}
               onFiles={addAttachments}

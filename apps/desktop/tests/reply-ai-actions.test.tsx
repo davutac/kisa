@@ -3,21 +3,42 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import MailReplyArea from "../src/renderer/src/components/mail/reply-area";
+import type {
+  Tooltip as TooltipComponent,
+  TooltipContent as TooltipContentComponent,
+  TooltipTrigger as TooltipTriggerComponent,
+} from "../src/renderer/src/components/ui/tooltip";
 import { createThreadMailDraft } from "../src/renderer/src/mail/mail-draft";
-import type { GmailThreadMessage } from "../src/shared/ipc/mail";
+import type {
+  GmailThreadMessage,
+  MailDraftInput,
+} from "../src/shared/ipc/mail";
+
+type TooltipProps = Parameters<typeof TooltipComponent>[0];
+type TooltipContentProps = Parameters<typeof TooltipContentComponent>[0];
+type TooltipTriggerProps = Parameters<typeof TooltipTriggerComponent>[0];
 
 vi.mock(import("@/components/mail/email-composer"), () => ({
-  default: ({ toolbarActions }: { toolbarActions?: ReactNode }) => (
-    <div aria-label="Composer toolbar">{toolbarActions}</div>
+  default: ({
+    toolbarActions,
+    toolbarHeader,
+  }: {
+    toolbarActions?: ReactNode;
+    toolbarHeader?: ReactNode;
+  }) => (
+    <div aria-label="Composer">
+      {toolbarHeader}
+      <div aria-label="Composer toolbar">{toolbarActions}</div>
+    </div>
   ),
 }));
 
 vi.mock(import("@/components/mail/email-recipient-fields"), () => ({
-  default: () => null,
+  default: () => <span />,
 }));
 
 vi.mock(import("@/components/mail/forwarded-message"), () => ({
-  default: () => null,
+  default: () => <span />,
 }));
 
 vi.mock(import("@/components/mail/message-attachments"), () => ({
@@ -25,42 +46,66 @@ vi.mock(import("@/components/mail/message-attachments"), () => ({
 }));
 
 vi.mock(import("@/components/mail/relative-time"), () => ({
-  default: () => null,
+  default: () => <span />,
 }));
 
 vi.mock(import("@/components/ui/tooltip"), () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TooltipContent: ({ children }: { children: ReactNode }) => (
-    <div>{children}</div>
+  Tooltip: ({ children }: TooltipProps) => <div>{children as ReactNode}</div>,
+  TooltipContent: ({ children }: TooltipContentProps) => <div>{children}</div>,
+  TooltipTrigger: ({ render }: TooltipTriggerProps) => (
+    <span>{render as ReactNode}</span>
   ),
-  TooltipTrigger: ({ render }: { render: ReactNode }) => render,
 }));
 
 vi.mock(import("@/hotkeys"), () => ({
   HotkeyHint: ({ command }: { command: string }) => <span>{command}</span>,
   getHotkeyAriaLabel: vi.fn<(command: string) => string>((command) => command),
-  getHotkeyDisplay: vi.fn<(command: string) => { label: string }>(
-    (command) => ({
-      label:
-        command === "threadComposer.createReply"
-          ? "Create reply"
-          : "Clean up reply",
-    })
-  ),
+  getHotkeyDisplay: vi.fn<
+    (command: string) => { bindings: string[]; label: string }
+  >((command) => ({
+    bindings: [],
+    label:
+      command === "threadComposer.createReply"
+        ? "Create reply"
+        : "Clean up reply",
+  })),
   useAppCommand: vi.fn<() => void>(),
   useHotkeyLayer: vi.fn<() => void>(),
 }));
 
 vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
-  useReplyWorkspace: ({ action, draft }: { action: string; draft: object }) => {
+  useReplyWorkspace: ({
+    action,
+    draft,
+  }: {
+    action: string;
+    draft: MailDraftInput;
+  }) => {
     const isForward = action === "forward";
     return {
-      aiAction: null,
       aiModelLabel: "Codex · gpt-5.6-luna",
       canClean: isForward,
       canCreateReply: !isForward,
       canSend: true,
       clean: () => Promise.resolve(),
+      cleanHistory: isForward
+        ? [
+            {
+              body: "<p>Draft</p>",
+              id: "original",
+              label: "Original",
+              status: "ready",
+              subject: "Project update",
+            },
+            {
+              body: "<p>Draft</p>",
+              id: "clean-1",
+              label: "#1 Clean",
+              status: "loading",
+              subject: "Project update",
+            },
+          ]
+        : [],
       composer: {
         html: isForward ? "<p>Draft</p>" : "",
         isEmpty: !isForward,
@@ -69,9 +114,14 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
       createReply: () => Promise.resolve(),
       currentDraft: draft,
       discard: () => Promise.resolve(),
+      dismissCleanVersion: () => null,
       isBusy: false,
+      isCreatingReply: false,
+      isInputDisabled: false,
       isSending: false,
       recipients: { bcc: [], cc: [], to: [] },
+      selectCleanVersion: () => null,
+      selectedCleanVersionId: isForward ? "original" : null,
       send: () => Promise.resolve(),
       setComposer: () => null,
       setRecipients: () => null,
@@ -138,5 +188,16 @@ describe("reply AI actions", () => {
 
     expect(markup).toContain("Clean");
     expect(markup).not.toContain("Create reply");
+  });
+
+  it("shows cleanup history above the reply toolbar", () => {
+    const markup = renderReplyArea("forward");
+
+    expect(markup.indexOf("Draft history")).toBeGreaterThan(-1);
+    expect(markup.indexOf("Draft history")).toBeLessThan(
+      markup.indexOf("Composer toolbar")
+    );
+    expect(markup).toContain("Original");
+    expect(markup).toContain("#1 Cleaning…");
   });
 });

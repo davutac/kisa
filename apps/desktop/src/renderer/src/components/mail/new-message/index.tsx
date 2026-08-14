@@ -32,10 +32,14 @@ const NewMessageDialogContent = ({
   const workspace = useNewMessageWorkspace({ accounts, isOpen, onOpenChange });
   const [sendBinding] = workspace.sendDisplay.bindings;
   const handleClean = workspace.cleanDraft;
+  const handleComposerChange = workspace.updateComposer;
+  const handleDismissCleanVersion = workspace.dismissCleanVersion;
   const handleFiles = workspace.addAttachments;
+  const handleSelectCleanVersion = workspace.selectCleanVersion;
   const handleSelectDraft = workspace.switchDraft;
   const handleSend = workspace.send;
   const handleStash = workspace.stashCurrentDraft;
+  const handleSubjectChange = workspace.updateSubject;
 
   return (
     <Dialog
@@ -69,10 +73,13 @@ const NewMessageDialogContent = ({
           cleanupModelLabel={workspace.cleanupModelLabel}
           focus={workspace.focus}
           inputRef={workspace.inputRef}
-          isCleaning={workspace.isCleaning}
           onClean={handleClean}
+          onComposerChange={handleComposerChange}
+          onDismissCleanVersion={handleDismissCleanVersion}
+          onSelectCleanVersion={handleSelectCleanVersion}
           onSend={handleSend}
           onStash={handleStash}
+          onSubjectChange={handleSubjectChange}
           selectedAccountId={workspace.selectedAccountId}
           sendShortcutLabel={`${workspace.sendDisplay.label} (${sendBinding})`}
           setAttachments={workspace.setAttachments}

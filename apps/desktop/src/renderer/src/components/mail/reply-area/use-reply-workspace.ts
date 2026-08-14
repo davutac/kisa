@@ -10,6 +10,8 @@ import type { MailMessageAction } from "@/mail/reply-recipients";
 import { getAiApi, getMailApi } from "@/platform/desktop";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
+import { useReplyCleanHistory } from "./use-reply-clean-history";
+
 export const useReplyWorkspace = ({
   accountId,
   action,
@@ -37,7 +39,7 @@ export const useReplyWorkspace = ({
     isEmpty: draft.body.text.trim().length === 0,
     text: draft.body.text,
   }));
-  const [aiAction, setAiAction] = useState<"clean" | "create" | null>(null);
+  const [isCreatingReply, setIsCreatingReply] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [recipients, setRecipients] = useState<EmailRecipients>(() => ({
     bcc: draft.bcc,
@@ -50,6 +52,17 @@ export const useReplyWorkspace = ({
   );
   const finalizedRef = useRef(false);
   const mountedRef = useRef(false);
+  const cleanHistory = useReplyCleanHistory({
+    aiApi,
+    composer,
+    isCreatingReply,
+    isSending,
+    model: aiModel.selection,
+    mountedRef,
+    replaceComposerContent,
+    setComposer,
+    subject: draft.subject,
+  });
   const currentDraft = useMemo<MailDraftInput>(
     () => ({
       ...draft,
@@ -61,8 +74,7 @@ export const useReplyWorkspace = ({
     [composer.html, composer.text, draft, recipients]
   );
   const currentDraftRef = useRef(currentDraft);
-  const isBusy = aiAction !== null || isSending;
-  const canClean = aiModel.selection !== null && !composer.isEmpty && !isBusy;
+  const isBusy = cleanHistory.isCleaning || isCreatingReply || isSending;
   const canCreateReply =
     aiModel.selection !== null &&
     action !== "forward" &&
@@ -189,51 +201,11 @@ export const useReplyWorkspace = ({
     }
   };
 
-  const applyGeneratedBody = (body: string, successMessage: string): void => {
-    if (!replaceComposerContent(body)) {
-      toast.error("Could not update the reply draft");
-      return;
-    }
-    toast.success(successMessage);
-  };
-
-  const clean = async (): Promise<void> => {
-    if (!(aiApi && aiModel.selection && canClean)) {
-      return;
-    }
-    setAiAction("clean");
-    try {
-      const reply = await aiApi.cleanupDraft({
-        body: composer.html,
-        model: aiModel.selection,
-        subject: draft.subject,
-      });
-      if (!mountedRef.current) {
-        return;
-      }
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      applyGeneratedBody(reply.data.body, "Reply cleaned up");
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error ? error.message : "Could not clean up reply"
-        );
-      }
-    } finally {
-      if (mountedRef.current) {
-        setAiAction(null);
-      }
-    }
-  };
-
   const createReply = async (): Promise<void> => {
     if (!(aiApi && aiModel.selection && canCreateReply)) {
       return;
     }
-    setAiAction("create");
+    setIsCreatingReply(true);
     try {
       const reply = await aiApi.generateReply({
         accountId,
@@ -247,7 +219,12 @@ export const useReplyWorkspace = ({
         toast.error(reply.error);
         return;
       }
-      applyGeneratedBody(reply.data.body, "Reply created");
+      if (!replaceComposerContent(reply.data.body)) {
+        toast.error("Could not update the reply draft");
+        return;
+      }
+      cleanHistory.reset();
+      toast.success("Reply created");
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
@@ -256,27 +233,32 @@ export const useReplyWorkspace = ({
       }
     } finally {
       if (mountedRef.current) {
-        setAiAction(null);
+        setIsCreatingReply(false);
       }
     }
   };
 
   return {
-    aiAction,
     aiModelLabel: aiModel.label,
-    canClean,
+    canClean: cleanHistory.canClean,
     canCreateReply,
     canSend: mailApi !== undefined && !isBusy,
-    clean,
+    clean: cleanHistory.clean,
+    cleanHistory: cleanHistory.history,
     composer,
     createReply,
     currentDraft,
     discard,
+    dismissCleanVersion: cleanHistory.dismissVersion,
     isBusy,
+    isCreatingReply,
+    isInputDisabled: isCreatingReply || isSending,
     isSending,
     recipients,
+    selectCleanVersion: cleanHistory.selectVersion,
+    selectedCleanVersionId: cleanHistory.selectedVersionId,
     send,
-    setComposer,
+    setComposer: cleanHistory.updateComposer,
     setRecipients,
   };
 };

@@ -8,18 +8,36 @@ import {
   NewMessageStoreProvider,
 } from "../src/renderer/src/components/mail/new-message/new-message-store";
 import type { useComposerFocus } from "../src/renderer/src/components/mail/use-composer-focus";
+import type {
+  Tooltip as TooltipComponent,
+  TooltipContent as TooltipContentComponent,
+  TooltipTrigger as TooltipTriggerComponent,
+} from "../src/renderer/src/components/ui/tooltip";
+
+type TooltipProps = Parameters<typeof TooltipComponent>[0];
+type TooltipContentProps = Parameters<typeof TooltipContentComponent>[0];
+type TooltipTriggerProps = Parameters<typeof TooltipTriggerComponent>[0];
 
 vi.mock(import("@/components/accounts/account-picker"), () => ({
-  default: () => null,
+  default: () => <span />,
 }));
 
 vi.mock(import("@/components/mail/email-recipient-fields"), () => ({
-  default: () => null,
+  default: () => <span />,
 }));
 
 vi.mock(import("@/components/mail/email-composer"), () => ({
-  default: ({ toolbarActions }: { toolbarActions?: ReactNode }) => (
-    <div aria-label="Composer toolbar">{toolbarActions}</div>
+  default: ({
+    toolbarActions,
+    toolbarHeader,
+  }: {
+    toolbarActions?: ReactNode;
+    toolbarHeader?: ReactNode;
+  }) => (
+    <div aria-label="Composer">
+      {toolbarHeader}
+      <div aria-label="Composer toolbar">{toolbarActions}</div>
+    </div>
   ),
 }));
 
@@ -33,17 +51,19 @@ vi.mock(import("@/components/mail/new-message-attachments"), () => ({
 }));
 
 vi.mock(import("@/components/ui/tooltip"), () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TooltipContent: ({ children }: { children: ReactNode }) => (
-    <div>{children}</div>
+  Tooltip: ({ children }: TooltipProps) => <div>{children as ReactNode}</div>,
+  TooltipContent: ({ children }: TooltipContentProps) => <div>{children}</div>,
+  TooltipTrigger: ({ render }: TooltipTriggerProps) => (
+    <span>{render as ReactNode}</span>
   ),
-  TooltipTrigger: ({ render }: { render: ReactNode }) => render,
 }));
 
 vi.mock(import("@/hotkeys"), () => ({
   HotkeyHint: ({ command }: { command: string }) => <span>{command}</span>,
   getHotkeyAriaLabel: vi.fn<(command: string) => string>(() => "Meta+Shift+C"),
-  getHotkeyDisplay: vi.fn<(command: string) => object>(() => ({
+  getHotkeyDisplay: vi.fn<
+    (command: string) => { bindings: string[]; label: string }
+  >(() => ({
     bindings: ["⌘ ⇧ C"],
     label: "Clean up draft",
   })),
@@ -66,13 +86,7 @@ const focus = {
   restorePending: () => null,
 } satisfies ReturnType<typeof useComposerFocus>;
 
-const renderForm = ({
-  canClean,
-  isCleaning,
-}: {
-  canClean: boolean;
-  isCleaning: boolean;
-}): string => {
+const renderForm = ({ canClean }: { canClean: boolean }): string => {
   const store = createNewMessageStore("");
 
   return renderToString(
@@ -88,10 +102,13 @@ const renderForm = ({
         cleanupModelLabel="Codex · gpt-5.6-luna"
         focus={focus}
         inputRef={{ current: null }}
-        isCleaning={isCleaning}
         onClean={() => Promise.resolve()}
+        onComposerChange={() => null}
+        onDismissCleanVersion={() => null}
+        onSelectCleanVersion={() => null}
         onSend={() => Promise.resolve()}
         onStash={() => null}
+        onSubjectChange={() => null}
         selectedAccountId=""
         sendShortcutLabel="Send"
         setAttachments={() => null}
@@ -103,7 +120,7 @@ const renderForm = ({
 
 describe("new message cleanup", () => {
   it("places Clean immediately before attachments in the composer toolbar", () => {
-    const markup = renderForm({ canClean: true, isCleaning: false });
+    const markup = renderForm({ canClean: true });
 
     expect(markup.indexOf("Clean")).toBeGreaterThan(-1);
     expect(markup.indexOf("Clean")).toBeLessThan(
@@ -114,26 +131,34 @@ describe("new message cleanup", () => {
   });
 
   it("shows its shortcut, provider, and model", () => {
-    const markup = renderForm({ canClean: true, isCleaning: false });
+    const markup = renderForm({ canClean: true });
 
     expect(markup).toContain('aria-keyshortcuts="Meta+Shift+C"');
     expect(markup).toContain("Codex · gpt-5.6-luna");
     expect(markup).toContain("composer.clean");
   });
 
-  it("shows a busy state and disables toolbar actions during cleanup", () => {
-    const markup = renderForm({ canClean: false, isCleaning: true });
+  it("keeps Clean and draft inputs available while generations run", () => {
+    const markup = renderForm({ canClean: true });
     const cleanButton = markup.match(
       /<button[^>]*aria-label="Clean up draft"[^>]*>/u
     )?.[0];
     const attachmentButton = markup.match(
       /<button[^>]*aria-label="Add attachments"[^>]*>/u
     )?.[0];
+    const subjectInput = markup.match(
+      /<input[^>]*id="new-message-subject"[^>]*>/u
+    )?.[0];
 
-    expect(markup).toContain("Cleaning…");
-    expect(cleanButton).toContain('aria-busy="true"');
-    expect(cleanButton).toContain("disabled");
-    expect(cleanButton).toContain("disabled:before:hidden");
-    expect(attachmentButton).toContain("disabled");
+    expect(cleanButton).toContain('aria-busy="false"');
+    expect(cleanButton).not.toContain(' disabled=""');
+    expect(attachmentButton).not.toContain(' disabled=""');
+    expect(subjectInput).not.toContain(' disabled=""');
+  });
+
+  it("keeps history hidden before a clean starts", () => {
+    const markup = renderForm({ canClean: true });
+
+    expect(markup).not.toContain("Draft history");
   });
 });

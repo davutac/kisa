@@ -6,6 +6,7 @@
     "src/renderer/src/**/*.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "../../packages/database/src/**/*.ts"
   ],
   "compilerOptions": {

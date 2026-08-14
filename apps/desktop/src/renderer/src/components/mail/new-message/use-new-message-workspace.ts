@@ -4,13 +4,11 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import { toast } from "sonner";
 
 import { useNewMessageAttachments } from "@/components/mail/new-message-attachments";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
-import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import {
   createNewMailDraft,
@@ -18,7 +16,7 @@ import {
   getNewMailStashCommandAction,
   isNewMailDraftEmpty,
 } from "@/mail/mail-draft";
-import { getAiApi, getMailApi } from "@/platform/desktop";
+import { getMailApi } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
@@ -32,6 +30,7 @@ import {
   useDraftPersistence,
 } from "./new-message-draft-persistence";
 import { useNewMessageStore } from "./new-message-store";
+import { useNewMessageCleanHistory } from "./use-new-message-clean-history";
 
 export const useNewMessageWorkspace = ({
   accounts,
@@ -61,17 +60,14 @@ export const useNewMessageWorkspace = ({
     (state) => state.incrementRecipientResetVersion
   );
   const { templates } = useComposerTemplates();
-  const aiApi = useMemo(() => getAiApi(), []);
-  const cleanupModel = useAiModelSelection();
-  const [isCleaning, setIsCleaning] = useState(false);
   const draftOperationQueueRef = useRef(Promise.resolve());
-  const isOpenRef = useRef(false);
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const mailApi = useMemo(() => getMailApi(), []);
   const { addAttachments, attachments, inputRef, setAttachments } =
     useNewMessageAttachments(mailApi);
   const { persistDraft, popDraft } = useDraftPersistence(mailApi);
   const focus = useComposerFocus();
+  const cleanup = useNewMessageCleanHistory({ focus, isOpen });
   const selectedAccountId = accounts.some(({ email }) => email === accountId)
     ? accountId
     : "";
@@ -115,13 +111,6 @@ export const useNewMessageWorkspace = ({
     currentDraftRef.current = currentDraft;
   }, [currentDraft]);
 
-  useEffect(() => {
-    isOpenRef.current = isOpen;
-    return () => {
-      isOpenRef.current = false;
-    };
-  }, [isOpen]);
-
   useLayoutEffect(() => {
     focus.restorePending();
   }, [draftId, focus]);
@@ -131,12 +120,8 @@ export const useNewMessageWorkspace = ({
     currentDraft,
     availableStashes.length > 0
   );
-  const isBusy = isCleaning || isSending;
+  const isBusy = cleanup.isCleaning || isSending;
   const canStash = stashCommandAction === "stash" && !isBusy;
-  const canClean =
-    cleanupModel.selection !== null &&
-    (subject.trim().length > 0 || !composer.isEmpty) &&
-    !isBusy;
   const canSend =
     mailApi !== undefined &&
     selectedAccountId.length > 0 &&
@@ -192,6 +177,7 @@ export const useNewMessageWorkspace = ({
   }, [accounts, mailApi, setStashes, updateStashes]);
 
   const applyDraft = (draft: MailDraftInput): void => {
+    cleanup.reset();
     currentDraftRef.current = draft;
     setAccountId(draft.accountId ?? "");
     setAttachments(draft.attachments);
@@ -223,6 +209,7 @@ export const useNewMessageWorkspace = ({
       },
       applicableTemplate
     );
+    cleanup.reset();
     setAccountId(applied.accountId);
     setComposer({
       html: applied.body.html,
@@ -279,57 +266,6 @@ export const useNewMessageWorkspace = ({
     });
   };
 
-  const cleanDraft = async (): Promise<void> => {
-    if (!(canClean && aiApi && cleanupModel.selection)) {
-      return;
-    }
-    const snapshot = {
-      body: composer.html,
-      draftId,
-      subject,
-    };
-    setIsCleaning(true);
-    try {
-      const reply = await aiApi.cleanupDraft({
-        body: snapshot.body,
-        model: cleanupModel.selection,
-        subject: snapshot.subject,
-      });
-      if (!isOpenRef.current) {
-        return;
-      }
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      const { current } = currentDraftRef;
-      if (
-        current.id !== snapshot.draftId ||
-        current.body.html !== snapshot.body ||
-        current.subject !== snapshot.subject
-      ) {
-        toast.info("Draft changed while cleaning. Try again when ready.");
-        return;
-      }
-      if (!focus.replaceContent("message", reply.data.body)) {
-        toast.error("Could not update the email draft");
-        return;
-      }
-      setSubject(reply.data.subject);
-      toast.success("Draft cleaned up");
-    } catch (error) {
-      if (isOpenRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Could not clean up the draft"
-        );
-      }
-    } finally {
-      setIsCleaning(false);
-    }
-  };
-
   const send = async (): Promise<void> => {
     if (!(canSend && mailApi)) {
       return;
@@ -374,9 +310,9 @@ export const useNewMessageWorkspace = ({
   useAppCommand(
     "composer.clean",
     () => {
-      void cleanDraft();
+      void cleanup.cleanDraft();
     },
-    { enabled: isOpen && canClean }
+    { enabled: isOpen && cleanup.canClean }
   );
   useAppCommand(
     "composer.stash",
@@ -397,14 +333,16 @@ export const useNewMessageWorkspace = ({
     applyTemplate,
     attachments,
     availableStashes,
-    canClean,
+    canClean: cleanup.canClean,
     canSend,
     canStash,
-    cleanDraft,
-    cleanupModelLabel: cleanupModel.label,
+    cleanDraft: cleanup.cleanDraft,
+    cleanupModelLabel: cleanup.modelLabel,
+    dismissCleanVersion: cleanup.dismissVersion,
     focus,
     inputRef,
-    isCleaning,
+    isCleaning: cleanup.isCleaning,
+    selectCleanVersion: cleanup.selectVersion,
     selectedAccountId,
     send,
     sendDisplay: getHotkeyDisplay("composer.send"),
@@ -413,5 +351,7 @@ export const useNewMessageWorkspace = ({
     stashPickerTriggerRef,
     switchDraft,
     templates,
+    updateComposer: cleanup.updateComposer,
+    updateSubject: cleanup.updateSubject,
   };
 };
