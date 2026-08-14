@@ -1,3 +1,4 @@
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import {
@@ -46,20 +47,32 @@ const loadGenerationSettings = Effect.fn("loadAiGenerationSettings")(
     const instructions =
       operation === "reply"
         ? {
-            systemPrompt: AI_REPLY_SYSTEM_INSTRUCTIONS,
-            userInstructions:
+            standingInstructions:
               settings.replyUserInstructions.trim() ||
               DEFAULT_AI_REPLY_USER_INSTRUCTIONS,
+            systemPrompt: AI_REPLY_SYSTEM_INSTRUCTIONS,
           }
         : {
-            systemPrompt: AI_DRAFT_CLEANUP_SYSTEM_INSTRUCTIONS,
-            userInstructions:
+            standingInstructions:
               settings.cleanupUserInstructions.trim() ||
               DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
+            systemPrompt: AI_DRAFT_CLEANUP_SYSTEM_INSTRUCTIONS,
           };
     return {
       ...instructions,
       model,
+    };
+  }
+);
+
+const loadAiRuntimeContext = Effect.fn("loadAiRuntimeContext")(
+  function* loadAiRuntimeContext() {
+    const now = yield* DateTime.nowInCurrentZone.pipe(
+      Effect.provide(DateTime.layerCurrentZoneLocal)
+    );
+    return {
+      currentDate: DateTime.formatIsoDate(now),
+      deviceTimeZone: DateTime.zoneToString(now.zone),
     };
   }
 );
@@ -71,10 +84,11 @@ const sanitizeSubject = (subject: string): string =>
 
 export const generateAiReply = Effect.fn("generateAiReply")(
   function* generateAiReply(request: AiReplyRequest) {
-    const [generation, context] = yield* Effect.all(
+    const [generation, context, runtimeContext] = yield* Effect.all(
       [
         loadGenerationSettings(request.model, "reply"),
         loadAiThreadContext(request),
+        loadAiRuntimeContext(),
       ],
       { concurrency: "unbounded" }
     );
@@ -86,7 +100,8 @@ export const generateAiReply = Effect.fn("generateAiReply")(
         accountId: request.accountId,
         context,
         requestInstructions: request.instructions,
-        userInstructions: generation.userInstructions,
+        runtimeContext,
+        standingInstructions: generation.standingInstructions,
       }),
     }).pipe(Effect.scoped);
 
@@ -96,7 +111,13 @@ export const generateAiReply = Effect.fn("generateAiReply")(
 
 export const cleanupAiDraft = Effect.fn("cleanupAiDraft")(
   function* cleanupAiDraft(request: AiCleanupDraftRequest) {
-    const generation = yield* loadGenerationSettings(request.model, "cleanup");
+    const [generation, runtimeContext] = yield* Effect.all(
+      [
+        loadGenerationSettings(request.model, "cleanup"),
+        loadAiRuntimeContext(),
+      ],
+      { concurrency: "unbounded" }
+    );
     const generated = yield* generateStructuredText({
       model: generation.model,
       outputSchema: AiCleanupGeneration,
@@ -104,8 +125,9 @@ export const cleanupAiDraft = Effect.fn("cleanupAiDraft")(
       userPrompt: buildCleanupPrompt({
         body: request.body,
         requestInstructions: request.instructions,
+        runtimeContext,
+        standingInstructions: generation.standingInstructions,
         subject: request.subject,
-        userInstructions: generation.userInstructions,
       }),
     }).pipe(Effect.scoped);
 
