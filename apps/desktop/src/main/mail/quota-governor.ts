@@ -31,7 +31,7 @@ import { setTimeout as delay } from "node:timers/promises";
  */
 
 /**
- * Documented Gmail API quota costs, per call, from
+ * Complete Gmail API quota costs, per call, from
  * https://developers.google.com/workspace/gmail/api/reference/quota
  *
  * `threadsGet` at 40 is the number that governs everything here: it is four
@@ -39,22 +39,65 @@ import { setTimeout as delay } from "node:timers/promises";
  * entire cost of indexing.
  */
 export const QUOTA_UNITS = {
-  attachmentsGet: 20,
+  draftsCreate: 10,
+  draftsDelete: 10,
+  draftsGet: 20,
+  draftsList: 5,
+  draftsSend: 100,
+  draftsUpdate: 15,
   getProfile: 1,
   historyList: 2,
   labelsCreate: 5,
   labelsDelete: 5,
   labelsGet: 1,
   labelsList: 1,
+  labelsUpdate: 5,
+  messagesAttachmentsGet: 20,
+  messagesBatchDelete: 50,
   messagesBatchModify: 50,
+  messagesDelete: 10,
   messagesGet: 20,
+  messagesImport: 25,
+  messagesInsert: 25,
   messagesList: 5,
+  messagesModify: 5,
   messagesSend: 100,
+  messagesTrash: 20,
+  messagesUntrash: 5,
+  settingsDelegatesCreate: 100,
+  settingsDelegatesDelete: 5,
+  settingsDelegatesGet: 1,
+  settingsDelegatesList: 1,
+  settingsFiltersCreate: 5,
+  settingsFiltersDelete: 5,
+  settingsFiltersGet: 1,
+  settingsFiltersList: 1,
+  settingsForwardingAddressesCreate: 100,
+  settingsForwardingAddressesDelete: 5,
+  settingsForwardingAddressesGet: 1,
+  settingsForwardingAddressesList: 1,
+  settingsGetAutoForwarding: 1,
+  settingsGetImap: 1,
+  settingsGetPop: 1,
+  settingsGetVacation: 1,
+  settingsSendAsCreate: 100,
+  settingsSendAsDelete: 5,
+  settingsSendAsGet: 1,
+  settingsSendAsList: 1,
+  settingsSendAsUpdate: 100,
+  settingsSendAsVerify: 100,
+  settingsUpdateAutoForwarding: 5,
+  settingsUpdateImap: 5,
+  settingsUpdatePop: 100,
+  settingsUpdateVacation: 5,
+  stop: 50,
   threadsDelete: 20,
   threadsGet: 40,
   threadsList: 10,
   threadsModify: 10,
   threadsTrash: 20,
+  threadsUntrash: 10,
+  watch: 100,
 } as const;
 
 /**

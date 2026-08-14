@@ -529,7 +529,7 @@ export const GmailGatewayLive = Layer.succeed(
 
           mailQuotaGovernor.charge(
             authorization.account.id,
-            QUOTA_UNITS.attachmentsGet
+            QUOTA_UNITS.messagesAttachmentsGet
           );
           const response = await client.users.messages.attachments.get({
             id: request.attachmentId,
