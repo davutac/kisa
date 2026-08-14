@@ -18,6 +18,16 @@ type TooltipProps = Parameters<typeof TooltipComponent>[0];
 type TooltipContentProps = Parameters<typeof TooltipContentComponent>[0];
 type TooltipTriggerProps = Parameters<typeof TooltipTriggerComponent>[0];
 
+const getMockHotkeyLabel = (command: string): string => {
+  if (command === "threadComposer.createReply") {
+    return "Create reply";
+  }
+  if (command === "threadComposer.attach") {
+    return "Add attachments";
+  }
+  return "Clean up reply";
+};
+
 vi.mock(import("@/components/mail/email-composer"), () => ({
   default: ({
     toolbarActions,
@@ -63,11 +73,8 @@ vi.mock(import("@/hotkeys"), () => ({
   getHotkeyDisplay: vi.fn<
     (command: string) => { bindings: string[]; label: string }
   >((command) => ({
-    bindings: [],
-    label:
-      command === "threadComposer.createReply"
-        ? "Create reply"
-        : "Clean up reply",
+    bindings: command === "threadComposer.attach" ? ["⌘ ⇧ A"] : [],
+    label: getMockHotkeyLabel(command),
   })),
   useAppCommand: vi.fn<() => void>(),
   useHotkeyLayer: vi.fn<() => void>(),
@@ -83,7 +90,17 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
   }) => {
     const isForward = action === "forward";
     return {
+      addAttachments: () => Promise.resolve(),
       aiModelLabel: "Codex · gpt-5.6-luna",
+      attachments: [
+        {
+          filename: "notes.txt",
+          id: "attachment-1",
+          mediaType: "text/plain",
+          referenceId: "reference-1",
+          size: 1200,
+        },
+      ],
       canClean: isForward,
       canCreateReply: !isForward,
       canSend: true,
@@ -115,6 +132,7 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
       currentDraft: draft,
       discard: () => Promise.resolve(),
       dismissCleanVersion: () => null,
+      inputRef: { current: null },
       isBusy: false,
       isCreatingReply: false,
       isInputDisabled: false,
@@ -123,6 +141,7 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
       selectCleanVersion: () => null,
       selectedCleanVersionId: isForward ? "original" : null,
       send: () => Promise.resolve(),
+      setAttachments: () => null,
       setComposer: () => null,
       setRecipients: () => null,
     };
@@ -199,5 +218,15 @@ describe("reply AI actions", () => {
     );
     expect(markup).toContain("Original");
     expect(markup).toContain("#1 Cleaning…");
+  });
+
+  it("offers attachments and shows selected files", () => {
+    const markup = renderReplyArea("reply");
+
+    expect(markup).toContain('aria-label="Add attachments"');
+    expect(markup).toContain('aria-keyshortcuts="threadComposer.attach"');
+    expect(markup).toContain("notes.txt");
+    expect(markup).toContain("2 KB");
+    expect(markup).toContain('aria-label="Remove notes.txt"');
   });
 });

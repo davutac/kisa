@@ -201,6 +201,13 @@ describe("GmailMime sending", () => {
           mime.composeReply(
             {
               accountId: AccountId.make("me@example.com"),
+              attachments: [
+                {
+                  bytes: new TextEncoder().encode("Reply attachment"),
+                  filename: "reply.txt",
+                  mediaType: "text/plain",
+                },
+              ],
               body: {
                 html: "<p>My reply</p>",
                 text: "My reply",
@@ -221,6 +228,9 @@ describe("GmailMime sending", () => {
     const bodies = decodeTransferBodies(raw);
 
     expect({
+      hasAttachment: raw.includes(
+        'Content-Disposition: attachment; filename="reply.txt"'
+      ),
       hasCc: raw.includes("Cc: bob@example.com"),
       hasInReplyTo: raw.includes("In-Reply-To: <message-1@example.com>"),
       hasReferences: raw.includes(
@@ -230,6 +240,7 @@ describe("GmailMime sending", () => {
       hasTo: raw.includes("To: alice@example.com"),
       threadId: message.threadId,
     }).toStrictEqual({
+      hasAttachment: true,
       hasCc: true,
       hasInReplyTo: true,
       hasReferences: true,
@@ -238,6 +249,9 @@ describe("GmailMime sending", () => {
       threadId: "thread-1",
     });
     expect(bodies).toContainEqual(expect.stringContaining("My reply"));
+    expect(raw).toContain(
+      Buffer.from("Reply attachment", "utf-8").toString("base64")
+    );
     expect(bodies).toContainEqual(expect.stringContaining("Original text"));
     expect(bodies).toContainEqual(expect.stringContaining("Original HTML"));
   });

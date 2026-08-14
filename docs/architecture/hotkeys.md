@@ -69,7 +69,7 @@ Within a conversation, `J` or `ArrowDown` selects and opens the next newer messa
 
 `R` replies to the selected message, `Shift+R` replies to everyone on it, and `F` forwards it. Reply all is available only when the selected message has at least two distinct non-self reply targets across its sender, To, and Cc fields; otherwise its footer button is omitted and `Shift+R` is inactive. Bcc recipients never count toward reply all. A draft captures that message as its immutable target. When a saved draft is resumed, its target becomes the selected message again. The footer buttons derive their shortcut labels and ARIA metadata from these commands.
 
-`Mod+Shift+A` opens the attachment picker while composing a new email.
+`Mod+Shift+A` opens the attachment picker while composing a new email, reply, reply-all, or forward.
 
 `Mod+Shift+C` cleans up the current new-email draft using the provider and model shown in the Clean button tooltip. The command remains available while focus is in the subject or message editor and is disabled for an empty draft or while another compose action is running.
 
@@ -137,9 +137,11 @@ Buttons and tooltips should derive labels and shortcut metadata from the registr
 
 ## Composer integration
 
+`MailComposer` owns the shared mail-editor surface: AI actions, draft history, the attachment picker and list, and their command registration. New-message and thread composers configure those optional parts while retaining only their distinct account, subject, context, and footer chrome.
+
 Tiptap's StarterKit maps `Mod+Enter` to a hard break, while Kisa maps it to Send. `EmailComposer` can install a high-priority Tiptap extension that consumes the editor command without stopping DOM propagation. TanStack then handles Send at the document layer. `Mod+S` remains an application command while the composer layer is active, and `Shift+Enter` remains owned by Tiptap.
 
-The same `Mod+Enter` guard is active in a thread draft. In that mode `Mod+Enter` sends, while `Escape` closes the editor and preserves the resumable draft. Discard remains an explicit button action.
+The same `Mod+Enter` guard is active in a thread draft. In that mode `Mod+Enter` sends, `Mod+Shift+A` opens the attachment picker, and `Escape` closes the editor and preserves the resumable draft. Discard remains an explicit button action.
 
 In a reply or reply-all composer, `Mod+Shift+R` creates a reply from thread context while the editor is empty. `Mod+Shift+C` cleans the current reply. Forward composers expose cleanup but not reply generation. Both commands work while focus is inside the rich-text editor and are disabled while another composer operation is running.
 

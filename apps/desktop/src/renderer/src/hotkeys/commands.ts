@@ -384,6 +384,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "thread",
   },
+  "threadComposer.attach": {
+    bindings: ["Mod+Shift+A"],
+    input: "allow",
+    label: "Add attachments",
+    repeat: "once",
+    scope: "thread-composer",
+  },
   "threadComposer.clean": {
     bindings: ["Mod+Shift+C"],
     input: "allow",

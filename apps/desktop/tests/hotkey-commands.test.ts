@@ -226,6 +226,11 @@ describe("hotkey command registry", () => {
   });
 
   it("gives the inline thread composer its own commands", () => {
+    expect(HOTKEY_COMMANDS["threadComposer.attach"]).toMatchObject({
+      bindings: ["Mod+Shift+A"],
+      input: "allow",
+      scope: "thread-composer",
+    });
     expect(HOTKEY_COMMANDS["threadComposer.close"]).toMatchObject({
       bindings: ["Escape"],
       input: "allow",

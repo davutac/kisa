@@ -186,6 +186,12 @@ export const GmailBulkThreadMutationResult = Schema.Struct({
 export type GmailBulkThreadMutationResult =
   typeof GmailBulkThreadMutationResult.Type;
 
+export const GmailOutgoingAttachmentCapability = Schema.Struct({
+  capability: Schema.NonEmptyString,
+});
+export type GmailOutgoingAttachmentCapability =
+  typeof GmailOutgoingAttachmentCapability.Type;
+
 export const GmailThreadMessageAction = Schema.Literals([
   "forward",
   "reply",
@@ -196,6 +202,7 @@ export type GmailThreadMessageAction = typeof GmailThreadMessageAction.Type;
 export const GmailThreadMessageSendRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   action: GmailThreadMessageAction,
+  attachments: Schema.Array(GmailOutgoingAttachmentCapability),
   bcc: Schema.Array(Schema.NonEmptyString),
   body: Schema.Struct({
     html: Schema.String,
@@ -214,12 +221,6 @@ export const MAX_GMAIL_ATTACHMENT_BYTES = 25_000_000;
 const GmailOutgoingSubject = Schema.String.check(
   Schema.isMaxLength(MAX_GMAIL_SUBJECT_LENGTH)
 );
-
-export const GmailOutgoingAttachmentCapability = Schema.Struct({
-  capability: Schema.NonEmptyString,
-});
-export type GmailOutgoingAttachmentCapability =
-  typeof GmailOutgoingAttachmentCapability.Type;
 
 export const GmailOutgoingAttachmentPrepareRequest = Schema.Struct({
   referenceIds: Schema.Array(Schema.NonEmptyString),

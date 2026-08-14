@@ -766,7 +766,7 @@ describe(Gmail, () => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("loads original attachments before forwarding", () => {
+  it.effect("combines attachments when forwarding", () => {
     const { layer, state } = createTestLayer();
 
     return Effect.gen(function* forwardsAttachments() {
@@ -776,6 +776,13 @@ describe(Gmail, () => {
       );
       const sent = yield* gmail.forward({
         accountId: account.id,
+        attachments: [
+          {
+            bytes: new Uint8Array([4, 5, 6]),
+            filename: "notes.txt",
+            mediaType: "text/plain",
+          },
+        ],
         body: { text: "FYI", type: "text" },
         forwardMessageId: MessageId.make("message-1"),
         threadId: ThreadId.make("thread-1"),
@@ -786,6 +793,7 @@ describe(Gmail, () => {
       expect(state.attachmentCalls).toStrictEqual(["attachment-1"]);
       expect(state.forwardAttachmentContentIds).toStrictEqual([
         "logo@example.com",
+        undefined,
       ]);
       expect(state.sendCalls).toBe(1);
     }).pipe(Effect.provide(layer));

@@ -7,7 +7,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { useNewMessageAttachments } from "@/components/mail/new-message-attachments";
+import { useOutgoingAttachments } from "@/components/mail/outgoing-attachments";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import {
@@ -63,8 +63,13 @@ export const useNewMessageWorkspace = ({
   const draftOperationQueueRef = useRef(Promise.resolve());
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const mailApi = useMemo(() => getMailApi(), []);
-  const { addAttachments, attachments, inputRef, setAttachments } =
-    useNewMessageAttachments(mailApi);
+  const {
+    addAttachments,
+    attachments,
+    inputRef,
+    prepareAttachments,
+    setAttachments,
+  } = useOutgoingAttachments(mailApi);
   const { persistDraft, popDraft } = useDraftPersistence(mailApi);
   const focus = useComposerFocus();
   const cleanup = useNewMessageCleanHistory({ focus, isOpen });
@@ -272,16 +277,13 @@ export const useNewMessageWorkspace = ({
     }
     setIsSending(true);
     try {
-      const prepared = await mailApi.prepareOutgoingAttachments({
-        referenceIds: attachments.map(({ referenceId }) => referenceId),
-      });
-      if (!prepared.ok) {
-        toast.error(prepared.error);
+      const preparedAttachments = await prepareAttachments();
+      if (preparedAttachments === undefined) {
         return;
       }
       const reply = await mailApi.sendMessage({
         accountId: selectedAccountId,
-        attachments: prepared.data,
+        attachments: preparedAttachments,
         bcc: recipients.bcc,
         body: currentDraft.body,
         cc: recipients.cc,

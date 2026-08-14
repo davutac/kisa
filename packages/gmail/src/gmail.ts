@@ -711,7 +711,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           parsed.messages.find(
             (message) => message.id === input.forwardMessageId
           ) ?? parsed.messages.at(-1);
-        const attachments =
+        const forwardedAttachments =
           forwarded === undefined
             ? []
             : yield* Effect.forEach(
@@ -733,7 +733,13 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
                 { concurrency: 3 }
               );
         const message = yield* mime.composeForward(
-          { ...input, attachments },
+          {
+            ...input,
+            attachments: [
+              ...forwardedAttachments,
+              ...(input.attachments ?? []),
+            ],
+          },
           rawThread
         );
 

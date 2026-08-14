@@ -15,9 +15,7 @@ export interface GmailMimeService {
     input: SendMessageInput
   ) => Effect.Effect<RawMessage, GmailMimeError | GmailValidationError>;
   readonly composeForward: (
-    input: ForwardInput & {
-      readonly attachments?: SendMessageInput["attachments"];
-    },
+    input: ForwardInput,
     thread: GatewayThread
   ) => Effect.Effect<RawMessage, GmailMimeError | GmailValidationError>;
   readonly composeReply: (

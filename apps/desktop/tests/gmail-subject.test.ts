@@ -18,6 +18,7 @@ import {
 } from "../src/shared/gmail-subject";
 import {
   GmailMessageSendRequest,
+  GmailThreadMessageSendRequest,
   MailDraftInput,
 } from "../src/shared/ipc/mail";
 
@@ -79,6 +80,30 @@ describe("Gmail subject limit", () => {
             path: "/renderer-controlled/secrets.txt",
           },
         ],
+      })
+    ).toThrow("capability");
+  });
+
+  it("accepts only opaque attachment capabilities for replies and forwards", () => {
+    const request = {
+      accountId: "person@example.com",
+      action: "reply" as const,
+      attachments: [{ capability: "main-issued-capability" }],
+      bcc: [],
+      body: { html: "", text: "Hello" },
+      cc: [],
+      messageId: "message-1",
+      threadId: "thread-1",
+      to: ["friend@example.com"],
+    };
+
+    expect(() =>
+      Schema.decodeSync(GmailThreadMessageSendRequest)(request)
+    ).not.toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(GmailThreadMessageSendRequest)({
+        ...request,
+        attachments: [{ path: "/renderer-controlled/secrets.txt" }],
       })
     ).toThrow("capability");
   });

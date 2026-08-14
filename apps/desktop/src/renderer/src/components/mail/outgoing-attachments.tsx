@@ -22,10 +22,12 @@ const formatAttachmentSize = (bytes: number): string => {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 };
 
-export const useNewMessageAttachments = (mailApi: MailApi | undefined) => {
-  const [attachments, setAttachments] = useState<
-    readonly MailDraftAttachment[]
-  >([]);
+export const useOutgoingAttachments = (
+  mailApi: MailApi | undefined,
+  initialAttachments: readonly MailDraftAttachment[] = []
+) => {
+  const [attachments, setAttachments] =
+    useState<readonly MailDraftAttachment[]>(initialAttachments);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addAttachments = useCallback(
@@ -69,23 +71,46 @@ export const useNewMessageAttachments = (mailApi: MailApi | undefined) => {
     [mailApi]
   );
 
-  return { addAttachments, attachments, inputRef, setAttachments };
+  const prepareAttachments = useCallback(async () => {
+    if (mailApi === undefined) {
+      return;
+    }
+
+    const reply = await mailApi.prepareOutgoingAttachments({
+      referenceIds: attachments.map(({ referenceId }) => referenceId),
+    });
+    if (!reply.ok) {
+      toast.error(reply.error);
+      return;
+    }
+    return reply.data;
+  }, [attachments, mailApi]);
+
+  return {
+    addAttachments,
+    attachments,
+    inputRef,
+    prepareAttachments,
+    setAttachments,
+  };
 };
 
-interface NewMessageAttachmentButtonProps {
+interface OutgoingAttachmentButtonProps {
+  command: "composer.attach" | "threadComposer.attach";
   disabled?: boolean;
   focusRef?: Ref<HTMLButtonElement>;
   inputRef: RefObject<HTMLInputElement | null>;
   onFiles: (files: FileList | null) => void;
 }
 
-export const NewMessageAttachmentButton = ({
+export const OutgoingAttachmentButton = ({
+  command,
   disabled = false,
   focusRef,
   inputRef,
   onFiles,
-}: NewMessageAttachmentButtonProps) => {
-  const display = getHotkeyDisplay("composer.attach");
+}: OutgoingAttachmentButtonProps) => {
+  const display = getHotkeyDisplay(command);
 
   return (
     <>
@@ -99,7 +124,7 @@ export const NewMessageAttachmentButton = ({
         type="file"
       />
       <Button
-        aria-keyshortcuts={getHotkeyAriaLabel("composer.attach")}
+        aria-keyshortcuts={getHotkeyAriaLabel(command)}
         aria-label={display.label}
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
@@ -115,15 +140,15 @@ export const NewMessageAttachmentButton = ({
   );
 };
 
-interface NewMessageAttachmentListProps {
+interface OutgoingAttachmentListProps {
   attachments: readonly MailDraftAttachment[];
   onRemove: (attachmentId: string) => void;
 }
 
-export const NewMessageAttachmentList = ({
+export const OutgoingAttachmentList = ({
   attachments,
   onRemove,
-}: NewMessageAttachmentListProps) =>
+}: OutgoingAttachmentListProps) =>
   attachments.length === 0 ? null : (
     <section
       aria-label="Attachments"

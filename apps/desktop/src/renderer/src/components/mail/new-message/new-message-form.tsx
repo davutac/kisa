@@ -7,16 +7,10 @@ import {
 import type { RefObject } from "react";
 
 import AccountPicker from "@/components/accounts/account-picker";
-import AiComposerButton from "@/components/mail/ai-composer-button";
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
-import CleanDraftHistoryStrip from "@/components/mail/clean-draft-history-strip";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
-import EmailComposer from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
-import {
-  NewMessageAttachmentButton,
-  NewMessageAttachmentList,
-} from "@/components/mail/new-message-attachments";
+import MailComposer from "@/components/mail/mail-composer";
 import type { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +18,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { getHotkeyAriaLabel, HotkeyHint, useAppCommand } from "@/hotkeys";
+import { getHotkeyAriaLabel, HotkeyHint } from "@/hotkeys";
 import { MAX_GMAIL_SUBJECT_LENGTH } from "@/shared/gmail-subject";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
@@ -103,10 +97,6 @@ const NewMessageForm = ({
   const subject = useNewMessageStore((state) => state.subject);
   const setAccountId = useNewMessageStore((state) => state.setAccountId);
   const setRecipients = useNewMessageStore((state) => state.setRecipients);
-  useAppCommand("composer.attach", () => inputRef.current?.click(), {
-    enabled: !isSending,
-  });
-
   return (
     <form
       className="bg-background flex min-h-0 flex-1 flex-col gap-px overflow-hidden"
@@ -149,8 +139,33 @@ const NewMessageForm = ({
           value={subject}
         />
       </InputGroup>
-      <EmailComposer
+      <MailComposer
+        aiActions={[
+          {
+            command: "composer.clean",
+            disabled: !canClean,
+            icon: SparklesIcon,
+            isWorking: false,
+            label: "Clean",
+            modelLabel: cleanupModelLabel,
+            onClick: () => {
+              void onClean();
+            },
+            workingLabel: "Cleaning…",
+          },
+        ]}
         ariaLabel="Message"
+        attachments={{
+          command: "composer.attach",
+          files: attachments,
+          focusRef: focus.refFor("attachment"),
+          inputRef,
+          onAdd: addAttachments,
+          onRemove: (attachmentId) =>
+            setAttachments((current) =>
+              current.filter(({ id }) => id !== attachmentId)
+            ),
+        }}
         className="min-h-40 flex-1 border-0"
         consumeModEnter
         contentKey={draftId}
@@ -164,45 +179,12 @@ const NewMessageForm = ({
         templateFallbackAccountId={selectedAccountId}
         templateAccounts={accounts}
         templates={templates}
-        toolbarHeader={
-          <CleanDraftHistoryStrip
-            disabled={isSending}
-            onDismiss={onDismissCleanVersion}
-            onSelect={onSelectCleanVersion}
-            selectedVersionId={selectedCleanVersionId}
-            versions={cleanHistory}
-          />
-        }
-        toolbarActions={
-          <>
-            <AiComposerButton
-              command="composer.clean"
-              disabled={!canClean}
-              icon={SparklesIcon}
-              isWorking={false}
-              label="Clean"
-              modelLabel={cleanupModelLabel}
-              onClick={() => {
-                void onClean();
-              }}
-              workingLabel="Cleaning…"
-            />
-            <NewMessageAttachmentButton
-              disabled={isSending}
-              focusRef={focus.refFor("attachment")}
-              inputRef={inputRef}
-              onFiles={addAttachments}
-            />
-          </>
-        }
-      />
-      <NewMessageAttachmentList
-        attachments={attachments}
-        onRemove={(attachmentId) =>
-          setAttachments((current) =>
-            current.filter(({ id }) => id !== attachmentId)
-          )
-        }
+        history={{
+          onDismiss: onDismissCleanVersion,
+          onSelect: onSelectCleanVersion,
+          selectedVersionId: selectedCleanVersionId,
+          versions: cleanHistory,
+        }}
       />
       <div className="bg-background flex shrink-0 items-stretch gap-0">
         <Button

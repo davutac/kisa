@@ -266,6 +266,7 @@ export interface OutgoingAttachment {
 
 export interface ForwardInput {
   readonly accountId: AccountId;
+  readonly attachments?: readonly OutgoingAttachment[];
   readonly bcc?: readonly Mailbox[];
   readonly body: ComposerBody;
   readonly cc?: readonly Mailbox[];

@@ -41,13 +41,13 @@ vi.mock(import("@/components/mail/email-composer"), () => ({
   ),
 }));
 
-vi.mock(import("@/components/mail/new-message-attachments"), () => ({
-  NewMessageAttachmentButton: ({ disabled }: { disabled?: boolean }) => (
+vi.mock(import("@/components/mail/outgoing-attachments"), () => ({
+  OutgoingAttachmentButton: ({ disabled }: { disabled?: boolean }) => (
     <button aria-label="Add attachments" disabled={disabled} type="button">
       Attach
     </button>
   ),
-  NewMessageAttachmentList: () => null,
+  OutgoingAttachmentList: () => null,
 }));
 
 vi.mock(import("@/components/ui/tooltip"), () => ({

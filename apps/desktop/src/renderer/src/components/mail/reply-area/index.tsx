@@ -8,16 +8,13 @@ import {
 import { useCallback, useRef } from "react";
 import type { Ref } from "react";
 
-import AiComposerButton from "@/components/mail/ai-composer-button";
-import CleanDraftHistoryStrip from "@/components/mail/clean-draft-history-strip";
-import EmailComposer from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import MailForwardedMessage from "@/components/mail/forwarded-message";
+import MailComposer from "@/components/mail/mail-composer";
 import MailMessageAttachments from "@/components/mail/message-attachments";
 import MailRelativeTime from "@/components/mail/relative-time";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
 import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
 import {
   getHotkeyAriaLabel,
   HotkeyHint,
@@ -91,7 +88,6 @@ const MailReplyArea = ({
     [onComposerReady]
   );
   const handleClose = () => onClose(workspace.currentDraft);
-  const hasEnabledAiAction = workspace.canCreateReply || workspace.canClean;
   const sender = parseMailboxAddress(message.from);
   const targetLabel = sender.name ?? sender.email;
 
@@ -129,59 +125,63 @@ const MailReplyArea = ({
         suggestedAddresses={suggestedAddresses}
         value={workspace.recipients}
       />
-      <EmailComposer
+      <MailComposer
+        aiActionGroupLabel="AI reply actions"
+        aiActions={[
+          ...(isForward
+            ? []
+            : [
+                {
+                  command: "threadComposer.createReply" as const,
+                  disabled: !workspace.canCreateReply,
+                  icon: MessageSquarePlusIcon,
+                  isWorking: workspace.isCreatingReply,
+                  label: "Create reply",
+                  modelLabel: workspace.aiModelLabel,
+                  onClick: () => {
+                    void workspace.createReply();
+                  },
+                  workingLabel: "Creating…",
+                },
+              ]),
+          {
+            command: "threadComposer.clean",
+            disabled: !workspace.canClean,
+            icon: SparklesIcon,
+            isWorking: false,
+            label: "Clean",
+            modelLabel: workspace.aiModelLabel,
+            onClick: () => {
+              void workspace.clean();
+            },
+            workingLabel: "Cleaning…",
+          },
+        ]}
         ariaLabel="Message"
+        attachments={{
+          command: "threadComposer.attach",
+          files: workspace.attachments,
+          inputRef: workspace.inputRef,
+          onAdd: workspace.addAttachments,
+          onRemove: (attachmentId) =>
+            workspace.setAttachments((current) =>
+              current.filter(({ id }) => id !== attachmentId)
+            ),
+        }}
         className="min-h-48"
         consumeModEnter
         defaultValue={draft.body.html}
         disabled={workspace.isInputDisabled}
         focusHandleRef={handleComposerReady}
+        groupAiActions
         onChange={handleComposerChange}
         placeholder={isForward ? "Add a message" : "Write a reply"}
-        toolbarHeader={
-          <CleanDraftHistoryStrip
-            disabled={workspace.isInputDisabled}
-            onDismiss={handleDismissCleanVersion}
-            onSelect={handleSelectCleanVersion}
-            selectedVersionId={workspace.selectedCleanVersionId}
-            versions={workspace.cleanHistory}
-          />
-        }
-        toolbarActions={
-          <ButtonGroup
-            aria-label="AI reply actions"
-            variant={hasEnabledAiAction ? "ai" : "default"}
-          >
-            {isForward ? null : (
-              <AiComposerButton
-                command="threadComposer.createReply"
-                disabled={!workspace.canCreateReply}
-                grouped
-                icon={MessageSquarePlusIcon}
-                isWorking={workspace.isCreatingReply}
-                label="Create reply"
-                modelLabel={workspace.aiModelLabel}
-                onClick={() => {
-                  void workspace.createReply();
-                }}
-                workingLabel="Creating…"
-              />
-            )}
-            <AiComposerButton
-              command="threadComposer.clean"
-              disabled={!workspace.canClean}
-              grouped
-              icon={SparklesIcon}
-              isWorking={false}
-              label="Clean"
-              modelLabel={workspace.aiModelLabel}
-              onClick={() => {
-                void workspace.clean();
-              }}
-              workingLabel="Cleaning…"
-            />
-          </ButtonGroup>
-        }
+        history={{
+          onDismiss: handleDismissCleanVersion,
+          onSelect: handleSelectCleanVersion,
+          selectedVersionId: workspace.selectedCleanVersionId,
+          versions: workspace.cleanHistory,
+        }}
       />
       {isForward ? (
         <>

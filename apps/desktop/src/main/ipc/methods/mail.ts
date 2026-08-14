@@ -416,8 +416,16 @@ export const sendNew = makeIpcMethod({
 
 export const sendThread = makeIpcMethod({
   channel: MAIL_SEND_THREAD_MESSAGE_CHANNEL,
-  handler: (request) =>
-    toIpcReply(sendThreadMessage(request), "Could not send message"),
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Could not identify this window",
+          ok: false as const,
+        })
+      : toIpcReply(
+          sendThreadMessage(request, bindOutgoingAttachmentOwner(event.sender)),
+          "Could not send message"
+        ),
   payload: GmailThreadMessageSendRequest,
   result: GmailThreadMessageSendReply,
 });

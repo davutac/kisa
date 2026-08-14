@@ -47,6 +47,7 @@ import type {
   GmailLabelCatalogRequest,
   GmailLabelSummary,
   GmailMessageSendRequest,
+  GmailOutgoingAttachmentCapability,
   GmailSenderBrand,
   GmailSpamStatus,
   GmailSpamStatusRequest,
@@ -1369,6 +1370,28 @@ const refreshAfterNewMessage = Effect.fn("refreshAfterNewMessage")(
   )
 );
 
+const consumeOutgoingAttachments = Effect.fn("consumeOutgoingAttachments")(
+  function* consumeOutgoingAttachments(
+    ownerWebContentsId: number,
+    capabilities: readonly GmailOutgoingAttachmentCapability[]
+  ) {
+    return yield* Effect.tryPromise({
+      catch: (error) =>
+        new MailSyncError({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not read attachments",
+        }),
+      try: () =>
+        outgoingAttachmentAuthorizations.consume(
+          ownerWebContentsId,
+          capabilities.map(({ capability }) => capability)
+        ),
+    });
+  }
+);
+
 export const sendNewMessage = Effect.fn("sendNewMessage")(
   function* sendNewMessage(
     request: GmailMessageSendRequest,
@@ -1387,20 +1410,10 @@ export const sendNewMessage = Effect.fn("sendNewMessage")(
       });
     }
 
-    const attachments = yield* Effect.tryPromise({
-      catch: (error) =>
-        new MailSyncError({
-          message:
-            error instanceof Error
-              ? error.message
-              : "Could not read attachments",
-        }),
-      try: () =>
-        outgoingAttachmentAuthorizations.consume(
-          ownerWebContentsId,
-          request.attachments.map(({ capability }) => capability)
-        ),
-    });
+    const attachments = yield* consumeOutgoingAttachments(
+      ownerWebContentsId,
+      request.attachments
+    );
 
     yield* runGmail(
       Gmail.pipe(
@@ -1427,7 +1440,10 @@ export const sendNewMessage = Effect.fn("sendNewMessage")(
 );
 
 export const sendThreadMessage = Effect.fn("sendThreadMessage")(
-  function* sendThreadMessage(request: GmailThreadMessageSendRequest) {
+  function* sendThreadMessage(
+    request: GmailThreadMessageSendRequest,
+    ownerWebContentsId: number
+  ) {
     const [to, cc, bcc] = yield* Effect.all([
       parseRecipients(request.to),
       parseRecipients(request.cc),
@@ -1441,8 +1457,14 @@ export const sendThreadMessage = Effect.fn("sendThreadMessage")(
       });
     }
 
+    const attachments = yield* consumeOutgoingAttachments(
+      ownerWebContentsId,
+      request.attachments
+    );
+
     const input = {
       accountId: AccountId.make(request.accountId),
+      attachments,
       bcc,
       body: {
         html: request.body.html,
