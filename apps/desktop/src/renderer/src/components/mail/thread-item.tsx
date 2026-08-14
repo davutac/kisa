@@ -1,4 +1,3 @@
-import { CheckIcon } from "lucide-react";
 import type { HTMLMotionProps } from "motion/react";
 import { m, useReducedMotion } from "motion/react";
 import { useState } from "react";
@@ -11,6 +10,7 @@ import MailThreadQuickActions, {
   getMailThreadQuickActionsWidth,
 } from "@/components/mail/thread-quick-actions";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Item,
   ItemActions,
@@ -41,7 +41,7 @@ interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   ) => void;
   onSelectionPointerDown: (
     thread: GmailThreadSummary,
-    event: PointerEvent<HTMLInputElement>
+    event: PointerEvent
   ) => void;
   onSelectionPointerEnter: (thread: GmailThreadSummary) => void;
   onNotSpam?: (thread: GmailThreadSummary) => void;
@@ -79,7 +79,7 @@ const ThreadSelectionCheckbox = ({
 }: {
   isChecked: boolean;
   isRevealed: boolean;
-  onPointerDown: (event: PointerEvent<HTMLInputElement>) => void;
+  onPointerDown: (event: PointerEvent) => void;
   onToggle: () => void;
   subject: string;
 }) => {
@@ -87,6 +87,11 @@ const ThreadSelectionCheckbox = ({
 
   return (
     <m.span
+      initial={{
+        marginRight: -8,
+        opacity: 0,
+        width: 0,
+      }}
       animate={{
         marginRight: isRevealed ? 2 : -8,
         opacity: isRevealed ? 1 : 0,
@@ -96,31 +101,22 @@ const ThreadSelectionCheckbox = ({
       inert={!isRevealed}
       transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
     >
-      <span className="relative flex size-4">
-        <input
-          aria-label={`${isChecked ? "Deselect" : "Select"} ${subject}`}
-          checked={isChecked}
-          className="border-input bg-background checked:border-primary checked:bg-primary focus-visible:border-ring focus-visible:ring-ring/30 size-4 appearance-none rounded-[4px] border transition-colors outline-none focus-visible:ring-2"
-          onClick={(event) => {
+      <Checkbox
+        aria-label={`${isChecked ? "Deselect" : "Select"} ${subject}`}
+        checked={isChecked}
+        onCheckedChange={() => onToggle()}
+        onClick={(event) => {
+          event.stopPropagation();
+          // Pointer-down toggles immediately for drag painting. Base UI still
+          // handles synthesized keyboard and assistive activation.
+          if (event.detail > 0) {
             event.preventDefault();
-            event.stopPropagation();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === " ") {
-              event.preventDefault();
-              event.stopPropagation();
-              onToggle();
-            }
-          }}
-          onPointerDown={onPointerDown}
-          readOnly
-          tabIndex={isRevealed ? 0 : -1}
-          type="checkbox"
-        />
-        {isChecked ? (
-          <CheckIcon className="text-primary-foreground pointer-events-none absolute inset-0 size-4 p-0.5" />
-        ) : null}
-      </span>
+            event.preventBaseUIHandler();
+          }
+        }}
+        onPointerDown={onPointerDown}
+        tabIndex={isRevealed ? 0 : -1}
+      />
     </m.span>
   );
 };
@@ -135,7 +131,7 @@ const ThreadSenderHeader = ({
 }: {
   isChecked: boolean;
   isSelectionRevealed: boolean;
-  onSelectionPointerDown: (event: PointerEvent<HTMLInputElement>) => void;
+  onSelectionPointerDown: (event: PointerEvent) => void;
   onToggleSelection: () => void;
   showAccount: boolean;
   thread: GmailThreadSummary;

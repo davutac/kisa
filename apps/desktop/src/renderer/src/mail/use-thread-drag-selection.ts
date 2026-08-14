@@ -266,7 +266,7 @@ export const useThreadDragSelection = ({
   );
 
   const onSelectionPointerDown = useCallback(
-    (threadKey: string, event: PointerEvent<HTMLInputElement>): void => {
+    (threadKey: string, event: PointerEvent): void => {
       if (event.button !== 0) {
         return;
       }
