@@ -120,6 +120,7 @@ export interface DesktopBridge {
   disconnectGoogleAccount: (
     request: GoogleAccountDisconnectRequest
   ) => Promise<GoogleAccountsReply>;
+  downloadUpdate: () => Promise<UpdateStatus>;
   dropDatabaseImportFile: (request: {
     readonly file: File;
     readonly kind: DatabaseImportFileKind;

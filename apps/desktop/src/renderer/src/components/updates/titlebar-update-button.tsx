@@ -1,18 +1,21 @@
-import { DownloadIcon, LoaderCircleIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { LoaderCircleIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { UpdateApi } from "@/platform/desktop";
 import { getTitlebarUpdateView } from "@/updates/update-view";
 import type { TitlebarUpdateView } from "@/updates/update-view";
-
-type UpdateStatus = Awaited<ReturnType<UpdateApi["getStatus"]>>;
+import { useUpdateActions } from "@/updates/use-update-actions";
+import { useUpdateStatus } from "@/updates/use-update-status";
 
 interface TitlebarUpdateButtonProps {
   updateApi: UpdateApi;
 }
 
-const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
+const renderUpdateButton = (
+  view: TitlebarUpdateView,
+  downloadUpdate: () => Promise<void>,
+  installUpdate: (version: string) => Promise<void>
+) => {
   if (view.kind === "hidden") {
     return null;
   }
@@ -35,11 +38,15 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
     <Button
       className="app-titlebar-interactive bg-blue-400 text-black hover:bg-blue-400/80"
       onClick={() => {
-        void updateApi.install();
+        if (view.kind === "download") {
+          void downloadUpdate();
+          return;
+        }
+
+        void installUpdate(view.version);
       }}
       type="button"
     >
-      <DownloadIcon />
       <span>{view.label}</span>
     </Button>
   );
@@ -47,32 +54,14 @@ const renderUpdateButton = (view: TitlebarUpdateView, updateApi: UpdateApi) => {
 
 // oxlint-disable-next-line sonarjs/function-name
 const TitlebarUpdateButton = ({ updateApi }: TitlebarUpdateButtonProps) => {
-  const [status, setStatus] = useState<UpdateStatus>({ state: "idle" });
+  const status = useUpdateStatus(updateApi);
+  const { downloadUpdate, installUpdate } = useUpdateActions(updateApi);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadStatus = async (): Promise<void> => {
-      const currentStatus = await updateApi.getStatus();
-
-      if (isMounted) {
-        setStatus(currentStatus);
-      }
-    };
-
-    void loadStatus();
-
-    const unsubscribe = updateApi.onStatusChange((nextStatus) => {
-      setStatus(nextStatus);
-    });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [updateApi]);
-
-  return renderUpdateButton(getTitlebarUpdateView(status), updateApi);
+  return renderUpdateButton(
+    getTitlebarUpdateView(status),
+    downloadUpdate,
+    installUpdate
+  );
 };
 
 export default TitlebarUpdateButton;

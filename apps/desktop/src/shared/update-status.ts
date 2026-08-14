@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 export const UpdateStatus = Schema.Union([
   Schema.Struct({ state: Schema.Literal("idle") }),
   Schema.Struct({ state: Schema.Literal("checking") }),
+  Schema.Struct({ state: Schema.Literal("available"), version: Schema.String }),
   Schema.Struct({
     percent: Schema.Finite,
     state: Schema.Literal("downloading"),

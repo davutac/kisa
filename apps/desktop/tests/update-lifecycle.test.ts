@@ -6,22 +6,30 @@ import type { UpdateStatus } from "../src/shared/update-status";
 const createLifecycleHarness = (args?: {
   canSelfUpdate?: () => boolean;
   checkForUpdates?: () => Promise<void>;
+  downloadUpdate?: () => Promise<void>;
 }) => {
   const emittedStatuses: UpdateStatus[] = [];
+  let didDownload = false;
   let didInstall = false;
   const lifecycle = createUpdateLifecycle({
     canSelfUpdate: args?.canSelfUpdate ?? (() => true),
     checkForUpdates: args?.checkForUpdates ?? (async () => {}),
+    downloadUpdate: async () => {
+      didDownload = true;
+      await args?.downloadUpdate?.();
+    },
     emitStatus: (status) => {
       emittedStatuses.push(status);
     },
-    getFallbackVersion: () => "0.0.0",
     installUpdate: () => {
       didInstall = true;
     },
   });
 
   return {
+    get didDownload() {
+      return didDownload;
+    },
     get didInstall() {
       return didInstall;
     },
@@ -74,10 +82,46 @@ describe(createUpdateLifecycle, () => {
     expect(harness.didInstall).toBeTruthy();
   });
 
-  it("normalizes download progress and preserves version during progress events", () => {
+  it("waits for an explicit download after finding an update", async () => {
+    const harness = createLifecycleHarness();
+
+    harness.lifecycle.handleUpdateAvailable("1.2.3");
+
+    expect(harness.lifecycle.getStatus()).toStrictEqual({
+      state: "available",
+      version: "1.2.3",
+    });
+    expect(harness.didDownload).toBeFalsy();
+
+    await harness.lifecycle.download();
+
+    expect(harness.didDownload).toBeTruthy();
+    expect(harness.lifecycle.getStatus()).toStrictEqual({
+      percent: 0,
+      state: "downloading",
+      version: "1.2.3",
+    });
+  });
+
+  it("makes a failed download available to retry", async () => {
+    const harness = createLifecycleHarness({
+      downloadUpdate: () => Promise.reject(new Error("network")),
+    });
+
+    harness.lifecycle.handleUpdateAvailable("1.2.3");
+    await harness.lifecycle.download();
+
+    expect(harness.lifecycle.getStatus()).toStrictEqual({
+      state: "available",
+      version: "1.2.3",
+    });
+  });
+
+  it("normalizes download progress and preserves version during progress events", async () => {
     const { emittedStatuses, lifecycle } = createLifecycleHarness();
 
     lifecycle.handleUpdateAvailable("1.2.3");
+    await lifecycle.download();
     lifecycle.handleDownloadProgress({ percent: 123.4 });
 
     expect(lifecycle.getStatus()).toStrictEqual({
@@ -86,8 +130,18 @@ describe(createUpdateLifecycle, () => {
       version: "1.2.3",
     });
     expect(emittedStatuses).toStrictEqual([
+      { state: "available", version: "1.2.3" },
       { percent: 0, state: "downloading", version: "1.2.3" },
       { percent: 100, state: "downloading", version: "1.2.3" },
     ]);
+  });
+
+  it("ignores download progress outside an active download", () => {
+    const { emittedStatuses, lifecycle } = createLifecycleHarness();
+
+    lifecycle.handleDownloadProgress({ percent: 50 });
+
+    expect(lifecycle.getStatus()).toStrictEqual({ state: "idle" });
+    expect(emittedStatuses).toStrictEqual([]);
   });
 });

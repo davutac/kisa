@@ -1,5 +1,5 @@
 import { DownloadIcon, LoaderCircleIcon, RefreshCwIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,8 @@ import {
   getManualUpdateFeedback,
   getSettingsUpdateView,
 } from "@/updates/update-view";
-
-type UpdateStatus = Awaited<ReturnType<UpdateApi["getStatus"]>>;
+import { useUpdateActions } from "@/updates/use-update-actions";
+import { useUpdateStatus } from "@/updates/use-update-status";
 
 interface SettingsUpdateRowProps {
   updateApi: UpdateApi;
@@ -35,38 +35,15 @@ const showManualUpdateFeedback = (
 };
 
 const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
-  const [status, setStatus] = useState<UpdateStatus>({ state: "idle" });
+  const status = useUpdateStatus(updateApi);
   const [isManualCheckPending, setIsManualCheckPending] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadStatus = async (): Promise<void> => {
-      const currentStatus = await updateApi.getStatus();
-
-      if (isMounted) {
-        setStatus(currentStatus);
-      }
-    };
-
-    void loadStatus();
-
-    const unsubscribe = updateApi.onStatusChange((nextStatus) => {
-      setStatus(nextStatus);
-    });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [updateApi]);
+  const { downloadUpdate, installUpdate } = useUpdateActions(updateApi);
 
   const handleCheckForUpdates = async (): Promise<void> => {
     setIsManualCheckPending(true);
 
     try {
       const nextStatus = await updateApi.check();
-      setStatus(nextStatus);
       showManualUpdateFeedback(getManualUpdateFeedback(nextStatus));
     } catch {
       toast.error("Could not check for updates", {
@@ -75,10 +52,6 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
     } finally {
       setIsManualCheckPending(false);
     }
-  };
-
-  const handleInstallUpdate = (): void => {
-    void updateApi.install();
   };
 
   const view = getSettingsUpdateView(status, isManualCheckPending);
@@ -92,18 +65,7 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
         </SettingsRowDescription>
       </SettingsRowContent>
       <SettingsRowActions>
-        {view.action === "install" ? (
-          <Button
-            aria-describedby="updates-description"
-            aria-labelledby="updates-title"
-            onClick={handleInstallUpdate}
-            type="button"
-            variant="secondary"
-          >
-            <DownloadIcon />
-            <span>{view.label}</span>
-          </Button>
-        ) : (
+        {view.action === "check" ? (
           <Button
             aria-describedby="updates-description"
             aria-labelledby="updates-title"
@@ -119,6 +81,24 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
             ) : (
               <RefreshCwIcon />
             )}
+            <span>{view.label}</span>
+          </Button>
+        ) : (
+          <Button
+            aria-describedby="updates-description"
+            aria-labelledby="updates-title"
+            onClick={() => {
+              if (view.action === "download") {
+                void downloadUpdate();
+                return;
+              }
+
+              void installUpdate(view.version);
+            }}
+            type="button"
+            variant="secondary"
+          >
+            <DownloadIcon />
             <span>{view.label}</span>
           </Button>
         )}

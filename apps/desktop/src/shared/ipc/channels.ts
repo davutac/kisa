@@ -97,6 +97,7 @@ export const SETTINGS_UPDATE_ACCOUNT_SETTINGS_CHANNEL =
   "desktop:settings:update-account-settings";
 
 export const UPDATES_CHECK_CHANNEL = "desktop:updates:check";
+export const UPDATES_DOWNLOAD_CHANNEL = "desktop:updates:download";
 export const UPDATES_GET_STATUS_CHANNEL = "desktop:updates:get-status";
 export const UPDATES_INSTALL_CHANNEL = "desktop:updates:install";
 export const UPDATES_STATUS_CHANNEL = "desktop:updates:status";

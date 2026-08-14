@@ -6,14 +6,15 @@ import { normalizeUpdateStatus } from "../../shared/update-status";
 interface UpdateLifecycleOptions {
   canSelfUpdate: () => boolean;
   checkForUpdates: () => Promise<void>;
+  downloadUpdate: () => Promise<void>;
   emitStatus: (status: UpdateStatus) => void;
-  getFallbackVersion: () => string;
   initialStatus?: UpdateStatus;
   installUpdate: () => void;
 }
 
 export interface UpdateLifecycle {
   check: () => Promise<UpdateStatus>;
+  download: () => Promise<UpdateStatus>;
   getStatus: () => UpdateStatus;
   handleDownloadProgress: (progress: { percent: number }) => void;
   handleError: () => void;
@@ -27,13 +28,15 @@ export interface UpdateLifecycle {
 export const createUpdateLifecycle = ({
   canSelfUpdate,
   checkForUpdates,
+  downloadUpdate,
   emitStatus,
-  getFallbackVersion,
   initialStatus = { state: "idle" },
   installUpdate,
 }: UpdateLifecycleOptions): UpdateLifecycle => {
   let currentStatus = normalizeUpdateStatus(initialStatus);
   let isCheckingForUpdates = false;
+
+  const readStatus = (): UpdateStatus => currentStatus;
 
   const publishStatus = (status: UpdateStatus): UpdateStatus => {
     currentStatus = normalizeUpdateStatus(status);
@@ -75,20 +78,53 @@ export const createUpdateLifecycle = ({
       isCheckingForUpdates = false;
       return currentStatus;
     },
-    getStatus: () => currentStatus,
-    handleDownloadProgress: ({ percent }) => {
-      const version =
-        currentStatus.state === "downloading"
-          ? currentStatus.version
-          : getFallbackVersion();
+    download: async () => {
+      if (currentStatus.state !== "available") {
+        return currentStatus;
+      }
 
-      publishStatus({ percent, state: "downloading", version });
+      const { version } = currentStatus;
+      publishStatus({ percent: 0, state: "downloading", version });
+
+      const downloadExit = await Effect.runPromiseExit(
+        Effect.tryPromise(downloadUpdate)
+      );
+      const statusAfterDownload = readStatus();
+
+      if (
+        Exit.isFailure(downloadExit) &&
+        statusAfterDownload.state === "downloading"
+      ) {
+        publishStatus({ state: "available", version });
+      }
+
+      return currentStatus;
+    },
+    getStatus: readStatus,
+    handleDownloadProgress: ({ percent }) => {
+      if (currentStatus.state !== "downloading") {
+        return;
+      }
+
+      publishStatus({
+        percent,
+        state: "downloading",
+        version: currentStatus.version,
+      });
     },
     handleError: () => {
+      if (currentStatus.state === "downloading") {
+        publishStatus({
+          state: "available",
+          version: currentStatus.version,
+        });
+        return;
+      }
+
       publishStatus({ state: "idle" });
     },
     handleUpdateAvailable: (version) => {
-      publishStatus({ percent: 0, state: "downloading", version });
+      publishStatus({ state: "available", version });
     },
     handleUpdateDownloaded: (version) => {
       publishStatus({ state: "ready", version });

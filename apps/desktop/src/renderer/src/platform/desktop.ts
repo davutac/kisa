@@ -84,6 +84,7 @@ export interface SettingsApi {
 
 export interface UpdateApi {
   check: DesktopBridge["checkForUpdates"];
+  download: DesktopBridge["downloadUpdate"];
   getStatus: DesktopBridge["getUpdateStatus"];
   install: DesktopBridge["installUpdate"];
   onStatusChange: DesktopBridge["onUpdateStatus"];
@@ -206,6 +207,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     },
     updates: {
       check: bridge.checkForUpdates,
+      download: bridge.downloadUpdate,
       getStatus: bridge.getUpdateStatus,
       install: bridge.installUpdate,
       onStatusChange: bridge.onUpdateStatus,

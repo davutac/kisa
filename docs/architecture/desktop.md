@@ -44,6 +44,8 @@ apps/desktop/src/
 
 Feature services do not register `ipcMain` handlers. Each public operation is a declarative method under `main/ipc/methods`, and `desktop-ipc-handlers.ts` is the single reviewable list of privileged calls.
 
+Packaged self-updates are user-driven after discovery. The main process checks in the background and publishes an available version without downloading it. The title bar and Settings expose the same sequence: download on the first action, show bounded progress, then request renderer-wide confirmation before the install action closes and restarts Kisa. Automatic download and install-on-quit remain disabled, and the main lifecycle accepts download and install calls only from their matching states.
+
 The renderer does not import main or preload modules and does not call Electron directly. Components use feature hooks or `platform/desktop.ts`; browser mode is represented by an absent optional bridge.
 
 The local SQLite database uses the `better-sqlite3-multiple-ciphers` implementation with a fixed ChaCha20 configuration. Main generates a 256-bit key, seals it with Electron `safeStorage`, and stores only the sealed blob beside the database. Development uses `app.dev.sqlite` and `app.dev.sqlite.key`; packaged builds use `app.sqlite` and `app.sqlite.key`. On Linux, main configures Chromium's password store before Electron becomes ready: desktops with a known secure automatic selection keep it, while LXQt and unrecognized sessions request Secret Service through `gnome-libsecret`. Explicit command-line selection remains authoritative. After startup, Kisa accepts only libsecret or KWallet backends and rejects `basic_text`, `unknown`, and failed secure-store fallbacks.

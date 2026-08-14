@@ -3,15 +3,25 @@ import { clampUpdateProgress } from "@/shared/update-status";
 
 export type TitlebarUpdateView =
   | { kind: "hidden" }
-  | { kind: "install"; label: string }
+  | {
+      kind: "download" | "install";
+      label: string;
+      version: string;
+    }
   | { kind: "progress"; percent: number };
 
-export interface SettingsUpdateView {
-  action: "check" | "install";
-  isBusy: boolean;
-  isDisabled: boolean;
-  label: string;
-}
+export type SettingsUpdateView =
+  | {
+      action: "check";
+      isBusy: boolean;
+      isDisabled: boolean;
+      label: string;
+    }
+  | {
+      action: "download" | "install";
+      label: string;
+      version: string;
+    };
 
 export interface ManualUpdateFeedback {
   description: string;
@@ -37,19 +47,38 @@ export const getTitlebarUpdateView = (
     };
   }
 
-  return { kind: "install", label: "Update" };
+  if (status.state === "available") {
+    return {
+      kind: "download",
+      label: "Update",
+      version: status.version,
+    };
+  }
+
+  return {
+    kind: "install",
+    label: "Install",
+    version: status.version,
+  };
 };
 
 export const getSettingsUpdateView = (
   status: UpdateStatus,
   isManualCheckPending: boolean
 ): SettingsUpdateView => {
+  if (status.state === "available") {
+    return {
+      action: "download",
+      label: "Download Update",
+      version: status.version,
+    };
+  }
+
   if (status.state === "ready") {
     return {
       action: "install",
-      isBusy: false,
-      isDisabled: false,
       label: "Install Update",
+      version: status.version,
     };
   }
 
@@ -100,6 +129,14 @@ export const getManualUpdateFeedback = (
       description: "No update is available right now.",
       title: "You're up to date",
       type: "success",
+    };
+  }
+
+  if (status.state === "available") {
+    return {
+      description: `Version ${status.version} is available to download.`,
+      title: "Update found",
+      type: "info",
     };
   }
 

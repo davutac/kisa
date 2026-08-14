@@ -29,6 +29,23 @@ describe("update view helpers", () => {
     ).toStrictEqual({ kind: "progress", percent: 0 });
   });
 
+  it("shows separate titlebar actions for downloading and installing", () => {
+    expect(
+      getTitlebarUpdateView({ state: "available", version: "1.2.3" })
+    ).toStrictEqual({
+      kind: "download",
+      label: "Update",
+      version: "1.2.3",
+    });
+    expect(
+      getTitlebarUpdateView({ state: "ready", version: "1.2.3" })
+    ).toStrictEqual({
+      kind: "install",
+      label: "Install",
+      version: "1.2.3",
+    });
+  });
+
   it("derives settings actions from update status", () => {
     expect(getSettingsUpdateView({ state: "idle" }, false)).toStrictEqual({
       action: "check",
@@ -37,12 +54,18 @@ describe("update view helpers", () => {
       label: "Check for Updates",
     });
     expect(
+      getSettingsUpdateView({ state: "available", version: "1.2.3" }, false)
+    ).toStrictEqual({
+      action: "download",
+      label: "Download Update",
+      version: "1.2.3",
+    });
+    expect(
       getSettingsUpdateView({ state: "ready", version: "1.2.3" }, false)
     ).toStrictEqual({
       action: "install",
-      isBusy: false,
-      isDisabled: false,
       label: "Install Update",
+      version: "1.2.3",
     });
     expect(
       getSettingsUpdateView({ state: "unsupported" }, false)
@@ -60,6 +83,13 @@ describe("update view helpers", () => {
       description: "No update is available right now.",
       title: "You're up to date",
       type: "success",
+    });
+    expect(
+      getManualUpdateFeedback({ state: "available", version: "1.2.3" })
+    ).toStrictEqual({
+      description: "Version 1.2.3 is available to download.",
+      title: "Update found",
+      type: "info",
     });
   });
 });

@@ -3,12 +3,14 @@ import * as Schema from "effect/Schema";
 
 import {
   UPDATES_CHECK_CHANNEL,
+  UPDATES_DOWNLOAD_CHANNEL,
   UPDATES_GET_STATUS_CHANNEL,
   UPDATES_INSTALL_CHANNEL,
 } from "../../../shared/ipc/channels";
 import { UpdateStatus } from "../../../shared/update-status";
 import {
   checkForUpdates,
+  downloadUpdate,
   getUpdateStatus,
   installUpdate,
 } from "../../updates/updater";
@@ -24,6 +26,13 @@ export const getStatus = makeIpcMethod({
 export const check = makeIpcMethod({
   channel: UPDATES_CHECK_CHANNEL,
   handler: () => Effect.promise(checkForUpdates),
+  payload: Schema.Void,
+  result: UpdateStatus,
+});
+
+export const download = makeIpcMethod({
+  channel: UPDATES_DOWNLOAD_CHANNEL,
+  handler: () => Effect.promise(downloadUpdate),
   payload: Schema.Void,
   result: UpdateStatus,
 });

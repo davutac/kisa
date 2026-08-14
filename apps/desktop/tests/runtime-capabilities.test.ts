@@ -76,6 +76,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     disconnectGoogleAccount: () =>
       Promise.resolve({ data: [], ok: true as const }),
+    downloadUpdate: () => Promise.resolve({ state: "idle" as const }),
     dropDatabaseImportFile: () =>
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
     exportDatabaseRecoveryKey: () =>
@@ -267,6 +268,7 @@ describe(getRuntimeCapabilities, () => {
       },
       updates: {
         check: desktopBridge.checkForUpdates,
+        download: desktopBridge.downloadUpdate,
         getStatus: desktopBridge.getUpdateStatus,
         install: desktopBridge.installUpdate,
         onStatusChange: desktopBridge.onUpdateStatus,

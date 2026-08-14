@@ -1,7 +1,6 @@
 import { is } from "@electron-toolkit/utils";
 import { Predicate } from "effect";
 import type { BrowserWindow } from "electron";
-import { app } from "electron";
 import electronUpdater from "electron-updater";
 
 import { UPDATES_STATUS_CHANNEL } from "../../shared/ipc/channels";
@@ -37,8 +36,10 @@ const updateLifecycle = createUpdateLifecycle({
   checkForUpdates: async () => {
     await autoUpdater.checkForUpdates();
   },
+  downloadUpdate: async () => {
+    await autoUpdater.downloadUpdate();
+  },
   emitStatus: emitUpdateStatus,
-  getFallbackVersion: () => app.getVersion(),
   installUpdate: () => {
     autoUpdater.quitAndInstall();
   },
@@ -48,6 +49,9 @@ export const getUpdateStatus = (): UpdateStatus => updateLifecycle.getStatus();
 
 export const checkForUpdates = (): Promise<UpdateStatus> =>
   updateLifecycle.check();
+
+export const downloadUpdate = (): Promise<UpdateStatus> =>
+  updateLifecycle.download();
 
 export const installUpdate = (): void => {
   updateLifecycle.install();
@@ -63,8 +67,8 @@ export const initializeAutoUpdates = (mainWindow: BrowserWindow): void => {
   }
 
   isInitialized = true;
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on("update-available", (info) => {
     updateLifecycle.handleUpdateAvailable(info.version);

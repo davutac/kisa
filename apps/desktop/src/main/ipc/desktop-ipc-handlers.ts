@@ -61,7 +61,7 @@ import {
   listTemplates,
   saveTemplate,
 } from "./methods/templates";
-import { check, getStatus, install } from "./methods/updates";
+import { check, download, getStatus, install } from "./methods/updates";
 
 export const installDesktopIpcHandlers = Effect.fn(
   "desktop.ipc.installHandlers"
@@ -121,5 +121,6 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(updateSettings);
   yield* ipc.handle(getStatus);
   yield* ipc.handle(check);
+  yield* ipc.handle(download);
   yield* ipc.handle(install);
 });
