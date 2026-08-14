@@ -44,4 +44,6 @@ AI settings live in the encrypted application database. System instructions are 
 
 ## Lifecycle
 
-Provider inventory is probed on demand rather than cached in renderer state. OpenCode's loopback server and session are scoped to one request. Codex and Claude use non-persistent/ephemeral invocations. Provider output is decoded against the exact reply or cleaned-draft schema before it can cross IPC.
+The authenticated renderer mounts one `AiProviderStateProvider` for the application session. It loads AI settings and provider inventory concurrently, keeps the last successful inventory during refresh failures, and exposes the same model selection to Settings, new-message cleanup, reply generation, and reply cleanup. Composer mounts and remounts do not perform provider probes. Settings saves update this shared state, and its refresh control runs one single-flight inventory refresh.
+
+Provider inventory is not persisted across application restarts. OpenCode's loopback server and session remain scoped to one generation request, while Codex and Claude continue to use non-persistent/ephemeral invocations. Provider output is decoded against the exact reply or cleaned-draft schema before it can cross IPC.

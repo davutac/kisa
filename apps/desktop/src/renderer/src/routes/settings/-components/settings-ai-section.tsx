@@ -14,7 +14,6 @@ import {
   SettingsSectionHeader,
   SettingsSectionTitle,
 } from "@/components/ui/settings";
-import type { AiApi } from "@/platform/desktop";
 import {
   DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
   DEFAULT_AI_REPLY_USER_INSTRUCTIONS,
@@ -25,12 +24,8 @@ import AiProviderRow from "./ai-provider-row";
 import { AI_PROVIDER_ORDER } from "./ai-settings-view";
 import { useAiSettings } from "./use-ai-settings";
 
-interface SettingsAiSectionProps {
-  readonly aiApi: AiApi;
-}
-
-const SettingsAiSection = ({ aiApi }: SettingsAiSectionProps) => {
-  const workflow = useAiSettings(aiApi);
+const SettingsAiSection = () => {
+  const workflow = useAiSettings();
   const { draft, settings } = workflow;
 
   if (settings === null || draft === null) {

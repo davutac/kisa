@@ -1,130 +1,50 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import type { AiApi } from "@/platform/desktop";
-import type { AiProvider, AiProviderStatus, AiSettings } from "@/shared/ipc/ai";
+import type { AiProvider, AiSettings } from "@/shared/ipc/ai";
+import { useAiProviderState } from "@/state/ai-provider-state";
 
 import { areAiProviderModelsEqual } from "./ai-settings-view";
 
-export const useAiSettings = (aiApi: AiApi) => {
-  const [settings, setSettings] = useState<AiSettings | null>(null);
-  const [draft, setDraft] = useState<AiSettings | null>(null);
-  const [providers, setProviders] = useState<readonly AiProviderStatus[]>([]);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [providersError, setProvidersError] = useState<string | null>(null);
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
-  const [isLoadingProviders, setIsLoadingProviders] = useState(true);
-  const settingsRequest = useRef(0);
-  const providersRequest = useRef(0);
-  const saveRequest = useRef(0);
+const areAiSettingsEqual = (left: AiSettings, right: AiSettings): boolean =>
+  left.activeProvider === right.activeProvider &&
+  left.cleanupUserInstructions === right.cleanupUserInstructions &&
+  left.replyUserInstructions === right.replyUserInstructions &&
+  areAiProviderModelsEqual(left.providerModels, right.providerModels);
 
-  const loadSettings = useCallback(async (): Promise<void> => {
-    const request = settingsRequest.current + 1;
-    settingsRequest.current = request;
-    setIsLoadingSettings(true);
-    setSettingsError(null);
-    try {
-      const reply = await aiApi.getSettings();
-      if (request !== settingsRequest.current) {
-        return;
-      }
-      if (!reply.ok) {
-        setSettingsError(reply.error);
-        return;
-      }
-      setSettings(reply.data);
-      setDraft(reply.data);
-    } catch {
-      if (request === settingsRequest.current) {
-        setSettingsError("Could not load AI writing settings");
-      }
-    } finally {
-      if (request === settingsRequest.current) {
-        setIsLoadingSettings(false);
-      }
-    }
-  }, [aiApi]);
-
-  const refreshProviders = useCallback(async (): Promise<void> => {
-    const request = providersRequest.current + 1;
-    providersRequest.current = request;
-    setIsLoadingProviders(true);
-    setProvidersError(null);
-    try {
-      const reply = await aiApi.listProviders();
-      if (request !== providersRequest.current) {
-        return;
-      }
-      if (!reply.ok) {
-        setProvidersError(reply.error);
-        return;
-      }
-      setProviders(reply.data);
-    } catch {
-      if (request === providersRequest.current) {
-        setProvidersError("Could not inspect installed AI providers");
-      }
-    } finally {
-      if (request === providersRequest.current) {
-        setIsLoadingProviders(false);
-      }
-    }
-  }, [aiApi]);
+export const useAiSettings = () => {
+  const isLoadingProviders = useAiProviderState(
+    (state) => state.isLoadingProviders
+  );
+  const isLoadingSettings = useAiProviderState(
+    (state) => state.isLoadingSettings
+  );
+  const loadSettings = useAiProviderState((state) => state.loadSettings);
+  const providers = useAiProviderState((state) => state.providers);
+  const providersError = useAiProviderState((state) => state.providersError);
+  const refreshProviders = useAiProviderState(
+    (state) => state.refreshProviders
+  );
+  const saveSettings = useAiProviderState((state) => state.saveSettings);
+  const settings = useAiProviderState((state) => state.settings);
+  const settingsError = useAiProviderState((state) => state.settingsError);
+  const [draft, setDraft] = useState<AiSettings | null>(settings);
+  const previousSettings = useRef(settings);
 
   useEffect(() => {
-    let active = true;
-    const loadInitialSettings = async (): Promise<void> => {
-      try {
-        const reply = await aiApi.getSettings();
-        if (!active) {
-          return;
-        }
-        if (!reply.ok) {
-          setSettingsError(reply.error);
-          return;
-        }
-        setSettings(reply.data);
-        setDraft(reply.data);
-      } catch {
-        if (active) {
-          setSettingsError("Could not load AI writing settings");
-        }
-      } finally {
-        if (active) {
-          setIsLoadingSettings(false);
-        }
-      }
-    };
-    const loadInitialProviders = async (): Promise<void> => {
-      try {
-        const reply = await aiApi.listProviders();
-        if (!active) {
-          return;
-        }
-        if (!reply.ok) {
-          setProvidersError(reply.error);
-          return;
-        }
-        setProviders(reply.data);
-      } catch {
-        if (active) {
-          setProvidersError("Could not inspect installed AI providers");
-        }
-      } finally {
-        if (active) {
-          setIsLoadingProviders(false);
-        }
-      }
-    };
+    if (settings === null) {
+      return;
+    }
 
-    void loadInitialSettings();
-    void loadInitialProviders();
-    return () => {
-      active = false;
-      settingsRequest.current += 1;
-      providersRequest.current += 1;
-    };
-  }, [aiApi]);
+    const previous = previousSettings.current;
+    previousSettings.current = settings;
+    setDraft((current) =>
+      current === null ||
+      (previous !== null && areAiSettingsEqual(current, previous))
+        ? settings
+        : current
+    );
+  }, [settings]);
 
   const setCleanupUserInstructions = (cleanupUserInstructions: string) => {
     setDraft((current) =>
@@ -156,43 +76,25 @@ export const useAiSettings = (aiApi: AiApi) => {
   };
 
   const isDirty =
-    settings !== null &&
-    draft !== null &&
-    (settings.activeProvider !== draft.activeProvider ||
-      settings.cleanupUserInstructions !== draft.cleanupUserInstructions ||
-      settings.replyUserInstructions !== draft.replyUserInstructions ||
-      !areAiProviderModelsEqual(settings.providerModels, draft.providerModels));
+    settings !== null && draft !== null && !areAiSettingsEqual(settings, draft);
 
   useEffect(() => {
     if (!isDirty || draft === null) {
       return;
     }
-    const request = saveRequest.current + 1;
-    saveRequest.current = request;
+
+    let active = true;
     void (async () => {
-      try {
-        const reply = await aiApi.updateSettings(draft);
-        if (request !== saveRequest.current) {
-          return;
-        }
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
-        }
-        setSettings(reply.data);
-      } catch {
-        if (request === saveRequest.current) {
-          toast.error("Could not save AI writing settings");
-        }
+      const error = await saveSettings(draft);
+      if (active && error !== null) {
+        toast.error(error);
       }
     })();
 
     return () => {
-      if (request === saveRequest.current) {
-        saveRequest.current += 1;
-      }
+      active = false;
     };
-  }, [aiApi, draft, isDirty]);
+  }, [draft, isDirty, saveSettings]);
 
   return {
     draft,

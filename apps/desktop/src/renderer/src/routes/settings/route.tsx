@@ -99,7 +99,7 @@ function SettingsRoute() {
           </SettingsRows>
         </SettingsSection>
 
-        {ai === undefined ? null : <SettingsAiSection aiApi={ai} />}
+        {ai === undefined ? null : <SettingsAiSection />}
 
         {settings === undefined ? null : (
           <SettingsDatabaseSection settingsApi={settings} />

@@ -62,7 +62,7 @@ export const useNewMessageWorkspace = ({
   );
   const { templates } = useComposerTemplates();
   const aiApi = useMemo(() => getAiApi(), []);
-  const cleanupModel = useAiModelSelection(aiApi);
+  const cleanupModel = useAiModelSelection();
   const [isCleaning, setIsCleaning] = useState(false);
   const draftOperationQueueRef = useRef(Promise.resolve());
   const isOpenRef = useRef(false);

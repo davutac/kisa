@@ -30,7 +30,7 @@ export const useReplyWorkspace = ({
   threadId: string;
 }) => {
   const aiApi = useMemo(() => getAiApi(), []);
-  const aiModel = useAiModelSelection(aiApi);
+  const aiModel = useAiModelSelection();
   const mailApi = useMemo(() => getMailApi(), []);
   const [composer, setComposer] = useState<EmailComposerValue>(() => ({
     html: draft.body.html,
