@@ -3,10 +3,12 @@ import { ArrowLeftIcon } from "lucide-react";
 
 import ThemeToggle from "@/components/theme-toggle";
 import BaseLayout from "@/layouts/base-layout.astro";
+
+const repositoryUrl = "https://github.com/davutac/kisa";
 ---
 
 <BaseLayout
-  description="Kisa has no remote mailbox database. Mail stays on your device unless you explicitly invoke an AI writing action."
+  description="How Kisa accesses, stores, shares, retains, and deletes Google user data."
   title="Privacy | Kisa"
 >
   <div class="page-shell relative min-h-screen overflow-x-clip">
@@ -32,14 +34,21 @@ import BaseLayout from "@/layouts/base-layout.astro";
       <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Privacy</p>
       <h1 class="mt-5 text-balance text-5xl font-semibold tracking-[-0.05em] sm:text-6xl">No Kisa cloud. No hidden copy.</h1>
       <p class="mt-6 text-pretty text-lg leading-8 text-muted-foreground">
-        Kisa has no cloud mailbox or user account service. Your mail and credentials are not retained by a Kisa backend.
+        Kisa is a local-first Gmail client. It does not operate a cloud mailbox or user-account service, and your mail and credentials are not retained by a Kisa backend.
       </p>
 
       <div class="mt-14 divide-y border-y">
         <section class="py-8">
+          <h2 class="text-sm font-semibold">What Kisa accesses</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            When you connect a Google account, Kisa accesses your email address, display name, profile image, and Gmail data needed to operate the mail client. Gmail data can include messages, headers, participants, thread metadata, labels, attachments, and mailbox state. Kisa uses this data to sync, display, search, compose, send, and manage mail at your direction.
+          </p>
+        </section>
+
+        <section class="py-8">
           <h2 class="text-sm font-semibold">Your data stays on your device</h2>
           <p class="mt-3 text-sm leading-6 text-muted-foreground">
-            Your mail cache, search index, settings, and encrypted OAuth credentials are stored locally by the Kisa desktop app. We do not upload or keep a copy.
+            Kisa stores your encrypted OAuth credentials, cached account profile, downloaded mail, labels, local drafts, search index, account settings, and synchronization state on your device. This data persists across app restarts for as long as the account remains connected. Kisa does not upload or retain a copy on a Kisa-operated server.
           </p>
         </section>
 
@@ -51,9 +60,40 @@ import BaseLayout from "@/layouts/base-layout.astro";
         </section>
 
         <section class="py-8">
+          <h2 class="text-sm font-semibold">Mail actions affect your Gmail account</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            Actions such as sending mail, changing read state or labels, moving mail to Trash, and restoring mail from Spam are sent directly to Gmail. Delete forever is available only for conversations in Spam and permanently deletes the selected conversation from Gmail after you confirm the action.
+          </p>
+        </section>
+
+        <section class="py-8">
           <h2 class="text-sm font-semibold">AI runs only when you ask</h2>
           <p class="mt-3 text-sm leading-6 text-muted-foreground">
-            When you choose Create reply or Clean, Kisa sends the draft or a bounded copy of cached thread context directly to your selected AI provider: Codex, Claude Code, or a provider connected through OpenCode. That content is handled under the provider's terms. Kisa uses your existing command-line sign-in, does not collect provider API keys, and isolates each request in an empty temporary directory with provider tool access restricted.
+            When you choose Create reply or Clean, Kisa sends the draft or a bounded copy of cached thread context directly to your selected AI provider: Codex, Claude Code, or a provider connected through OpenCode. Kisa uses this content only to return the writing result you requested and does not use it to train an AI model. The selected provider processes the content under the terms, retention rules, and data controls of your plan with that provider.
+          </p>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            Kisa does not provide AI accounts or retain provider credentials. AI requests are sent directly from your device using a provider command-line tool and account configured by you. Each request runs from an empty temporary directory with provider tool access restricted, and Kisa deletes temporary request output when the operation ends. Provider-side retention and model-training behavior depend on your provider, plan, and account configuration. OpenCode can connect to different upstream providers, so the provider and model selected in your OpenCode configuration determine where that request is processed.
+          </p>
+        </section>
+
+        <section class="py-8">
+          <h2 class="text-sm font-semibold">Retention and deletion</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            To remove an account's locally stored Google data, open Kisa Settings, select the account, and choose Disconnect. Kisa revokes its Google access and deletes that account's saved sign-in, cached profile, downloaded mail, labels, local drafts, search index, settings, synchronization state, and trusted-sender choices from the device. Attachment preview data exists only for the current app session.
+          </p>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            Disconnecting an account does not delete mail from Gmail or undo changes already sent to Gmail. Delete Gmail messages with Kisa's mail actions or directly in Gmail. Revoking Kisa in your Google Account prevents future access but does not by itself remove data already stored on your device; use Disconnect in Kisa before uninstalling when you want that local data removed.
+          </p>
+        </section>
+
+        <section class="py-8">
+          <h2 class="text-sm font-semibold">Limited use of Google data</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            Kisa uses Google user data only to provide the user-facing mail and optional AI writing features described on this page. Kisa does not sell Google user data, use it for advertising, use it to determine creditworthiness, or use it to train or improve generalized AI or machine-learning models.
+          </p>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            Kisa's use of information received from Google Workspace APIs adheres to the{" "}
+            <a class="underline decoration-border underline-offset-4 transition-colors hover:text-foreground" href="https://developers.google.com/terms/api-services-user-data-policy" rel="noreferrer" target="_blank">Google User Data Policy</a>, including the Limited Use requirements.
           </p>
         </section>
 
@@ -72,9 +112,17 @@ import BaseLayout from "@/layouts/base-layout.astro";
             Your theme preference is stored only in your browser.
           </p>
         </section>
+
+        <section class="py-8">
+          <h2 class="text-sm font-semibold">Questions and requests</h2>
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            For privacy questions or help deleting data, contact the project maintainer through the{" "}
+            <a class="underline decoration-border underline-offset-4 transition-colors hover:text-foreground" href={repositoryUrl} rel="noreferrer" target="_blank">Kisa repository</a>.
+          </p>
+        </section>
       </div>
 
-      <p class="mt-8 text-xs text-muted-foreground">Last updated August 13, 2026.</p>
+      <p class="mt-8 text-xs text-muted-foreground">Last updated August 14, 2026.</p>
     </main>
   </div>
 </BaseLayout>
