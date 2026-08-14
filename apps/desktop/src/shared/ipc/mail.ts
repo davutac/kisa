@@ -113,6 +113,18 @@ export const GmailLabelCatalogRequest = Schema.Struct({
 });
 export type GmailLabelCatalogRequest = typeof GmailLabelCatalogRequest.Type;
 
+export const GmailLabelCreateRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  name: Schema.NonEmptyString,
+});
+export type GmailLabelCreateRequest = typeof GmailLabelCreateRequest.Type;
+
+export const GmailLabelDeleteRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  labelId: Schema.NonEmptyString,
+});
+export type GmailLabelDeleteRequest = typeof GmailLabelDeleteRequest.Type;
+
 export const GmailThreadRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
@@ -470,6 +482,12 @@ export type GmailIndexProgressList = typeof GmailIndexProgressList.Type;
 
 export const GmailLabelCatalogReply = IpcReply(GmailLabelCatalog);
 export type GmailLabelCatalogReply = typeof GmailLabelCatalogReply.Type;
+
+export const GmailLabelCreateReply = IpcReply(GmailLabelSummary);
+export type GmailLabelCreateReply = typeof GmailLabelCreateReply.Type;
+
+export const GmailLabelDeleteReply = IpcReply(Schema.Void);
+export type GmailLabelDeleteReply = typeof GmailLabelDeleteReply.Type;
 
 export const GmailCachedThreadPageReply = IpcReply(GmailCachedThreadPage);
 export type GmailCachedThreadPageReply = typeof GmailCachedThreadPageReply.Type;

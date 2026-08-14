@@ -31,6 +31,10 @@ import type {
   GmailCachedThreadPageRequest,
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
+  GmailLabelCreateReply,
+  GmailLabelCreateRequest,
+  GmailLabelDeleteReply,
+  GmailLabelDeleteRequest,
   GmailIndexProgressList,
   MailDraftChanged,
   MailDraftDiscardReply,
@@ -108,12 +112,18 @@ export interface DesktopBridge {
     request: DatabaseImportSession
   ) => Promise<DatabaseImportCancelReply>;
   checkForUpdates: () => Promise<UpdateStatus>;
+  createGmailLabel: (
+    request: GmailLabelCreateRequest
+  ) => Promise<GmailLabelCreateReply>;
   deleteComposerTemplate: (
     request: ComposerTemplateDeleteRequest
   ) => Promise<ComposerTemplateDeleteReply>;
   deleteSpamThread: (
     request: GmailThreadRequest
   ) => Promise<GmailThreadMutationReply>;
+  deleteGmailLabel: (
+    request: GmailLabelDeleteRequest
+  ) => Promise<GmailLabelDeleteReply>;
   discardMailDraft: (
     request: MailDraftDiscardRequest
   ) => Promise<MailDraftDiscardReply>;

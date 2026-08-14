@@ -36,6 +36,8 @@ export interface AuthApi {
 export interface MailApi {
   authorizeOutgoingAttachments: DesktopBridge["authorizeOutgoingAttachments"];
   bulkMutateThreads: DesktopBridge["bulkMutateThreads"];
+  createLabel: DesktopBridge["createGmailLabel"];
+  deleteLabel: DesktopBridge["deleteGmailLabel"];
   deleteSpamThread: DesktopBridge["deleteSpamThread"];
   discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
@@ -154,6 +156,8 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     mail: {
       authorizeOutgoingAttachments: bridge.authorizeOutgoingAttachments,
       bulkMutateThreads: bridge.bulkMutateThreads,
+      createLabel: bridge.createGmailLabel,
+      deleteLabel: bridge.deleteGmailLabel,
       deleteSpamThread: bridge.deleteSpamThread,
       discardDraft: bridge.discardMailDraft,
       getIndexProgress: bridge.getMailIndexProgress,

@@ -27,6 +27,8 @@ import type {
   AccountId,
   BatchThreadLabelMutationRequest,
   BatchThreadMutationRequest,
+  CreateLabelRequest,
+  DeleteLabelRequest,
   DisconnectAccountOptions,
   ForwardInput,
   GetAttachmentRequest,
@@ -113,6 +115,12 @@ export interface GmailService {
   ) => Effect.Effect<GmailAccount, GmailError>;
   readonly disconnectAccount: (
     options: DisconnectAccountOptions
+  ) => Effect.Effect<void, GmailError>;
+  readonly createLabel: (
+    request: CreateLabelRequest
+  ) => Effect.Effect<GmailLabel, GmailError>;
+  readonly deleteLabel: (
+    request: DeleteLabelRequest
   ) => Effect.Effect<void, GmailError>;
   readonly deleteThread: (
     request: ThreadMutationRequest
@@ -347,6 +355,48 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         }
 
         return yield* refreshLabels(options.accountId);
+      });
+
+      const requireUserLabel = Effect.fn("Gmail.requireUserLabel")(
+        function* requireUserLabel(accountId: AccountId, labelId: LabelId) {
+          const label = (yield* store.getLabels(accountId)).find(
+            (candidate) => candidate.id === labelId
+          );
+
+          if (label?.type !== "user") {
+            return yield* new GmailValidationError({
+              message: "Only user-created Gmail labels can be changed here",
+            });
+          }
+
+          return label;
+        }
+      );
+
+      const createLabel = Effect.fn("Gmail.createLabel")(function* createLabel(
+        request: CreateLabelRequest
+      ) {
+        const label = yield* withAuthorization(
+          request.accountId,
+          "modify",
+          (authorization) => gateway.createLabel(authorization, request.name)
+        );
+        yield* store.upsertLabels(request.accountId, [label]);
+        return label;
+      });
+
+      const deleteLabel = Effect.fn("Gmail.deleteLabel")(function* deleteLabel(
+        request: DeleteLabelRequest
+      ) {
+        const label = yield* requireUserLabel(
+          request.accountId,
+          request.labelId
+        );
+
+        yield* withAuthorization(request.accountId, "modify", (authorization) =>
+          gateway.deleteLabel(authorization, request.labelId)
+        );
+        yield* store.deleteLabel(request.accountId, label);
       });
 
       const resolveUnknownLabels = Effect.fn("Gmail.resolveUnknownLabels")(
@@ -591,15 +641,10 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
 
       const setThreadLabel = Effect.fn("Gmail.setThreadLabel")(
         function* setThreadLabel(request: ThreadLabelMutationRequest) {
-          const label = (yield* store.getLabels(request.accountId)).find(
-            (candidate) => candidate.id === request.labelId
+          const label = yield* requireUserLabel(
+            request.accountId,
+            request.labelId
           );
-
-          if (label?.type !== "user") {
-            return yield* new GmailValidationError({
-              message: "Only user-created Gmail labels can be changed here",
-            });
-          }
 
           yield* withAuthorization(
             request.accountId,
@@ -624,15 +669,10 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         function* batchSetThreadLabel(
           request: BatchThreadLabelMutationRequest
         ) {
-          const label = (yield* store.getLabels(request.accountId)).find(
-            (candidate) => candidate.id === request.labelId
+          const label = yield* requireUserLabel(
+            request.accountId,
+            request.labelId
           );
-
-          if (label?.type !== "user") {
-            return yield* new GmailValidationError({
-              message: "Only user-created Gmail labels can be changed here",
-            });
-          }
 
           yield* batchModifyMessageLabels(
             request,
@@ -839,6 +879,8 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         batchSetThreadLabel,
         batchSetThreadReadState,
         batchTrashThreads,
+        createLabel,
+        deleteLabel,
         deleteThread,
         disconnectAccount,
         forward,

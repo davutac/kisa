@@ -97,6 +97,14 @@ export interface GatewayMailboxTotals {
 }
 
 export interface GmailGatewayService {
+  readonly createLabel: (
+    authorization: GmailAuthorization,
+    name: string
+  ) => Effect.Effect<GatewayResult<GmailLabel>, GmailGatewayError>;
+  readonly deleteLabel: (
+    authorization: GmailAuthorization,
+    labelId: LabelId
+  ) => Effect.Effect<GatewayResult<void>, GmailGatewayError>;
   readonly deleteThread: (
     authorization: GmailAuthorization,
     threadId: ThreadId

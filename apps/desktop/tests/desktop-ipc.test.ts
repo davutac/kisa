@@ -7,8 +7,16 @@ import type { IpcMainInvokeEvent } from "electron";
 
 import * as DesktopIpc from "../src/main/ipc/desktop-ipc";
 import { DesktopIpcRegistrationError } from "../src/main/ipc/desktop-ipc-registration-error";
-import { MAIL_SET_THREAD_LABEL_CHANNEL } from "../src/shared/ipc/channels";
 import {
+  MAIL_CREATE_LABEL_CHANNEL,
+  MAIL_DELETE_LABEL_CHANNEL,
+  MAIL_SET_THREAD_LABEL_CHANNEL,
+} from "../src/shared/ipc/channels";
+import {
+  GmailLabelCreateReply,
+  GmailLabelCreateRequest,
+  GmailLabelDeleteReply,
+  GmailLabelDeleteRequest,
   GmailThreadLabelRequest,
   GmailThreadMutationReply,
 } from "../src/shared/ipc/mail";
@@ -136,6 +144,53 @@ describe(DesktopIpc.DesktopIpc, () => {
       expect(requests).toStrictEqual([request]);
       expect(
         (yield* Effect.exit(method.handler({ ...request, labelId: "" })))._tag
+      ).toBe("Failure");
+    })
+  );
+
+  it.effect("validates label creation and deletion boundaries", () =>
+    Effect.gen(function* validatesLabelDefinitionMutations() {
+      const create = DesktopIpc.makeIpcMethod({
+        channel: MAIL_CREATE_LABEL_CHANNEL,
+        handler: (request) =>
+          Effect.succeed({
+            data: { id: "Label_1", name: request.name, type: "user" },
+            ok: true as const,
+          }),
+        payload: GmailLabelCreateRequest,
+        result: GmailLabelCreateReply,
+      });
+      const remove = DesktopIpc.makeIpcMethod({
+        channel: MAIL_DELETE_LABEL_CHANNEL,
+        handler: () => Effect.succeed({ data: undefined, ok: true as const }),
+        payload: GmailLabelDeleteRequest,
+        result: GmailLabelDeleteReply,
+      });
+
+      expect(
+        yield* create.handler({
+          accountId: "person@example.com",
+          name: "Projects/Kisa",
+        })
+      ).toStrictEqual({
+        data: { id: "Label_1", name: "Projects/Kisa", type: "user" },
+        ok: true,
+      });
+      expect(
+        yield* remove.handler({
+          accountId: "person@example.com",
+          labelId: "Label_1",
+        })
+      ).toStrictEqual({ data: undefined, ok: true });
+      expect(
+        (yield* Effect.exit(
+          create.handler({ accountId: "person@example.com", name: "" })
+        ))._tag
+      ).toBe("Failure");
+      expect(
+        (yield* Effect.exit(
+          remove.handler({ accountId: "person@example.com", labelId: "" })
+        ))._tag
       ).toBe("Failure");
     })
   );

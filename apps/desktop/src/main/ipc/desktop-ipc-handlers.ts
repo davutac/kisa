@@ -18,6 +18,8 @@ import {
 import {
   authorizeOutgoingAttachments,
   bulkMutate,
+  createLabel,
+  deleteLabel,
   deleteSpam,
   discardDraft,
   getIndexProgress,
@@ -87,6 +89,8 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(getSpamStatus);
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);
+  yield* ipc.handle(createLabel);
+  yield* ipc.handle(deleteLabel);
   yield* ipc.handle(syncLabels);
   yield* ipc.handle(loadThread);
   yield* ipc.handle(listStashedDrafts);

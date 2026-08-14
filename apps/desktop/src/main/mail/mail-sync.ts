@@ -45,6 +45,8 @@ import type {
   GmailBulkThreadMutationResult,
   GmailLabelCatalog,
   GmailLabelCatalogRequest,
+  GmailLabelCreateRequest,
+  GmailLabelDeleteRequest,
   GmailLabelSummary,
   GmailMessageSendRequest,
   GmailOutgoingAttachmentCapability,
@@ -445,6 +447,39 @@ export const listGmailLabelCatalog = Effect.fn("listGmailLabelCatalog")(
     return {
       labels: labels.map(toGmailLabelSummary),
     } satisfies GmailLabelCatalog;
+  }
+);
+
+export const createGmailLabel = Effect.fn("createGmailLabel")(
+  function* createGmailLabel(request: GmailLabelCreateRequest) {
+    const label = yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.createLabel({
+            accountId: AccountId.make(request.accountId),
+            name: request.name,
+          })
+        )
+      )
+    );
+
+    return toGmailLabelSummary(label);
+  }
+);
+
+export const deleteGmailLabel = Effect.fn("deleteGmailLabel")(
+  function* deleteGmailLabel(request: GmailLabelDeleteRequest) {
+    yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.deleteLabel({
+            accountId: AccountId.make(request.accountId),
+            labelId: LabelId.make(request.labelId),
+          })
+        )
+      )
+    );
+    yield* reloadThreadList(request.accountId);
   }
 );
 

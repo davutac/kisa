@@ -4,6 +4,8 @@ import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
   MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_BULK_MUTATE_THREADS_CHANNEL,
+  MAIL_CREATE_LABEL_CHANNEL,
+  MAIL_DELETE_LABEL_CHANNEL,
   MAIL_DELETE_SPAM_THREAD_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
@@ -49,6 +51,8 @@ export const mailApi: Pick<
   | "discardMailDraft"
   | "bulkMutateThreads"
   | "authorizeOutgoingAttachments"
+  | "createGmailLabel"
+  | "deleteGmailLabel"
   | "deleteSpamThread"
   | "getMailIndexProgress"
   | "getMailSyncStatus"
@@ -91,6 +95,10 @@ export const mailApi: Pick<
     }),
   bulkMutateThreads: (request) =>
     ipcRenderer.invoke(MAIL_BULK_MUTATE_THREADS_CHANNEL, request),
+  createGmailLabel: (request) =>
+    ipcRenderer.invoke(MAIL_CREATE_LABEL_CHANNEL, request),
+  deleteGmailLabel: (request) =>
+    ipcRenderer.invoke(MAIL_DELETE_LABEL_CHANNEL, request),
   deleteSpamThread: (request) =>
     ipcRenderer.invoke(MAIL_DELETE_SPAM_THREAD_CHANNEL, request),
   discardMailDraft: (request) =>

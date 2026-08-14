@@ -466,6 +466,44 @@ export const GmailGatewayLive = Layer.succeed(
           return VOID_RESULT;
         },
       }),
+    createLabel: (authorization, name) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<GmailLabel>> => {
+          const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.labelsCreate
+          );
+          const response = await client.users.labels.create({
+            requestBody: { name },
+            userId: "me",
+          });
+          const label = toGmailLabel(response.data);
+
+          if (label === undefined) {
+            throw new TypeError("Gmail returned an invalid label");
+          }
+
+          return succeed(label);
+        },
+      }),
+    deleteLabel: (authorization, labelId) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<void>> => {
+          const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.labelsDelete
+          );
+          await client.users.labels.delete({ id: labelId, userId: "me" });
+
+          return VOID_RESULT;
+        },
+      }),
     deleteThread: (authorization, threadId: ThreadIdType) =>
       Effect.tryPromise({
         catch: (error) => toGatewayError(authorization.account.id, error),

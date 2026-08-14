@@ -207,6 +207,57 @@ export const GmailStoreLive = Layer.succeed(
         forgetCachedCorrespondents(accountId);
       }),
 
+    deleteLabel: (accountId, label) =>
+      withDatabase("Could not delete Gmail label", async (database) => {
+        const now = Date.now();
+        const remainingMessageLabelIds = sql`(
+          SELECT json_group_array(value)
+          FROM json_each(coalesce(${gmailMessages.labelIds}, '[]'))
+          WHERE value <> ${label.id}
+        )`;
+        const messageHasLabel = sql`EXISTS (
+          SELECT 1
+          FROM json_each(coalesce(${gmailMessages.labelIds}, '[]'))
+          WHERE value = ${label.id}
+        )`;
+        const remainingThreadLabels = sql`(
+          SELECT json_group_array(value)
+          FROM json_each(coalesce(${gmailThreads.labels}, '[]'))
+          WHERE value <> ${label.name}
+        )`;
+        const threadHasLabel = sql`EXISTS (
+          SELECT 1
+          FROM json_each(coalesce(${gmailThreads.labels}, '[]'))
+          WHERE value = ${label.name}
+        )`;
+
+        await database.transaction(async (transaction) => {
+          await transaction
+            .update(gmailMessages)
+            .set({ labelIds: remainingMessageLabelIds, updatedAt: now })
+            .where(
+              and(eq(gmailMessages.accountEmail, accountId), messageHasLabel)
+            )
+            .run();
+          await transaction
+            .update(gmailThreads)
+            .set({ labels: remainingThreadLabels, updatedAt: now })
+            .where(
+              and(eq(gmailThreads.accountEmail, accountId), threadHasLabel)
+            )
+            .run();
+          await transaction
+            .delete(gmailLabels)
+            .where(
+              and(
+                eq(gmailLabels.accountEmail, accountId),
+                eq(gmailLabels.labelId, label.id)
+              )
+            )
+            .run();
+        });
+      }),
+
     /**
      * Credentials stay owned by `auth/auth.ts`, which refreshes directly with
      * Google. Reading an authorization therefore mints a live access token

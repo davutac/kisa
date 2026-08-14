@@ -5,6 +5,8 @@ import { BrowserWindow } from "electron";
 import {
   ATTACHMENT_PREVIEW_LOAD_CHANNEL,
   ATTACHMENT_PREVIEW_SAVE_CHANNEL,
+  MAIL_CREATE_LABEL_CHANNEL,
+  MAIL_DELETE_LABEL_CHANNEL,
   MAIL_DELETE_SPAM_THREAD_CHANNEL,
   MAIL_BULK_MUTATE_THREADS_CHANNEL,
   MAIL_INDEX_PROGRESS_CHANNEL,
@@ -45,6 +47,10 @@ import {
   GmailIndexProgressList,
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
+  GmailLabelCreateReply,
+  GmailLabelCreateRequest,
+  GmailLabelDeleteReply,
+  GmailLabelDeleteRequest,
   GmailMessageSendReply,
   GmailMessageSendRequest,
   GmailOutgoingAttachmentPrepareReply,
@@ -94,6 +100,8 @@ import {
 } from "../../mail/mail-search";
 import {
   bulkMutateThreads,
+  createGmailLabel,
+  deleteGmailLabel,
   deleteSpamThread,
   getMailSyncStatus,
   getSpamStatus as loadSpamStatus,
@@ -277,6 +285,22 @@ export const listLabels = makeIpcMethod({
     toIpcReply(listGmailLabelCatalog(request), "Could not load Gmail labels"),
   payload: GmailLabelCatalogRequest,
   result: GmailLabelCatalogReply,
+});
+
+export const createLabel = makeIpcMethod({
+  channel: MAIL_CREATE_LABEL_CHANNEL,
+  handler: (request) =>
+    toIpcReply(createGmailLabel(request), "Could not create Gmail label"),
+  payload: GmailLabelCreateRequest,
+  result: GmailLabelCreateReply,
+});
+
+export const deleteLabel = makeIpcMethod({
+  channel: MAIL_DELETE_LABEL_CHANNEL,
+  handler: (request) =>
+    toIpcReply(deleteGmailLabel(request), "Could not delete Gmail label"),
+  payload: GmailLabelDeleteRequest,
+  result: GmailLabelDeleteReply,
 });
 
 export const syncLabels = makeIpcMethod({

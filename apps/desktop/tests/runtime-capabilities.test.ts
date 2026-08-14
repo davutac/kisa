@@ -68,7 +68,14 @@ describe(getRuntimeCapabilities, () => {
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
     cleanupEmailDraft: () =>
       Promise.resolve({ data: { body: "Body", subject: "Subject" }, ok: true }),
+    createGmailLabel: (request) =>
+      Promise.resolve({
+        data: { id: "Label_1", name: request.name, type: "user" },
+        ok: true as const,
+      }),
     deleteComposerTemplate: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
+    deleteGmailLabel: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     deleteSpamThread: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
@@ -214,6 +221,8 @@ describe(getRuntimeCapabilities, () => {
         authorizeOutgoingAttachments:
           desktopBridge.authorizeOutgoingAttachments,
         bulkMutateThreads: desktopBridge.bulkMutateThreads,
+        createLabel: desktopBridge.createGmailLabel,
+        deleteLabel: desktopBridge.deleteGmailLabel,
         deleteSpamThread: desktopBridge.deleteSpamThread,
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,

@@ -18,6 +18,10 @@ export interface GmailStoreService {
   readonly clearAccount: (
     accountId: AccountId
   ) => Effect.Effect<void, GmailStoreError>;
+  readonly deleteLabel: (
+    accountId: AccountId,
+    label: GmailLabel
+  ) => Effect.Effect<void, GmailStoreError>;
   readonly getAuthorization: (
     accountId: AccountId
   ) => Effect.Effect<Option.Option<GmailAuthorization>, GmailStoreError>;

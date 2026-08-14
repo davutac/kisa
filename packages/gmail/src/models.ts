@@ -180,6 +180,16 @@ export interface ListLabelsOptions {
   readonly refresh?: boolean;
 }
 
+export interface CreateLabelRequest {
+  readonly accountId: AccountId;
+  readonly name: string;
+}
+
+export interface DeleteLabelRequest {
+  readonly accountId: AccountId;
+  readonly labelId: LabelId;
+}
+
 export interface DisconnectAccountOptions {
   readonly accountId: AccountId;
   readonly revoke?: boolean;
