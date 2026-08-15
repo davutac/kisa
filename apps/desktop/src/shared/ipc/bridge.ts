@@ -9,6 +9,8 @@ import type {
   AiSettingsUpdateRequest,
 } from "./ai";
 import type {
+  AppSettingsReply,
+  AppSettingsUpdateRequest,
   AppStartupReply,
   ThreadWindowOpenReply,
   ThreadWindowOpenRequest,
@@ -145,6 +147,7 @@ export interface DesktopBridge {
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
   getAiSettings: () => Promise<AiSettingsReply>;
+  getAppSettings: () => Promise<AppSettingsReply>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
   getSpamStatus: (
     request: GmailSpamStatusRequest
@@ -264,6 +267,9 @@ export interface DesktopBridge {
   updateAccountSettings: (
     request: AccountSettingsUpdateRequest
   ) => Promise<AccountSettingsReply>;
+  setAppSettings: (
+    request: AppSettingsUpdateRequest
+  ) => Promise<AppSettingsReply>;
   updateAiSettings: (
     request: AiSettingsUpdateRequest
   ) => Promise<AiSettingsReply>;

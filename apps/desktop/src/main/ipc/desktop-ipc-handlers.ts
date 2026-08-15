@@ -8,7 +8,12 @@ import {
   listAiProviders,
   updateAiWritingSettings,
 } from "./methods/ai";
-import { openThreadWindow, startApp } from "./methods/app";
+import {
+  getAppSettings,
+  openThreadWindow,
+  startApp,
+  updateAppSettings,
+} from "./methods/app";
 import {
   disconnectAccount,
   listAccounts,
@@ -78,6 +83,8 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(cleanupDraft);
   yield* ipc.handle(startApp);
   yield* ipc.handle(openThreadWindow);
+  yield* ipc.handle(getAppSettings);
+  yield* ipc.handle(updateAppSettings);
   yield* ipc.handle(startGoogle);
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);

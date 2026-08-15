@@ -7,7 +7,9 @@ import { APP_NAME } from "@/constants";
 import type { ThreadWindowOpenRequest } from "@/shared/ipc/app";
 
 import { applyNativeMailIndexProgress } from "../app/native-mail-index-progress";
+import { isQuitInProgress } from "../app/quit-state";
 import { openExternalUrl } from "../electron/shell";
+import { getCurrentAppSettings } from "../settings/app-settings";
 import { initializeAutoUpdates } from "../updates/updater";
 import { createBrowserWindow } from "./browser-window";
 import { installNativeContextMenu } from "./native-context-menu";
@@ -109,8 +111,15 @@ export const createWindow = (): BrowserWindow => {
 
   initializeAutoUpdates(window);
 
-  window.on("close", () => {
+  window.on("close", (event) => {
     writeWindowState(window);
+
+    if (isQuitInProgress() || !getCurrentAppSettings().runInBackground) {
+      return;
+    }
+
+    event.preventDefault();
+    window.hide();
   });
   window.on("closed", () => {
     if (mainWindow === window) {

@@ -1,6 +1,8 @@
 export const APP_START_CHANNEL = "desktop:app:start";
 export const APP_CLOSING_CHANNEL = "desktop:app:closing";
 export const APP_OPEN_THREAD_WINDOW_CHANNEL = "desktop:app:open-thread-window";
+export const APP_GET_SETTINGS_CHANNEL = "desktop:app:get-settings";
+export const APP_UPDATE_SETTINGS_CHANNEL = "desktop:app:update-settings";
 
 export const AI_CLEANUP_DRAFT_CHANNEL = "desktop:ai:cleanup-draft";
 export const AI_GENERATE_REPLY_CHANNEL = "desktop:ai:generate-reply";

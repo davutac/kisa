@@ -8,12 +8,18 @@ import { APP_CLOSING_CHANNEL } from "../shared/ipc/channels";
 import { registerAppActivation } from "./app/app-activation";
 import { setDevelopmentDockIcon } from "./app/app-icon";
 import { configureLinuxSecretStorage } from "./app/linux-secret-storage";
+import { beginQuit } from "./app/quit-state";
 import { stopGoogleAuth } from "./auth/auth";
 import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailSync } from "./mail/mail-sync";
+import {
+  getCurrentAppSettings,
+  hydrateAppSettings,
+} from "./settings/app-settings";
 import { createWindow, getMainWindow } from "./window/create-window";
+import { destroyBackgroundTray, setBackgroundTray } from "./window/tray";
 
 configureLinuxSecretStorage({
   commandLine: app.commandLine,
@@ -50,14 +56,29 @@ if (hasSingleInstanceLock) {
     });
 
     await startDesktopIpc();
+    hydrateAppSettings();
     createWindow();
 
+    if (getCurrentAppSettings().runInBackground) {
+      setBackgroundTray(true, getMainWindow);
+    }
+
     app.on("activate", () => {
-      // On macOS it's common to re-create a window in the app when the
-      // dock icon is clicked and there are no other windows open.
-      if (getMainWindow() === undefined) {
+      // On macOS the dock icon is clicked even when the window is hidden in
+      // the tray, so restore it instead of recreating a second window.
+      const window = getMainWindow();
+
+      if (window === undefined) {
         createWindow();
+        return;
       }
+
+      if (window.isMinimized()) {
+        window.restore();
+      }
+
+      window.show();
+      window.focus();
     });
   })();
 } else {
@@ -68,6 +89,7 @@ let shutdownStarted = false;
 
 const finishShutdown = async (): Promise<void> => {
   stopGoogleAuth();
+  destroyBackgroundTray();
   await Promise.allSettled([
     Effect.runPromise(closeDatabase()),
     stopDesktopIpc(),
@@ -81,6 +103,7 @@ app.on("before-quit", (event) => {
   }
 
   event.preventDefault();
+  beginQuit();
   shutdownStarted = true;
   sendRendererEvent(APP_CLOSING_CHANNEL, AppClosingEvent, "closing");
   stopMailSync();

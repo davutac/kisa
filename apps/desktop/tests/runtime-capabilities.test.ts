@@ -9,6 +9,7 @@ describe(getRuntimeCapabilities, () => {
 
     expect(capabilities).toStrictEqual({
       ai: undefined,
+      appSettings: undefined,
       auth: undefined,
       isWeb: true,
       lifecycle: undefined,
@@ -29,6 +30,7 @@ describe(getRuntimeCapabilities, () => {
 
     expect(capabilities).toStrictEqual({
       ai: undefined,
+      appSettings: undefined,
       auth: undefined,
       isWeb: false,
       lifecycle: undefined,
@@ -93,6 +95,11 @@ describe(getRuntimeCapabilities, () => {
     getAiSettings: () =>
       Promise.resolve({
         data: aiSettings,
+        ok: true,
+      }),
+    getAppSettings: () =>
+      Promise.resolve({
+        data: { runInBackground: false },
         ok: true,
       }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
@@ -175,6 +182,11 @@ describe(getRuntimeCapabilities, () => {
     sendMessage: () => Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    setAppSettings: (request) =>
+      Promise.resolve({
+        data: { runInBackground: request.runInBackground },
+        ok: true as const,
+      }),
     setThreadLabel: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
@@ -216,6 +228,10 @@ describe(getRuntimeCapabilities, () => {
         getSettings: desktopBridge.getAiSettings,
         listProviders: desktopBridge.listAiProviders,
         updateSettings: desktopBridge.updateAiSettings,
+      },
+      appSettings: {
+        get: desktopBridge.getAppSettings,
+        set: desktopBridge.setAppSettings,
       },
       auth: {
         disconnectGoogleAccount: desktopBridge.disconnectGoogleAccount,
@@ -307,6 +323,7 @@ describe(getRuntimeCapabilities, () => {
 
     expect([
       nextCapabilities.ai === capabilities.ai,
+      nextCapabilities.appSettings === capabilities.appSettings,
       nextCapabilities.auth === capabilities.auth,
       nextCapabilities.lifecycle === capabilities.lifecycle,
       nextCapabilities.mail === capabilities.mail,
@@ -315,6 +332,17 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.templates === capabilities.templates,
       nextCapabilities.updates === capabilities.updates,
       nextCapabilities.window === capabilities.window,
-    ]).toStrictEqual([true, true, true, true, true, true, true, true, true]);
+    ]).toStrictEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
   });
 });

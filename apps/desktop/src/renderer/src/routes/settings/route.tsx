@@ -17,6 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
+import { useRunInBackground } from "@/state/app-settings";
 import {
   useAnimationsEnabled,
   useGeneralSettingsStore,
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/settings")({
 function SettingsRoute() {
   const {
     ai,
+    appSettings,
     auth,
     mail,
     settings,
@@ -50,6 +52,8 @@ function SettingsRoute() {
   const setOpenThreadsInNewWindows = useGeneralSettingsStore(
     (state) => state.setOpenThreadsInNewWindows
   );
+  const { enabled: runInBackground, toggle: setRunInBackground } =
+    useRunInBackground(appSettings);
 
   useHotkeyLayer("settings", true);
 
@@ -95,6 +99,27 @@ function SettingsRoute() {
                 />
               </SettingsRowActions>
             </SettingsRow>
+            {appSettings === undefined ? null : (
+              <SettingsRow>
+                <SettingsRowContent>
+                  <SettingsRowTitle id="run-in-background-title">
+                    Run in background
+                  </SettingsRowTitle>
+                  <SettingsRowDescription>
+                    Keep Kisa running in the system tray after closing the
+                    window so mail notifications continue.
+                  </SettingsRowDescription>
+                </SettingsRowContent>
+                <SettingsRowActions>
+                  <Switch
+                    aria-labelledby="run-in-background-title"
+                    checked={runInBackground === true}
+                    disabled={runInBackground === undefined}
+                    onCheckedChange={setRunInBackground}
+                  />
+                </SettingsRowActions>
+              </SettingsRow>
+            )}
             {windowApi === undefined ? null : (
               <SettingsRow>
                 <SettingsRowContent>

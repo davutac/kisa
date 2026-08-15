@@ -19,6 +19,17 @@ vi.mock(import("../src/main/window/create-window"), () => ({
   openThreadWindow: mocks.openThreadWindow,
 }));
 
+// The tray and app settings modules touch Electron and the icon asset, which
+// must not load inside a Vitest worker.
+vi.mock(import("../src/main/window/tray"), () => ({
+  setBackgroundTray: vi.fn<() => void>(),
+}));
+
+vi.mock(import("../src/main/settings/app-settings"), () => ({
+  getCurrentAppSettings: () => ({ runInBackground: false }),
+  writeAppSettings: vi.fn<() => void>(),
+}));
+
 // Importing startup reaches the database utility entry through its production
 // module-path import, which must not execute inside a Vitest worker.
 vi.mock(import("../src/main/app/startup"), () => ({

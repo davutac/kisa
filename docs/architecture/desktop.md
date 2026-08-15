@@ -27,6 +27,8 @@ The app-wide General setting "Always open threads in new windows" changes the de
 
 The app-wide General setting "Animations" defaults to enabled and persists locally across restarts. A shared provider applies it to the main, thread, and attachment-preview renderers. Disabling it removes CSS animations and transitions and configures Motion for reduced motion; enabling it restores motion while preserving the operating system's reduced-motion preference.
 
+The app-wide General setting "Run in background" defaults to enabled. When enabled, closing the main window hides it to a system tray icon instead of quitting, so mail synchronization and notifications keep running. The tray menu restores the window or quits, and the app persists the preference in `app-settings.json` under the user data directory.
+
 ## Ownership
 
 ```text
