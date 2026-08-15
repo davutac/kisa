@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StateStorage } from "zustand/middleware";
 
-import {
-  applyAnimationsPreference,
-  shouldReduceMotion,
-} from "../src/renderer/src/lib/motion";
+import { applyAnimationsClass } from "../src/renderer/src/lib/motion";
 import { createGeneralSettingsStore } from "../src/renderer/src/state/general-settings";
 
 const createMemoryStorage = (): StateStorage => {
@@ -22,19 +19,6 @@ const createMemoryStorage = (): StateStorage => {
 };
 
 describe("animations setting", () => {
-  it("keeps motion when animations are enabled and the OS does not prefer reduced motion", () => {
-    expect(shouldReduceMotion(true, false)).toBeFalsy();
-  });
-
-  it("still honors the operating system's reduced-motion preference", () => {
-    expect(shouldReduceMotion(true, true)).toBeTruthy();
-  });
-
-  it("suppresses motion when animations are disabled", () => {
-    expect(shouldReduceMotion(false, false)).toBeTruthy();
-    expect(shouldReduceMotion(false, true)).toBeTruthy();
-  });
-
   it("enables animations by default", () => {
     const store = createGeneralSettingsStore(createMemoryStorage());
 
@@ -51,7 +35,7 @@ describe("animations setting", () => {
     expect(restartedSession.getState().animationsEnabled).toBeFalsy();
   });
 
-  it("adds and removes the reduced-animation document class", () => {
+  it("adds and removes the reduced-animations document class", () => {
     const classes = new Set<string>();
     const documentElement = {
       classList: {
@@ -67,10 +51,10 @@ describe("animations setting", () => {
       },
     };
 
-    applyAnimationsPreference(false, documentElement);
+    applyAnimationsClass(documentElement, false);
     expect(classes.has("reduce-animations")).toBeTruthy();
 
-    applyAnimationsPreference(true, documentElement);
+    applyAnimationsClass(documentElement, true);
     expect(classes.has("reduce-animations")).toBeFalsy();
   });
 });

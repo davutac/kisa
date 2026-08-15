@@ -173,9 +173,7 @@
   min-height: 100svh;
 }
 
-/* "Reduce animations" setting: land every CSS animation and transition on its
-   end state. Portals (dialogs, menus, toasts) render under <html>, so the
-   class lives on the document element and overrides every descendant. */
+/* Includes portal content mounted outside #root. */
 .reduce-animations *,
 .reduce-animations *::before,
 .reduce-animations *::after {

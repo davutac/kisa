@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/react/sortable";
 import { UserRoundIcon } from "lucide-react";
-import { m } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import { getHotkeyAriaLabel, HotkeyHint } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
-import { easeInOut, NO_MOTION, useShouldReduceMotion } from "@/lib/motion";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
@@ -36,7 +36,7 @@ const TitlebarAccountButton = ({
   });
   const { openAccount } = useMailboxNavigation();
   const selectedAccountId = useSelectedAccountId();
-  const shouldReduceMotion = useShouldReduceMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
   const hasUnreadMail = useHasUnreadMail(account.email);
   const isSyncing = useIsAccountSyncing(account.email);
   const indexProgress = useAccountIndexProgress(account.email);

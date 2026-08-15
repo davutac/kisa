@@ -1,5 +1,5 @@
 import { CircleAlertIcon } from "lucide-react";
-import { m } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { easeInOut, NO_MOTION, useShouldReduceMotion } from "@/lib/motion";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 
 interface StartupSplashProps {
   errorMessage?: string;
@@ -35,7 +35,7 @@ const getStatusDescription = (errorMessage: string | undefined): string => {
 };
 
 const StartupSplash = ({ errorMessage, onRetry }: StartupSplashProps) => {
-  const shouldReduceMotion = useShouldReduceMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
   const hasError = errorMessage !== undefined;
 
   return (

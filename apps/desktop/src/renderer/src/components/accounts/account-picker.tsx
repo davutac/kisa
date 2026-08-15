@@ -1,5 +1,5 @@
 import { ShuffleIcon, UserRoundIcon } from "lucide-react";
-import { m } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 import { Fragment } from "react";
 import type { Ref } from "react";
 
@@ -16,7 +16,7 @@ import {
   HotkeyHint,
 } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
-import { easeInOut, NO_MOTION, useShouldReduceMotion } from "@/lib/motion";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 
 interface AccountPickerBaseProps {
@@ -78,7 +78,7 @@ const AccountOptionButton = ({
   label,
   onSelect,
 }: AccountOptionButtonProps) => {
-  const shouldReduceMotion = useShouldReduceMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
 
   return (
     <Tooltip>

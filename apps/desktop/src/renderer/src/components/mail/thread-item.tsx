@@ -1,5 +1,5 @@
 import type { HTMLMotionProps } from "motion/react";
-import { m } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 import { useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 
@@ -19,7 +19,7 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@/components/ui/item";
-import { easeInOut, NO_MOTION, useShouldReduceMotion } from "@/lib/motion";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
@@ -83,7 +83,7 @@ const ThreadSelectionCheckbox = ({
   onToggle: () => void;
   subject: string;
 }) => {
-  const shouldReduceMotion = useShouldReduceMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
 
   return (
     <m.span
@@ -196,7 +196,7 @@ const MailThreadItem = ({
   thread,
   ...props
 }: MailThreadItemProps) => {
-  const shouldReduceMotion = useShouldReduceMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
   const [isHovered, setIsHovered] = useState(false);
   const { areQuickActionsRevealed, isActive } = getThreadItemRevealState(
     hasCheckedThreads,
