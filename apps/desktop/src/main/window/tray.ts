@@ -3,7 +3,7 @@ import { Menu, Tray, app, nativeImage } from "electron";
 
 import { APP_NAME } from "@/constants";
 
-import icon from "../../../build/icon.png?asset";
+import trayIcon from "../../../build/tray-icon.png?asset";
 
 let tray: Tray | undefined;
 
@@ -29,9 +29,12 @@ const createBackgroundTray = (
     return;
   }
 
-  const image = nativeImage
-    .createFromPath(icon)
-    .resize({ height: 16, width: 16 });
+  const height = process.platform === "darwin" ? 14 : 16;
+  const image = nativeImage.createFromPath(trayIcon).resize({ height });
+
+  if (process.platform === "darwin") {
+    image.setTemplateImage(true);
+  }
 
   tray = new Tray(image);
   tray.setToolTip(APP_NAME);
