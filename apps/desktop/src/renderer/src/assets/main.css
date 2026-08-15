@@ -173,6 +173,16 @@
   min-height: 100svh;
 }
 
+/* "Reduce animations" setting: land every CSS animation and transition on its
+   end state. Portals (dialogs, menus, toasts) render under <html>, so the
+   class lives on the document element and overrides every descendant. */
+.reduce-animations *,
+.reduce-animations *::before,
+.reduce-animations *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
 .app-titlebar {
   height: var(--app-titlebar-height);
   padding-right: max(0.5rem, var(--app-titlebar-right));

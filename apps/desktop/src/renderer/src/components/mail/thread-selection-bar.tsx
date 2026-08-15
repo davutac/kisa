@@ -5,7 +5,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { m, useReducedMotion } from "motion/react";
+import { m } from "motion/react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getHotkeyAriaLabel, getHotkeyDisplay, useAppCommand } from "@/hotkeys";
+import { useShouldReduceMotion } from "@/lib/motion";
 import { getBulkLabelGroups } from "@/mail/bulk-thread-selection";
 import type { ThreadActions } from "@/mail/use-thread-actions";
 import type { GmailMailbox, GmailThreadSummary } from "@/shared/ipc/mail";
@@ -39,7 +40,7 @@ const ThreadSelectionBar = ({
   onTrash,
   threads,
 }: ThreadSelectionBarProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useShouldReduceMotion();
   const catalogs = useGmailLabelCatalogs();
   const [isLabelPickerOpen, setIsLabelPickerOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);

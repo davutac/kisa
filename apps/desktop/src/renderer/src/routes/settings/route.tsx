@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
 import {
+  useAnimationsEnabled,
   useGeneralSettingsStore,
   useOpenThreadsInNewWindows,
 } from "@/state/general-settings";
@@ -41,6 +42,10 @@ function SettingsRoute() {
     versions,
     window: windowApi,
   } = getRuntimeCapabilities();
+  const animationsEnabled = useAnimationsEnabled();
+  const setAnimationsEnabled = useGeneralSettingsStore(
+    (state) => state.setAnimationsEnabled
+  );
   const openThreadsInNewWindows = useOpenThreadsInNewWindows();
   const setOpenThreadsInNewWindows = useGeneralSettingsStore(
     (state) => state.setOpenThreadsInNewWindows
@@ -71,6 +76,23 @@ function SettingsRoute() {
               </SettingsRowContent>
               <SettingsRowActions>
                 <ModeToggle />
+              </SettingsRowActions>
+            </SettingsRow>
+            <SettingsRow>
+              <SettingsRowContent>
+                <SettingsRowTitle id="animations-title">
+                  Animations
+                </SettingsRowTitle>
+                <SettingsRowDescription>
+                  Turn off animations and transitions to reduce lag.
+                </SettingsRowDescription>
+              </SettingsRowContent>
+              <SettingsRowActions>
+                <Switch
+                  aria-labelledby="animations-title"
+                  checked={animationsEnabled}
+                  onCheckedChange={setAnimationsEnabled}
+                />
               </SettingsRowActions>
             </SettingsRow>
             {windowApi === undefined ? null : (

@@ -1,4 +1,7 @@
+import { useReducedMotion } from "motion/react";
 import type { Transition } from "motion/react";
+
+import { useAnimationsEnabled } from "@/state/general-settings";
 
 /**
  * One easing curve for the whole app: everything eases in and out, nothing
@@ -14,3 +17,15 @@ export const easeInOut = (duration: number): Transition => ({
   duration,
   ease: MOTION_EASE,
 });
+
+/**
+ * Whether interface motion should be suppressed: either the operating system
+ * asks for reduced motion or the user disabled animations in settings.
+ */
+export const shouldReduceMotion = (
+  animationsEnabled: boolean,
+  prefersReducedMotion: boolean
+): boolean => !animationsEnabled || prefersReducedMotion;
+
+export const useShouldReduceMotion = (): boolean =>
+  shouldReduceMotion(useAnimationsEnabled(), useReducedMotion() === true);

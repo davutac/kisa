@@ -1,9 +1,9 @@
 import { InboxIcon, MailIcon, MailOpenIcon, Trash2Icon } from "lucide-react";
-import { m, useReducedMotion } from "motion/react";
+import { m } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
-import { MOTION_EASE, NO_MOTION } from "@/lib/motion";
+import { MOTION_EASE, NO_MOTION, useShouldReduceMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 /** Width of each action column uncovered by the thread row. */
@@ -44,7 +44,7 @@ const MailThreadQuickActions = ({
   onToggleRead,
   onTrash,
 }: MailThreadQuickActionsProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useShouldReduceMotion();
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
   const toggleReadKeys = getHotkeyDisplay("mailbox.toggleThreadRead");
   const trashKeys = getHotkeyDisplay("mailbox.trashThread");

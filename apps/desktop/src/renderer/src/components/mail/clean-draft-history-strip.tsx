@@ -1,10 +1,10 @@
 import { LoaderCircleIcon, XIcon } from "lucide-react";
-import { AnimatePresence, m, useReducedMotion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
-import { easeInOut, NO_MOTION } from "@/lib/motion";
+import { easeInOut, NO_MOTION, useShouldReduceMotion } from "@/lib/motion";
 
 interface CleanDraftHistoryStripProps {
   disabled: boolean;
@@ -21,7 +21,7 @@ const CleanDraftHistoryStrip = ({
   selectedVersionId,
   versions,
 }: CleanDraftHistoryStripProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useShouldReduceMotion();
 
   if (!versions.some(({ id }) => id !== "original")) {
     return null;
