@@ -6,9 +6,9 @@ import { useGoogleAccounts } from "@/state/google-accounts";
 import { useMailboxStore } from "@/state/mailbox";
 
 export interface MailboxNavigation {
-  /** Filters the mailbox down to a single account, reloading it when already there. */
+  /** Shows one account's inbox, reloading it when already shown. */
   openAccount: (accountEmail: string) => void;
-  /** Clears the account filter, reloading the mailbox when already unfiltered. */
+  /** Shows the combined inbox, reloading it when already shown. */
   openAllAccounts: () => void;
 }
 
@@ -20,8 +20,11 @@ export const useMailboxNavigation = (): MailboxNavigation => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const accounts = useGoogleAccounts();
+  const mailbox = useMailboxStore((state) => state.mailbox);
+  const openThreadId = useMailboxStore((state) => state.openThreadId);
   const selectedAccountId = useMailboxStore((state) => state.selectedAccountId);
-  const selectAccount = useMailboxStore((state) => state.selectAccount);
+  const selectInbox = useMailboxStore((state) => state.selectInbox);
+  const showUnread = useMailboxStore((state) => state.showUnread);
   const isMailboxRoute = pathname === "/";
 
   const showMailbox = (): void => {
@@ -29,20 +32,26 @@ export const useMailboxNavigation = (): MailboxNavigation => {
       void navigate({ to: "/" });
     }
   };
+  const isShowingInbox = (accountId: string | null): boolean =>
+    isMailboxRoute &&
+    selectedAccountId === accountId &&
+    mailbox === "inbox" &&
+    openThreadId === null &&
+    !showUnread;
 
   return {
     openAccount: (accountEmail) => {
-      if (isMailboxRoute && selectedAccountId === accountEmail) {
+      if (isShowingInbox(accountEmail)) {
         requestMailboxReload();
         return;
       }
 
       retainMailboxThreadsSnapshotsForAccounts([accountEmail]);
-      selectAccount(accountEmail);
+      selectInbox(accountEmail);
       showMailbox();
     },
     openAllAccounts: () => {
-      if (isMailboxRoute && selectedAccountId === null) {
+      if (isShowingInbox(null)) {
         requestMailboxReload();
         return;
       }
@@ -50,7 +59,7 @@ export const useMailboxNavigation = (): MailboxNavigation => {
       retainMailboxThreadsSnapshotsForAccounts(
         accounts.map(({ email }) => email)
       );
-      selectAccount(null);
+      selectInbox(null);
       showMailbox();
     },
   };

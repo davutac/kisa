@@ -18,6 +18,7 @@ interface MailboxState {
   closeThread: () => void;
   openThread: (threadId: string) => void;
   selectAccount: (accountId: string | null) => void;
+  selectInbox: (accountId: string | null) => void;
   selectThread: (threadId: string | null) => void;
   retainCheckedThreads: (threadIds: ReadonlySet<string>) => void;
   setShowUnread: (showUnread: boolean) => void;
@@ -79,6 +80,16 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
       openThreadId: null,
       selectedAccountId,
       selectedThreadId: null,
+    });
+  },
+  selectInbox: (selectedAccountId) => {
+    set({
+      checkedThreadIds: new Set(),
+      mailbox: "inbox",
+      openThreadId: null,
+      selectedAccountId,
+      selectedThreadId: null,
+      showUnread: false,
     });
   },
   selectThread: (selectedThreadId) => {

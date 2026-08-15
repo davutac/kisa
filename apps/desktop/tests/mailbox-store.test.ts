@@ -143,4 +143,24 @@ describe("mailbox store", () => {
     expect(useMailboxStore.getState().selectedThreadId).toBeNull();
     expect(useMailboxStore.getState().checkedThreadIds.size).toBe(0);
   });
+
+  it("selects an account inbox without mailbox filters", () => {
+    const store = useMailboxStore.getState();
+    store.setMailbox("spam");
+    store.setShowUnread(true);
+    store.openThread("person@example.com:thread-42");
+    store.checkThread("person@example.com:thread-42", true);
+
+    store.selectInbox("other@example.com");
+
+    const state = useMailboxStore.getState();
+    expect(state.checkedThreadIds.size).toBe(0);
+    expect(state).toMatchObject({
+      mailbox: "inbox",
+      openThreadId: null,
+      selectedAccountId: "other@example.com",
+      selectedThreadId: null,
+      showUnread: false,
+    });
+  });
 });
