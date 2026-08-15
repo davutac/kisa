@@ -40,7 +40,9 @@ const electronState = vi.hoisted(() => {
   };
 });
 
-vi.mock("electron", () => {
+vi.mock(import("electron"), async (importOriginal) => {
+  const original = await importOriginal();
+
   class Tray {
     readonly destroy = vi.fn<() => void>();
     readonly image: Electron.NativeImage;
@@ -54,16 +56,17 @@ vi.mock("electron", () => {
   }
 
   return {
-    Menu: {
+    ...original,
+    Menu: Object.assign(vi.fn(), original.Menu, {
       buildFromTemplate: vi.fn<
         (template: Electron.MenuItemConstructorOptions[]) => Electron.Menu
       >(() => ({}) as Electron.Menu),
-    },
-    Tray,
-    app: { quit: vi.fn<() => void>() },
-    nativeImage: {
+    }),
+    Tray: Object.assign(Tray, original.Tray),
+    app: { ...original.app, quit: vi.fn<() => void>() },
+    nativeImage: Object.assign(vi.fn(), original.nativeImage, {
       createFromPath: electronState.createFromPath,
-    },
+    }),
   };
 });
 
@@ -81,7 +84,9 @@ describe("background tray", () => {
   });
 
   it("uses the dedicated monochrome tray asset", () => {
-    setBackgroundTray(true, () => undefined);
+    const getWindow = vi.fn<() => Electron.BrowserWindow | undefined>();
+
+    setBackgroundTray(true, getWindow);
 
     expect(electronState.createFromPath).toHaveBeenCalledOnce();
     expect(electronState.createFromPath.mock.calls[0]?.[0]).toContain(
@@ -92,10 +97,8 @@ describe("background tray", () => {
     });
     expect(electronState.trays).toHaveLength(1);
 
-    if (process.platform === "darwin") {
-      expect(electronState.image.setTemplateImage).toHaveBeenCalledWith(true);
-    } else {
-      expect(electronState.image.setTemplateImage).not.toHaveBeenCalled();
-    }
+    expect(electronState.image.setTemplateImage.mock.calls).toStrictEqual(
+      process.platform === "darwin" ? [[true]] : []
+    );
   });
 });
