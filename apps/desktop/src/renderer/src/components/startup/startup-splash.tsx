@@ -11,7 +11,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { easeInOut, useShouldReduceMotion } from "@/lib/motion";
+import { easeInOut, NO_MOTION, useShouldReduceMotion } from "@/lib/motion";
 
 interface StartupSplashProps {
   errorMessage?: string;
@@ -46,7 +46,7 @@ const StartupSplash = ({ errorMessage, onRetry }: StartupSplashProps) => {
           ? { opacity: 0 }
           : { filter: "blur(8px)", opacity: 0, scale: 0.985, y: -8 }
       }
-      transition={easeInOut(shouldReduceMotion ? 0.18 : 0.45)}
+      transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.45)}
     >
       <Empty className="max-w-80 flex-none gap-5 border-0">
         <EmptyMedia variant="icon">

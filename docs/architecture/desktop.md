@@ -25,6 +25,8 @@ Conversation popouts use the same boundary. The main mailbox requests an account
 
 The app-wide General setting "Always open threads in new windows" changes the default for mailbox clicks, the mailbox open command, and search results. It persists locally across restarts, while the explicit inline popout action remains available when the preference is off.
 
+The app-wide General setting "Animations" defaults to enabled and persists locally across restarts. Every renderer entry, including attachment previews, mounts the shared animations provider. Turning the setting off applies one document-level class that removes CSS animations and transitions and configures Motion to suppress interface motion; turning it back on removes that class immediately. When animations remain enabled, components that expose motion still honor the operating system's reduced-motion preference.
+
 ## Ownership
 
 ```text

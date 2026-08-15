@@ -18,6 +18,17 @@ export const easeInOut = (duration: number): Transition => ({
   ease: MOTION_EASE,
 });
 
+interface AnimationsDocumentElement {
+  classList: Pick<DOMTokenList, "toggle">;
+}
+
+export const applyAnimationsPreference = (
+  animationsEnabled: boolean,
+  documentElement: AnimationsDocumentElement = document.documentElement
+): void => {
+  documentElement.classList.toggle("reduce-animations", !animationsEnabled);
+};
+
 /**
  * Whether interface motion should be suppressed: either the operating system
  * asks for reduced motion or the user disabled animations in settings.

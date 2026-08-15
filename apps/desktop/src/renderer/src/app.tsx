@@ -1,40 +1,23 @@
 import { RouterProvider } from "@tanstack/react-router";
-import {
-  AnimatePresence,
-  domMax,
-  LazyMotion,
-  MotionConfig,
-} from "motion/react";
-import { useLayoutEffect } from "react";
+import { AnimatePresence, domMax, LazyMotion } from "motion/react";
 
 import type { AppRouter } from "@/router";
 
+import AnimationsProvider from "./components/animations-provider";
 import AppClosingOverlay from "./components/shell/app-closing-overlay";
 import Providers from "./providers";
-import { useAnimationsEnabled } from "./state/general-settings";
 
-const App = ({ router }: { router: AppRouter }) => {
-  const animationsEnabled = useAnimationsEnabled();
-
-  useLayoutEffect(() => {
-    document.documentElement.classList.toggle(
-      "reduce-animations",
-      !animationsEnabled
-    );
-  }, [animationsEnabled]);
-
-  return (
-    <Providers>
+const App = ({ router }: { router: AppRouter }) => (
+  <Providers>
+    <AnimationsProvider>
       <LazyMotion features={domMax}>
-        <MotionConfig reducedMotion={animationsEnabled ? "never" : "always"}>
-          <AnimatePresence initial={false}>
-            <RouterProvider router={router} />
-          </AnimatePresence>
-        </MotionConfig>
+        <AnimatePresence initial={false}>
+          <RouterProvider router={router} />
+        </AnimatePresence>
       </LazyMotion>
       <AppClosingOverlay />
-    </Providers>
-  );
-};
+    </AnimationsProvider>
+  </Providers>
+);
 
 export default App;
