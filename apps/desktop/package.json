@@ -54,7 +54,7 @@
     "cmdk": "catalog:",
     "date-fns": "catalog:",
     "drizzle-orm": "catalog:",
-    "effect": "4.0.0-rc.108",
+    "effect": "catalog:",
     "electron-updater": "catalog:",
     "embla-carousel-react": "catalog:",
     "input-otp": "catalog:",
