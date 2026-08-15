@@ -14,3 +14,14 @@ export const easeInOut = (duration: number): Transition => ({
   duration,
   ease: MOTION_EASE,
 });
+
+interface AnimationClassTarget {
+  classList: Pick<DOMTokenList, "toggle">;
+}
+
+export const applyAnimationsClass = (
+  target: AnimationClassTarget,
+  animationsEnabled: boolean
+): void => {
+  target.classList.toggle("reduce-animations", !animationsEnabled);
+};

@@ -1,10 +1,10 @@
 import { PaperclipIcon } from "lucide-react";
-import { m } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { DialogContent } from "@/components/ui/dialog";
-import { easeInOut } from "@/lib/motion";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 
 interface NewMessageDialogShellProps {
   children: ReactNode;
@@ -19,6 +19,7 @@ const NewMessageDialogShell = ({
 }: NewMessageDialogShellProps) => {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const fileDragDepthRef = useRef(0);
+  const shouldReduceMotion = useReducedMotionConfig();
 
   return (
     <DialogContent
@@ -79,7 +80,7 @@ const NewMessageDialogShell = ({
         aria-hidden="true"
         className="bg-background/90 pointer-events-none absolute inset-2 z-50 grid place-items-center rounded-lg border-2 border-dashed"
         initial={false}
-        transition={easeInOut(0.15)}
+        transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.15)}
       >
         <div className="text-muted-foreground flex flex-col items-center gap-2 font-medium">
           <PaperclipIcon className="size-6" />

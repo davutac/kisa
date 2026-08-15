@@ -1,5 +1,5 @@
 import { ShuffleIcon, UserRoundIcon } from "lucide-react";
-import { m, useReducedMotion } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 import { Fragment } from "react";
 import type { Ref } from "react";
 
@@ -78,7 +78,7 @@ const AccountOptionButton = ({
   label,
   onSelect,
 }: AccountOptionButtonProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
 
   return (
     <Tooltip>

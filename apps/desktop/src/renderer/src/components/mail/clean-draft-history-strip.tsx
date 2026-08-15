@@ -1,5 +1,5 @@
 import { LoaderCircleIcon, XIcon } from "lucide-react";
-import { AnimatePresence, m, useReducedMotion } from "motion/react";
+import { AnimatePresence, m, useReducedMotionConfig } from "motion/react";
 
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ const CleanDraftHistoryStrip = ({
   selectedVersionId,
   versions,
 }: CleanDraftHistoryStripProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
 
   if (!versions.some(({ id }) => id !== "original")) {
     return null;

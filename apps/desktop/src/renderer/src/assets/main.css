@@ -173,6 +173,14 @@
   min-height: 100svh;
 }
 
+/* Includes portal content mounted outside #root. */
+.reduce-animations *,
+.reduce-animations *::before,
+.reduce-animations *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
 .app-titlebar {
   height: var(--app-titlebar-height);
   padding-right: max(0.5rem, var(--app-titlebar-right));

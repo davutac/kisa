@@ -5,7 +5,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { m, useReducedMotion } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,7 @@ const ThreadSelectionBar = ({
   onTrash,
   threads,
 }: ThreadSelectionBarProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
   const catalogs = useGmailLabelCatalogs();
   const [isLabelPickerOpen, setIsLabelPickerOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);

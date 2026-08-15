@@ -2,6 +2,7 @@ import "../assets/main.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import AnimationsProvider from "../components/animations-provider";
 import AttachmentPreviewApp from "./attachment-preview-app";
 
 const rootElement = document.querySelector("#root");
@@ -12,6 +13,8 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <AttachmentPreviewApp />
+    <AnimationsProvider>
+      <AttachmentPreviewApp />
+    </AnimationsProvider>
   </StrictMode>
 );

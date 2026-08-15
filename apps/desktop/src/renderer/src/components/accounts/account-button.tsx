@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/react/sortable";
 import { UserRoundIcon } from "lucide-react";
-import { m, useReducedMotion } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -36,7 +36,7 @@ const TitlebarAccountButton = ({
   });
   const { openAccount } = useMailboxNavigation();
   const selectedAccountId = useSelectedAccountId();
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
   const hasUnreadMail = useHasUnreadMail(account.email);
   const isSyncing = useIsAccountSyncing(account.email);
   const indexProgress = useAccountIndexProgress(account.email);

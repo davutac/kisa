@@ -1,5 +1,5 @@
 import type { HTMLMotionProps } from "motion/react";
-import { m, useReducedMotion } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 import { useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 
@@ -83,7 +83,7 @@ const ThreadSelectionCheckbox = ({
   onToggle: () => void;
   subject: string;
 }) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
 
   return (
     <m.span
@@ -196,7 +196,7 @@ const MailThreadItem = ({
   thread,
   ...props
 }: MailThreadItemProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
   const [isHovered, setIsHovered] = useState(false);
   const { areQuickActionsRevealed, isActive } = getThreadItemRevealState(
     hasCheckedThreads,

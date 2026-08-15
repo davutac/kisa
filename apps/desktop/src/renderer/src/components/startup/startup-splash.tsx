@@ -1,5 +1,5 @@
 import { CircleAlertIcon } from "lucide-react";
-import { m, useReducedMotion } from "motion/react";
+import { m, useReducedMotionConfig } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { easeInOut } from "@/lib/motion";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 
 interface StartupSplashProps {
   errorMessage?: string;
@@ -35,7 +35,7 @@ const getStatusDescription = (errorMessage: string | undefined): string => {
 };
 
 const StartupSplash = ({ errorMessage, onRetry }: StartupSplashProps) => {
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useReducedMotionConfig();
   const hasError = errorMessage !== undefined;
 
   return (
@@ -46,7 +46,7 @@ const StartupSplash = ({ errorMessage, onRetry }: StartupSplashProps) => {
           ? { opacity: 0 }
           : { filter: "blur(8px)", opacity: 0, scale: 0.985, y: -8 }
       }
-      transition={easeInOut(shouldReduceMotion ? 0.18 : 0.45)}
+      transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.45)}
     >
       <Empty className="max-w-80 flex-none gap-5 border-0">
         <EmptyMedia variant="icon">
