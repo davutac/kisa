@@ -731,6 +731,52 @@ export const GmailStoreLive = Layer.succeed(
     /** See `saveAuthorization`. */
     updateCredentials: () => Effect.void,
 
+    updateLabel: (accountId, previous, updated) =>
+      withDatabase("Could not update Gmail label", async (database) => {
+        const now = Date.now();
+
+        await database.transaction(async (transaction) => {
+          if (previous.name !== updated.name) {
+            const renamedThreadLabels = sql`(
+              SELECT json_group_array(
+                CASE WHEN value = ${previous.name} THEN ${updated.name} ELSE value END
+              )
+              FROM json_each(coalesce(${gmailThreads.labels}, '[]'))
+            )`;
+            const threadHasLabel = sql`EXISTS (
+              SELECT 1
+              FROM json_each(coalesce(${gmailThreads.labels}, '[]'))
+              WHERE value = ${previous.name}
+            )`;
+
+            await transaction
+              .update(gmailThreads)
+              .set({ labels: renamedThreadLabels, updatedAt: now })
+              .where(
+                and(eq(gmailThreads.accountEmail, accountId), threadHasLabel)
+              )
+              .run();
+          }
+
+          await transaction
+            .update(gmailLabels)
+            .set({
+              backgroundColor: updated.color?.background ?? null,
+              name: updated.name,
+              textColor: updated.color?.text ?? null,
+              type: updated.type,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(gmailLabels.accountEmail, accountId),
+                eq(gmailLabels.labelId, previous.id)
+              )
+            )
+            .run();
+        });
+      }),
+
     upsertLabels: (accountId, labels) =>
       withDatabase("Could not save Gmail labels", async (database) => {
         if (labels.length === 0) {

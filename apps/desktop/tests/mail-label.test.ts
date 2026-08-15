@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   formatGmailLabel,
   gmailLabelColorStyle,
+  gmailLabelTextColor,
   hasInboxLabel,
   isSystemGmailLabel,
   listUserGmailLabels,
@@ -34,6 +35,13 @@ describe(formatGmailLabel, () => {
 
   it("preserves user-created label names", () => {
     expect(formatGmailLabel("Project Kisa")).toBe("Project Kisa");
+  });
+});
+
+describe(gmailLabelTextColor, () => {
+  it("chooses an accepted contrasting text color", () => {
+    expect(gmailLabelTextColor("#fef1d1")).toBe("#000000");
+    expect(gmailLabelTextColor("#0d3472")).toBe("#ffffff");
   });
 });
 

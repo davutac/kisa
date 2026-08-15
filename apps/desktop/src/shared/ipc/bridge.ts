@@ -30,11 +30,14 @@ import type {
   GmailCachedThreadPageReply,
   GmailCachedThreadPageRequest,
   GmailLabelCatalogReply,
+  GmailLabelCatalogChanged,
   GmailLabelCatalogRequest,
   GmailLabelCreateReply,
   GmailLabelCreateRequest,
   GmailLabelDeleteReply,
   GmailLabelDeleteRequest,
+  GmailLabelUpdateReply,
+  GmailLabelUpdateRequest,
   GmailIndexProgressList,
   MailDraftChanged,
   MailDraftDiscardReply,
@@ -124,6 +127,9 @@ export interface DesktopBridge {
   deleteGmailLabel: (
     request: GmailLabelDeleteRequest
   ) => Promise<GmailLabelDeleteReply>;
+  updateGmailLabel: (
+    request: GmailLabelUpdateRequest
+  ) => Promise<GmailLabelUpdateReply>;
   discardMailDraft: (
     request: MailDraftDiscardRequest
   ) => Promise<MailDraftDiscardReply>;
@@ -192,6 +198,9 @@ export interface DesktopBridge {
   ) => () => void;
   onMailIndexProgressChanged: (
     listener: (progress: GmailIndexProgressList) => void
+  ) => () => void;
+  onMailLabelCatalogChanged: (
+    listener: (change: GmailLabelCatalogChanged) => void
   ) => () => void;
   onMailSyncStatusChanged: (
     listener: (status: GmailSyncStatus) => void

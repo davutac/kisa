@@ -1,13 +1,18 @@
 import { useRef, useState } from "react";
 
 import MailLabelBadges from "@/components/mail/label-badges";
+import LabelDialog from "@/components/mail/label-dialog";
 import ThreadLabelPicker from "@/components/mail/thread-label-picker";
 import type { ThreadLabelChange } from "@/components/mail/thread-label-picker";
 import { Badge } from "@/components/ui/badge";
 import { useAppCommand } from "@/hotkeys";
 import { listUserGmailLabels, withGmailLabelState } from "@/mail/label";
 import type { ThreadActions } from "@/mail/use-thread-actions";
-import { useGmailLabelCatalog } from "@/state/gmail-labels";
+import { getMailApi } from "@/platform/desktop";
+import {
+  useGmailLabelCatalog,
+  useUpsertGmailLabel,
+} from "@/state/gmail-labels";
 
 interface ThreadLabelsProps {
   accountId: string;
@@ -29,13 +34,16 @@ const ThreadLabels = ({
   threadId,
 }: ThreadLabelsProps) => {
   const rowRef = useRef<HTMLDivElement>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [optimisticLabels, setOptimisticLabels] = useState<
     ReadonlyMap<string, OptimisticLabelState>
   >(new Map());
   const nextRequestIdRef = useRef(0);
   const catalog = useGmailLabelCatalog(accountId);
-  const userLabels = listUserGmailLabels(catalog ?? []);
+  const mailApi = getMailApi();
+  const upsertLabel = useUpsertGmailLabel();
+  const userLabels = listUserGmailLabels(catalog?.labels ?? []);
   const userLabelsByName = new Map(
     userLabels.map((label) => [label.name, label] as const)
   );
@@ -122,12 +130,36 @@ const ThreadLabels = ({
         isOpen={isPickerOpen}
         isLoading={catalog === undefined}
         labels={userLabels}
+        onCreateLabel={
+          catalog === undefined || mailApi === undefined
+            ? undefined
+            : () => {
+                setIsCreateDialogOpen(true);
+              }
+        }
         onOpenChange={setIsPickerOpen}
         onSetLabel={(label) => {
           void setLabel(label);
         }}
         pendingLabelIds={pendingLabelIds}
       />
+      {catalog === undefined || mailApi === undefined ? null : (
+        <LabelDialog
+          accountId={accountId}
+          existingLabels={catalog.labels}
+          isOpen={isCreateDialogOpen}
+          mailApi={mailApi}
+          onSaved={(label) => {
+            upsertLabel(accountId, label);
+            void setLabel({
+              applied: true,
+              labelId: label.id,
+              labelName: label.name,
+            });
+          }}
+          onOpenChange={setIsCreateDialogOpen}
+        />
+      )}
     </div>
   );
 };

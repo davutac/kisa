@@ -11,12 +11,15 @@ import {
   MAIL_CREATE_LABEL_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
+  MAIL_UPDATE_LABEL_CHANNEL,
 } from "../src/shared/ipc/channels";
 import {
   GmailLabelCreateReply,
   GmailLabelCreateRequest,
   GmailLabelDeleteReply,
   GmailLabelDeleteRequest,
+  GmailLabelUpdateReply,
+  GmailLabelUpdateRequest,
   GmailThreadLabelRequest,
   GmailThreadMutationReply,
 } from "../src/shared/ipc/mail";
@@ -148,13 +151,19 @@ describe(DesktopIpc.DesktopIpc, () => {
     })
   );
 
-  it.effect("validates label creation and deletion boundaries", () =>
+  it.effect("validates label definition mutation boundaries", () =>
     Effect.gen(function* validatesLabelDefinitionMutations() {
       const create = DesktopIpc.makeIpcMethod({
         channel: MAIL_CREATE_LABEL_CHANNEL,
         handler: (request) =>
           Effect.succeed({
-            data: { id: "Label_1", name: request.name, type: "user" },
+            data: {
+              color: request.color,
+              id: "Label_1",
+              name: request.name,
+              threadCount: 0,
+              type: "user",
+            },
             ok: true as const,
           }),
         payload: GmailLabelCreateRequest,
@@ -166,14 +175,36 @@ describe(DesktopIpc.DesktopIpc, () => {
         payload: GmailLabelDeleteRequest,
         result: GmailLabelDeleteReply,
       });
+      const update = DesktopIpc.makeIpcMethod({
+        channel: MAIL_UPDATE_LABEL_CHANNEL,
+        handler: (request) =>
+          Effect.succeed({
+            data: {
+              color: request.color,
+              id: request.labelId,
+              name: request.name,
+              type: "user",
+            },
+            ok: true as const,
+          }),
+        payload: GmailLabelUpdateRequest,
+        result: GmailLabelUpdateReply,
+      });
 
       expect(
         yield* create.handler({
           accountId: "person@example.com",
+          color: { background: "#fef1d1", text: "#0d3472" },
           name: "Projects/Kisa",
         })
       ).toStrictEqual({
-        data: { id: "Label_1", name: "Projects/Kisa", type: "user" },
+        data: {
+          color: { background: "#fef1d1", text: "#0d3472" },
+          id: "Label_1",
+          name: "Projects/Kisa",
+          threadCount: 0,
+          type: "user",
+        },
         ok: true,
       });
       expect(
@@ -183,15 +214,50 @@ describe(DesktopIpc.DesktopIpc, () => {
         })
       ).toStrictEqual({ data: undefined, ok: true });
       expect(
-        (yield* Effect.exit(
+        yield* update.handler({
+          accountId: "person@example.com",
+          color: { background: "#4a86e8", text: "#ffffff" },
+          labelId: "Label_1",
+          name: "Projects/Kisa 2",
+        })
+      ).toStrictEqual({
+        data: {
+          color: { background: "#4a86e8", text: "#ffffff" },
+          id: "Label_1",
+          name: "Projects/Kisa 2",
+          type: "user",
+        },
+        ok: true,
+      });
+      const invalid = yield* Effect.all([
+        Effect.exit(
           create.handler({ accountId: "person@example.com", name: "" })
-        ))._tag
-      ).toBe("Failure");
-      expect(
-        (yield* Effect.exit(
+        ),
+        Effect.exit(
+          create.handler({
+            accountId: "person@example.com",
+            color: { background: "#123456", text: "#ffffff" },
+            name: "Projects/Kisa",
+          })
+        ),
+        Effect.exit(
           remove.handler({ accountId: "person@example.com", labelId: "" })
-        ))._tag
-      ).toBe("Failure");
+        ),
+        Effect.exit(
+          update.handler({
+            accountId: "person@example.com",
+            labelId: "Label_1",
+            name: "",
+          })
+        ),
+      ]);
+
+      expect(invalid.map((exit) => exit._tag)).toStrictEqual([
+        "Failure",
+        "Failure",
+        "Failure",
+        "Failure",
+      ]);
     })
   );
 

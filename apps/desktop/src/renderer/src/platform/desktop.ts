@@ -38,6 +38,7 @@ export interface MailApi {
   bulkMutateThreads: DesktopBridge["bulkMutateThreads"];
   createLabel: DesktopBridge["createGmailLabel"];
   deleteLabel: DesktopBridge["deleteGmailLabel"];
+  updateLabel: DesktopBridge["updateGmailLabel"];
   deleteSpamThread: DesktopBridge["deleteSpamThread"];
   discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
@@ -53,6 +54,7 @@ export interface MailApi {
   markThreadNotSpam: DesktopBridge["markThreadNotSpam"];
   onDraftChanged: DesktopBridge["onMailDraftChanged"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
+  onLabelCatalogChanged: DesktopBridge["onMailLabelCatalogChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
   onThreadListUpdated: DesktopBridge["onMailThreadListUpdated"];
   onThreadUpdated: DesktopBridge["onMailThreadUpdated"];
@@ -173,6 +175,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       markThreadNotSpam: bridge.markThreadNotSpam,
       onDraftChanged: bridge.onMailDraftChanged,
       onIndexProgressChanged: bridge.onMailIndexProgressChanged,
+      onLabelCatalogChanged: bridge.onMailLabelCatalogChanged,
       onSyncStatusChanged: bridge.onMailSyncStatusChanged,
       onThreadListUpdated: bridge.onMailThreadListUpdated,
       onThreadUpdated: bridge.onMailThreadUpdated,
@@ -189,6 +192,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       syncLabels: bridge.syncGmailLabels,
       trashThread: bridge.trashThread,
       trustImageSender: bridge.trustImageSender,
+      updateLabel: bridge.updateGmailLabel,
     },
     settings: {
       beginDatabaseImport: bridge.beginDatabaseImport,

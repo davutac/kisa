@@ -18,8 +18,8 @@ import type {
 } from "@/shared/ipc/mail";
 
 interface GmailLabelCatalogState {
+  readonly catalog: GmailLabelCatalog;
   readonly colorsByName: ReadonlyMap<string, GmailLabelColor>;
-  readonly labels: readonly GmailLabelSummary[];
   readonly names: ReadonlySet<string>;
 }
 
@@ -30,6 +30,7 @@ interface GmailLabelsContextValue {
     accountId: string,
     catalog: GmailLabelCatalog
   ) => void;
+  readonly upsertLabel: (accountId: string, label: GmailLabelSummary) => void;
 }
 
 const EMPTY_COLORS: ReadonlyMap<string, GmailLabelColor> = new Map();
@@ -38,13 +39,34 @@ const GmailLabelsContext = createContext<GmailLabelsContextValue | undefined>(
 );
 
 const toGmailLabelColors = (
-  catalog: GmailLabelCatalog
+  labels: readonly GmailLabelSummary[]
 ): ReadonlyMap<string, GmailLabelColor> =>
   new Map(
-    catalog.labels.flatMap((label) =>
+    labels.flatMap((label) =>
       label.color === undefined ? [] : [[label.name, label.color] as const]
     )
   );
+
+const toGmailLabelCatalogState = (
+  catalog: GmailLabelCatalog
+): GmailLabelCatalogState => {
+  const labels = sortGmailLabelCatalog(catalog.labels);
+
+  return {
+    catalog: { ...catalog, labels },
+    colorsByName: toGmailLabelColors(labels),
+    names: new Set(labels.map((label) => label.name)),
+  };
+};
+
+const withGmailLabelCatalog = (
+  catalogs: ReadonlyMap<string, GmailLabelCatalogState>,
+  accountId: string,
+  catalog: GmailLabelCatalog
+): ReadonlyMap<string, GmailLabelCatalogState> => {
+  const entry = [accountId, toGmailLabelCatalogState(catalog)] as const;
+  return new Map([...catalogs, entry]);
+};
 
 export const GmailLabelsProvider = ({
   accountIds,
@@ -61,14 +83,33 @@ export const GmailLabelsProvider = ({
 
   const updateCatalog = useCallback(
     (accountId: string, catalog: GmailLabelCatalog): void => {
+      setCatalogs((current) =>
+        withGmailLabelCatalog(current, accountId, catalog)
+      );
+    },
+    []
+  );
+
+  const upsertLabel = useCallback(
+    (accountId: string, label: GmailLabelSummary): void => {
       setCatalogs((current) => {
-        const labels = sortGmailLabelCatalog(catalog.labels);
-        const state = {
-          colorsByName: toGmailLabelColors(catalog),
-          labels,
-          names: new Set(labels.map((label) => label.name)),
+        const state = current.get(accountId);
+
+        if (state === undefined) {
+          return current;
+        }
+
+        const catalog = {
+          ...state.catalog,
+          labels: [
+            ...state.catalog.labels.filter(
+              (candidate) => candidate.id !== label.id
+            ),
+            label,
+          ],
         };
-        return new Map([...current, [accountId, state]]);
+
+        return withGmailLabelCatalog(current, accountId, catalog);
       });
     },
     []
@@ -107,6 +148,22 @@ export const GmailLabelsProvider = ({
     void Promise.all(accountIds.map(loadCatalog));
   }, [accountIds, loadCatalog]);
 
+  useEffect(() => {
+    const mailApi = getMailApi();
+
+    if (mailApi === undefined) {
+      return;
+    }
+
+    const connectedAccountIds = new Set(accountIds);
+
+    return mailApi.onLabelCatalogChanged(({ accountId }) => {
+      if (connectedAccountIds.has(accountId)) {
+        void loadCatalog(accountId);
+      }
+    });
+  }, [accountIds, loadCatalog]);
+
   const ensureLabels = useCallback(
     (accountId: string, labels: readonly string[]): void => {
       const knownNames = catalogs.get(accountId)?.names;
@@ -137,8 +194,13 @@ export const GmailLabelsProvider = ({
       [...catalogs].filter(([accountId]) => connectedAccountIds.has(accountId))
     );
 
-    return { catalogs: connectedCatalogs, ensureLabels, updateCatalog };
-  }, [accountIds, catalogs, ensureLabels, updateCatalog]);
+    return {
+      catalogs: connectedCatalogs,
+      ensureLabels,
+      updateCatalog,
+      upsertLabel,
+    };
+  }, [accountIds, catalogs, ensureLabels, updateCatalog, upsertLabel]);
 
   return <GmailLabelsContext value={value}>{children}</GmailLabelsContext>;
 };
@@ -168,8 +230,8 @@ export const useGmailLabelColors = (
 
 export const useGmailLabelCatalog = (
   accountId: string
-): readonly GmailLabelSummary[] | undefined =>
-  useGmailLabelsContext().catalogs.get(accountId)?.labels;
+): GmailLabelCatalog | undefined =>
+  useGmailLabelsContext().catalogs.get(accountId)?.catalog;
 
 export const useGmailLabelCatalogs = (): ReadonlyMap<
   string,
@@ -180,7 +242,10 @@ export const useGmailLabelCatalogs = (): ReadonlyMap<
   return useMemo(
     () =>
       new Map(
-        [...catalogs].map(([accountId, catalog]) => [accountId, catalog.labels])
+        [...catalogs].map(([accountId, state]) => [
+          accountId,
+          state.catalog.labels,
+        ])
       ),
     [catalogs]
   );
@@ -191,4 +256,11 @@ export const useUpdateGmailLabelCatalog =
     const context = useGmailLabelsContext();
 
     return context.updateCatalog;
+  };
+
+export const useUpsertGmailLabel =
+  (): GmailLabelsContextValue["upsertLabel"] => {
+    const context = useGmailLabelsContext();
+
+    return context.upsertLabel;
   };

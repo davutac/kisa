@@ -20,6 +20,7 @@ import {
   GmailThread,
   GMAIL_FULL_ACCESS_SCOPE,
   HistoryId,
+  LabelColor,
   LabelId,
   Mailbox,
   MessageId,
@@ -58,11 +59,18 @@ interface TestState {
   readonly labelGetCalls: LabelId[];
   readonly labelCreateCalls: {
     readonly accountId: AccountId;
+    readonly color?: LabelColor;
     readonly name: string;
   }[];
   readonly labelDeleteCalls: {
     readonly accountId: AccountId;
     readonly labelId: LabelId;
+  }[];
+  readonly labelUpdateCalls: {
+    readonly accountId: AccountId;
+    readonly color?: LabelColor;
+    readonly labelId: LabelId;
+    readonly name: string;
   }[];
   readonly labelMutationCalls: {
     readonly addLabelIds: readonly string[];
@@ -119,6 +127,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     labelGetCalls: [],
     labelListCalls: 0,
     labelMutationCalls: [],
+    labelUpdateCalls: [],
     labels: options.cachedLabels ?? [],
     listThreadCalls: [],
     mutationCalls: [],
@@ -196,6 +205,12 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
           });
         }
       }),
+    updateLabel: (_accountId, previous, updated) =>
+      Effect.sync(() => {
+        state.labels = state.labels.map((candidate) =>
+          candidate.id === previous.id ? updated : candidate
+        );
+      }),
     upsertLabels: (_accountId, labels) =>
       Effect.sync(() => {
         const next = new Map(state.labels.map((label) => [label.id, label]));
@@ -223,14 +238,16 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
         });
         return { value: undefined };
       }),
-    createLabel: (authorization, name) =>
+    createLabel: (authorization, name, color) =>
       Effect.sync(() => {
         state.labelCreateCalls.push({
           accountId: authorization.account.id,
+          color,
           name,
         });
         return {
           value: new GmailLabel({
+            color,
             id: LabelId.make("Label_created"),
             name,
             type: "user",
@@ -368,6 +385,23 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
           unread: request.addLabelIds.includes("UNREAD"),
         });
         return { value: undefined };
+      }),
+    patchLabel: (authorization, labelId, name, color) =>
+      Effect.sync(() => {
+        state.labelUpdateCalls.push({
+          accountId: authorization.account.id,
+          color,
+          labelId,
+          name,
+        });
+        return {
+          value: new GmailLabel({
+            color,
+            id: labelId,
+            name,
+            type: "user",
+          }),
+        };
       }),
     revoke: () => Effect.void,
     send: () =>
@@ -780,7 +814,7 @@ describe(Gmail, () => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("creates and deletes user labels in the account catalog", () => {
+  it.effect("creates, updates, and deletes user labels", () => {
     const { layer, state } = createTestLayer({
       cachedLabels: [INBOX_LABEL, USER_LABEL],
     });
@@ -791,15 +825,37 @@ describe(Gmail, () => {
         accessToken: "access-a",
         scopes: [GMAIL_FULL_ACCESS_SCOPE],
       });
+      const color = new LabelColor({
+        background: "#4a86e8",
+        text: "#ffffff",
+      });
       const created = yield* gmail.createLabel({
         accountId: account.id,
+        color,
         name: "Projects/Kisa",
       });
 
       expect(created).toStrictEqual(
         new GmailLabel({
+          color,
           id: LabelId.make("Label_created"),
           name: "Projects/Kisa",
+          type: "user",
+        })
+      );
+
+      const updated = yield* gmail.updateLabel({
+        accountId: account.id,
+        color,
+        labelId: USER_LABEL.id,
+        name: "Invoices",
+      });
+
+      expect(updated).toStrictEqual(
+        new GmailLabel({
+          color,
+          id: USER_LABEL.id,
+          name: "Invoices",
           type: "user",
         })
       );
@@ -813,18 +869,27 @@ describe(Gmail, () => {
         createCalls: state.labelCreateCalls,
         deleteCalls: state.labelDeleteCalls,
         labels: state.labels,
+        updateCalls: state.labelUpdateCalls,
       }).toStrictEqual({
-        createCalls: [{ accountId: account.id, name: "Projects/Kisa" }],
+        createCalls: [{ accountId: account.id, color, name: "Projects/Kisa" }],
         deleteCalls: [{ accountId: account.id, labelId: USER_LABEL.id }],
         labels: [INBOX_LABEL, created],
+        updateCalls: [
+          {
+            accountId: account.id,
+            color,
+            labelId: USER_LABEL.id,
+            name: "Invoices",
+          },
+        ],
       });
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("rejects deleting system or unknown labels", () => {
+  it.effect("rejects changing system or unknown labels", () => {
     const { layer, state } = createTestLayer({ cachedLabels: [INBOX_LABEL] });
 
-    return Effect.gen(function* rejectsInvalidLabelDeletion() {
+    return Effect.gen(function* rejectsInvalidLabelChanges() {
       const gmail = yield* Gmail;
       const account = yield* gmail.authorizeAccount({
         accessToken: "access-a",
@@ -832,18 +897,28 @@ describe(Gmail, () => {
       });
 
       const errors = yield* Effect.all(
-        [INBOX_LABEL.id, LabelId.make("Label_missing")].map((labelId) =>
+        [INBOX_LABEL.id, LabelId.make("Label_missing")].flatMap((labelId) => [
           gmail
             .deleteLabel({ accountId: account.id, labelId })
-            .pipe(Effect.flip)
-        )
+            .pipe(Effect.flip),
+          gmail
+            .updateLabel({
+              accountId: account.id,
+              labelId,
+              name: "Changed",
+            })
+            .pipe(Effect.flip),
+        ])
       );
 
       expect(errors.map((error) => error._tag)).toStrictEqual([
         "GmailValidationError",
         "GmailValidationError",
+        "GmailValidationError",
+        "GmailValidationError",
       ]);
       expect(state.labelDeleteCalls).toStrictEqual([]);
+      expect(state.labelUpdateCalls).toStrictEqual([]);
     }).pipe(Effect.provide(layer));
   });
 

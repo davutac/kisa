@@ -3,9 +3,11 @@ import { ipcRenderer, webUtils } from "electron";
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
   MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
   MAIL_BULK_MUTATE_THREADS_CHANNEL,
   MAIL_CREATE_LABEL_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
+  MAIL_UPDATE_LABEL_CHANNEL,
   MAIL_DELETE_SPAM_THREAD_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
@@ -38,6 +40,7 @@ import {
 } from "../shared/ipc/channels";
 import {
   GmailIndexProgressList,
+  GmailLabelCatalogChanged,
   GmailSyncStatus,
   GmailThreadListUpdated,
   GmailThreadUpdated,
@@ -53,6 +56,7 @@ export const mailApi: Pick<
   | "authorizeOutgoingAttachments"
   | "createGmailLabel"
   | "deleteGmailLabel"
+  | "updateGmailLabel"
   | "deleteSpamThread"
   | "getMailIndexProgress"
   | "getMailSyncStatus"
@@ -69,6 +73,7 @@ export const mailApi: Pick<
   | "prepareOutgoingAttachments"
   | "onMailDraftChanged"
   | "onMailIndexProgressChanged"
+  | "onMailLabelCatalogChanged"
   | "onMailSyncStatusChanged"
   | "onMailThreadListUpdated"
   | "onMailThreadUpdated"
@@ -127,6 +132,12 @@ export const mailApi: Pick<
     subscribe(MAIL_DRAFT_CHANGED_CHANNEL, MailDraftChanged, listener),
   onMailIndexProgressChanged: (listener) =>
     subscribe(MAIL_INDEX_PROGRESS_CHANNEL, GmailIndexProgressList, listener),
+  onMailLabelCatalogChanged: (listener) =>
+    subscribe(
+      MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
+      GmailLabelCatalogChanged,
+      listener
+    ),
   onMailSyncStatusChanged: (listener) =>
     subscribe(MAIL_SYNC_STATUS_CHANNEL, GmailSyncStatus, listener),
   onMailThreadListUpdated: (listener) =>
@@ -167,4 +178,6 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_TRASH_THREAD_CHANNEL, request),
   trustImageSender: (request) =>
     ipcRenderer.invoke(MAIL_TRUST_IMAGE_SENDER_CHANNEL, request),
+  updateGmailLabel: (request) =>
+    ipcRenderer.invoke(MAIL_UPDATE_LABEL_CHANNEL, request),
 };

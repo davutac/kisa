@@ -297,6 +297,20 @@ export const toGmailLabel = (
   });
 };
 
+const toLabelRequestBody = (
+  name: string,
+  color?: LabelColor
+): gmail_v1.Schema$Label =>
+  color === undefined
+    ? { name }
+    : {
+        color: {
+          backgroundColor: color.background,
+          textColor: color.text,
+        },
+        name,
+      };
+
 export const hydrateUserLabelDetails = (
   labels: readonly gmail_v1.Schema$Label[],
   load: (labelId: string) => Promise<gmail_v1.Schema$Label>
@@ -466,7 +480,7 @@ export const GmailGatewayLive = Layer.succeed(
           return VOID_RESULT;
         },
       }),
-    createLabel: (authorization, name) =>
+    createLabel: (authorization, name, color) =>
       Effect.tryPromise({
         catch: (error) => toGatewayError(authorization.account.id, error),
         try: async (): Promise<GatewayResult<GmailLabel>> => {
@@ -477,7 +491,7 @@ export const GmailGatewayLive = Layer.succeed(
             QUOTA_UNITS.labelsCreate
           );
           const response = await client.users.labels.create({
-            requestBody: { name },
+            requestBody: toLabelRequestBody(name, color),
             userId: "me",
           });
           const label = toGmailLabel(response.data);
@@ -805,6 +819,30 @@ export const GmailGatewayLive = Layer.succeed(
           });
 
           return VOID_RESULT;
+        },
+      }),
+    patchLabel: (authorization, labelId, name, color) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<GmailLabel>> => {
+          const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.labelsUpdate
+          );
+          const response = await client.users.labels.patch({
+            id: labelId,
+            requestBody: toLabelRequestBody(name, color),
+            userId: "me",
+          });
+          const label = toGmailLabel(response.data);
+
+          if (label === undefined || label.id !== labelId) {
+            throw new TypeError("Gmail returned an invalid label");
+          }
+
+          return succeed(label);
         },
       }),
 

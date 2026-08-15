@@ -35,6 +35,27 @@ export const gmailLabelColorStyle = (
     ? undefined
     : { backgroundColor: color.background, color: color.text };
 
+const toLinearColorChannel = (value: number): number => {
+  const channel = value / 255;
+  return channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4;
+};
+
+export const gmailLabelTextColor = (
+  background: string
+): "#000000" | "#ffffff" => {
+  const red = Number.parseInt(background.slice(1, 3), 16);
+  const green = Number.parseInt(background.slice(3, 5), 16);
+  const blue = Number.parseInt(background.slice(5, 7), 16);
+  const luminance =
+    0.2126 * toLinearColorChannel(red) +
+    0.7152 * toLinearColorChannel(green) +
+    0.0722 * toLinearColorChannel(blue);
+
+  return luminance > 0.179 ? "#000000" : "#ffffff";
+};
+
 // Gmail reports its own labels by id, and user labels by the name their owner
 // typed, so an id that Gmail reserves is what marks a label as a system one.
 export const isSystemGmailLabel = (label: string): boolean =>

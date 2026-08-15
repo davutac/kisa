@@ -354,6 +354,104 @@ describe("Gmail label store", () => {
     ).toStrictEqual([{ account_email: otherAccountId }]);
   });
 
+  it("renames a label without changing its cached message membership", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const otherAccountId = AccountId.make("other@example.com");
+    const previous = new GmailLabel({
+      id: LabelId.make("Label_1"),
+      name: "Receipts",
+      type: "user",
+    });
+    const updated = new GmailLabel({
+      color: new LabelColor({ background: "#4a86e8", text: "#ffffff" }),
+      id: previous.id,
+      name: "Invoices",
+      type: "user",
+    });
+    const insertThread = connection.prepare(
+      `INSERT INTO gmail_threads (
+        account_email, "from", is_in_inbox, is_unread, labels, latest_at,
+        message_count, snippet, subject, thread_id, updated_at
+      ) VALUES (?, 'sender@example.com', 1, 0, '["INBOX","Receipts"]',
+        1, 1, '', 'Subject', 'shared-thread', 1)`
+    );
+    const insertMessage = connection.prepare(
+      `INSERT INTO gmail_messages (
+        account_email, from_address, internal_date, label_ids, message_id,
+        schema_version, subject, thread_id, updated_at
+      ) VALUES (?, 'sender@example.com', 1, '["INBOX","Label_1"]', ?, 1,
+        'Subject', 'shared-thread', 1)`
+    );
+
+    insertThread.run(accountId);
+    insertThread.run(otherAccountId);
+    insertMessage.run(accountId, "message-a");
+    insertMessage.run(otherAccountId, "message-b");
+
+    await Effect.runPromise(
+      Effect.gen(function* updateCachedLabel() {
+        const store = yield* GmailStore;
+        yield* store.replaceLabels(accountId, [previous]);
+        yield* store.replaceLabels(otherAccountId, [previous]);
+        yield* store.updateLabel(accountId, previous, updated);
+      }).pipe(Effect.provide(GmailStoreLive))
+    );
+
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, labels
+           FROM gmail_threads
+           ORDER BY account_email`
+        )
+        .all()
+    ).toStrictEqual([
+      {
+        account_email: otherAccountId,
+        labels: '["INBOX","Receipts"]',
+      },
+      { account_email: accountId, labels: '["INBOX","Invoices"]' },
+    ]);
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, label_ids
+           FROM gmail_messages
+           ORDER BY account_email`
+        )
+        .all()
+    ).toStrictEqual([
+      {
+        account_email: otherAccountId,
+        label_ids: '["INBOX","Label_1"]',
+      },
+      { account_email: accountId, label_ids: '["INBOX","Label_1"]' },
+    ]);
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, background_color, name, text_color
+           FROM gmail_labels
+           WHERE label_id = 'Label_1'
+           ORDER BY account_email`
+        )
+        .all()
+    ).toStrictEqual([
+      {
+        account_email: otherAccountId,
+        background_color: null,
+        name: "Receipts",
+        text_color: null,
+      },
+      {
+        account_email: accountId,
+        background_color: "#4a86e8",
+        name: "Invoices",
+        text_color: "#ffffff",
+      },
+    ]);
+  });
+
   it("moves a Spam thread and all cached messages back to Inbox", async () => {
     const accountId = AccountId.make("person@example.com");
     const otherAccountId = AccountId.make("other@example.com");

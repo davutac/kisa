@@ -16,6 +16,7 @@ import type {
   GmailCredentials,
   GmailLabel,
   HistoryId,
+  LabelColor,
   LabelId,
   MessageId,
   SentMessage,
@@ -99,7 +100,8 @@ export interface GatewayMailboxTotals {
 export interface GmailGatewayService {
   readonly createLabel: (
     authorization: GmailAuthorization,
-    name: string
+    name: string,
+    color?: LabelColor
   ) => Effect.Effect<GatewayResult<GmailLabel>, GmailGatewayError>;
   readonly deleteLabel: (
     authorization: GmailAuthorization,
@@ -120,6 +122,12 @@ export interface GmailGatewayService {
     authorization: GmailAuthorization,
     labelIds: readonly LabelId[]
   ) => Effect.Effect<GatewayResult<readonly GmailLabel[]>, GmailGatewayError>;
+  readonly patchLabel: (
+    authorization: GmailAuthorization,
+    labelId: LabelId,
+    name: string,
+    color?: LabelColor
+  ) => Effect.Effect<GatewayResult<GmailLabel>, GmailGatewayError>;
   /**
    * The mailbox's own totals, which is the only cheap way to get a denominator
    * for indexing progress — one quota unit, versus walking every page to count.

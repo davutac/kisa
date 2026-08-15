@@ -7,6 +7,7 @@ import {
   ATTACHMENT_PREVIEW_SAVE_CHANNEL,
   MAIL_CREATE_LABEL_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
+  MAIL_UPDATE_LABEL_CHANNEL,
   MAIL_DELETE_SPAM_THREAD_CHANNEL,
   MAIL_BULK_MUTATE_THREADS_CHANNEL,
   MAIL_INDEX_PROGRESS_CHANNEL,
@@ -51,6 +52,8 @@ import {
   GmailLabelCreateRequest,
   GmailLabelDeleteReply,
   GmailLabelDeleteRequest,
+  GmailLabelUpdateReply,
+  GmailLabelUpdateRequest,
   GmailMessageSendReply,
   GmailMessageSendRequest,
   GmailOutgoingAttachmentPrepareReply,
@@ -115,6 +118,7 @@ import {
   setThreadReadState,
   syncGmailLabelCatalog,
   trashThread,
+  updateGmailLabel,
 } from "../../mail/mail-sync";
 import {
   bindOutgoingAttachmentOwner,
@@ -301,6 +305,14 @@ export const deleteLabel = makeIpcMethod({
     toIpcReply(deleteGmailLabel(request), "Could not delete Gmail label"),
   payload: GmailLabelDeleteRequest,
   result: GmailLabelDeleteReply,
+});
+
+export const updateLabel = makeIpcMethod({
+  channel: MAIL_UPDATE_LABEL_CHANNEL,
+  handler: (request) =>
+    toIpcReply(updateGmailLabel(request), "Could not update Gmail label"),
+  payload: GmailLabelUpdateRequest,
+  result: GmailLabelUpdateReply,
 });
 
 export const syncLabels = makeIpcMethod({

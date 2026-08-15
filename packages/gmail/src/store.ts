@@ -77,6 +77,11 @@ export interface GmailStoreService {
     accountId: AccountId,
     patch: GmailCredentialPatch
   ) => Effect.Effect<void, GmailStoreError>;
+  readonly updateLabel: (
+    accountId: AccountId,
+    previous: GmailLabel,
+    updated: GmailLabel
+  ) => Effect.Effect<void, GmailStoreError>;
   readonly upsertLabels: (
     accountId: AccountId,
     labels: readonly GmailLabel[]

@@ -93,10 +93,125 @@ export const GmailLabelColor = Schema.Struct({
 });
 export type GmailLabelColor = typeof GmailLabelColor.Type;
 
+/** Gmail's accepted label colors, ordered as displayed in the 12-column picker. */
+export const GMAIL_LABEL_COLOR_VALUES = [
+  "#000000",
+  "#434343",
+  "#464646",
+  "#666666",
+  "#999999",
+  "#c2c2c2",
+  "#cccccc",
+  "#e7e7e7",
+  "#efefef",
+  "#f3f3f3",
+  "#ffffff",
+  "#ebdbde",
+  "#f6c5be",
+  "#ffe6c7",
+  "#ffdeb5",
+  "#fef1d1",
+  "#fdedc1",
+  "#c6f3de",
+  "#c9daf8",
+  "#e3d7ff",
+  "#e4d7f5",
+  "#fcdee8",
+  "#fbc8d9",
+  "#fbd3e0",
+  "#f2b2a8",
+  "#ffc8af",
+  "#ffd6a2",
+  "#fce8b3",
+  "#b3efd3",
+  "#b9e4d0",
+  "#a0eac9",
+  "#b6cff5",
+  "#a4c2f4",
+  "#b99aff",
+  "#d0bcf1",
+  "#f7a7c0",
+  "#efa093",
+  "#ffbc6b",
+  "#fcda83",
+  "#fad165",
+  "#fbe983",
+  "#a2dcc1",
+  "#89d3b2",
+  "#98d7e4",
+  "#b694e8",
+  "#f691b3",
+  "#f691b2",
+  "#cca6ac",
+  "#e66550",
+  "#ff7537",
+  "#ffad47",
+  "#ffad46",
+  "#f2c960",
+  "#68dfa9",
+  "#6d9eeb",
+  "#4986e7",
+  "#4a86e8",
+  "#8e63ce",
+  "#a479e2",
+  "#e07798",
+  "#fb4c2f",
+  "#cc3a21",
+  "#cf8933",
+  "#eaa041",
+  "#d5ae49",
+  "#43d692",
+  "#42d692",
+  "#44b984",
+  "#3dc789",
+  "#2da2bb",
+  "#3c78d8",
+  "#b65775",
+  "#ac2b16",
+  "#a46a21",
+  "#aa8831",
+  "#2a9c68",
+  "#16a765",
+  "#149e60",
+  "#16a766",
+  "#285bac",
+  "#3d188e",
+  "#653e9b",
+  "#994a64",
+  "#83334c",
+  "#8a1c0a",
+  "#822111",
+  "#7a2e0b",
+  "#7a4706",
+  "#684e07",
+  "#0b804b",
+  "#1a764d",
+  "#0d3472",
+  "#1c4587",
+  "#41236d",
+  "#711a36",
+  "#662e37",
+  "#594c05",
+  "#094228",
+  "#0b4f30",
+  "#076239",
+  "#04502e",
+  "#0d3b44",
+] as const;
+
+export const GmailLabelInputColor = Schema.Struct({
+  background: Schema.Literals(GMAIL_LABEL_COLOR_VALUES),
+  text: Schema.Literals(GMAIL_LABEL_COLOR_VALUES),
+});
+export type GmailLabelInputColor = typeof GmailLabelInputColor.Type;
+
 export const GmailLabelSummary = Schema.Struct({
   color: Schema.optional(GmailLabelColor),
   id: Schema.String,
   name: Schema.String,
+  threadCount: Schema.optional(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+  ),
   /** Gmail's own wording: "system" for its labels, "user" for the rest. */
   type: Schema.optional(Schema.String),
 });
@@ -108,6 +223,11 @@ export const GmailLabelCatalog = Schema.Struct({
 });
 export type GmailLabelCatalog = typeof GmailLabelCatalog.Type;
 
+export const GmailLabelCatalogChanged = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+});
+export type GmailLabelCatalogChanged = typeof GmailLabelCatalogChanged.Type;
+
 export const GmailLabelCatalogRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
@@ -115,6 +235,7 @@ export type GmailLabelCatalogRequest = typeof GmailLabelCatalogRequest.Type;
 
 export const GmailLabelCreateRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
+  color: Schema.optional(GmailLabelInputColor),
   name: Schema.NonEmptyString,
 });
 export type GmailLabelCreateRequest = typeof GmailLabelCreateRequest.Type;
@@ -124,6 +245,14 @@ export const GmailLabelDeleteRequest = Schema.Struct({
   labelId: Schema.NonEmptyString,
 });
 export type GmailLabelDeleteRequest = typeof GmailLabelDeleteRequest.Type;
+
+export const GmailLabelUpdateRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  color: Schema.optional(GmailLabelInputColor),
+  labelId: Schema.NonEmptyString,
+  name: Schema.NonEmptyString,
+});
+export type GmailLabelUpdateRequest = typeof GmailLabelUpdateRequest.Type;
 
 export const GmailThreadRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
@@ -488,6 +617,9 @@ export type GmailLabelCreateReply = typeof GmailLabelCreateReply.Type;
 
 export const GmailLabelDeleteReply = IpcReply(Schema.Void);
 export type GmailLabelDeleteReply = typeof GmailLabelDeleteReply.Type;
+
+export const GmailLabelUpdateReply = IpcReply(GmailLabelSummary);
+export type GmailLabelUpdateReply = typeof GmailLabelUpdateReply.Type;
 
 export const GmailCachedThreadPageReply = IpcReply(GmailCachedThreadPage);
 export type GmailCachedThreadPageReply = typeof GmailCachedThreadPageReply.Type;

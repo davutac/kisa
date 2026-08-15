@@ -182,12 +182,20 @@ export interface ListLabelsOptions {
 
 export interface CreateLabelRequest {
   readonly accountId: AccountId;
+  readonly color?: LabelColor;
   readonly name: string;
 }
 
 export interface DeleteLabelRequest {
   readonly accountId: AccountId;
   readonly labelId: LabelId;
+}
+
+export interface UpdateLabelRequest {
+  readonly accountId: AccountId;
+  readonly color?: LabelColor;
+  readonly labelId: LabelId;
+  readonly name: string;
 }
 
 export interface DisconnectAccountOptions {

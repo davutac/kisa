@@ -37,7 +37,7 @@ const buttonVariants = cva(
         "icon-sm": "size-6 [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-8 [&_svg:not([class*='size-'])]:size-4",
         footer:
-          "h-auto min-w-0 flex-1 gap-1 rounded-none border-0 px-4 py-2 text-base",
+          "h-auto min-w-0 flex-1 gap-1 rounded-none border-0 px-4 py-2 text-sm [&_svg:not([class*='size-'])]:size-4",
         "footer-icon": "size-12 rounded-none border-0 p-0",
       },
     },
