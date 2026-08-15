@@ -4,6 +4,7 @@ import type { BrowserWindow } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { openThreadWindow as openThreadWindowMethod } from "../src/main/ipc/methods/app";
+import type { AppSettings } from "../src/shared/ipc/app";
 
 const mocks = vi.hoisted(() => ({
   openThreadWindow:
@@ -19,10 +20,30 @@ vi.mock(import("../src/main/window/create-window"), () => ({
   openThreadWindow: mocks.openThreadWindow,
 }));
 
+// The tray and app settings modules touch Electron and the icon asset, which
+// must not load inside a Vitest worker.
+vi.mock(import("../src/main/window/tray"), () => ({
+  setBackgroundTray: vi.fn<() => void>(),
+}));
+
+vi.mock(import("../src/main/settings/app-settings"), () => ({
+  getCurrentAppSettings: (): AppSettings => ({
+    animationsEnabled: true,
+    openThreadsInNewWindows: false,
+    runInBackground: false,
+  }),
+  writeAppSettings: vi.fn<() => void>(),
+}));
+
 // Importing startup reaches the database utility entry through its production
 // module-path import, which must not execute inside a Vitest worker.
 vi.mock(import("../src/main/app/startup"), () => ({
-  getAppStartupReply: vi.fn<() => Promise<{ readonly ok: true }>>(),
+  getAppStartupReply: vi.fn<
+    () => Promise<{
+      readonly appSettings: AppSettings;
+      readonly ok: true;
+    }>
+  >(),
 }));
 
 describe("openThreadWindow IPC", () => {

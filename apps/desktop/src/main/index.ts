@@ -8,12 +8,21 @@ import { APP_CLOSING_CHANNEL } from "../shared/ipc/channels";
 import { registerAppActivation } from "./app/app-activation";
 import { setDevelopmentDockIcon } from "./app/app-icon";
 import { configureLinuxSecretStorage } from "./app/linux-secret-storage";
+import { beginQuit } from "./app/quit-state";
+import { shouldQuitAfterAllWindowsClose } from "./app/window-lifecycle";
 import { stopGoogleAuth } from "./auth/auth";
 import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailSync } from "./mail/mail-sync";
+import {
+  flushAppSettings,
+  getCurrentAppSettings,
+  hydrateAppSettings,
+} from "./settings/app-settings";
 import { createWindow, getMainWindow } from "./window/create-window";
+import { destroyBackgroundTray, setBackgroundTray } from "./window/tray";
+import { installWindowVisibility } from "./window/window-visibility";
 
 configureLinuxSecretStorage({
   commandLine: app.commandLine,
@@ -42,22 +51,36 @@ if (hasSingleInstanceLock) {
     // Set app user model id for windows
     electronApp.setAppUserModelId("com.kisa.app");
 
-    // Default open or close DevTools by F12 in development
-    // and ignore CommandOrControl + R in production.
-    // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
+    // Apply shared behavior to main, thread, and preview windows.
     app.on("browser-window-created", (_, window) => {
       optimizer.watchWindowShortcuts(window);
+      installWindowVisibility(window);
     });
 
     await startDesktopIpc();
+    hydrateAppSettings();
     createWindow();
 
+    if (getCurrentAppSettings().runInBackground) {
+      setBackgroundTray(true, getMainWindow);
+    }
+
     app.on("activate", () => {
-      // On macOS it's common to re-create a window in the app when the
-      // dock icon is clicked and there are no other windows open.
-      if (getMainWindow() === undefined) {
+      // On macOS the dock icon is clicked even when the window is hidden in
+      // the tray, so restore it instead of recreating a second window.
+      const window = getMainWindow();
+
+      if (window === undefined) {
         createWindow();
+        return;
       }
+
+      if (window.isMinimized()) {
+        window.restore();
+      }
+
+      window.show();
+      window.focus();
     });
   })();
 } else {
@@ -68,7 +91,9 @@ let shutdownStarted = false;
 
 const finishShutdown = async (): Promise<void> => {
   stopGoogleAuth();
+  destroyBackgroundTray();
   await Promise.allSettled([
+    flushAppSettings(),
     Effect.runPromise(closeDatabase()),
     stopDesktopIpc(),
   ]);
@@ -81,17 +106,23 @@ app.on("before-quit", (event) => {
   }
 
   event.preventDefault();
+  beginQuit();
   shutdownStarted = true;
   sendRendererEvent(APP_CLOSING_CHANNEL, AppClosingEvent, "closing");
   stopMailSync();
   void finishShutdown();
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// The event only fires after the last native window closes. Background mode
+// keeps the main window hidden, so reaching this path with it disabled should
+// quit on every platform, including macOS.
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+  if (
+    shouldQuitAfterAllWindowsClose(
+      process.platform,
+      getCurrentAppSettings().runInBackground
+    )
+  ) {
     app.quit();
   }
 });

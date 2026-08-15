@@ -2,6 +2,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
+  AppSettingsReply,
+  AppSettingsUpdateRequest,
   AppStartupReply,
   ThreadWindowOpenReply,
   ThreadWindowOpenRequest,
@@ -9,9 +11,18 @@ import {
 import {
   APP_OPEN_THREAD_WINDOW_CHANNEL,
   APP_START_CHANNEL,
+  APP_UPDATE_SETTINGS_CHANNEL,
 } from "../../../shared/ipc/channels";
 import { getAppStartupReply } from "../../app/startup";
-import { openThreadWindow as openNativeThreadWindow } from "../../window/create-window";
+import {
+  getCurrentAppSettings,
+  writeAppSettings,
+} from "../../settings/app-settings";
+import {
+  getMainWindow,
+  openThreadWindow as openNativeThreadWindow,
+} from "../../window/create-window";
+import { setBackgroundTray } from "../../window/tray";
 import { makeIpcMethod } from "../desktop-ipc";
 import { toIpcReply } from "../reply";
 
@@ -48,4 +59,19 @@ export const openThreadWindow = makeIpcMethod({
     ),
   payload: ThreadWindowOpenRequest,
   result: ThreadWindowOpenReply,
+});
+
+export const updateAppSettings = makeIpcMethod({
+  channel: APP_UPDATE_SETTINGS_CHANNEL,
+  handler: (request) =>
+    toIpcReply(
+      Effect.sync(() => {
+        writeAppSettings(request);
+        setBackgroundTray(request.runInBackground, getMainWindow);
+        return getCurrentAppSettings();
+      }),
+      "Could not save app settings"
+    ),
+  payload: AppSettingsUpdateRequest,
+  result: AppSettingsReply,
 });

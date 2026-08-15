@@ -9,6 +9,8 @@ import type {
   AiSettingsUpdateRequest,
 } from "./ai";
 import type {
+  AppSettingsReply,
+  AppSettingsUpdateRequest,
   AppStartupReply,
   ThreadWindowOpenReply,
   ThreadWindowOpenRequest,
@@ -264,6 +266,9 @@ export interface DesktopBridge {
   updateAccountSettings: (
     request: AccountSettingsUpdateRequest
   ) => Promise<AccountSettingsReply>;
+  setAppSettings: (
+    request: AppSettingsUpdateRequest
+  ) => Promise<AppSettingsReply>;
   updateAiSettings: (
     request: AiSettingsUpdateRequest
   ) => Promise<AiSettingsReply>;

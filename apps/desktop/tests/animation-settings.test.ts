@@ -1,38 +1,26 @@
 import { describe, expect, it } from "vitest";
-import type { StateStorage } from "zustand/middleware";
 
 import { applyAnimationsClass } from "../src/renderer/src/lib/motion";
-import { createGeneralSettingsStore } from "../src/renderer/src/state/general-settings";
-
-const createMemoryStorage = (): StateStorage => {
-  const values = new Map<string, string>();
-
-  return {
-    getItem: (key) => values.get(key) ?? null,
-    removeItem: (key) => {
-      values.delete(key);
-    },
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-  };
-};
+import {
+  getAppSettingsState,
+  hydrateAppSettingsState,
+} from "../src/renderer/src/state/app-settings";
+import { DEFAULT_APP_SETTINGS } from "../src/shared/ipc/app";
 
 describe("animations setting", () => {
   it("enables animations by default", () => {
-    const store = createGeneralSettingsStore(createMemoryStorage());
+    hydrateAppSettingsState(DEFAULT_APP_SETTINGS);
 
-    expect(store.getState().animationsEnabled).toBeTruthy();
+    expect(getAppSettingsState().animationsEnabled).toBeTruthy();
   });
 
-  it("restores the animation preference after restart", () => {
-    const storage = createMemoryStorage();
-    const firstSession = createGeneralSettingsStore(storage);
+  it("hydrates the animation preference during app startup", () => {
+    hydrateAppSettingsState({
+      ...DEFAULT_APP_SETTINGS,
+      animationsEnabled: false,
+    });
 
-    firstSession.getState().setAnimationsEnabled(false);
-
-    const restartedSession = createGeneralSettingsStore(storage);
-    expect(restartedSession.getState().animationsEnabled).toBeFalsy();
+    expect(getAppSettingsState().animationsEnabled).toBeFalsy();
   });
 
   it("adds and removes the reduced-animations document class", () => {

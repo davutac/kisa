@@ -4,6 +4,11 @@ import {
   createAuthGateStateResolver,
   resolveInitialAuthGateState,
 } from "../src/renderer/src/startup/auth-gate";
+import {
+  getAppSettingsState,
+  hydrateAppSettingsState,
+} from "../src/renderer/src/state/app-settings";
+import { DEFAULT_APP_SETTINGS } from "../src/shared/ipc/app";
 
 describe(resolveInitialAuthGateState, () => {
   it("treats browser mode as authenticated after startup", async () => {
@@ -43,6 +48,29 @@ describe(resolveInitialAuthGateState, () => {
         isWeb: false,
       })
     ).resolves.toStrictEqual({ status: "unauthenticated" });
+  });
+
+  it("hydrates app settings during startup", async () => {
+    hydrateAppSettingsState(DEFAULT_APP_SETTINGS);
+
+    await resolveInitialAuthGateState({
+      auth: {
+        listGoogleAccounts: () => Promise.resolve({ data: [], ok: true }),
+      },
+      isWeb: false,
+      startup: {
+        start: () =>
+          Promise.resolve({
+            appSettings: {
+              ...DEFAULT_APP_SETTINGS,
+              runInBackground: false,
+            },
+            ok: true,
+          }),
+      },
+    });
+
+    expect(getAppSettingsState().runInBackground).toBeFalsy();
   });
 
   it("surfaces startup failures through the route error boundary", async () => {

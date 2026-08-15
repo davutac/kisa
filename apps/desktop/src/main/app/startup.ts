@@ -10,6 +10,7 @@ import { startMailBackfill } from "../mail/mail-backfill";
 import { warmCorrespondentCache } from "../mail/mail-search";
 import { startMailSync } from "../mail/mail-sync";
 import { refreshUnreadBadge } from "../mail/unread-badge";
+import { getCurrentAppSettings } from "../settings/app-settings";
 
 let startupPromise: Promise<AppStartupExit> | null = null;
 const CORRESPONDENT_WARM_DELAY_MS = 1000;
@@ -54,7 +55,7 @@ const serializeStartupError = (
 
 const toStartupReply = (exit: AppStartupExit): AppStartupReply => {
   if (Exit.isSuccess(exit)) {
-    return { ok: true };
+    return { appSettings: getCurrentAppSettings(), ok: true };
   }
 
   const error = Option.getOrUndefined(Exit.findErrorOption(exit));

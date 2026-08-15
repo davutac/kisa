@@ -6,16 +6,19 @@ import {
   APP_CLOSING_CHANNEL,
   APP_OPEN_THREAD_WINDOW_CHANNEL,
   APP_START_CHANNEL,
+  APP_UPDATE_SETTINGS_CHANNEL,
 } from "../shared/ipc/channels";
 import { subscribe } from "./subscribe";
 
 export const appApi: Pick<
   DesktopBridge,
-  "onAppClosing" | "openThreadWindow" | "startApp"
+  "onAppClosing" | "openThreadWindow" | "setAppSettings" | "startApp"
 > = {
   onAppClosing: (listener) =>
     subscribe(APP_CLOSING_CHANNEL, AppClosingEvent, listener),
   openThreadWindow: (request) =>
     ipcRenderer.invoke(APP_OPEN_THREAD_WINDOW_CHANNEL, request),
+  setAppSettings: (request) =>
+    ipcRenderer.invoke(APP_UPDATE_SETTINGS_CHANNEL, request),
   startApp: () => ipcRenderer.invoke(APP_START_CHANNEL),
 };

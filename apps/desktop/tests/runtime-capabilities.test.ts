@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import { getRuntimeCapabilities } from "../src/renderer/src/platform/desktop";
+import { DEFAULT_APP_SETTINGS } from "../src/shared/ipc/app";
 import type { DesktopBridge } from "../src/shared/ipc/bridge";
 
 describe(getRuntimeCapabilities, () => {
@@ -9,6 +10,7 @@ describe(getRuntimeCapabilities, () => {
 
     expect(capabilities).toStrictEqual({
       ai: undefined,
+      appSettings: undefined,
       auth: undefined,
       isWeb: true,
       lifecycle: undefined,
@@ -29,6 +31,7 @@ describe(getRuntimeCapabilities, () => {
 
     expect(capabilities).toStrictEqual({
       ai: undefined,
+      appSettings: undefined,
       auth: undefined,
       isWeb: false,
       lifecycle: undefined,
@@ -175,11 +178,20 @@ describe(getRuntimeCapabilities, () => {
     sendMessage: () => Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    setAppSettings: (request) =>
+      Promise.resolve({
+        data: request,
+        ok: true as const,
+      }),
     setThreadLabel: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
-    startApp: () => Promise.resolve({ ok: true as const }),
+    startApp: () =>
+      Promise.resolve({
+        appSettings: { ...DEFAULT_APP_SETTINGS, runInBackground: false },
+        ok: true as const,
+      }),
     startGoogleAuth: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     syncGmailLabels: () =>
@@ -216,6 +228,9 @@ describe(getRuntimeCapabilities, () => {
         getSettings: desktopBridge.getAiSettings,
         listProviders: desktopBridge.listAiProviders,
         updateSettings: desktopBridge.updateAiSettings,
+      },
+      appSettings: {
+        set: desktopBridge.setAppSettings,
       },
       auth: {
         disconnectGoogleAccount: desktopBridge.disconnectGoogleAccount,
@@ -307,6 +322,7 @@ describe(getRuntimeCapabilities, () => {
 
     expect([
       nextCapabilities.ai === capabilities.ai,
+      nextCapabilities.appSettings === capabilities.appSettings,
       nextCapabilities.auth === capabilities.auth,
       nextCapabilities.lifecycle === capabilities.lifecycle,
       nextCapabilities.mail === capabilities.mail,
@@ -315,6 +331,17 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.templates === capabilities.templates,
       nextCapabilities.updates === capabilities.updates,
       nextCapabilities.window === capabilities.window,
-    ]).toStrictEqual([true, true, true, true, true, true, true, true, true]);
+    ]).toStrictEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
   });
 });

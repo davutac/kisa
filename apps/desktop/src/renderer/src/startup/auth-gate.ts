@@ -1,6 +1,7 @@
 import type { AuthApi, RuntimeCapabilities } from "@/platform/desktop";
 import { getRuntimeCapabilities } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
+import { hydrateAppSettingsState } from "@/state/app-settings";
 
 import { requestStartupSession } from "./startup-session";
 
@@ -28,6 +29,10 @@ const loadAuthGateState = async (
 
   if (startup.state === "aborted") {
     throw new Error("Application startup was cancelled");
+  }
+
+  if (startup.appSettings !== undefined) {
+    hydrateAppSettingsState(startup.appSettings);
   }
 
   if (capabilities.auth === undefined) {

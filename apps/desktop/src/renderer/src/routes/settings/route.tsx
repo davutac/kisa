@@ -17,11 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
-import {
-  useAnimationsEnabled,
-  useGeneralSettingsStore,
-  useOpenThreadsInNewWindows,
-} from "@/state/general-settings";
+import { useAppSettings } from "@/state/app-settings";
 
 import SettingsAccountsSection from "./-components/settings-accounts-section";
 import SettingsAiSection from "./-components/settings-ai-section";
@@ -35,6 +31,7 @@ export const Route = createFileRoute("/settings")({
 function SettingsRoute() {
   const {
     ai,
+    appSettings,
     auth,
     mail,
     settings,
@@ -42,14 +39,14 @@ function SettingsRoute() {
     versions,
     window: windowApi,
   } = getRuntimeCapabilities();
-  const animationsEnabled = useAnimationsEnabled();
-  const setAnimationsEnabled = useGeneralSettingsStore(
-    (state) => state.setAnimationsEnabled
-  );
-  const openThreadsInNewWindows = useOpenThreadsInNewWindows();
-  const setOpenThreadsInNewWindows = useGeneralSettingsStore(
-    (state) => state.setOpenThreadsInNewWindows
-  );
+  const {
+    animationsEnabled,
+    openThreadsInNewWindows,
+    runInBackground,
+    setAnimationsEnabled,
+    setOpenThreadsInNewWindows,
+    setRunInBackground,
+  } = useAppSettings(appSettings);
 
   useHotkeyLayer("settings", true);
 
@@ -95,6 +92,26 @@ function SettingsRoute() {
                 />
               </SettingsRowActions>
             </SettingsRow>
+            {appSettings === undefined ? null : (
+              <SettingsRow>
+                <SettingsRowContent>
+                  <SettingsRowTitle id="run-in-background-title">
+                    Run in background
+                  </SettingsRowTitle>
+                  <SettingsRowDescription>
+                    Keep Kisa running in the system tray after closing the
+                    window so mail notifications continue.
+                  </SettingsRowDescription>
+                </SettingsRowContent>
+                <SettingsRowActions>
+                  <Switch
+                    aria-labelledby="run-in-background-title"
+                    checked={runInBackground}
+                    onCheckedChange={setRunInBackground}
+                  />
+                </SettingsRowActions>
+              </SettingsRow>
+            )}
             {windowApi === undefined ? null : (
               <SettingsRow>
                 <SettingsRowContent>
