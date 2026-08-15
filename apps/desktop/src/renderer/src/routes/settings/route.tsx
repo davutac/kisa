@@ -17,12 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
-import { useRunInBackground } from "@/state/app-settings";
-import {
-  useAnimationsEnabled,
-  useGeneralSettingsStore,
-  useOpenThreadsInNewWindows,
-} from "@/state/general-settings";
+import { useAppSettings } from "@/state/app-settings";
 
 import SettingsAccountsSection from "./-components/settings-accounts-section";
 import SettingsAiSection from "./-components/settings-ai-section";
@@ -44,16 +39,14 @@ function SettingsRoute() {
     versions,
     window: windowApi,
   } = getRuntimeCapabilities();
-  const animationsEnabled = useAnimationsEnabled();
-  const setAnimationsEnabled = useGeneralSettingsStore(
-    (state) => state.setAnimationsEnabled
-  );
-  const openThreadsInNewWindows = useOpenThreadsInNewWindows();
-  const setOpenThreadsInNewWindows = useGeneralSettingsStore(
-    (state) => state.setOpenThreadsInNewWindows
-  );
-  const { enabled: runInBackground, toggle: setRunInBackground } =
-    useRunInBackground(appSettings);
+  const {
+    animationsEnabled,
+    openThreadsInNewWindows,
+    runInBackground,
+    setAnimationsEnabled,
+    setOpenThreadsInNewWindows,
+    setRunInBackground,
+  } = useAppSettings(appSettings);
 
   useHotkeyLayer("settings", true);
 
@@ -113,8 +106,7 @@ function SettingsRoute() {
                 <SettingsRowActions>
                   <Switch
                     aria-labelledby="run-in-background-title"
-                    checked={runInBackground === true}
-                    disabled={runInBackground === undefined}
+                    checked={runInBackground}
                     onCheckedChange={setRunInBackground}
                   />
                 </SettingsRowActions>

@@ -9,7 +9,6 @@ import {
   ThreadWindowOpenRequest,
 } from "../../../shared/ipc/app";
 import {
-  APP_GET_SETTINGS_CHANNEL,
   APP_OPEN_THREAD_WINDOW_CHANNEL,
   APP_START_CHANNEL,
   APP_UPDATE_SETTINGS_CHANNEL,
@@ -60,17 +59,6 @@ export const openThreadWindow = makeIpcMethod({
     ),
   payload: ThreadWindowOpenRequest,
   result: ThreadWindowOpenReply,
-});
-
-export const getAppSettings = makeIpcMethod({
-  channel: APP_GET_SETTINGS_CHANNEL,
-  handler: () =>
-    toIpcReply(
-      Effect.succeed(getCurrentAppSettings()),
-      "Could not load app settings"
-    ),
-  payload: Schema.Void,
-  result: AppSettingsReply,
 });
 
 export const updateAppSettings = makeIpcMethod({

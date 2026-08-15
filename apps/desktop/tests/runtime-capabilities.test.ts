@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import { getRuntimeCapabilities } from "../src/renderer/src/platform/desktop";
+import { DEFAULT_APP_SETTINGS } from "../src/shared/ipc/app";
 import type { DesktopBridge } from "../src/shared/ipc/bridge";
 
 describe(getRuntimeCapabilities, () => {
@@ -97,11 +98,6 @@ describe(getRuntimeCapabilities, () => {
         data: aiSettings,
         ok: true,
       }),
-    getAppSettings: () =>
-      Promise.resolve({
-        data: { runInBackground: false },
-        ok: true,
-      }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
     getSpamStatus: () =>
@@ -184,14 +180,18 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     setAppSettings: (request) =>
       Promise.resolve({
-        data: { runInBackground: request.runInBackground },
+        data: request,
         ok: true as const,
       }),
     setThreadLabel: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
-    startApp: () => Promise.resolve({ ok: true as const }),
+    startApp: () =>
+      Promise.resolve({
+        appSettings: { ...DEFAULT_APP_SETTINGS, runInBackground: false },
+        ok: true as const,
+      }),
     startGoogleAuth: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     syncGmailLabels: () =>
@@ -230,7 +230,6 @@ describe(getRuntimeCapabilities, () => {
         updateSettings: desktopBridge.updateAiSettings,
       },
       appSettings: {
-        get: desktopBridge.getAppSettings,
         set: desktopBridge.setAppSettings,
       },
       auth: {

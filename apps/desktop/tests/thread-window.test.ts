@@ -98,6 +98,9 @@ vi.mock(import("../src/main/updates/updater"), () => ({
 vi.mock(import("../src/main/window/native-context-menu"), () => ({
   installNativeContextMenu: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
+vi.mock(import("../src/main/window/window-visibility"), () => ({
+  hideWindowInBackground: vi.fn<(window: Electron.BrowserWindow) => void>(),
+}));
 vi.mock(import("../src/main/window/window-state"), () => ({
   MIN_WINDOW_SIZE: { height: 560, width: 860 } as const,
   readWindowState: vi.fn<(type?: string) => { height: number; width: number }>(

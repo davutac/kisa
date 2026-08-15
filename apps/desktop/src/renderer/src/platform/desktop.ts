@@ -10,7 +10,6 @@ export interface AppStartupApi {
 }
 
 export interface AppSettingsApi {
-  get: DesktopBridge["getAppSettings"];
   set: DesktopBridge["setAppSettings"];
 }
 
@@ -155,7 +154,6 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       updateSettings: bridge.updateAiSettings,
     },
     appSettings: {
-      get: bridge.getAppSettings,
       set: bridge.setAppSettings,
     },
     auth: {

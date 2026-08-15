@@ -147,7 +147,6 @@ export interface DesktopBridge {
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
   getAiSettings: () => Promise<AiSettingsReply>;
-  getAppSettings: () => Promise<AppSettingsReply>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
   getSpamStatus: (
     request: GmailSpamStatusRequest

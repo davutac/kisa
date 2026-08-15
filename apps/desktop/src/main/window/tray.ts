@@ -35,11 +35,9 @@ const createBackgroundTray = (
 
   tray = new Tray(image);
   tray.setToolTip(APP_NAME);
-  tray.on("click", () => showMainWindow(getWindow));
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { click: () => showMainWindow(getWindow), label: `Open ${APP_NAME}` },
-      { type: "separator" },
       { click: () => app.quit(), label: "Quit" },
     ])
   );

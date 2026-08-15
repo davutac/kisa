@@ -5,7 +5,7 @@ import type { ThreadSelection } from "@/mail/thread-selection";
 import { getThreadSelectionKey } from "@/mail/thread-selection";
 import type { WindowApi } from "@/platform/desktop";
 import { getWindowApi } from "@/platform/desktop";
-import { useOpenThreadsInNewWindows } from "@/state/general-settings";
+import { useOpenThreadsInNewWindows } from "@/state/app-settings";
 import { useMailboxStore } from "@/state/mailbox";
 
 type ThreadOpeningLocation = "inline" | "window";

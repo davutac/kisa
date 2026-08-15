@@ -4,6 +4,23 @@ import { IpcReply } from "./reply";
 
 export const AppClosingEvent = Schema.Literal("closing");
 
+export const AppSettings = Schema.Struct({
+  /** Whether renderer motion and CSS transitions are enabled. */
+  animationsEnabled: Schema.Boolean,
+  /** Whether mailbox thread selections open in native windows by default. */
+  openThreadsInNewWindows: Schema.Boolean,
+  /** Whether closing the main window keeps Kisa running in the tray. */
+  runInBackground: Schema.Boolean,
+});
+export type AppSettings = typeof AppSettings.Type;
+
+/** Apps without stored settings behave as if they had these settings. */
+export const DEFAULT_APP_SETTINGS = {
+  animationsEnabled: true,
+  openThreadsInNewWindows: false,
+  runInBackground: true,
+} as const satisfies AppSettings;
+
 export const AppStartupErrorPayload = Schema.Struct({
   message: Schema.String,
   reason: Schema.optional(Schema.String),
@@ -12,7 +29,7 @@ export const AppStartupErrorPayload = Schema.Struct({
 export type AppStartupErrorPayload = typeof AppStartupErrorPayload.Type;
 
 export const AppStartupReply = Schema.Union([
-  Schema.Struct({ ok: Schema.Literal(true) }),
+  Schema.Struct({ appSettings: AppSettings, ok: Schema.Literal(true) }),
   Schema.Struct({ error: AppStartupErrorPayload, ok: Schema.Literal(false) }),
 ]);
 export type AppStartupReply = typeof AppStartupReply.Type;
@@ -26,20 +43,7 @@ export type ThreadWindowOpenRequest = typeof ThreadWindowOpenRequest.Type;
 export const ThreadWindowOpenReply = IpcReply(Schema.Void);
 export type ThreadWindowOpenReply = typeof ThreadWindowOpenReply.Type;
 
-export const AppSettings = Schema.Struct({
-  /** Whether closing the main window keeps Kisa running in the tray. */
-  runInBackground: Schema.Boolean,
-});
-export type AppSettings = typeof AppSettings.Type;
-
-/** Apps without a stored row behave as if they had these settings. */
-export const DEFAULT_APP_SETTINGS = {
-  runInBackground: true,
-} as const satisfies AppSettings;
-
-export const AppSettingsUpdateRequest = Schema.Struct({
-  runInBackground: Schema.Boolean,
-});
+export const AppSettingsUpdateRequest = AppSettings;
 export type AppSettingsUpdateRequest = typeof AppSettingsUpdateRequest.Type;
 
 export const AppSettingsReply = IpcReply(AppSettings);

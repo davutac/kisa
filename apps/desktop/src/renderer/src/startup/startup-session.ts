@@ -1,12 +1,12 @@
 import type { AppStartupApi } from "@/platform/desktop";
-import type { AppStartupReply } from "@/shared/ipc/app";
+import type { AppSettings, AppStartupReply } from "@/shared/ipc/app";
 
 type StartupAdapter = AppStartupApi;
 
 export type StartupSessionOutcome =
   | { state: "aborted" }
   | { state: "failed"; message: string }
-  | { state: "started" };
+  | { appSettings?: AppSettings; state: "started" };
 
 interface RequestStartupSessionArgs {
   abortSignal?: AbortSignal;
@@ -20,7 +20,7 @@ const isAborted = (abortSignal?: AbortSignal): boolean =>
 
 const toOutcome = (reply: AppStartupReply): StartupSessionOutcome => {
   if (reply.ok) {
-    return { state: "started" };
+    return { appSettings: reply.appSettings, state: "started" };
   }
 
   return {

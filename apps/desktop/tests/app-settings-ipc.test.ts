@@ -4,23 +4,25 @@ import { Effect, Exit } from "effect";
 import type { BrowserWindow } from "electron";
 import { beforeEach, vi } from "vitest";
 
-import type { ThreadWindowOpenRequest } from "../src/shared/ipc/app";
-import {
-  APP_GET_SETTINGS_CHANNEL,
-  APP_UPDATE_SETTINGS_CHANNEL,
-} from "../src/shared/ipc/channels";
+import { DEFAULT_APP_SETTINGS } from "../src/shared/ipc/app";
+import type {
+  AppSettings,
+  ThreadWindowOpenRequest,
+} from "../src/shared/ipc/app";
+import { APP_UPDATE_SETTINGS_CHANNEL } from "../src/shared/ipc/channels";
 
 const mocks = vi.hoisted(() => ({
-  getCurrentAppSettings: vi.fn<() => { readonly runInBackground: boolean }>(
-    () => ({ runInBackground: false })
-  ),
+  getCurrentAppSettings: vi.fn<() => AppSettings>(() => ({
+    animationsEnabled: true,
+    openThreadsInNewWindows: false,
+    runInBackground: true,
+  })),
   getMainWindow: vi.fn<() => BrowserWindow | undefined>(),
   setBackgroundTray:
     vi.fn<
       (enabled: boolean, getWindow: () => BrowserWindow | undefined) => void
     >(),
-  writeAppSettings:
-    vi.fn<(next: { readonly runInBackground: boolean }) => void>(),
+  writeAppSettings: vi.fn<(next: AppSettings) => void>(),
 }));
 
 // The tray, window, startup, and settings modules touch Electron or the icon
@@ -41,35 +43,30 @@ vi.mock(import("../src/main/window/create-window"), () => ({
 }));
 
 vi.mock(import("../src/main/app/startup"), () => ({
-  getAppStartupReply: vi.fn<() => Promise<{ readonly ok: true }>>(),
+  getAppStartupReply: vi.fn<
+    () => Promise<{
+      readonly appSettings: AppSettings;
+      readonly ok: true;
+    }>
+  >(),
 }));
 
-const { getAppSettings, updateAppSettings } =
-  await import("../src/main/ipc/methods/app");
+const { updateAppSettings } = await import("../src/main/ipc/methods/app");
 
 describe("app settings IPC", () => {
   beforeEach(() => {
-    mocks.getCurrentAppSettings.mockReturnValue({ runInBackground: false });
+    mocks.getCurrentAppSettings.mockReturnValue({
+      ...DEFAULT_APP_SETTINGS,
+      runInBackground: false,
+    });
     mocks.writeAppSettings.mockClear();
     mocks.setBackgroundTray.mockClear();
   });
 
-  it.effect("reads the persisted app settings", () =>
-    Effect.gen(function* readAppSettingsThroughIpc() {
-      const reply = yield* getAppSettings.handler(undefined);
-
-      expect(getAppSettings.channel).toBe(APP_GET_SETTINGS_CHANNEL);
-      expect(reply).toStrictEqual({
-        data: { runInBackground: false },
-        ok: true,
-      });
-    })
-  );
-
   it.effect("persists the toggle and keeps the tray in sync", () =>
     Effect.gen(function* updateAppSettingsThroughIpc() {
-      mocks.getCurrentAppSettings.mockReturnValue({ runInBackground: true });
-      const request = { runInBackground: true as const };
+      mocks.getCurrentAppSettings.mockReturnValue(DEFAULT_APP_SETTINGS);
+      const request = DEFAULT_APP_SETTINGS;
       const reply = yield* updateAppSettings.handler(request);
 
       expect(updateAppSettings.channel).toBe(APP_UPDATE_SETTINGS_CHANNEL);
@@ -79,7 +76,7 @@ describe("app settings IPC", () => {
         mocks.getMainWindow
       );
       expect(reply).toStrictEqual({
-        data: { runInBackground: true },
+        data: DEFAULT_APP_SETTINGS,
         ok: true,
       });
     })
@@ -87,7 +84,10 @@ describe("app settings IPC", () => {
 
   it("rejects a non-boolean run-in-background value", async () => {
     const exit = await Effect.runPromiseExit(
-      updateAppSettings.handler({ runInBackground: "yes" })
+      updateAppSettings.handler({
+        ...DEFAULT_APP_SETTINGS,
+        runInBackground: "yes",
+      })
     );
 
     expect(Exit.isFailure(exit)).toBeTruthy();

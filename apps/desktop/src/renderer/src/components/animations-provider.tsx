@@ -3,7 +3,7 @@ import { useLayoutEffect } from "react";
 import type { ReactNode } from "react";
 
 import { applyAnimationsClass } from "@/lib/motion";
-import { useAnimationsEnabled } from "@/state/general-settings";
+import { useAnimationsEnabled } from "@/state/app-settings";
 
 const AnimationsProvider = ({ children }: { children: ReactNode }) => {
   const animationsEnabled = useAnimationsEnabled();

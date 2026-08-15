@@ -18,6 +18,7 @@ import {
   readWindowState,
   writeWindowState,
 } from "./window-state";
+import { hideWindowInBackground } from "./window-visibility";
 
 const THREAD_WINDOW_SIZE = {
   height: 720,
@@ -119,7 +120,7 @@ export const createWindow = (): BrowserWindow => {
     }
 
     event.preventDefault();
-    window.hide();
+    hideWindowInBackground(window);
   });
   window.on("closed", () => {
     if (mainWindow === window) {

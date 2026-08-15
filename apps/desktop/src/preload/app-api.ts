@@ -4,7 +4,6 @@ import { AppClosingEvent } from "../shared/ipc/app";
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
   APP_CLOSING_CHANNEL,
-  APP_GET_SETTINGS_CHANNEL,
   APP_OPEN_THREAD_WINDOW_CHANNEL,
   APP_START_CHANNEL,
   APP_UPDATE_SETTINGS_CHANNEL,
@@ -13,13 +12,8 @@ import { subscribe } from "./subscribe";
 
 export const appApi: Pick<
   DesktopBridge,
-  | "getAppSettings"
-  | "onAppClosing"
-  | "openThreadWindow"
-  | "setAppSettings"
-  | "startApp"
+  "onAppClosing" | "openThreadWindow" | "setAppSettings" | "startApp"
 > = {
-  getAppSettings: () => ipcRenderer.invoke(APP_GET_SETTINGS_CHANNEL),
   onAppClosing: (listener) =>
     subscribe(APP_CLOSING_CHANNEL, AppClosingEvent, listener),
   openThreadWindow: (request) =>
