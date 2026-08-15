@@ -45,6 +45,9 @@ export const MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL =
   "desktop:mail:list-cached-thread-page";
 export const MAIL_CREATE_LABEL_CHANNEL = "desktop:mail:create-label";
 export const MAIL_DELETE_LABEL_CHANNEL = "desktop:mail:delete-label";
+export const MAIL_UPDATE_LABEL_CHANNEL = "desktop:mail:update-label";
+export const MAIL_LABEL_CATALOG_CHANGED_CHANNEL =
+  "desktop:mail:label-catalog-changed";
 export const MAIL_LIST_LABELS_CHANNEL = "desktop:mail:list-labels";
 export const MAIL_LIST_SENDERS_CHANNEL = "desktop:mail:list-senders";
 export const MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL =

@@ -50,6 +50,7 @@ import type {
   ThreadMutationRequest,
   ThreadPage,
   ThreadSummary,
+  UpdateLabelRequest,
 } from "./models";
 import {
   GmailAccount,
@@ -122,6 +123,9 @@ export interface GmailService {
   readonly deleteLabel: (
     request: DeleteLabelRequest
   ) => Effect.Effect<void, GmailError>;
+  readonly updateLabel: (
+    request: UpdateLabelRequest
+  ) => Effect.Effect<GmailLabel, GmailError>;
   readonly deleteThread: (
     request: ThreadMutationRequest
   ) => Effect.Effect<void, GmailError>;
@@ -379,7 +383,8 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         const label = yield* withAuthorization(
           request.accountId,
           "modify",
-          (authorization) => gateway.createLabel(authorization, request.name)
+          (authorization) =>
+            gateway.createLabel(authorization, request.name, request.color)
         );
         yield* store.upsertLabels(request.accountId, [label]);
         return label;
@@ -397,6 +402,28 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           gateway.deleteLabel(authorization, request.labelId)
         );
         yield* store.deleteLabel(request.accountId, label);
+      });
+
+      const updateLabel = Effect.fn("Gmail.updateLabel")(function* updateLabel(
+        request: UpdateLabelRequest
+      ) {
+        const previous = yield* requireUserLabel(
+          request.accountId,
+          request.labelId
+        );
+        const updated = yield* withAuthorization(
+          request.accountId,
+          "modify",
+          (authorization) =>
+            gateway.patchLabel(
+              authorization,
+              request.labelId,
+              request.name,
+              request.color
+            )
+        );
+        yield* store.updateLabel(request.accountId, previous, updated);
+        return updated;
       });
 
       const resolveUnknownLabels = Effect.fn("Gmail.resolveUnknownLabels")(
@@ -898,6 +925,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         setThreadLabel,
         sync,
         trashThread,
+        updateLabel,
       });
     })
   );

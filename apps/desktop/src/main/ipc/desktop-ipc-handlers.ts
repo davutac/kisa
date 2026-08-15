@@ -47,6 +47,7 @@ import {
   syncLabels,
   trash,
   trustImages,
+  updateLabel,
 } from "./methods/mail";
 import {
   beginImport,
@@ -91,6 +92,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(listLabels);
   yield* ipc.handle(createLabel);
   yield* ipc.handle(deleteLabel);
+  yield* ipc.handle(updateLabel);
   yield* ipc.handle(syncLabels);
   yield* ipc.handle(loadThread);
   yield* ipc.handle(listStashedDrafts);

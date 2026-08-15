@@ -5,7 +5,9 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -27,6 +29,7 @@ interface ThreadLabelPickerProps {
   isOpen: boolean;
   isLoading: boolean;
   labels: readonly GmailLabelSummary[];
+  onCreateLabel?: () => void;
   onOpenChange: (isOpen: boolean) => void;
   onSetLabel: (label: ThreadLabelChange) => void;
   pendingLabelIds: ReadonlySet<string>;
@@ -37,6 +40,7 @@ const ThreadLabelPicker = ({
   isOpen,
   isLoading,
   labels,
+  onCreateLabel,
   onOpenChange,
   onSetLabel,
   pendingLabelIds,
@@ -106,6 +110,15 @@ const ThreadLabelPicker = ({
               </DropdownMenuCheckboxItem>
             );
           })
+        )}
+        {onCreateLabel === undefined ? null : (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onCreateLabel}>
+              <PlusIcon />
+              Create new label
+            </DropdownMenuItem>
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

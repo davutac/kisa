@@ -5,6 +5,7 @@ import {
   GMAIL_FULL_ACCESS_SCOPE,
   GmailAccount,
   GmailCapabilities,
+  LabelColor,
   LabelId,
   ThreadId,
 } from "@repo/gmail/models";
@@ -17,6 +18,7 @@ const googleApi = vi.hoisted(() => ({
   clientOptions: [] as { readonly http2?: boolean }[],
   labelCreates: [] as gmail_v1.Params$Resource$Users$Labels$Create[],
   labelDeletes: [] as gmail_v1.Params$Resource$Users$Labels$Delete[],
+  labelPatches: [] as gmail_v1.Params$Resource$Users$Labels$Patch[],
   pendingRequest: Promise.withResolvers<undefined>().promise,
 }));
 
@@ -38,6 +40,7 @@ vi.mock(import("@googleapis/gmail"), async (importOriginal) => {
           googleApi.labelCreates.push(request);
           return Promise.resolve({
             data: {
+              color: request.requestBody?.color,
               id: "Label_created",
               name: request.requestBody?.name,
               type: "user",
@@ -49,6 +52,19 @@ vi.mock(import("@googleapis/gmail"), async (importOriginal) => {
         value: (request: gmail_v1.Params$Resource$Users$Labels$Delete) => {
           googleApi.labelDeletes.push(request);
           return Promise.resolve();
+        },
+      });
+      Object.defineProperty(client.users.labels, "patch", {
+        value: (request: gmail_v1.Params$Resource$Users$Labels$Patch) => {
+          googleApi.labelPatches.push(request);
+          return Promise.resolve({
+            data: {
+              color: request.requestBody?.color,
+              id: request.id,
+              name: request.requestBody?.name,
+              type: "user",
+            },
+          });
         },
       });
       Object.defineProperty(client.users.threads, "trash", {
@@ -87,38 +103,63 @@ describe("Gmail gateway", () => {
     googleApi.clientOptions.length = 0;
     googleApi.labelCreates.length = 0;
     googleApi.labelDeletes.length = 0;
+    googleApi.labelPatches.length = 0;
   });
 
-  it("creates and deletes labels through Gmail", async () => {
-    const label = await Effect.runPromise(
+  it("creates, patches, and deletes labels through Gmail", async () => {
+    const color = new LabelColor({
+      background: "#4a86e8",
+      text: "#ffffff",
+    });
+    const updatedLabel = await Effect.runPromise(
       GmailGateway.pipe(
         Effect.flatMap((gateway) =>
           Effect.gen(function* mutatesLabels() {
-            const created = yield* gateway.createLabel(
+            yield* gateway.createLabel(authorization, "Projects/Kisa", color);
+            const updated = yield* gateway.patchLabel(
               authorization,
-              "Projects/Kisa"
+              LabelId.make("Label_created"),
+              "Projects/Kisa 2",
+              color
             );
             yield* gateway.deleteLabel(
               authorization,
               LabelId.make("Label_created")
             );
-            return created.value;
+            return updated.value;
           })
         ),
         Effect.provide(GmailGatewayLive)
       )
     );
 
-    expect(label).toMatchObject({
+    expect(updatedLabel).toMatchObject({
+      color,
       id: "Label_created",
-      name: "Projects/Kisa",
+      name: "Projects/Kisa 2",
       type: "user",
     });
     expect(googleApi.labelCreates).toStrictEqual([
-      { requestBody: { name: "Projects/Kisa" }, userId: "me" },
+      {
+        requestBody: {
+          color: { backgroundColor: "#4a86e8", textColor: "#ffffff" },
+          name: "Projects/Kisa",
+        },
+        userId: "me",
+      },
     ]);
     expect(googleApi.labelDeletes).toStrictEqual([
       { id: "Label_created", userId: "me" },
+    ]);
+    expect(googleApi.labelPatches).toStrictEqual([
+      {
+        id: "Label_created",
+        requestBody: {
+          color: { backgroundColor: "#4a86e8", textColor: "#ffffff" },
+          name: "Projects/Kisa 2",
+        },
+        userId: "me",
+      },
     ]);
   });
 

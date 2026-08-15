@@ -22,6 +22,7 @@ describe("Gmail label sync", () => {
               ? { backgroundColor: "#16a766", textColor: "#ffffff" }
               : undefined,
           id: labelId,
+          threadsTotal: labelId === "Label_1" ? 12 : 0,
         })
     );
 
@@ -34,6 +35,7 @@ describe("Gmail label sync", () => {
     expect({
       calls: load.mock.calls,
       colors: labels.map((label) => label.color),
+      threadCounts: labels.map((label) => label.threadCount),
     }).toStrictEqual({
       calls: [["Label_1"], ["Label_2"]],
       colors: [
@@ -41,6 +43,7 @@ describe("Gmail label sync", () => {
         new LabelColor({ background: "#16a766", text: "#ffffff" }),
         undefined,
       ],
+      threadCounts: [undefined, 12, 0],
     });
   });
 

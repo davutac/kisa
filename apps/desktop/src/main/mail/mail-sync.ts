@@ -17,6 +17,7 @@ import type {
 import {
   AccountId,
   isGmailScope,
+  LabelColor,
   LabelId,
   MessageId,
   PageCursor,
@@ -28,11 +29,13 @@ import { and as andSql, eq, inArray as inArraySql } from "drizzle-orm";
 import { Clock, Effect, Layer, Schedule, Schema } from "effect";
 
 import {
+  MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
   MAIL_SYNC_STATUS_CHANNEL,
   MAIL_THREAD_LIST_UPDATED_CHANNEL,
   MAIL_THREAD_UPDATED_CHANNEL,
 } from "../../shared/ipc/channels";
 import {
+  GmailLabelCatalogChanged,
   GmailSyncStatus,
   GmailThreadListUpdated,
   GmailThreadUpdated,
@@ -47,7 +50,9 @@ import type {
   GmailLabelCatalogRequest,
   GmailLabelCreateRequest,
   GmailLabelDeleteRequest,
+  GmailLabelInputColor,
   GmailLabelSummary,
+  GmailLabelUpdateRequest,
   GmailMessageSendRequest,
   GmailOutgoingAttachmentCapability,
   GmailSenderBrand,
@@ -405,6 +410,18 @@ const publishThreadListUpdated = Effect.fn("publishThreadListUpdated")(
 const reloadThreadList = (accountId: string) =>
   publishThreadListUpdated([{ accountId, kind: "reload" }]);
 
+const publishLabelCatalogChanged = Effect.fn("publishLabelCatalogChanged")(
+  function* publishLabelCatalogChanged(accountId: string) {
+    yield* Effect.sync(() => {
+      sendRendererEvent(
+        MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
+        GmailLabelCatalogChanged,
+        { accountId }
+      );
+    });
+  }
+);
+
 // Disconnecting an account must leave nothing behind, and every mail table is
 // keyed by the account address, so deleting by it clears the account entirely.
 export const forgetAccountMailData = Effect.fn("forgetAccountMailData")(
@@ -431,8 +448,14 @@ const toGmailLabelSummary = (label: GmailLabel): GmailLabelSummary => ({
   color: label.color,
   id: label.id,
   name: label.name,
+  threadCount: label.threadCount,
   type: label.type,
 });
+
+const toLabelColor = (
+  color: GmailLabelInputColor | undefined
+): LabelColor | undefined =>
+  color === undefined ? undefined : new LabelColor(color);
 
 export const listGmailLabelCatalog = Effect.fn("listGmailLabelCatalog")(
   function* listGmailLabelCatalog(request: GmailLabelCatalogRequest) {
@@ -457,12 +480,14 @@ export const createGmailLabel = Effect.fn("createGmailLabel")(
         Effect.flatMap((gmail) =>
           gmail.createLabel({
             accountId: AccountId.make(request.accountId),
+            color: toLabelColor(request.color),
             name: request.name,
           })
         )
       )
     );
 
+    yield* publishLabelCatalogChanged(request.accountId);
     return toGmailLabelSummary(label);
   }
 );
@@ -479,7 +504,29 @@ export const deleteGmailLabel = Effect.fn("deleteGmailLabel")(
         )
       )
     );
+    yield* publishLabelCatalogChanged(request.accountId);
     yield* reloadThreadList(request.accountId);
+  }
+);
+
+export const updateGmailLabel = Effect.fn("updateGmailLabel")(
+  function* updateGmailLabel(request: GmailLabelUpdateRequest) {
+    const label = yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.updateLabel({
+            accountId: AccountId.make(request.accountId),
+            color: toLabelColor(request.color),
+            labelId: LabelId.make(request.labelId),
+            name: request.name,
+          })
+        )
+      )
+    );
+
+    yield* publishLabelCatalogChanged(request.accountId);
+    yield* reloadThreadList(request.accountId);
+    return toGmailLabelSummary(label);
   }
 );
 
@@ -496,6 +543,7 @@ export const syncGmailLabelCatalog = Effect.fn("syncGmailLabelCatalog")(
       )
     );
 
+    yield* publishLabelCatalogChanged(request.accountId);
     return {
       labels: labels.map(toGmailLabelSummary),
       syncedAt: Date.now(),

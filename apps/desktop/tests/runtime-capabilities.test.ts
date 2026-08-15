@@ -139,6 +139,7 @@ describe(getRuntimeCapabilities, () => {
     onGoogleAccountsChanged: () => () => {},
     onMailDraftChanged: () => () => {},
     onMailIndexProgressChanged: () => () => {},
+    onMailLabelCatalogChanged: () => () => {},
     onMailSyncStatusChanged: () => () => {},
     onMailThreadListUpdated: () => () => {},
     onMailThreadUpdated: () => () => {},
@@ -192,6 +193,16 @@ describe(getRuntimeCapabilities, () => {
         data: aiSettings,
         ok: true,
       }),
+    updateGmailLabel: (request) =>
+      Promise.resolve({
+        data: {
+          color: request.color,
+          id: request.labelId,
+          name: request.name,
+          type: "user",
+        },
+        ok: true as const,
+      }),
   });
 
   it("returns capability values from the runtime window", () => {
@@ -238,6 +249,7 @@ describe(getRuntimeCapabilities, () => {
         markThreadNotSpam: desktopBridge.markThreadNotSpam,
         onDraftChanged: desktopBridge.onMailDraftChanged,
         onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,
+        onLabelCatalogChanged: desktopBridge.onMailLabelCatalogChanged,
         onSyncStatusChanged: desktopBridge.onMailSyncStatusChanged,
         onThreadListUpdated: desktopBridge.onMailThreadListUpdated,
         onThreadUpdated: desktopBridge.onMailThreadUpdated,
@@ -255,6 +267,7 @@ describe(getRuntimeCapabilities, () => {
         syncLabels: desktopBridge.syncGmailLabels,
         trashThread: desktopBridge.trashThread,
         trustImageSender: desktopBridge.trustImageSender,
+        updateLabel: desktopBridge.updateGmailLabel,
       },
       settings: {
         beginDatabaseImport: desktopBridge.beginDatabaseImport,
