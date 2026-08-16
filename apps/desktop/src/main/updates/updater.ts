@@ -5,6 +5,7 @@ import electronUpdater from "electron-updater";
 
 import { UPDATES_STATUS_CHANNEL } from "../../shared/ipc/channels";
 import { UpdateStatus } from "../../shared/update-status";
+import { beginQuit } from "../app/quit-state";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { createUpdateLifecycle } from "./update-lifecycle";
 
@@ -41,6 +42,9 @@ const updateLifecycle = createUpdateLifecycle({
   },
   emitStatus: emitUpdateStatus,
   installUpdate: () => {
+    // The updater closes windows before `before-quit`, so background mode must
+    // observe the install as a real quit before that sequence starts.
+    beginQuit();
     autoUpdater.quitAndInstall();
   },
 });
