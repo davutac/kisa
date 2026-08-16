@@ -3,9 +3,11 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
+import { DEFAULT_AI_PROVIDER_MODELS } from "../../../shared/ipc/ai";
 import type {
   AiAuthenticationStatus,
   AiModel,
+  AiReasoningOption,
   AiProviderStatus,
 } from "../../../shared/ipc/ai";
 import {
@@ -28,15 +30,37 @@ import type {
   StructuredGenerationResult,
 } from "./shared";
 
-const CLAUDE_MODELS: readonly AiModel[] = [
-  { id: "claude-fable-5", isDefault: false, name: "Claude Fable 5" },
-  { id: "claude-opus-5", isDefault: false, name: "Claude Opus 5" },
-  { id: "claude-sonnet-5", isDefault: true, name: "Claude Sonnet 5" },
-  { id: "claude-opus-4-8", isDefault: false, name: "Claude Opus 4.8" },
-  { id: "claude-opus-4-7", isDefault: false, name: "Claude Opus 4.7" },
-  { id: "claude-opus-4-6", isDefault: false, name: "Claude Opus 4.6" },
-  { id: "claude-sonnet-4-6", isDefault: false, name: "Claude Sonnet 4.6" },
-  { id: "claude-haiku-4-5", isDefault: false, name: "Claude Haiku 4.5" },
+const claudeReasoningOptions = (
+  values: readonly string[],
+  defaultValue?: string
+): AiReasoningOption[] =>
+  values.map((id) => (id === defaultValue ? { id, isDefault: true } : { id }));
+
+const CLAUDE_EFFORTS = ["low", "medium", "high", "max"] as const;
+const CLAUDE_XHIGH_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+const claudeModel = (
+  id: string,
+  name: string,
+  efforts: readonly string[],
+  defaultEffort?: string
+): AiModel => ({
+  id,
+  isDefault: id === DEFAULT_AI_PROVIDER_MODELS.claude,
+  name,
+  reasoningOptions: claudeReasoningOptions(efforts, defaultEffort),
+});
+
+export const CLAUDE_MODELS: readonly AiModel[] = [
+  claudeModel("claude-fable-5", "Fable 5", CLAUDE_XHIGH_EFFORTS, "high"),
+  claudeModel("claude-opus-5", "Opus 5", CLAUDE_XHIGH_EFFORTS, "high"),
+  claudeModel("claude-sonnet-5", "Sonnet 5", CLAUDE_XHIGH_EFFORTS, "high"),
+  claudeModel("claude-opus-4-8", "Opus 4.8", CLAUDE_XHIGH_EFFORTS, "high"),
+  claudeModel("claude-opus-4-7", "Opus 4.7", CLAUDE_XHIGH_EFFORTS, "xhigh"),
+  claudeModel("claude-opus-4-6", "Opus 4.6", CLAUDE_EFFORTS, "high"),
+  claudeModel("claude-opus-4-5", "Opus 4.5", CLAUDE_EFFORTS, "high"),
+  claudeModel("claude-sonnet-4-6", "Sonnet 4.6", CLAUDE_EFFORTS, "high"),
+  claudeModel("claude-haiku-4-5", "Haiku 4.5", []),
 ];
 
 const waitForAbortSignal = (signal: AbortSignal): Promise<void> => {
@@ -186,6 +210,33 @@ const ClaudeOutputEnvelope = Schema.Struct({
   structured_output: Schema.Unknown,
 });
 
+const normalizeClaudeReasoning = (
+  reasoning: string,
+  model: string | undefined
+): string => {
+  if (
+    reasoning === "xhigh" &&
+    model !== "claude-fable-5" &&
+    model !== "claude-opus-5" &&
+    model !== "claude-opus-4-8" &&
+    model !== "claude-sonnet-5"
+  ) {
+    return "max";
+  }
+  if (reasoning === "max" && model === "claude-sonnet-4-6") {
+    return "high";
+  }
+  return reasoning;
+};
+
+export const getClaudeReasoningArgs = (
+  reasoning?: string,
+  model?: string
+): readonly string[] =>
+  reasoning === undefined
+    ? []
+    : ["--effort", normalizeClaudeReasoning(reasoning, model)];
+
 export const generateWithClaude = Effect.fn("generateWithClaude")(
   function* generateWithClaude<S extends Schema.Top>(
     input: StructuredGenerationInput<S>
@@ -200,6 +251,7 @@ export const generateWithClaude = Effect.fn("generateWithClaude")(
         JSON.stringify(toJsonSchemaObject(input.outputSchema)),
         "--model",
         input.model,
+        ...getClaudeReasoningArgs(input.reasoning, input.model),
         "--no-session-persistence",
         "--safe-mode",
         "--strict-mcp-config",

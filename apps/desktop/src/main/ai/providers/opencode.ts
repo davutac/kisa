@@ -35,10 +35,35 @@ const OPEN_CODE_SLUG = /^(?<slug>\S+\/\S+)\s*$/u;
 
 const OpenCodeModelMetadata = Schema.Struct({
   name: Schema.optional(Schema.String),
+  variants: Schema.optional(
+    Schema.Record(
+      Schema.String,
+      Schema.Struct({ disabled: Schema.optional(Schema.Boolean) })
+    )
+  ),
 });
 const decodeOpenCodeModelMetadata = Schema.decodeExit(
   Schema.fromJsonString(OpenCodeModelMetadata)
 );
+
+export const inferOpenCodeDefaultVariant = (
+  providerId: string,
+  variants: readonly string[]
+): string | undefined => {
+  if (variants.length === 1) {
+    return variants[0];
+  }
+  if (providerId === "anthropic" || providerId.startsWith("google")) {
+    return variants.includes("high") ? "high" : undefined;
+  }
+  if (providerId === "openai" || providerId === "opencode") {
+    if (variants.includes("medium")) {
+      return "medium";
+    }
+    return variants.includes("high") ? "high" : undefined;
+  }
+  return undefined;
+};
 
 export const parseOpenCodeModels = (stdout: string): readonly AiModel[] => {
   const models: AiModel[] = [];
@@ -55,10 +80,22 @@ export const parseOpenCodeModels = (stdout: string): readonly AiModel[] => {
     const metadata = decodeOpenCodeModelMetadata(jsonLines.join("\n"));
     if (Exit.isSuccess(metadata) && !seen.has(currentSlug)) {
       seen.add(currentSlug);
+      const variantIds = Object.entries(metadata.value.variants ?? {})
+        .filter(([, variant]) => variant.disabled !== true)
+        .map(([id]) => id);
+      const [providerId = ""] = currentSlug.split("/", 1);
+      const defaultVariant = inferOpenCodeDefaultVariant(
+        providerId,
+        variantIds
+      );
+      const reasoningOptions = variantIds.map((id) =>
+        id === defaultVariant ? { id, isDefault: true } : { id }
+      );
       models.push({
         id: currentSlug,
         isDefault: false,
         name: metadata.value.name?.trim() || currentSlug,
+        reasoningOptions,
       });
     }
     currentSlug = undefined;
@@ -314,6 +351,11 @@ const OpenCodeTextPart = Schema.Struct({
 });
 const decodeOpenCodeTextPart = Schema.decodeUnknownOption(OpenCodeTextPart);
 
+export const getOpenCodeReasoningInput = (
+  reasoning?: string
+): { readonly variant?: string } =>
+  reasoning === undefined ? {} : { variant: reasoning };
+
 export const generateWithOpenCode = Effect.fn("generateWithOpenCode")(
   function* generateWithOpenCode<S extends Schema.Top>(
     input: StructuredGenerationInput<S>
@@ -369,6 +411,7 @@ export const generateWithOpenCode = Effect.fn("generateWithOpenCode")(
           sessionID: sessionId,
           system: input.systemPrompt,
           tools: {},
+          ...getOpenCodeReasoningInput(input.reasoning),
         }),
     }).pipe(
       Effect.ensuring(

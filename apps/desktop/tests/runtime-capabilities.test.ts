@@ -54,6 +54,7 @@ describe(getRuntimeCapabilities, () => {
       codex: "gpt-5.6-luna",
       opencode: null,
     },
+    providerReasoning: { claude: null, codex: "low", opencode: null },
     replyUserInstructions: "Reply",
   } as const;
   const createDesktopBridge = (): DesktopBridge => ({

@@ -1,16 +1,18 @@
 # AI writing
 
-Kisa exposes an AI writing capability for generating a reply from cached thread context and cleaning up draft text. The settings screen lets the user save a model for each provider, choose one active provider for generation, inspect provider availability, and customize separate reply and draft cleanup user instructions in dialogs. New email compose exposes draft cleanup next to attachments. Reply and reply-all composers can create a reply from thread context or clean text already in the editor; forward composers expose cleanup only. Each AI action tooltip identifies the provider and model that will handle the request.
+Kisa generates replies from cached thread context and cleans up draft text. Settings store an active provider plus a model and optional model-specific reasoning value for each provider. AI action tooltips show the resolved provider, model, and reasoning value. New-message, reply, and reply-all composers support cleanup; reply and reply-all also support reply generation.
 
-Settings changes save automatically. Codex starts with `gpt-5.6-luna`, Claude starts with `claude-sonnet-5`, and OpenCode has no preset model.
+Settings changes save automatically. Codex starts with `gpt-5.6-luna` at `low` reasoning, Claude starts with `claude-sonnet-5` and its provider-default reasoning, and OpenCode has no preset model or reasoning variant.
 
 ## Provider ownership
 
 Kisa uses the user's existing command-line subscriptions and credentials. It does not collect provider API keys or copy provider credentials into Kisa:
 
-- Codex runs through `codex exec`; authentication and model inventory come from `codex app-server`.
-- Claude runs through `claude --print`; account state comes from a no-prompt Agent SDK initialization and the supported model catalog is versioned with Kisa.
-- OpenCode runs a loopback-only `opencode serve` process for the request and talks to it with the OpenCode SDK. Model inventory comes from `opencode models --verbose`.
+- Codex runs through `codex exec`; authentication, model inventory, supported reasoning efforts, and each model's default effort come from `codex app-server`.
+- Claude runs through `claude --print`; account state comes from a no-prompt Agent SDK initialization. Kisa keeps an explicit Claude model catalog because Claude Code's discovered list contains moving aliases. The catalog records each model's effort choices and default.
+- OpenCode runs a loopback-only `opencode serve` process and uses the OpenCode SDK. Model inventory and model variants come from `opencode models --verbose`. The settings reasoning control passes the selected variant through unchanged.
+
+The OpenCode model picker groups models into submenus by their upstream provider while preserving the explicit `provider/model` value for selection and generation.
 
 The process environment includes the interactive login shell's `PATH` so a packaged desktop app can locate user-installed CLIs. Provider stderr and raw failures never cross IPC. Generation has bounded output, startup, and request timeouts, and interruption terminates child processes.
 
@@ -20,13 +22,13 @@ This provider design is adapted from [T3 Code](https://github.com/pingdotgg/t3co
 
 The typed `desktopBridge` exposes five methods:
 
-- `listAiProviders()` reports installation, authentication state, and models for Codex, Claude, and OpenCode.
-- `getAiSettings()` returns the reply and cleanup user instructions, active provider, and saved model for each provider.
-- `updateAiSettings(request)` persists both user-instruction fields, the active provider, and all provider model selections.
+- `listAiProviders()` reports installation, authentication state, models, and model-specific reasoning choices for Codex, Claude, and OpenCode.
+- `getAiSettings()` returns the reply and cleanup user instructions, active provider, and saved model and reasoning choice for each provider.
+- `updateAiSettings(request)` persists both user-instruction fields, the active provider, and all provider model and reasoning selections.
 - `generateEmailReply(request)` generates a body from an account-scoped cached thread plus optional request-specific instructions.
 - `cleanupEmailDraft(request)` rewrites a supplied subject/body pair plus optional request-specific instructions.
 
-Every IPC input is decoded in main and every result is encoded before it is returned. A generation request may select a provider/model directly or use the saved model for the active provider. There is intentionally no arbitrary prompt, command, filesystem, or provider-configuration capability.
+Main decodes every IPC input and encodes every result. A generation request may supply a provider, model, and reasoning value or use the saved active selection. Provider adapters translate reasoning to Codex's `model_reasoning_effort`, Claude's `--effort`, or OpenCode's `variant`. IPC does not expose arbitrary prompts, commands, filesystem access, or provider configuration.
 
 ## Prompt and mail boundaries
 
@@ -44,6 +46,8 @@ AI settings live in the encrypted application database. System instructions are 
 
 ## Lifecycle
 
-The authenticated renderer mounts one `AiProviderStateProvider` for the application session. It loads AI settings and provider inventory concurrently, keeps the last successful inventory during refresh failures, and exposes the same model selection to Settings, new-message cleanup, reply generation, and reply cleanup. Composer mounts and remounts do not perform provider probes. Settings saves update this shared state, and its refresh control runs one single-flight inventory refresh.
+The authenticated renderer mounts one `AiProviderStateProvider` for the application session. It loads settings and provider inventory concurrently and keeps the last successful inventory when refresh fails. Composer mounts do not probe providers. Settings changes update the shared state, and refresh runs one inventory request at a time.
+
+Changing models keeps the current reasoning value only when the new model supports it. Otherwise Settings selects the new model's reported default. The menu marks that concrete option as `Default`; it does not add a second default row. Models with no reasoning options have no reasoning control.
 
 Provider inventory is not persisted across application restarts. OpenCode's loopback server and session remain scoped to one generation request, while Codex and Claude continue to use non-persistent/ephemeral invocations. Provider output is decoded against the exact reply or cleaned-draft schema before it can cross IPC.

@@ -8,6 +8,13 @@ import {
   buildReplyPrompt,
 } from "../src/main/ai/prompts";
 import {
+  CLAUDE_MODELS,
+  getClaudeReasoningArgs,
+} from "../src/main/ai/providers/claude";
+import { getCodexReasoningArgs } from "../src/main/ai/providers/codex";
+import {
+  getOpenCodeReasoningInput,
+  inferOpenCodeDefaultVariant,
   extractJsonObject,
   parseOpenCodeModels,
 } from "../src/main/ai/providers/opencode";
@@ -154,6 +161,56 @@ describe("AI writing prompts", () => {
 });
 
 describe("AI provider output parsing", () => {
+  it("maps saved reasoning to each provider's native request shape", () => {
+    expect(getCodexReasoningArgs("xhigh")).toStrictEqual([
+      "--config",
+      'model_reasoning_effort="xhigh"',
+    ]);
+    expect(getClaudeReasoningArgs("medium")).toStrictEqual([
+      "--effort",
+      "medium",
+    ]);
+    expect(getClaudeReasoningArgs("xhigh", "claude-opus-4-7")).toStrictEqual([
+      "--effort",
+      "max",
+    ]);
+    expect(getOpenCodeReasoningInput("high")).toStrictEqual({
+      variant: "high",
+    });
+  });
+
+  it("omits reasoning when no explicit value is available", () => {
+    expect(getCodexReasoningArgs()).toStrictEqual([]);
+    expect(getClaudeReasoningArgs()).toStrictEqual([]);
+    expect(getOpenCodeReasoningInput()).toStrictEqual({});
+  });
+
+  it("uses Claude's explicit model and effort catalog", () => {
+    expect(CLAUDE_MODELS.map(({ id }) => id)).toStrictEqual([
+      "claude-fable-5",
+      "claude-opus-5",
+      "claude-sonnet-5",
+      "claude-opus-4-8",
+      "claude-opus-4-7",
+      "claude-opus-4-6",
+      "claude-opus-4-5",
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5",
+    ]);
+    expect(
+      CLAUDE_MODELS.find(({ id }) => id === "claude-sonnet-5")?.reasoningOptions
+    ).toStrictEqual([
+      { id: "low" },
+      { id: "medium" },
+      { id: "high", isDefault: true },
+      { id: "xhigh" },
+      { id: "max" },
+    ]);
+    expect(
+      CLAUDE_MODELS.find(({ id }) => id === "claude-opus-4-7")?.reasoningOptions
+    ).toContainEqual({ id: "xhigh", isDefault: true });
+  });
+
   it("uses a provider-compatible schema for cleanup generation", () => {
     const schema = toJsonSchemaObject(AiCleanupGeneration);
 
@@ -178,11 +235,13 @@ describe("AI provider output parsing", () => {
         id: "anthropic/claude-sonnet-5",
         isDefault: false,
         name: "Claude Sonnet 5",
+        reasoningOptions: [],
       },
       {
         id: "openai/gpt-5.6-luna",
         isDefault: false,
         name: "GPT-5.6 Luna",
+        reasoningOptions: [],
       },
     ]);
   });
@@ -201,8 +260,38 @@ describe("AI provider output parsing", () => {
         id: "anthropic/claude-sonnet-5",
         isDefault: false,
         name: "Claude Sonnet 5",
+        reasoningOptions: [],
       },
     ]);
+  });
+
+  it("reads model-specific OpenCode reasoning variants", () => {
+    const output = [
+      "openai/gpt-5.6-luna",
+      JSON.stringify({
+        name: "GPT-5.6 Luna",
+        variants: {
+          high: { reasoningEffort: "high" },
+          low: { reasoningEffort: "low" },
+          unavailable: { disabled: true },
+        },
+      }),
+    ].join("\n");
+
+    expect(parseOpenCodeModels(output)).toStrictEqual([
+      {
+        id: "openai/gpt-5.6-luna",
+        isDefault: false,
+        name: "GPT-5.6 Luna",
+        reasoningOptions: [{ id: "high", isDefault: true }, { id: "low" }],
+      },
+    ]);
+    expect(
+      inferOpenCodeDefaultVariant("openai", ["low", "medium", "high"])
+    ).toBe("medium");
+    expect(inferOpenCodeDefaultVariant("anthropic", ["low", "high"])).toBe(
+      "high"
+    );
   });
 
   it("extracts a JSON object without stopping at braces inside strings", () => {

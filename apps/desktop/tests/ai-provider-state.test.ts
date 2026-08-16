@@ -16,6 +16,7 @@ const settings = {
     codex: "gpt-5.6-luna",
     opencode: null,
   },
+  providerReasoning: { claude: null, codex: "low", opencode: null },
   replyUserInstructions: "Write replies",
 } satisfies AiSettings;
 
@@ -28,6 +29,7 @@ const providers = [
         id: "gpt-5.6-luna",
         isDefault: true,
         name: "GPT-5.6 Luna",
+        reasoningOptions: [{ id: "low" }, { id: "medium", isDefault: true }],
       },
     ],
     provider: "codex",

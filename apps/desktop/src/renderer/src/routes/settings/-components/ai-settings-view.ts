@@ -1,6 +1,9 @@
+import { resolveAiReasoning } from "@/ai";
 import type {
+  AiModel,
   AiProvider,
   AiProviderModels,
+  AiProviderReasoning,
   AiProviderStatus,
 } from "@/shared/ipc/ai";
 
@@ -23,6 +26,7 @@ export interface AiProviderModelOption {
 }
 
 export interface AiProviderModelGroup {
+  readonly id: string;
   readonly items: readonly AiProviderModelOption[];
   readonly label: string;
 }
@@ -38,49 +42,70 @@ const OPENCODE_PROVIDER_LABELS = {
   openrouter: "OpenRouter",
 } satisfies Readonly<Record<string, string>>;
 
-const getOpenCodeProviderLabel = (model: string): string => {
+const getOpenCodeProvider = (model: string) => {
   const separator = model.indexOf("/");
   if (separator <= 0) {
-    return "Other";
+    return { id: "", label: "Other" };
   }
   const provider = model.slice(0, separator);
   const knownLabel = OPENCODE_PROVIDER_LABELS[provider.toLowerCase()];
   if (knownLabel !== undefined) {
-    return knownLabel;
+    return { id: provider, label: knownLabel };
   }
-  return provider
-    .split(/[-_]/gu)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() + part.slice(1))
-    .join(" ");
+  return {
+    id: provider,
+    label: provider
+      .split(/[-_]/gu)
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase() + part.slice(1))
+      .join(" "),
+  };
 };
 
 export const groupOpenCodeModelOptions = (
   options: readonly AiProviderModelOption[]
 ): readonly AiProviderModelGroup[] => {
-  const groups = new Map<string, AiProviderModelOption[]>();
+  const groups = new Map<
+    string,
+    { readonly items: AiProviderModelOption[]; readonly label: string }
+  >();
   for (const option of options) {
-    const label = getOpenCodeProviderLabel(option.model);
-    const group = groups.get(label);
+    const provider = getOpenCodeProvider(option.model);
+    const group = groups.get(provider.id);
     if (group === undefined) {
-      groups.set(label, [option]);
+      groups.set(provider.id, { items: [option], label: provider.label });
     } else {
-      group.push(option);
+      group.items.push(option);
     }
   }
-  return [...groups.entries()].map(([label, groupOptions]) => ({
-    items: groupOptions,
-    label,
+  return [...groups.entries()].map(([id, group]) => ({
+    id,
+    items: group.items,
+    label: group.label,
   }));
 };
+
+const areProviderValuesEqual = (
+  left: Record<AiProvider, string | null>,
+  right: Record<AiProvider, string | null>
+): boolean =>
+  AI_PROVIDER_ORDER.every((provider) => left[provider] === right[provider]);
 
 export const areAiProviderModelsEqual = (
   left: AiProviderModels,
   right: AiProviderModels
-): boolean =>
-  left.claude === right.claude &&
-  left.codex === right.codex &&
-  left.opencode === right.opencode;
+): boolean => areProviderValuesEqual(left, right);
+
+export const areAiProviderReasoningEqual = (
+  left: AiProviderReasoning,
+  right: AiProviderReasoning
+): boolean => areProviderValuesEqual(left, right);
+
+export const getReasoningAfterModelChange = (
+  currentReasoning: string | null,
+  model?: AiModel
+): string | null =>
+  resolveAiReasoning(currentReasoning, model?.reasoningOptions ?? []);
 
 export const getAiProviderPresentation = (
   provider: AiProviderStatus

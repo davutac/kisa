@@ -34,11 +34,19 @@ const loadGenerationSettings = Effect.fn("loadAiGenerationSettings")(
       settings.activeProvider === null
         ? null
         : settings.providerModels[settings.activeProvider];
+    const configuredReasoning =
+      settings.activeProvider === null
+        ? null
+        : settings.providerReasoning[settings.activeProvider];
     const model =
       requestModel ??
       (settings.activeProvider === null || configuredModel === null
         ? null
-        : { model: configuredModel, provider: settings.activeProvider });
+        : {
+            model: configuredModel,
+            provider: settings.activeProvider,
+            reasoning: configuredReasoning ?? undefined,
+          });
     if (model === null) {
       return yield* new AiModelSelectionError({
         message: "Choose an AI model before generating email text",

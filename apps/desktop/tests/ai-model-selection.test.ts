@@ -18,12 +18,14 @@ const settings = {
     codex: "gpt-5.6-luna",
     opencode: null,
   },
+  providerReasoning: { claude: null, codex: "low", opencode: null },
   replyUserInstructions: "Write replies",
 } satisfies AiSettings;
 
 const selection = {
   model: "gpt-5.6-luna",
   provider: "codex",
+  reasoning: "low",
 } satisfies AiModelSelection;
 
 const codex = {
@@ -34,6 +36,7 @@ const codex = {
       id: "gpt-5.6-luna",
       isDefault: true,
       name: "GPT-5.6 Luna",
+      reasoningOptions: [{ id: "low" }, { id: "medium", isDefault: true }],
     },
   ],
   provider: "codex",
@@ -44,6 +47,7 @@ describe("AI model selection", () => {
     expect(getAiModelSelection(settings)).toStrictEqual({
       model: "gpt-5.6-luna",
       provider: "codex",
+      reasoning: "low",
     });
   });
 
@@ -73,5 +77,28 @@ describe("AI model selection", () => {
         [codex]
       )
     ).toBeNull();
+  });
+
+  it("repairs missing or stale reasoning with the model's real default", () => {
+    expect(
+      getAvailableAiModelSelection({ ...selection, reasoning: "max" }, [codex])
+    ).toStrictEqual({ ...selection, reasoning: "medium" });
+    expect(
+      getAvailableAiModelSelection(
+        { model: selection.model, provider: selection.provider },
+        [codex]
+      )
+    ).toStrictEqual({ ...selection, reasoning: "medium" });
+  });
+
+  it("drops stale reasoning when the model has no reasoning choices", () => {
+    expect(
+      getAvailableAiModelSelection(selection, [
+        {
+          ...codex,
+          models: [{ ...codex.models[0], reasoningOptions: [] }],
+        },
+      ])
+    ).toStrictEqual({ model: selection.model, provider: selection.provider });
   });
 });

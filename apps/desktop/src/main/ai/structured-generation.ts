@@ -18,6 +18,7 @@ export const generateStructuredText = Effect.fn("generateStructuredText")(
     const generationInput = {
       ...input,
       model: input.model.model,
+      reasoning: input.model.reasoning,
     };
     switch (input.model.provider) {
       case "codex": {

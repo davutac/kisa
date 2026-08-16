@@ -1,16 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import type { AiProvider, AiSettings } from "@/shared/ipc/ai";
+import type {
+  AiProvider,
+  AiProviderReasoning,
+  AiSettings,
+} from "@/shared/ipc/ai";
 import { useAiProviderState } from "@/state/ai-provider-state";
 
-import { areAiProviderModelsEqual } from "./ai-settings-view";
+import {
+  areAiProviderModelsEqual,
+  areAiProviderReasoningEqual,
+  getReasoningAfterModelChange,
+} from "./ai-settings-view";
 
 const areAiSettingsEqual = (left: AiSettings, right: AiSettings): boolean =>
   left.activeProvider === right.activeProvider &&
   left.cleanupUserInstructions === right.cleanupUserInstructions &&
   left.replyUserInstructions === right.replyUserInstructions &&
-  areAiProviderModelsEqual(left.providerModels, right.providerModels);
+  areAiProviderModelsEqual(left.providerModels, right.providerModels) &&
+  areAiProviderReasoningEqual(left.providerReasoning, right.providerReasoning);
 
 export const useAiSettings = () => {
   const isLoadingProviders = useAiProviderState(
@@ -65,12 +74,42 @@ export const useAiSettings = () => {
   };
 
   const setProviderModel = (provider: AiProvider, model: string) => {
+    setDraft((current) => {
+      if (current === null) {
+        return null;
+      }
+      const modelInfo = providers
+        .find((status) => status.provider === provider)
+        ?.models.find((candidate) => candidate.id === model);
+      const currentReasoning = current.providerReasoning[provider];
+      const nextReasoning = getReasoningAfterModelChange(
+        currentReasoning,
+        modelInfo
+      );
+      return {
+        ...current,
+        providerModels: { ...current.providerModels, [provider]: model },
+        providerReasoning: {
+          ...current.providerReasoning,
+          [provider]: nextReasoning,
+        },
+      };
+    });
+  };
+
+  const setProviderReasoning = <Provider extends AiProvider>(
+    provider: Provider,
+    reasoning: AiProviderReasoning[Provider]
+  ) => {
     setDraft((current) =>
       current === null
         ? null
         : {
             ...current,
-            providerModels: { ...current.providerModels, [provider]: model },
+            providerReasoning: {
+              ...current.providerReasoning,
+              [provider]: reasoning,
+            },
           }
     );
   };
@@ -107,6 +146,7 @@ export const useAiSettings = () => {
     setActiveProvider,
     setCleanupUserInstructions,
     setProviderModel,
+    setProviderReasoning,
     setReplyUserInstructions,
     settings,
     settingsError,

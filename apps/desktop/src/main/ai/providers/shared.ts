@@ -27,6 +27,7 @@ const PROVIDER_NAMES = {
 export interface StructuredGenerationInput<S extends Schema.Top> {
   readonly model: string;
   readonly outputSchema: S;
+  readonly reasoning?: string;
   readonly systemPrompt: string;
   readonly userPrompt: string;
 }

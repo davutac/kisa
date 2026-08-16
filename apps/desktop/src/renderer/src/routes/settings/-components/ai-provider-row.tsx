@@ -1,19 +1,6 @@
-import { ChevronDownIcon } from "lucide-react";
-import { Fragment } from "react";
 import type { ComponentType, SVGProps } from "react";
 
 import { AI_PROVIDER_NAMES } from "@/ai";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { RadioGroupItem } from "@/components/ui/radio-group";
 import {
   SettingsRow,
@@ -28,18 +15,12 @@ import {
   CodexProviderIcon,
   OpenCodeProviderIcon,
 } from "./ai-provider-icons";
+import { AiModelSelect, AiReasoningSelect } from "./ai-provider-selectors";
 import {
   getAiProviderModelOptions,
   getAiProviderPresentation,
-  groupOpenCodeModelOptions,
 } from "./ai-settings-view";
-import type {
-  AiProviderModelGroup,
-  AiProviderModelOption,
-  AiProviderPresentation,
-} from "./ai-settings-view";
-
-const DROPDOWN_MENU_COLLISION_AVOIDANCE = { side: "none" } as const;
+import type { AiProviderPresentation } from "./ai-settings-view";
 
 const PROVIDER_ICONS = {
   claude: ClaudeProviderIcon,
@@ -50,8 +31,10 @@ const PROVIDER_ICONS = {
 interface AiProviderRowProps {
   readonly activeProvider: AiProvider | null;
   readonly currentModel: string | null;
+  readonly currentReasoning: string | null;
   readonly isLoading: boolean;
   readonly onSelectModel: (model: string) => void;
+  readonly onSelectReasoning: (reasoning: string) => void;
   readonly provider: AiProvider;
   readonly status: AiProviderStatus | undefined;
 }
@@ -66,112 +49,6 @@ const getModelOptions = (
   return currentModel === null
     ? []
     : [{ label: currentModel, model: currentModel }];
-};
-
-interface AiModelMenuItemsProps {
-  readonly currentModel: string | null;
-  readonly modelGroups: readonly AiProviderModelGroup[] | null;
-  readonly modelOptions: readonly AiProviderModelOption[];
-  readonly onSelectModel: (model: string) => void;
-}
-
-interface AiModelDropdownProps extends AiModelMenuItemsProps {
-  readonly hasSelectableModel: boolean;
-  readonly provider: AiProvider;
-  readonly showStatusText: boolean;
-  readonly statusId: string;
-}
-
-const AiModelMenuItems = ({
-  currentModel,
-  modelGroups,
-  modelOptions,
-  onSelectModel,
-}: AiModelMenuItemsProps) => {
-  if (modelGroups === null) {
-    return (
-      <DropdownMenuRadioGroup
-        onValueChange={onSelectModel}
-        value={currentModel ?? ""}
-      >
-        {modelOptions.map((option) => (
-          <DropdownMenuRadioItem key={option.model} value={option.model}>
-            {option.label}
-          </DropdownMenuRadioItem>
-        ))}
-      </DropdownMenuRadioGroup>
-    );
-  }
-
-  return modelGroups.map((group, groupIndex) => (
-    <Fragment key={group.label}>
-      {groupIndex === 0 ? null : <DropdownMenuSeparator />}
-      <DropdownMenuGroup>
-        <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          onValueChange={onSelectModel}
-          value={currentModel ?? ""}
-        >
-          {group.items.map((option) => (
-            <DropdownMenuRadioItem key={option.model} value={option.model}>
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuGroup>
-    </Fragment>
-  ));
-};
-
-const AiModelDropdown = ({
-  currentModel,
-  hasSelectableModel,
-  modelGroups,
-  modelOptions,
-  onSelectModel,
-  provider,
-  showStatusText,
-  statusId,
-}: AiModelDropdownProps) => {
-  const selectedModel =
-    modelOptions.find((option) => option.model === currentModel) ?? null;
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        disabled={!hasSelectableModel}
-        render={
-          <Button
-            aria-describedby={showStatusText ? statusId : undefined}
-            aria-label={`${AI_PROVIDER_NAMES[provider]} model, ${selectedModel?.label ?? "none selected"}`}
-            className="w-full justify-between font-normal sm:w-48"
-            type="button"
-            variant="secondary"
-          />
-        }
-      >
-        <span className="truncate">
-          {selectedModel?.label ?? "Choose model"}
-        </span>
-        <ChevronDownIcon
-          aria-hidden
-          className="text-muted-foreground shrink-0"
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        collisionAvoidance={DROPDOWN_MENU_COLLISION_AVOIDANCE}
-        side="bottom"
-      >
-        <AiModelMenuItems
-          currentModel={currentModel}
-          modelGroups={modelGroups}
-          modelOptions={modelOptions}
-          onSelectModel={onSelectModel}
-        />
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 };
 
 const AiProviderStatusText = ({
@@ -213,8 +90,10 @@ const AiProviderStatusText = ({
 const AiProviderRow = ({
   activeProvider,
   currentModel,
+  currentReasoning,
   isLoading,
   onSelectModel,
+  onSelectReasoning,
   provider,
   status,
 }: AiProviderRowProps) => {
@@ -223,10 +102,11 @@ const AiProviderRow = ({
   const presentation =
     status === undefined ? null : getAiProviderPresentation(status);
   const modelOptions = getModelOptions(status, currentModel);
-  const modelGroups =
-    provider === "opencode" ? groupOpenCodeModelOptions(modelOptions) : null;
   const hasSelectableModel =
     status?.installed === true && status.models.length > 0;
+  const reasoningOptions =
+    status?.models.find(({ id }) => id === currentModel)?.reasoningOptions ??
+    [];
   const canActivateProvider = modelOptions.some(
     (option) => option.model === currentModel
   );
@@ -273,17 +153,23 @@ const AiProviderRow = ({
         </div>
       </SettingsRowContent>
 
-      <SettingsRowActions className="w-full sm:w-auto">
-        <AiModelDropdown
+      <SettingsRowActions className="w-full flex-wrap justify-end sm:w-auto">
+        <AiModelSelect
           currentModel={currentModel}
-          hasSelectableModel={hasSelectableModel}
-          modelGroups={modelGroups}
+          disabled={!hasSelectableModel}
           modelOptions={modelOptions}
           onSelectModel={onSelectModel}
           provider={provider}
-          showStatusText={showStatusText}
-          statusId={statusId}
+          statusDescriptionId={showStatusText ? statusId : undefined}
         />
+        {hasSelectableModel && reasoningOptions.length > 0 ? (
+          <AiReasoningSelect
+            currentReasoning={currentReasoning}
+            onSelectReasoning={onSelectReasoning}
+            provider={provider}
+            reasoningOptions={reasoningOptions}
+          />
+        ) : null}
       </SettingsRowActions>
     </SettingsRow>
   );

@@ -73,10 +73,19 @@ const decodeCodexInitializeResponse = Schema.decodeUnknownExit(
 const CodexModelListResponse = Schema.Struct({
   data: Schema.Array(
     Schema.Struct({
+      defaultReasoningEffort: Schema.optional(Schema.NonEmptyString),
       displayName: Schema.String,
       hidden: Schema.Boolean,
       isDefault: Schema.Boolean,
       model: Schema.NonEmptyString,
+      supportedReasoningEfforts: Schema.optional(
+        Schema.Array(
+          Schema.Struct({
+            description: Schema.String,
+            reasoningEffort: Schema.NonEmptyString,
+          })
+        )
+      ),
     })
   ),
   nextCursor: Schema.optional(Schema.NullOr(Schema.String)),
@@ -294,6 +303,19 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
                 id: model.model,
                 isDefault: model.isDefault,
                 name: model.displayName,
+                reasoningOptions: (model.supportedReasoningEfforts ?? []).map(
+                  (option) =>
+                    option.reasoningEffort === model.defaultReasoningEffort
+                      ? {
+                          description: option.description,
+                          id: option.reasoningEffort,
+                          isDefault: true,
+                        }
+                      : {
+                          description: option.description,
+                          id: option.reasoningEffort,
+                        }
+                ),
               }))
           );
           cursor = page.value.nextCursor;
@@ -349,6 +371,11 @@ const makeFullPrompt = (systemPrompt: string, userPrompt: string): string =>
     "\n\n"
   );
 
+export const getCodexReasoningArgs = (reasoning?: string): readonly string[] =>
+  reasoning === undefined
+    ? []
+    : ["--config", `model_reasoning_effort=${JSON.stringify(reasoning)}`];
+
 export const generateWithCodex = Effect.fn("generateWithCodex")(
   function* generateWithCodex<S extends Schema.Top>(
     input: StructuredGenerationInput<S>
@@ -374,8 +401,7 @@ export const generateWithCodex = Effect.fn("generateWithCodex")(
         "read-only",
         "--model",
         input.model,
-        "--config",
-        'model_reasoning_effort="low"',
+        ...getCodexReasoningArgs(input.reasoning),
         "--output-schema",
         schemaPath,
         "--output-last-message",

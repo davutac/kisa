@@ -9,6 +9,7 @@ export type AiProvider = typeof AiProvider.Type;
 export const AiModelSelection = Schema.Struct({
   model: Schema.NonEmptyString,
   provider: AiProvider,
+  reasoning: Schema.optional(Schema.NonEmptyString),
 });
 export type AiModelSelection = typeof AiModelSelection.Type;
 
@@ -25,10 +26,31 @@ export const DEFAULT_AI_PROVIDER_MODELS = {
   opencode: null,
 } as const satisfies AiProviderModels;
 
+export const AiProviderReasoning = Schema.Struct({
+  claude: Schema.NullOr(Schema.NonEmptyString),
+  codex: Schema.NullOr(Schema.NonEmptyString),
+  opencode: Schema.NullOr(Schema.NonEmptyString),
+});
+export type AiProviderReasoning = typeof AiProviderReasoning.Type;
+
+export const DEFAULT_AI_PROVIDER_REASONING = {
+  claude: null,
+  codex: "low",
+  opencode: null,
+} as const satisfies AiProviderReasoning;
+
+export const AiReasoningOption = Schema.Struct({
+  description: Schema.optional(Schema.String),
+  id: Schema.NonEmptyString,
+  isDefault: Schema.optional(Schema.Boolean),
+});
+export type AiReasoningOption = typeof AiReasoningOption.Type;
+
 export const AiModel = Schema.Struct({
   id: Schema.NonEmptyString,
   isDefault: Schema.Boolean,
   name: Schema.NonEmptyString,
+  reasoningOptions: Schema.Array(AiReasoningOption),
 });
 export type AiModel = typeof AiModel.Type;
 
@@ -69,6 +91,7 @@ export const AiSettings = Schema.Struct({
   activeProvider: Schema.NullOr(AiProvider),
   cleanupUserInstructions: AiInstructions,
   providerModels: AiProviderModels,
+  providerReasoning: AiProviderReasoning,
   replyUserInstructions: AiInstructions,
 });
 export type AiSettings = typeof AiSettings.Type;

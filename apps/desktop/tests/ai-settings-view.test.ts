@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   areAiProviderModelsEqual,
+  areAiProviderReasoningEqual,
   getAiProviderModelOptions,
   getAiProviderPresentation,
+  getReasoningAfterModelChange,
   groupOpenCodeModelOptions,
 } from "../src/renderer/src/routes/settings/-components/ai-settings-view";
 import type { AiProviderStatus } from "../src/shared/ipc/ai";
@@ -13,7 +15,17 @@ const codex = {
   authLabel: "ChatGPT Pro 5x Subscription",
   authentication: "authenticated",
   installed: true,
-  models: [{ id: "gpt-5", isDefault: true, name: "GPT-5" }],
+  models: [
+    {
+      id: "gpt-5",
+      isDefault: true,
+      name: "GPT-5",
+      reasoningOptions: [
+        { description: "Fast", id: "low" },
+        { description: "Balanced", id: "medium", isDefault: true },
+      ],
+    },
+  ],
   provider: "codex",
   version: "0.147.0",
 } satisfies AiProviderStatus;
@@ -25,7 +37,16 @@ describe("AI settings view", () => {
     ]);
   });
 
-  it("groups OpenCode models by their upstream provider", () => {
+  it("keeps supported reasoning across model changes and repairs stale values", () => {
+    const [model] = codex.models;
+
+    expect(getReasoningAfterModelChange("low", model)).toBe("low");
+    expect(getReasoningAfterModelChange(null, model)).toBe("medium");
+    expect(getReasoningAfterModelChange("max", model)).toBe("medium");
+    expect(getReasoningAfterModelChange("max")).toBeNull();
+  });
+
+  it("groups OpenCode models for provider submenus", () => {
     expect(
       groupOpenCodeModelOptions([
         { label: "Claude Sonnet", model: "anthropic/claude-sonnet" },
@@ -34,6 +55,7 @@ describe("AI settings view", () => {
       ])
     ).toStrictEqual([
       {
+        id: "anthropic",
         items: [
           { label: "Claude Sonnet", model: "anthropic/claude-sonnet" },
           { label: "Claude Opus", model: "anthropic/claude-opus" },
@@ -41,10 +63,26 @@ describe("AI settings view", () => {
         label: "Anthropic",
       },
       {
+        id: "openai",
         items: [{ label: "GPT", model: "openai/gpt" }],
         label: "OpenAI",
       },
     ]);
+  });
+
+  it("compares the saved reasoning choice for every provider", () => {
+    expect(
+      areAiProviderReasoningEqual(
+        { claude: null, codex: "low", opencode: "high" },
+        { claude: null, codex: "low", opencode: "high" }
+      )
+    ).toBeTruthy();
+    expect(
+      areAiProviderReasoningEqual(
+        { claude: null, codex: "low", opencode: "high" },
+        { claude: "high", codex: "low", opencode: "high" }
+      )
+    ).toBeFalsy();
   });
 
   it("compares the saved model for every provider", () => {

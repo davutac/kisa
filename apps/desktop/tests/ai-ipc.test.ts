@@ -26,6 +26,7 @@ const state = vi.hoisted(() => ({
         codex: "gpt-5.6-luna",
         opencode: "openai/gpt-5",
       },
+      providerReasoning: { claude: null, codex: "low", opencode: "high" },
       replyUserInstructions: "Reply",
     })
   ),
@@ -36,7 +37,17 @@ const state = vi.hoisted(() => ({
         authLabel: "ChatGPT Pro 5x Subscription",
         authentication: "authenticated" as const,
         installed: true,
-        models: [{ id: "gpt-5.6-luna", isDefault: true, name: "GPT-5.6 Luna" }],
+        models: [
+          {
+            id: "gpt-5.6-luna",
+            isDefault: true,
+            name: "GPT-5.6 Luna",
+            reasoningOptions: [
+              { id: "low" },
+              { id: "medium", isDefault: true },
+            ],
+          },
+        ],
         provider: "codex" as const,
         version: "0.147.0",
       },
@@ -51,6 +62,7 @@ const state = vi.hoisted(() => ({
         codex: "gpt-5.6-luna",
         opencode: "openai/gpt-5",
       },
+      providerReasoning: { claude: null, codex: "low", opencode: "high" },
       replyUserInstructions: "Reply",
     })
   ),
@@ -97,7 +109,15 @@ describe("AI IPC", () => {
               authentication: "authenticated",
               installed: true,
               models: [
-                { id: "gpt-5.6-luna", isDefault: true, name: "GPT-5.6 Luna" },
+                {
+                  id: "gpt-5.6-luna",
+                  isDefault: true,
+                  name: "GPT-5.6 Luna",
+                  reasoningOptions: [
+                    { id: "low" },
+                    { id: "medium", isDefault: true },
+                  ],
+                },
               ],
               provider: "codex",
               version: "0.147.0",
@@ -113,6 +133,11 @@ describe("AI IPC", () => {
               claude: "claude-sonnet-5",
               codex: "gpt-5.6-luna",
               opencode: "openai/gpt-5",
+            },
+            providerReasoning: {
+              claude: null,
+              codex: "low",
+              opencode: "high",
             },
             replyUserInstructions: "Reply",
           },

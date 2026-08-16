@@ -143,7 +143,7 @@ The main process owns privileged capabilities, including the installed-app OAuth
 ## Effect and TypeScript
 
 - Backend and non-renderer boundary code uses Effect v4 for expected failures, resources, concurrency, and lifecycle.
-- Prefer named `Effect.fn` functions, `Effect.gen` for sequencing, `Schema.TaggedErrorClass` for domain failures, and `Effect.try` or `Effect.tryPromise` only at throwing boundaries.
+- Prefer named `Effect.fn` functions, `Effect.gen` for sequencing, `Schema.TaggedError` for domain failures, and `Effect.try` or `Effect.tryPromise` only at throwing boundaries.
 - Run effects at application, framework, adapter, or test boundaries. Preserve scopes and interruption; do not launch untracked promises or fibers for work that owns resources or mutates account state.
 - Prefer inferred types and boundary schemas over duplicate annotations. Avoid `any`, unsafe casts, non-null assertions, and stringly typed cross-process contracts.
 - Comments should explain ownership, invariants, or non-obvious tradeoffs, not narrate line-by-line behavior.

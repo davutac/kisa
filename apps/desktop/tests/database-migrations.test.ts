@@ -313,8 +313,9 @@ describe("database migrations", () => {
       expect(
         connection
           .prepare(
-            `SELECT active_provider, claude_model, codex_model,
-                    cleanup_instructions, opencode_model, reply_instructions
+            `SELECT active_provider, claude_model, claude_reasoning,
+                    codex_model, codex_reasoning, cleanup_instructions,
+                    opencode_model, opencode_reasoning, reply_instructions
              FROM ai_settings
              WHERE id = 1`
           )
@@ -322,9 +323,12 @@ describe("database migrations", () => {
       ).toStrictEqual({
         active_provider: "codex",
         claude_model: "claude-sonnet-5",
+        claude_reasoning: null,
         cleanup_instructions: "Cleanup",
         codex_model: "gpt-5.6-luna",
+        codex_reasoning: "low",
         opencode_model: "openai/gpt-5",
+        opencode_reasoning: null,
         reply_instructions: "Reply",
       });
     } finally {

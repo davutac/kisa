@@ -121,10 +121,14 @@ const SettingsAiSection = () => {
             <AiProviderRow
               activeProvider={draft.activeProvider}
               currentModel={draft.providerModels[provider]}
+              currentReasoning={draft.providerReasoning[provider]}
               isLoading={workflow.isLoadingProviders}
               key={provider}
               onSelectModel={(model) => {
                 workflow.setProviderModel(provider, model);
+              }}
+              onSelectReasoning={(reasoning) => {
+                workflow.setProviderReasoning(provider, reasoning);
               }}
               provider={provider}
               status={providersById.get(provider)}
