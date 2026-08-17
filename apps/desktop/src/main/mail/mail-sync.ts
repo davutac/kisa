@@ -6,6 +6,7 @@ import {
   gmailSyncState,
   gmailThreads,
 } from "@repo/database/schemas";
+import { withReconciledThread } from "@repo/gmail/errors";
 import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
 import { GmailMime } from "@repo/gmail/mime";
@@ -24,9 +25,13 @@ import {
   ThreadId,
 } from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
+import type {
+  BatchThreadMutationOutcome,
+  ThreadMutationOutcome,
+} from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
 import { and as andSql, eq, inArray as inArraySql } from "drizzle-orm";
-import { Clock, Effect, Layer, Schedule, Schema } from "effect";
+import { Clock, Effect, Layer, Option, Schedule, Schema } from "effect";
 
 import {
   MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
@@ -94,6 +99,7 @@ import type { MessageHeader } from "./sender-brand";
 import { getSenderBrand, hasCachedSenderBrand } from "./sender-brand";
 import { hasUnreadSpamRemote, resetSpamBackfillRemote } from "./spam-mailbox";
 import { getThreadCacheState } from "./thread-cache-policy";
+import { publishReconciledGmailError } from "./thread-reconciliation";
 import { refreshUnreadBadge } from "./unread-badge";
 
 const GMAIL_INBOX_LABEL = "INBOX";
@@ -140,9 +146,24 @@ const isRetryableGmailError = (error: GmailError): boolean =>
   error._tag === "GmailRateLimitError" ||
   (error._tag === "GmailApiError" && error.retryable);
 
+const getMailSyncErrorMessage = (error: GmailError): string => {
+  if (
+    error._tag === "GmailEntityNotFoundError" &&
+    error.resource === "thread"
+  ) {
+    return "This conversation no longer exists in Gmail";
+  }
+
+  if (error._tag === "GmailApiError" && error.status === 404) {
+    return "Gmail could not find the requested resource";
+  }
+
+  return error.message;
+};
+
 const toMailSyncError = (error: GmailError): MailSyncError =>
   new MailSyncError({
-    message: error.message,
+    message: getMailSyncErrorMessage(error),
     retryable: isRetryableGmailError(error),
   });
 
@@ -152,10 +173,43 @@ const toMailSyncError = (error: GmailError): MailSyncError =>
  * concurrency is already bounded below it (thread fetches at 5 in the gateway)
  * and above it (two accounts at a time in the poll loop).
  */
-const runGmail = <A, E extends GmailError>(
-  effect: Effect.Effect<A, E, GmailServices>
+const runGmail = <A>(
+  effect: Effect.Effect<A, GmailError, GmailServices>
 ): Effect.Effect<A, MailSyncError> =>
-  effect.pipe(Effect.provide(GmailLive), Effect.mapError(toMailSyncError));
+  effect.pipe(
+    Effect.provide(GmailLive),
+    Effect.tapErrorTag("GmailEntityNotFoundError", publishReconciledGmailError),
+    Effect.mapError(toMailSyncError)
+  );
+
+const loadRawThread = Effect.fn("loadRawThread")(function* loadRawThread(
+  accountId: AccountId,
+  threadId: ThreadId
+) {
+  const store = yield* GmailStore;
+  const gateway = yield* GmailGateway;
+  const authorization = yield* store.getAuthorization(accountId);
+
+  if (Option.isNone(authorization)) {
+    return;
+  }
+
+  const result = yield* gateway
+    .getThread(authorization.value, threadId)
+    .pipe(
+      Effect.catchTag("GmailEntityNotFoundError", (error) =>
+        store
+          .removeThreads(accountId, [threadId])
+          .pipe(
+            Effect.flatMap(() =>
+              withReconciledThread(error, { outcome: "removed", threadId })
+            )
+          )
+      )
+    );
+
+  return result.value;
+});
 
 const withDatabase = <A>(
   message: string,
@@ -511,7 +565,7 @@ export const deleteGmailLabel = Effect.fn("deleteGmailLabel")(
 
 export const updateGmailLabel = Effect.fn("updateGmailLabel")(
   function* updateGmailLabel(request: GmailLabelUpdateRequest) {
-    const label = yield* runGmail(
+    const outcome = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.updateLabel({
@@ -526,7 +580,14 @@ export const updateGmailLabel = Effect.fn("updateGmailLabel")(
 
     yield* publishLabelCatalogChanged(request.accountId);
     yield* reloadThreadList(request.accountId);
-    return toGmailLabelSummary(label);
+
+    if (outcome.type === "removed") {
+      return yield* new MailSyncError({
+        message: "This label no longer exists in Gmail",
+      });
+    }
+
+    return toGmailLabelSummary(outcome.label);
   }
 );
 
@@ -570,24 +631,14 @@ const loadNotificationSenderBrand = Effect.fn("loadNotificationSenderBrand")(
     // Only known brand domains pay for this re-read. The current message's own
     // authentication headers still have to validate the cached BIMI logo.
     const rawMessages = yield* runGmail(
-      Effect.gen(function* loadRawNotificationMessage() {
-        const store = yield* GmailStore;
-        const gateway = yield* GmailGateway;
-        const authorization = yield* store.getAuthorization(
-          AccountId.make(message.accountId)
-        );
-
-        if (authorization._tag === "None") {
-          return [];
-        }
-
-        const result = yield* gateway.getThread(
-          authorization.value,
-          ThreadId.make(message.threadId)
-        );
-
-        return result.value.messages as readonly RawThreadMessage[];
-      })
+      loadRawThread(
+        AccountId.make(message.accountId),
+        ThreadId.make(message.threadId)
+      ).pipe(
+        Effect.map(
+          (thread) => (thread?.messages ?? []) as readonly RawThreadMessage[]
+        )
+      )
     );
     const rawMessage = rawMessages.find(({ id }) => id === message.messageId);
 
@@ -654,14 +705,23 @@ const withInlineImages = Effect.fn("withInlineImages")(
       string,
       GmailDomainThread["messages"][number]["attachments"]
     >(parsedMessages.map((message) => [message.id, message.attachments]));
-    const wanted = messages.flatMap((message) =>
-      message.body.html === undefined
+    const threadIdsByMessageId = new Map<string, ThreadId>(
+      parsedMessages.map((message) => [message.id, message.threadId])
+    );
+    const wanted = messages.flatMap((message) => {
+      const threadId = threadIdsByMessageId.get(message.id);
+
+      return message.body.html === undefined || threadId === undefined
         ? []
         : selectInlineImages(
             message.body.html,
             attachmentsById.get(message.id) ?? []
-          ).map((attachment) => ({ attachment, messageId: message.id }))
-    );
+          ).map((attachment) => ({
+            attachment,
+            messageId: message.id,
+            threadId,
+          }));
+    });
 
     if (wanted.length === 0) {
       return messages;
@@ -672,7 +732,7 @@ const withInlineImages = Effect.fn("withInlineImages")(
         Effect.flatMap((gmail) =>
           Effect.forEach(
             wanted,
-            ({ attachment, messageId }) =>
+            ({ attachment, messageId, threadId }) =>
               gmail
                 .getAttachment({
                   accountId,
@@ -680,6 +740,7 @@ const withInlineImages = Effect.fn("withInlineImages")(
                   filename: attachment.filename,
                   mediaType: attachment.mediaType,
                   messageId: attachment.messageId,
+                  threadId,
                 })
                 .pipe(
                   Effect.map((image) => ({
@@ -743,23 +804,21 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
     // The raw thread is needed twice: parsed into the domain model, and kept
     // for the headers BIMI discovery reads.
     const loaded = yield* runGmail(
-      Effect.gen(function* loadRawThread() {
+      Effect.gen(function* loadRawThreadForDisplay() {
         const store = yield* GmailStore;
-        const gateway = yield* GmailGateway;
         const mime = yield* GmailMime;
-        const authorization = yield* store.getAuthorization(accountId);
+        const raw = yield* loadRawThread(accountId, threadId);
 
-        if (authorization._tag === "None") {
+        if (raw === undefined) {
           return;
         }
 
-        const result = yield* gateway.getThread(authorization.value, threadId);
-        const parsed = yield* mime.parseThread(result.value);
+        const parsed = yield* mime.parseThread(raw);
         yield* store.saveThread(accountId, parsed);
 
         return {
           parsed,
-          raw: result.value.messages as readonly RawThreadMessage[],
+          raw: raw.messages as readonly RawThreadMessage[],
         };
       })
     );
@@ -804,25 +863,28 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
       message.labelIds.includes(LabelId.make("UNREAD"))
     );
 
+    const readOutcome = wasUnread
+      ? yield* runGmail(
+          Gmail.pipe(
+            Effect.flatMap((gmail) =>
+              gmail.markThreadRead({ accountId, threadId })
+            )
+          )
+        ).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Could not mark Gmail thread as read: ${error.message}`
+            )
+          )
+        )
+      : undefined;
+
     if (wasUnread) {
-      yield* runGmail(
-        Gmail.pipe(
-          Effect.flatMap((gmail) =>
-            gmail.markThreadRead({ accountId, threadId })
-          )
-        )
-      ).pipe(
-        Effect.tap(() =>
-          Effect.sync(() =>
-            dismissThreadNotifications(request.accountId, request.threadId)
-          )
-        ),
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Could not mark Gmail thread as read: ${error.message}`
-          )
-        )
-      );
+      if (readOutcome === "removed" || readOutcome === "updated") {
+        yield* Effect.sync(() =>
+          dismissThreadNotifications(request.accountId, request.threadId)
+        );
+      }
 
       yield* reloadThreadList(request.accountId);
     }
@@ -830,12 +892,13 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
     return {
       accountId: request.accountId,
       labels: yield* resolveLabelNames(request.accountId, [...parsed.labelIds]),
-      messages: wasUnread
-        ? messages.map((message) => ({
-            ...message,
-            labelIds: removeUnreadLabel(message.labelIds),
-          }))
-        : messages,
+      messages:
+        readOutcome === "updated"
+          ? messages.map((message) => ({
+              ...message,
+              labelIds: removeUnreadLabel(message.labelIds),
+            }))
+          : messages,
       subject: messages[0]?.subject ?? "(No subject)",
       threadId: parsed.id,
     } satisfies GmailThreadDto;
@@ -892,7 +955,7 @@ const toReadStateSummary = (
 
 const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
   function* markCachedThreadRead(request: GmailThreadRequest) {
-    yield* runGmail(
+    const outcome = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.markThreadRead({
@@ -902,9 +965,29 @@ const markCachedThreadRead = Effect.fn("markCachedThreadRead")(
         )
       )
     );
+    if (outcome === "removed") {
+      yield* Effect.sync(() =>
+        dismissThreadNotifications(request.accountId, request.threadId)
+      );
+      yield* publishThreadListUpdated([
+        {
+          accountId: request.accountId,
+          kind: "remove",
+          threadId: request.threadId,
+        },
+      ]);
+      return;
+    }
+
+    if (outcome === "refreshed") {
+      yield* reloadThreadList(request.accountId);
+      return;
+    }
+
     yield* Effect.sync(() =>
       dismissThreadNotifications(request.accountId, request.threadId)
     );
+
     const summary = yield* withDatabase(
       "Could not cache email",
       async (database) => {
@@ -1043,29 +1126,27 @@ const publishCachedThreadListChanges = Effect.fn(
   }
 });
 
-const updateCachedThread = (
-  summary: GmailThreadSummary
-): Effect.Effect<void, MailSyncError> =>
-  withDatabase("Could not cache email", async (database) => {
-    await database
-      .update(gmailThreads)
-      .set({
-        // `is_in_inbox` is derived from the labels, so the two always move
-        // together — the paging query reads the column, not the JSON.
-        isInInbox: summary.labels.includes(GMAIL_INBOX_LABEL),
-        isInSpam: summary.labels.includes(GMAIL_SPAM_LABEL),
-        isUnread: summary.isUnread,
-        labels: summary.labels,
-        updatedAt: Date.now(),
-      })
-      .where(
-        andSql(
-          eq(gmailThreads.accountEmail, summary.accountId),
-          eq(gmailThreads.threadId, summary.threadId)
-        )
-      )
-      .run();
-  });
+const publishThreadMutationOutcome = Effect.fn("publishThreadMutationOutcome")(
+  function* publishThreadMutationOutcome(
+    request: GmailThreadRequest,
+    outcome: ThreadMutationOutcome
+  ) {
+    if (outcome === "removed") {
+      yield* publishCachedThreadListChanges(request.accountId, [
+        ThreadId.make(request.threadId),
+      ]);
+      return;
+    }
+
+    const row = yield* findCachedThread(request.accountId, request.threadId);
+
+    yield* row === undefined
+      ? reloadThreadList(request.accountId)
+      : publishThreadListUpdated([
+          { kind: "upsert", thread: toCachedThreadSummary(row) },
+        ]);
+  }
+);
 
 // Trashing is a label move for Gmail, so the cached row mirrors it rather than
 // being deleted: losing INBOX is already how the cache hides an archived
@@ -1227,7 +1308,7 @@ const runBatchMutation = Effect.fn("runBatchMutation")(
       Gmail.pipe(
         Effect.flatMap((gmail) => {
           if (operation.kind === "deleteSpam") {
-            return Effect.void;
+            return Effect.succeed({ type: "updated" } as const);
           }
 
           if (operation.kind === "setLabel") {
@@ -1289,7 +1370,7 @@ export const setThreadReadState = Effect.fn("setThreadReadState")(
       threadId: ThreadId.make(request.threadId),
     };
 
-    yield* runGmail(
+    const outcome = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           request.isUnread
@@ -1299,32 +1380,19 @@ export const setThreadReadState = Effect.fn("setThreadReadState")(
       )
     );
 
-    if (!request.isUnread) {
+    if (outcome === "removed" || (outcome === "updated" && !request.isUnread)) {
       yield* Effect.sync(() =>
         dismissThreadNotifications(request.accountId, request.threadId)
       );
     }
 
-    const row = yield* findCachedThread(request.accountId, request.threadId);
-
-    if (row === undefined) {
-      yield* reloadThreadList(request.accountId);
-      return;
-    }
-
-    const summary = toReadStateSummary(
-      toCachedThreadSummary(row),
-      request.isUnread
-    );
-
-    yield* updateCachedThread(summary);
-    yield* publishThreadListUpdated([{ kind: "upsert", thread: summary }]);
+    yield* publishThreadMutationOutcome(request, outcome);
   }
 );
 
 export const setThreadLabel = Effect.fn("setThreadLabel")(
   function* setThreadLabel(request: GmailThreadLabelRequest) {
-    yield* runGmail(
+    const outcome = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.setThreadLabel({
@@ -1337,22 +1405,13 @@ export const setThreadLabel = Effect.fn("setThreadLabel")(
       )
     );
 
-    const row = yield* findCachedThread(request.accountId, request.threadId);
-
-    if (row === undefined) {
-      yield* reloadThreadList(request.accountId);
-      return;
-    }
-
-    yield* publishThreadListUpdated([
-      { kind: "upsert", thread: toCachedThreadSummary(row) },
-    ]);
+    yield* publishThreadMutationOutcome(request, outcome);
   }
 );
 
 export const markThreadNotSpam = Effect.fn("markThreadNotSpam")(
   function* markThreadNotSpam(request: GmailThreadRequest) {
-    yield* runGmail(
+    const outcome = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.markThreadNotSpam({
@@ -1363,16 +1422,7 @@ export const markThreadNotSpam = Effect.fn("markThreadNotSpam")(
       )
     );
 
-    const row = yield* findCachedThread(request.accountId, request.threadId);
-
-    if (row === undefined) {
-      yield* reloadThreadList(request.accountId);
-      return;
-    }
-
-    yield* publishThreadListUpdated([
-      { kind: "upsert", thread: toCachedThreadSummary(row) },
-    ]);
+    yield* publishThreadMutationOutcome(request, outcome);
   }
 );
 
@@ -1584,7 +1634,7 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
 ) {
   const row = yield* findCachedThread(request.accountId, request.threadId);
 
-  yield* runGmail(
+  const outcome = yield* runGmail(
     Gmail.pipe(
       Effect.flatMap((gmail) =>
         gmail.trashThread({
@@ -1594,9 +1644,20 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
       )
     )
   );
+  if (outcome !== "updated") {
+    if (outcome === "removed") {
+      yield* Effect.sync(() =>
+        dismissThreadNotifications(request.accountId, request.threadId)
+      );
+    }
+    yield* publishThreadMutationOutcome(request, outcome);
+    return;
+  }
+
   yield* Effect.sync(() =>
     dismissThreadNotifications(request.accountId, request.threadId)
   );
+
   yield* restoreTrashedThreadRows(row === undefined ? [] : [row]);
   yield* publishCachedThreadListChanges(request.accountId, [
     ThreadId.make(request.threadId),
@@ -1613,7 +1674,7 @@ export const deleteSpamThread = Effect.fn("deleteSpamThread")(
       });
     }
 
-    yield* runGmail(
+    const outcome = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.deleteThread({
@@ -1623,16 +1684,12 @@ export const deleteSpamThread = Effect.fn("deleteSpamThread")(
         )
       )
     );
-    yield* Effect.sync(() =>
-      dismissThreadNotifications(request.accountId, request.threadId)
-    );
-    yield* publishThreadListUpdated([
-      {
-        accountId: request.accountId,
-        kind: "remove",
-        threadId: request.threadId,
-      },
-    ]);
+    if (outcome !== "refreshed") {
+      yield* Effect.sync(() =>
+        dismissThreadNotifications(request.accountId, request.threadId)
+      );
+    }
+    yield* publishThreadMutationOutcome(request, outcome);
   }
 );
 
@@ -1659,8 +1716,8 @@ const runSingleBulkMutation = (
   return trashThread(request);
 };
 
-const applySuccessfulBatch = Effect.fn("applySuccessfulBatch")(
-  function* applySuccessfulBatch(
+const applySuccessfulBatchEffects = Effect.fn("applySuccessfulBatchEffects")(
+  function* applySuccessfulBatchEffects(
     operation: GmailBulkThreadMutationOperation,
     accountId: string,
     threads: readonly ResolvedBulkThread[]
@@ -1685,7 +1742,54 @@ const applySuccessfulBatch = Effect.fn("applySuccessfulBatch")(
         }
       });
     }
+  }
+);
 
+const applySuccessfulBatch = Effect.fn("applySuccessfulBatch")(
+  function* applySuccessfulBatch(
+    operation: GmailBulkThreadMutationOperation,
+    accountId: string,
+    threads: readonly ResolvedBulkThread[]
+  ) {
+    yield* applySuccessfulBatchEffects(operation, accountId, threads);
+
+    yield* publishCachedThreadListChanges(
+      accountId,
+      threads.map((thread) => ThreadId.make(thread.request.threadId))
+    );
+  }
+);
+
+const applyReconciledBatch = Effect.fn("applyReconciledBatch")(
+  function* applyReconciledBatch(
+    operation: GmailBulkThreadMutationOperation,
+    accountId: string,
+    threads: readonly ResolvedBulkThread[],
+    outcome: Extract<
+      BatchThreadMutationOutcome,
+      { readonly type: "reconciled" }
+    >
+  ) {
+    const outcomesByThreadId = new Map(
+      outcome.results.map((result) => [result.threadId, result.outcome])
+    );
+    const updated = threads.filter(
+      (thread) =>
+        outcomesByThreadId.get(ThreadId.make(thread.request.threadId)) ===
+        "updated"
+    );
+    const removed = threads.filter(
+      (thread) =>
+        outcomesByThreadId.get(ThreadId.make(thread.request.threadId)) ===
+        "removed"
+    );
+
+    yield* applySuccessfulBatchEffects(operation, accountId, updated);
+    yield* Effect.sync(() => {
+      for (const thread of removed) {
+        dismissThreadNotifications(accountId, thread.request.threadId);
+      }
+    });
     yield* publishCachedThreadListChanges(
       accountId,
       threads.map((thread) => ThreadId.make(thread.request.threadId))
@@ -1740,15 +1844,47 @@ export const bulkMutateThreads = Effect.fn("bulkMutateThreads")(
       });
 
       for (const batch of batches) {
-        const succeeded = yield* attemptBulkMutation(
-          Effect.gen(function* runBulkBatch() {
-            yield* runBatchMutation(request.operation, accountId, batch);
-            yield* applySuccessfulBatch(request.operation, accountId, batch);
-          })
+        const result = yield* Effect.gen(function* runBulkBatch() {
+          const outcome = yield* runBatchMutation(
+            request.operation,
+            accountId,
+            batch
+          );
+
+          yield* outcome.type === "updated"
+            ? applySuccessfulBatch(request.operation, accountId, batch)
+            : applyReconciledBatch(
+                request.operation,
+                accountId,
+                batch,
+                outcome
+              );
+
+          return outcome;
+        }).pipe(
+          Effect.map((outcome) => ({ outcome, type: "success" }) as const),
+          Effect.orElseSucceed(() => ({ type: "failed" }) as const)
         );
 
-        if (succeeded) {
+        if (result.type === "failed") {
+          continue;
+        }
+
+        if (result.outcome.type === "updated") {
           for (const thread of batch) {
+            succeededKeys.add(getThreadRequestKey(thread.request));
+          }
+          continue;
+        }
+
+        const succeededThreadIds = new Set(
+          result.outcome.results.flatMap((entry) =>
+            entry.outcome === "refreshed" ? [] : [entry.threadId]
+          )
+        );
+
+        for (const thread of batch) {
+          if (succeededThreadIds.has(ThreadId.make(thread.request.threadId))) {
             succeededKeys.add(getThreadRequestKey(thread.request));
           }
         }

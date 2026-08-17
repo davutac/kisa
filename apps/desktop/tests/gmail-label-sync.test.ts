@@ -57,4 +57,18 @@ describe("Gmail label sync", () => {
       })?.color
     ).toBeUndefined();
   });
+
+  it("drops a user label that disappears during hydration", async () => {
+    const hydrated = await hydrateUserLabelDetails(
+      [
+        { id: "INBOX", name: "INBOX", type: "system" },
+        { id: "Label_stale", name: "Stale", type: "user" },
+      ],
+      () => Promise.resolve(null)
+    );
+
+    expect(hydrated).toStrictEqual([
+      { id: "INBOX", name: "INBOX", type: "system" },
+    ]);
+  });
 });

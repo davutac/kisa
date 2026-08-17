@@ -2,6 +2,7 @@ import { AuthPlus, gmail } from "@googleapis/gmail";
 import type { gmail_v1 } from "@googleapis/gmail";
 import {
   GmailApiError,
+  GmailEntityNotFoundError,
   GmailHistoryExpiredError,
   GmailRateLimitError,
   GmailReauthorizationRequiredError,
@@ -119,6 +120,9 @@ const readErrorStatus = (
   return numericStatus || undefined;
 };
 
+const isNotFoundError = <ErrorInput>(error: ErrorInput): boolean =>
+  readErrorStatus(parseGaxiosLikeError(error)) === 404;
+
 const readErrorReasons = (
   candidate: GaxiosLikeError | undefined
 ): readonly string[] =>
@@ -133,13 +137,16 @@ const readErrorMessage = (
 
 /**
  * Translates a `@googleapis/gmail` rejection into the domain errors that
- * `GmailService` already branches on. `history.list` is the one caller that
- * treats 404 as a recoverable cursor expiry, so it opts in explicitly.
+ * `GmailService` already branches on. Callers opt into the meaning of 404:
+ * history expiry and a missing thread are separate recovery paths.
  */
 const toGatewayError = <ErrorInput>(
   accountId: AccountId,
   error: ErrorInput,
-  options: { readonly historyExpiredOnNotFound?: boolean } = {}
+  options: {
+    readonly historyExpiredOnNotFound?: boolean;
+    readonly notFoundResource?: GmailEntityNotFoundError["resource"];
+  } = {}
 ): GmailGatewayError => {
   const candidate = parseGaxiosLikeError(error);
   const status = readErrorStatus(candidate);
@@ -166,13 +173,29 @@ const toGatewayError = <ErrorInput>(
     return new GmailHistoryExpiredError({ accountId, message });
   }
 
+  if (status === 404 && options.notFoundResource !== undefined) {
+    return new GmailEntityNotFoundError({
+      accountId,
+      message,
+      resource: options.notFoundResource,
+    });
+  }
+
   return new GmailApiError({
     accountId,
     cause: error,
     message,
     retryable: status !== undefined && RETRYABLE_STATUSES.has(status),
+    status,
   });
 };
+
+const toResourceGatewayError = <ErrorInput>(
+  accountId: AccountId,
+  error: ErrorInput,
+  resource: GmailEntityNotFoundError["resource"]
+): GmailGatewayError =>
+  toGatewayError(accountId, error, { notFoundResource: resource });
 
 const toSendError = <ErrorInput>(
   accountId: AccountId,
@@ -311,17 +334,27 @@ const toLabelRequestBody = (
         name,
       };
 
-export const hydrateUserLabelDetails = (
+export const hydrateUserLabelDetails = async (
   labels: readonly gmail_v1.Schema$Label[],
-  load: (labelId: string) => Promise<gmail_v1.Schema$Label>
-): Promise<readonly gmail_v1.Schema$Label[]> =>
-  mapWithConcurrency(labels, LABEL_FETCH_CONCURRENCY, async (label) => {
-    if (label.type !== "user" || !isPresent(label.id)) {
-      return label;
-    }
+  load: (labelId: string) => Promise<gmail_v1.Schema$Label | null>
+): Promise<readonly gmail_v1.Schema$Label[]> => {
+  const hydrated = await mapWithConcurrency(
+    labels,
+    LABEL_FETCH_CONCURRENCY,
+    async (label) => {
+      if (label.type !== "user" || !isPresent(label.id)) {
+        return label;
+      }
 
-    return { ...label, ...(await load(label.id)) };
-  });
+      const loaded = await load(label.id);
+      return loaded === null ? undefined : { ...label, ...loaded };
+    }
+  );
+
+  return hydrated.filter(
+    (label): label is gmail_v1.Schema$Label => label !== undefined
+  );
+};
 
 const fetchLabelResource = async (
   accountId: AccountId,
@@ -335,6 +368,22 @@ const fetchLabelResource = async (
   });
 
   return response.data;
+};
+
+const fetchLabelResourceIfPresent = async (
+  accountId: AccountId,
+  client: gmail_v1.Gmail,
+  labelId: string
+): Promise<gmail_v1.Schema$Label | null> => {
+  try {
+    return await fetchLabelResource(accountId, client, labelId);
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 const succeed = <A>(value: A): GatewayResult<A> => ({ value });
@@ -457,7 +506,8 @@ export const GmailGatewayLive = Layer.succeed(
   GmailGateway.of({
     batchModifyMessageLabels: (authorization, request) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "message"),
         try: async (): Promise<GatewayResult<void>> => {
           const client = createClient(authorization.credentials);
 
@@ -505,7 +555,8 @@ export const GmailGatewayLive = Layer.succeed(
       }),
     deleteLabel: (authorization, labelId) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "label"),
         try: async (): Promise<GatewayResult<void>> => {
           const client = createClient(authorization.credentials);
 
@@ -520,7 +571,8 @@ export const GmailGatewayLive = Layer.succeed(
       }),
     deleteThread: (authorization, threadId: ThreadIdType) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "thread"),
         try: async (): Promise<GatewayResult<void>> => {
           const client = createClient(authorization.credentials);
 
@@ -537,7 +589,8 @@ export const GmailGatewayLive = Layer.succeed(
 
     getAttachment: (authorization, request) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "attachment"),
         try: async (): Promise<GatewayResult<GmailAttachment>> => {
           const client = createClient(authorization.credentials);
 
@@ -584,11 +637,16 @@ export const GmailGatewayLive = Layer.succeed(
             labelIds,
             LABEL_FETCH_CONCURRENCY,
             async (labelId) => {
-              const resource = await fetchLabelResource(
+              const resource = await fetchLabelResourceIfPresent(
                 authorization.account.id,
                 client,
                 labelId
               );
+
+              if (resource === null) {
+                return;
+              }
+
               const label = toGmailLabel(resource);
 
               if (label === undefined) {
@@ -601,7 +659,9 @@ export const GmailGatewayLive = Layer.succeed(
             }
           );
 
-          return succeed(labels);
+          return succeed(
+            labels.filter((label): label is GmailLabel => label !== undefined)
+          );
         },
       }),
 
@@ -627,7 +687,8 @@ export const GmailGatewayLive = Layer.succeed(
 
     getThread: (authorization, threadId) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "thread"),
         try: async (): Promise<GatewayResult<GatewayThread>> => {
           const client = createClient(authorization.credentials);
 
@@ -750,7 +811,11 @@ export const GmailGatewayLive = Layer.succeed(
           const labels = await hydrateUserLabelDetails(
             response.data.labels ?? [],
             (labelId) =>
-              fetchLabelResource(authorization.account.id, client, labelId)
+              fetchLabelResourceIfPresent(
+                authorization.account.id,
+                client,
+                labelId
+              )
           );
 
           return succeed(
@@ -800,7 +865,8 @@ export const GmailGatewayLive = Layer.succeed(
 
     modifyThreadLabels: (authorization, request) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "thread"),
         try: async (): Promise<GatewayResult<void>> => {
           const client = createClient(authorization.credentials);
 
@@ -823,7 +889,8 @@ export const GmailGatewayLive = Layer.succeed(
       }),
     patchLabel: (authorization, labelId, name, color) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "label"),
         try: async (): Promise<GatewayResult<GmailLabel>> => {
           const client = createClient(authorization.credentials);
 
@@ -896,7 +963,8 @@ export const GmailGatewayLive = Layer.succeed(
 
     trashThread: (authorization, threadId: ThreadIdType) =>
       Effect.tryPromise({
-        catch: (error) => toGatewayError(authorization.account.id, error),
+        catch: (error) =>
+          toResourceGatewayError(authorization.account.id, error, "thread"),
         try: async (): Promise<GatewayResult<void>> => {
           const client = createClient(authorization.credentials);
 

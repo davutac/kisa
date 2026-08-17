@@ -238,6 +238,7 @@ export interface GetAttachmentRequest {
   readonly filename: string;
   readonly mediaType: string;
   readonly messageId: MessageId;
+  readonly threadId: ThreadId;
 }
 
 export interface ThreadMutationRequest {

@@ -5,7 +5,12 @@ import { is } from "@electron-toolkit/utils";
 import type { GmailError } from "@repo/gmail/errors";
 import type { GmailGateway } from "@repo/gmail/gateway";
 import type { GmailMime } from "@repo/gmail/mime";
-import { AccountId, AttachmentId, MessageId } from "@repo/gmail/models";
+import {
+  AccountId,
+  AttachmentId,
+  MessageId,
+  ThreadId,
+} from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import type { GmailStore } from "@repo/gmail/store";
 import { Effect, Layer, Schema } from "effect";
@@ -24,6 +29,7 @@ import { readWindowState, writeWindowState } from "../window/window-state";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
 import { GmailStoreLive } from "./gmail-store";
+import { publishReconciledGmailError } from "./thread-reconciliation";
 
 const MAX_ATTACHMENT_BYTES = 50_000_000;
 const PREVIEW_WINDOW_SIZE = {
@@ -44,6 +50,7 @@ interface ResolvedAttachment {
   readonly mediaType: string;
   readonly messageId: string;
   readonly size: number;
+  readonly threadId: string;
 }
 
 interface LoadedAttachment {
@@ -75,11 +82,14 @@ const GmailLive = Gmail.layerWithoutDependencies.pipe(
 
 type GmailServices = Gmail | GmailGateway | GmailMime | GmailStore;
 
-const runGmail = <A, E extends GmailError>(
-  effect: Effect.Effect<A, E, GmailServices>
+const runGmail = <A>(
+  effect: Effect.Effect<A, GmailError, GmailServices>
 ): Effect.Effect<A, AttachmentActionError> =>
   effect.pipe(
     Effect.provide(GmailLive),
+    // Effect error channels require a handler here; converting to Promise would lose the typed failure.
+    // oxlint-disable-next-line promise/prefer-await-to-callbacks
+    Effect.tapErrorTag("GmailEntityNotFoundError", publishReconciledGmailError),
     Effect.mapError(() => actionError("Could not load attachment"))
   );
 
@@ -112,7 +122,7 @@ const resolveAttachment = Effect.fn("resolveAttachment")(
       (candidate) => candidate.attachmentId === request.attachmentId
     );
 
-    if (attachment === undefined) {
+    if (row === undefined || attachment === undefined) {
       return yield* actionError("This attachment is not available yet");
     }
 
@@ -127,6 +137,7 @@ const resolveAttachment = Effect.fn("resolveAttachment")(
       mediaType: attachment.mediaType,
       messageId: request.messageId,
       size: attachment.size,
+      threadId: row.threadId,
     } satisfies ResolvedAttachment;
   }
 );
@@ -143,6 +154,7 @@ const fetchAttachment = Effect.fn("fetchAttachment")(function* fetchAttachment(
           filename: metadata.filename,
           mediaType: metadata.mediaType,
           messageId: MessageId.make(metadata.messageId),
+          threadId: ThreadId.make(metadata.threadId),
         })
       )
     )

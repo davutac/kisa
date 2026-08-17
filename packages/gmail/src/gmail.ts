@@ -15,8 +15,10 @@ import {
   GmailPermissionError,
   GmailValidationError,
   InvalidAuthHandoffError,
+  withReconciledThread,
 } from "./errors";
 import type {
+  GmailGatewayError,
   GatewayHistoryResult,
   GatewayResult,
   GatewayThread,
@@ -47,6 +49,7 @@ import type {
   SyncRequest,
   SyncResult,
   ThreadLabelMutationRequest,
+  ThreadId,
   ThreadMutationRequest,
   ThreadPage,
   ThreadSummary,
@@ -68,6 +71,8 @@ const AuthHandoff = Schema.Struct({
   refreshToken: Schema.optional(Schema.NonEmptyString),
   scopes: Schema.Array(Schema.NonEmptyString),
 });
+
+const ACCOUNT_REQUEST_CONCURRENCY = 4;
 
 const decodeAuthHandoff = Schema.decodeUnknownEffect(AuthHandoff);
 type AuthHandoffInput = typeof AuthHandoff.Encoded;
@@ -110,6 +115,33 @@ const requireCapability = (
   });
 };
 
+export type ThreadMutationOutcome = "refreshed" | "removed" | "updated";
+export type BatchThreadMutationOutcome =
+  | {
+      readonly results: readonly {
+        readonly outcome: ThreadMutationOutcome;
+        readonly threadId: ThreadId;
+      }[];
+      readonly type: "reconciled";
+    }
+  | { readonly type: "updated" };
+export type UpdateLabelOutcome =
+  | { readonly label: GmailLabel; readonly type: "updated" }
+  | { readonly type: "removed" };
+
+const getUpdatedThreadIds = (
+  request: BatchThreadMutationRequest,
+  outcome: BatchThreadMutationOutcome
+): readonly ThreadId[] => [
+  ...new Set(
+    outcome.type === "updated"
+      ? request.targets.map((target) => target.threadId)
+      : outcome.results.flatMap((result) =>
+          result.outcome === "updated" ? [result.threadId] : []
+        )
+  ),
+];
+
 export interface GmailService {
   readonly authorizeAccount: (
     handoff: AuthHandoffInput
@@ -125,20 +157,20 @@ export interface GmailService {
   ) => Effect.Effect<void, GmailError>;
   readonly updateLabel: (
     request: UpdateLabelRequest
-  ) => Effect.Effect<GmailLabel, GmailError>;
+  ) => Effect.Effect<UpdateLabelOutcome, GmailError>;
   readonly deleteThread: (
     request: ThreadMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
   readonly batchSetThreadLabel: (
     request: BatchThreadLabelMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<BatchThreadMutationOutcome, GmailError>;
   readonly batchSetThreadReadState: (
     request: BatchThreadMutationRequest,
     isRead: boolean
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<BatchThreadMutationOutcome, GmailError>;
   readonly batchTrashThreads: (
     request: BatchThreadMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<BatchThreadMutationOutcome, GmailError>;
   readonly getAccount: (
     accountId: AccountId
   ) => Effect.Effect<GmailAccount, GmailError>;
@@ -157,16 +189,16 @@ export interface GmailService {
   ) => Effect.Effect<ThreadPage, GmailError>;
   readonly markThreadRead: (
     request: ThreadMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
   readonly markThreadUnread: (
     request: ThreadMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
   readonly markThreadNotSpam: (
     request: ThreadMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
   readonly setThreadLabel: (
     request: ThreadLabelMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
   readonly forward: (
     input: ForwardInput
   ) => Effect.Effect<SentMessage, GmailError>;
@@ -179,7 +211,7 @@ export interface GmailService {
   ) => Effect.Effect<SyncResult, GmailError>;
   readonly trashThread: (
     request: ThreadMutationRequest
-  ) => Effect.Effect<void, GmailError>;
+  ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
 }
 
 export class Gmail extends Context.Service<Gmail, GmailService>()(
@@ -200,7 +232,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         let semaphore = accountSemaphores.get(accountId);
 
         if (semaphore === undefined) {
-          semaphore = Semaphore.makeUnsafe(4);
+          semaphore = Semaphore.makeUnsafe(ACCOUNT_REQUEST_CONCURRENCY);
           accountSemaphores.set(accountId, semaphore);
         }
 
@@ -400,7 +432,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
 
         yield* withAuthorization(request.accountId, "modify", (authorization) =>
           gateway.deleteLabel(authorization, request.labelId)
-        );
+        ).pipe(Effect.catchTag("GmailEntityNotFoundError", () => Effect.void));
         yield* store.deleteLabel(request.accountId, label);
       });
 
@@ -411,7 +443,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           request.accountId,
           request.labelId
         );
-        const updated = yield* withAuthorization(
+        const outcome = yield* withAuthorization(
           request.accountId,
           "modify",
           (authorization) =>
@@ -421,9 +453,20 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
               request.name,
               request.color
             )
+        ).pipe(
+          Effect.map((label) => ({ label, type: "updated" }) as const),
+          Effect.catchTag("GmailEntityNotFoundError", () =>
+            Effect.succeed({ type: "removed" } as const)
+          )
         );
-        yield* store.updateLabel(request.accountId, previous, updated);
-        return updated;
+
+        if (outcome.type === "removed") {
+          yield* store.deleteLabel(request.accountId, previous);
+          return outcome;
+        }
+
+        yield* store.updateLabel(request.accountId, previous, outcome.label);
+        return outcome;
       });
 
       const resolveUnknownLabels = Effect.fn("Gmail.resolveUnknownLabels")(
@@ -528,6 +571,28 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         } satisfies ThreadPage;
       });
 
+      const getRemoteThread = Effect.fn("Gmail.getRemoteThread")(
+        function* getRemoteThread(request: ThreadMutationRequest) {
+          return yield* withAuthorization(
+            request.accountId,
+            "read",
+            (authorization) =>
+              gateway.getThread(authorization, request.threadId)
+          ).pipe(
+            Effect.catchTag("GmailEntityNotFoundError", (error) =>
+              store.removeThreads(request.accountId, [request.threadId]).pipe(
+                Effect.flatMap(() =>
+                  withReconciledThread(error, {
+                    outcome: "removed",
+                    threadId: request.threadId,
+                  })
+                )
+              )
+            )
+          );
+        }
+      );
+
       const getThread = Effect.fn("Gmail.getThread")(function* getThread(
         request: GetThreadRequest
       ) {
@@ -542,16 +607,80 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           }
         }
 
-        const raw = yield* withAuthorization(
-          request.accountId,
-          "read",
-          (authorization) => gateway.getThread(authorization, request.threadId)
-        );
+        const raw = yield* getRemoteThread(request);
         yield* resolveUnknownLabels(request.accountId, raw.labelIds);
         const thread = yield* mime.parseThread(raw);
         yield* store.saveThread(request.accountId, thread);
         return thread;
       });
+
+      const reconcileMissingThread = Effect.fn("Gmail.reconcileMissingThread")(
+        function* reconcileMissingThread(request: ThreadMutationRequest) {
+          const remoteThread = yield* withAuthorization(
+            request.accountId,
+            "read",
+            (authorization) =>
+              gateway.getThread(authorization, request.threadId)
+          ).pipe(
+            Effect.map(Option.some),
+            Effect.catchTag(
+              "GmailEntityNotFoundError",
+              () => Effect.succeedNone
+            )
+          );
+
+          if (Option.isSome(remoteThread)) {
+            yield* resolveUnknownLabels(
+              request.accountId,
+              remoteThread.value.labelIds
+            );
+            const parsed = yield* mime.parseThread(remoteThread.value);
+            yield* store.saveThread(request.accountId, parsed);
+            return "refreshed" as const;
+          }
+
+          yield* store.removeThreads(request.accountId, [request.threadId]);
+          return "removed" as const;
+        }
+      );
+
+      const mutateThread = Effect.fn("Gmail.mutateThread")(
+        function* mutateThread(
+          request: ThreadMutationRequest,
+          mutation: (
+            authorization: GmailAuthorization
+          ) => Effect.Effect<GatewayResult<void>, GmailGatewayError>
+        ) {
+          return yield* withAuthorization(
+            request.accountId,
+            "modify",
+            mutation
+          ).pipe(
+            Effect.as("updated" as const),
+            Effect.catchTag("GmailEntityNotFoundError", () =>
+              reconcileMissingThread(request)
+            )
+          );
+        }
+      );
+
+      const mutateThreadAndCache = Effect.fn("Gmail.mutateThreadAndCache")(
+        function* mutateThreadAndCache(
+          request: ThreadMutationRequest,
+          mutation: (
+            authorization: GmailAuthorization
+          ) => Effect.Effect<GatewayResult<void>, GmailGatewayError>,
+          updateCache: Effect.Effect<void, GmailError>
+        ) {
+          const outcome = yield* mutateThread(request, mutation);
+
+          if (outcome === "updated") {
+            yield* updateCache;
+          }
+
+          return outcome;
+        }
+      );
 
       const getAttachment = Effect.fn("Gmail.getAttachment")(
         function* getAttachment(request: GetAttachmentRequest) {
@@ -559,6 +688,20 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
             request.accountId,
             "read",
             (authorization) => gateway.getAttachment(authorization, request)
+          ).pipe(
+            Effect.catchTag("GmailEntityNotFoundError", (error) =>
+              reconcileMissingThread({
+                accountId: request.accountId,
+                threadId: request.threadId,
+              }).pipe(
+                Effect.flatMap((outcome) =>
+                  withReconciledThread(error, {
+                    outcome,
+                    threadId: request.threadId,
+                  })
+                )
+              )
+            )
           );
         }
       );
@@ -568,20 +711,19 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
           request: ThreadMutationRequest,
           isRead: boolean
         ) {
-          yield* withAuthorization(
-            request.accountId,
-            "modify",
+          return yield* mutateThreadAndCache(
+            request,
             (authorization) =>
               gateway.modifyThreadLabels(authorization, {
                 addLabelIds: isRead ? [] : ["UNREAD"],
                 removeLabelIds: isRead ? ["UNREAD"] : [],
                 threadId: request.threadId,
-              })
-          );
-          yield* store.setThreadReadState(
-            request.accountId,
-            request.threadId,
-            isRead
+              }),
+            store.setThreadReadState(
+              request.accountId,
+              request.threadId,
+              isRead
+            )
           );
         }
       );
@@ -610,13 +752,54 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         removeLabelIds: readonly string[]
       ) {
         const messageIds = yield* getBatchMessageIds(request);
+        const targets = [
+          ...new Map(
+            request.targets.map((target) => [target.threadId, target])
+          ).values(),
+        ];
 
-        yield* withAuthorization(request.accountId, "modify", (authorization) =>
-          gateway.batchModifyMessageLabels(authorization, {
-            addLabelIds,
-            messageIds,
-            removeLabelIds,
-          })
+        return yield* withAuthorization(
+          request.accountId,
+          "modify",
+          (authorization) =>
+            gateway.batchModifyMessageLabels(authorization, {
+              addLabelIds,
+              messageIds,
+              removeLabelIds,
+            })
+        ).pipe(
+          Effect.as({ type: "updated" } as const),
+          Effect.catchTag("GmailEntityNotFoundError", () =>
+            // A batch 404 does not identify the missing message. Retrying the
+            // 10-unit thread mutation avoids a 40-unit GET for valid threads;
+            // mutateThread performs that GET only if this retry also returns 404.
+            Effect.forEach(
+              targets,
+              (target) =>
+                mutateThread(
+                  {
+                    accountId: request.accountId,
+                    threadId: target.threadId,
+                  },
+                  (authorization) =>
+                    gateway.modifyThreadLabels(authorization, {
+                      addLabelIds,
+                      removeLabelIds,
+                      threadId: target.threadId,
+                    })
+                ).pipe(
+                  Effect.map((outcome) => ({
+                    outcome,
+                    threadId: target.threadId,
+                  }))
+                ),
+              { concurrency: ACCOUNT_REQUEST_CONCURRENCY }
+            ).pipe(
+              Effect.map(
+                (results) => ({ results, type: "reconciled" }) as const
+              )
+            )
+          )
         );
       });
 
@@ -626,43 +809,43 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         request: BatchThreadMutationRequest,
         isRead: boolean
       ) {
-        yield* batchModifyMessageLabels(
+        const outcome = yield* batchModifyMessageLabels(
           request,
           isRead ? [] : ["UNREAD"],
           isRead ? ["UNREAD"] : []
         );
         yield* Effect.all(
-          request.targets.map((target) =>
-            store.setThreadReadState(request.accountId, target.threadId, isRead)
+          getUpdatedThreadIds(request, outcome).map((threadId) =>
+            store.setThreadReadState(request.accountId, threadId, isRead)
           )
         );
+        return outcome;
       });
 
       const markThreadRead = Effect.fn("Gmail.markThreadRead")(
         function* markThreadRead(request: ThreadMutationRequest) {
-          yield* setThreadReadState(request, true);
+          return yield* setThreadReadState(request, true);
         }
       );
 
       const markThreadUnread = Effect.fn("Gmail.markThreadUnread")(
         function* markThreadUnread(request: ThreadMutationRequest) {
-          yield* setThreadReadState(request, false);
+          return yield* setThreadReadState(request, false);
         }
       );
 
       const markThreadNotSpam = Effect.fn("Gmail.markThreadNotSpam")(
         function* markThreadNotSpam(request: ThreadMutationRequest) {
-          yield* withAuthorization(
-            request.accountId,
-            "modify",
+          return yield* mutateThreadAndCache(
+            request,
             (authorization) =>
               gateway.modifyThreadLabels(authorization, {
                 addLabelIds: ["INBOX"],
                 removeLabelIds: ["SPAM"],
                 threadId: request.threadId,
-              })
+              }),
+            store.markThreadNotSpam(request.accountId, request.threadId)
           );
-          yield* store.markThreadNotSpam(request.accountId, request.threadId);
         }
       );
 
@@ -673,21 +856,20 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
             request.labelId
           );
 
-          yield* withAuthorization(
-            request.accountId,
-            "modify",
+          return yield* mutateThreadAndCache(
+            request,
             (authorization) =>
               gateway.modifyThreadLabels(authorization, {
                 addLabelIds: request.applied ? [request.labelId] : [],
                 removeLabelIds: request.applied ? [] : [request.labelId],
                 threadId: request.threadId,
-              })
-          );
-          yield* store.setThreadLabel(
-            request.accountId,
-            request.threadId,
-            label,
-            request.applied
+              }),
+            store.setThreadLabel(
+              request.accountId,
+              request.threadId,
+              label,
+              request.applied
+            )
           );
         }
       );
@@ -701,56 +883,59 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
             request.labelId
           );
 
-          yield* batchModifyMessageLabels(
+          const outcome = yield* batchModifyMessageLabels(
             request,
             request.applied ? [request.labelId] : [],
             request.applied ? [] : [request.labelId]
           );
           yield* Effect.all(
-            request.targets.map((target) =>
+            getUpdatedThreadIds(request, outcome).map((threadId) =>
               store.setThreadLabel(
                 request.accountId,
-                target.threadId,
+                threadId,
                 label,
                 request.applied
               )
             )
           );
+          return outcome;
         }
       );
 
       const trashThread = Effect.fn("Gmail.trashThread")(function* trashThread(
         request: ThreadMutationRequest
       ) {
-        yield* withAuthorization(request.accountId, "modify", (authorization) =>
-          gateway.trashThread(authorization, request.threadId)
+        return yield* mutateThreadAndCache(
+          request,
+          (authorization) =>
+            gateway.trashThread(authorization, request.threadId),
+          store.removeThreads(request.accountId, [request.threadId])
         );
-        yield* store.removeThreads(request.accountId, [request.threadId]);
       });
 
       const batchTrashThreads = Effect.fn("Gmail.batchTrashThreads")(
         function* batchTrashThreads(request: BatchThreadMutationRequest) {
-          yield* batchModifyMessageLabels(
+          const outcome = yield* batchModifyMessageLabels(
             request,
             ["TRASH"],
             ["INBOX", "SPAM"]
           );
           yield* store.removeThreads(
             request.accountId,
-            request.targets.map((target) => target.threadId)
+            getUpdatedThreadIds(request, outcome)
           );
+          return outcome;
         }
       );
 
       const deleteThread = Effect.fn("Gmail.deleteThread")(
         function* deleteThread(request: ThreadMutationRequest) {
-          yield* withAuthorization(
-            request.accountId,
-            "modify",
+          return yield* mutateThreadAndCache(
+            request,
             (authorization) =>
-              gateway.deleteThread(authorization, request.threadId)
+              gateway.deleteThread(authorization, request.threadId),
+            store.removeThreads(request.accountId, [request.threadId])
           );
-          yield* store.removeThreads(request.accountId, [request.threadId]);
         }
       );
 
@@ -768,11 +953,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
       const forward = Effect.fn("Gmail.forward")(function* forward(
         input: ForwardInput
       ) {
-        const rawThread = yield* withAuthorization(
-          input.accountId,
-          "read",
-          (authorization) => gateway.getThread(authorization, input.threadId)
-        );
+        const rawThread = yield* getRemoteThread(input);
         const parsed = yield* mime.parseThread(rawThread);
         const forwarded =
           parsed.messages.find(
@@ -784,14 +965,14 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
             : yield* Effect.forEach(
                 forwarded.attachments,
                 (attachment) =>
-                  withAuthorization(input.accountId, "read", (authorization) =>
-                    gateway.getAttachment(authorization, {
-                      attachmentId: attachment.attachmentId,
-                      filename: attachment.filename,
-                      mediaType: attachment.mediaType,
-                      messageId: attachment.messageId,
-                    })
-                  ).pipe(
+                  getAttachment({
+                    accountId: input.accountId,
+                    attachmentId: attachment.attachmentId,
+                    filename: attachment.filename,
+                    mediaType: attachment.mediaType,
+                    messageId: attachment.messageId,
+                    threadId: input.threadId,
+                  }).pipe(
                     Effect.map((loaded) => ({
                       ...loaded,
                       contentId: attachment.contentId,
@@ -820,11 +1001,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
       const reply = Effect.fn("Gmail.reply")(function* reply(
         input: ReplyInput
       ) {
-        const rawThread = yield* withAuthorization(
-          input.accountId,
-          "read",
-          (authorization) => gateway.getThread(authorization, input.threadId)
-        );
+        const rawThread = yield* getRemoteThread(input);
         const message = yield* mime.composeReply(input, rawThread);
         return yield* withAuthorization(
           input.accountId,

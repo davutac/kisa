@@ -3,7 +3,10 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option, Redacted } from "effect";
 
-import { GmailHistoryExpiredError } from "../src/errors";
+import {
+  GmailEntityNotFoundError,
+  GmailHistoryExpiredError,
+} from "../src/errors";
 import type { GmailGatewayService } from "../src/gateway";
 import { GmailGateway } from "../src/gateway";
 import { Gmail } from "../src/gmail";
@@ -102,18 +105,38 @@ interface TestState {
   }[];
   readonly indexedThreadIds: ThreadId[];
   readonly removedThreads: ThreadId[];
+  readonly savedThreadIds: ThreadId[];
   forwardAttachmentContentIds: readonly (string | undefined)[];
+  readonly getThreadCalls: {
+    readonly accountId: AccountId;
+    readonly threadId: ThreadId;
+  }[];
   sendCalls: number;
 }
 
 interface TestLayerOptions {
+  readonly attachmentNotFound?: boolean;
+  readonly batchMutationNotFound?: boolean;
   readonly cachedLabels?: readonly GmailLabel[];
   readonly historyAddedMessageIds?: readonly MessageId[];
   readonly historyExpired?: boolean;
   readonly historyThreads?: readonly ThreadSummary[];
+  readonly labelMutationNotFound?: boolean;
   readonly syncCursor?: HistoryId;
+  readonly threadGetNotFound?: boolean;
+  readonly threadMutationNotFound?: boolean;
   readonly threadLabelIds?: readonly LabelId[];
 }
+
+const missingEntity = (
+  accountId: AccountId,
+  resource: GmailEntityNotFoundError["resource"]
+): GmailEntityNotFoundError =>
+  new GmailEntityNotFoundError({
+    accountId,
+    message: "Requested entity was not found.",
+    resource,
+  });
 
 const createTestLayer = (options: TestLayerOptions = {}) => {
   const state: TestState = {
@@ -121,6 +144,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     authorizations: new Map(),
     batchLabelMutationCalls: [],
     forwardAttachmentContentIds: [],
+    getThreadCalls: [],
     indexedThreadIds: [],
     labelCreateCalls: [],
     labelDeleteCalls: [],
@@ -133,6 +157,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     mutationCalls: [],
     readStateChanges: [],
     removedThreads: [],
+    savedThreadIds: [],
     sendCalls: 0,
     spamStateChanges: [],
     threadLabelChanges: [],
@@ -177,7 +202,10 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
         state.authorizations.set(authorization.account.id, authorization);
       }),
     saveSyncCursor: () => Effect.void,
-    saveThread: () => Effect.void,
+    saveThread: (_accountId, thread) =>
+      Effect.sync(() => {
+        state.savedThreadIds.push(thread.id);
+      }),
     setThreadLabel: (accountId, threadId, label, applied) =>
       Effect.sync(() => {
         state.threadLabelChanges.push({
@@ -229,15 +257,17 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
 
   const gateway: GmailGatewayService = {
     batchModifyMessageLabels: (authorization, request) =>
-      Effect.sync(() => {
-        state.batchLabelMutationCalls.push({
-          accountId: authorization.account.id,
-          addLabelIds: request.addLabelIds,
-          messageIds: request.messageIds,
-          removeLabelIds: request.removeLabelIds,
-        });
-        return { value: undefined };
-      }),
+      options.batchMutationNotFound === true
+        ? Effect.fail(missingEntity(authorization.account.id, "message"))
+        : Effect.sync(() => {
+            state.batchLabelMutationCalls.push({
+              accountId: authorization.account.id,
+              addLabelIds: request.addLabelIds,
+              messageIds: request.messageIds,
+              removeLabelIds: request.removeLabelIds,
+            });
+            return { value: undefined };
+          }),
     createLabel: (authorization, name, color) =>
       Effect.sync(() => {
         state.labelCreateCalls.push({
@@ -255,33 +285,39 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
         };
       }),
     deleteLabel: (authorization, labelId) =>
-      Effect.sync(() => {
-        state.labelDeleteCalls.push({
-          accountId: authorization.account.id,
-          labelId,
-        });
-        return { value: undefined };
-      }),
+      options.labelMutationNotFound === true
+        ? Effect.fail(missingEntity(authorization.account.id, "label"))
+        : Effect.sync(() => {
+            state.labelDeleteCalls.push({
+              accountId: authorization.account.id,
+              labelId,
+            });
+            return { value: undefined };
+          }),
     deleteThread: (authorization, threadId) =>
-      Effect.sync(() => {
-        state.mutationCalls.push({
-          accountId: authorization.account.id,
-          operation: "delete",
-          threadId,
-        });
-        return { value: undefined };
-      }),
+      options.threadMutationNotFound === true
+        ? Effect.fail(missingEntity(authorization.account.id, "thread"))
+        : Effect.sync(() => {
+            state.mutationCalls.push({
+              accountId: authorization.account.id,
+              operation: "delete",
+              threadId,
+            });
+            return { value: undefined };
+          }),
     getAttachment: (_authorization, request) =>
-      Effect.sync(() => {
-        state.attachmentCalls.push(request.attachmentId);
-        return {
-          value: {
-            bytes: new Uint8Array([1, 2, 3]),
-            filename: request.filename,
-            mediaType: request.mediaType,
-          },
-        };
-      }),
+      options.attachmentNotFound === true
+        ? Effect.fail(missingEntity(_authorization.account.id, "attachment"))
+        : Effect.sync(() => {
+            state.attachmentCalls.push(request.attachmentId);
+            return {
+              value: {
+                bytes: new Uint8Array([1, 2, 3]),
+                filename: request.filename,
+                mediaType: request.mediaType,
+              },
+            };
+          }),
     getCurrentHistoryId: () =>
       Effect.succeed({ value: HistoryId.make("history-current") }),
     getLabels: (_authorization, labelIds) =>
@@ -299,15 +335,23 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
         };
       }),
     getMailboxTotals: () => Effect.die("unused"),
-    getThread: () =>
-      Effect.succeed({
-        value: {
-          historyId: HistoryId.make("history-1"),
-          id: ThreadId.make("thread-1"),
-          labelIds: ["INBOX"],
-          messages: [],
-        },
-      }),
+    getThread: (authorization, threadId) => {
+      state.getThreadCalls.push({
+        accountId: authorization.account.id,
+        threadId,
+      });
+
+      return options.threadGetNotFound === true
+        ? Effect.fail(missingEntity(authorization.account.id, "thread"))
+        : Effect.succeed({
+            value: {
+              historyId: HistoryId.make("history-1"),
+              id: threadId,
+              labelIds: ["INBOX"],
+              messages: [],
+            },
+          });
+    },
     identifyAccount: (credentials) => {
       const token = Redacted.value(credentials.accessToken);
       const suffix = token.at(-1) ?? "a";
@@ -372,37 +416,41 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
       });
     },
     modifyThreadLabels: (authorization, request) =>
-      Effect.sync(() => {
-        state.labelMutationCalls.push({
-          addLabelIds: request.addLabelIds,
-          removeLabelIds: request.removeLabelIds,
-          threadId: request.threadId,
-        });
-        state.mutationCalls.push({
-          accountId: authorization.account.id,
-          operation: "labels",
-          threadId: request.threadId,
-          unread: request.addLabelIds.includes("UNREAD"),
-        });
-        return { value: undefined };
-      }),
-    patchLabel: (authorization, labelId, name, color) =>
-      Effect.sync(() => {
-        state.labelUpdateCalls.push({
-          accountId: authorization.account.id,
-          color,
-          labelId,
-          name,
-        });
-        return {
-          value: new GmailLabel({
-            color,
-            id: labelId,
-            name,
-            type: "user",
+      options.threadMutationNotFound === true
+        ? Effect.fail(missingEntity(authorization.account.id, "thread"))
+        : Effect.sync(() => {
+            state.labelMutationCalls.push({
+              addLabelIds: request.addLabelIds,
+              removeLabelIds: request.removeLabelIds,
+              threadId: request.threadId,
+            });
+            state.mutationCalls.push({
+              accountId: authorization.account.id,
+              operation: "labels",
+              threadId: request.threadId,
+              unread: request.addLabelIds.includes("UNREAD"),
+            });
+            return { value: undefined };
           }),
-        };
-      }),
+    patchLabel: (authorization, labelId, name, color) =>
+      options.labelMutationNotFound === true
+        ? Effect.fail(missingEntity(authorization.account.id, "label"))
+        : Effect.sync(() => {
+            state.labelUpdateCalls.push({
+              accountId: authorization.account.id,
+              color,
+              labelId,
+              name,
+            });
+            return {
+              value: new GmailLabel({
+                color,
+                id: labelId,
+                name,
+                type: "user",
+              }),
+            };
+          }),
     revoke: () => Effect.void,
     send: () =>
       Effect.sync(() => {
@@ -415,14 +463,16 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
         };
       }),
     trashThread: (authorization, threadId) =>
-      Effect.sync(() => {
-        state.mutationCalls.push({
-          accountId: authorization.account.id,
-          operation: "trash",
-          threadId,
-        });
-        return { value: undefined };
-      }),
+      options.threadMutationNotFound === true
+        ? Effect.fail(missingEntity(authorization.account.id, "thread"))
+        : Effect.sync(() => {
+            state.mutationCalls.push({
+              accountId: authorization.account.id,
+              operation: "trash",
+              threadId,
+            });
+            return { value: undefined };
+          }),
   };
 
   const mime: GmailMimeService = {
@@ -434,11 +484,11 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
       }),
     composeMessage: () => Effect.die("unused"),
     composeReply: () => Effect.die("unused"),
-    parseThread: () =>
+    parseThread: (rawThread) =>
       Effect.succeed(
         new GmailThread({
           historyId: HistoryId.make("history-1"),
-          id: ThreadId.make("thread-1"),
+          id: rawThread.id,
           labelIds: [LabelId.make("INBOX")],
           messages: [
             new GmailMessage({
@@ -460,7 +510,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
               labelIds: [LabelId.make("INBOX")],
               sentAt: "1700000000000",
               subject: "Subject",
-              threadId: ThreadId.make("thread-1"),
+              threadId: rawThread.id,
               to: [new Mailbox({ address: "me@example.com" })],
             }),
           ],
@@ -622,6 +672,137 @@ describe(Gmail, () => {
   });
 
   it.effect(
+    "evicts stale cached threads after Gmail confirms they are missing",
+    () => {
+      const { layer, state } = createTestLayer({
+        cachedLabels: [USER_LABEL],
+        threadGetNotFound: true,
+        threadMutationNotFound: true,
+      });
+
+      return Effect.gen(function* reconcilesMissingThreads() {
+        const gmail = yield* Gmail;
+        const account = yield* gmail.authorizeAccount({
+          accessToken: "access-a",
+          scopes: [GMAIL_FULL_ACCESS_SCOPE],
+        });
+        const request = {
+          accountId: account.id,
+          threadId: ThreadId.make("stale-thread"),
+        };
+
+        yield* gmail.markThreadRead(request);
+        yield* gmail.markThreadUnread(request);
+        yield* gmail.markThreadNotSpam(request);
+        yield* gmail.setThreadLabel({
+          ...request,
+          applied: true,
+          labelId: USER_LABEL.id,
+        });
+        yield* gmail.trashThread(request);
+        yield* gmail.deleteThread(request);
+
+        expect(state.getThreadCalls).toStrictEqual(
+          Array.from({ length: 6 }, () => ({
+            accountId: account.id,
+            threadId: request.threadId,
+          }))
+        );
+        expect(state.removedThreads).toStrictEqual(
+          Array.from({ length: 6 }, () => request.threadId)
+        );
+        expect(state.mutationCalls).toStrictEqual([]);
+      }).pipe(Effect.provide(layer));
+    }
+  );
+
+  it.effect("reconciles the parent thread after an attachment 404", () => {
+    const { layer, state } = createTestLayer({
+      attachmentNotFound: true,
+      threadGetNotFound: true,
+    });
+
+    return Effect.gen(function* reconcilesMissingAttachment() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+      const threadId = ThreadId.make("stale-thread");
+
+      const error = yield* gmail
+        .getAttachment({
+          accountId: account.id,
+          attachmentId: AttachmentId.make("stale-attachment"),
+          filename: "stale.pdf",
+          mediaType: "application/pdf",
+          messageId: MessageId.make("stale-message"),
+          threadId,
+        })
+        .pipe(Effect.flip);
+
+      expect(error).toMatchObject({
+        _tag: "GmailEntityNotFoundError",
+        reconciledThread: { outcome: "removed", threadId },
+        resource: "attachment",
+      });
+      expect(state.removedThreads).toStrictEqual([threadId]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("evicts a thread when its direct fetch returns 404", () => {
+    const { layer, state } = createTestLayer({ threadGetNotFound: true });
+
+    return Effect.gen(function* reconcilesMissingThreadFetch() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+      const threadId = ThreadId.make("stale-thread");
+
+      const error = yield* gmail
+        .getThread({ accountId: account.id, refresh: true, threadId })
+        .pipe(Effect.flip);
+
+      expect(error).toMatchObject({
+        _tag: "GmailEntityNotFoundError",
+        reconciledThread: { outcome: "removed", threadId },
+        resource: "thread",
+      });
+      expect(state.removedThreads).toStrictEqual([threadId]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect(
+    "preserves the cache when the thread still exists after a mutation 404",
+    () => {
+      const { layer, state } = createTestLayer({
+        cachedLabels: [USER_LABEL],
+        threadMutationNotFound: true,
+      });
+
+      return Effect.gen(function* preservesExistingThread() {
+        const gmail = yield* Gmail;
+        const account = yield* gmail.authorizeAccount({
+          accessToken: "access-a",
+          scopes: [GMAIL_FULL_ACCESS_SCOPE],
+        });
+        const request = {
+          accountId: account.id,
+          applied: true,
+          labelId: USER_LABEL.id,
+          threadId: ThreadId.make("existing-thread"),
+        };
+
+        const outcome = yield* gmail.setThreadLabel(request);
+
+        expect(outcome).toBe("refreshed");
+        expect(state.getThreadCalls).toStrictEqual([
+          { accountId: account.id, threadId: request.threadId },
+        ]);
+        expect(state.removedThreads).toStrictEqual([]);
+        expect(state.savedThreadIds).toStrictEqual([request.threadId]);
+        expect(state.threadLabelChanges).toStrictEqual([]);
+      }).pipe(Effect.provide(layer));
+    }
+  );
+
+  it.effect(
     "batches message mutations while updating each cached thread",
     () => {
       const { layer, state } = createTestLayer({ cachedLabels: [USER_LABEL] });
@@ -697,6 +878,80 @@ describe(Gmail, () => {
       }).pipe(Effect.provide(layer));
     }
   );
+
+  it.effect("falls back to per-thread mutations after a batch 404", () => {
+    const { layer, state } = createTestLayer({ batchMutationNotFound: true });
+
+    return Effect.gen(function* retriesBatchTargets() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+      const first = {
+        messageIds: [MessageId.make("thread-1-message")],
+        threadId: ThreadId.make("thread-1"),
+      };
+      const second = {
+        messageIds: [MessageId.make("thread-2-message")],
+        threadId: ThreadId.make("thread-2"),
+      };
+      const uniqueTargets = [first, second];
+      const targets = [first, first, second];
+
+      const outcome = yield* gmail.batchSetThreadReadState(
+        { accountId: account.id, targets },
+        true
+      );
+
+      expect(outcome).toStrictEqual({
+        results: uniqueTargets.map((target) => ({
+          outcome: "updated",
+          threadId: target.threadId,
+        })),
+        type: "reconciled",
+      });
+      expect(state.getThreadCalls).toStrictEqual([]);
+      expect(state.readStateChanges).toStrictEqual(
+        uniqueTargets.map((target) => ({
+          accountId: account.id,
+          isRead: true,
+          threadId: target.threadId,
+        }))
+      );
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("reconciles targets missing during batch fallback", () => {
+    const { layer, state } = createTestLayer({
+      batchMutationNotFound: true,
+      threadGetNotFound: true,
+      threadMutationNotFound: true,
+    });
+
+    return Effect.gen(function* reconcilesMissingBatchTargets() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+      const targets = ["thread-1", "thread-2"].map((threadId) => ({
+        messageIds: [MessageId.make(`${threadId}-message`)],
+        threadId: ThreadId.make(threadId),
+      }));
+
+      const outcome = yield* gmail.batchSetThreadReadState(
+        { accountId: account.id, targets },
+        true
+      );
+
+      expect(outcome).toStrictEqual({
+        results: targets.map((target) => ({
+          outcome: "removed",
+          threadId: target.threadId,
+        })),
+        type: "reconciled",
+      });
+      expect(state.removedThreads).toStrictEqual(
+        targets.map((target) => target.threadId)
+      );
+      expect(state.readStateChanges).toStrictEqual([]);
+    }).pipe(Effect.provide(layer));
+  });
 
   it.effect("permanently deletes threads only with full Gmail access", () => {
     const { layer, state } = createTestLayer();
@@ -851,14 +1106,15 @@ describe(Gmail, () => {
         name: "Invoices",
       });
 
-      expect(updated).toStrictEqual(
-        new GmailLabel({
+      expect(updated).toStrictEqual({
+        label: new GmailLabel({
           color,
           id: USER_LABEL.id,
           name: "Invoices",
           type: "user",
-        })
-      );
+        }),
+        type: "updated",
+      });
 
       yield* gmail.deleteLabel({
         accountId: account.id,
@@ -883,6 +1139,48 @@ describe(Gmail, () => {
           },
         ],
       });
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("removes a stale cached label when Gmail returns 404", () => {
+    const { layer, state } = createTestLayer({
+      cachedLabels: [USER_LABEL],
+      labelMutationNotFound: true,
+    });
+
+    return Effect.gen(function* reconcilesMissingLabel() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+
+      yield* gmail.deleteLabel({
+        accountId: account.id,
+        labelId: USER_LABEL.id,
+      });
+
+      expect(state.labels).toStrictEqual([]);
+      expect(state.labelDeleteCalls).toStrictEqual([]);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("refreshes the catalog when a label update returns 404", () => {
+    const { layer, state } = createTestLayer({
+      cachedLabels: [USER_LABEL],
+      labelMutationNotFound: true,
+    });
+
+    return Effect.gen(function* reconcilesMissingLabelUpdate() {
+      const gmail = yield* Gmail;
+      const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+
+      const outcome = yield* gmail.updateLabel({
+        accountId: account.id,
+        labelId: USER_LABEL.id,
+        name: "Invoices",
+      });
+
+      expect(outcome).toStrictEqual({ type: "removed" });
+      expect(state.labels).toStrictEqual([]);
+      expect(state.labelUpdateCalls).toStrictEqual([]);
     }).pipe(Effect.provide(layer));
   });
 
@@ -978,6 +1276,38 @@ describe(Gmail, () => {
       expect(state.sendCalls).toBe(1);
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect(
+    "reconciles a thread when a forwarded attachment is missing",
+    () => {
+      const { layer, state } = createTestLayer({ attachmentNotFound: true });
+
+      return Effect.gen(function* reconcilesForwardAttachment() {
+        const gmail = yield* Gmail;
+        const account = yield* gmail.authorizeAccount(authHandoff("access-a"));
+        const threadId = ThreadId.make("thread-1");
+
+        const error = yield* gmail
+          .forward({
+            accountId: account.id,
+            body: { text: "FYI", type: "text" },
+            forwardMessageId: MessageId.make("message-1"),
+            threadId,
+            to: [new Mailbox({ address: "recipient@example.com" })],
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toMatchObject({
+          _tag: "GmailEntityNotFoundError",
+          reconciledThread: { outcome: "refreshed", threadId },
+          resource: "attachment",
+        });
+        expect(state.getThreadCalls).toHaveLength(2);
+        expect(state.savedThreadIds).toStrictEqual([threadId]);
+        expect(state.sendCalls).toBe(0);
+      }).pipe(Effect.provide(layer));
+    }
+  );
 
   it.effect("does not treat initial mailbox hydration as new mail", () => {
     const { layer, state } = createTestLayer();

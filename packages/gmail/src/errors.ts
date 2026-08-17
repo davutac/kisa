@@ -1,7 +1,7 @@
 // oxlint-disable eslint/max-classes-per-file unicorn/throw-new-error
 import { Schema } from "effect";
 
-import { AccountId } from "./models";
+import { AccountId, ThreadId } from "./models";
 
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
@@ -36,8 +36,35 @@ export class GmailApiError extends Schema.TaggedError<GmailApiError>()(
     cause: Schema.optional(Schema.Defect()),
     message: Schema.String,
     retryable: Schema.Boolean,
+    status: Schema.optional(NonNegativeInt),
   }
 ) {}
+
+export class GmailEntityNotFoundError extends Schema.TaggedError<GmailEntityNotFoundError>()(
+  "GmailEntityNotFoundError",
+  {
+    accountId: AccountId,
+    message: Schema.String,
+    reconciledThread: Schema.optional(
+      Schema.Struct({
+        outcome: Schema.Literals(["refreshed", "removed"]),
+        threadId: ThreadId,
+      })
+    ),
+    resource: Schema.Literals(["attachment", "label", "message", "thread"]),
+  }
+) {}
+
+export const withReconciledThread = (
+  error: GmailEntityNotFoundError,
+  reconciledThread: NonNullable<GmailEntityNotFoundError["reconciledThread"]>
+): GmailEntityNotFoundError =>
+  new GmailEntityNotFoundError({
+    accountId: error.accountId,
+    message: error.message,
+    reconciledThread,
+    resource: error.resource,
+  });
 
 export class GmailRateLimitError extends Schema.TaggedError<GmailRateLimitError>()(
   "GmailRateLimitError",
@@ -79,6 +106,7 @@ export class GmailHistoryExpiredError extends Schema.TaggedError<GmailHistoryExp
 export type GmailError =
   | AccountNotFoundError
   | GmailApiError
+  | GmailEntityNotFoundError
   | GmailHistoryExpiredError
   | GmailMimeError
   | GmailPermissionError

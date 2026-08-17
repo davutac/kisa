@@ -3,6 +3,7 @@ import { Context } from "effect";
 
 import type {
   GmailApiError,
+  GmailEntityNotFoundError,
   GmailHistoryExpiredError,
   GmailRateLimitError,
   GmailReauthorizationRequiredError,
@@ -26,6 +27,7 @@ import type {
 
 export type GmailGatewayError =
   | GmailApiError
+  | GmailEntityNotFoundError
   | GmailHistoryExpiredError
   | GmailRateLimitError
   | GmailReauthorizationRequiredError;
