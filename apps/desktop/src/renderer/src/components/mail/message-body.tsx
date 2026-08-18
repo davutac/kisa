@@ -1,7 +1,11 @@
+import { CopyIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { toast } from "sonner";
 
 import type { ColorScheme } from "@/components/shell/theme-provider";
 import { useTheme } from "@/components/shell/theme-provider";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { needsLightSurface } from "@/mail/email-surface";
 import { blockRemoteImages } from "@/mail/remote-images";
 import type { GmailMessageBody } from "@/shared/ipc/mail";
@@ -62,10 +66,11 @@ const createEmailDocument = (
       html { padding: 0; }
       body {
         box-sizing: border-box;
-        padding: ${lightSurface ? "12px 16px" : "0 16px"};
+        padding: ${lightSurface ? "12px 48px 12px 16px" : "0 48px 0 16px"};
         overflow-wrap: anywhere;
         font: 14px/1.55 system-ui, sans-serif;
       }
+      body, body * { user-select: text !important; }
       img { max-width: 100%; height: auto; }
       pre { overflow: auto; white-space: pre-wrap; }
       table { max-width: 100%; }
@@ -88,6 +93,23 @@ interface EmailFrameLayout {
   } | null;
   readonly style: { height: string };
 }
+
+interface EmailFrameText {
+  readonly contentDocument: {
+    readonly body: { readonly innerText: string };
+  } | null;
+}
+
+export const resolveMessageBodyCopyText = (
+  bodyText: string | undefined,
+  frame: EmailFrameText | null,
+  fallbackText: string
+): string => {
+  // `innerText` matches what the user sees; `textContent` includes hidden markup.
+  // oxlint-disable-next-line unicorn/prefer-dom-node-text-content
+  const renderedText = frame?.contentDocument?.body.innerText;
+  return bodyText ?? renderedText ?? fallbackText;
+};
 
 export const resizeEmailFrame = (frame: EmailFrameLayout): void => {
   const documentElement = frame.contentDocument?.documentElement;
@@ -136,8 +158,10 @@ const MailMessageBody = ({
   body,
   fallbackText,
 }: MailMessageBodyProps) => {
+  const emailFrameRef = useRef<HTMLIFrameElement | null>(null);
   const resizeObserver = useRef<ResizeObserver | null>(null);
   const { resolvedTheme } = useTheme();
+  const lightSurface = body.html !== undefined && needsLightSurface(body.html);
   const emailDocument = useMemo(
     () =>
       body.html === undefined
@@ -147,11 +171,25 @@ const MailMessageBody = ({
             {
               allowRemoteImages,
               colorScheme: resolvedTheme,
-              lightSurface: needsLightSurface(body.html),
+              lightSurface,
             }
           ),
-    [allowRemoteImages, body.html, resolvedTheme]
+    [allowRemoteImages, body.html, lightSurface, resolvedTheme]
   );
+  const copyMessageBody = useCallback(async (): Promise<void> => {
+    const text = resolveMessageBodyCopyText(
+      body.text,
+      emailFrameRef.current,
+      fallbackText
+    );
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Message copied");
+    } catch {
+      toast.error("Could not copy message");
+    }
+  }, [body.text, fallbackText]);
   const prepareEmailFrame = useCallback((frame: HTMLIFrameElement): void => {
     resizeObserver.current?.disconnect();
 
@@ -185,23 +223,42 @@ const MailMessageBody = ({
     []
   );
 
-  if (emailDocument !== undefined) {
-    return (
-      <iframe
-        className="bg-card min-h-24 w-full border-0"
-        onLoad={(event) => prepareEmailFrame(event.currentTarget)}
-        referrerPolicy="no-referrer"
-        sandbox="allow-popups allow-same-origin"
-        scrolling="no"
-        srcDoc={emailDocument}
-        title="Email message content"
-      />
-    );
-  }
-
   return (
-    <div className="bg-card p-4 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap">
-      {body.text ?? fallbackText}
+    <div className="bg-card relative min-w-0">
+      <Button
+        aria-label="Copy message body"
+        className={cn(
+          "absolute top-2 right-2 z-10",
+          lightSurface
+            ? "text-black hover:bg-black/10 hover:text-black dark:hover:bg-black/10"
+            : "text-muted-foreground"
+        )}
+        onClick={() => {
+          void copyMessageBody();
+        }}
+        size="icon-sm"
+        title="Copy message body"
+        type="button"
+        variant="ghost"
+      >
+        <CopyIcon />
+      </Button>
+      {emailDocument === undefined ? (
+        <div className="p-4 pr-12 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap select-text">
+          {body.text ?? fallbackText}
+        </div>
+      ) : (
+        <iframe
+          className="bg-card min-h-24 w-full border-0"
+          onLoad={(event) => prepareEmailFrame(event.currentTarget)}
+          ref={emailFrameRef}
+          referrerPolicy="no-referrer"
+          sandbox="allow-popups allow-same-origin"
+          scrolling="no"
+          srcDoc={emailDocument}
+          title="Email message content"
+        />
+      )}
     </div>
   );
 };

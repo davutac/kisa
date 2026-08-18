@@ -1,6 +1,30 @@
 import { describe, expect, it } from "vitest";
 
-import { resizeEmailFrame } from "../src/renderer/src/components/mail/message-body";
+import {
+  resizeEmailFrame,
+  resolveMessageBodyCopyText,
+} from "../src/renderer/src/components/mail/message-body";
+
+describe("message body copy", () => {
+  const frame = {
+    contentDocument: { body: { innerText: "Rendered HTML message" } },
+  };
+
+  it("uses the plain-text MIME body when available", () => {
+    expect(resolveMessageBodyCopyText("Plain message", frame, "Snippet")).toBe(
+      "Plain message"
+    );
+  });
+
+  it("copies rendered HTML text and falls back while the frame is unavailable", () => {
+    expect(resolveMessageBodyCopyText(undefined, frame, "Snippet")).toBe(
+      "Rendered HTML message"
+    );
+    expect(resolveMessageBodyCopyText(undefined, null, "Snippet")).toBe(
+      "Snippet"
+    );
+  });
+});
 
 describe("email message body sizing", () => {
   it("shrinks the frame when reflow makes the message shorter", () => {
