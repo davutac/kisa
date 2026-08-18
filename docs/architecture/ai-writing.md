@@ -38,6 +38,8 @@ The editable reply and cleanup fields contain instructions about how the result 
 
 Create reply opens a focused steering popover before generation. The user can provide one-off instructions for that reply, or submit the textarea blank to generate from the cached conversation context and standing reply preferences. The Create reply hotkey opens the same popover as the mouse action.
 
+Create reply remains available after generation so the user can steer another attempt. A successful generation replaces the current reply body; the selected model, forward restriction, and in-progress work still control action availability.
+
 Each generation also receives a trusted runtime-context section containing the current date in the device's time zone and that IANA time-zone identifier. Kisa obtains the instant from Effect's clock, which keeps time deterministic under a test clock, and derives the calendar date through Effect's local-zone service. The context intentionally omits the wall-clock time and only helps interpret relative dates; it does not imply user availability or authorize commitments.
 
 Reply context is loaded only from Kisa's local cache using the composite account and Gmail thread identity. It is bounded to the latest 50 messages, 12,000 body characters per message, and 60,000 body characters overall. Sender-controlled headers and plain-text bodies are serialized inside an explicitly untrusted data section. Loading context never calls Gmail and never marks, drafts, sends, or otherwise mutates mail.

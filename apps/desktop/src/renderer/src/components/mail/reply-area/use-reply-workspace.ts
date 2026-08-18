@@ -9,9 +9,16 @@ import { isThreadMailDraftEmpty } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 import { getAiApi, getMailApi } from "@/platform/desktop";
+import type { AiModelSelection } from "@/shared/ipc/ai";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 import { useReplyCleanHistory } from "./use-reply-clean-history";
+
+export const canCreateAiReply = (
+  selection: AiModelSelection | null,
+  action: MailMessageAction,
+  isBusy: boolean
+): boolean => selection !== null && action !== "forward" && !isBusy;
 
 export const useReplyWorkspace = ({
   accountId,
@@ -84,11 +91,7 @@ export const useReplyWorkspace = ({
   );
   const currentDraftRef = useRef(currentDraft);
   const isBusy = cleanHistory.isCleaning || isCreatingReply || isSending;
-  const canCreateReply =
-    aiModel.selection !== null &&
-    action !== "forward" &&
-    composer.isEmpty &&
-    !isBusy;
+  const canCreateReply = canCreateAiReply(aiModel.selection, action, isBusy);
 
   useEffect(() => {
     currentDraftRef.current = currentDraft;
