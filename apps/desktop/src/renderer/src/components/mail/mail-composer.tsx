@@ -62,20 +62,25 @@ const MailComposer = ({
     { enabled: attachments !== undefined && !disabled }
   );
 
-  const aiButtons = aiActions.map((action) => (
-    <AiComposerButton
-      command={action.command}
-      disabled={action.disabled}
-      grouped={groupAiActions}
-      icon={action.icon}
-      isWorking={action.isWorking}
-      key={action.command}
-      label={action.label}
-      modelLabel={action.modelLabel}
-      onClick={() => action.onClick()}
-      workingLabel={action.workingLabel}
-    />
-  ));
+  const aiButtons = aiActions.map((action) => {
+    const handleClick = action.onClick;
+
+    return (
+      <AiComposerButton
+        command={action.command}
+        disabled={action.disabled}
+        grouped={groupAiActions}
+        icon={action.icon}
+        isWorking={action.isWorking}
+        key={action.command}
+        label={action.label}
+        modelLabel={action.modelLabel}
+        onClick={handleClick}
+        popover={action.popover}
+        workingLabel={action.workingLabel}
+      />
+    );
+  });
   const aiControls =
     groupAiActions && aiButtons.length > 0 ? (
       <ButtonGroup

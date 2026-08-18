@@ -215,7 +215,7 @@ export const useReplyWorkspace = ({
     }
   };
 
-  const createReply = async (): Promise<void> => {
+  const createReply = async (instructions?: string): Promise<void> => {
     if (!(aiApi && aiModel.selection && canCreateReply)) {
       return;
     }
@@ -223,6 +223,7 @@ export const useReplyWorkspace = ({
     try {
       const reply = await aiApi.generateReply({
         accountId,
+        instructions,
         model: aiModel.selection,
         threadId,
       });

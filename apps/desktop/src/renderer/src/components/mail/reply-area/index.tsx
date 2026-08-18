@@ -5,7 +5,7 @@ import {
   SparklesIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
@@ -25,6 +25,7 @@ import { parseMailboxAddress } from "@/mail/address";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
+import CreateReplyForm from "./create-reply-form";
 import { useReplyWorkspace } from "./use-reply-workspace";
 
 interface MailReplyAreaProps {
@@ -55,6 +56,8 @@ const MailReplyArea = ({
   threadId,
 }: MailReplyAreaProps) => {
   const composerHandleRef = useRef<ComposerFocusHandle | null>(null);
+  const replyInstructionsRef = useRef<HTMLTextAreaElement>(null);
+  const [isReplyPopoverOpen, setIsReplyPopoverOpen] = useState(false);
   const replaceComposerContent = useCallback((content: string): boolean => {
     const replaceContent = composerHandleRef.current?.replaceContent;
     if (replaceContent === undefined) {
@@ -77,8 +80,10 @@ const MailReplyArea = ({
   const handleDiscard = workspace.discard;
   const handleDismissCleanVersion = workspace.dismissCleanVersion;
   const handleComposerChange = workspace.setComposer;
+  const handleCreateReply = workspace.createReply;
   const handleRecipientsChange = workspace.setRecipients;
   const handleSend = workspace.send;
+  const canSend = workspace.canSend && !isReplyPopoverOpen;
   const handleSelectCleanVersion = workspace.selectCleanVersion;
   const handleComposerReady = useCallback(
     (handle: ComposerFocusHandle | null): void => {
@@ -87,7 +92,13 @@ const MailReplyArea = ({
     },
     [onComposerReady]
   );
-  const handleClose = () => onClose(workspace.currentDraft);
+  const handleClose = (): void => {
+    if (isReplyPopoverOpen) {
+      setIsReplyPopoverOpen(false);
+      return;
+    }
+    onClose(workspace.currentDraft);
+  };
   const sender = parseMailboxAddress(message.from);
   const targetLabel = sender.name ?? sender.email;
 
@@ -98,11 +109,15 @@ const MailReplyArea = ({
   useAppCommand("threadComposer.clean", workspace.clean, {
     enabled: workspace.canClean,
   });
-  useAppCommand("threadComposer.createReply", workspace.createReply, {
-    enabled: workspace.canCreateReply,
-  });
+  useAppCommand(
+    "threadComposer.createReply",
+    () => setIsReplyPopoverOpen(true),
+    {
+      enabled: workspace.canCreateReply,
+    }
+  );
   useAppCommand("threadComposer.send", handleSend, {
-    enabled: workspace.canSend,
+    enabled: canSend,
   });
 
   return (
@@ -138,8 +153,17 @@ const MailReplyArea = ({
                   isWorking: workspace.isCreatingReply,
                   label: "Create reply",
                   modelLabel: workspace.aiModelLabel,
-                  onClick: () => {
-                    void workspace.createReply();
+                  popover: {
+                    content: (
+                      <CreateReplyForm
+                        onClose={() => setIsReplyPopoverOpen(false)}
+                        onCreate={handleCreateReply}
+                        textareaRef={replyInstructionsRef}
+                      />
+                    ),
+                    handleOpenChange: setIsReplyPopoverOpen,
+                    initialFocus: replyInstructionsRef,
+                    open: isReplyPopoverOpen,
                   },
                   workingLabel: "Creating…",
                 },
@@ -195,7 +219,7 @@ const MailReplyArea = ({
       <div className="bg-background flex shrink-0 items-stretch">
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel("threadComposer.send")}
-          disabled={!workspace.canSend}
+          disabled={!canSend}
           onClick={handleSend}
           size="footer"
           type="button"

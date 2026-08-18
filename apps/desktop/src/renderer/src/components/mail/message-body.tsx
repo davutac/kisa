@@ -76,11 +76,28 @@ const createEmailDocument = (
 </html>`;
 };
 
-const resizeEmailFrame = (frame: HTMLIFrameElement): void => {
+interface EmailFrameLayoutElement {
+  readonly offsetHeight: number;
+  readonly scrollHeight: number;
+}
+
+interface EmailFrameLayout {
+  readonly contentDocument: {
+    readonly body: EmailFrameLayoutElement;
+    readonly documentElement: EmailFrameLayoutElement;
+  } | null;
+  readonly style: { height: string };
+}
+
+export const resizeEmailFrame = (frame: EmailFrameLayout): void => {
   const documentElement = frame.contentDocument?.documentElement;
   const body = frame.contentDocument?.body;
 
   if (documentElement !== undefined && body !== undefined) {
+    // The root document's scroll and offset heights are never smaller than the
+    // iframe viewport. Collapse that viewport before measuring so a reflowed
+    // message can shrink instead of feeding the previous height back in.
+    frame.style.height = "0px";
     const contentHeight = Math.max(
       documentElement.scrollHeight,
       documentElement.offsetHeight,
