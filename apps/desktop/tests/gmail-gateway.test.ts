@@ -6,6 +6,7 @@ import {
   GMAIL_FULL_ACCESS_SCOPE,
   GmailAccount,
   GmailCapabilities,
+  HistoryId,
   LabelColor,
   LabelId,
   MessageId,
@@ -20,6 +21,8 @@ const googleApi = vi.hoisted(() => ({
   attachmentError: undefined as unknown,
   batchError: undefined as unknown,
   clientOptions: [] as { readonly http2?: boolean }[],
+  historyRecords: [] as gmail_v1.Schema$History[],
+  historyRequests: [] as gmail_v1.Params$Resource$Users$History$List[],
   labelCreates: [] as gmail_v1.Params$Resource$Users$Labels$Create[],
   labelDeletes: [] as gmail_v1.Params$Resource$Users$Labels$Delete[],
   labelError: undefined as unknown,
@@ -97,6 +100,17 @@ vi.mock(import("@googleapis/gmail"), async (importOriginal) => {
             ? Promise.resolve({ data: { data: "" } })
             : Promise.reject(googleApi.attachmentError),
       });
+      Object.defineProperty(client.users.history, "list", {
+        value: (request: gmail_v1.Params$Resource$Users$History$List) => {
+          googleApi.historyRequests.push(request);
+          return Promise.resolve({
+            data: {
+              history: googleApi.historyRecords,
+              historyId: "history-next",
+            },
+          });
+        },
+      });
       Object.defineProperty(client.users.threads, "trash", {
         value: () => {
           if (googleApi.trashError !== undefined) {
@@ -140,6 +154,8 @@ describe("Gmail gateway", () => {
     googleApi.attachmentError = undefined;
     googleApi.batchError = undefined;
     googleApi.clientOptions.length = 0;
+    googleApi.historyRecords.length = 0;
+    googleApi.historyRequests.length = 0;
     googleApi.labelError = undefined;
     googleApi.labelCreates.length = 0;
     googleApi.labelDeletes.length = 0;
@@ -218,6 +234,39 @@ describe("Gmail gateway", () => {
     expect(Option.isSome(result)).toBeTruthy();
     expect(googleApi.clientOptions).toStrictEqual([
       expect.not.objectContaining({ http2: true }),
+    ]);
+  });
+
+  it("requests deleted-message history so remote deletions are synchronized", async () => {
+    googleApi.historyRecords.push({
+      messagesDeleted: [
+        {
+          message: { id: "deleted-message", threadId: "deleted-thread" },
+        },
+      ],
+    });
+
+    const result = await Effect.runPromise(
+      GmailGateway.pipe(
+        Effect.flatMap((gateway) =>
+          gateway.listHistory(authorization, HistoryId.make("history-before"))
+        ),
+        Effect.provide(GmailGatewayLive)
+      )
+    );
+
+    expect(result.value.removedThreadIds).toStrictEqual(["deleted-thread"]);
+    expect(googleApi.historyRequests).toStrictEqual([
+      expect.objectContaining({
+        historyTypes: [
+          "labelAdded",
+          "labelRemoved",
+          "messageAdded",
+          "messageDeleted",
+        ],
+        startHistoryId: "history-before",
+        userId: "me",
+      }),
     ]);
   });
 

@@ -56,7 +56,12 @@ const authPlus = new AuthPlus();
 const createOAuthClient = () => new authPlus.OAuth2();
 
 const UNREAD_LABEL_ID = "UNREAD";
-const HISTORY_TYPES = ["labelAdded", "labelRemoved", "messageAdded"];
+const HISTORY_TYPES = [
+  "labelAdded",
+  "labelRemoved",
+  "messageAdded",
+  "messageDeleted",
+];
 const HISTORY_PAGE_SIZE = 500;
 /** Matches the fan-out the hand-rolled sync used; Gmail throttles above this. */
 const THREAD_FETCH_CONCURRENCY = 5;
