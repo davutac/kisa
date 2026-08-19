@@ -5,7 +5,12 @@ import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import { useCleanDraftHistory } from "@/components/mail/use-clean-draft-history";
 import type { getAiApi } from "@/platform/desktop";
+import {
+  appendEmailSignatureHtml,
+  removeEmailSignature,
+} from "@/shared/email-signature";
 import type { AiModelSelection } from "@/shared/ipc/ai";
+import type { MailDraftSignature } from "@/shared/ipc/mail";
 
 const MESSAGES = {
   applyError: "Could not update the reply draft",
@@ -22,6 +27,7 @@ export const useReplyCleanHistory = ({
   mountedRef,
   replaceComposerContent,
   setComposer,
+  signature,
   subject,
 }: {
   aiApi: ReturnType<typeof getAiApi>;
@@ -32,6 +38,7 @@ export const useReplyCleanHistory = ({
   mountedRef: RefObject<boolean>;
   replaceComposerContent: (content: string) => boolean;
   setComposer: (composer: EmailComposerValue) => void;
+  signature?: MailDraftSignature;
   subject: string;
 }) => {
   const [history, setHistory] = useState<readonly CleanDraftVersion[]>([]);
@@ -54,10 +61,21 @@ export const useReplyCleanHistory = ({
     model !== null && !composer.isEmpty && !(isCreatingReply || isSending);
   const controller = useCleanDraftHistory({
     aiApi,
-    applyVersion: (version) => replaceComposerContent(version.body),
+    applyVersion: (version) =>
+      replaceComposerContent(
+        signature === undefined
+          ? version.body
+          : appendEmailSignatureHtml(version.body, signature.body)
+      ),
     canClean,
     getState: () => ({
-      draft: { body: composerRef.current.html, subject },
+      draft: {
+        body:
+          signature === undefined
+            ? composerRef.current.html
+            : removeEmailSignature(composerRef.current, signature.body).html,
+        subject,
+      },
       history: historyRef.current,
       selectedVersionId: selectedVersionIdRef.current,
     }),
@@ -75,9 +93,13 @@ export const useReplyCleanHistory = ({
     const selectedVersion = historyRef.current.find(
       ({ id }) => id === selectedVersionIdRef.current
     );
+    const authoredBody =
+      signature === undefined
+        ? nextComposer
+        : removeEmailSignature(nextComposer, signature.body);
     if (
       selectedVersion !== undefined &&
-      nextComposer.html !== selectedVersion.body
+      authoredBody.html !== selectedVersion.body
     ) {
       updateSelectedVersionId(null);
     }

@@ -6,6 +6,7 @@ import NewMessageDialogShell from "@/components/mail/new-message-dialog-shell";
 import { Dialog } from "@/components/ui/dialog";
 import { getInitialComposerAccountId } from "@/mail/composer-account";
 import type { GoogleAccount } from "@/shared/ipc/auth";
+import { useAccountSettings } from "@/state/account-settings";
 
 import NewMessageForm from "./new-message-form";
 import NewMessageHeader from "./new-message-header";
@@ -32,6 +33,7 @@ const NewMessageDialogContent = ({
   const workspace = useNewMessageWorkspace({ accounts, isOpen, onOpenChange });
   const [sendBinding] = workspace.sendDisplay.bindings;
   const handleClean = workspace.cleanDraft;
+  const handleAccountSelect = workspace.selectAccount;
   const handleComposerChange = workspace.updateComposer;
   const handleDismissCleanVersion = workspace.dismissCleanVersion;
   const handleFiles = workspace.addAttachments;
@@ -74,6 +76,7 @@ const NewMessageDialogContent = ({
           focus={workspace.focus}
           inputRef={workspace.inputRef}
           onClean={handleClean}
+          onAccountSelect={handleAccountSelect}
           onComposerChange={handleComposerChange}
           onDismissCleanVersion={handleDismissCleanVersion}
           onSelectCleanVersion={handleSelectCleanVersion}
@@ -96,11 +99,13 @@ const NewMessageDialog = ({
   isOpen,
   onOpenChange,
 }: NewMessageDialogProps) => {
+  const initialComposerAccountId = getInitialComposerAccountId(
+    accounts,
+    initialAccountId
+  );
+  const { emailSignature } = useAccountSettings(initialComposerAccountId);
   const store = useMemo(
-    () =>
-      createNewMessageStore(
-        getInitialComposerAccountId(accounts, initialAccountId)
-      ),
+    () => createNewMessageStore(initialComposerAccountId, emailSignature),
     // The parent keys each newly opened composer. Account changes while that
     // composer is open must not replace its draft store.
     // oxlint-disable-next-line react-hooks/exhaustive-deps

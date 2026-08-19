@@ -5,6 +5,10 @@ import { useCleanDraftHistory } from "@/components/mail/use-clean-draft-history"
 import type { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import { getAiApi } from "@/platform/desktop";
+import {
+  appendEmailSignatureHtml,
+  removeEmailSignature,
+} from "@/shared/email-signature";
 import { truncateGmailSubject } from "@/shared/gmail-subject";
 
 import { useNewMessageStore, useNewMessageStoreApi } from "./new-message-store";
@@ -55,7 +59,12 @@ export const useNewMessageCleanHistory = ({
   const controller = useCleanDraftHistory({
     aiApi,
     applyVersion: (version) => {
-      if (!focus.replaceContent("message", version.body)) {
+      const { signature } = store.getState();
+      const body =
+        signature === undefined
+          ? version.body
+          : appendEmailSignatureHtml(version.body, signature.body);
+      if (!focus.replaceContent("message", body)) {
         return false;
       }
       setSubject(version.subject);
@@ -64,9 +73,13 @@ export const useNewMessageCleanHistory = ({
     canClean,
     getState: () => {
       const state = store.getState();
+      const body =
+        state.signature === undefined
+          ? state.composer
+          : removeEmailSignature(state.composer, state.signature.body);
       return {
         draft: {
-          body: state.composer.html,
+          body: body.html,
           key: state.draftId,
           subject: state.subject,
         },
@@ -86,9 +99,14 @@ export const useNewMessageCleanHistory = ({
 
   const updateComposer = (nextComposer: EmailComposerValue): void => {
     setComposer(nextComposer);
+    const { signature } = store.getState();
+    const authoredBody =
+      signature === undefined
+        ? nextComposer
+        : removeEmailSignature(nextComposer, signature.body);
     if (
       selectedVersion !== null &&
-      nextComposer.html !== selectedVersion.body
+      authoredBody.html !== selectedVersion.body
     ) {
       setSelectedVersionId(null);
     }

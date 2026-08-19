@@ -2,17 +2,20 @@ import { describe, expect, it } from "@effect/vitest";
 
 import type { EmailRecipients } from "../src/renderer/src/components/mail/email-recipient-fields";
 import {
+  changeNewMailDraftAccount,
   createNewMailDraft,
   createThreadMailDraft,
   getDraftBodyPreview,
   getDraftResumeFocusTarget,
   getNewMailStashCommandAction,
   isNewMailDraftEmpty,
+  isDraftBodyOnlySignature,
   isThreadMailDraftEmpty,
 } from "../src/renderer/src/mail/mail-draft";
 import type { MailDraftInput } from "../src/shared/ipc/mail";
 
 const accountId = "person@example.com";
+const signature = (text: string) => ({ html: `<p>${text}</p>`, text });
 
 const newDraft = (patch: Partial<MailDraftInput> = {}): MailDraftInput => ({
   ...createNewMailDraft(accountId),
@@ -51,6 +54,65 @@ describe("mail draft lifecycle", () => {
 
   it("allows a new email draft to remain unassigned", () => {
     expect(createNewMailDraft()).not.toHaveProperty("accountId");
+  });
+
+  it("treats an automatic signature as editable but not authored content", () => {
+    const draft = createNewMailDraft(accountId, {
+      html: "<p><strong>Best,</strong><br>Davut</p>",
+      text: "Best,\nDavut",
+    });
+
+    expect(draft.body).toStrictEqual({
+      html: "<p></p><p><strong>Best,</strong><br>Davut</p>",
+      text: "Best,\nDavut",
+    });
+    expect(draft.signature).toMatchObject({ accountId });
+    expect(isDraftBodyOnlySignature(draft)).toBeTruthy();
+    expect(isNewMailDraftEmpty(draft)).toBeTruthy();
+  });
+
+  it("replaces only an untouched signature when the From account changes", () => {
+    const first = createNewMailDraft(
+      "first@example.com",
+      signature("First sign-off")
+    );
+    const second = changeNewMailDraftAccount(
+      first,
+      "second@example.com",
+      signature("Second sign-off")
+    );
+    const edited = changeNewMailDraftAccount(
+      {
+        ...first,
+        body: {
+          html: `${first.body.html}<p>edited</p>`,
+          text: `${first.body.text} edited`,
+        },
+      },
+      "second@example.com",
+      signature("Second sign-off"),
+      signature("First sign-off")
+    );
+
+    expect(second.body.text).toBe("Second sign-off");
+    expect(second.signature?.accountId).toBe("second@example.com");
+    expect(edited.body.text).toBe("First sign-off edited");
+    expect(edited.signature).toBeUndefined();
+  });
+
+  it("adds the selected account's signature after writing from an unsigned account", () => {
+    const draft = {
+      ...createNewMailDraft("first@example.com"),
+      body: { html: "<p>Hello</p>", text: "Hello" },
+    };
+    const changed = changeNewMailDraftAccount(
+      draft,
+      "second@example.com",
+      signature("Second sign-off")
+    );
+
+    expect(changed.body.text).toBe("Hello\n\nSecond sign-off");
+    expect(changed.signature?.accountId).toBe("second@example.com");
   });
 
   it("opens stashes from a blank form and stashes a dirty form", () => {

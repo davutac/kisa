@@ -44,6 +44,7 @@ interface EmailComposerProps {
   disabled?: boolean;
   enableTemplateSlashMenu?: boolean;
   focusHandleRef?: (handle: ComposerFocusHandle | null) => void;
+  focusAtStart?: boolean;
   enableTemplateVariables?: boolean;
   onApplyTemplate?: (template: ComposerTemplateInput) => void;
   onChange?: (value: EmailComposerValue) => void;
@@ -126,6 +127,7 @@ const EmailComposer = ({
   enableTemplateSlashMenu = false,
   enableTemplateVariables = false,
   focusHandleRef,
+  focusAtStart = false,
   onApplyTemplate,
   onChange,
   placeholder = "Write a message",
@@ -243,7 +245,9 @@ const EmailComposer = ({
         : {
             element,
             focus: () =>
-              editor.commands.focus("end", { scrollIntoView: false }),
+              editor.commands.focus(focusAtStart ? "start" : "end", {
+                scrollIntoView: false,
+              }),
             replaceContent: (content) => {
               editor.commands.setContent(content);
               editor.commands.focus("end", { scrollIntoView: false });
@@ -252,7 +256,7 @@ const EmailComposer = ({
     );
 
     return () => focusHandleRef?.(null);
-  }, [editor, focusHandleRef]);
+  }, [editor, focusAtStart, focusHandleRef]);
 
   return (
     <div

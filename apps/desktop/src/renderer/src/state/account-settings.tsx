@@ -63,3 +63,6 @@ export const useAccountSettings = (accountId: string): AccountSettings =>
     ...DEFAULT_ACCOUNT_SETTINGS,
     accountId,
   };
+
+export const useAllAccountSettings = (): readonly AccountSettings[] =>
+  use(AccountSettingsContext);

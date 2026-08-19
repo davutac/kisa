@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 
+import { EmailSignatureBody } from "../email-signature";
 import { MAX_GMAIL_SUBJECT_LENGTH } from "../gmail-subject";
 import { IpcReply } from "./reply";
 
@@ -411,6 +412,12 @@ export const MailDraftAttachment = Schema.Struct({
 });
 export type MailDraftAttachment = typeof MailDraftAttachment.Type;
 
+export const MailDraftSignature = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  body: EmailSignatureBody,
+});
+export type MailDraftSignature = typeof MailDraftSignature.Type;
+
 export const MailDraftInput = Schema.Struct({
   accountId: Schema.optional(Schema.NonEmptyString),
   attachments: Schema.Array(MailDraftAttachment),
@@ -420,6 +427,7 @@ export const MailDraftInput = Schema.Struct({
   id: Schema.NonEmptyString,
   kind: MailDraftKind,
   messageId: Schema.optional(Schema.NonEmptyString),
+  signature: Schema.optional(MailDraftSignature),
   subject: Schema.String,
   threadId: Schema.optional(Schema.NonEmptyString),
   to: Schema.Array(Schema.NonEmptyString),

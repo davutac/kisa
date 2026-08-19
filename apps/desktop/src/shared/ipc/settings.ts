@@ -1,9 +1,15 @@
 import * as Schema from "effect/Schema";
 
+import {
+  EmailSignatureBody,
+  EMPTY_EMAIL_SIGNATURE_BODY,
+} from "../email-signature";
 import { IpcReply } from "./reply";
 
 export const AccountSettings = Schema.Struct({
   accountId: Schema.String,
+  /** Rich-text sign-off inserted into drafts sent from this account. */
+  emailSignature: EmailSignatureBody,
   /** Whether newly synced unread Inbox messages may produce an OS alert. */
   notificationsEnabled: Schema.Boolean,
   /** Gmail's own labels (INBOX, UNREAD, CATEGORY_*, …) shown next to threads. */
@@ -13,11 +19,16 @@ export type AccountSettings = typeof AccountSettings.Type;
 
 /** Accounts without a stored row behave as if they had these settings. */
 export const DEFAULT_ACCOUNT_SETTINGS = {
+  emailSignature: EMPTY_EMAIL_SIGNATURE_BODY,
   notificationsEnabled: true,
   showSystemLabels: true,
 } as const satisfies Omit<AccountSettings, "accountId">;
 
 export const AccountSettingsUpdateRequest = Schema.Union([
+  Schema.Struct({
+    accountId: Schema.NonEmptyString,
+    emailSignature: EmailSignatureBody,
+  }),
   Schema.Struct({
     accountId: Schema.NonEmptyString,
     notificationsEnabled: Schema.Boolean,

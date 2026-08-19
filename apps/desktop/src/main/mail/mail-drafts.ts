@@ -3,12 +3,14 @@ import type { StoredMailDraftAttachment } from "@repo/database/schemas";
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { Clock, Effect, Schema } from "effect";
 
+import { hasEmailSignature } from "../../shared/email-signature";
 import { MAIL_DRAFT_CHANGED_CHANNEL } from "../../shared/ipc/channels";
 import type {
   MailDraft,
   MailDraftDiscardRequest,
   MailDraftInput,
   MailDraftListRequest,
+  MailDraftSignature,
 } from "../../shared/ipc/mail";
 import { MailDraftChanged } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database-query";
@@ -29,6 +31,51 @@ class MailDraftError extends Schema.TaggedError<MailDraftError>()(
 
 type MailDraftRow = typeof mailDrafts.$inferSelect;
 
+const toMailDraftSignature = (
+  row: MailDraftRow
+): MailDraftSignature | undefined => {
+  if (
+    row.signatureAccountEmail === null ||
+    row.signatureHtml === null ||
+    row.signatureText === null
+  ) {
+    return undefined;
+  }
+
+  return {
+    accountId: row.signatureAccountEmail,
+    body: { html: row.signatureHtml, text: row.signatureText },
+  };
+};
+
+const toStoredSignature = (signature: MailDraftSignature | undefined) => {
+  if (signature === undefined) {
+    return {
+      signatureAccountEmail: null,
+      signatureHtml: null,
+      signatureText: null,
+    };
+  }
+
+  return {
+    signatureAccountEmail: signature.accountId,
+    signatureHtml: signature.body.html,
+    signatureText: signature.body.text,
+  };
+};
+
+const hasValidDraftSignature = (input: MailDraftInput): boolean =>
+  input.signature === undefined ||
+  (input.accountId === input.signature.accountId &&
+    hasEmailSignature(input.body, input.signature.body));
+
+const hasValidDraftContext = (input: MailDraftInput): boolean =>
+  (input.kind === "new"
+    ? input.messageId === undefined && input.threadId === undefined
+    : input.accountId !== undefined &&
+      input.messageId !== undefined &&
+      input.threadId !== undefined) && hasValidDraftSignature(input);
+
 const toMailDraft = (
   row: MailDraftRow,
   ownerWebContentsId: number
@@ -45,6 +92,7 @@ const toMailDraft = (
   id: row.id,
   kind: row.kind,
   messageId: row.messageId ?? undefined,
+  signature: toMailDraftSignature(row),
   subject: row.subject,
   threadId: row.threadId ?? undefined,
   to: row.to,
@@ -163,14 +211,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
   });
   const saved = yield* withDatabaseClient((database) =>
     database.transaction(async (transaction) => {
-      if (
-        (input.kind === "new" &&
-          (input.messageId !== undefined || input.threadId !== undefined)) ||
-        (input.kind !== "new" &&
-          (input.accountId === undefined ||
-            input.messageId === undefined ||
-            input.threadId === undefined))
-      ) {
+      if (!hasValidDraftContext(input)) {
         throw new Error("Draft context does not match its kind");
       }
 
@@ -206,6 +247,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
         id: input.id,
         kind: input.kind,
         messageId: input.messageId,
+        ...toStoredSignature(input.signature),
         subject: input.subject,
         threadId: input.threadId,
         to: input.to,
@@ -226,6 +268,9 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
               cc: values.cc,
               kind: values.kind,
               messageId: values.messageId,
+              signatureAccountEmail: values.signatureAccountEmail,
+              signatureHtml: values.signatureHtml,
+              signatureText: values.signatureText,
               subject: values.subject,
               threadId: values.threadId,
               to: values.to,
