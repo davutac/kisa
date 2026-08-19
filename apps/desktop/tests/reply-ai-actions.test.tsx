@@ -133,6 +133,7 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
       discard: () => Promise.resolve(),
       dismissCleanVersion: () => null,
       inputRef: { current: null },
+      isBodyOnlySignature: false,
       isBusy: false,
       isCreatingReply: false,
       isInputDisabled: false,

@@ -5,10 +5,16 @@ import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
 import { useOutgoingAttachments } from "@/components/mail/outgoing-attachments";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
-import { isThreadMailDraftEmpty } from "@/mail/mail-draft";
+import {
+  isDraftBodyOnlySignature,
+  isThreadMailDraftEmpty,
+  toMailDraftComposerValue,
+  updateMailDraftBody,
+} from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 import { getAiApi, getMailApi } from "@/platform/desktop";
+import { appendEmailSignatureHtml } from "@/shared/email-signature";
 import type { AiModelSelection } from "@/shared/ipc/ai";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
@@ -49,11 +55,9 @@ export const useReplyWorkspace = ({
     prepareAttachments,
     setAttachments,
   } = useOutgoingAttachments(mailApi, draft.attachments);
-  const [composer, setComposer] = useState<EmailComposerValue>(() => ({
-    html: draft.body.html,
-    isEmpty: draft.body.text.trim().length === 0,
-    text: draft.body.text,
-  }));
+  const [composer, setComposer] = useState<EmailComposerValue>(() =>
+    toMailDraftComposerValue(draft)
+  );
   const [isCreatingReply, setIsCreatingReply] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [recipients, setRecipients] = useState<EmailRecipients>(() => ({
@@ -61,6 +65,7 @@ export const useReplyWorkspace = ({
     cc: draft.cc,
     to: draft.to,
   }));
+  const [signature, setSignature] = useState(draft.signature);
   const initialRecipients = useMemo(
     () => getInitialReplyRecipients(accountId, action, message),
     [accountId, action, message]
@@ -76,6 +81,7 @@ export const useReplyWorkspace = ({
     mountedRef,
     replaceComposerContent,
     setComposer,
+    signature,
     subject: draft.subject,
   });
   const currentDraft = useMemo<MailDraftInput>(
@@ -85,13 +91,15 @@ export const useReplyWorkspace = ({
       bcc: recipients.bcc,
       body: { html: composer.html, text: composer.text },
       cc: recipients.cc,
+      signature,
       to: recipients.to,
     }),
-    [attachments, composer.html, composer.text, draft, recipients]
+    [attachments, composer.html, composer.text, draft, recipients, signature]
   );
   const currentDraftRef = useRef(currentDraft);
   const isBusy = cleanHistory.isCleaning || isCreatingReply || isSending;
   const canCreateReply = canCreateAiReply(aiModel.selection, action, isBusy);
+  const isBodyOnlySignature = isDraftBodyOnlySignature(currentDraft);
 
   useEffect(() => {
     currentDraftRef.current = currentDraft;
@@ -237,7 +245,11 @@ export const useReplyWorkspace = ({
         toast.error(reply.error);
         return;
       }
-      if (!replaceComposerContent(reply.data.body)) {
+      const replyBody =
+        signature === undefined
+          ? reply.data.body
+          : appendEmailSignatureHtml(reply.data.body, signature.body);
+      if (!replaceComposerContent(replyBody)) {
         toast.error("Could not update the reply draft");
         return;
       }
@@ -256,13 +268,22 @@ export const useReplyWorkspace = ({
     }
   };
 
+  const updateComposer = (nextComposer: EmailComposerValue): void => {
+    const nextDraft = updateMailDraftBody(currentDraftRef.current, {
+      html: nextComposer.html,
+      text: nextComposer.text,
+    });
+    setSignature(nextDraft.signature);
+    cleanHistory.updateComposer(toMailDraftComposerValue(nextDraft));
+  };
+
   return {
     addAttachments,
     aiModelLabel: aiModel.label,
     attachments,
     canClean: cleanHistory.canClean,
     canCreateReply,
-    canSend: mailApi !== undefined && !isBusy,
+    canSend: mailApi !== undefined && !composer.isEmpty && !isBusy,
     clean: cleanHistory.clean,
     cleanHistory: cleanHistory.history,
     composer,
@@ -271,6 +292,7 @@ export const useReplyWorkspace = ({
     discard,
     dismissCleanVersion: cleanHistory.dismissVersion,
     inputRef,
+    isBodyOnlySignature,
     isBusy,
     isCreatingReply,
     isInputDisabled: isCreatingReply || isSending,
@@ -280,7 +302,7 @@ export const useReplyWorkspace = ({
     selectedCleanVersionId: cleanHistory.selectedVersionId,
     send,
     setAttachments,
-    setComposer: cleanHistory.updateComposer,
+    setComposer: updateComposer,
     setRecipients,
   };
 };

@@ -183,6 +183,41 @@ describe("mail drafts", () => {
     );
   });
 
+  it("persists the automatic signature metadata with its editable body", async () => {
+    const signature = {
+      accountId: "person@example.com",
+      body: { html: "<p>Best,<br>Davut</p>", text: "Best,\nDavut" },
+    };
+    await Effect.runPromise(
+      saveMailDraft(
+        {
+          ...newDraft,
+          accountId: "person@example.com",
+          body: {
+            html: `<p>Hello</p><p></p>${signature.body.html}`,
+            text: `Hello\n\n${signature.body.text}`,
+          },
+          signature,
+        },
+        7
+      )
+    );
+
+    await expect(
+      Effect.runPromise(
+        listStashedDrafts({ accountIds: ["person@example.com"] }, 7)
+      )
+    ).resolves.toMatchObject([
+      {
+        body: {
+          html: "<p>Hello</p><p></p><p>Best,<br>Davut</p>",
+          text: "Hello\n\nBest,\nDavut",
+        },
+        signature,
+      },
+    ]);
+  });
+
   it("rejects invalid draft ownership and conversation context", async () => {
     await expect(
       Effect.runPromise(
@@ -202,6 +237,21 @@ describe("mail drafts", () => {
             ...newDraft,
             messageId: "message-1",
             threadId: "thread-1",
+          },
+          7
+        )
+      )
+    ).rejects.toMatchObject({ message: "Could not save draft" });
+    await expect(
+      Effect.runPromise(
+        saveMailDraft(
+          {
+            ...newDraft,
+            accountId: "person@example.com",
+            signature: {
+              accountId: "other@example.com",
+              body: { html: "<p>Signature</p>", text: "Signature" },
+            },
           },
           7
         )

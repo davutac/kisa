@@ -269,10 +269,15 @@ describe("database migrations", () => {
       expect(
         connection
           .prepare(
-            "SELECT notifications_enabled FROM account_settings WHERE account_email = ?"
+            `SELECT email_signature, notifications_enabled
+             FROM account_settings
+             WHERE account_email = ?`
           )
           .get("user@example.com")
-      ).toStrictEqual({ notifications_enabled: 1 });
+      ).toStrictEqual({
+        email_signature: '{"html":"","text":""}',
+        notifications_enabled: 1,
+      });
     } finally {
       connection.close();
     }

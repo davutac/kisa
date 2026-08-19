@@ -7,6 +7,7 @@ import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 import { getMailApi } from "@/platform/desktop";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import { useAccountSettings } from "@/state/account-settings";
 
 export const getThreadDraftAction = (
   draft: MailDraftInput
@@ -33,6 +34,7 @@ export const useThreadDraft = ({
   selectedMessage: GmailThreadMessage;
   threadId: string;
 }) => {
+  const { emailSignature } = useAccountSettings(accountId);
   const mailApi = useMemo(() => getMailApi(), []);
   const [draft, setDraft] = useState<MailDraftInput | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -179,6 +181,7 @@ export const useThreadDraft = ({
             action,
             selectedMessage
           ),
+          signature: emailSignature,
           threadId,
         })
       );
@@ -188,6 +191,7 @@ export const useThreadDraft = ({
       continueDraft,
       createDraft,
       draft,
+      emailSignature,
       isLoadingDraft,
       selectedMessage,
       threadId,

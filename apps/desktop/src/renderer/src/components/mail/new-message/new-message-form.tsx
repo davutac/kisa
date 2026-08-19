@@ -41,6 +41,7 @@ interface NewMessageFormProps {
   focus: ReturnType<typeof useComposerFocus>;
   inputRef: RefObject<HTMLInputElement | null>;
   onClean: () => Promise<void>;
+  onAccountSelect: (accountId: string) => void;
   onComposerChange: (composer: EmailComposerValue) => void;
   onDismissCleanVersion: (version: CleanDraftVersion) => void;
   onSelectCleanVersion: (version: CleanDraftVersion) => void;
@@ -71,6 +72,7 @@ const NewMessageForm = ({
   focus,
   inputRef,
   onClean,
+  onAccountSelect,
   onComposerChange,
   onDismissCleanVersion,
   onSelectCleanVersion,
@@ -95,7 +97,6 @@ const NewMessageForm = ({
     (state) => state.selectedCleanVersionId
   );
   const subject = useNewMessageStore((state) => state.subject);
-  const setAccountId = useNewMessageStore((state) => state.setAccountId);
   const setRecipients = useNewMessageStore((state) => state.setRecipients);
   return (
     <form
@@ -110,7 +111,7 @@ const NewMessageForm = ({
         accounts={accounts}
         enableHotkeys
         focusRefForAccount={(email) => focus.refFor(`account:${email}`)}
-        onSelect={setAccountId}
+        onSelect={onAccountSelect}
         selectedAccountId={selectedAccountId}
       />
       <EmailRecipientFields
@@ -173,6 +174,7 @@ const NewMessageForm = ({
         disabled={isSending}
         enableTemplateSlashMenu
         focusHandleRef={focus.handleRefFor("message")}
+        focusAtStart={composer.isEmpty}
         onApplyTemplate={applyTemplate}
         onChange={onComposerChange}
         placeholder="Write a message"

@@ -102,6 +102,7 @@ const renderForm = ({ canClean }: { canClean: boolean }): string => {
         cleanupModelLabel="Codex · gpt-5.6-luna"
         focus={focus}
         inputRef={{ current: null }}
+        onAccountSelect={() => null}
         onClean={() => Promise.resolve()}
         onComposerChange={() => null}
         onDismissCleanVersion={() => null}

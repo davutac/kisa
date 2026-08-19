@@ -2,6 +2,7 @@ import { accountSettings } from "@repo/database/schemas";
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
+import { normalizeEmailSignature } from "../../shared/email-signature";
 import { SETTINGS_ACCOUNT_SETTINGS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
 import type {
   AccountSettings,
@@ -50,6 +51,7 @@ export const listAccountSettings = Effect.fn("listAccountSettings")(
       (row) =>
         ({
           accountId: row.accountEmail,
+          emailSignature: row.emailSignature,
           notificationsEnabled: row.notificationsEnabled,
           showSystemLabels: row.showSystemLabels,
         }) satisfies AccountSettings
@@ -60,10 +62,16 @@ export const listAccountSettings = Effect.fn("listAccountSettings")(
 export const updateAccountSettings = Effect.fn("updateAccountSettings")(
   function* updateAccountSettings(request: AccountSettingsUpdateRequest) {
     const now = Date.now();
-    const setting =
-      "notificationsEnabled" in request
-        ? { notificationsEnabled: request.notificationsEnabled }
-        : { showSystemLabels: request.showSystemLabels };
+    let setting;
+    if ("emailSignature" in request) {
+      setting = {
+        emailSignature: normalizeEmailSignature(request.emailSignature),
+      };
+    } else if ("notificationsEnabled" in request) {
+      setting = { notificationsEnabled: request.notificationsEnabled };
+    } else {
+      setting = { showSystemLabels: request.showSystemLabels };
+    }
 
     yield* withDatabaseClient((database) =>
       database

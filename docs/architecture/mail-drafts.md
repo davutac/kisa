@@ -22,6 +22,12 @@ New email initially focuses To whether or not an account is selected. Stashing r
 
 Changing the From account changes where the composition is stored the next time it is stashed. Disconnecting an account removes all of its stored drafts along with its credentials, cached mail, settings, and sender trust.
 
+## Account signatures
+
+Each connected account may have one local rich-text signature with a plain-text alternative of up to 10,000 characters. Kisa edits it with the same constrained Tiptap surface used for message composition and stores the validated HTML/text pair together in the account setting. Kisa inserts the signature visibly when a new-message, reply, reply-all, or forward draft is created, and persists the matching text and HTML fragments with the draft. The signature remains editable or removable like the rest of the body. A signature by itself does not make a draft sendable or worth saving.
+
+Automatic-signature metadata records the owning account and exact generated fragment. Switching the From account replaces the fragment only while it is still untouched; edited signature text is ordinary user content and is preserved. Existing drafts retain the signature they were created with when the account setting changes, so the visible draft matches the MIME body sent to Gmail. Kisa does not write Gmail's `SendAs.signature`: Gmail documents that setting for its web composer, while API clients send complete client-authored MIME messages.
+
 ## Attachments
 
 The renderer receives only attachment display metadata and opaque references. Preload resolves paths only from Electron `File` objects produced by an actual file selection, and main opens each selection to record its canonical path and file identity. Draft storage keeps that main-validated record so stashes remain usable after restart; records written by older versions without the authorization marker are not reopened and must be attached again.

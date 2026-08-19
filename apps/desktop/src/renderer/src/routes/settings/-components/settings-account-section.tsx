@@ -14,6 +14,7 @@ import type { GoogleAccount } from "@/shared/ipc/auth";
 import SettingsAccountDisconnectRow from "./settings-account-disconnect-row";
 import SettingsAccountLabelsRow from "./settings-account-labels-row";
 import SettingsAccountNotificationsRow from "./settings-account-notifications-row";
+import SettingsAccountSignatureRow from "./settings-account-signature-row";
 import SettingsAccountSystemLabelsRow from "./settings-account-system-labels-row";
 
 interface SettingsAccountSectionProps {
@@ -59,6 +60,12 @@ const SettingsAccountSection = ({
       <SettingsRows>
         {settingsApi === undefined ? null : (
           <SettingsAccountNotificationsRow
+            account={account}
+            settingsApi={settingsApi}
+          />
+        )}
+        {settingsApi === undefined ? null : (
+          <SettingsAccountSignatureRow
             account={account}
             settingsApi={settingsApi}
           />

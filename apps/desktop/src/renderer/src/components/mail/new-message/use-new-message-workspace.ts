@@ -7,19 +7,30 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import type { EmailComposerValue } from "@/components/mail/email-composer";
 import { useOutgoingAttachments } from "@/components/mail/outgoing-attachments";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import {
+  changeNewMailDraftAccount,
   createNewMailDraft,
   getDraftResumeFocusTarget,
   getNewMailStashCommandAction,
   isNewMailDraftEmpty,
+  toMailDraftComposerValue,
+  updateMailDraftBody,
 } from "@/mail/mail-draft";
 import { getMailApi } from "@/platform/desktop";
+import {
+  appendEmailSignatureBody,
+  createEmailSignatureBody,
+  EMPTY_EMAIL_SIGNATURE_BODY,
+} from "@/shared/email-signature";
+import type { EmailSignatureBody } from "@/shared/email-signature";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
+import { useAllAccountSettings } from "@/state/account-settings";
 import { useComposerTemplates } from "@/state/composer-templates";
 import { applyComposerTemplate } from "@/templates/apply-composer-template";
 
@@ -29,7 +40,7 @@ import {
   upsertStash,
   useDraftPersistence,
 } from "./new-message-draft-persistence";
-import { useNewMessageStore } from "./new-message-store";
+import { useNewMessageStore, useNewMessageStoreApi } from "./new-message-store";
 import { useNewMessageCleanHistory } from "./use-new-message-clean-history";
 
 export const useNewMessageWorkspace = ({
@@ -41,12 +52,14 @@ export const useNewMessageWorkspace = ({
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }) => {
+  const store = useNewMessageStoreApi();
   const accountId = useNewMessageStore((state) => state.accountId);
   const composer = useNewMessageStore((state) => state.composer);
   const draftId = useNewMessageStore((state) => state.draftId);
   const isSending = useNewMessageStore((state) => state.isSending);
   const recipients = useNewMessageStore((state) => state.recipients);
   const stashes = useNewMessageStore((state) => state.stashes);
+  const signature = useNewMessageStore((state) => state.signature);
   const subject = useNewMessageStore((state) => state.subject);
   const setAccountId = useNewMessageStore((state) => state.setAccountId);
   const setComposer = useNewMessageStore((state) => state.setComposer);
@@ -54,12 +67,14 @@ export const useNewMessageWorkspace = ({
   const setIsSending = useNewMessageStore((state) => state.setIsSending);
   const setRecipients = useNewMessageStore((state) => state.setRecipients);
   const setStashes = useNewMessageStore((state) => state.setStashes);
+  const setSignature = useNewMessageStore((state) => state.setSignature);
   const setSubject = useNewMessageStore((state) => state.setSubject);
   const updateStashes = useNewMessageStore((state) => state.updateStashes);
   const incrementRecipientResetVersion = useNewMessageStore(
     (state) => state.incrementRecipientResetVersion
   );
   const { templates } = useComposerTemplates();
+  const accountSettings = useAllAccountSettings();
   const draftOperationQueueRef = useRef(Promise.resolve());
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const mailApi = useMemo(() => getMailApi(), []);
@@ -85,6 +100,7 @@ export const useNewMessageWorkspace = ({
       cc: recipients.cc,
       id: draftId,
       kind: "new",
+      signature,
       subject,
       to: recipients.to,
     }),
@@ -97,6 +113,7 @@ export const useNewMessageWorkspace = ({
       recipients.cc,
       recipients.to,
       selectedAccountId,
+      signature,
       subject,
     ]
   );
@@ -186,14 +203,29 @@ export const useNewMessageWorkspace = ({
     currentDraftRef.current = draft;
     setAccountId(draft.accountId ?? "");
     setAttachments(draft.attachments);
-    setComposer({
-      html: draft.body.html,
-      isEmpty: draft.body.text.trim().length === 0,
-      text: draft.body.text,
-    });
+    setComposer(toMailDraftComposerValue(draft));
     setDraftId(draft.id);
     setRecipients({ bcc: draft.bcc, cc: draft.cc, to: draft.to });
     setSubject(draft.subject);
+    setSignature(draft.signature);
+  };
+
+  const getEmailSignature = (nextAccountId: string): EmailSignatureBody =>
+    accountSettings.find(({ accountId: id }) => id === nextAccountId)
+      ?.emailSignature ?? EMPTY_EMAIL_SIGNATURE_BODY;
+
+  const selectAccount = (nextAccountId: string): void => {
+    const nextDraft = changeNewMailDraftAccount(
+      currentDraftRef.current,
+      nextAccountId,
+      getEmailSignature(nextAccountId),
+      getEmailSignature(currentDraftRef.current.accountId ?? "")
+    );
+    currentDraftRef.current = nextDraft;
+    setAccountId(nextAccountId);
+    setSignature(nextDraft.signature);
+    setComposer(toMailDraftComposerValue(nextDraft));
+    focus.replaceContent("message", nextDraft.body.html);
   };
 
   const applyTemplate = (template: ComposerTemplateInput): void => {
@@ -214,13 +246,26 @@ export const useNewMessageWorkspace = ({
       },
       applicableTemplate
     );
+    const signatureBody = createEmailSignatureBody(
+      getEmailSignature(applied.accountId)
+    );
+    const appliedSignature =
+      signatureBody === undefined || applied.accountId.length === 0
+        ? undefined
+        : { accountId: applied.accountId, body: signatureBody };
+    const appliedBody =
+      appliedSignature === undefined
+        ? applied.body
+        : appendEmailSignatureBody(applied.body, appliedSignature.body);
     cleanup.reset();
     setAccountId(applied.accountId);
     setComposer({
-      html: applied.body.html,
+      html: appliedBody.html,
       isEmpty: applied.body.text.trim().length === 0,
-      text: applied.body.text,
+      text: appliedBody.text,
     });
+    setSignature(appliedSignature);
+    focus.replaceContent("message", appliedBody.html);
     incrementRecipientResetVersion();
     setRecipients({ bcc: applied.bcc, cc: applied.cc, to: applied.to });
     setSubject(applied.subject);
@@ -232,7 +277,12 @@ export const useNewMessageWorkspace = ({
       return;
     }
     const optimisticStash = toOptimisticStash(draft);
-    const blankDraft = createNewMailDraft(draft.accountId);
+    const blankDraft = createNewMailDraft(
+      draft.accountId,
+      draft.accountId === undefined
+        ? EMPTY_EMAIL_SIGNATURE_BODY
+        : getEmailSignature(draft.accountId)
+    );
     const focusTarget = focus.getCurrentTarget();
     updateStashes((current) => upsertStash(current, optimisticStash));
     focus.requestRestore(focusTarget);
@@ -308,6 +358,18 @@ export const useNewMessageWorkspace = ({
     }
   };
 
+  const updateComposer = (nextComposer: EmailComposerValue): void => {
+    const draft = updateMailDraftBody(
+      {
+        ...currentDraftRef.current,
+        signature: store.getState().signature,
+      },
+      { html: nextComposer.html, text: nextComposer.text }
+    );
+    setSignature(draft.signature);
+    cleanup.updateComposer(toMailDraftComposerValue(draft));
+  };
+
   useAppCommand("composer.send", send, { enabled: isOpen && canSend });
   useAppCommand(
     "composer.clean",
@@ -344,6 +406,7 @@ export const useNewMessageWorkspace = ({
     focus,
     inputRef,
     isCleaning: cleanup.isCleaning,
+    selectAccount,
     selectCleanVersion: cleanup.selectVersion,
     selectedAccountId,
     send,
@@ -353,7 +416,7 @@ export const useNewMessageWorkspace = ({
     stashPickerTriggerRef,
     switchDraft,
     templates,
-    updateComposer: cleanup.updateComposer,
+    updateComposer,
     updateSubject: cleanup.updateSubject,
   };
 };

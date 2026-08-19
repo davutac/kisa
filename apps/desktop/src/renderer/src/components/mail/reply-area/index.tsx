@@ -197,6 +197,7 @@ const MailReplyArea = ({
         defaultValue={draft.body.html}
         disabled={workspace.isInputDisabled}
         focusHandleRef={handleComposerReady}
+        focusAtStart={workspace.isBodyOnlySignature}
         groupAiActions
         onChange={handleComposerChange}
         placeholder={isForward ? "Add a message" : "Write a reply"}
