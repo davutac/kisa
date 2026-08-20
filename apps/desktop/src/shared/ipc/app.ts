@@ -21,6 +21,21 @@ export const DEFAULT_APP_SETTINGS = {
   runInBackground: true,
 } as const satisfies AppSettings;
 
+export const LoginItemSettings = Schema.Struct({
+  openAtLogin: Schema.Boolean,
+  requiresApproval: Schema.Boolean,
+});
+export type LoginItemSettings = typeof LoginItemSettings.Type;
+
+export const LoginItemSettingsUpdateRequest = Schema.Struct({
+  openAtLogin: Schema.Boolean,
+});
+export type LoginItemSettingsUpdateRequest =
+  typeof LoginItemSettingsUpdateRequest.Type;
+
+export const LoginItemSettingsReply = IpcReply(LoginItemSettings);
+export type LoginItemSettingsReply = typeof LoginItemSettingsReply.Type;
+
 export const AppStartupErrorPayload = Schema.Struct({
   message: Schema.String,
   reason: Schema.optional(Schema.String),

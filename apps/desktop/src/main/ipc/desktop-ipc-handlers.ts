@@ -16,6 +16,10 @@ import {
   startGoogle,
 } from "./methods/auth";
 import {
+  getLoginItemSettings,
+  setLoginItemSettings,
+} from "./methods/login-item-settings";
+import {
   authorizeOutgoingAttachments,
   bulkMutate,
   createLabel,
@@ -78,6 +82,8 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(cleanupDraft);
   yield* ipc.handle(startApp);
   yield* ipc.handle(openThreadWindow);
+  yield* ipc.handle(getLoginItemSettings);
+  yield* ipc.handle(setLoginItemSettings);
   yield* ipc.handle(updateAppSettings);
   yield* ipc.handle(startGoogle);
   yield* ipc.handle(listAccounts);

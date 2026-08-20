@@ -12,6 +12,8 @@ import type {
   AppSettingsReply,
   AppSettingsUpdateRequest,
   AppStartupReply,
+  LoginItemSettingsReply,
+  LoginItemSettingsUpdateRequest,
   ThreadWindowOpenReply,
   ThreadWindowOpenRequest,
 } from "./app";
@@ -146,6 +148,7 @@ export interface DesktopBridge {
   }) => Promise<DatabaseImportFileSelectionReply>;
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
+  getLoginItemSettings: () => Promise<LoginItemSettingsReply>;
   getAiSettings: () => Promise<AiSettingsReply>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
   getSpamStatus: (
@@ -154,6 +157,7 @@ export interface DesktopBridge {
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
   installUpdate: () => Promise<void>;
+  launchAtLoginSupported: boolean;
   importDatabase: (
     request: DatabaseImportSession
   ) => Promise<DatabaseImportReply>;
@@ -269,6 +273,9 @@ export interface DesktopBridge {
   setAppSettings: (
     request: AppSettingsUpdateRequest
   ) => Promise<AppSettingsReply>;
+  setLoginItemSettings: (
+    request: LoginItemSettingsUpdateRequest
+  ) => Promise<LoginItemSettingsReply>;
   updateAiSettings: (
     request: AiSettingsUpdateRequest
   ) => Promise<AiSettingsReply>;

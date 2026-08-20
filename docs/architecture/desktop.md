@@ -29,6 +29,8 @@ Animations default to enabled. A shared provider applies the preference to the m
 
 "Run in background" defaults to enabled. When enabled, closing the main window hides it to a system tray icon instead of quitting, so mail synchronization and notifications keep running. On macOS, the Dock icon is also hidden while no Kisa windows are visible and restored with the window. When disabled, closing the last open window quits the app on every platform, including macOS. The tray menu restores the window or quits.
 
+"Launch at login" is available on macOS and Windows, the platforms supported by Electron's login-item API. The operating system owns this value. Settings reads it on mount, writes changes through a narrow IPC method, and displays the value Electron reports after each write. Kisa does not copy it into `app-settings.json`, so changes made in macOS System Settings or Windows Startup Apps remain authoritative. A macOS login item that requires approval stays off and explains the required System Settings action.
+
 ## Ownership
 
 ```text
