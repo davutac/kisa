@@ -21,6 +21,17 @@ const decodeAppSettings = Schema.decodeUnknownEffect(
   Schema.fromJsonString(AppSettingsSchema)
 );
 
+const applyLaunchAtLogin = (enabled: boolean): void => {
+  try {
+    app.setLoginItemSettings({
+      openAsHidden: true,
+      openAtLogin: enabled,
+    });
+  } catch {
+    // Ignore errors (e.g., on Linux without systemd)
+  }
+};
+
 // Total effect: unreadable or undecodable files fall back to the defaults.
 const loadAppSettings = Effect.fn("loadAppSettings")(
   (appSettingsPath: string) =>
@@ -76,11 +87,18 @@ const persistCachedAppSettings = (): void => {
 /** Loads persisted app settings into memory, falling back to defaults. */
 export const hydrateAppSettings = (): void => {
   cachedSettings = Effect.runSync(loadAppSettings(getAppSettingsPath()));
+  applyLaunchAtLogin(cachedSettings.launchAtLogin);
 };
 
 /** Updates memory immediately and coalesces persistence on a short debounce. */
 export const writeAppSettings = (next: AppSettings): void => {
+  const launchAtLoginChanged =
+    next.launchAtLogin !== cachedSettings.launchAtLogin;
   cachedSettings = next;
+
+  if (launchAtLoginChanged) {
+    applyLaunchAtLogin(next.launchAtLogin);
+  }
 
   if (pendingWrite !== undefined) {
     clearTimeout(pendingWrite);

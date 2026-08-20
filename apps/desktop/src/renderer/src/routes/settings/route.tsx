@@ -41,9 +41,11 @@ function SettingsRoute() {
   } = getRuntimeCapabilities();
   const {
     animationsEnabled,
+    launchAtLogin,
     openThreadsInNewWindows,
     runInBackground,
     setAnimationsEnabled,
+    setLaunchAtLogin,
     setOpenThreadsInNewWindows,
     setRunInBackground,
   } = useAppSettings(appSettings);
@@ -108,6 +110,25 @@ function SettingsRoute() {
                     aria-labelledby="run-in-background-title"
                     checked={runInBackground}
                     onCheckedChange={setRunInBackground}
+                  />
+                </SettingsRowActions>
+              </SettingsRow>
+            )}
+            {appSettings === undefined ? null : (
+              <SettingsRow>
+                <SettingsRowContent>
+                  <SettingsRowTitle id="launch-at-login-title">
+                    Launch at login
+                  </SettingsRowTitle>
+                  <SettingsRowDescription>
+                    Automatically start Kisa when you sign in to your computer.
+                  </SettingsRowDescription>
+                </SettingsRowContent>
+                <SettingsRowActions>
+                  <Switch
+                    aria-labelledby="launch-at-login-title"
+                    checked={launchAtLogin}
+                    onCheckedChange={setLaunchAtLogin}
                   />
                 </SettingsRowActions>
               </SettingsRow>

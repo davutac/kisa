@@ -86,6 +86,7 @@ describe("app settings", () => {
   it("persists and reloads all app settings", async () => {
     const settings = {
       animationsEnabled: false,
+      launchAtLogin: true,
       openThreadsInNewWindows: true,
       runInBackground: false,
     };
@@ -109,6 +110,7 @@ describe("app settings", () => {
     writeAppSettings({ ...DEFAULT_APP_SETTINGS, runInBackground: false });
     writeAppSettings({
       ...DEFAULT_APP_SETTINGS,
+      launchAtLogin: true,
       openThreadsInNewWindows: true,
       runInBackground: false,
     });
@@ -125,7 +127,11 @@ describe("app settings", () => {
   });
 
   it("flushes a pending write during shutdown", async () => {
-    writeAppSettings({ ...DEFAULT_APP_SETTINGS, runInBackground: false });
+    writeAppSettings({
+      ...DEFAULT_APP_SETTINGS,
+      launchAtLogin: true,
+      runInBackground: false,
+    });
 
     await flushAppSettings();
 
