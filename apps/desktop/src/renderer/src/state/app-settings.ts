@@ -10,7 +10,6 @@ export interface UseAppSettings extends AppSettings {
   readonly setAnimationsEnabled: (enabled: boolean) => void;
   readonly setOpenThreadsInNewWindows: (enabled: boolean) => void;
   readonly setRunInBackground: (enabled: boolean) => void;
-  readonly setLaunchAtLogin: (enabled: boolean) => void;
 }
 
 const appSettingsStore = createStore<AppSettings>()(() => DEFAULT_APP_SETTINGS);
@@ -70,9 +69,6 @@ export const useAppSettings = (
     ...settings,
     setAnimationsEnabled: (animationsEnabled) => {
       update({ animationsEnabled });
-    },
-    setLaunchAtLogin: (launchAtLogin) => {
-      update({ launchAtLogin });
     },
     setOpenThreadsInNewWindows: (openThreadsInNewWindows) => {
       update({ openThreadsInNewWindows });

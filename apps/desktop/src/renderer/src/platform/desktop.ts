@@ -13,6 +13,11 @@ export interface AppSettingsApi {
   set: DesktopBridge["setAppSettings"];
 }
 
+export interface LoginItemSettingsApi {
+  get: DesktopBridge["getLoginItemSettings"];
+  set: DesktopBridge["setLoginItemSettings"];
+}
+
 export interface AppLifecycleApi {
   onClosing: DesktopBridge["onAppClosing"];
 }
@@ -111,6 +116,7 @@ export interface RuntimeCapabilities {
   auth?: AuthApi;
   isWeb: boolean;
   lifecycle?: AppLifecycleApi;
+  loginItemSettings?: LoginItemSettingsApi;
   mail?: MailApi;
   settings?: SettingsApi;
   startup?: AppStartupApi;
@@ -125,6 +131,7 @@ interface DesktopCapabilities {
   appSettings: AppSettingsApi;
   auth: AuthApi;
   lifecycle: AppLifecycleApi;
+  loginItemSettings?: LoginItemSettingsApi;
   mail: MailApi;
   settings: SettingsApi;
   startup: AppStartupApi;
@@ -164,6 +171,12 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       startGoogle: bridge.startGoogleAuth,
     },
     lifecycle: { onClosing: bridge.onAppClosing },
+    loginItemSettings: bridge.launchAtLoginSupported
+      ? {
+          get: bridge.getLoginItemSettings,
+          set: bridge.setLoginItemSettings,
+        }
+      : undefined,
     mail: {
       authorizeOutgoingAttachments: bridge.authorizeOutgoingAttachments,
       bulkMutateThreads: bridge.bulkMutateThreads,
@@ -251,6 +264,7 @@ export const getRuntimeCapabilities = (
       auth: undefined,
       isWeb: !isElectron,
       lifecycle: undefined,
+      loginItemSettings: undefined,
       mail: undefined,
       settings: undefined,
       startup: undefined,

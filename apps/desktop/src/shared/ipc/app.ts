@@ -7,8 +7,6 @@ export const AppClosingEvent = Schema.Literal("closing");
 export const AppSettings = Schema.Struct({
   /** Whether renderer motion and CSS transitions are enabled. */
   animationsEnabled: Schema.Boolean,
-  /** Whether Kisa starts automatically at login. */
-  launchAtLogin: Schema.Boolean,
   /** Whether mailbox thread selections open in native windows by default. */
   openThreadsInNewWindows: Schema.Boolean,
   /** Whether closing the main window keeps Kisa running in the tray. */
@@ -19,10 +17,24 @@ export type AppSettings = typeof AppSettings.Type;
 /** Apps without stored settings behave as if they had these settings. */
 export const DEFAULT_APP_SETTINGS = {
   animationsEnabled: true,
-  launchAtLogin: false,
   openThreadsInNewWindows: false,
   runInBackground: true,
 } as const satisfies AppSettings;
+
+export const LoginItemSettings = Schema.Struct({
+  openAtLogin: Schema.Boolean,
+  requiresApproval: Schema.Boolean,
+});
+export type LoginItemSettings = typeof LoginItemSettings.Type;
+
+export const LoginItemSettingsUpdateRequest = Schema.Struct({
+  openAtLogin: Schema.Boolean,
+});
+export type LoginItemSettingsUpdateRequest =
+  typeof LoginItemSettingsUpdateRequest.Type;
+
+export const LoginItemSettingsReply = IpcReply(LoginItemSettings);
+export type LoginItemSettingsReply = typeof LoginItemSettingsReply.Type;
 
 export const AppStartupErrorPayload = Schema.Struct({
   message: Schema.String,

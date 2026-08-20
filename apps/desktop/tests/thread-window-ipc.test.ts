@@ -29,7 +29,6 @@ vi.mock(import("../src/main/window/tray"), () => ({
 vi.mock(import("../src/main/settings/app-settings"), () => ({
   getCurrentAppSettings: (): AppSettings => ({
     animationsEnabled: true,
-    launchAtLogin: false,
     openThreadsInNewWindows: false,
     runInBackground: false,
   }),

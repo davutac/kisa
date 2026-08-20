@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { useHotkeyLayer } from "@/hotkeys";
 import { getRuntimeCapabilities } from "@/platform/desktop";
 import { useAppSettings } from "@/state/app-settings";
+import { useLoginItemSettings } from "@/state/login-item-settings";
 
 import SettingsAccountsSection from "./-components/settings-accounts-section";
 import SettingsAiSection from "./-components/settings-ai-section";
@@ -33,6 +34,7 @@ function SettingsRoute() {
     ai,
     appSettings,
     auth,
+    loginItemSettings: loginItemSettingsApi,
     mail,
     settings,
     updates,
@@ -41,14 +43,14 @@ function SettingsRoute() {
   } = getRuntimeCapabilities();
   const {
     animationsEnabled,
-    launchAtLogin,
     openThreadsInNewWindows,
     runInBackground,
     setAnimationsEnabled,
-    setLaunchAtLogin,
     setOpenThreadsInNewWindows,
     setRunInBackground,
   } = useAppSettings(appSettings);
+  const { settings: loginItemSettings, setOpenAtLogin } =
+    useLoginItemSettings(loginItemSettingsApi);
 
   useHotkeyLayer("settings", true);
 
@@ -114,21 +116,24 @@ function SettingsRoute() {
                 </SettingsRowActions>
               </SettingsRow>
             )}
-            {appSettings === undefined ? null : (
+            {loginItemSettingsApi === undefined ? null : (
               <SettingsRow>
                 <SettingsRowContent>
                   <SettingsRowTitle id="launch-at-login-title">
                     Launch at login
                   </SettingsRowTitle>
                   <SettingsRowDescription>
-                    Automatically start Kisa when you sign in to your computer.
+                    {loginItemSettings?.requiresApproval === true
+                      ? "Allow Kisa in System Settings to finish enabling this."
+                      : "Start Kisa when you sign in to your computer."}
                   </SettingsRowDescription>
                 </SettingsRowContent>
                 <SettingsRowActions>
                   <Switch
                     aria-labelledby="launch-at-login-title"
-                    checked={launchAtLogin}
-                    onCheckedChange={setLaunchAtLogin}
+                    checked={loginItemSettings?.openAtLogin ?? false}
+                    disabled={loginItemSettings === null}
+                    onCheckedChange={setOpenAtLogin}
                   />
                 </SettingsRowActions>
               </SettingsRow>

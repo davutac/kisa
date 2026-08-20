@@ -14,7 +14,6 @@ import { APP_UPDATE_SETTINGS_CHANNEL } from "../src/shared/ipc/channels";
 const mocks = vi.hoisted(() => ({
   getCurrentAppSettings: vi.fn<() => AppSettings>(() => ({
     animationsEnabled: true,
-    launchAtLogin: false,
     openThreadsInNewWindows: false,
     runInBackground: true,
   })),

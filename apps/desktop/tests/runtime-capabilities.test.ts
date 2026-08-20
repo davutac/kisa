@@ -14,6 +14,7 @@ describe(getRuntimeCapabilities, () => {
       auth: undefined,
       isWeb: true,
       lifecycle: undefined,
+      loginItemSettings: undefined,
       mail: undefined,
       settings: undefined,
       startup: undefined,
@@ -35,6 +36,7 @@ describe(getRuntimeCapabilities, () => {
       auth: undefined,
       isWeb: false,
       lifecycle: undefined,
+      loginItemSettings: undefined,
       mail: undefined,
       settings: undefined,
       startup: undefined,
@@ -99,6 +101,11 @@ describe(getRuntimeCapabilities, () => {
         data: aiSettings,
         ok: true,
       }),
+    getLoginItemSettings: () =>
+      Promise.resolve({
+        data: { openAtLogin: false, requiresApproval: false },
+        ok: true as const,
+      }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
     getSpamStatus: () =>
@@ -108,6 +115,7 @@ describe(getRuntimeCapabilities, () => {
     importDatabase: () =>
       Promise.resolve({ data: "restart-pending" as const, ok: true as const }),
     installUpdate: () => Promise.resolve(),
+    launchAtLoginSupported: true,
     listAccountSettings: () => Promise.resolve({ data: [], ok: true as const }),
     listAiProviders: () => Promise.resolve({ data: [], ok: true }),
     listCachedThreadPage: () =>
@@ -184,6 +192,11 @@ describe(getRuntimeCapabilities, () => {
         data: request,
         ok: true as const,
       }),
+    setLoginItemSettings: (request) =>
+      Promise.resolve({
+        data: { ...request, requiresApproval: false },
+        ok: true as const,
+      }),
     setThreadLabel: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
@@ -243,6 +256,10 @@ describe(getRuntimeCapabilities, () => {
       isWeb: false,
       lifecycle: {
         onClosing: desktopBridge.onAppClosing,
+      },
+      loginItemSettings: {
+        get: desktopBridge.getLoginItemSettings,
+        set: desktopBridge.setLoginItemSettings,
       },
       mail: {
         authorizeOutgoingAttachments:
@@ -316,6 +333,15 @@ describe(getRuntimeCapabilities, () => {
     });
   });
 
+  it("omits login item settings on unsupported platforms", () => {
+    const desktopBridge = createDesktopBridge();
+    desktopBridge.launchAtLoginSupported = false;
+
+    expect(
+      getRuntimeCapabilities({ desktopBridge }).loginItemSettings
+    ).toBeUndefined();
+  });
+
   it("reuses the capabilities it built for a bridge", () => {
     const desktopBridge = createDesktopBridge();
     const capabilities = getRuntimeCapabilities({ desktopBridge });
@@ -326,6 +352,7 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.appSettings === capabilities.appSettings,
       nextCapabilities.auth === capabilities.auth,
       nextCapabilities.lifecycle === capabilities.lifecycle,
+      nextCapabilities.loginItemSettings === capabilities.loginItemSettings,
       nextCapabilities.mail === capabilities.mail,
       nextCapabilities.settings === capabilities.settings,
       nextCapabilities.startup === capabilities.startup,
@@ -333,6 +360,7 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.updates === capabilities.updates,
       nextCapabilities.window === capabilities.window,
     ]).toStrictEqual([
+      true,
       true,
       true,
       true,
