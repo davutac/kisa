@@ -24,6 +24,8 @@ import type {
   GoogleAccountReorderRequest,
   GoogleAccountsReply,
   GoogleAuthStartReply,
+  GoogleOAuthClientSetupReply,
+  GoogleOAuthClientStatusReply,
 } from "./auth";
 import type {
   GmailAttachmentActionReply,
@@ -148,6 +150,7 @@ export interface DesktopBridge {
   }) => Promise<DatabaseImportFileSelectionReply>;
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
+  getGoogleOAuthClientStatus: () => Promise<GoogleOAuthClientStatusReply>;
   getLoginItemSettings: () => Promise<LoginItemSettingsReply>;
   getAiSettings: () => Promise<AiSettingsReply>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
@@ -257,6 +260,7 @@ export interface DesktopBridge {
     request: GmailThreadReadStateRequest
   ) => Promise<GmailThreadMutationReply>;
   startApp: () => Promise<AppStartupReply>;
+  setupGoogleOAuthClient: () => Promise<GoogleOAuthClientSetupReply>;
   syncGmailLabels: (
     request: GmailLabelCatalogRequest
   ) => Promise<GmailLabelCatalogReply>;

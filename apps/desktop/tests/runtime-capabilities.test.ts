@@ -101,6 +101,8 @@ describe(getRuntimeCapabilities, () => {
         data: aiSettings,
         ok: true,
       }),
+    getGoogleOAuthClientStatus: () =>
+      Promise.resolve({ data: true, ok: true as const }),
     getLoginItemSettings: () =>
       Promise.resolve({
         data: { openAtLogin: false, requiresApproval: false },
@@ -201,6 +203,8 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    setupGoogleOAuthClient: () =>
+      Promise.resolve({ data: true, ok: true as const }),
     startApp: () =>
       Promise.resolve({
         appSettings: { ...DEFAULT_APP_SETTINGS, runInBackground: false },
@@ -248,9 +252,11 @@ describe(getRuntimeCapabilities, () => {
       },
       auth: {
         disconnectGoogleAccount: desktopBridge.disconnectGoogleAccount,
+        getGoogleOAuthClientStatus: desktopBridge.getGoogleOAuthClientStatus,
         listGoogleAccounts: desktopBridge.listGoogleAccounts,
         onGoogleAccountsChanged: desktopBridge.onGoogleAccountsChanged,
         reorderGoogleAccounts: desktopBridge.reorderGoogleAccounts,
+        setupGoogleOAuthClient: desktopBridge.setupGoogleOAuthClient,
         startGoogle: desktopBridge.startGoogleAuth,
       },
       isWeb: false,
