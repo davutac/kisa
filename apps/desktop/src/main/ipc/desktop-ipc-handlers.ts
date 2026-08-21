@@ -12,8 +12,10 @@ import {
 import { openThreadWindow, startApp, updateAppSettings } from "./methods/app";
 import {
   disconnectAccount,
+  getGoogleOAuthStatus,
   listAccounts,
   reorderAccounts,
+  setupGoogleOAuth,
   startGoogle,
 } from "./methods/auth";
 import {
@@ -99,6 +101,8 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(getLoginItemSettings);
   yield* ipc.handle(setLoginItemSettings);
   yield* ipc.handle(updateAppSettings);
+  yield* ipc.handle(getGoogleOAuthStatus);
+  yield* ipc.handle(setupGoogleOAuth);
   yield* ipc.handle(startGoogle);
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);

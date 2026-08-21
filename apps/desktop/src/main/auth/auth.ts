@@ -5,15 +5,12 @@ import type { Server } from "node:http";
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
 import { GMAIL_FULL_ACCESS_SCOPE } from "@repo/gmail/models";
-import { count, eq as equals } from "drizzle-orm";
+import { eq as equals } from "drizzle-orm";
 import { Effect, Predicate, Schema } from "effect";
 import { app, safeStorage, shell } from "electron";
 
 import type { GoogleAccount, GoogleAccountsReply } from "../../shared/ipc/auth";
-import {
-  GoogleAccountsReply as GoogleAccountsReplySchema,
-  MAX_GOOGLE_ACCOUNTS,
-} from "../../shared/ipc/auth";
+import { GoogleAccountsReply as GoogleAccountsReplySchema } from "../../shared/ipc/auth";
 import { AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
 import {
   getLinuxSecretStorageErrorMessage,
@@ -25,13 +22,14 @@ import { toIpcReply } from "../ipc/reply";
 import { getMainWindow } from "../window/create-window";
 import { notifyGoogleAccountConnected } from "./account-events";
 import { renderGoogleAuthCallbackPage } from "./google-auth-callback-page";
+import type { GoogleOAuthCredentials } from "./google-oauth-credentials";
+import {
+  chooseGoogleOAuthCredentials,
+  createGoogleTokenRequestBody,
+  loadStoredGoogleOAuthCredentials,
+  persistGoogleOAuthCredentials,
+} from "./google-oauth-credentials";
 
-const GOOGLE_OAUTH_CLIENT_ID =
-  import.meta.env.MAIN_VITE_GOOGLE_OAUTH_CLIENT_ID?.trim() ||
-  process.env["MAIN_VITE_GOOGLE_OAUTH_CLIENT_ID"]?.trim();
-const GOOGLE_OAUTH_CLIENT_SECRET =
-  import.meta.env.MAIN_VITE_GOOGLE_OAUTH_CLIENT_SECRET?.trim() ||
-  process.env["MAIN_VITE_GOOGLE_OAUTH_CLIENT_SECRET"]?.trim();
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_PROFILE_URL =
@@ -53,13 +51,13 @@ const GOOGLE_REQUEST_TIMEOUT_MS = 5000;
 const GOOGLE_TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 const GOOGLE_AUTH_ATTEMPT_TTL_MS = 10 * 60 * 1000;
 const GOOGLE_AUTH_CALLBACK_PATH = "/oauth/google/callback";
-const GOOGLE_ACCOUNT_LIMIT_MESSAGE = `You can connect up to ${MAX_GOOGLE_ACCOUNTS} Google accounts.`;
-
 const GmailProfile = Schema.Struct({ emailAddress: Schema.NonEmptyString });
 const StoredCredentials = Schema.Struct({
   accessToken: Schema.NonEmptyString,
   clientId: Schema.optional(Schema.NonEmptyString),
+  clientSecret: Schema.optional(Schema.NonEmptyString),
   expiresAt: Schema.optional(Schema.Finite),
+  oauthClient: Schema.optional(Schema.Literal("user-owned")),
   refreshToken: Schema.optional(Schema.NonEmptyString),
 });
 const StoredScopes = Schema.Array(Schema.NonEmptyString);
@@ -90,6 +88,7 @@ const GoogleUserInfo = Schema.Struct({
 interface AuthHandoff {
   readonly accessToken: string;
   readonly clientId: string;
+  readonly clientSecret?: string;
   readonly expiresAt: number;
   readonly refreshToken?: string;
   readonly scopes: readonly string[];
@@ -103,6 +102,7 @@ class GoogleAuthError extends Schema.TaggedError<GoogleAuthError>()(
 
 interface PendingGoogleAuthAttempt {
   readonly createdAt: number;
+  readonly oauth: GoogleOAuthCredentials;
   readonly redirectUri: string;
   readonly server: Server;
   readonly timeout: NodeJS.Timeout;
@@ -123,6 +123,17 @@ const decodeGoogleOAuthErrorResponse = Schema.decodeUnknownPromise(
   GoogleOAuthErrorResponse
 );
 const decodeGoogleUserInfo = Schema.decodeUnknownPromise(GoogleUserInfo);
+
+const isUserOwnedOAuthClient = (credentials: Buffer): boolean => {
+  try {
+    const stored = decodeStoredCredentials(
+      JSON.parse(safeStorage.decryptString(credentials))
+    );
+    return stored.oauthClient === "user-owned";
+  } catch {
+    return false;
+  }
+};
 
 const describeGoogleOAuthFailure = Effect.fn("describeGoogleOAuthFailure")(
   function* describeGoogleOAuthFailure(response: Response, prefix: string) {
@@ -145,24 +156,6 @@ const describeGoogleOAuthFailure = Effect.fn("describeGoogleOAuthFailure")(
     return `${prefix} (${response.status}, ${payload.error})${safeDescription}`;
   }
 );
-
-const requireGoogleOAuthCredentials = Effect.fn(
-  "requireGoogleOAuthCredentials"
-)(function* requireGoogleOAuthCredentials() {
-  if (
-    GOOGLE_OAUTH_CLIENT_ID === undefined ||
-    GOOGLE_OAUTH_CLIENT_SECRET === undefined
-  ) {
-    return yield* new GoogleAuthError({
-      message: "Google Desktop OAuth credentials are not configured",
-    });
-  }
-
-  return {
-    clientId: GOOGLE_OAUTH_CLIENT_ID,
-    clientSecret: GOOGLE_OAUTH_CLIENT_SECRET,
-  };
-});
 
 export const notifyGoogleAccountsChanged = (
   reply: GoogleAccountsReply
@@ -273,40 +266,17 @@ const withDatabase = <A>(
     Effect.mapError(() => new GoogleAuthError({ message }))
   );
 
-const requireGoogleAccountCapacity = Effect.fn("requireGoogleAccountCapacity")(
-  function* requireGoogleAccountCapacity() {
-    const accountCount = yield* withDatabase(
-      "Could not load Google accounts",
-      async (database) => {
-        const rows = await database
-          .select({ value: count() })
-          .from(googleAccounts)
-          .all();
-        return rows.at(0)?.value ?? 0;
-      }
-    );
-
-    if (accountCount >= MAX_GOOGLE_ACCOUNTS) {
-      return yield* new GoogleAuthError({
-        message: GOOGLE_ACCOUNT_LIMIT_MESSAGE,
-      });
-    }
-  }
-);
-
 const exchangeCode = Effect.fn("exchangeCode")(function* exchangeCode(
   code: string,
   pending: PendingGoogleAuthAttempt
 ) {
-  const oauth = yield* requireGoogleOAuthCredentials();
+  const { oauth } = pending;
   const response = yield* Effect.tryPromise({
     catch: () =>
       new GoogleAuthError({ message: "Could not complete Google sign-in" }),
     try: () =>
       fetch(GOOGLE_TOKEN_URL, {
-        body: new URLSearchParams({
-          client_id: oauth.clientId,
-          client_secret: oauth.clientSecret,
+        body: createGoogleTokenRequestBody(oauth, {
           code,
           code_verifier: pending.verifier,
           grant_type: "authorization_code",
@@ -336,6 +306,7 @@ const exchangeCode = Effect.fn("exchangeCode")(function* exchangeCode(
   return {
     accessToken: payload.access_token,
     clientId: oauth.clientId,
+    clientSecret: oauth.clientSecret,
     expiresAt: Date.now() + payload.expires_in * 1000,
     refreshToken: payload.refresh_token,
     scopes: payload.scope.split(" ").filter((scope) => scope.length > 0),
@@ -378,7 +349,7 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
           where: { email: profile.emailAddress },
         })
     );
-    const existingRefreshToken = yield* Effect.try({
+    const existingOAuthState = yield* Effect.try({
       catch: () =>
         new GoogleAuthError({ message: "Could not read saved credentials" }),
       try: () => {
@@ -390,7 +361,10 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
           JSON.parse(safeStorage.decryptString(existing.credentials))
         );
         return credentials.clientId === handoff.clientId
-          ? credentials.refreshToken
+          ? {
+              clientSecret: credentials.clientSecret,
+              refreshToken: credentials.refreshToken,
+            }
           : undefined;
       },
     });
@@ -398,60 +372,35 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
       JSON.stringify({
         accessToken: handoff.accessToken,
         clientId: handoff.clientId,
+        clientSecret: handoff.clientSecret ?? existingOAuthState?.clientSecret,
         expiresAt: handoff.expiresAt,
-        refreshToken: handoff.refreshToken ?? existingRefreshToken,
+        oauthClient: "user-owned",
+        refreshToken: handoff.refreshToken ?? existingOAuthState?.refreshToken,
       })
     );
     const now = Date.now();
 
-    const saved = yield* withDatabase(
-      "Could not save Google account",
-      (database) =>
-        database.transaction(async (transaction) => {
-          const existingAccounts = await transaction
-            .select({ email: googleAccounts.email })
-            .from(googleAccounts)
-            .where(equals(googleAccounts.email, profile.emailAddress))
-            .all();
-          const accountRows = await transaction
-            .select({ value: count() })
-            .from(googleAccounts)
-            .all();
-          const isExistingAccount = existingAccounts.length > 0;
-          const accountCount = accountRows.at(0)?.value ?? 0;
-
-          if (!isExistingAccount && accountCount >= MAX_GOOGLE_ACCOUNTS) {
-            return false;
-          }
-
-          await transaction
-            .insert(googleAccounts)
-            .values({
-              createdAt: now,
-              credentials: encryptedCredentials,
-              email: profile.emailAddress,
-              scopes: JSON.stringify(handoff.scopes),
-              sortOrder: now,
-              updatedAt: now,
-            })
-            .onConflictDoUpdate({
-              set: {
-                credentials: encryptedCredentials,
-                scopes: JSON.stringify(handoff.scopes),
-                updatedAt: now,
-              },
-              target: googleAccounts.email,
-            })
-            .run();
-          return true;
+    yield* withDatabase("Could not save Google account", (database) =>
+      database
+        .insert(googleAccounts)
+        .values({
+          createdAt: now,
+          credentials: encryptedCredentials,
+          email: profile.emailAddress,
+          scopes: JSON.stringify(handoff.scopes),
+          sortOrder: now,
+          updatedAt: now,
         })
+        .onConflictDoUpdate({
+          set: {
+            credentials: encryptedCredentials,
+            scopes: JSON.stringify(handoff.scopes),
+            updatedAt: now,
+          },
+          target: googleAccounts.email,
+        })
+        .run()
     );
-
-    if (!saved) {
-      return yield* new GoogleAuthError({
-        message: GOOGLE_ACCOUNT_LIMIT_MESSAGE,
-      });
-    }
 
     return profile.emailAddress;
   }
@@ -459,22 +408,28 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
 
 const refreshCredentials = Effect.fn("refreshCredentials")(
   function* refreshCredentials(credentials: typeof StoredCredentials.Type) {
-    const { clientId, refreshToken } = credentials;
-    const oauth = yield* requireGoogleOAuthCredentials();
+    const { clientId, clientSecret, oauthClient, refreshToken } = credentials;
 
-    if (refreshToken === undefined || clientId !== oauth.clientId) {
+    if (
+      refreshToken === undefined ||
+      clientId === undefined ||
+      oauthClient !== "user-owned"
+    ) {
       return yield* new GoogleAuthError({
-        message: "Google account must be connected again",
+        message:
+          "Google account must be connected again with your own credentials JSON",
       });
     }
+    const oauth = {
+      clientId,
+      clientSecret,
+    };
     const response = yield* Effect.tryPromise({
       catch: () =>
         new GoogleAuthError({ message: "Could not refresh Google sign-in" }),
       try: () =>
         fetch(GOOGLE_TOKEN_URL, {
-          body: new URLSearchParams({
-            client_id: oauth.clientId,
-            client_secret: oauth.clientSecret,
+          body: createGoogleTokenRequestBody(oauth, {
             grant_type: "refresh_token",
             refresh_token: refreshToken,
           }),
@@ -503,7 +458,9 @@ const refreshCredentials = Effect.fn("refreshCredentials")(
     return {
       accessToken: refreshed.access_token,
       clientId: oauth.clientId,
+      clientSecret: oauth.clientSecret,
       expiresAt: Date.now() + refreshed.expires_in * 1000,
+      oauthClient: "user-owned" as const,
       refreshToken: refreshed.refresh_token ?? refreshToken,
     };
   }
@@ -537,6 +494,12 @@ export const getGoogleAccessToken = Effect.fn("getGoogleAccessToken")(
           JSON.parse(safeStorage.decryptString(account.credentials))
         ),
     });
+    if (stored.oauthClient !== "user-owned") {
+      return yield* new GoogleAuthError({
+        message:
+          "Google account must be connected again with your own credentials JSON",
+      });
+    }
     const shouldRefresh =
       options.forceRefresh === true ||
       (stored.expiresAt !== undefined &&
@@ -763,6 +726,7 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
 
 export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
   function* listGoogleAccounts() {
+    yield* requireSecureStorage();
     const rows = yield* withDatabase(
       "Could not load Google accounts",
       (database) =>
@@ -788,8 +752,12 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
         })
     );
 
+    const userOwnedRows = rows.filter((row) =>
+      isUserOwnedOAuthClient(row.credentials)
+    );
+
     return yield* Effect.forEach(
-      rows,
+      userOwnedRows,
       (row) => {
         const avatarUrl = toAvatarDataUrl(row.avatarData, row.avatarMediaType);
 
@@ -809,15 +777,23 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
 
 export const reorderGoogleAccounts = Effect.fn("reorderGoogleAccounts")(
   function* reorderGoogleAccounts(emails: readonly string[]) {
+    yield* requireSecureStorage();
     const matchesStoredAccounts = yield* withDatabase(
       "Could not save Google account order",
       (database) =>
         database.transaction(async (transaction) => {
           const accountRows = await transaction
-            .select({ email: googleAccounts.email })
+            .select({
+              credentials: googleAccounts.credentials,
+              email: googleAccounts.email,
+            })
             .from(googleAccounts)
             .all();
-          const storedEmails = new Set(accountRows.map(({ email }) => email));
+          const storedEmails = new Set(
+            accountRows
+              .filter(({ credentials }) => isUserOwnedOAuthClient(credentials))
+              .map(({ email }) => email)
+          );
 
           if (
             emails.length !== storedEmails.size ||
@@ -953,7 +929,8 @@ export const handleGoogleAuthCallback = async (
 
 const startCallbackServer = (
   state: string,
-  verifier: string
+  verifier: string,
+  oauth: GoogleOAuthCredentials
 ): Effect.Effect<string, GoogleAuthError> =>
   Effect.callback((resume) => {
     const server = createServer((request, response) => {
@@ -1036,6 +1013,7 @@ const startCallbackServer = (
       pruneExpiredGoogleAuthAttempts();
       pendingGoogleAuthAttempts.set(state, {
         createdAt: Date.now(),
+        oauth,
         redirectUri,
         server,
         timeout,
@@ -1051,14 +1029,19 @@ const startCallbackServer = (
 
 export const startGoogleAuth = Effect.fn("startGoogleAuth")(
   function* startGoogleAuth() {
-    const oauth = yield* requireGoogleOAuthCredentials();
     yield* requireSecureStorage();
-    yield* requireGoogleAccountCapacity();
+    const oauth = yield* loadStoredGoogleOAuthCredentials();
+
+    if (oauth === null) {
+      return yield* new GoogleAuthError({
+        message: "Set up Google before signing in",
+      });
+    }
 
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const state = randomBytes(32).toString("base64url");
-    const callbackUrl = yield* startCallbackServer(state, verifier);
+    const callbackUrl = yield* startCallbackServer(state, verifier, oauth);
     const url = new URL(GOOGLE_AUTH_URL);
     url.search = new URLSearchParams({
       access_type: "offline",
@@ -1084,5 +1067,26 @@ export const startGoogleAuth = Effect.fn("startGoogleAuth")(
         })
       )
     );
+  }
+);
+
+export const getGoogleOAuthClientStatus = Effect.fn(
+  "getGoogleOAuthClientStatus"
+)(function* getGoogleOAuthClientStatus() {
+  yield* requireSecureStorage();
+  return (yield* loadStoredGoogleOAuthCredentials()) !== null;
+});
+
+export const setupGoogleOAuthClient = Effect.fn("setupGoogleOAuthClient")(
+  function* setupGoogleOAuthClient() {
+    yield* requireSecureStorage();
+    const oauth = yield* chooseGoogleOAuthCredentials();
+
+    if (oauth === undefined) {
+      return false;
+    }
+
+    yield* persistGoogleOAuthCredentials(oauth);
+    return true;
   }
 );

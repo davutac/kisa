@@ -2,8 +2,8 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 
 import { MAX_GMAIL_SUBJECT_LENGTH } from "../src/shared/gmail-subject";
-import { MAX_GOOGLE_ACCOUNTS } from "../src/shared/ipc/auth";
 import {
+  MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT,
   MAX_SCHEDULED_MAIL_PREVIEW_LENGTH,
   SCHEDULED_MAIL_PAGE_SIZE,
   ScheduledMailAttentionCount,
@@ -54,7 +54,17 @@ describe("scheduled mail IPC", () => {
   });
 
   it("bounds account scopes and uses a fixed page size with an opaque cursor", () => {
+    const tenAccountScope = {
+      accountIds: Array.from(
+        { length: 10 },
+        (_, index) => `person-${index}@example.com`
+      ),
+    };
+
     expect(SCHEDULED_MAIL_PAGE_SIZE).toBe(50);
+    expect(
+      Schema.decodeSync(ScheduledMailPageRequest)(tenAccountScope)
+    ).toStrictEqual(tenAccountScope);
     expect(
       Schema.decodeSync(ScheduledMailPageRequest)({
         accountIds: ["person@example.com"],
@@ -67,7 +77,7 @@ describe("scheduled mail IPC", () => {
     expect(() =>
       Schema.decodeSync(ScheduledMailPageRequest)({
         accountIds: Array.from(
-          { length: MAX_GOOGLE_ACCOUNTS + 1 },
+          { length: MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT + 1 },
           (_, index) => `person-${index}@example.com`
         ),
       })

@@ -1,6 +1,5 @@
 import * as Schema from "effect/Schema";
 
-import { MAX_GOOGLE_ACCOUNTS } from "./auth";
 import {
   MAX_GMAIL_ATTACHMENT_COUNT,
   GmailOutgoingSubject,
@@ -11,6 +10,7 @@ import { IpcReply } from "./reply";
 
 export const SCHEDULED_MAIL_PAGE_SIZE = 50;
 export const MAX_SCHEDULED_MAIL_PREVIEW_LENGTH = 240;
+export const MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT = 1000;
 
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
@@ -45,7 +45,7 @@ export type ScheduledMailKey = typeof ScheduledMailKey.Type;
 
 export const ScheduledMailScope = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString).check(
-    Schema.isMaxLength(MAX_GOOGLE_ACCOUNTS)
+    Schema.isMaxLength(MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT)
   ),
 });
 export type ScheduledMailScope = typeof ScheduledMailScope.Type;

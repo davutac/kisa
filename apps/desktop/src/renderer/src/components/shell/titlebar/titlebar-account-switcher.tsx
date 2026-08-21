@@ -16,7 +16,6 @@ import {
 import { AppCommand, OPEN_ACCOUNT_COMMAND_IDS } from "@/hotkeys";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 import { getRuntimeCapabilities } from "@/platform/desktop";
-import { MAX_GOOGLE_ACCOUNTS } from "@/shared/ipc/auth";
 import {
   useGoogleAccounts,
   useReorderGoogleAccounts,
@@ -34,14 +33,13 @@ const TitlebarAccountSwitcher = () => {
   const reorderAccounts = useReorderGoogleAccounts();
   const { openAccount } = useMailboxNavigation();
   const [isAddingAccount, setIsAddingAccount] = useState(false);
-  const canAddAccount = accounts.length < MAX_GOOGLE_ACCOUNTS;
   const accountCommands = accounts.map((account, index) => ({
     account,
     command: OPEN_ACCOUNT_COMMAND_IDS[index],
   }));
 
   const handleAddAccount = async (): Promise<void> => {
-    if (auth === undefined || !canAddAccount) {
+    if (auth === undefined) {
       return;
     }
     setIsAddingAccount(true);
@@ -71,31 +69,35 @@ const TitlebarAccountSwitcher = () => {
   };
 
   return (
-    <div className="flex items-center gap-1">
-      <DragDropProvider
-        onDragEnd={handleAccountDrag}
-        sensors={(defaults) => [
-          ...defaults.filter((sensor) => sensor !== PointerSensor),
-          delayedAccountPointerSensor,
-        ]}
-      >
-        {accountCommands.map(({ account, command }, index) => (
-          <Fragment key={account.email}>
-            {command === undefined ? null : (
-              <AppCommand
-                callback={() => openAccount(account.email)}
-                command={command}
-              />
-            )}
-            <TitlebarAccountButton
-              account={account}
-              command={command}
-              index={index}
-            />
-          </Fragment>
-        ))}
-      </DragDropProvider>
-      {auth === undefined || !canAddAccount ? null : (
+    <div className="flex min-w-0 items-center gap-1">
+      <div className="no-scrollbar scroll-fade-x min-w-0 flex-1 overflow-x-auto">
+        <div className="flex w-max items-center gap-1">
+          <DragDropProvider
+            onDragEnd={handleAccountDrag}
+            sensors={(defaults) => [
+              ...defaults.filter((sensor) => sensor !== PointerSensor),
+              delayedAccountPointerSensor,
+            ]}
+          >
+            {accountCommands.map(({ account, command }, index) => (
+              <Fragment key={account.email}>
+                {command === undefined ? null : (
+                  <AppCommand
+                    callback={() => openAccount(account.email)}
+                    command={command}
+                  />
+                )}
+                <TitlebarAccountButton
+                  account={account}
+                  command={command}
+                  index={index}
+                />
+              </Fragment>
+            ))}
+          </DragDropProvider>
+        </div>
+      </div>
+      {auth === undefined ? null : (
         <Tooltip>
           <TooltipTrigger
             render={
