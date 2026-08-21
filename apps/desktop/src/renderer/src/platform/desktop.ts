@@ -36,9 +36,11 @@ export interface WindowApi {
 
 export interface AuthApi {
   disconnectGoogleAccount: DesktopBridge["disconnectGoogleAccount"];
+  getGoogleOAuthClientStatus: DesktopBridge["getGoogleOAuthClientStatus"];
   listGoogleAccounts: DesktopBridge["listGoogleAccounts"];
   onGoogleAccountsChanged: DesktopBridge["onGoogleAccountsChanged"];
   reorderGoogleAccounts: DesktopBridge["reorderGoogleAccounts"];
+  setupGoogleOAuthClient: DesktopBridge["setupGoogleOAuthClient"];
   startGoogle: DesktopBridge["startGoogleAuth"];
 }
 
@@ -165,9 +167,11 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     },
     auth: {
       disconnectGoogleAccount: bridge.disconnectGoogleAccount,
+      getGoogleOAuthClientStatus: bridge.getGoogleOAuthClientStatus,
       listGoogleAccounts: bridge.listGoogleAccounts,
       onGoogleAccountsChanged: bridge.onGoogleAccountsChanged,
       reorderGoogleAccounts: bridge.reorderGoogleAccounts,
+      setupGoogleOAuthClient: bridge.setupGoogleOAuthClient,
       startGoogle: bridge.startGoogleAuth,
     },
     lifecycle: { onClosing: bridge.onAppClosing },

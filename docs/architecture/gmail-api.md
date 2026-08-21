@@ -73,9 +73,11 @@ Request the narrowest set that implements the product. Google's current classifi
 
 Kisa requests `mail.google.com` because Spam supports immediate permanent deletion; requesting `gmail.modify` alongside it would add no capability. Accounts connected with a narrower scope must connect again.
 
-Public applications using restricted Gmail scopes generally require OAuth verification. Storing or transmitting restricted-scope data through a server can add security-assessment requirements. Kisa's local-first design reduces that remote data exposure, but it does not remove the need for verification or careful local protection. Credentials remain encrypted in Electron's main process and never cross into the renderer.
+Google requires applications requesting restricted Gmail scopes to complete an annual security assessment, including local desktop clients. Kisa does not ship a shared OAuth client. Each user creates a personal Google Cloud project and imports its Desktop OAuth credentials. See [Connect Kisa to Google](../google-oauth-setup.md).
 
-Kisa registers as a Google Desktop application. Electron main opens the system browser, receives the authorization response on a temporary `127.0.0.1` loopback listener, and protects the code exchange with PKCE and validated OAuth state. Code exchange and refresh requests go directly from the desktop process to Google; Kisa has no OAuth relay. The matching Desktop client ID and client secret are injected only into the main bundle at build time. As with every installed application, the distributed client secret is public application identity rather than a confidential authorization factor.
+Electron main opens the JSON file picker for the first connection and accepts only the `installed` Desktop-client shape. The file is bounded to 64 KiB and its contents never cross renderer IPC. The selected client is encrypted once behind `safeStorage` in the app's user-data directory and reused for later account connections. The client identity is also encrypted with each account's access and refresh tokens because Google refresh tokens belong to the OAuth client that issued them.
+
+Electron main opens the system browser, receives the authorization response on a temporary `127.0.0.1` loopback listener, and protects the code exchange with PKCE and validated OAuth state. Code exchange and refresh requests go directly from the desktop process to Google; Kisa has no OAuth relay or server. A Desktop client secret is public application identity rather than a confidential authorization factor, so PKCE and validated state remain the authorization boundary.
 
 ## Boundaries and limitations
 
