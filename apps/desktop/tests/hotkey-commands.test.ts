@@ -68,6 +68,17 @@ describe("hotkey command registry", () => {
     expect(getHotkeyAriaLabel("composer.stash", "windows")).toBe("Control+S");
   });
 
+  it("keeps app Undo out of native editor history", () => {
+    expect(HOTKEY_COMMANDS["app.undo"]).toMatchObject({
+      bindings: ["Mod+Z"],
+      input: "ignore",
+      repeat: "once",
+      scope: "app",
+    });
+    expect(getHotkeyAriaLabel("app.undo", "mac")).toBe("Meta+Z");
+    expect(getHotkeyAriaLabel("app.undo", "windows")).toBe("Control+Z");
+  });
+
   it("assigns template workspace shortcuts", () => {
     expect(HOTKEY_COMMANDS["app.openTemplates"].bindings).toStrictEqual([
       "Mod+Shift+T",

@@ -132,6 +132,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "ignore-key-repeat",
     scope: "app",
   },
+  "app.undo": {
+    bindings: ["Mod+Z"],
+    input: "ignore",
+    label: "Undo last action",
+    repeat: "once",
+    scope: "app",
+  },
   "composer.attach": {
     bindings: ["Mod+Shift+A"],
     input: "allow",

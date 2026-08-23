@@ -1,12 +1,6 @@
 import { useCallback } from "react";
-import { toast } from "sonner";
 
-import { getMailApi } from "@/platform/desktop";
-import type {
-  GmailBulkThreadMutationOperation,
-  GmailThreadMutationReply,
-  GmailThreadRequest,
-} from "@/shared/ipc/mail";
+import { useThreadActionRunner } from "@/mail/use-thread-action-runner";
 
 export interface ThreadActionTarget {
   accountId: string;
@@ -18,6 +12,11 @@ type OnThreadActionSuccess = () => void;
 
 const labelSuccessMessage = (applied: boolean): string =>
   applied ? "Label added to conversations" : "Label removed from conversations";
+
+const labelUndoMessage = (applied: boolean): string =>
+  applied
+    ? "Removed the label from conversations"
+    : "Restored the label to conversations";
 
 export interface ThreadActions {
   bulkDeleteSpam: (
@@ -55,94 +54,46 @@ export interface ThreadActions {
 }
 
 /**
- * Every thread action enters through this hook. The main process performs the
- * Gmail and cache mutation, then publishes the resulting list projection; the
- * renderer list and open thread both reconcile from that one typed event.
+ * All mouse and keyboard thread actions enter through this hook. Main owns the
+ * Gmail/cache mutation and publishes the authoritative renderer projection.
  */
 export const useThreadActions = (): ThreadActions => {
-  const mailApi = getMailApi();
-  const runThreadAction = useCallback(
-    async (
-      send: () => Promise<GmailThreadMutationReply>,
-      fallbackMessage: string,
-      onSuccess?: OnThreadActionSuccess
-    ): Promise<void> => {
-      try {
-        const reply = await send();
-
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
-        }
-
-        onSuccess?.();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : fallbackMessage);
-      }
-    },
-    []
-  );
-
-  const runBulkAction = useCallback(
-    async (
-      threads: readonly GmailThreadRequest[],
-      operation: GmailBulkThreadMutationOperation,
-      successMessage: string,
-      failureMessage: string
-    ): Promise<void> => {
-      if (mailApi === undefined || threads.length === 0) {
-        return;
-      }
-
-      try {
-        const reply = await mailApi.bulkMutateThreads({ operation, threads });
-
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
-        }
-
-        if (reply.data.failed.length === 0) {
-          toast.success(successMessage);
-          return;
-        }
-
-        toast.error(failureMessage, {
-          description: `${reply.data.failed.length} of ${threads.length} conversations could not be updated.`,
-        });
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Could not update emails"
-        );
-      }
-    },
-    [mailApi]
-  );
+  const { runBulkAction, runThreadAction } = useThreadActionRunner();
 
   const bulkSetReadState = useCallback(
     (
       threads: readonly ThreadActionTarget[],
       isUnread: boolean
     ): Promise<void> =>
-      runBulkAction(
-        threads.map(({ accountId, threadId }) => ({ accountId, threadId })),
-        { isUnread, kind: "setReadState" },
-        isUnread
+      runBulkAction({
+        failureMessage: "Some conversations were not updated",
+        operation: { isUnread, kind: "setReadState" },
+        successMessage: isUnread
           ? "Marked conversations as unread"
           : "Marked conversations as read",
-        "Some conversations were not updated"
-      ),
+        threads: threads.map(({ accountId, threadId }) => ({
+          accountId,
+          threadId,
+        })),
+      }),
     [runBulkAction]
   );
 
   const bulkTrash = useCallback(
     (threads: readonly ThreadActionTarget[]): Promise<void> =>
-      runBulkAction(
-        threads.map(({ accountId, threadId }) => ({ accountId, threadId })),
-        { kind: "trash" },
-        "Moved conversations to trash",
-        "Some conversations were not moved to trash"
-      ),
+      runBulkAction({
+        failureMessage: "Some conversations were not moved to trash",
+        operation: { kind: "trash" },
+        successMessage: "Moved conversations to trash",
+        threads: threads.map(({ accountId, threadId }) => ({
+          accountId,
+          threadId,
+        })),
+        undo: {
+          operation: { kind: "moveToInbox" },
+          undoneMessage: "Restored conversations to the inbox",
+        },
+      }),
     [runBulkAction]
   );
 
@@ -150,12 +101,12 @@ export const useThreadActions = (): ThreadActions => {
     (
       threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[]
     ): Promise<void> =>
-      runBulkAction(
+      runBulkAction({
+        failureMessage: "Some conversations were not deleted",
+        operation: { kind: "deleteSpam" },
+        successMessage: "Conversations permanently deleted",
         threads,
-        { kind: "deleteSpam" },
-        "Conversations permanently deleted",
-        "Some conversations were not deleted"
-      ),
+      }),
     [runBulkAction]
   );
 
@@ -164,65 +115,77 @@ export const useThreadActions = (): ThreadActions => {
       threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[],
       label: { readonly applied: boolean; readonly labelId: string }
     ): Promise<void> =>
-      runBulkAction(
-        threads,
-        {
+      runBulkAction({
+        failureMessage: "Some labels were not updated",
+        operation: {
           applied: label.applied,
           kind: "setLabel",
           labelId: label.labelId,
         },
-        labelSuccessMessage(label.applied),
-        "Some labels were not updated"
-      ),
+        successMessage: labelSuccessMessage(label.applied),
+        threads,
+        undo: {
+          operation: {
+            applied: !label.applied,
+            kind: "setLabel",
+            labelId: label.labelId,
+          },
+          undoneMessage: labelUndoMessage(label.applied),
+        },
+      }),
     [runBulkAction]
   );
 
   const toggleRead = useCallback(
     (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
-      if (mailApi === undefined) {
-        return;
-      }
+      const isUnread = !thread.isUnread;
 
-      void runThreadAction(
-        () =>
+      void runThreadAction({
+        failureMessage: "Could not update email",
+        onSuccess,
+        send: (mailApi) =>
           mailApi.setThreadReadState({
             accountId: thread.accountId,
-            isUnread: !thread.isUnread,
+            isUnread,
             threadId: thread.threadId,
           }),
-        "Could not update email",
-        () => {
-          toast.success(
-            thread.isUnread ? "Marked as read" : "Marked as unread"
-          );
-          onSuccess?.();
-        }
-      );
+        successMessage: isUnread ? "Marked as unread" : "Marked as read",
+      });
     },
-    [mailApi, runThreadAction]
+    [runThreadAction]
   );
 
   const setLabel = useCallback(
-    async (
+    (
       thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
       label: { readonly applied: boolean; readonly labelId: string }
-    ): Promise<void> => {
-      if (mailApi === undefined) {
-        return;
-      }
-
-      await runThreadAction(
-        () =>
+    ): Promise<void> =>
+      runThreadAction({
+        failureMessage: "Could not update email labels",
+        send: (mailApi) =>
           mailApi.setThreadLabel({
             accountId: thread.accountId,
             applied: label.applied,
             labelId: label.labelId,
             threadId: thread.threadId,
           }),
-        "Could not update email labels"
-      );
-    },
-    [mailApi, runThreadAction]
+        undo: {
+          failureMessage: "Could not restore the email label",
+          kind: "thread",
+          message: label.applied ? "Label added" : "Label removed",
+          send: (mailApi) =>
+            mailApi.setThreadLabel({
+              accountId: thread.accountId,
+              applied: !label.applied,
+              labelId: label.labelId,
+              threadId: thread.threadId,
+            }),
+          undoneMessage: label.applied
+            ? "Label removed again"
+            : "Label restored",
+        },
+      }),
+    [runThreadAction]
   );
 
   const notSpam = useCallback(
@@ -230,21 +193,21 @@ export const useThreadActions = (): ThreadActions => {
       thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
       onSuccess?: OnThreadActionSuccess
     ): void => {
-      if (mailApi === undefined) {
-        return;
-      }
-
-      void runThreadAction(
-        () =>
-          mailApi.markThreadNotSpam({
-            accountId: thread.accountId,
-            threadId: thread.threadId,
-          }),
-        "Could not mark email as not spam",
-        onSuccess
-      );
+      void runThreadAction({
+        failureMessage: "Could not mark email as not spam",
+        onSuccess,
+        send: (mailApi) => mailApi.markThreadNotSpam(thread),
+        undo: {
+          failureMessage: "Could not move the conversation back to spam",
+          kind: "bulk",
+          message: "Moved conversation to the inbox",
+          operation: { kind: "moveToSpam" },
+          threads: [thread],
+          undoneMessage: "Moved conversation back to spam",
+        },
+      });
     },
-    [mailApi, runThreadAction]
+    [runThreadAction]
   );
 
   const deleteSpam = useCallback(
@@ -252,43 +215,38 @@ export const useThreadActions = (): ThreadActions => {
       thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
       onSuccess?: OnThreadActionSuccess
     ): void => {
-      if (mailApi === undefined) {
-        return;
-      }
-
-      void runThreadAction(
-        () =>
-          mailApi.deleteSpamThread({
-            accountId: thread.accountId,
-            threadId: thread.threadId,
-          }),
-        "Could not permanently delete email",
-        () => {
-          toast.success("Conversation permanently deleted");
-          onSuccess?.();
-        }
-      );
+      void runThreadAction({
+        failureMessage: "Could not permanently delete email",
+        onSuccess,
+        send: (mailApi) => mailApi.deleteSpamThread(thread),
+        successMessage: "Conversation permanently deleted",
+      });
     },
-    [mailApi, runThreadAction]
+    [runThreadAction]
   );
 
   const trash = useCallback(
     (thread: ThreadActionTarget, onSuccess?: OnThreadActionSuccess): void => {
-      if (mailApi === undefined) {
-        return;
-      }
+      const request = {
+        accountId: thread.accountId,
+        threadId: thread.threadId,
+      };
 
-      void runThreadAction(
-        () =>
-          mailApi.trashThread({
-            accountId: thread.accountId,
-            threadId: thread.threadId,
-          }),
-        "Could not move email to trash",
-        onSuccess
-      );
+      void runThreadAction({
+        failureMessage: "Could not move email to trash",
+        onSuccess,
+        send: (mailApi) => mailApi.trashThread(request),
+        undo: {
+          failureMessage: "Could not restore the conversation",
+          kind: "bulk",
+          message: "Moved conversation to trash",
+          operation: { kind: "moveToInbox" },
+          threads: [request],
+          undoneMessage: "Restored conversation to the inbox",
+        },
+      });
     },
-    [mailApi, runThreadAction]
+    [runThreadAction]
   );
 
   return {

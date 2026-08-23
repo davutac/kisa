@@ -55,6 +55,8 @@ In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, a
 
 `U` toggles the unread-only mailbox filter. `S` toggles the Spam mailbox.
 
+`Mod+Z` runs the latest application Undo while its eight-second toast is available. The command ignores text inputs and rich-text editors, where native editing history continues to own the same shortcut.
+
 `J`, `K`, and the arrow keys move mailbox focus. `X` adds or removes the focused conversation from the bulk selection. A revealed row checkbox provides the same action with the mouse. Pressing and dragging anywhere across a conversation row paints that row's checked or unchecked state across every row crossed; reversing the drag restores the rows crossed on the way back. A 15-pixel movement tolerance keeps ordinary clicks opening the conversation. `Escape` clears both bulk selection and mailbox focus.
 
 When conversations are checked, Apple Mail-style `Mod+Shift+U` applies to the full selection: it marks the selection unread only when every selected conversation is currently read; otherwise it marks the selection read. `Mod+D` moves the selection to trash, or opens the permanent-delete confirmation in Spam. Without a bulk selection these commands continue to target the focused conversation. These commands are not registered for hover-only quick actions.

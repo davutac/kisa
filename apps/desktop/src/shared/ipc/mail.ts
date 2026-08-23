@@ -309,6 +309,8 @@ export const GmailBulkThreadMutationOperation = Schema.Union([
     labelId: Schema.NonEmptyString,
   }),
   Schema.Struct({ kind: Schema.Literal("trash") }),
+  Schema.Struct({ kind: Schema.Literal("moveToInbox") }),
+  Schema.Struct({ kind: Schema.Literal("moveToSpam") }),
   Schema.Struct({ kind: Schema.Literal("deleteSpam") }),
 ]);
 export type GmailBulkThreadMutationOperation =

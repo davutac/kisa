@@ -93,8 +93,9 @@ interface TestState {
     readonly isRead: boolean;
     readonly threadId: ThreadId;
   }[];
-  readonly spamStateChanges: {
+  readonly systemMailboxChanges: {
     readonly accountId: AccountId;
+    readonly mailbox: "inbox" | "spam";
     readonly threadId: ThreadId;
   }[];
   readonly threadLabelChanges: {
@@ -159,7 +160,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     removedThreads: [],
     savedThreadIds: [],
     sendCalls: 0,
-    spamStateChanges: [],
+    systemMailboxChanges: [],
     threadLabelChanges: [],
   };
 
@@ -185,9 +186,21 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     listAccounts: Effect.sync(() =>
       [...state.authorizations.values()].map(({ account }) => account)
     ),
-    markThreadNotSpam: (accountId, threadId) =>
+    moveThreadToInbox: (accountId, threadId) =>
       Effect.sync(() => {
-        state.spamStateChanges.push({ accountId, threadId });
+        state.systemMailboxChanges.push({
+          accountId,
+          mailbox: "inbox",
+          threadId,
+        });
+      }),
+    moveThreadToSpam: (accountId, threadId) =>
+      Effect.sync(() => {
+        state.systemMailboxChanges.push({
+          accountId,
+          mailbox: "spam",
+          threadId,
+        });
       }),
     removeThreads: (_accountId, threadIds) =>
       Effect.sync(() => {
@@ -693,7 +706,7 @@ describe(Gmail, () => {
 
         yield* gmail.markThreadRead(request);
         yield* gmail.markThreadUnread(request);
-        yield* gmail.markThreadNotSpam(request);
+        yield* gmail.moveThreadToInbox(request);
         yield* gmail.setThreadLabel({
           ...request,
           applied: true,
@@ -993,10 +1006,10 @@ describe(Gmail, () => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("moves a thread from Spam to Inbox", () => {
+  it.effect("moves a thread between Inbox and Spam", () => {
     const { layer, state } = createTestLayer();
 
-    return Effect.gen(function* recoversSpam() {
+    return Effect.gen(function* movesThread() {
       const gmail = yield* Gmail;
       const account = yield* gmail.authorizeAccount({
         accessToken: "access-a",
@@ -1007,17 +1020,43 @@ describe(Gmail, () => {
         threadId: ThreadId.make("thread-1"),
       };
 
-      yield* gmail.markThreadNotSpam(request);
+      yield* gmail.moveThreadToInbox(request);
+      yield* gmail.moveThreadToSpam(request);
+      yield* gmail.moveThreadToInbox(request);
 
       expect(state.labelMutationCalls).toStrictEqual([
         {
           addLabelIds: ["INBOX"],
-          removeLabelIds: ["SPAM"],
+          removeLabelIds: ["SPAM", "TRASH"],
+          threadId: request.threadId,
+        },
+        {
+          addLabelIds: ["SPAM"],
+          removeLabelIds: ["INBOX", "TRASH"],
+          threadId: request.threadId,
+        },
+        {
+          addLabelIds: ["INBOX"],
+          removeLabelIds: ["SPAM", "TRASH"],
           threadId: request.threadId,
         },
       ]);
-      expect(state.spamStateChanges).toStrictEqual([
-        { accountId: account.id, threadId: request.threadId },
+      expect(state.systemMailboxChanges).toStrictEqual([
+        {
+          accountId: account.id,
+          mailbox: "inbox",
+          threadId: request.threadId,
+        },
+        {
+          accountId: account.id,
+          mailbox: "spam",
+          threadId: request.threadId,
+        },
+        {
+          accountId: account.id,
+          mailbox: "inbox",
+          threadId: request.threadId,
+        },
       ]);
     }).pipe(Effect.provide(layer));
   });

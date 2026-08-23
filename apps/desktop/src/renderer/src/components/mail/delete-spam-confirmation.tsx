@@ -24,10 +24,3 @@ export const getBulkDeleteSpamConfirmation = (
   description: `${conversationCount(count)} will be permanently deleted from Gmail. This action cannot be undone.`,
   title: `Delete ${conversationCount(count)}?`,
 });
-
-export const getBulkTrashConfirmation = (count: number): ConfirmOptions => ({
-  confirmLabel: "Move to trash",
-  confirmVariant: "destructive",
-  description: `${conversationCount(count)} will be moved to Gmail Trash.`,
-  title: `Move ${conversationCount(count)} to trash?`,
-});
