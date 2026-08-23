@@ -193,7 +193,10 @@ export interface GmailService {
   readonly markThreadUnread: (
     request: ThreadMutationRequest
   ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
-  readonly markThreadNotSpam: (
+  readonly moveThreadToInbox: (
+    request: ThreadMutationRequest
+  ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
+  readonly moveThreadToSpam: (
     request: ThreadMutationRequest
   ) => Effect.Effect<ThreadMutationOutcome, GmailError>;
   readonly setThreadLabel: (
@@ -834,17 +837,32 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         }
       );
 
-      const markThreadNotSpam = Effect.fn("Gmail.markThreadNotSpam")(
-        function* markThreadNotSpam(request: ThreadMutationRequest) {
+      const moveThreadToInbox = Effect.fn("Gmail.moveThreadToInbox")(
+        function* moveThreadToInbox(request: ThreadMutationRequest) {
           return yield* mutateThreadAndCache(
             request,
             (authorization) =>
               gateway.modifyThreadLabels(authorization, {
                 addLabelIds: ["INBOX"],
-                removeLabelIds: ["SPAM"],
+                removeLabelIds: ["SPAM", "TRASH"],
                 threadId: request.threadId,
               }),
-            store.markThreadNotSpam(request.accountId, request.threadId)
+            store.moveThreadToInbox(request.accountId, request.threadId)
+          );
+        }
+      );
+
+      const moveThreadToSpam = Effect.fn("Gmail.moveThreadToSpam")(
+        function* moveThreadToSpam(request: ThreadMutationRequest) {
+          return yield* mutateThreadAndCache(
+            request,
+            (authorization) =>
+              gateway.modifyThreadLabels(authorization, {
+                addLabelIds: ["SPAM"],
+                removeLabelIds: ["INBOX", "TRASH"],
+                threadId: request.threadId,
+              }),
+            store.moveThreadToSpam(request.accountId, request.threadId)
           );
         }
       );
@@ -1094,9 +1112,10 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         listAccounts: store.listAccounts,
         listLabels,
         listThreads,
-        markThreadNotSpam,
         markThreadRead,
         markThreadUnread,
+        moveThreadToInbox,
+        moveThreadToSpam,
         reply,
         sendMessage,
         setThreadLabel,

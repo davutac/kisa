@@ -14,6 +14,7 @@ import type {
   GmailMessage,
   GmailScope,
   Mailbox,
+  ThreadId,
 } from "@repo/gmail/models";
 import {
   AccountId,
@@ -41,6 +42,7 @@ const storeError = (message: string) => new GmailStoreError({ message });
 
 const INBOX_LABEL_ID = LabelId.make("INBOX");
 const SPAM_LABEL_ID = LabelId.make("SPAM");
+const TRASH_LABEL_ID = LabelId.make("TRASH");
 const UNREAD_LABEL_ID = LabelId.make("UNREAD");
 
 const setLabelMembership = (
@@ -55,14 +57,98 @@ const setLabelMembership = (
   return labels.filter((candidate) => candidate !== label);
 };
 
-const withoutSpamAndWithInbox = (
-  labels: readonly string[]
+type SystemMailbox = "inbox" | "spam";
+
+const moveToSystemMailbox = (
+  labels: readonly string[],
+  mailbox: SystemMailbox
 ): readonly string[] => [
   ...labels.filter(
-    (label) => label !== SPAM_LABEL_ID && label !== INBOX_LABEL_ID
+    (label) =>
+      label !== SPAM_LABEL_ID &&
+      label !== INBOX_LABEL_ID &&
+      label !== TRASH_LABEL_ID
   ),
-  INBOX_LABEL_ID,
+  mailbox === "inbox" ? INBOX_LABEL_ID : SPAM_LABEL_ID,
 ];
+
+const updateThreadSystemMailbox = async (
+  database: RemoteDatabaseClient,
+  accountId: AccountId,
+  threadId: ThreadId,
+  mailbox: SystemMailbox
+): Promise<void> => {
+  const now = Date.now();
+
+  await database.transaction(async (transaction) => {
+    const messages = await transaction
+      .select({
+        labelIds: gmailMessages.labelIds,
+        messageId: gmailMessages.messageId,
+      })
+      .from(gmailMessages)
+      .where(
+        and(
+          eq(gmailMessages.accountEmail, accountId),
+          eq(gmailMessages.threadId, threadId)
+        )
+      )
+      .all();
+
+    for (const message of messages) {
+      // Gmail applies system-label moves to every message in the thread.
+      // oxlint-disable-next-line eslint/no-await-in-loop
+      await transaction
+        .update(gmailMessages)
+        .set({
+          labelIds: moveToSystemMailbox(message.labelIds ?? [], mailbox),
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(gmailMessages.accountEmail, accountId),
+            eq(gmailMessages.messageId, message.messageId)
+          )
+        )
+        .run();
+    }
+
+    const [thread] = await transaction
+      .select({ labels: gmailThreads.labels })
+      .from(gmailThreads)
+      .where(
+        and(
+          eq(gmailThreads.accountEmail, accountId),
+          eq(gmailThreads.threadId, threadId)
+        )
+      )
+      .limit(1)
+      .all();
+
+    if (thread === undefined) {
+      return;
+    }
+
+    await transaction
+      .update(gmailThreads)
+      .set({
+        isInInbox: mailbox === "inbox",
+        isInSpam: mailbox === "spam",
+        labels: moveToSystemMailbox(thread.labels ?? [], mailbox),
+        spamAddedAt: mailbox === "spam" ? now : null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(gmailThreads.accountEmail, accountId),
+          eq(gmailThreads.threadId, threadId)
+        )
+      )
+      .run();
+  });
+
+  forgetCachedCorrespondents(accountId);
+};
 
 /**
  * Bumped when the stored representation of a body changes, so rows written by
@@ -342,82 +428,14 @@ export const GmailStoreLive = Layer.succeed(
       }
     ),
 
-    markThreadNotSpam: (accountId, threadId) =>
-      withDatabase(
-        "Could not recover Gmail thread from spam",
-        async (database) => {
-          const now = Date.now();
+    moveThreadToInbox: (accountId, threadId) =>
+      withDatabase("Could not move Gmail thread to the inbox", (database) =>
+        updateThreadSystemMailbox(database, accountId, threadId, "inbox")
+      ),
 
-          await database.transaction(async (transaction) => {
-            const messages = await transaction
-              .select({
-                labelIds: gmailMessages.labelIds,
-                messageId: gmailMessages.messageId,
-              })
-              .from(gmailMessages)
-              .where(
-                and(
-                  eq(gmailMessages.accountEmail, accountId),
-                  eq(gmailMessages.threadId, threadId)
-                )
-              )
-              .all();
-
-            for (const message of messages) {
-              // Gmail applies this system-label move to every message.
-              // oxlint-disable-next-line eslint/no-await-in-loop
-              await transaction
-                .update(gmailMessages)
-                .set({
-                  labelIds: withoutSpamAndWithInbox(message.labelIds ?? []),
-                  updatedAt: now,
-                })
-                .where(
-                  and(
-                    eq(gmailMessages.accountEmail, accountId),
-                    eq(gmailMessages.messageId, message.messageId)
-                  )
-                )
-                .run();
-            }
-
-            const [thread] = await transaction
-              .select({ labels: gmailThreads.labels })
-              .from(gmailThreads)
-              .where(
-                and(
-                  eq(gmailThreads.accountEmail, accountId),
-                  eq(gmailThreads.threadId, threadId)
-                )
-              )
-              .limit(1)
-              .all();
-
-            if (thread === undefined) {
-              return;
-            }
-
-            await transaction
-              .update(gmailThreads)
-              .set({
-                isInInbox: true,
-                isInSpam: false,
-                labels: withoutSpamAndWithInbox(thread.labels ?? []),
-                spamAddedAt: null,
-                updatedAt: now,
-              })
-              .where(
-                and(
-                  eq(gmailThreads.accountEmail, accountId),
-                  eq(gmailThreads.threadId, threadId)
-                )
-              )
-              .run();
-          });
-
-          // Rebuild lazily so the recovered sender can re-enter completion.
-          forgetCachedCorrespondents(accountId);
-        }
+    moveThreadToSpam: (accountId, threadId) =>
+      withDatabase("Could not move Gmail thread to spam", (database) =>
+        updateThreadSystemMailbox(database, accountId, threadId, "spam")
       ),
 
     removeThreads: (accountId, threadIds) =>

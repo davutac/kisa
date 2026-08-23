@@ -186,9 +186,13 @@ const ThreadSelectionBar = ({
                           key={label.id}
                           onCheckedChange={() => {
                             const applied = !appliedToAll;
+                            const changedThreads = group.threads.filter(
+                              (thread) =>
+                                thread.labels.includes(label.name) !== applied
+                            );
 
                             void run(() =>
-                              actions.bulkSetLabel(group.threads, {
+                              actions.bulkSetLabel(changedThreads, {
                                 applied,
                                 labelId: label.id,
                               })

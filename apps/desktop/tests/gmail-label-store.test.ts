@@ -452,7 +452,7 @@ describe("Gmail label store", () => {
     ]);
   });
 
-  it("moves a Spam thread and all cached messages back to Inbox", async () => {
+  it("moves a thread and all cached messages between system mailboxes", async () => {
     const accountId = AccountId.make("person@example.com");
     const otherAccountId = AccountId.make("other@example.com");
     const threadId = ThreadId.make("spam-thread");
@@ -480,7 +480,7 @@ describe("Gmail label store", () => {
 
     await Effect.runPromise(
       GmailStore.pipe(
-        Effect.flatMap((store) => store.markThreadNotSpam(accountId, threadId)),
+        Effect.flatMap((store) => store.moveThreadToInbox(accountId, threadId)),
         Effect.provide(GmailStoreLive)
       )
     );
@@ -512,6 +512,14 @@ describe("Gmail label store", () => {
       { label_ids: '["UNREAD","INBOX"]', message_id: "spam-message-1" },
       { label_ids: '["UNREAD","INBOX"]', message_id: "spam-message-2" },
     ]);
+
+    await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) => store.moveThreadToSpam(accountId, threadId)),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
     expect(
       connection
         .prepare(
@@ -519,21 +527,57 @@ describe("Gmail label store", () => {
            FROM gmail_threads
            WHERE account_email = ? AND thread_id = ?`
         )
-        .get(otherAccountId, threadId)
+        .get(accountId, threadId)
     ).toStrictEqual({
       is_in_inbox: 0,
       is_in_spam: 1,
-      labels: '["SPAM","UNREAD"]',
+      labels: '["UNREAD","SPAM"]',
     });
+
+    await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) => store.moveThreadToInbox(accountId, threadId)),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
     expect(
       connection
+        .prepare(
+          `SELECT is_in_inbox, is_in_spam, labels, spam_added_at
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = ?`
+        )
+        .get(accountId, threadId)
+    ).toStrictEqual({
+      is_in_inbox: 1,
+      is_in_spam: 0,
+      labels: '["UNREAD","INBOX"]',
+      spam_added_at: null,
+    });
+    expect({
+      message: connection
         .prepare(
           `SELECT label_ids
            FROM gmail_messages
            WHERE account_email = ? AND message_id = 'other-message'`
         )
-        .get(otherAccountId)
-    ).toStrictEqual({ label_ids: '["SPAM","UNREAD"]' });
+        .get(otherAccountId),
+      thread: connection
+        .prepare(
+          `SELECT is_in_inbox, is_in_spam, labels
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = ?`
+        )
+        .get(otherAccountId, threadId),
+    }).toStrictEqual({
+      message: { label_ids: '["SPAM","UNREAD"]' },
+      thread: {
+        is_in_inbox: 0,
+        is_in_spam: 1,
+        labels: '["SPAM","UNREAD"]',
+      },
+    });
   });
 
   it("removes cached unread labels when marking a Spam thread read", async () => {

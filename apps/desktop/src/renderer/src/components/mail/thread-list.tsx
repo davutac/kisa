@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfirm } from "@/components/confirm-dialog";
 import {
   getBulkDeleteSpamConfirmation,
-  getBulkTrashConfirmation,
   getDeleteSpamConfirmation,
 } from "@/components/mail/delete-spam-confirmation";
 import MailThreadItem from "@/components/mail/thread-item";
@@ -153,13 +152,6 @@ const MailThreadList = ({
       if (confirmed) {
         await actions.bulkDeleteSpam(checkedThreads);
       }
-      return;
-    }
-
-    if (
-      checkedThreads.length > 1 &&
-      !(await confirm(getBulkTrashConfirmation(checkedThreads.length)))
-    ) {
       return;
     }
 

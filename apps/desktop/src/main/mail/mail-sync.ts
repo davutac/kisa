@@ -1409,12 +1409,12 @@ export const setThreadLabel = Effect.fn("setThreadLabel")(
   }
 );
 
-export const markThreadNotSpam = Effect.fn("markThreadNotSpam")(
-  function* markThreadNotSpam(request: GmailThreadRequest) {
+const moveThreadToInbox = Effect.fn("moveThreadToInbox")(
+  function* moveThreadToInbox(request: GmailThreadRequest) {
     const outcome = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
-          gmail.markThreadNotSpam({
+          gmail.moveThreadToInbox({
             accountId: AccountId.make(request.accountId),
             threadId: ThreadId.make(request.threadId),
           })
@@ -1422,6 +1422,28 @@ export const markThreadNotSpam = Effect.fn("markThreadNotSpam")(
       )
     );
 
+    yield* publishThreadMutationOutcome(request, outcome);
+  }
+);
+
+export const markThreadNotSpam = moveThreadToInbox;
+
+const moveThreadToSpam = Effect.fn("moveThreadToSpam")(
+  function* moveThreadToSpam(request: GmailThreadRequest) {
+    const outcome = yield* runGmail(
+      Gmail.pipe(
+        Effect.flatMap((gmail) =>
+          gmail.moveThreadToSpam({
+            accountId: AccountId.make(request.accountId),
+            threadId: ThreadId.make(request.threadId),
+          })
+        )
+      )
+    );
+
+    yield* Effect.sync(() =>
+      dismissThreadNotifications(request.accountId, request.threadId)
+    );
     yield* publishThreadMutationOutcome(request, outcome);
   }
 );
@@ -1711,6 +1733,14 @@ const runSingleBulkMutation = (
 
   if (operation.kind === "setReadState") {
     return setThreadReadState({ ...request, isUnread: operation.isUnread });
+  }
+
+  if (operation.kind === "moveToSpam") {
+    return moveThreadToSpam(request);
+  }
+
+  if (operation.kind === "moveToInbox") {
+    return moveThreadToInbox(request);
   }
 
   return trashThread(request);

@@ -44,4 +44,13 @@ describe(planBulkThreadMutation, () => {
       fallback: [0, 1, 2, 3, 4, 5],
     });
   });
+
+  it("keeps Undo mailbox moves on Gmail's whole-thread endpoint", () => {
+    for (const kind of ["moveToInbox", "moveToSpam"] as const) {
+      expect(planBulkThreadMutation(kind, [1, 1, 1, 1, 1, 1])).toStrictEqual({
+        batches: [],
+        fallback: [0, 1, 2, 3, 4, 5],
+      });
+    }
+  });
 });
