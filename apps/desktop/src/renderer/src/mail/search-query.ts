@@ -1,17 +1,6 @@
-import type {
-  GmailLabelSummary,
-  GmailSearchFilter,
-  GmailSearchFilterField,
-} from "@/shared/ipc/mail";
+import type { GmailMailbox, GmailSearchFilterField } from "@/shared/ipc/mail";
 
-import { compareGmailLabelDisplayNames, isSystemGmailLabel } from "./label";
-
-/**
- * `account` is the one operator the index does not answer: it scopes *which*
- * mailboxes are searched rather than what matches inside them, so it is applied
- * by choosing the accounts in the request. Everything else is sent as a filter.
- */
-export type SearchFilterField = GmailSearchFilterField | "account";
+export type SearchFilterField = GmailSearchFilterField;
 
 export interface SearchFilter {
   field: SearchFilterField;
@@ -24,31 +13,26 @@ export interface SearchQuery {
   text: string;
 }
 
-const INBOX_FILTER: SearchFilter = { field: "label", value: "inbox" };
+export const MIN_SEARCH_TEXT_LENGTH = 2;
 
-const isInboxFilter = (filter: SearchFilter): boolean =>
-  filter.field === "label" && filter.value.toLowerCase() === "inbox";
+/** Filter-only and broad searches run immediately; free text needs two letters. */
+export const isMailSearchQueryReady = (query: SearchQuery): boolean => {
+  const text = query.text.trim();
+  return text.length === 0 || text.length >= MIN_SEARCH_TEXT_LENGTH;
+};
 
-/** Search opens in the visible Inbox and can widen when this pill is removed. */
-export const createScopedSearchQuery = (
-  accountId: string | null
-): SearchQuery => ({
-  filters:
-    accountId === null
-      ? [INBOX_FILTER]
-      : [{ field: "account", value: accountId }, INBOX_FILTER],
+/** Search has no hidden Inbox scope: edited queries cover all non-Spam mail. */
+export const createMailSearchQuery = (): SearchQuery => ({
+  filters: [],
   text: "",
 });
 
-export const SEARCH_FILTER_FIELDS: readonly SearchFilterField[] = [
-  "account",
+export const SEARCH_FILTER_FIELDS = [
   "from",
   "to",
   "subject",
-  "label",
   "has",
-  "is",
-];
+] as const satisfies readonly SearchFilterField[];
 
 const FILTER_FIELDS = new Set<string>(SEARCH_FILTER_FIELDS);
 
@@ -102,27 +86,9 @@ const toFilter = (token: string): SearchFilter | undefined => {
 
   const field = token.slice(0, separatorIndex).toLowerCase();
   const value = token.slice(separatorIndex + 1).trim();
-
   return FILTER_FIELDS.has(field) && value.length > 0
     ? { field: field as SearchFilterField, value }
     : undefined;
-};
-
-export const parseSearchQuery = (raw: string): SearchQuery => {
-  const filters: SearchFilter[] = [];
-  const words: string[] = [];
-
-  for (const token of tokenizeQuery(raw)) {
-    const filter = toFilter(token.value);
-
-    if (filter === undefined) {
-      words.push(token.value);
-    } else {
-      filters.push(filter);
-    }
-  }
-
-  return { filters, text: words.join(" ") };
 };
 
 const formatFilterValue = (value: string): string =>
@@ -133,19 +99,12 @@ export const formatSearchFilter = (filter: SearchFilter): string =>
 
 /**
  * Serialises back to Gmail's own query syntax, so the same string can be handed
- * to Gmail search when the palette hands off to the mailbox list.
+ * to Gmail search when the inline field hands off to the mailbox list.
  */
 export const formatSearchQuery = (query: SearchQuery): string =>
   [...query.filters.map(formatSearchFilter), query.text.trim()]
     .filter((part) => part.length > 0)
     .join(" ");
-
-/** Account and Inbox describe where to search; another filter asks a question. */
-export const isSearchQueryScopeOnly = (query: SearchQuery): boolean =>
-  query.text.trim().length === 0 &&
-  query.filters.every(
-    (filter) => filter.field === "account" || isInboxFilter(filter)
-  );
 
 const isSameFilter = (left: SearchFilter, right: SearchFilter): boolean =>
   left.field === right.field &&
@@ -170,6 +129,33 @@ export const addSearchFilters = (
   }
 
   return next;
+};
+
+export const applyExternalMailSearchScope = (
+  query: SearchQuery,
+  {
+    labelNames,
+    mailbox,
+    unreadOnly,
+  }: {
+    readonly labelNames: readonly string[];
+    readonly mailbox: GmailMailbox;
+    readonly unreadOnly: boolean;
+  }
+): SearchQuery => {
+  const scopeFilters: SearchFilter[] = labelNames.map((value) => ({
+    field: "label",
+    value,
+  }));
+
+  if (mailbox === "spam") {
+    scopeFilters.push({ field: "label", value: "spam" });
+  }
+  if (unreadOnly) {
+    scopeFilters.push({ field: "is", value: "unread" });
+  }
+
+  return addSearchFilters(query, scopeFilters);
 };
 
 export const removeSearchFilterAt = (
@@ -229,7 +215,7 @@ export interface FilterDraft {
 }
 
 /**
- * The operator being typed right now, if any — what the palette offers
+ * The operator being typed right now, if any — what the completion menu offers
  * completions for. Only the last token counts: earlier ones are pills already.
  */
 export const parseFilterDraft = (draft: string): FilterDraft | undefined => {
@@ -246,11 +232,12 @@ export const parseFilterDraft = (draft: string): FilterDraft | undefined => {
   }
 
   const field = token.value.slice(0, separatorIndex).toLowerCase();
+  const value = token.value.slice(separatorIndex + 1);
 
   return FILTER_FIELDS.has(field)
     ? {
         field: field as SearchFilterField,
-        value: token.value.slice(separatorIndex + 1),
+        value,
       }
     : undefined;
 };
@@ -269,8 +256,26 @@ export const removeFilterDraft = (draft: string): string => {
   return rest.length === 0 ? "" : `${rest.join(" ")} `;
 };
 
+export const toMailSearchDraftFilter = (
+  draft: FilterDraft | undefined
+): SearchFilter | undefined =>
+  draft === undefined || draft.value.trim().length === 0
+    ? undefined
+    : { field: draft.field, value: draft.value.trim() };
+
+export const toLiveMailSearchQuery = (query: SearchQuery): SearchQuery => {
+  const draft = parseFilterDraft(query.text);
+  const filter = toMailSearchDraftFilter(draft);
+
+  return draft === undefined
+    ? query
+    : {
+        ...(filter === undefined ? query : addSearchFilter(query, filter)),
+        text: removeFilterDraft(query.text),
+      };
+};
+
 const FILTER_LABELS = {
-  account: "Account",
   from: "From",
   has: "Has",
   is: "Is",
@@ -281,102 +286,3 @@ const FILTER_LABELS = {
 
 export const getSearchFilterLabel = (field: SearchFilterField): string =>
   FILTER_LABELS[field];
-
-export const hasInboxSearchScope = (query: SearchQuery): boolean =>
-  query.filters.some(isInboxFilter);
-
-const UNINDEXED_SYSTEM_LABELS = new Set(["CHAT", "TRASH"]);
-
-export interface SearchLabelSuggestion {
-  accountIds: readonly string[];
-  isSystem: boolean;
-  name: string;
-}
-
-interface SearchLabelCatalog {
-  accountId: string;
-  labels: readonly GmailLabelSummary[];
-}
-
-interface MutableSearchLabelSuggestion {
-  accountIds: Set<string>;
-  isSystem: boolean;
-  name: string;
-}
-
-const isSystemSearchLabel = (label: GmailLabelSummary): boolean =>
-  label.type === "system" || isSystemGmailLabel(label.name);
-
-export const toSearchLabelSuggestions = (
-  catalogs: readonly SearchLabelCatalog[]
-): readonly SearchLabelSuggestion[] => {
-  const suggestions = new Map<string, MutableSearchLabelSuggestion>();
-
-  for (const catalog of catalogs) {
-    for (const label of catalog.labels) {
-      const isSystem = isSystemSearchLabel(label);
-
-      if (isSystem && UNINDEXED_SYSTEM_LABELS.has(label.id.toUpperCase())) {
-        continue;
-      }
-
-      const key = label.name.toLowerCase();
-      const existing = suggestions.get(key);
-
-      if (existing === undefined) {
-        suggestions.set(key, {
-          accountIds: new Set([catalog.accountId]),
-          isSystem,
-          name: label.name,
-        });
-        continue;
-      }
-
-      existing.accountIds.add(catalog.accountId);
-      existing.isSystem ||= isSystem;
-    }
-  }
-
-  return [...suggestions.values()]
-    .map((suggestion) => ({
-      accountIds: [...suggestion.accountIds],
-      isSystem: suggestion.isSystem,
-      name: suggestion.name,
-    }))
-    .toSorted((left, right) => {
-      const systemOrder = Number(right.isSystem) - Number(left.isSystem);
-
-      return (
-        systemOrder || compareGmailLabelDisplayNames(left.name, right.name)
-      );
-    });
-};
-
-/**
- * The accounts an `account:` pill narrows to, matched against the connected
- * ones so a half-typed or stale address cannot silently search nothing. With no
- * pill — or none that names a connected account — every account is searched.
- */
-export const getSearchAccountIds = (
-  query: SearchQuery,
-  accountIds: readonly string[]
-): readonly string[] => {
-  const wanted = new Set(
-    query.filters
-      .filter((filter) => filter.field === "account")
-      .map((filter) => filter.value.toLowerCase())
-  );
-  const scoped = accountIds.filter((accountId) =>
-    wanted.has(accountId.toLowerCase())
-  );
-
-  return scoped.length === 0 ? accountIds : scoped;
-};
-
-/** Drops the pills the index does not answer, leaving what the search takes. */
-export const toIndexSearchFilters = (
-  query: SearchQuery
-): readonly GmailSearchFilter[] =>
-  query.filters.filter(
-    (filter): filter is GmailSearchFilter => filter.field !== "account"
-  );

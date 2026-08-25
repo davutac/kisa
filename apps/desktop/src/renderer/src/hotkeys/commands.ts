@@ -19,6 +19,12 @@ interface HotkeyCommandDefinition {
   readonly scope: HotkeyScope;
 }
 
+const CLEAR_LABEL_FILTERS_COMMAND = {
+  bindings: ["Mod+Shift+L"],
+  label: "Clear label filters",
+  repeat: "once",
+} as const;
+
 export const HOTKEY_COMMANDS = {
   "app.composeMessage": {
     bindings: ["Mod+N"],
@@ -230,6 +236,11 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "composer",
   },
+  "mailbox.clearLabelFilters": {
+    ...CLEAR_LABEL_FILTERS_COMMAND,
+    input: "ignore",
+    scope: "mailbox",
+  },
   "mailbox.clearSelection": {
     bindings: ["Escape"],
     input: "ignore",
@@ -244,6 +255,13 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "mailbox",
   },
+  "mailbox.nextLabel": {
+    bindings: ["ArrowRight"],
+    input: "ignore",
+    label: "Next mailbox label",
+    repeat: "allow",
+    scope: "mailbox",
+  },
   "mailbox.nextThread": {
     bindings: ["Tab", "ArrowDown", "J"],
     input: "ignore",
@@ -256,6 +274,13 @@ export const HOTKEY_COMMANDS = {
     input: "ignore",
     label: "Open conversation",
     repeat: "once",
+    scope: "mailbox",
+  },
+  "mailbox.previousLabel": {
+    bindings: ["ArrowLeft"],
+    input: "ignore",
+    label: "Previous mailbox label",
+    repeat: "allow",
     scope: "mailbox",
   },
   "mailbox.previousThread": {
@@ -285,6 +310,25 @@ export const HOTKEY_COMMANDS = {
     label: "Move to trash",
     repeat: "once",
     scope: "mailbox",
+  },
+  "search.clearLabelFilters": {
+    ...CLEAR_LABEL_FILTERS_COMMAND,
+    input: "allow",
+    scope: "search",
+  },
+  "search.nextThread": {
+    bindings: ["Tab"],
+    input: "allow",
+    label: "Focus next search result",
+    repeat: "allow",
+    scope: "search",
+  },
+  "search.previousThread": {
+    bindings: ["Shift+Tab"],
+    input: "allow",
+    label: "Focus previous search result",
+    repeat: "allow",
+    scope: "search",
   },
   "templates.focusSearch": {
     bindings: ["Mod+F"],

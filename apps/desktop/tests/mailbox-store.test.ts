@@ -22,6 +22,7 @@ describe("mailbox store", () => {
       checkedThreadIds,
       mailbox,
       selectedAccountId,
+      selectedLabelNames,
       selectedThreadId,
       showUnread,
     } = useMailboxStore.getState();
@@ -31,6 +32,7 @@ describe("mailbox store", () => {
       mailbox,
       openThreadId: useMailboxStore.getState().openThreadId,
       selectedAccountId,
+      selectedLabelNames,
       selectedThreadId,
       showUnread,
     }).toStrictEqual({
@@ -38,6 +40,7 @@ describe("mailbox store", () => {
       mailbox: "inbox",
       openThreadId: null,
       selectedAccountId: null,
+      selectedLabelNames: [],
       selectedThreadId: null,
       showUnread: false,
     });
@@ -118,6 +121,48 @@ describe("mailbox store", () => {
     );
     expect(useMailboxStore.getState().selectedThreadId).toBeNull();
     expect(useMailboxStore.getState().checkedThreadIds.size).toBe(0);
+  });
+
+  it("changes only the account scope when selecting an account", () => {
+    const store = useMailboxStore.getState();
+    store.setMailbox("spam");
+    store.setShowUnread(true);
+    store.setSelectedLabels(["Work"]);
+
+    store.selectAccount("other@example.com");
+
+    expect(useMailboxStore.getState()).toMatchObject({
+      mailbox: "spam",
+      selectedAccountId: "other@example.com",
+      selectedLabelNames: ["work"],
+      showUnread: true,
+    });
+  });
+
+  it("normalizes label selection and clears thread state", () => {
+    const store = useMailboxStore.getState();
+    store.openThread("person@example.com:thread-42");
+    store.checkThread("person@example.com:thread-42", true);
+
+    store.setSelectedLabels([" Work ", "travel", "WORK"]);
+
+    expect(useMailboxStore.getState()).toMatchObject({
+      openThreadId: null,
+      selectedLabelNames: ["travel", "work"],
+      selectedThreadId: null,
+    });
+    expect(useMailboxStore.getState().checkedThreadIds.size).toBe(0);
+  });
+
+  it("retains selected labels available in the new account scope", () => {
+    const store = useMailboxStore.getState();
+    store.setSelectedLabels(["travel", "work"]);
+
+    store.retainSelectedLabels(new Set(["work"]));
+
+    expect(useMailboxStore.getState().selectedLabelNames).toStrictEqual([
+      "work",
+    ]);
   });
 
   it("drops the selection when the unread filter changes", () => {

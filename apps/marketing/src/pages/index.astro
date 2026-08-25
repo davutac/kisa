@@ -107,6 +107,19 @@ const historyComposerTools = [
   { icon: Redo2Icon, label: "Redo" },
 ];
 
+const mailboxLabels = [
+  {
+    background: "#3c78d8",
+    name: "Design",
+    selected: true,
+    text: "#ffffff",
+  },
+  { background: "#8e63ce", name: "Personal", text: "#ffffff" },
+  { background: "#a479e2", name: "Photos", text: "#ffffff" },
+  { background: "#eaa041", name: "Updates", text: "#3c1f00" },
+  { background: "#0b8043", name: "Work", text: "#ffffff" },
+];
+
 const threads = [
   {
     attachments: [
@@ -292,7 +305,23 @@ const threads = [
             </div>
           </div>
 
-          <section class="min-h-120 bg-background p-3 sm:p-4" aria-label="Example Kisa inbox">
+          <div class="flex h-10 items-center overflow-hidden px-3 sm:px-4" aria-label="Example mailbox label filters">
+            <span class="grid size-6 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground" title="Clear label filters (⌘ ⇧ L)">
+              <XIcon className="size-3" />
+            </span>
+            <div class="flex min-w-0 flex-1 snap-x snap-proximity items-center gap-1 overflow-x-auto overscroll-x-contain pe-8 ps-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {mailboxLabels.map((label) => (
+                <span
+                  class="flex h-6 shrink-0 snap-center items-center rounded-md px-2 text-xs font-medium whitespace-nowrap"
+                  style={`background-color: ${label.selected ? label.background : `color-mix(in oklch, ${label.background} 5%, transparent)`}; color: ${label.selected ? label.text : "var(--foreground)"};`}
+                >
+                  {label.name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <section class="min-h-120 bg-background px-3 pb-3 sm:px-4 sm:pb-4" aria-label="Example Kisa inbox">
             <ol class="relative space-y-px">
               {threads.map((thread) => (
                 <li

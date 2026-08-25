@@ -165,6 +165,33 @@ describe("hotkey command registry", () => {
     ]);
   });
 
+  it("assigns mailbox label navigation", () => {
+    expect(HOTKEY_COMMANDS["mailbox.clearLabelFilters"]).toMatchObject({
+      bindings: ["Mod+Shift+L"],
+      input: "ignore",
+      repeat: "once",
+      scope: "mailbox",
+    });
+    expect(HOTKEY_COMMANDS["search.clearLabelFilters"]).toMatchObject({
+      bindings: ["Mod+Shift+L"],
+      input: "allow",
+      repeat: "once",
+      scope: "search",
+    });
+    expect(HOTKEY_COMMANDS["mailbox.nextLabel"]).toMatchObject({
+      bindings: ["ArrowRight"],
+      input: "ignore",
+      repeat: "allow",
+      scope: "mailbox",
+    });
+    expect(HOTKEY_COMMANDS["mailbox.previousLabel"]).toMatchObject({
+      bindings: ["ArrowLeft"],
+      input: "ignore",
+      repeat: "allow",
+      scope: "mailbox",
+    });
+  });
+
   it("formats selected-thread quick actions", () => {
     expect(
       getHotkeyDisplay("mailbox.toggleThreadRead", "mac").bindings
@@ -271,6 +298,19 @@ describe("hotkey command registry", () => {
       "ignore-key-repeat"
     );
     expect(HOTKEY_COMMANDS["app.toggleSpam"].repeat).toBe("ignore-key-repeat");
+  });
+
+  it("hands search Tab navigation to the thread list", () => {
+    expect(HOTKEY_COMMANDS["search.nextThread"]).toMatchObject({
+      bindings: ["Tab"],
+      input: "allow",
+      scope: "search",
+    });
+    expect(HOTKEY_COMMANDS["search.previousThread"]).toMatchObject({
+      bindings: ["Shift+Tab"],
+      input: "allow",
+      scope: "search",
+    });
   });
 
   it("formats display keys for each platform", () => {

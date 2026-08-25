@@ -26,7 +26,7 @@ const MAX_SENDER_LIMIT = 50;
 
 /**
  * A prefix query typed one letter at a time ("i", "in", "inv") matches a large
- * share of a full mailbox on its way to being specific, and the palette only
+ * share of a full mailbox on its way to being specific, and inline search only
  * shows the newest handful. Bounding the message scan keeps the broad
  * intermediate queries cheap; the cap takes the newest matches, which is the
  * order results are shown in anyway.

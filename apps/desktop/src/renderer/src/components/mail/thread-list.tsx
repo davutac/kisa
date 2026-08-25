@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { InboxIcon, ShieldAlertIcon } from "lucide-react";
+import { InboxIcon, SearchIcon, ShieldAlertIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
@@ -25,6 +25,7 @@ import {
   getThreadSelectionKey,
   getVisibleThreadSelectionIndex,
 } from "@/mail/thread-selection";
+import { blurFocusedMailboxLabel } from "@/mail/use-mailbox-label-navigation";
 import { useOpenThread } from "@/mail/use-open-thread";
 import type { ThreadActions } from "@/mail/use-thread-actions";
 import { useThreadDragSelection } from "@/mail/use-thread-drag-selection";
@@ -35,39 +36,57 @@ import {
   useSelectedThreadId,
 } from "@/state/mailbox";
 
-interface MailThreadListProps {
+export interface MailThreadListProps {
   actions: ThreadActions;
   emptyMessage: string;
   emptyTitle?: string;
   hasNextPage?: boolean;
-  /**
-   * Rendered in place of the paging row once the cache is exhausted but the
-   * mail index is still running, so reaching the end of a partly-indexed
-   * mailbox reads as "more is coming" rather than as the end of the mail.
-   */
-  indexingMessage?: string;
+  /** A passive final row, such as indexing progress or a capped-search note. */
+  trailingMessage?: string;
   isInitialLoading: boolean;
   isLoadingNextPage?: boolean;
+  loadingTitle?: string;
   loadNextPage?: () => Promise<boolean>;
   mailbox?: GmailMailbox;
-  reloadRevision: number;
+  scrollResetKey: number | string;
+  searchResults?: boolean;
   showAccount?: boolean;
   threads: readonly GmailThreadSummary[];
 }
 
 const RAPID_SELECTION_INTERVAL_MS = 150;
 
+interface ThreadListPresentation {
+  readonly emptyIcon: React.ReactNode;
+  readonly label: string;
+}
+
+const getThreadListPresentation = (
+  searchResults: boolean,
+  mailbox: GmailMailbox
+): ThreadListPresentation => {
+  if (searchResults) {
+    return { emptyIcon: <SearchIcon />, label: "Search results" };
+  }
+  if (mailbox === "spam") {
+    return { emptyIcon: <ShieldAlertIcon />, label: "Spam" };
+  }
+  return { emptyIcon: <InboxIcon />, label: "Inbox" };
+};
+
 const MailThreadList = ({
   actions,
   emptyMessage,
   emptyTitle = "No email",
   hasNextPage = false,
-  indexingMessage,
+  trailingMessage,
   isInitialLoading,
   isLoadingNextPage = false,
+  loadingTitle = "Checking the post…",
   loadNextPage,
   mailbox = "inbox",
-  reloadRevision,
+  scrollResetKey,
+  searchResults = false,
   showAccount = false,
   threads,
 }: MailThreadListProps) => {
@@ -86,7 +105,7 @@ const MailThreadList = ({
   );
   const selectThread = useMailboxStore((state) => state.selectThread);
   const lastSelectionMoveAtRef = useRef<number | null>(null);
-  const previousReloadRevisionRef = useRef(reloadRevision);
+  const previousScrollResetKeyRef = useRef(scrollResetKey);
   const threadKeys = useMemo(
     () => threads.map((thread) => getThreadSelectionKey(thread)),
     [threads]
@@ -98,11 +117,10 @@ const MailThreadList = ({
     selectThread,
     threadKeys,
   });
-  // The trailing row is the paging trigger, but it also carries the indexing
-  // notice — the auto-load effect below still keys off `hasNextPage` alone, so
-  // showing the notice cannot start a paging loop against an exhausted cache.
-  const hasTrailingRow = hasNextPage || indexingMessage !== undefined;
-  const emptyIcon = mailbox === "spam" ? <ShieldAlertIcon /> : <InboxIcon />;
+  // The trailing row can be a paging trigger or a passive note. Auto-load still
+  // keys off `hasNextPage`, so a note cannot start a paging loop.
+  const hasTrailingRow = hasNextPage || trailingMessage !== undefined;
+  const presentation = getThreadListPresentation(searchResults, mailbox);
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
     count: threads.length + (hasTrailingRow ? 1 : 0),
     estimateSize: () => 88,
@@ -212,7 +230,30 @@ const MailThreadList = ({
     });
   };
 
+  const handoffSearchSelection = (
+    direction: ThreadSelectionDirection
+  ): void => {
+    moveSelection(direction);
+    if (document.activeElement instanceof HTMLInputElement) {
+      document.activeElement.blur();
+    }
+  };
+
   useHotkeyLayer("mailbox", true);
+  useAppCommand(
+    "search.nextThread",
+    () => {
+      handoffSearchSelection(1);
+    },
+    { enabled: threads.length > 0 }
+  );
+  useAppCommand(
+    "search.previousThread",
+    () => {
+      handoffSearchSelection(-1);
+    },
+    { enabled: threads.length > 0 }
+  );
   useAppCommand(
     "mailbox.nextThread",
     () => {
@@ -227,14 +268,11 @@ const MailThreadList = ({
     },
     { enabled: threads.length > 0 }
   );
-  useAppCommand(
-    "mailbox.clearSelection",
-    () => {
-      clearCheckedThreads();
-      selectThread(null);
-    },
-    { enabled: selectedThreadKey !== null || checkedThreadIds.size > 0 }
-  );
+  useAppCommand("mailbox.clearSelection", () => {
+    clearCheckedThreads();
+    selectThread(null);
+    blurFocusedMailboxLabel();
+  });
   useAppCommand(
     "mailbox.toggleThreadSelection",
     () => {
@@ -291,13 +329,13 @@ const MailThreadList = ({
   }, [retainCheckedThreads, threadKeys]);
 
   useEffect(() => {
-    if (previousReloadRevisionRef.current === reloadRevision) {
+    if (previousScrollResetKeyRef.current === scrollResetKey) {
       return;
     }
 
-    previousReloadRevisionRef.current = reloadRevision;
+    previousScrollResetKeyRef.current = scrollResetKey;
     scrollElementRef.current?.scrollTo({ top: 0 });
-  }, [reloadRevision]);
+  }, [scrollResetKey]);
 
   useEffect(() => {
     const lastRow = virtualRows.at(-1);
@@ -322,8 +360,8 @@ const MailThreadList = ({
   return (
     <>
       <section
-        aria-label={mailbox === "spam" ? "Spam" : "Inbox"}
-        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4"
+        aria-label={presentation.label}
+        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4"
         ref={scrollElementRef}
         tabIndex={-1}
       >
@@ -334,10 +372,10 @@ const MailThreadList = ({
           >
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                {isInitialLoading ? <Spinner /> : emptyIcon}
+                {isInitialLoading ? <Spinner /> : presentation.emptyIcon}
               </EmptyMedia>
               <EmptyTitle>
-                {isInitialLoading ? "Checking the post…" : emptyTitle}
+                {isInitialLoading ? loadingTitle : emptyTitle}
               </EmptyTitle>
               {isInitialLoading ? null : (
                 <EmptyDescription>{emptyMessage}</EmptyDescription>
@@ -368,7 +406,7 @@ const MailThreadList = ({
                   >
                     {hasNextPage
                       ? "Fetching the next chapter…"
-                      : indexingMessage}
+                      : trailingMessage}
                   </p>
                 </li>
               ) : (

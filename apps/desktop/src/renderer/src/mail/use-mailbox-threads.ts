@@ -33,6 +33,7 @@ interface MailboxThreadsState {
 
 interface MailboxThreadsOptions {
   accountIds: readonly string[];
+  labelNames?: readonly string[];
   mailbox?: GmailMailbox;
   reloadRevision?: number;
   unreadOnly?: boolean;
@@ -41,18 +42,24 @@ interface MailboxThreadsOptions {
 type MailboxThreadsResult = MailboxThreadsSnapshot;
 
 /**
- * Mailbox lists come only from the local cache. Searching lives in the palette,
+ * Mailbox lists come only from the local cache. Searching lives in the titlebar,
  * over the local index — this hook never queries Gmail, so each mailbox is one
  * keyset walk through rows that are already on disk.
  */
 export const useMailboxThreads = ({
   accountIds,
+  labelNames = [],
   mailbox = "inbox",
   reloadRevision = 0,
   unreadOnly = false,
 }: MailboxThreadsOptions): MailboxThreadsState => {
   const mailApi = getMailApi();
-  const scopeKey = getMailboxScopeKey(accountIds, unreadOnly, mailbox);
+  const scopeKey = getMailboxScopeKey(
+    accountIds,
+    unreadOnly,
+    mailbox,
+    labelNames
+  );
   const createStartingResult = (): MailboxThreadsResult =>
     getMailboxThreadsSnapshot(scopeKey) ?? {
       cacheCursor: null,
@@ -104,7 +111,12 @@ export const useMailboxThreads = ({
     let isActive = true;
     const loadCachedFirstPage = async (merge: boolean): Promise<void> => {
       const reply = await mailApi.listCachedThreadPage(
-        createCachedThreadPageRequest(accountIds, unreadOnly, mailbox)
+        createCachedThreadPageRequest(
+          accountIds,
+          unreadOnly,
+          mailbox,
+          labelNames
+        )
       );
 
       if (!(isActive && generationRef.current === generation)) {
@@ -172,14 +184,23 @@ export const useMailboxThreads = ({
       isActive = false;
       unsubscribeThreadList();
     };
-  }, [accountIds, mailApi, mailbox, reloadRevision, scopeKey, unreadOnly]);
+  }, [
+    accountIds,
+    labelNames,
+    mailApi,
+    mailbox,
+    reloadRevision,
+    scopeKey,
+    unreadOnly,
+  ]);
 
   const isCurrentScope = result.scopeKey === scopeKey;
   const scopedThreads = filterThreadsByScope(
     result.threads,
     accountIds,
     unreadOnly,
-    mailbox
+    mailbox,
+    labelNames
   );
   const currentResult = {
     ...result,
@@ -229,6 +250,7 @@ export const useMailboxThreads = ({
         accountIds,
         unreadOnly,
         mailbox,
+        labelNames,
         tailThread === undefined ? cacheCursor : toThreadCursor(tailThread)
       )
     );
@@ -256,7 +278,7 @@ export const useMailboxThreads = ({
         : current
     );
     return reply.ok;
-  }, [accountIds, mailApi, mailbox, scopeKey, unreadOnly]);
+  }, [accountIds, labelNames, mailApi, mailbox, scopeKey, unreadOnly]);
 
   return {
     hasNextPage: currentResult.cacheCursor !== null,
