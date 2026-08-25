@@ -46,7 +46,6 @@ import {
   GmailThreadUpdated,
 } from "../../shared/ipc/mail";
 import type {
-  GmailCachedThreadPage,
   GmailCachedThreadPageRequest,
   GmailBulkThreadMutationOperation,
   GmailBulkThreadMutationRequest,
@@ -87,6 +86,12 @@ import {
   selectInlineImages,
   toImageDataUrl,
 } from "./inline-images";
+import {
+  listCachedThreadPageFromDatabase,
+  THREAD_PAGE_SIZE,
+  toCachedThreadSummary,
+} from "./mailbox-page";
+import type { CachedThreadRow } from "./mailbox-page";
 import type { NewMailNotificationMessage } from "./new-mail-notifications";
 import {
   dismissThreadNotifications,
@@ -106,7 +111,6 @@ const GMAIL_INBOX_LABEL = "INBOX";
 const GMAIL_DRAFT_LABEL = "DRAFT";
 const GMAIL_SPAM_LABEL = "SPAM";
 const GMAIL_TRASH_LABEL = "TRASH";
-const THREAD_PAGE_SIZE = 50;
 const SPAM_PAGE_QUOTA_UNITS =
   QUOTA_UNITS.threadsList + THREAD_PAGE_SIZE * QUOTA_UNITS.threadsGet;
 const INLINE_IMAGE_CONCURRENCY = 3;
@@ -218,26 +222,6 @@ const withDatabase = <A>(
   withDatabaseClient(run).pipe(
     Effect.mapError(() => new MailSyncError({ message }))
   );
-
-type CachedThreadRow = typeof gmailThreads.$inferSelect;
-
-const toCachedThreadSummary = (row: CachedThreadRow): GmailThreadSummary => {
-  const attachments = row.attachments ?? [];
-
-  return {
-    accountId: row.accountEmail,
-    attachments,
-    from: row.from,
-    hasAttachments: row.hasAttachments ?? attachments.length > 0,
-    isUnread: row.isUnread,
-    labels: row.labels ?? [],
-    latestAt: row.latestAt,
-    messageCount: row.messageCount,
-    snippet: row.snippet,
-    subject: row.subject,
-    threadId: row.threadId,
-  };
-};
 
 type CachedMessageRow = typeof gmailMessages.$inferSelect;
 
@@ -352,62 +336,9 @@ const readCachedConversation = Effect.fn("readCachedConversation")(
 
 export const listCachedThreadPage = Effect.fn("listCachedThreadPage")(
   function* listCachedThreadPage(request: GmailCachedThreadPageRequest) {
-    if (request.accountIds.length === 0) {
-      return { threads: [] } satisfies GmailCachedThreadPage;
-    }
-
-    const mailbox = request.mailbox ?? "inbox";
-    const rows = yield* withDatabase("Could not load email", (database) =>
-      database.query.gmailThreads.findMany({
-        limit: THREAD_PAGE_SIZE + 1,
-        // SQL ordering follows insertion order, so these keys are semantic.
-        // oxlint-disable-next-line eslint/sort-keys
-        orderBy: {
-          latestAt: "desc",
-          accountEmail: "asc",
-          threadId: "asc",
-        },
-        where: {
-          OR:
-            request.cursor === undefined
-              ? undefined
-              : [
-                  { latestAt: { lt: request.cursor.latestAt } },
-                  {
-                    accountEmail: { gt: request.cursor.accountId },
-                    latestAt: request.cursor.latestAt,
-                  },
-                  {
-                    accountEmail: request.cursor.accountId,
-                    latestAt: request.cursor.latestAt,
-                    threadId: { gt: request.cursor.threadId },
-                  },
-                ],
-          accountEmail: { in: [...request.accountIds] },
-          // The inbox predicate has to be in SQL, not a filter over the
-          // page below: the index stores archived mail in this table too,
-          // so filtering afterwards would return near-empty pages while
-          // paging through everything the user archived.
-          isInInbox: mailbox === "spam" ? undefined : true,
-          isInSpam: mailbox === "spam" ? true : undefined,
-          isUnread: request.unreadOnly === true ? true : undefined,
-        },
-      })
+    return yield* withDatabase("Could not load email", (database) =>
+      listCachedThreadPageFromDatabase(database, request)
     );
-    const pageRows = rows.slice(0, THREAD_PAGE_SIZE);
-    const threads = pageRows.map(toCachedThreadSummary);
-    const lastRow = pageRows.at(-1);
-
-    return rows.length > THREAD_PAGE_SIZE && lastRow !== undefined
-      ? {
-          nextCursor: {
-            accountId: lastRow.accountEmail,
-            latestAt: lastRow.latestAt,
-            threadId: lastRow.threadId,
-          },
-          threads,
-        }
-      : { threads };
   }
 );
 

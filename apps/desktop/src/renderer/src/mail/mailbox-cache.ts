@@ -18,7 +18,7 @@ export interface MailboxThreadsSnapshot {
 }
 
 // Keyed by mailbox scope alone: the list has no query of its own now that
-// searching lives in the palette.
+// searching lives in the inline mailbox search session.
 const mailboxSnapshots = new Map<string, MailboxThreadsSnapshot>();
 
 export const getMailboxThreadsSnapshot = (
@@ -44,10 +44,9 @@ export const setMailboxThreadsSnapshot = (
 // one. That prevents a stale snapshot from restoring an old projection later
 // and lets incoming threads appear without reloading a whole first page.
 const getSnapshotAccountIds = (snapshot: MailboxThreadsSnapshot): string[] => {
-  const separatorIndex = snapshot.scopeKey.lastIndexOf("\u0001");
+  const accountSegment = snapshot.scopeKey.split("\u0001")[2] ?? "";
 
-  return snapshot.scopeKey
-    .slice(separatorIndex + 1)
+  return accountSegment
     .split("\u0000")
     .filter((accountId) => accountId.length > 0);
 };

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import {
+  createCachedThreadPageRequest,
   filterThreadsByScope,
+  getMailboxScopeKey,
   mergeAndSortThreads,
 } from "../src/renderer/src/mail/mailbox-model";
 import type { GmailThreadSummary } from "../src/shared/ipc/mail";
@@ -79,5 +81,50 @@ describe(filterThreadsByScope, () => {
         "spam"
       )
     ).toStrictEqual([spam]);
+  });
+
+  it("requires every selected mailbox label", () => {
+    const both = makeThread("one@example.com", "both", 300, {
+      labels: ["INBOX", "Work", "Travel"],
+    });
+    const one = makeThread("one@example.com", "one", 200, {
+      labels: ["INBOX", "Work"],
+    });
+
+    expect(
+      filterThreadsByScope([both, one], ["one@example.com"], false, "inbox", [
+        "travel",
+        "work",
+      ])
+    ).toStrictEqual([both]);
+  });
+});
+
+describe("mailbox label request scope", () => {
+  it("normalizes labels in requests and cache keys", () => {
+    expect(
+      createCachedThreadPageRequest(["one@example.com"], false, "inbox", [
+        " Work ",
+        "travel",
+        "WORK",
+      ])
+    ).toStrictEqual({
+      accountIds: ["one@example.com"],
+      cursor: undefined,
+      labelNames: ["travel", "work"],
+      mailbox: "inbox",
+      unreadOnly: undefined,
+    });
+    expect(
+      getMailboxScopeKey(["one@example.com"], false, "inbox", [
+        "work",
+        "travel",
+      ])
+    ).toBe(
+      getMailboxScopeKey(["one@example.com"], false, "inbox", [
+        "Travel",
+        "WORK",
+      ])
+    );
   });
 });

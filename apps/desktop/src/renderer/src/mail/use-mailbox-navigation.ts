@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { retainMailboxThreadsSnapshotsForAccounts } from "@/mail/mailbox-cache";
 import { requestMailboxReload } from "@/mail/mailbox-reload";
 import { useGoogleAccounts } from "@/state/google-accounts";
+import { useIsMailSearchActive } from "@/state/mail-search";
 import { useMailboxStore } from "@/state/mailbox";
 
 export interface MailboxNavigation {
@@ -23,8 +24,10 @@ export const useMailboxNavigation = (): MailboxNavigation => {
   const mailbox = useMailboxStore((state) => state.mailbox);
   const openThreadId = useMailboxStore((state) => state.openThreadId);
   const selectedAccountId = useMailboxStore((state) => state.selectedAccountId);
+  const selectAccount = useMailboxStore((state) => state.selectAccount);
   const selectInbox = useMailboxStore((state) => state.selectInbox);
   const showUnread = useMailboxStore((state) => state.showUnread);
+  const isMailSearchActive = useIsMailSearchActive();
   const isMailboxRoute = pathname === "/";
 
   const showMailbox = (): void => {
@@ -38,20 +41,28 @@ export const useMailboxNavigation = (): MailboxNavigation => {
     mailbox === "inbox" &&
     openThreadId === null &&
     !showUnread;
+  const selectAccountScope = (accountId: string | null): void => {
+    if (isMailSearchActive) {
+      selectAccount(accountId);
+      return;
+    }
+
+    selectInbox(accountId);
+  };
 
   return {
     openAccount: (accountEmail) => {
-      if (isShowingInbox(accountEmail)) {
+      if (!isMailSearchActive && isShowingInbox(accountEmail)) {
         requestMailboxReload();
         return;
       }
 
       retainMailboxThreadsSnapshotsForAccounts([accountEmail]);
-      selectInbox(accountEmail);
+      selectAccountScope(accountEmail);
       showMailbox();
     },
     openAllAccounts: () => {
-      if (isShowingInbox(null)) {
+      if (!isMailSearchActive && isShowingInbox(null)) {
         requestMailboxReload();
         return;
       }
@@ -59,7 +70,7 @@ export const useMailboxNavigation = (): MailboxNavigation => {
       retainMailboxThreadsSnapshotsForAccounts(
         accounts.map(({ email }) => email)
       );
-      selectInbox(null);
+      selectAccountScope(null);
       showMailbox();
     },
   };

@@ -21,7 +21,7 @@ The hotkey module owns commands that apply to an application screen or interacti
 - Selecting the composer account, attaching files, stashing a draft, and sending a message
 - Creating, searching, and explicitly saving templates
 
-Focused widgets retain their native keyboard behavior. Recipient completion, search results, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused.
+Focused widgets retain their native keyboard behavior. Recipient completion, the inline search field, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused.
 
 Application renderer code should not import `@tanstack/react-hotkeys` outside `@/hotkeys` and the root provider setup.
 
@@ -58,6 +58,10 @@ In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, a
 `Mod+Z` runs the latest application Undo while its eight-second toast is available. The command ignores text inputs and rich-text editors, where native editing history continues to own the same shortcut.
 
 `J`, `K`, and the arrow keys move mailbox focus. `X` adds or removes the focused conversation from the bulk selection. A revealed row checkbox provides the same action with the mouse. Pressing and dragging anywhere across a conversation row paints that row's checked or unchecked state across every row crossed; reversing the drag restores the rows crossed on the way back. A 15-pixel movement tolerance keeps ordinary clicks opening the conversation. `Escape` clears both bulk selection and mailbox focus.
+
+While the inline mail search field owns focus, `Tab` or `Shift+Tab` dismisses its completion menu and hands keyboard control to the next or previous visible search result. The ordinary mailbox bindings then continue result navigation, and `Enter` opens the selected conversation.
+
+The mailbox label bar is a horizontal multi-toggle group. Mailbox-scoped `ArrowLeft` and `ArrowRight` commands move between label toggles, including when no label owns DOM focus yet. A fresh move starts from the first or last visible label, matching mailbox thread navigation; subsequent moves stop at the list edges and keep the focused toggle centered when possible. The commands ignore text inputs, while native `Space` toggles a focused label. `Escape` clears that label focus together with ordinary mailbox selection without changing the active label filters. `Mod+Shift+L` clears every active label filter, matching the X button and its shortcut tooltip. The same binding remains registered in the search scope while the inline search field owns focus.
 
 When conversations are checked, Apple Mail-style `Mod+Shift+U` applies to the full selection: it marks the selection unread only when every selected conversation is currently read; otherwise it marks the selection read. `Mod+D` moves the selection to trash, or opens the permanent-delete confirmation in Spam. Without a bulk selection these commands continue to target the focused conversation. These commands are not registered for hover-only quick actions.
 
@@ -99,9 +103,9 @@ The provider stores each declaration under a unique token. The highest-priority,
 | `search`          | `always`, `search`                 |
 | `blocking`        | `always`                           |
 
-Composer and search overlays suppress every underlying application command. Removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
+The composer and focused inline search field suppress every underlying application command. Blurring the search field or removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
 
-The inline thread composer uses the intermediate `thread-composer` layer. It suppresses thread navigation and message actions while keeping app commands available. A new-message composer or search overlay supersedes it.
+The inline thread composer uses the intermediate `thread-composer` layer. It suppresses thread navigation and message actions while keeping app commands available. A new-message composer or focused inline search field supersedes it.
 
 Blocking operations, such as database import, and app-wide confirmation dialogs activate the highest-priority `blocking` layer. It suspends every product command while the modal owns the window; only commands in the reserved `always` scope remain active.
 

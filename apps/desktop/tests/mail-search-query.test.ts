@@ -2,143 +2,105 @@ import { describe, expect, it } from "vitest";
 
 import {
   addSearchFilter,
-  createScopedSearchQuery,
+  applyExternalMailSearchScope,
+  createMailSearchQuery,
   extractSearchFilters,
   formatSearchQuery,
-  getSearchAccountIds,
-  isSearchQueryScopeOnly,
+  isMailSearchQueryReady,
   parseFilterDraft,
-  parseSearchQuery,
   removeFilterDraft,
   removeSearchFilterAt,
-  toSearchLabelSuggestions,
-  toIndexSearchFilters,
+  SEARCH_FILTER_FIELDS,
 } from "../src/renderer/src/mail/search-query";
 
-const ACCOUNTS = ["one@example.com", "two@example.com"];
 const EMPTY_SEARCH_QUERY = { filters: [], text: "" } as const;
 
-describe(parseSearchQuery, () => {
-  it("splits operators away from the words to match", () => {
-    expect(parseSearchQuery("from:test@gmail.com invoice march")).toStrictEqual(
-      {
-        filters: [{ field: "from", value: "test@gmail.com" }],
-        text: "invoice march",
-      }
-    );
-  });
-
-  it("keeps a quoted value in one piece", () => {
-    expect(parseSearchQuery('from:"Jane Doe" receipt')).toStrictEqual({
-      filters: [{ field: "from", value: "Jane Doe" }],
-      text: "receipt",
-    });
-  });
-
-  it("parses a label operator", () => {
-    expect(parseSearchQuery("label:inbox receipt")).toStrictEqual({
-      filters: [{ field: "label", value: "inbox" }],
-      text: "receipt",
-    });
-  });
-
-  it("leaves unknown operators as text", () => {
-    expect(parseSearchQuery("after:today")).toStrictEqual({
-      filters: [],
-      text: "after:today",
-    });
-  });
-
-  it("ignores an operator with no value", () => {
-    expect(parseSearchQuery("from:")).toStrictEqual({
-      filters: [],
-      text: "from:",
-    });
-  });
-});
-
-describe(createScopedSearchQuery, () => {
-  it("defaults every search to Inbox", () => {
-    expect(createScopedSearchQuery(null)).toStrictEqual({
-      filters: [{ field: "label", value: "inbox" }],
-      text: "",
-    });
-  });
-
-  it("keeps the selected account alongside Inbox", () => {
-    expect(createScopedSearchQuery("one@example.com")).toStrictEqual({
-      filters: [
-        { field: "account", value: "one@example.com" },
-        { field: "label", value: "inbox" },
-      ],
-      text: "",
-    });
-  });
-});
-
-describe(toSearchLabelSuggestions, () => {
-  it("merges indexed labels while preserving ownership and system status", () => {
-    expect(
-      toSearchLabelSuggestions([
-        {
-          accountId: "one@example.com",
-          labels: [
-            { id: "INBOX", name: "INBOX", type: "system" },
-            {
-              id: "CATEGORY_PERSONAL",
-              name: "CATEGORY_PERSONAL",
-              type: "system",
-            },
-            { id: "CHAT", name: "CHAT", type: "system" },
-            { id: "SPAM", name: "SPAM", type: "system" },
-            { id: "TRASH", name: "TRASH", type: "system" },
-            { id: "Label_1", name: "Work", type: "user" },
-          ],
-        },
-        {
-          accountId: "two@example.com",
-          labels: [
-            { id: "INBOX", name: "inbox", type: "system" },
-            { id: "Label_2", name: "Personal", type: "user" },
-            { id: "Label_9", name: "work", type: "user" },
-          ],
-        },
-      ])
-    ).toStrictEqual([
-      {
-        accountIds: ["one@example.com", "two@example.com"],
-        isSystem: true,
-        name: "INBOX",
-      },
-      {
-        accountIds: ["one@example.com"],
-        isSystem: true,
-        name: "CATEGORY_PERSONAL",
-      },
-      {
-        accountIds: ["one@example.com"],
-        isSystem: true,
-        name: "SPAM",
-      },
-      {
-        accountIds: ["two@example.com"],
-        isSystem: false,
-        name: "Personal",
-      },
-      {
-        accountIds: ["one@example.com", "two@example.com"],
-        isSystem: false,
-        name: "Work",
-      },
+describe("search filter fields", () => {
+  it("leaves labels and read state to their mailbox controls", () => {
+    expect(SEARCH_FILTER_FIELDS).toStrictEqual([
+      "from",
+      "to",
+      "subject",
+      "has",
     ]);
   });
 });
 
-describe(formatSearchQuery, () => {
-  it("round-trips through Gmail's own syntax", () => {
-    const raw = "from:test@gmail.com is:unread invoice";
+describe(createMailSearchQuery, () => {
+  it("starts without a hidden Inbox filter", () => {
+    expect(createMailSearchQuery()).toStrictEqual({
+      filters: [],
+      text: "",
+    });
+  });
+});
 
-    expect(formatSearchQuery(parseSearchQuery(raw))).toBe(raw);
+describe(isMailSearchQueryReady, () => {
+  it("runs broad and filter-only searches immediately", () => {
+    expect(isMailSearchQueryReady(EMPTY_SEARCH_QUERY)).toBeTruthy();
+    expect(
+      isMailSearchQueryReady({
+        filters: [{ field: "from", value: "sender@example.com" }],
+        text: "",
+      })
+    ).toBeTruthy();
+  });
+
+  it("waits for two free-text characters", () => {
+    expect(isMailSearchQueryReady({ filters: [], text: "a" })).toBeFalsy();
+    expect(isMailSearchQueryReady({ filters: [], text: "ab" })).toBeTruthy();
+  });
+});
+
+describe(applyExternalMailSearchScope, () => {
+  it("keeps Inbox search broad while applying labels and unread state", () => {
+    expect(
+      applyExternalMailSearchScope(
+        { filters: [{ field: "from", value: "sender@example.com" }], text: "" },
+        {
+          labelNames: ["travel", "work"],
+          mailbox: "inbox",
+          unreadOnly: true,
+        }
+      )
+    ).toStrictEqual({
+      filters: [
+        { field: "from", value: "sender@example.com" },
+        { field: "label", value: "travel" },
+        { field: "label", value: "work" },
+        { field: "is", value: "unread" },
+      ],
+      text: "",
+    });
+  });
+
+  it("adds Spam without exposing a visible search pill", () => {
+    expect(
+      applyExternalMailSearchScope(EMPTY_SEARCH_QUERY, {
+        labelNames: [],
+        mailbox: "spam",
+        unreadOnly: false,
+      })
+    ).toStrictEqual({
+      filters: [{ field: "label", value: "spam" }],
+      text: "",
+    });
+  });
+});
+
+describe(formatSearchQuery, () => {
+  it("formats Gmail's own syntax", () => {
+    const raw = "from:test@gmail.com subject:invoice march";
+
+    expect(
+      formatSearchQuery({
+        filters: [
+          { field: "from", value: "test@gmail.com" },
+          { field: "subject", value: "invoice" },
+        ],
+        text: "march",
+      })
+    ).toBe(raw);
   });
 
   it("re-quotes a value with spaces", () => {
@@ -156,6 +118,24 @@ describe(extractSearchFilters, () => {
     expect(extractSearchFilters("from:test@gmail.com ")).toStrictEqual({
       draft: "",
       filters: [{ field: "from", value: "test@gmail.com" }],
+    });
+  });
+
+  it("keeps a quoted operator value together", () => {
+    expect(extractSearchFilters('from:"Jane Doe" ')).toStrictEqual({
+      draft: "",
+      filters: [{ field: "from", value: "Jane Doe" }],
+    });
+  });
+
+  it("leaves externally controlled operators in free text", () => {
+    expect(extractSearchFilters("label:spam ")).toStrictEqual({
+      draft: "label:spam ",
+      filters: [],
+    });
+    expect(extractSearchFilters("is:unread ")).toStrictEqual({
+      draft: "is:unread ",
+      filters: [],
     });
   });
 
@@ -198,6 +178,10 @@ describe(parseFilterDraft, () => {
     });
   });
 
+  it("does not draft the externally controlled Spam scope", () => {
+    expect(parseFilterDraft("label:spam")).toBeUndefined();
+  });
+
   it("reports nothing once the operator is finished", () => {
     expect(parseFilterDraft("from:jane ")).toBeUndefined();
     expect(parseFilterDraft("invoice")).toBeUndefined();
@@ -237,72 +221,5 @@ describe(removeSearchFilterAt, () => {
     expect(removeSearchFilterAt(query, 0).filters).toStrictEqual([
       { field: "is", value: "unread" },
     ]);
-  });
-});
-
-describe(getSearchAccountIds, () => {
-  it("narrows to the account the pill names, whatever its case", () => {
-    expect(
-      getSearchAccountIds(
-        { filters: [{ field: "account", value: "One@Example.com" }], text: "" },
-        ACCOUNTS
-      )
-    ).toStrictEqual(["one@example.com"]);
-  });
-
-  it("searches every account when no pill names a connected one", () => {
-    expect(getSearchAccountIds(EMPTY_SEARCH_QUERY, ACCOUNTS)).toStrictEqual(
-      ACCOUNTS
-    );
-    expect(
-      getSearchAccountIds(
-        {
-          filters: [{ field: "account", value: "gone@example.com" }],
-          text: "",
-        },
-        ACCOUNTS
-      )
-    ).toStrictEqual(ACCOUNTS);
-  });
-});
-
-describe(toIndexSearchFilters, () => {
-  it("leaves the account pill out of what the index is asked", () => {
-    expect(
-      toIndexSearchFilters({
-        filters: [
-          { field: "account", value: "one@example.com" },
-          { field: "is", value: "unread" },
-        ],
-        text: "",
-      })
-    ).toStrictEqual([{ field: "is", value: "unread" }]);
-  });
-});
-
-describe(isSearchQueryScopeOnly, () => {
-  it("does not treat the default Inbox and account pills as a search", () => {
-    expect(isSearchQueryScopeOnly(createScopedSearchQuery(null))).toBeTruthy();
-    expect(
-      isSearchQueryScopeOnly(createScopedSearchQuery("one@example.com"))
-    ).toBeTruthy();
-  });
-
-  it("recognizes another label or filter as a search", () => {
-    expect(
-      isSearchQueryScopeOnly({
-        filters: [{ field: "label", value: "work" }],
-        text: "",
-      })
-    ).toBeFalsy();
-    expect(
-      isSearchQueryScopeOnly({
-        filters: [
-          { field: "label", value: "inbox" },
-          { field: "is", value: "unread" },
-        ],
-        text: "",
-      })
-    ).toBeFalsy();
   });
 });

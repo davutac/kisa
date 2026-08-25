@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { normalizeMailboxLabelSelection } from "@/mail/mailbox-labels";
 import type { GmailMailbox } from "@/shared/ipc/mail";
 
 interface MailboxState {
@@ -10,6 +11,8 @@ interface MailboxState {
   mailbox: GmailMailbox;
   /** `null` shows every account. */
   selectedAccountId: string | null;
+  /** Case-normalized user label names used as a match-all mailbox filter. */
+  selectedLabelNames: readonly string[];
   /** A thread selection key, see `getThreadSelectionKey`. */
   selectedThreadId: string | null;
   showUnread: boolean;
@@ -21,8 +24,10 @@ interface MailboxState {
   selectInbox: (accountId: string | null) => void;
   selectThread: (threadId: string | null) => void;
   retainCheckedThreads: (threadIds: ReadonlySet<string>) => void;
-  setShowUnread: (showUnread: boolean) => void;
+  retainSelectedLabels: (availableNames: ReadonlySet<string>) => void;
   setMailbox: (mailbox: GmailMailbox) => void;
+  setSelectedLabels: (labelNames: readonly string[]) => void;
+  setShowUnread: (showUnread: boolean) => void;
 }
 
 // Narrowing the mailbox strands a selection that is no longer in the list, so
@@ -74,6 +79,22 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
         : { checkedThreadIds };
     });
   },
+  retainSelectedLabels: (availableNames) => {
+    set((state) => {
+      const selectedLabelNames = state.selectedLabelNames.filter((name) =>
+        availableNames.has(name)
+      );
+
+      return selectedLabelNames.length === state.selectedLabelNames.length
+        ? state
+        : {
+            checkedThreadIds: new Set(),
+            openThreadId: null,
+            selectedLabelNames,
+            selectedThreadId: null,
+          };
+    });
+  },
   selectAccount: (selectedAccountId) => {
     set({
       checkedThreadIds: new Set(),
@@ -98,6 +119,7 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
     );
   },
   selectedAccountId: null,
+  selectedLabelNames: [],
   selectedThreadId: null,
   setMailbox: (mailbox) => {
     set({
@@ -106,6 +128,23 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
       openThreadId: null,
       selectedThreadId: null,
     });
+  },
+  setSelectedLabels: (labelNames) => {
+    const selectedLabelNames = normalizeMailboxLabelSelection(labelNames);
+
+    set((state) =>
+      selectedLabelNames.length === state.selectedLabelNames.length &&
+      selectedLabelNames.every(
+        (name, index) => name === state.selectedLabelNames[index]
+      )
+        ? state
+        : {
+            checkedThreadIds: new Set(),
+            openThreadId: null,
+            selectedLabelNames,
+            selectedThreadId: null,
+          }
+    );
   },
   setShowUnread: (showUnread) => {
     set({
@@ -129,6 +168,9 @@ export const useMailbox = (): GmailMailbox =>
 
 export const useSelectedAccountId = (): string | null =>
   useMailboxStore((state) => state.selectedAccountId);
+
+export const useSelectedLabelNames = (): readonly string[] =>
+  useMailboxStore((state) => state.selectedLabelNames);
 
 export const useSelectedThreadId = (): string | null =>
   useMailboxStore((state) => state.selectedThreadId);

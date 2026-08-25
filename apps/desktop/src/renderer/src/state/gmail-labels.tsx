@@ -23,6 +23,8 @@ interface GmailLabelCatalogState {
   readonly names: ReadonlySet<string>;
 }
 
+export type GmailLabelCatalogLoadStatus = "loading" | "ready" | "unavailable";
+
 interface GmailLabelsContextValue {
   readonly catalogs: ReadonlyMap<string, GmailLabelCatalogState>;
   readonly ensureLabels: (accountId: string, labels: readonly string[]) => void;
@@ -31,6 +33,7 @@ interface GmailLabelsContextValue {
     catalog: GmailLabelCatalog
   ) => void;
   readonly upsertLabel: (accountId: string, label: GmailLabelSummary) => void;
+  readonly statuses: ReadonlyMap<string, GmailLabelCatalogLoadStatus>;
 }
 
 const EMPTY_COLORS: ReadonlyMap<string, GmailLabelColor> = new Map();
@@ -78,6 +81,9 @@ export const GmailLabelsProvider = ({
   const [catalogs, setCatalogs] = useState<
     ReadonlyMap<string, GmailLabelCatalogState>
   >(new Map());
+  const [statuses, setStatuses] = useState<
+    ReadonlyMap<string, GmailLabelCatalogLoadStatus>
+  >(new Map());
   const attemptedLabels = useRef(new Set<string>());
   const loadsInFlight = useRef(new Map<string, Promise<void>>());
 
@@ -124,15 +130,24 @@ export const GmailLabelsProvider = ({
       }
 
       const load = (async () => {
+        setStatuses((current) => new Map(current).set(accountId, "loading"));
         try {
           const reply = await getMailApi()?.listLabels({ accountId });
 
           if (reply?.ok === true) {
             updateCatalog(accountId, reply.data);
+            setStatuses((current) => new Map(current).set(accountId, "ready"));
+          } else {
+            setStatuses((current) =>
+              new Map(current).set(accountId, "unavailable")
+            );
           }
         } catch {
           // Labels are supplementary mailbox metadata; the sync action is the
           // visible retry when a cached catalog cannot be loaded.
+          setStatuses((current) =>
+            new Map(current).set(accountId, "unavailable")
+          );
         } finally {
           loadsInFlight.current.delete(accountId);
         }
@@ -193,14 +208,25 @@ export const GmailLabelsProvider = ({
     const connectedCatalogs = new Map(
       [...catalogs].filter(([accountId]) => connectedAccountIds.has(accountId))
     );
+    const connectedStatuses = new Map(
+      [...statuses].filter(([accountId]) => connectedAccountIds.has(accountId))
+    );
 
     return {
       catalogs: connectedCatalogs,
       ensureLabels,
+      statuses: connectedStatuses,
       updateCatalog,
       upsertLabel,
     };
-  }, [accountIds, catalogs, ensureLabels, updateCatalog, upsertLabel]);
+  }, [
+    accountIds,
+    catalogs,
+    ensureLabels,
+    statuses,
+    updateCatalog,
+    upsertLabel,
+  ]);
 
   return <GmailLabelsContext value={value}>{children}</GmailLabelsContext>;
 };
@@ -248,6 +274,26 @@ export const useGmailLabelCatalogs = (): ReadonlyMap<
         ])
       ),
     [catalogs]
+  );
+};
+
+export const useGmailLabelCatalogSnapshot = (): {
+  readonly catalogs: ReadonlyMap<string, readonly GmailLabelSummary[]>;
+  readonly statuses: ReadonlyMap<string, GmailLabelCatalogLoadStatus>;
+} => {
+  const { catalogs, statuses } = useGmailLabelsContext();
+
+  return useMemo(
+    () => ({
+      catalogs: new Map(
+        [...catalogs].map(([accountId, state]) => [
+          accountId,
+          state.catalog.labels,
+        ])
+      ),
+      statuses,
+    }),
+    [catalogs, statuses]
   );
 };
 

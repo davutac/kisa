@@ -7,6 +7,10 @@ import type {
 } from "@/shared/ipc/mail";
 
 import { hasInboxLabel, hasSpamLabel } from "./label";
+import {
+  normalizeMailboxLabelSelection,
+  threadMatchesMailboxLabels,
+} from "./mailbox-labels";
 
 export const getThreadListChangeAccountId = (
   change: GmailThreadListChange
@@ -51,13 +55,15 @@ export const filterThreadsByScope = (
   threads: readonly GmailThreadSummary[],
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: GmailMailbox = "inbox"
+  mailbox: GmailMailbox = "inbox",
+  labelNames: readonly string[] = []
 ): readonly GmailThreadSummary[] =>
   threads.filter(
     ({ accountId, isUnread, labels }) =>
       accountIds.includes(accountId) &&
       (mailbox === "spam" ? hasSpamLabel(labels) : hasInboxLabel(labels)) &&
-      (!unreadOnly || isUnread)
+      (!unreadOnly || isUnread) &&
+      threadMatchesMailboxLabels(labels, labelNames)
   );
 
 export const applyThreadListChanges = (
@@ -98,17 +104,28 @@ export const createCachedThreadPageRequest = (
   accountIds: readonly string[],
   unreadOnly: boolean,
   mailbox: GmailMailbox = "inbox",
+  labelNames: readonly string[] = [],
   cursor?: GmailThreadCursor
-): GmailCachedThreadPageRequest => ({
-  accountIds,
-  cursor,
-  mailbox,
-  unreadOnly: unreadOnly || undefined,
-});
+): GmailCachedThreadPageRequest => {
+  const normalizedLabelNames = normalizeMailboxLabelSelection(labelNames);
+
+  return {
+    accountIds,
+    cursor,
+    labelNames:
+      normalizedLabelNames.length === 0 ? undefined : normalizedLabelNames,
+    mailbox,
+    unreadOnly: unreadOnly || undefined,
+  };
+};
 
 export const getMailboxScopeKey = (
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: GmailMailbox = "inbox"
-): string =>
-  `${mailbox}\u0001${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}`;
+  mailbox: GmailMailbox = "inbox",
+  labelNames: readonly string[] = []
+): string => {
+  const normalizedLabelNames = normalizeMailboxLabelSelection(labelNames);
+
+  return `${mailbox}\u0001${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}\u0001${normalizedLabelNames.join("\u0000")}`;
+};

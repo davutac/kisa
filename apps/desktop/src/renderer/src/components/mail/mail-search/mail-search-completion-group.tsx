@@ -1,11 +1,4 @@
-import {
-  AtSignIcon,
-  LaptopIcon,
-  PaperclipIcon,
-  SearchIcon,
-  TagIcon,
-  UserIcon,
-} from "lucide-react";
+import { PaperclipIcon, SearchIcon, UserIcon } from "lucide-react";
 
 import {
   CommandGroup,
@@ -16,12 +9,9 @@ import {
 import type { MailSearchCompletions } from "./mail-search-completions";
 
 const COMPLETION_ICONS = {
-  account: AtSignIcon,
   address: UserIcon,
   attachment: PaperclipIcon,
-  label: TagIcon,
   operator: SearchIcon,
-  "system-label": LaptopIcon,
 } as const;
 
 const MailSearchCompletionGroup = ({
@@ -45,11 +35,6 @@ const MailSearchCompletionGroup = ({
             <span className="text-muted-foreground truncate">
               {item.sublabel}
             </span>
-          )}
-          {item.trailing === undefined ? null : (
-            <CommandShortcut className="max-w-[60%] truncate text-right text-xs tracking-normal">
-              {item.trailing}
-            </CommandShortcut>
           )}
           {item.shortcut === undefined ? null : (
             <CommandShortcut>{item.shortcut}</CommandShortcut>

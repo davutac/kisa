@@ -492,6 +492,7 @@ export type GmailMailbox = typeof GmailMailbox.Type;
 export const GmailCachedThreadPageRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
   cursor: Schema.optional(GmailThreadCursor),
+  labelNames: Schema.optional(Schema.Array(Schema.NonEmptyString)),
   mailbox: Schema.optional(GmailMailbox),
   unreadOnly: Schema.optional(Schema.Boolean),
 });
@@ -518,7 +519,7 @@ export const GmailSyncStatus = Schema.Struct({
 export type GmailSyncStatus = typeof GmailSyncStatus.Type;
 
 /**
- * The operators the search palette turns into pills, spelled the way Gmail
+ * The operators inline search turns into pills, spelled the way Gmail
  * spells them so a query typed out of habit lands where it is expected.
  */
 export const GmailSearchFilterField = Schema.Literals([
