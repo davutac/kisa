@@ -12,6 +12,7 @@ import {
 import { getHotkeyAriaLabel, HotkeyHint } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
+import { toIndexRatio } from "@/mail/mail-index-progress-view";
 import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
@@ -42,17 +43,7 @@ const TitlebarAccountButton = ({
   const indexProgress = useAccountIndexProgress(account.email);
   const isActive = selectedAccountId === account.email;
   const isIndexing = indexProgress?.status === "running";
-  // Gmail's own total is an estimate and the indexer re-walks a day of overlap
-  // on resume, so the ratio is clamped rather than trusted to stay under one.
-  const indexedRatio =
-    indexProgress === undefined ||
-    indexProgress.estimatedThreads === undefined ||
-    indexProgress.estimatedThreads <= 0
-      ? undefined
-      : Math.min(
-          1,
-          indexProgress.indexedThreads / indexProgress.estimatedThreads
-        );
+  const indexedRatio = toIndexRatio(indexProgress);
 
   // The button is the sortable DOM item, while the avatar stays the fixed-size
   // collision target so an expanded account label cannot block position one.

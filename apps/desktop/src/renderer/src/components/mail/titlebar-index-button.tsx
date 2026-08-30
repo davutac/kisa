@@ -5,6 +5,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatRemaining } from "@/mail/mail-index-eta";
+import {
+  toIndexRatio,
+  toOverallIndexRatio,
+} from "@/mail/mail-index-progress-view";
 import { useMailIndexState } from "@/mail/use-mail-index-progress";
 import type { GmailIndexProgress } from "@/shared/ipc/mail";
 
@@ -14,21 +18,17 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
 });
 const NUMBER_FORMAT = new Intl.NumberFormat();
 
-/**
- * Gmail's own total is an estimate, and the indexer re-walks a day of overlap
- * on every resume, so the ratio is clamped rather than trusted to stay under 1.
- */
-const toRatio = (entry: GmailIndexProgress): number | undefined =>
-  entry.estimatedThreads === undefined || entry.estimatedThreads <= 0
-    ? undefined
-    : Math.min(1, entry.indexedThreads / entry.estimatedThreads);
+const toCounts = (entry: GmailIndexProgress): string => {
+  if (entry.estimatedThreads !== undefined && entry.estimatedThreads <= 0) {
+    return "Refreshing complete history";
+  }
 
-const toCounts = (entry: GmailIndexProgress): string =>
-  entry.estimatedThreads === undefined
+  return entry.estimatedThreads === undefined
     ? `${NUMBER_FORMAT.format(entry.indexedThreads)} conversations`
     : `${NUMBER_FORMAT.format(entry.indexedThreads)} of ~${NUMBER_FORMAT.format(
         entry.estimatedThreads
       )}`;
+};
 
 /**
  * Titlebar indicator for the full-account mail index.
@@ -51,13 +51,7 @@ const TitlebarIndexButton = () => {
     return null;
   }
 
-  const ratios = active
-    .map((entry) => toRatio(entry))
-    .filter((value): value is number => value !== undefined);
-  const overall =
-    ratios.length === 0
-      ? undefined
-      : ratios.reduce((total, value) => total + value, 0) / ratios.length;
+  const overall = toOverallIndexRatio(active);
 
   return (
     <Tooltip>
@@ -114,7 +108,7 @@ const TitlebarIndexButton = () => {
         <span className="font-medium">Indexing your mail</span>
         <span className="flex w-full flex-col gap-2.5">
           {active.map((entry) => {
-            const ratio = toRatio(entry);
+            const ratio = toIndexRatio(entry);
             const eta = etas.get(entry.accountId);
             const isQueued = entry.status === "queued";
 

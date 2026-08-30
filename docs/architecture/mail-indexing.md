@@ -174,7 +174,7 @@ A token bucket over quota units, shared by **every** Gmail call rather than scop
 
 Each account section in Settings exposes a **Reindex** action. It is deliberately manual because a complete Gmail walk is expensive: the confirmation warns that it can consume substantial Gmail API quota and take a long time for a large mailbox.
 
-Starting it deletes only that account's durable `gmail_backfill_state` cursor and then queues the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available and are refreshed through normal account-scoped upserts. Reindex is disabled while the account is already queued or running.
+Starting it resets only that account's durable `gmail_backfill_state` cursor and then queues the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available and are refreshed through normal account-scoped upserts. Because preserved rows cannot distinguish conversations revisited by the current run, manual reindex progress is indeterminate; the oldest-indexed date still advances as Gmail is walked. Reindex is disabled while the account is already queued or running.
 
 The first index for a newly connected readable account still starts automatically. Gmail history cursor expiry does not automatically trigger another complete index; normal cursor recovery remains bounded, and the user can choose Reindex if they suspect historical gaps.
 

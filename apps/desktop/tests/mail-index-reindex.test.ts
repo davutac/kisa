@@ -81,16 +81,43 @@ describe(resetMailIndexRemote, () => {
 
   afterAll(() => connection.close());
 
-  it("resets only the selected account's progress and preserves cached mail", async () => {
+  it("restarts only the selected account with indeterminate progress and preserves cached mail", async () => {
     await resetMailIndexRemote(database, "one@example.com");
 
-    expect(
-      connection
-        .prepare(
-          "SELECT account_email FROM gmail_backfill_state ORDER BY account_email"
-        )
-        .all()
-    ).toStrictEqual([{ account_email: "two@example.com" }]);
+    const indexStates = connection
+      .prepare(
+        `SELECT account_email, completed_at, estimated_threads,
+                indexed_messages, indexed_threads, oldest_indexed_at,
+                page_token, started_at, status
+         FROM gmail_backfill_state
+         ORDER BY account_email`
+      )
+      .all();
+
+    expect(indexStates).toStrictEqual([
+      {
+        account_email: "one@example.com",
+        completed_at: null,
+        estimated_threads: 0,
+        indexed_messages: 0,
+        indexed_threads: 0,
+        oldest_indexed_at: null,
+        page_token: null,
+        started_at: null,
+        status: "running",
+      },
+      {
+        account_email: "two@example.com",
+        completed_at: 2,
+        estimated_threads: null,
+        indexed_messages: 0,
+        indexed_threads: 0,
+        oldest_indexed_at: null,
+        page_token: null,
+        started_at: null,
+        status: "complete",
+      },
+    ]);
     expect(
       connection
         .prepare(
