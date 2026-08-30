@@ -11,6 +11,7 @@ import type {
   AiAuthenticationStatus,
   AiModel,
   AiProviderStatus,
+  AiReasoningOption,
 } from "../../../shared/ipc/ai";
 import {
   aiProcessEnvironment,
@@ -102,6 +103,26 @@ interface CodexProbe {
   readonly version?: string;
 }
 
+export const mapCodexReasoningOptions = (
+  supportedReasoningEfforts: readonly {
+    readonly description: string;
+    readonly reasoningEffort: string;
+  }[],
+  defaultReasoningEffort?: string
+): readonly AiReasoningOption[] =>
+  supportedReasoningEfforts.map((option) =>
+    option.reasoningEffort === defaultReasoningEffort
+      ? {
+          description: option.description,
+          id: option.reasoningEffort,
+          isDefault: true,
+        }
+      : {
+          description: option.description,
+          id: option.reasoningEffort,
+        }
+  );
+
 const codexAuthLabel = (
   account: typeof CodexAccount.Type | null | undefined
 ): string | undefined => {
@@ -117,13 +138,18 @@ const codexAuthLabel = (
   const labels = {
     business: "ChatGPT Business Subscription",
     edu: "ChatGPT Edu Subscription",
+    edu_plus: "ChatGPT Edu Subscription",
+    edu_pro: "ChatGPT Edu Subscription",
+    ent26: "ChatGPT Enterprise Subscription",
     enterprise: "ChatGPT Enterprise Subscription",
+    enterprise_cbp_automation: "ChatGPT Enterprise Subscription",
     enterprise_cbp_usage_based: "ChatGPT Enterprise Subscription",
     free: "ChatGPT Free Subscription",
     go: "ChatGPT Go Subscription",
     plus: "ChatGPT Plus Subscription",
     pro: "ChatGPT Pro 20x Subscription",
     prolite: "ChatGPT Pro 5x Subscription",
+    self_serve_business_prolite: "ChatGPT Business Subscription",
     self_serve_business_usage_based: "ChatGPT Business Subscription",
     team: "ChatGPT Team Subscription",
     unknown: "ChatGPT Subscription",
@@ -303,18 +329,9 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
                 id: model.model,
                 isDefault: model.isDefault,
                 name: model.displayName,
-                reasoningOptions: (model.supportedReasoningEfforts ?? []).map(
-                  (option) =>
-                    option.reasoningEffort === model.defaultReasoningEffort
-                      ? {
-                          description: option.description,
-                          id: option.reasoningEffort,
-                          isDefault: true,
-                        }
-                      : {
-                          description: option.description,
-                          id: option.reasoningEffort,
-                        }
+                reasoningOptions: mapCodexReasoningOptions(
+                  model.supportedReasoningEfforts ?? [],
+                  model.defaultReasoningEffort
                 ),
               }))
           );

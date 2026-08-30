@@ -43,6 +43,7 @@ export const AiReasoningOption = Schema.Struct({
   description: Schema.optional(Schema.String),
   id: Schema.NonEmptyString,
   isDefault: Schema.optional(Schema.Boolean),
+  label: Schema.optional(Schema.NonEmptyString),
 });
 export type AiReasoningOption = typeof AiReasoningOption.Type;
 
@@ -50,6 +51,7 @@ export const AiModel = Schema.Struct({
   id: Schema.NonEmptyString,
   isDefault: Schema.Boolean,
   name: Schema.NonEmptyString,
+  optionLabel: Schema.optional(Schema.NonEmptyString),
   reasoningOptions: Schema.Array(AiReasoningOption),
 });
 export type AiModel = typeof AiModel.Type;

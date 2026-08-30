@@ -30,6 +30,9 @@ export const getAiReasoningName = (reasoning: string): string =>
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
 
+export const getAiReasoningOptionName = (option: AiReasoningOption): string =>
+  option.label ?? getAiReasoningName(option.id);
+
 export const resolveAiReasoning = (
   reasoning: string | null | undefined,
   options: readonly AiReasoningOption[]

@@ -95,6 +95,7 @@ export const parseOpenCodeModels = (stdout: string): readonly AiModel[] => {
         id: currentSlug,
         isDefault: false,
         name: metadata.value.name?.trim() || currentSlug,
+        optionLabel: "Variant",
         reasoningOptions,
       });
     }

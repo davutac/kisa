@@ -2,7 +2,7 @@ import { ChevronDownIcon } from "lucide-react";
 
 import {
   AI_PROVIDER_NAMES,
-  getAiReasoningName,
+  getAiReasoningOptionName,
   resolveAiReasoning,
 } from "@/ai";
 import { Button } from "@/components/ui/button";
@@ -142,25 +142,28 @@ export const AiModelSelect = ({
 export const AiReasoningSelect = ({
   currentReasoning,
   onSelectReasoning,
+  optionLabel,
   provider,
   reasoningOptions,
 }: {
   readonly currentReasoning: string | null;
   readonly onSelectReasoning: (reasoning: string) => void;
+  readonly optionLabel: string;
   readonly provider: AiProvider;
   readonly reasoningOptions: readonly AiReasoningOption[];
 }) => {
   const selectedId = resolveAiReasoning(currentReasoning, reasoningOptions);
-  const selectedLabel = selectedId
-    ? getAiReasoningName(selectedId)
-    : "Choose reasoning";
+  const selectedOption = reasoningOptions.find(({ id }) => id === selectedId);
+  const selectedLabel = selectedOption
+    ? getAiReasoningOptionName(selectedOption)
+    : `Choose ${optionLabel.toLowerCase()}`;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
           <Button
-            aria-label={`${AI_PROVIDER_NAMES[provider]} reasoning, ${selectedLabel}`}
+            aria-label={`${AI_PROVIDER_NAMES[provider]} ${optionLabel.toLowerCase()}, ${selectedLabel}`}
             className="w-fit max-w-full justify-between gap-3 font-normal"
             type="button"
             variant="secondary"
@@ -179,7 +182,7 @@ export const AiReasoningSelect = ({
         side="bottom"
       >
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Reasoning</DropdownMenuLabel>
+          <DropdownMenuLabel>{optionLabel}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             onValueChange={onSelectReasoning}
             value={selectedId ?? ""}
@@ -192,7 +195,7 @@ export const AiReasoningSelect = ({
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">
-                    {getAiReasoningName(option.id)}
+                    {getAiReasoningOptionName(option)}
                   </span>
                   {option.isDefault ? (
                     <span className="text-muted-foreground text-xs">
