@@ -1,19 +1,20 @@
 # Full-Account Mail Indexing
 
-Design for indexing an entire Gmail account on connect: every thread outside spam and trash, with message bodies, stored locally and searchable, built in the background while the user reads normally.
+Design for indexing an entire Gmail account on connect: every email thread, including Spam and Trash but excluding Gmail Chats, with message bodies stored locally and searchable while the user reads normally.
 
 ## Goals
 
 - A newly connected account ends up fully indexed without the user waiting on it.
 - Scrolling, opening, and searching stay responsive for the whole build.
 - The build survives quit, crash, network loss, and token expiry, and resumes where it stopped.
-- Gmail's per-user quota is never exhausted, and foreground work always wins against the backfill.
+- Gmail's per-user quota is never exhausted, and foreground work always wins against indexing.
 - Accounts index independently of each other, since the quota that binds is per-user.
 
 ## Non-goals
 
 - Attachment bytes. Only attachment metadata is indexed; bodies of attachments stay on demand.
-- Full historical indexing of spam, trash, and chats. Spam has its own smaller, resumable cache seed for the dedicated Spam mailbox; it is not part of the all-mail backfill or default search.
+- Gmail Chats, which are not email and carry no useful mail body.
+- Showing Spam in default search results. Spam remains behind its explicit mailbox scope; Trash is available through all-mail search once indexed.
 - Server-side search. Local FTS replaces the `q=` round trip for indexed mail; Gmail search stays as the fallback for anything not yet indexed.
 
 ## Where the current code stands
@@ -24,9 +25,9 @@ Three properties of the existing implementation decide most of this design.
 
 Storing bodies therefore costs **no extra API quota**. It is a disk decision only, and it makes thread opens instant and offline-capable as a side effect.
 
-**`threads.list` returns newest-first**, the same direction the user scrolls. Backfill deepens the list exactly where the reader is heading, so the two never fight for position.
+**`threads.list` returns newest-first**, the same direction the user scrolls. Indexing deepens the list exactly where the reader is heading, so the two never fight for position.
 
-**The thread list already pages over the local cache.** `listCachedThreadPage` (`apps/desktop/src/main/mail/mail-sync.ts`) is a keyset query over `gmail_threads`. Anything the backfill commits becomes scrollable with no renderer change at all.
+**The thread list already pages over the local cache.** `listCachedThreadPage` (`apps/desktop/src/main/mail/mail-sync.ts`) is a keyset query over `gmail_threads`. Anything the indexer commits becomes scrollable with no renderer change at all.
 
 ## Quota and bandwidth budget
 
@@ -127,6 +128,8 @@ Two changes, both needed _because_ the cache is about to hold all mail rather th
 
 The index is `(is_in_inbox, latest_at DESC, account_email, thread_id)`. The mixed directions have to be declared: SQLite only skips the sort when the index matches the ordering forwards or fully reversed, and here the tiebreakers are ASC against a DESC leading term. `is_in_inbox` leads as an equality prefix. `EXPLAIN QUERY PLAN` confirms the result is a range seek (`SEARCH ... USING INDEX gmail_threads_mailbox_idx`); a temp b-tree remains for the last ORDER BY term only, which sorts within groups of equal `latest_at` and is therefore empty in practice.
 
+Sent and Trash membership are projected the same way into indexed `is_in_sent` and `is_in_trash` columns. The primary mailbox combines Inbox and Sent while excluding Trash, and the title-bar toggles narrow to the requested projection. Existing cached rows derive both projections from their stored label array during migration, so the views do not wait for a fresh Gmail sync.
+
 Both are worth doing on their own merits, before any backfill code exists.
 
 ## Write path
@@ -135,7 +138,7 @@ Today `Gmail.listThreads` persists summaries and drops details. The fix is a sin
 
 ```
 store.upsertThreadDetails(accountId, threads)
-  → gmail_threads (summary + is_in_inbox)
+  → gmail_threads (summary + mailbox projections)
   → gmail_messages (bodies, gzipped)
   → gmail_messages_fts
 ```
@@ -146,9 +149,9 @@ Called by `initialSync`, by history sync, by foreground `listThreads`, and by th
 
 The consequence beyond backfill: a thread the user scrolled past is already stored, so opening it is instant and works offline.
 
-## Backfill service
+## Index service
 
-`apps/desktop/src/main/mail/mail-backfill.ts`, one Effect fiber, **one account at a time globally** — two accounts connected together queue rather than doubling the API pressure.
+`apps/desktop/src/main/mail/mail-backfill.ts` runs one Effect-owned job per active account, with at most two accounts indexing at once. Additional accounts wait in a FIFO queue.
 
 ```
 resume state from gmail_backfill_state
@@ -166,6 +169,14 @@ until no nextPageToken → status = complete
 ### Quota governor
 
 A token bucket over quota units, shared by **every** Gmail call rather than scoped to the backfill — that is what makes foreground priority possible. Refill ~150 units/s. Foreground calls (thread open, search, poll) acquire ahead of the backfill, which yields.
+
+### Manual reindex
+
+Each account section in Settings exposes a **Reindex** action. It is deliberately manual because a complete Gmail walk is expensive: the confirmation warns that it can consume substantial Gmail API quota and take a long time for a large mailbox.
+
+Starting it deletes only that account's durable `gmail_backfill_state` cursor and then queues the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available and are refreshed through normal account-scoped upserts. Reindex is disabled while the account is already queued or running.
+
+The first index for a newly connected readable account still starts automatically. Gmail history cursor expiry does not automatically trigger another complete index; normal cursor recovery remains bounded, and the user can choose Reindex if they suspect historical gaps.
 
 On `GmailRateLimitError` — which the gateway already classifies correctly, including Gmail's habit of reporting quota exhaustion as 403-with-reason rather than 429 — halve the rate, back off exponentially with jitter, and recover slowly. `MAX_SYNC_RETRIES` and the existing `Schedule.exponential(1000).pipe(Schedule.jittered)` in `syncAllAccounts` are the pattern to follow.
 
@@ -199,7 +210,7 @@ WAL, bounded page transactions, and yielding between pages still matter for writ
 
 ### Search scope
 
-The title-bar search button expands into a single-line field and leaves the ordinary mailbox list as the only result surface. Edited queries cover every indexed non-Spam thread for the selected accounts; the account selector, unread toggle, and Spam toggle apply those scopes without adding redundant pills. Filter and address completions appear in a small menu anchored below the field, while matching threads use the mailbox's normal virtualized rows, selection, and actions. Filter-only and broadened empty searches run immediately; free text waits for two characters. Results retain the existing 200-thread relevance cap and identify when only the top 200 matches are shown.
+The title-bar search button expands into a single-line field and leaves the ordinary mailbox list as the only result surface. Edited queries cover every indexed non-Spam thread for the selected accounts; the account selector and unread, Sent, Spam, and Trash toggles apply those scopes without adding redundant pills. Filter and address completions appear in a small menu anchored below the field, while matching threads use the mailbox's normal virtualized rows, selection, and actions. Filter-only and broadened empty searches run immediately; free text waits for two characters. Results retain the existing 200-thread relevance cap and identify when only the top 200 matches are shown.
 
 User-label filtering belongs to the horizontal mailbox label bar rather than the search syntax. One account shows its catalog; All Accounts merges equal names case-insensitively and indicates how many accounts own a shared label. Multiple toggles use match-all semantics. The ordinary mailbox page carries those names into its keyset SQL query, and an edited search adds them as internal `label` filters without showing label pills. Label selection is renderer-session state, survives entering and exiting search, and is narrowed to labels available after an account-scope change.
 

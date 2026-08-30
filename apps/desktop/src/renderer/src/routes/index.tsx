@@ -55,12 +55,36 @@ function getEmptyState(
         };
   }
 
+  if (mailbox === "sent") {
+    return {
+      message: "Messages you send will appear here.",
+      title: "No sent conversations yet",
+    };
+  }
+
+  if (mailbox === "trash") {
+    return {
+      message: "Conversations you delete will appear here.",
+      title: "Trash is empty",
+    };
+  }
+
   return {
     message: unreadOnly
       ? "Nothing unread. The tiny red badge has been defeated."
       : "No mail here yet. Kisa is checking the post in the background.",
     title: unreadOnly ? "Inbox zero, achieved" : "A rare sight: inbox zero",
   };
+}
+
+function getThreadCloseLabel(mailbox: GmailMailbox): string | undefined {
+  if (mailbox === "spam") {
+    return "Back to spam";
+  }
+  if (mailbox === "sent") {
+    return "Back to sent";
+  }
+  return mailbox === "trash" ? "Back to trash" : undefined;
 }
 
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -195,7 +219,7 @@ function HomeRoute() {
     threads,
   } = mailboxThreads;
   const threadActions = useThreadActions();
-  const { deleteSpam, notSpam, setLabel, toggleRead, trash } = threadActions;
+  const { deleteForever, notSpam, setLabel, toggleRead, trash } = threadActions;
   const indexProgress = useMailIndexProgress();
   const emptyState = getEmptyState(
     mailbox,
@@ -203,9 +227,9 @@ function HomeRoute() {
     selectedLabelNames.length > 0
   );
   const indexingMessage =
-    mailbox === "inbox"
-      ? getIndexingMessage(indexProgress, accountIds)
-      : undefined;
+    mailbox === "spam"
+      ? undefined
+      : getIndexingMessage(indexProgress, accountIds);
   const listView = search.isShowingResults
     ? getSearchThreadListView(search)
     : getMailboxThreadListView({
@@ -270,10 +294,10 @@ function HomeRoute() {
         <div className="bg-background absolute inset-0 z-10 overflow-x-hidden overflow-y-auto">
           <MailThreadView
             accountId={openThread.accountId}
-            closeLabel={mailbox === "spam" ? "Back to spam" : undefined}
+            closeLabel={getThreadCloseLabel(mailbox)}
             key={`${openThread.accountId}:${openThread.threadId}`}
             onClose={closeThread}
-            onDeleteSpam={deleteSpam}
+            onDeleteForever={deleteForever}
             onPopOut={windowApi === undefined ? undefined : popOutThread}
             onNotSpam={notSpam}
             onSetLabel={setLabel}

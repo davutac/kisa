@@ -34,8 +34,16 @@ export const gmailThreads = sqliteTable(
     isInInbox: integer("is_in_inbox", { mode: "boolean" })
       .notNull()
       .default(false),
+    /** Indexed separately so Sent browsing never scans cached label JSON. */
+    isInSent: integer("is_in_sent", { mode: "boolean" })
+      .notNull()
+      .default(false),
     /** Indexed separately from Inbox so opening Spam never scans label JSON. */
     isInSpam: integer("is_in_spam", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    /** Indexed separately so Trash browsing never scans cached label JSON. */
+    isInTrash: integer("is_in_trash", { mode: "boolean" })
       .notNull()
       .default(false),
     isUnread: integer("is_unread", { mode: "boolean" }).notNull(),
@@ -66,6 +74,18 @@ export const gmailThreads = sqliteTable(
     ),
     index("gmail_threads_spam_mailbox_idx").on(
       table.isInSpam,
+      sql`${table.latestAt} desc`,
+      table.accountEmail,
+      table.threadId
+    ),
+    index("gmail_threads_sent_mailbox_idx").on(
+      table.isInSent,
+      sql`${table.latestAt} desc`,
+      table.accountEmail,
+      table.threadId
+    ),
+    index("gmail_threads_trash_mailbox_idx").on(
+      table.isInTrash,
       sql`${table.latestAt} desc`,
       table.accountEmail,
       table.threadId

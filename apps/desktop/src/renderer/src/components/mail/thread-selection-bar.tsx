@@ -21,21 +21,21 @@ import {
 import { getHotkeyAriaLabel, getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import { getBulkLabelGroups } from "@/mail/bulk-thread-selection";
 import type { ThreadActions } from "@/mail/use-thread-actions";
-import type { GmailMailbox, GmailThreadSummary } from "@/shared/ipc/mail";
+import type { GmailThreadSummary } from "@/shared/ipc/mail";
 import { useGmailLabelCatalogs } from "@/state/gmail-labels";
 
 interface ThreadSelectionBarProps {
   actions: ThreadActions;
-  mailbox: GmailMailbox;
   onClear: () => void;
-  onTrash: () => Promise<void>;
+  onDeleteForever?: () => Promise<void>;
+  onTrash?: () => Promise<void>;
   threads: readonly GmailThreadSummary[];
 }
 
 const ThreadSelectionBar = ({
   actions,
-  mailbox,
   onClear,
+  onDeleteForever,
   onTrash,
   threads,
 }: ThreadSelectionBarProps) => {
@@ -51,6 +51,8 @@ const ThreadSelectionBar = ({
     (thread) => !catalogs.has(thread.accountId)
   );
   const labelPickerHotkey = getHotkeyDisplay("mailbox.manageLabels");
+  const destructiveAction = onDeleteForever ?? onTrash;
+  const isDeleteForever = onDeleteForever !== undefined;
 
   useAppCommand(
     "mailbox.manageLabels",
@@ -226,25 +228,29 @@ const ThreadSelectionBar = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </fieldset>
-      <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-      <Button
-        aria-label={
-          mailbox === "spam"
-            ? "Permanently delete selected conversations"
-            : "Move selected conversations to trash"
-        }
-        className="text-destructive hover:text-destructive focus-visible:text-destructive size-8 rounded-full"
-        disabled={isPending}
-        onClick={() => {
-          void run(onTrash);
-        }}
-        size="icon"
-        title={mailbox === "spam" ? "Delete forever" : "Move to trash"}
-        type="button"
-        variant="ghost"
-      >
-        <Trash2Icon />
-      </Button>
+      {destructiveAction === undefined ? null : (
+        <>
+          <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
+          <Button
+            aria-label={
+              isDeleteForever
+                ? "Permanently delete selected conversations"
+                : "Move selected conversations to trash"
+            }
+            className="text-destructive hover:text-destructive focus-visible:text-destructive size-8 rounded-full"
+            disabled={isPending}
+            onClick={() => {
+              void run(destructiveAction);
+            }}
+            size="icon"
+            title={isDeleteForever ? "Delete forever" : "Move to trash"}
+            type="button"
+            variant="ghost"
+          >
+            <Trash2Icon />
+          </Button>
+        </>
+      )}
     </m.div>
   );
 };

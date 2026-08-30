@@ -8,9 +8,8 @@ import {
   MAIL_CREATE_LABEL_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
   MAIL_UPDATE_LABEL_CHANNEL,
-  MAIL_DELETE_SPAM_THREAD_CHANNEL,
+  MAIL_DELETE_THREAD_FOREVER_CHANNEL,
   MAIL_BULK_MUTATE_THREADS_CHANNEL,
-  MAIL_INDEX_PROGRESS_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
@@ -45,7 +44,6 @@ import {
   GmailBulkThreadMutationRequest,
   GmailCachedThreadPageReply,
   GmailCachedThreadPageRequest,
-  GmailIndexProgressList,
   GmailLabelCatalogReply,
   GmailLabelCatalogRequest,
   GmailLabelCreateReply,
@@ -90,7 +88,6 @@ import {
   saveAttachment as saveAttachmentAction,
   saveAttachmentPreview as saveAttachmentPreviewAction,
 } from "../../mail/attachment-actions";
-import { getMailIndexProgress } from "../../mail/mail-backfill";
 import {
   discardMailDraft,
   listStashedDrafts as listStashedDraftsAction,
@@ -105,7 +102,7 @@ import {
   bulkMutateThreads,
   createGmailLabel,
   deleteGmailLabel,
-  deleteSpamThread,
+  deleteThreadForever,
   getMailSyncStatus,
   getSpamStatus as loadSpamStatus,
   listCachedThreadPage,
@@ -266,13 +263,6 @@ export const getSpamStatus = makeIpcMethod({
     toIpcReply(loadSpamStatus(request), "Could not check spam"),
   payload: GmailSpamStatusRequest,
   result: GmailSpamStatusReply,
-});
-
-export const getIndexProgress = makeIpcMethod({
-  channel: MAIL_INDEX_PROGRESS_CHANNEL,
-  handler: () => Effect.sync(() => ({ accounts: getMailIndexProgress() })),
-  payload: Schema.Void,
-  result: GmailIndexProgressList,
 });
 
 export const listCachedPage = makeIpcMethod({
@@ -474,10 +464,13 @@ export const trash = makeIpcMethod({
   result: GmailThreadMutationReply,
 });
 
-export const deleteSpam = makeIpcMethod({
-  channel: MAIL_DELETE_SPAM_THREAD_CHANNEL,
+export const deleteForever = makeIpcMethod({
+  channel: MAIL_DELETE_THREAD_FOREVER_CHANNEL,
   handler: (request) =>
-    toIpcReply(deleteSpamThread(request), "Could not permanently delete email"),
+    toIpcReply(
+      deleteThreadForever(request),
+      "Could not permanently delete email"
+    ),
   payload: GmailThreadRequest,
   result: GmailThreadMutationReply,
 });

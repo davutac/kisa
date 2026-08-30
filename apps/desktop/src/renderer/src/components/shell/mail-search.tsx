@@ -42,13 +42,21 @@ import {
 import type { SearchFilter } from "@/mail/search-query";
 import { useAddressSuggestions } from "@/mail/use-mail-search";
 import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
+import type { GmailMailbox } from "@/shared/ipc/mail";
 import { useMailSearchStore } from "@/state/mail-search";
 import { useMailbox } from "@/state/mailbox";
 
 const SEARCH_WIDTH = "clamp(10rem, 32vw, 22rem)";
 
-const getSearchPlaceholder = (isSpam: boolean): string =>
-  isSpam ? "Search Spam" : "Search all mail";
+const getSearchPlaceholder = (mailbox: GmailMailbox): string => {
+  if (mailbox === "spam") {
+    return "Search Spam";
+  }
+  if (mailbox === "sent") {
+    return "Search Sent";
+  }
+  return mailbox === "trash" ? "Search Trash" : "Search all mail";
+};
 
 const TitlebarMailSearch = () => {
   const { accountIds } = useMailboxAccountScope();
@@ -233,7 +241,7 @@ const TitlebarMailSearch = () => {
                 updateQuery(nextQuery);
                 setAreCompletionsDismissed(false);
               }}
-              placeholder={getSearchPlaceholder(mailbox === "spam")}
+              placeholder={getSearchPlaceholder(mailbox)}
               ref={inputRef}
               value={query.text}
             />

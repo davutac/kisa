@@ -19,7 +19,7 @@ const labelUndoMessage = (applied: boolean): string =>
     : "Restored the label to conversations";
 
 export interface ThreadActions {
-  bulkDeleteSpam: (
+  bulkDeleteForever: (
     threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[]
   ) => Promise<void>;
   bulkSetLabel: (
@@ -31,7 +31,7 @@ export interface ThreadActions {
     isUnread: boolean
   ) => Promise<void>;
   bulkTrash: (threads: readonly ThreadActionTarget[]) => Promise<void>;
-  deleteSpam: (
+  deleteForever: (
     thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
     onSuccess?: OnThreadActionSuccess
   ) => void;
@@ -97,13 +97,13 @@ export const useThreadActions = (): ThreadActions => {
     [runBulkAction]
   );
 
-  const bulkDeleteSpam = useCallback(
+  const bulkDeleteForever = useCallback(
     (
       threads: readonly Pick<ThreadActionTarget, "accountId" | "threadId">[]
     ): Promise<void> =>
       runBulkAction({
         failureMessage: "Some conversations were not deleted",
-        operation: { kind: "deleteSpam" },
+        operation: { kind: "deleteForever" },
         successMessage: "Conversations permanently deleted",
         threads,
       }),
@@ -210,7 +210,7 @@ export const useThreadActions = (): ThreadActions => {
     [runThreadAction]
   );
 
-  const deleteSpam = useCallback(
+  const deleteForever = useCallback(
     (
       thread: Pick<ThreadActionTarget, "accountId" | "threadId">,
       onSuccess?: OnThreadActionSuccess
@@ -218,7 +218,7 @@ export const useThreadActions = (): ThreadActions => {
       void runThreadAction({
         failureMessage: "Could not permanently delete email",
         onSuccess,
-        send: (mailApi) => mailApi.deleteSpamThread(thread),
+        send: (mailApi) => mailApi.deleteThreadForever(thread),
         successMessage: "Conversation permanently deleted",
       });
     },
@@ -250,11 +250,11 @@ export const useThreadActions = (): ThreadActions => {
   );
 
   return {
-    bulkDeleteSpam,
+    bulkDeleteForever,
     bulkSetLabel,
     bulkSetReadState,
     bulkTrash,
-    deleteSpam,
+    deleteForever,
     notSpam,
     setLabel,
     toggleRead,

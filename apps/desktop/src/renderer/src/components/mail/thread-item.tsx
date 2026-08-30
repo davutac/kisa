@@ -1,3 +1,4 @@
+import { SendIcon } from "lucide-react";
 import type { HTMLMotionProps } from "motion/react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { useState } from "react";
@@ -22,6 +23,7 @@ import {
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
+import { hasSentLabel } from "@/mail/label";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
@@ -30,7 +32,7 @@ interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   hasCheckedThreads?: boolean;
   isChecked?: boolean;
   isSelected?: boolean;
-  onDeleteSpam?: (thread: GmailThreadSummary) => void;
+  onDeleteForever?: (thread: GmailThreadSummary) => void;
   onOpen: (
     thread: GmailThreadSummary,
     event: MouseEvent<HTMLButtonElement>
@@ -160,6 +162,15 @@ const ThreadSenderHeader = ({
           {senderMailbox?.email}
         </span>
       </ItemTitle>
+      {hasSentLabel(thread.labels) ? (
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground inline-flex shrink-0"
+          title="Sent conversation"
+        >
+          <SendIcon className="size-3.5 stroke-[1.8]" />
+        </span>
+      ) : null}
       <MailLabelBadges
         accountId={thread.accountId}
         labels={thread.labels}
@@ -181,7 +192,7 @@ const MailThreadItem = ({
   hasCheckedThreads = false,
   isChecked = false,
   isSelected = false,
-  onDeleteSpam,
+  onDeleteForever,
   onOpen,
   onRowPointerDown,
   onSelectionPointerDown,
@@ -213,7 +224,7 @@ const MailThreadItem = ({
     thread.attachments.length - visibleAttachments.length;
   const handleNotSpam = bindThreadAction(onNotSpam, thread);
   const hasDestructiveAction =
-    onDeleteSpam !== undefined || onTrash !== undefined;
+    onDeleteForever !== undefined || onTrash !== undefined;
   const quickActionsWidth = getMailThreadQuickActionsWidth(
     handleNotSpam !== undefined,
     hasDestructiveAction
@@ -256,7 +267,7 @@ const MailThreadItem = ({
           hotkeysEnabled={isSelected}
           isRevealed={areQuickActionsRevealed}
           isUnread={thread.isUnread}
-          onDeleteSpam={bindThreadAction(onDeleteSpam, thread)}
+          onDeleteForever={bindThreadAction(onDeleteForever, thread)}
           onNotSpam={handleNotSpam}
           onToggleRead={bindThreadAction(onToggleRead, thread)}
           onTrash={bindThreadAction(onTrash, thread)}
@@ -281,7 +292,7 @@ const MailThreadItem = ({
           >
             <button
               aria-current={isSelected}
-              aria-label={`${thread.subject}, from ${thread.from}`}
+              aria-label={`${thread.subject}, from ${thread.from}${hasSentLabel(thread.labels) ? ", sent" : ""}`}
               className="absolute inset-0 z-0 rounded-md text-left outline-none"
               onClick={(event) => {
                 onOpen(thread, event);

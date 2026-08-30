@@ -41,6 +41,7 @@ import { toIndexText } from "./message-text";
 const storeError = (message: string) => new GmailStoreError({ message });
 
 const INBOX_LABEL_ID = LabelId.make("INBOX");
+const SENT_LABEL_ID = LabelId.make("SENT");
 const SPAM_LABEL_ID = LabelId.make("SPAM");
 const TRASH_LABEL_ID = LabelId.make("TRASH");
 const UNREAD_LABEL_ID = LabelId.make("UNREAD");
@@ -134,6 +135,7 @@ const updateThreadSystemMailbox = async (
       .set({
         isInInbox: mailbox === "inbox",
         isInSpam: mailbox === "spam",
+        isInTrash: false,
         labels: moveToSystemMailbox(thread.labels ?? [], mailbox),
         spamAddedAt: mailbox === "spam" ? now : null,
         updatedAt: now,
@@ -597,7 +599,9 @@ export const GmailStoreLive = Layer.succeed(
               from: latestMessage?.from.address ?? "Unknown sender",
               hasAttachments: attachments.length > 0,
               isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+              isInSent: thread.labelIds.includes(SENT_LABEL_ID),
               isInSpam,
+              isInTrash: thread.labelIds.includes(TRASH_LABEL_ID),
               isUnread: thread.messages.some((message) =>
                 message.labelIds.includes(LabelId.make("UNREAD"))
               ),
@@ -889,7 +893,9 @@ export const GmailStoreLive = Layer.succeed(
               // mapping falls back to the id for unknown labels, so a stale
               // catalog would otherwise be able to change what counts as inbox.
               isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+              isInSent: thread.labelIds.includes(SENT_LABEL_ID),
               isInSpam,
+              isInTrash: thread.labelIds.includes(TRASH_LABEL_ID),
               isUnread: thread.hasUnread,
               labels: thread.labelIds.map(
                 (labelId) => namesById.get(labelId) ?? labelId

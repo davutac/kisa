@@ -84,6 +84,39 @@ vi.mock(import("../src/main/auth/auth"), () => ({
   getGoogleAccessToken: vi.fn<typeof getGoogleAccessToken>(),
 }));
 
+const upsertThreadLabels = (
+  accountId: AccountId,
+  threadId: ThreadId,
+  labels: readonly LabelId[],
+  hasUnread = false
+) =>
+  Effect.runPromise(
+    GmailStore.pipe(
+      Effect.flatMap((store) =>
+        store.upsertThreadDetails(
+          accountId,
+          [
+            new ThreadSummary({
+              attachments: [],
+              hasAttachments: false,
+              hasUnread,
+              id: threadId,
+              labelIds: labels,
+              latestAt: "1000",
+              latestMessageId: MessageId.make("message-1"),
+              messageCount: 1,
+              participants: [],
+              snippet: "Snippet",
+              subject: "Subject",
+            }),
+          ],
+          []
+        )
+      ),
+      Effect.provide(GmailStoreLive)
+    )
+  );
+
 describe("Gmail label store", () => {
   beforeEach(() => {
     connection.prepare("DELETE FROM gmail_messages").run();
@@ -673,32 +706,7 @@ describe("Gmail label store", () => {
     const threadId = ThreadId.make("spam-transition");
     const now = vi.spyOn(Date, "now");
     const upsert = (labels: readonly LabelId[]) =>
-      Effect.runPromise(
-        GmailStore.pipe(
-          Effect.flatMap((store) =>
-            store.upsertThreadDetails(
-              accountId,
-              [
-                new ThreadSummary({
-                  attachments: [],
-                  hasAttachments: false,
-                  hasUnread: true,
-                  id: threadId,
-                  labelIds: labels,
-                  latestAt: "1000",
-                  latestMessageId: MessageId.make("message-1"),
-                  messageCount: 1,
-                  participants: [],
-                  snippet: "Snippet",
-                  subject: "Subject",
-                }),
-              ],
-              []
-            )
-          ),
-          Effect.provide(GmailStoreLive)
-        )
-      );
+      upsertThreadLabels(accountId, threadId, labels, true);
     const readTransition = () =>
       connection
         .prepare(
@@ -734,6 +742,40 @@ describe("Gmail label store", () => {
     expect(readTransition()).toStrictEqual({
       is_in_spam: 1,
       spam_added_at: 400,
+    });
+  });
+
+  it("projects Sent and Trash membership from synchronized labels", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const threadId = ThreadId.make("sent-thread");
+    const readMailboxState = () =>
+      connection
+        .prepare(
+          `SELECT is_in_sent, is_in_trash
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = ?`
+        )
+        .get(accountId, threadId);
+
+    await upsertThreadLabels(accountId, threadId, [LabelId.make("SENT")]);
+    expect(readMailboxState()).toStrictEqual({
+      is_in_sent: 1,
+      is_in_trash: 0,
+    });
+
+    await upsertThreadLabels(accountId, threadId, [
+      LabelId.make("SENT"),
+      LabelId.make("TRASH"),
+    ]);
+    expect(readMailboxState()).toStrictEqual({
+      is_in_sent: 1,
+      is_in_trash: 1,
+    });
+
+    await upsertThreadLabels(accountId, threadId, [LabelId.make("INBOX")]);
+    expect(readMailboxState()).toStrictEqual({
+      is_in_sent: 0,
+      is_in_trash: 0,
     });
   });
 });

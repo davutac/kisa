@@ -47,7 +47,7 @@ describe("thread quick actions", () => {
         hotkeysEnabled={false}
         isRevealed
         isUnread
-        onDeleteSpam={() => {}}
+        onDeleteForever={() => {}}
         onNotSpam={() => {}}
         onToggleRead={() => {}}
       />

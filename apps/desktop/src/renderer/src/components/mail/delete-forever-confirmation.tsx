@@ -1,7 +1,9 @@
 import { ConfirmMessage } from "@/components/confirm-dialog";
 import type { ConfirmOptions } from "@/components/confirm-dialog";
 
-export const getDeleteSpamConfirmation = (subject: string): ConfirmOptions => ({
+export const getDeleteForeverConfirmation = (
+  subject: string
+): ConfirmOptions => ({
   confirmLabel: "Delete forever",
   confirmVariant: "destructive",
   description: (
@@ -16,7 +18,7 @@ export const getDeleteSpamConfirmation = (subject: string): ConfirmOptions => ({
 const conversationCount = (count: number): string =>
   `${count} conversation${count === 1 ? "" : "s"}`;
 
-export const getBulkDeleteSpamConfirmation = (
+export const getBulkDeleteForeverConfirmation = (
   count: number
 ): ConfirmOptions => ({
   confirmLabel: "Delete forever",

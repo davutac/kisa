@@ -25,9 +25,8 @@ import {
   bulkMutate,
   createLabel,
   deleteLabel,
-  deleteSpam,
+  deleteForever,
   discardDraft,
-  getIndexProgress,
   getSpamStatus,
   getSyncStatus,
   loadAttachmentPreview,
@@ -54,6 +53,7 @@ import {
   trustImages,
   updateLabel,
 } from "./methods/mail";
+import { getIndexProgress, reindexMail } from "./methods/mail-index";
 import {
   beginImport,
   cancelImport,
@@ -96,6 +96,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(deleteTemplate);
   yield* ipc.handle(getSyncStatus);
   yield* ipc.handle(getIndexProgress);
+  yield* ipc.handle(reindexMail);
   yield* ipc.handle(getSpamStatus);
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);
@@ -122,7 +123,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(setLabel);
   yield* ipc.handle(setReadState);
   yield* ipc.handle(trash);
-  yield* ipc.handle(deleteSpam);
+  yield* ipc.handle(deleteForever);
   yield* ipc.handle(markThreadNotSpam);
   yield* ipc.handle(listImageSenders);
   yield* ipc.handle(trustImages);

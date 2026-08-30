@@ -87,6 +87,7 @@ import {
   selectInlineImages,
   toImageDataUrl,
 } from "./inline-images";
+import { canDeleteThreadForever } from "./mail-permanent-delete";
 import {
   listCachedThreadPageFromDatabase,
   THREAD_PAGE_SIZE,
@@ -1240,7 +1241,7 @@ const runBatchMutation = Effect.fn("runBatchMutation")(
     return yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) => {
-          if (operation.kind === "deleteSpam") {
+          if (operation.kind === "deleteForever") {
             return Effect.succeed({ type: "updated" } as const);
           }
 
@@ -1278,6 +1279,7 @@ const restoreTrashedThreadRows = (
         const values = {
           isInInbox: false,
           isInSpam: false,
+          isInTrash: true,
           labels: summary.labels,
           spamAddedAt: null,
           updatedAt: Date.now(),
@@ -1619,13 +1621,14 @@ export const trashThread = Effect.fn("trashThread")(function* trashThread(
   ]);
 });
 
-export const deleteSpamThread = Effect.fn("deleteSpamThread")(
-  function* deleteSpamThread(request: GmailThreadRequest) {
+export const deleteThreadForever = Effect.fn("deleteThreadForever")(
+  function* deleteThreadForever(request: GmailThreadRequest) {
     const row = yield* findCachedThread(request.accountId, request.threadId);
 
-    if (row?.isInSpam !== true) {
+    if (!canDeleteThreadForever(row)) {
       return yield* new MailSyncError({
-        message: "Only conversations in Spam can be permanently deleted",
+        message:
+          "Only conversations in Spam or Trash can be permanently deleted",
       });
     }
 
@@ -1652,8 +1655,8 @@ const runSingleBulkMutation = (
   operation: GmailBulkThreadMutationOperation,
   request: GmailThreadRequest
 ): Effect.Effect<void, MailSyncError> => {
-  if (operation.kind === "deleteSpam") {
-    return deleteSpamThread(request);
+  if (operation.kind === "deleteForever") {
+    return deleteThreadForever(request);
   }
 
   if (operation.kind === "setLabel") {

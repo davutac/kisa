@@ -5,6 +5,7 @@ import {
   gmailLabelColorStyle,
   gmailLabelTextColor,
   hasInboxLabel,
+  hasSentLabel,
   isSystemGmailLabel,
   listUserGmailLabels,
   sortGmailLabelCatalog,
@@ -136,5 +137,13 @@ describe(hasInboxLabel, () => {
   it("distinguishes Inbox threads from stale Trash entries", () => {
     expect(hasInboxLabel(["INBOX", "CATEGORY_UPDATES"])).toBeTruthy();
     expect(hasInboxLabel(["TRASH", "CATEGORY_UPDATES"])).toBeFalsy();
+  });
+});
+
+describe(hasSentLabel, () => {
+  it("recognizes Sent membership anywhere in the thread label union", () => {
+    expect(hasSentLabel(["SENT"])).toBeTruthy();
+    expect(hasSentLabel(["INBOX", "SENT"])).toBeTruthy();
+    expect(hasSentLabel(["INBOX"])).toBeFalsy();
   });
 });

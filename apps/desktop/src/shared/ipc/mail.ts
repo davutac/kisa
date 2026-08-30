@@ -311,7 +311,7 @@ export const GmailBulkThreadMutationOperation = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("trash") }),
   Schema.Struct({ kind: Schema.Literal("moveToInbox") }),
   Schema.Struct({ kind: Schema.Literal("moveToSpam") }),
-  Schema.Struct({ kind: Schema.Literal("deleteSpam") }),
+  Schema.Struct({ kind: Schema.Literal("deleteForever") }),
 ]);
 export type GmailBulkThreadMutationOperation =
   typeof GmailBulkThreadMutationOperation.Type;
@@ -486,7 +486,7 @@ export const GmailThreadCursor = Schema.Struct({
 });
 export type GmailThreadCursor = typeof GmailThreadCursor.Type;
 
-export const GmailMailbox = Schema.Literals(["inbox", "spam"]);
+export const GmailMailbox = Schema.Literals(["inbox", "sent", "spam", "trash"]);
 export type GmailMailbox = typeof GmailMailbox.Type;
 
 export const GmailCachedThreadPageRequest = Schema.Struct({
@@ -503,6 +503,11 @@ export const GmailSpamStatusRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
 });
 export type GmailSpamStatusRequest = typeof GmailSpamStatusRequest.Type;
+
+export const GmailReindexRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+});
+export type GmailReindexRequest = typeof GmailReindexRequest.Type;
 
 export const GmailSpamStatus = Schema.Struct({ hasUnreadSpam: Schema.Boolean });
 export type GmailSpamStatus = typeof GmailSpamStatus.Type;
@@ -669,6 +674,9 @@ export type GmailBulkThreadMutationReply =
 
 export const GmailSpamStatusReply = IpcReply(GmailSpamStatus);
 export type GmailSpamStatusReply = typeof GmailSpamStatusReply.Type;
+
+export const GmailReindexReply = IpcReply(Schema.Void);
+export type GmailReindexReply = typeof GmailReindexReply.Type;
 
 export const GmailThreadMessageSendReply = IpcReply(Schema.Void);
 export type GmailThreadMessageSendReply =

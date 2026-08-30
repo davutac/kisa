@@ -31,31 +31,18 @@ import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
 import { GmailStoreLive } from "./gmail-store";
+import { mergeWatermark, oldestTimestamp } from "./mail-backfill-cursor";
+import { resetMailIndexRemote } from "./mail-index-reindex";
 import {
-  mergeWatermark,
-  oldestTimestamp,
-  toBeforeQuery,
-} from "./mail-backfill-cursor";
+  MAIL_INDEX_PAGE_SIZE,
+  toMailIndexPageRequest,
+} from "./mail-index-request";
 import { mailQuotaGovernor, QUOTA_UNITS } from "./quota-governor";
 import { refreshUnreadBadge } from "./unread-badge";
 
-/**
- * 100 threads is Gmail's practical `threads.list` page and the unit of the
- * indexer's checkpoint: one page is one transaction, so it also bounds how long
- * a single write can block the main thread.
- */
-const BACKFILL_PAGE_SIZE = 100;
-
-/**
- * All mail except spam and trash. `labelIds: []` with `includeSpamTrash: false`
- * already means exactly that, so the query only has to drop Hangouts/Chat
- * records, which are not mail and carry no useful body.
- */
-const BACKFILL_QUERY = "-in:chats";
-
 /** One page's worth of quota: the list call plus a `threads.get` per thread. */
 const PAGE_QUOTA_UNITS =
-  QUOTA_UNITS.threadsList + BACKFILL_PAGE_SIZE * QUOTA_UNITS.threadsGet;
+  QUOTA_UNITS.threadsList + MAIL_INDEX_PAGE_SIZE * QUOTA_UNITS.threadsGet;
 
 /**
  * How many accounts index at once.
@@ -259,16 +246,7 @@ const listPage = (
     Gmail.pipe(
       Effect.flatMap((gmail) =>
         gmail.listThreads(
-          cursor === undefined
-            ? {
-                accountId,
-                pageSize: BACKFILL_PAGE_SIZE,
-                search:
-                  oldestIndexedAt === null
-                    ? BACKFILL_QUERY
-                    : toBeforeQuery(BACKFILL_QUERY, oldestIndexedAt),
-              }
-            : { accountId, cursor }
+          toMailIndexPageRequest(accountId, cursor, oldestIndexedAt)
         )
       )
     )
@@ -305,6 +283,22 @@ const estimateThreadTotal = Effect.fn("mailBackfill.estimateThreadTotal")(
 const cancellations = new Set<string>();
 const queued: string[] = [];
 const active = new Set<string>();
+const pendingReindexes = new Set<string>();
+
+const isMailIndexScheduled = (accountId: string): boolean =>
+  active.has(accountId) ||
+  queued.includes(accountId) ||
+  pendingReindexes.has(accountId);
+
+const ensureMailIndexCanStart = (accountId: string) => {
+  if (isMailIndexScheduled(accountId)) {
+    return Effect.fail(backfillError("Mail is already being indexed"));
+  }
+
+  return accountMailWorkSupervisor.isSuspended(accountId)
+    ? Effect.fail(backfillError("The Gmail account is not available"))
+    : Effect.void;
+};
 
 const isCancelled = (accountId: string): boolean =>
   cancellations.has(accountId);
@@ -531,8 +525,7 @@ const drainQueue = (): void => {
 export const requestMailBackfill = (accountId: string): void => {
   if (
     accountMailWorkSupervisor.isSuspended(accountId) ||
-    queued.includes(accountId) ||
-    active.has(accountId)
+    isMailIndexScheduled(accountId)
   ) {
     return;
   }
@@ -574,21 +567,50 @@ const hasReadScope = (scopes: string): boolean => {
 
 const NO_ACCOUNT_IDS: readonly string[] = [];
 
-const listReadableAccountIds = () => {
-  const accounts = withDatabase(
-    "Could not load Google accounts",
-    async (database) => {
-      const rows = await database.query.googleAccounts.findMany({
-        columns: { email: true, scopes: true },
-      });
-      return rows
-        .filter(({ scopes }) => hasReadScope(scopes))
-        .map(({ email }) => email);
-    }
-  );
+const listReadableAccountIds = () =>
+  withDatabase("Could not load Google accounts", async (database) => {
+    const rows = await database.query.googleAccounts.findMany({
+      columns: { email: true, scopes: true },
+    });
+    return rows
+      .filter(({ scopes }) => hasReadScope(scopes))
+      .map(({ email }) => email);
+  });
 
-  return accounts.pipe(Effect.orElseSucceed(() => NO_ACCOUNT_IDS));
-};
+/**
+ * Explicit Settings action. It preserves the cache, clears only the durable
+ * index checkpoint, and then lets the normal resumable indexer refresh every
+ * conversation for this account.
+ */
+export const reindexMailAccount = Effect.fn("reindexMailAccount")(
+  function* reindexMailAccount(accountId: string) {
+    yield* ensureMailIndexCanStart(accountId);
+
+    const readableAccountIds = yield* listReadableAccountIds();
+    if (!readableAccountIds.includes(accountId)) {
+      return yield* backfillError("The Gmail account is not available");
+    }
+
+    // Recheck after the database round trip so a concurrent connect or reindex
+    // cannot reset a run that started while account access was being verified.
+    yield* ensureMailIndexCanStart(accountId);
+
+    // Prevent a reconnect event from starting the old completed run while its
+    // checkpoint is being cleared in the database process.
+    pendingReindexes.add(accountId);
+
+    yield* withDatabase("Could not reset the mail index", (database) =>
+      resetMailIndexRemote(database, accountId)
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          pendingReindexes.delete(accountId);
+        })
+      )
+    );
+    yield* Effect.sync(() => requestMailBackfill(accountId));
+  }
+);
 
 /**
  * Seeds the renderer's progress state and decides what to index on launch.
@@ -615,7 +637,9 @@ export const startMailBackfill = Effect.fn("startMailBackfill")(
     const stateByAccount = new Map(
       rows.map((row) => [row.accountEmail, row] as const)
     );
-    const accountIds = yield* listReadableAccountIds();
+    const accountIds = yield* listReadableAccountIds().pipe(
+      Effect.orElseSucceed(() => NO_ACCOUNT_IDS)
+    );
 
     for (const accountId of accountIds) {
       const row = stateByAccount.get(accountId);

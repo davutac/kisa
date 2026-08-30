@@ -58,15 +58,18 @@ const insertThread = (
   connection
     .prepare(
       `INSERT INTO gmail_threads (
-        account_email, "from", is_in_inbox, is_in_spam, is_unread, labels,
-        latest_at, message_count, snippet, subject, thread_id, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        account_email, "from", is_in_inbox, is_in_sent, is_in_spam,
+        is_in_trash, is_unread, labels, latest_at, message_count, snippet,
+        subject, thread_id, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       accountId,
       "sender@example.com",
       Number(labels.includes("INBOX")),
+      Number(labels.includes("SENT")),
       Number(labels.includes("SPAM")),
+      Number(labels.includes("TRASH")),
       Number(isUnread),
       JSON.stringify(labels),
       latestAt,
@@ -112,6 +115,9 @@ describe(listCachedThreadPageFromDatabase, () => {
       ["INBOX", "work", "travel"],
       true
     );
+    insertThread("one@example.com", "sent-only", 600, ["SENT"]);
+    insertThread("one@example.com", "trash-only", 700, ["TRASH"]);
+    insertThread("one@example.com", "sent-trash", 650, ["SENT", "TRASH"]);
   });
 
   afterAll(() => connection.close());
@@ -149,6 +155,45 @@ describe(listCachedThreadPageFromDatabase, () => {
     ).toStrictEqual([
       "one@example.com:both-inbox",
       "two@example.com:both-inbox",
+    ]);
+  });
+
+  it("includes Sent conversations in Inbox and narrows the Sent mailbox", async () => {
+    const inbox = await listCachedThreadPageFromDatabase(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      mailbox: "inbox",
+    });
+    const sent = await listCachedThreadPageFromDatabase(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      mailbox: "sent",
+    });
+
+    expect(inbox.threads.map(({ threadId }) => threadId)).toStrictEqual([
+      "sent-only",
+      "both-inbox",
+      "work-inbox",
+    ]);
+    expect(sent.threads.map(({ threadId }) => threadId)).toStrictEqual([
+      "sent-only",
+    ]);
+  });
+
+  it("keeps trashed conversations out of Inbox and Sent", async () => {
+    const trash = await listCachedThreadPageFromDatabase(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      mailbox: "trash",
+    });
+    const sent = await listCachedThreadPageFromDatabase(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      mailbox: "sent",
+    });
+
+    expect(trash.threads.map(({ threadId }) => threadId)).toStrictEqual([
+      "trash-only",
+      "sent-trash",
+    ]);
+    expect(sent.threads.map(({ threadId }) => threadId)).toStrictEqual([
+      "sent-only",
     ]);
   });
 

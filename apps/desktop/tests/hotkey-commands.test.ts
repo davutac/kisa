@@ -107,6 +107,7 @@ describe("hotkey command registry", () => {
       "app.openSettings",
       "app.openTemplates",
       "app.toggleSpam",
+      "app.toggleTrash",
       "app.toggleUnread",
       "mailbox.toggleThreadRead",
       "mailbox.toggleThreadSelection",
@@ -292,12 +293,17 @@ describe("hotkey command registry", () => {
   });
 
   it("assigns the mailbox filters", () => {
-    expect(HOTKEY_COMMANDS["app.toggleUnread"].bindings).toStrictEqual(["U"]);
-    expect(HOTKEY_COMMANDS["app.toggleSpam"].bindings).toStrictEqual(["S"]);
-    expect(HOTKEY_COMMANDS["app.toggleUnread"].repeat).toBe(
-      "ignore-key-repeat"
-    );
-    expect(HOTKEY_COMMANDS["app.toggleSpam"].repeat).toBe("ignore-key-repeat");
+    expect({
+      sent: HOTKEY_COMMANDS["app.toggleSent"],
+      spam: HOTKEY_COMMANDS["app.toggleSpam"],
+      trash: HOTKEY_COMMANDS["app.toggleTrash"],
+      unread: HOTKEY_COMMANDS["app.toggleUnread"],
+    }).toMatchObject({
+      sent: { bindings: ["Shift+S"], repeat: "ignore-key-repeat" },
+      spam: { bindings: ["S"], repeat: "ignore-key-repeat" },
+      trash: { bindings: ["T"], repeat: "ignore-key-repeat" },
+      unread: { bindings: ["U"], repeat: "ignore-key-repeat" },
+    });
   });
 
   it("hands search Tab navigation to the thread list", () => {
