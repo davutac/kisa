@@ -12,6 +12,7 @@ export type MailDraftKind = "forward" | "new" | "reply" | "reply-all";
 export interface StoredMailDraftAttachment {
   readonly authorizationVersion: 1;
   readonly birthtimeMs: number;
+  readonly contentId?: string;
   readonly device: string;
   readonly filename: string;
   readonly id: string;

@@ -184,16 +184,11 @@ const MailReplyArea = ({
         ariaLabel="Message"
         attachments={{
           command: "threadComposer.attach",
-          files: workspace.attachments,
-          inputRef: workspace.inputRef,
-          onAdd: workspace.addAttachments,
-          onRemove: (attachmentId) =>
-            workspace.setAttachments((current) =>
-              current.filter(({ id }) => id !== attachmentId)
-            ),
+          controller: workspace.outgoingAttachments,
         }}
         className="min-h-48"
         consumeModEnter
+        contentKey={draft.id}
         defaultValue={draft.body.html}
         disabled={workspace.isInputDisabled}
         focusHandleRef={handleComposerReady}

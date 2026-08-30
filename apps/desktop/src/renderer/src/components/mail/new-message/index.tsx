@@ -36,7 +36,7 @@ const NewMessageDialogContent = ({
   const handleAccountSelect = workspace.selectAccount;
   const handleComposerChange = workspace.updateComposer;
   const handleDismissCleanVersion = workspace.dismissCleanVersion;
-  const handleFiles = workspace.addAttachments;
+  const handleFiles = workspace.outgoingAttachments.addAttachments;
   const handleSelectCleanVersion = workspace.selectCleanVersion;
   const handleSelectDraft = workspace.switchDraft;
   const handleSend = workspace.send;
@@ -66,15 +66,12 @@ const NewMessageDialogContent = ({
         />
         <NewMessageForm
           accounts={accounts}
-          addAttachments={workspace.addAttachments}
           applyTemplate={workspace.applyTemplate}
-          attachments={workspace.attachments}
           canClean={workspace.canClean}
           canSend={workspace.canSend}
           canStash={workspace.canStash}
           cleanupModelLabel={workspace.cleanupModelLabel}
           focus={workspace.focus}
-          inputRef={workspace.inputRef}
           onClean={handleClean}
           onAccountSelect={handleAccountSelect}
           onComposerChange={handleComposerChange}
@@ -83,9 +80,9 @@ const NewMessageDialogContent = ({
           onSend={handleSend}
           onStash={handleStash}
           onSubjectChange={handleSubjectChange}
+          outgoingAttachments={workspace.outgoingAttachments}
           selectedAccountId={workspace.selectedAccountId}
           sendShortcutLabel={`${workspace.sendDisplay.label} (${sendBinding})`}
-          setAttachments={workspace.setAttachments}
           templates={workspace.templates}
         />
       </NewMessageDialogShell>

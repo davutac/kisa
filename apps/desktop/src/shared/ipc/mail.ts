@@ -366,8 +366,17 @@ const GmailOutgoingSubject = Schema.String.check(
   Schema.isMaxLength(MAX_GMAIL_SUBJECT_LENGTH)
 );
 
+export const GmailOutgoingInlineContentId = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$/u)
+);
+
 export const GmailOutgoingAttachmentPrepareRequest = Schema.Struct({
-  referenceIds: Schema.Array(Schema.NonEmptyString),
+  attachments: Schema.Array(
+    Schema.Struct({
+      contentId: Schema.optional(GmailOutgoingInlineContentId),
+      referenceId: Schema.NonEmptyString,
+    })
+  ),
 });
 export type GmailOutgoingAttachmentPrepareRequest =
   typeof GmailOutgoingAttachmentPrepareRequest.Type;
@@ -406,6 +415,7 @@ export const MailDraftKind = Schema.Literals([
 export type MailDraftKind = typeof MailDraftKind.Type;
 
 export const MailDraftAttachment = Schema.Struct({
+  contentId: Schema.optional(GmailOutgoingInlineContentId),
   filename: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
   mediaType: Schema.NonEmptyString,

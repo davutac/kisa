@@ -176,7 +176,7 @@ export const prepareOutgoingAttachments = makeIpcMethod({
             try: () =>
               outgoingAttachmentAuthorizations.prepare(
                 bindOutgoingAttachmentOwner(event.sender),
-                request.referenceIds
+                request.attachments
               ),
           }),
           "Could not prepare attachments"
