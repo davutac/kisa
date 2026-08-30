@@ -122,6 +122,22 @@ export type AiReply = typeof AiReply.Type;
 export const AiReplyGenerationReply = IpcReply(AiReply);
 export type AiReplyGenerationReply = typeof AiReplyGenerationReply.Type;
 
+export const AiThreadCategorizationRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  threadId: Schema.NonEmptyString,
+});
+export type AiThreadCategorizationRequest =
+  typeof AiThreadCategorizationRequest.Type;
+
+export const AiThreadCategorization = Schema.Struct({
+  labelIds: Schema.Array(Schema.NonEmptyString),
+});
+export type AiThreadCategorization = typeof AiThreadCategorization.Type;
+
+export const AiThreadCategorizationReply = IpcReply(AiThreadCategorization);
+export type AiThreadCategorizationReply =
+  typeof AiThreadCategorizationReply.Type;
+
 export const AiCleanupDraftRequest = Schema.Struct({
   body: Schema.String.check(Schema.isMaxLength(MAX_AI_DRAFT_BODY_LENGTH)),
   instructions: OperationInstructions,

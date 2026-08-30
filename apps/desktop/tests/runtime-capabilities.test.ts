@@ -71,6 +71,8 @@ describe(getRuntimeCapabilities, () => {
       }),
     cancelDatabaseImport: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    categorizeThread: () =>
+      Promise.resolve({ data: { labelIds: [] }, ok: true as const }),
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
     cleanupEmailDraft: () =>
       Promise.resolve({ data: { body: "Body", subject: "Subject" }, ok: true }),
@@ -237,6 +239,7 @@ describe(getRuntimeCapabilities, () => {
 
     expect(capabilities).toStrictEqual({
       ai: {
+        categorizeThread: desktopBridge.categorizeThread,
         cleanupDraft: desktopBridge.cleanupEmailDraft,
         generateReply: desktopBridge.generateEmailReply,
         getSettings: desktopBridge.getAiSettings,

@@ -8,6 +8,7 @@ import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 
 import type { AiProvider } from "../../../shared/ipc/ai";
+import { logDevelopmentAiError } from "../development-logging";
 import { AiProviderError } from "../errors";
 import { runAiCommand } from "../process";
 import type { AiCommandError, AiCommandResult } from "../process";
@@ -47,6 +48,10 @@ export const commandFailure = (
   provider: AiProvider,
   error: AiCommandError
 ): AiProviderError => {
+  logDevelopmentAiError(
+    `${PROVIDER_NAMES[provider]} command (${error.kind})`,
+    error
+  );
   if (error.kind === "not-installed") {
     return providerFailure(
       provider,

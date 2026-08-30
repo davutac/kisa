@@ -107,9 +107,38 @@ describe("account settings", () => {
       )
     ).resolves.toMatchObject([
       {
+        categorizationEnabled: false,
         emailSignature: { html: "", text: "" },
         notificationsEnabled: false,
       },
     ]);
+  });
+
+  it("persists automatic categorization and emits the updated account settings", async () => {
+    const settings = await Effect.runPromise(
+      updateAccountSettings({
+        accountId: "person@example.com",
+        categorizationEnabled: true,
+      })
+    );
+
+    expect(settings).toMatchObject([
+      {
+        accountId: "person@example.com",
+        categorizationEnabled: true,
+      },
+    ]);
+    expect(
+      connection
+        .prepare(
+          "SELECT categorization_enabled AS categorizationEnabled FROM account_settings"
+        )
+        .get()
+    ).toStrictEqual({ categorizationEnabled: 1 });
+    expect(rendererEvents.send).toHaveBeenCalledOnce();
+    expect(rendererEvents.send.mock.calls[0]?.[2]).toMatchObject({
+      data: [{ categorizationEnabled: true }],
+      ok: true,
+    });
   });
 });

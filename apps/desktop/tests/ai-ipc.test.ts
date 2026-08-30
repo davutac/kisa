@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import { vi } from "vitest";
 
 import {
+  AI_CATEGORIZE_THREAD_CHANNEL,
   AI_CLEANUP_DRAFT_CHANNEL,
   AI_GENERATE_REPLY_CHANNEL,
   AI_GET_SETTINGS_CHANNEL,
@@ -13,6 +14,7 @@ import {
 } from "../src/shared/ipc/channels";
 
 const state = vi.hoisted(() => ({
+  categorizeThread: vi.fn(() => Effect.succeed({ labelIds: ["Label_1"] })),
   cleanupAiDraft: vi.fn(() =>
     Effect.succeed({ body: "Clean body", subject: "Clean subject" })
   ),
@@ -82,7 +84,12 @@ vi.mock("../src/main/ai/provider-catalog", () => ({
   listAiProviderStatuses: state.listAiProviderStatuses,
 }));
 
+vi.mock("../src/main/ai/thread-categorization", () => ({
+  categorizeThread: state.categorizeThread,
+}));
+
 const {
+  categorizeMailThread,
   cleanupDraft,
   generateReply,
   getAiWritingSettings,
@@ -171,6 +178,22 @@ describe("AI IPC", () => {
       });
       expect(state.generateAiReply).toHaveBeenCalledWith(replyRequest);
       expect(state.cleanupAiDraft).toHaveBeenCalledWith(cleanupRequest);
+    })
+  );
+
+  it.effect("routes manual categorization to the AI label pipeline", () =>
+    Effect.gen(function* routeManualCategorization() {
+      const request = {
+        accountId: "person@example.com",
+        threadId: "thread-1",
+      };
+
+      expect(categorizeMailThread.channel).toBe(AI_CATEGORIZE_THREAD_CHANNEL);
+      expect(yield* categorizeMailThread.handler(request)).toStrictEqual({
+        data: { labelIds: ["Label_1"] },
+        ok: true,
+      });
+      expect(state.categorizeThread).toHaveBeenCalledWith(request);
     })
   );
 

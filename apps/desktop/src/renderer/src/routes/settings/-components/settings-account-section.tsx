@@ -11,6 +11,7 @@ import {
 import type { AuthApi, MailApi, SettingsApi } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 
+import SettingsAccountCategorizationRow from "./settings-account-categorization-row";
 import SettingsAccountDisconnectRow from "./settings-account-disconnect-row";
 import SettingsAccountLabelsRow from "./settings-account-labels-row";
 import SettingsAccountNotificationsRow from "./settings-account-notifications-row";
@@ -60,6 +61,12 @@ const SettingsAccountSection = ({
       <SettingsRows>
         {settingsApi === undefined ? null : (
           <SettingsAccountNotificationsRow
+            account={account}
+            settingsApi={settingsApi}
+          />
+        )}
+        {settingsApi === undefined ? null : (
+          <SettingsAccountCategorizationRow
             account={account}
             settingsApi={settingsApi}
           />

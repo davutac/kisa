@@ -25,6 +25,10 @@ export interface GmailStoreService {
   readonly getAuthorization: (
     accountId: AccountId
   ) => Effect.Effect<Option.Option<GmailAuthorization>, GmailStoreError>;
+  readonly getExistingThreadIds: (
+    accountId: AccountId,
+    threadIds: readonly ThreadId[]
+  ) => Effect.Effect<readonly ThreadId[], GmailStoreError>;
   readonly getLabels: (
     accountId: AccountId
   ) => Effect.Effect<readonly GmailLabel[], GmailStoreError>;

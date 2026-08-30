@@ -32,6 +32,26 @@ export const notifyAccountSettingsChanged = (
   );
 };
 
+export const isAutomaticCategorizationEnabled = Effect.fn(
+  "isAutomaticCategorizationEnabled"
+)(function* isAutomaticCategorizationEnabled(accountId: string) {
+  const settings = yield* withDatabaseClient((database) =>
+    database.query.accountSettings.findFirst({
+      columns: { categorizationEnabled: true },
+      where: { accountEmail: accountId },
+    })
+  ).pipe(
+    Effect.mapError(
+      () =>
+        new AccountSettingsError({
+          message: "Could not load account settings",
+        })
+    )
+  );
+
+  return settings?.categorizationEnabled === true;
+});
+
 // Only accounts that changed a default have a row, so the renderer fills in the
 // defaults for everything this list leaves out.
 export const listAccountSettings = Effect.fn("listAccountSettings")(
@@ -51,6 +71,7 @@ export const listAccountSettings = Effect.fn("listAccountSettings")(
       (row) =>
         ({
           accountId: row.accountEmail,
+          categorizationEnabled: row.categorizationEnabled,
           emailSignature: row.emailSignature,
           notificationsEnabled: row.notificationsEnabled,
           showSystemLabels: row.showSystemLabels,
@@ -63,7 +84,9 @@ export const updateAccountSettings = Effect.fn("updateAccountSettings")(
   function* updateAccountSettings(request: AccountSettingsUpdateRequest) {
     const now = Date.now();
     let setting;
-    if ("emailSignature" in request) {
+    if ("categorizationEnabled" in request) {
+      setting = { categorizationEnabled: request.categorizationEnabled };
+    } else if ("emailSignature" in request) {
       setting = {
         emailSignature: normalizeEmailSignature(request.emailSignature),
       };

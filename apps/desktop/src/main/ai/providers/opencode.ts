@@ -384,7 +384,7 @@ export const generateWithOpenCode = Effect.fn("generateWithOpenCode")(
       try: () =>
         client.session.create({
           permission: [{ action: "deny", pattern: "*", permission: "*" }],
-          title: "Kisa email writing",
+          title: "Kisa AI generation",
         }),
     });
     if (session.data === undefined) {

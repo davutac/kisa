@@ -248,7 +248,7 @@ describe("database migrations", () => {
     }
   });
 
-  it("enables notifications by default for existing account settings", () => {
+  it("applies new defaults to existing account settings", () => {
     const connection = createLegacyDatabase();
 
     try {
@@ -269,12 +269,13 @@ describe("database migrations", () => {
       expect(
         connection
           .prepare(
-            `SELECT email_signature, notifications_enabled
+            `SELECT categorization_enabled, email_signature, notifications_enabled
              FROM account_settings
              WHERE account_email = ?`
           )
           .get("user@example.com")
       ).toStrictEqual({
+        categorization_enabled: 0,
         email_signature: '{"html":"","text":""}',
         notifications_enabled: 1,
       });

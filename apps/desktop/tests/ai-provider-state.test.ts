@@ -37,6 +37,9 @@ const providers = [
 ] satisfies readonly AiProviderStatus[];
 
 const createAiApi = (): AiApi => ({
+  categorizeThread: vi.fn<AiApi["categorizeThread"]>(() =>
+    Promise.resolve({ data: { labelIds: [] }, ok: true as const })
+  ),
   cleanupDraft: vi.fn<AiApi["cleanupDraft"]>(() =>
     Promise.resolve({
       data: { body: "Clean body", subject: "Clean subject" },

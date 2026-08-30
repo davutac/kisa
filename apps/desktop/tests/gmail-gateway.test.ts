@@ -28,6 +28,7 @@ const googleApi = vi.hoisted(() => ({
   labelError: undefined as unknown,
   labelPatches: [] as gmail_v1.Params$Resource$Users$Labels$Patch[],
   pendingRequest: Promise.withResolvers<undefined>().promise,
+  threadResponses: new Map<string, gmail_v1.Schema$Thread>(),
   trashError: undefined as unknown,
 }));
 
@@ -124,6 +125,17 @@ vi.mock(import("@googleapis/gmail"), async (importOriginal) => {
           return Promise.resolve();
         },
       });
+      Object.defineProperty(client.users.threads, "get", {
+        value: (request: gmail_v1.Params$Resource$Users$Threads$Get) => {
+          const id = request.id ?? "";
+          return Promise.resolve({
+            data: googleApi.threadResponses.get(id) ?? {
+              id,
+              messages: [],
+            },
+          });
+        },
+      });
     }
 
     return client;
@@ -149,6 +161,23 @@ const authorization = {
   credentials: { accessToken: Redacted.make("test-access-token") },
 };
 
+const historyMessage = (
+  id: string,
+  subject: string,
+  internalDate: string
+): gmail_v1.Schema$Message => ({
+  id,
+  internalDate,
+  labelIds: ["INBOX"],
+  payload: {
+    headers: [
+      { name: "From", value: "sender@example.com" },
+      { name: "Subject", value: subject },
+    ],
+  },
+  snippet: subject,
+});
+
 describe("Gmail gateway", () => {
   beforeEach(() => {
     googleApi.attachmentError = undefined;
@@ -160,6 +189,7 @@ describe("Gmail gateway", () => {
     googleApi.labelCreates.length = 0;
     googleApi.labelDeletes.length = 0;
     googleApi.labelPatches.length = 0;
+    googleApi.threadResponses.clear();
     googleApi.trashError = undefined;
   });
 
@@ -267,6 +297,56 @@ describe("Gmail gateway", () => {
         startHistoryId: "history-before",
         userId: "me",
       }),
+    ]);
+  });
+
+  it("only marks history threads whose complete conversation arrived in the window", async () => {
+    googleApi.historyRecords.push({
+      messagesAdded: [
+        { message: { id: "new-message", threadId: "new-thread" } },
+        { message: { id: "multi-message-1", threadId: "multi-thread" } },
+        { message: { id: "multi-message-2", threadId: "multi-thread" } },
+        { message: { id: "reply-message", threadId: "existing-thread" } },
+      ],
+    });
+    googleApi.threadResponses.set("new-thread", {
+      historyId: "history-next",
+      id: "new-thread",
+      messages: [historyMessage("new-message", "A new conversation", "1")],
+    });
+    googleApi.threadResponses.set("multi-thread", {
+      historyId: "history-next",
+      id: "multi-thread",
+      messages: [
+        historyMessage("multi-message-1", "A multi-message conversation", "1"),
+        historyMessage(
+          "multi-message-2",
+          "Re: A multi-message conversation",
+          "2"
+        ),
+      ],
+    });
+    googleApi.threadResponses.set("existing-thread", {
+      historyId: "history-next",
+      id: "existing-thread",
+      messages: [
+        historyMessage("old-message", "An existing conversation", "1"),
+        historyMessage("reply-message", "Re: An existing conversation", "2"),
+      ],
+    });
+
+    const result = await Effect.runPromise(
+      GmailGateway.pipe(
+        Effect.flatMap((gateway) =>
+          gateway.listHistory(authorization, HistoryId.make("history-before"))
+        ),
+        Effect.provide(GmailGatewayLive)
+      )
+    );
+
+    expect(result.value.newThreadCandidateIds).toStrictEqual([
+      "new-thread",
+      "multi-thread",
     ]);
   });
 

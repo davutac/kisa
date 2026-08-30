@@ -119,8 +119,10 @@ interface TestLayerOptions {
   readonly attachmentNotFound?: boolean;
   readonly batchMutationNotFound?: boolean;
   readonly cachedLabels?: readonly GmailLabel[];
+  readonly existingThreadIds?: readonly ThreadId[];
   readonly historyAddedMessageIds?: readonly MessageId[];
   readonly historyExpired?: boolean;
+  readonly historyNewThreadCandidateIds?: readonly ThreadId[];
   readonly historyThreads?: readonly ThreadSummary[];
   readonly labelMutationNotFound?: boolean;
   readonly syncCursor?: HistoryId;
@@ -178,6 +180,12 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
     getAuthorization: (accountId) =>
       Effect.sync(() =>
         Option.fromNullishOr(state.authorizations.get(accountId))
+      ),
+    getExistingThreadIds: (_accountId, threadIds) =>
+      Effect.succeed(
+        threadIds.filter((threadId) =>
+          options.existingThreadIds?.includes(threadId)
+        )
       ),
     getLabels: () => Effect.succeed(state.labels),
     getSyncCursor: () =>
@@ -386,6 +394,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
               addedMessageIds: options.historyAddedMessageIds ?? [],
               details: [],
               historyId: HistoryId.make("history-next"),
+              newThreadCandidateIds: options.historyNewThreadCandidateIds ?? [],
               removedThreadIds: [],
               threads: options.historyThreads ?? [],
             },
@@ -1363,6 +1372,7 @@ describe(Gmail, () => {
 
       expect(result.type).toBe("initial");
       expect(result.addedMessageIds).toStrictEqual([]);
+      expect(result.newThreadIds).toStrictEqual([]);
       expect(state.labelListCalls).toBe(1);
     }).pipe(Effect.provide(layer));
   });
@@ -1386,9 +1396,37 @@ describe(Gmail, () => {
 
       expect(result.type).toBe("partial");
       expect(result.addedMessageIds).toStrictEqual([addedMessageId]);
+      expect(result.newThreadIds).toStrictEqual([]);
       expect(state.labelListCalls).toBe(0);
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect(
+    "keeps only uncached complete history additions as new threads",
+    () => {
+      const newThreadId = ThreadId.make("brand-new-thread");
+      const cachedThreadId = ThreadId.make("cached-thread");
+      const { layer } = createTestLayer({
+        existingThreadIds: [cachedThreadId],
+        historyNewThreadCandidateIds: [newThreadId, cachedThreadId],
+        syncCursor: HistoryId.make("history-before"),
+      });
+
+      return Effect.gen(function* selectsNewThreads() {
+        const gmail = yield* Gmail;
+        const account = yield* gmail.authorizeAccount(
+          authHandoff("access-a", "refresh-a")
+        );
+        const result = yield* gmail.sync({
+          accountId: account.id,
+          reason: "timer",
+        });
+
+        expect(result.type).toBe("partial");
+        expect(result.newThreadIds).toStrictEqual([newThreadId]);
+      }).pipe(Effect.provide(layer));
+    }
+  );
 
   it.effect("gets labels first seen during incremental history", () => {
     const { layer, state } = createTestLayer({
@@ -1461,6 +1499,7 @@ describe(Gmail, () => {
         });
 
         expect(result.type).toBe("cursor-recovered");
+        expect(result.newThreadIds).toStrictEqual([]);
         expect(state.labelListCalls).toBe(0);
         expect(state.labelGetCalls).toStrictEqual([UNKNOWN_LABEL_ID]);
       }).pipe(Effect.provide(layer));

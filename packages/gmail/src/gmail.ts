@@ -1049,6 +1049,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         return {
           addedMessageIds: [],
           changedThreadIds: page.items.map((thread) => thread.id),
+          newThreadIds: [],
           type,
         } satisfies SyncResult;
       });
@@ -1064,6 +1065,12 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
 
         const applyHistory = Effect.fn("Gmail.applyHistory")(
           function* applyHistory(history: GatewayHistoryResult) {
+            const existingThreadIds = new Set(
+              yield* store.getExistingThreadIds(
+                request.accountId,
+                history.newThreadCandidateIds
+              )
+            );
             yield* persistThreadPage(
               request.accountId,
               history.threads,
@@ -1081,6 +1088,9 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
                 ...history.threads.map((thread) => thread.id),
                 ...history.removedThreadIds,
               ],
+              newThreadIds: history.newThreadCandidateIds.filter(
+                (threadId) => !existingThreadIds.has(threadId)
+              ),
               type: "partial",
             } satisfies SyncResult;
           }

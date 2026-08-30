@@ -14,7 +14,6 @@ import type {
   GmailMessage,
   GmailScope,
   Mailbox,
-  ThreadId,
 } from "@repo/gmail/models";
 import {
   AccountId,
@@ -23,6 +22,7 @@ import {
   HistoryId,
   LabelColor,
   LabelId,
+  ThreadId,
   getGmailCapabilities,
   isGmailScope,
 } from "@repo/gmail/models";
@@ -371,6 +371,37 @@ export const GmailStoreLive = Layer.succeed(
                 )
               )
         )
+      ),
+
+    getExistingThreadIds: (accountId, threadIds) =>
+      withDatabase(
+        "Could not inspect cached Gmail threads",
+        async (database) => {
+          if (threadIds.length === 0) {
+            return [];
+          }
+
+          const existing: ThreadId[] = [];
+          const chunkSize = 400;
+          for (let index = 0; index < threadIds.length; index += chunkSize) {
+            const chunk = threadIds.slice(index, index + chunkSize);
+            // Keep each query below SQLite's bound-parameter limit.
+            // oxlint-disable-next-line eslint/no-await-in-loop
+            const rows = await database
+              .select({ threadId: gmailThreads.threadId })
+              .from(gmailThreads)
+              .where(
+                and(
+                  eq(gmailThreads.accountEmail, accountId),
+                  inArray(gmailThreads.threadId, [...chunk])
+                )
+              )
+              .all();
+            existing.push(...rows.map((row) => ThreadId.make(row.threadId)));
+          }
+
+          return existing;
+        }
       ),
 
     getLabels: (accountId) =>

@@ -4,6 +4,7 @@ import type {
   AppStartupErrorPayload,
   AppStartupReply,
 } from "../../shared/ipc/app";
+import { startThreadCategorization } from "../ai/thread-categorization";
 import { startDatabase } from "../database";
 import type { DatabaseError } from "../database";
 import { startMailBackfill } from "../mail/mail-backfill";
@@ -25,6 +26,7 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
     startupPromise = null;
   } else {
     await Effect.runPromise(refreshUnreadBadge().pipe(Effect.ignore));
+    startThreadCategorization();
     startMailSync();
     // Picks up any account whose index was still running when the app last
     // closed, and seeds the renderer's progress state for the rest.

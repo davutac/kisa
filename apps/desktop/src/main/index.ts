@@ -5,6 +5,8 @@ import { app } from "electron";
 import icon from "../../build/icon.png?asset";
 import { AppClosingEvent } from "../shared/ipc/app";
 import { APP_CLOSING_CHANNEL } from "../shared/ipc/channels";
+import { configureDevelopmentAiLogging } from "./ai/development-logging";
+import { stopThreadCategorization } from "./ai/thread-categorization";
 import { registerAppActivation } from "./app/app-activation";
 import { setDevelopmentDockIcon } from "./app/app-icon";
 import { configureLinuxSecretStorage } from "./app/linux-secret-storage";
@@ -23,6 +25,8 @@ import {
 import { createWindow, getMainWindow } from "./window/create-window";
 import { destroyBackgroundTray, setBackgroundTray } from "./window/tray";
 import { installWindowVisibility } from "./window/window-visibility";
+
+configureDevelopmentAiLogging(is.dev);
 
 configureLinuxSecretStorage({
   commandLine: app.commandLine,
@@ -92,6 +96,7 @@ let shutdownStarted = false;
 const finishShutdown = async (): Promise<void> => {
   stopGoogleAuth();
   destroyBackgroundTray();
+  await stopThreadCategorization();
   await Promise.allSettled([
     flushAppSettings(),
     Effect.runPromise(closeDatabase()),

@@ -78,6 +78,8 @@ export interface GatewayHistoryResult {
   /** See `GatewayThreadPage.details`. */
   readonly details: readonly GatewayThread[];
   readonly historyId: HistoryId;
+  /** Threads whose complete current message set was added in this history window. */
+  readonly newThreadCandidateIds: readonly ThreadId[];
   readonly removedThreadIds: readonly ThreadId[];
   readonly threads: readonly ThreadSummary[];
 }

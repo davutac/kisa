@@ -403,6 +403,7 @@ export const collectHistoryIds = (
   records: readonly gmail_v1.Schema$History[],
   target: {
     readonly addedMessageIds: Set<string>;
+    readonly addedMessageIdsByThreadId: Map<string, Set<string>>;
     readonly changedThreadIds: Set<string>;
     readonly removedThreadIds: Set<string>;
   }
@@ -415,6 +416,16 @@ export const collectHistoryIds = (
 
       if (isPresent(added.message?.threadId)) {
         target.changedThreadIds.add(added.message.threadId);
+        if (isPresent(added.message.id)) {
+          const threadMessageIds =
+            target.addedMessageIdsByThreadId.get(added.message.threadId) ??
+            new Set<string>();
+          threadMessageIds.add(added.message.id);
+          target.addedMessageIdsByThreadId.set(
+            added.message.threadId,
+            threadMessageIds
+          );
+        }
       }
     }
 
@@ -460,8 +471,16 @@ const toGatewayThread = (
       }
     : undefined;
 
+const getThreadMessageIds = (
+  thread: gmail_v1.Schema$Thread
+): readonly MessageId[] =>
+  (thread.messages ?? []).flatMap((message) =>
+    isPresent(message.id) ? [MessageId.make(message.id)] : []
+  );
+
 interface FetchedThreads {
   readonly details: readonly GatewayThread[];
+  readonly messageIdsByThreadId: ReadonlyMap<ThreadId, readonly MessageId[]>;
   readonly summaries: readonly ThreadSummary[];
 }
 
@@ -486,7 +505,11 @@ const fetchThreadSummaries = async (
 
         return summary === undefined
           ? undefined
-          : { detail: toGatewayThread(detail.data), summary };
+          : {
+              detail: toGatewayThread(detail.data),
+              messageIds: getThreadMessageIds(detail.data),
+              summary,
+            };
       } catch (error) {
         if (readErrorStatus(parseGaxiosLikeError(error)) === 404) {
           return;
@@ -501,6 +524,9 @@ const fetchThreadSummaries = async (
   return {
     details: present.flatMap((entry) =>
       entry.detail === undefined ? [] : [entry.detail]
+    ),
+    messageIdsByThreadId: new Map(
+      present.map((entry) => [entry.summary.id, entry.messageIds])
     ),
     summaries: present.map((entry) => entry.summary),
   };
@@ -740,6 +766,7 @@ export const GmailGatewayLive = Layer.succeed(
         try: async (): Promise<GatewayResult<GatewayHistoryResult>> => {
           const client = createClient(authorization.credentials);
           const addedMessageIds = new Set<string>();
+          const addedMessageIdsByThreadId = new Map<string, Set<string>>();
           const changedThreadIds = new Set<string>();
           const removedThreadIds = new Set<string>();
           let latestHistoryId = historyId;
@@ -768,6 +795,7 @@ export const GmailGatewayLive = Layer.succeed(
 
             collectHistoryIds(response.data.history ?? [], {
               addedMessageIds,
+              addedMessageIdsByThreadId,
               changedThreadIds,
               removedThreadIds,
             });
@@ -787,6 +815,19 @@ export const GmailGatewayLive = Layer.succeed(
             client,
             [...changedThreadIds]
           );
+          const newThreadCandidateIds = fetched.details.flatMap((thread) => {
+            const historyMessageIds = addedMessageIdsByThreadId.get(thread.id);
+            const currentMessageIds = fetched.messageIdsByThreadId.get(
+              thread.id
+            );
+            const isNewConversation =
+              currentMessageIds !== undefined &&
+              currentMessageIds.length > 0 &&
+              currentMessageIds.every(
+                (messageId) => historyMessageIds?.has(messageId) === true
+              );
+            return isNewConversation ? [thread.id] : [];
+          });
 
           return succeed({
             addedMessageIds: [...addedMessageIds].map((id) =>
@@ -794,6 +835,7 @@ export const GmailGatewayLive = Layer.succeed(
             ),
             details: fetched.details,
             historyId: latestHistoryId,
+            newThreadCandidateIds,
             removedThreadIds: [...removedThreadIds].map((id) =>
               ThreadId.make(id)
             ),
