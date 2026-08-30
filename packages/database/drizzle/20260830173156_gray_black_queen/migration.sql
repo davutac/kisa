@@ -1,0 +1,1 @@
+ALTER TABLE `gmail_backfill_state` ADD `estimated_messages` integer;

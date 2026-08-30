@@ -12,12 +12,12 @@ import {
 import { getHotkeyAriaLabel, HotkeyHint } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
-import { toIndexRatio } from "@/mail/mail-index-progress-view";
 import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 import type { GoogleAccount } from "@/shared/ipc/auth";
+import { toMailIndexRatio } from "@/shared/mail-index-progress";
 import { useSelectedAccountId } from "@/state/mailbox";
 
 interface TitlebarAccountButtonProps {
@@ -43,7 +43,7 @@ const TitlebarAccountButton = ({
   const indexProgress = useAccountIndexProgress(account.email);
   const isActive = selectedAccountId === account.email;
   const isIndexing = indexProgress?.status === "running";
-  const indexedRatio = toIndexRatio(indexProgress);
+  const indexedRatio = toMailIndexRatio(indexProgress);
 
   // The button is the sortable DOM item, while the avatar stays the fixed-size
   // collision target so an expanded account label cannot block position one.
@@ -81,15 +81,14 @@ const TitlebarAccountButton = ({
                     <Spinner className="size-4 text-white" />
                   </span>
                 ) : null}
-                {/*
-                  Indexing runs for minutes, so it gets a determinate ring
-                  rather than a spinner. The mask cuts out the center so the
-                  conic gradient follows the avatar's rounded rectangle.
-                */}
                 {isIndexing ? (
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 rounded-md"
+                    className={
+                      indexedRatio === undefined
+                        ? "pointer-events-none absolute inset-0 animate-spin rounded-md"
+                        : "pointer-events-none absolute inset-0 rounded-md"
+                    }
                     style={{
                       WebkitMask:
                         "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",

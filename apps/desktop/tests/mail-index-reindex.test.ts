@@ -11,6 +11,7 @@ import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  readMailIndexCountsRemote,
   resetMailIndexRemote,
   sweepUnseenMailRemote,
 } from "../src/main/mail/mail-index-reindex";
@@ -84,12 +85,12 @@ describe("mail index reconciliation", () => {
 
   afterAll(() => connection.close());
 
-  it("restarts only the selected account with indeterminate progress and preserves cached mail", async () => {
+  it("restarts only the selected account with fresh progress and preserves cached mail", async () => {
     await resetMailIndexRemote(database, "one@example.com");
 
     const indexStates = connection
       .prepare(
-        `SELECT account_email, completed_at, estimated_threads,
+        `SELECT account_email, completed_at, estimated_messages, estimated_threads,
                 indexed_messages, indexed_threads, oldest_indexed_at,
                 page_token, started_at, status
          FROM gmail_backfill_state
@@ -101,7 +102,8 @@ describe("mail index reconciliation", () => {
       {
         account_email: "one@example.com",
         completed_at: null,
-        estimated_threads: 0,
+        estimated_messages: null,
+        estimated_threads: null,
         indexed_messages: 0,
         indexed_threads: 0,
         oldest_indexed_at: null,
@@ -112,6 +114,7 @@ describe("mail index reconciliation", () => {
       {
         account_email: "two@example.com",
         completed_at: 2,
+        estimated_messages: null,
         estimated_threads: null,
         indexed_messages: 0,
         indexed_threads: 0,
@@ -141,6 +144,12 @@ describe("mail index reconciliation", () => {
         thread_id: "thread-1",
       },
     ]);
+    await expect(
+      readMailIndexCountsRemote(database, "one@example.com")
+    ).resolves.toStrictEqual({ messages: 0, threads: 0 });
+    await expect(
+      readMailIndexCountsRemote(database, "two@example.com")
+    ).resolves.toStrictEqual({ messages: 1, threads: 1 });
     expect(
       connection
         .prepare(

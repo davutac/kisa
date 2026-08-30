@@ -5,12 +5,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatRemaining } from "@/mail/mail-index-eta";
-import {
-  toIndexRatio,
-  toOverallIndexRatio,
-} from "@/mail/mail-index-progress-view";
 import { useMailIndexState } from "@/mail/use-mail-index-progress";
 import type { GmailIndexProgress } from "@/shared/ipc/mail";
+import {
+  toMailIndexRatio,
+  toOverallMailIndexRatio,
+} from "@/shared/mail-index-progress";
 
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
   month: "long",
@@ -18,17 +18,12 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
 });
 const NUMBER_FORMAT = new Intl.NumberFormat();
 
-const toCounts = (entry: GmailIndexProgress): string => {
-  if (entry.estimatedThreads !== undefined && entry.estimatedThreads <= 0) {
-    return "Refreshing complete history";
-  }
-
-  return entry.estimatedThreads === undefined
-    ? `${NUMBER_FORMAT.format(entry.indexedThreads)} conversations`
-    : `${NUMBER_FORMAT.format(entry.indexedThreads)} of ~${NUMBER_FORMAT.format(
-        entry.estimatedThreads
-      )}`;
-};
+const formatIndexedMessages = (entry: GmailIndexProgress): string =>
+  entry.estimatedMessages === undefined || entry.estimatedMessages <= 0
+    ? "Checking Gmail mailbox total…"
+    : `${NUMBER_FORMAT.format(entry.indexedMessages)} / ~${NUMBER_FORMAT.format(
+        entry.estimatedMessages
+      )} emails indexed`;
 
 /**
  * Titlebar indicator for the full-account mail index.
@@ -46,7 +41,7 @@ const TitlebarIndexButton = () => {
     return null;
   }
 
-  const overall = toOverallIndexRatio(active);
+  const overall = toOverallMailIndexRatio(active);
 
   return (
     <Tooltip>
@@ -69,7 +64,11 @@ const TitlebarIndexButton = () => {
                 outside the circle and the ring renders invisible.
               */}
               <span
-                className="absolute inset-0 rounded-full"
+                className={
+                  overall === undefined
+                    ? "absolute inset-0 animate-spin rounded-full"
+                    : "absolute inset-0 rounded-full"
+                }
                 style={{
                   WebkitMask:
                     "radial-gradient(circle closest-side, transparent 60%, black 62%)",
@@ -103,7 +102,7 @@ const TitlebarIndexButton = () => {
         <span className="font-medium">Indexing your mail</span>
         <span className="flex w-full flex-col gap-2.5">
           {active.map((entry) => {
-            const ratio = toIndexRatio(entry);
+            const ratio = toMailIndexRatio(entry);
             const eta = etas.get(entry.accountId);
 
             return (
@@ -131,7 +130,11 @@ const TitlebarIndexButton = () => {
                   />
                 </span>
                 <span className="opacity-60">
-                  {toCounts(entry)}
+                  {formatIndexedMessages(entry)}
+                </span>
+                <span className="opacity-60">
+                  {NUMBER_FORMAT.format(entry.indexedThreads)} conversations
+                  checked
                   {entry.oldestIndexedAt === undefined
                     ? ""
                     : ` · back to ${MONTH_FORMAT.format(new Date(entry.oldestIndexedAt))}`}
@@ -141,7 +144,8 @@ const TitlebarIndexButton = () => {
           })}
         </span>
         <span className="opacity-60">
-          You can keep reading while this runs.
+          Updating local mail and search. After the complete scan, mail removed
+          from Gmail is cleared locally. You can keep reading while this runs.
         </span>
       </TooltipContent>
     </Tooltip>

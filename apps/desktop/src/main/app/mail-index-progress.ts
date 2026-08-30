@@ -1,4 +1,5 @@
 import type { GmailIndexProgress } from "../../shared/ipc/mail";
+import { toOverallMailIndexRatio } from "../../shared/mail-index-progress";
 
 export const HIDDEN_MAIL_INDEX_PROGRESS = -1;
 export const INDETERMINATE_MAIL_INDEX_PROGRESS = 2;
@@ -8,7 +9,7 @@ const isActive = (progress: GmailIndexProgress): boolean =>
 
 /**
  * Converts per-account indexing progress into Electron's single application
- * progress value. Active accounts are weighted by their estimated thread
+ * progress value. Active accounts are weighted by their estimated message
  * totals so a small mailbox does not count as much as a large one.
  */
 export const getNativeMailIndexProgress = (
@@ -20,24 +21,5 @@ export const getNativeMailIndexProgress = (
     return HIDDEN_MAIL_INDEX_PROGRESS;
   }
 
-  if (
-    active.some(
-      ({ estimatedThreads }) =>
-        estimatedThreads === undefined || estimatedThreads <= 0
-    )
-  ) {
-    return INDETERMINATE_MAIL_INDEX_PROGRESS;
-  }
-
-  let estimatedThreads = 0;
-  let indexedThreads = 0;
-
-  for (const account of active) {
-    const estimate = account.estimatedThreads as number;
-
-    estimatedThreads += estimate;
-    indexedThreads += Math.min(account.indexedThreads, estimate);
-  }
-
-  return indexedThreads / estimatedThreads;
+  return toOverallMailIndexRatio(active) ?? INDETERMINATE_MAIL_INDEX_PROGRESS;
 };

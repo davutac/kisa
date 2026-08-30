@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { toMailIndexDescription } from "../src/renderer/src/mail/mail-index-progress-view";
 import {
-  toMailIndexDescription,
-  toIndexRatio,
-  toOverallIndexRatio,
-} from "../src/renderer/src/mail/mail-index-progress-view";
+  toMailIndexRatio,
+  toOverallMailIndexRatio,
+} from "../src/shared/mail-index-progress";
 
 describe("mail index progress view", () => {
   it("reports running, paused, and failed lifecycle states safely", () => {
@@ -22,29 +22,32 @@ describe("mail index progress view", () => {
     );
   });
 
-  it("treats a manual reindex sentinel as indeterminate", () => {
+  it("reports current-run email progress and weights accounts by email total", () => {
     expect(
-      toIndexRatio({ estimatedThreads: 0, indexedThreads: 18_000 })
-    ).toBeUndefined();
-  });
-
-  it("clamps Gmail estimates and averages determinate accounts", () => {
-    expect(toIndexRatio({ estimatedThreads: 100, indexedThreads: 120 })).toBe(
-      1
-    );
+      toMailIndexRatio({
+        estimatedMessages: 400,
+        indexedMessages: 100,
+      })
+    ).toBe(0.25);
     expect(
-      toOverallIndexRatio([
-        { estimatedThreads: 200, indexedThreads: 100 },
-        { estimatedThreads: 100, indexedThreads: 25 },
+      toOverallMailIndexRatio([
+        { estimatedMessages: 900, indexedMessages: 450 },
+        { estimatedMessages: 100, indexedMessages: 100 },
       ])
-    ).toBe(0.375);
+    ).toBe(0.55);
+    expect(
+      toMailIndexRatio({ estimatedMessages: 100, indexedMessages: 120 })
+    ).toBe(1);
   });
 
-  it("keeps combined progress indeterminate when any account is", () => {
+  it("keeps email progress indeterminate until every total is known", () => {
     expect(
-      toOverallIndexRatio([
-        { estimatedThreads: 100, indexedThreads: 50 },
-        { estimatedThreads: 0, indexedThreads: 18_000 },
+      toMailIndexRatio({ estimatedMessages: 0, indexedMessages: 18_000 })
+    ).toBeUndefined();
+    expect(
+      toOverallMailIndexRatio([
+        { estimatedMessages: 100, indexedMessages: 50 },
+        { indexedMessages: 10 },
       ])
     ).toBeUndefined();
   });

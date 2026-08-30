@@ -4,7 +4,48 @@ import {
   gmailMessages,
   gmailThreads,
 } from "@repo/database/schemas";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
+
+/** Counts only mail revisited by the current full-account walk. */
+export const readMailIndexCountsRemote = async (
+  database: RemoteDatabaseClient,
+  accountId: string
+): Promise<{ readonly messages: number; readonly threads: number }> => {
+  const seenThreadIds = database
+    .select({ threadId: gmailThreads.threadId })
+    .from(gmailThreads)
+    .where(
+      and(
+        eq(gmailThreads.accountEmail, accountId),
+        eq(gmailThreads.isIndexSeen, true)
+      )
+    );
+  const messageRows = await database
+    .select({ value: count() })
+    .from(gmailMessages)
+    .where(
+      and(
+        eq(gmailMessages.accountEmail, accountId),
+        inArray(gmailMessages.threadId, seenThreadIds)
+      )
+    )
+    .all();
+  const threadRows = await database
+    .select({ value: count() })
+    .from(gmailThreads)
+    .where(
+      and(
+        eq(gmailThreads.accountEmail, accountId),
+        eq(gmailThreads.isIndexSeen, true)
+      )
+    )
+    .all();
+
+  return {
+    messages: messageRows.at(0)?.value ?? 0,
+    threads: threadRows.at(0)?.value ?? 0,
+  };
+};
 
 export const unmarkMailIndexRemote = async (
   database: Pick<RemoteDatabaseClient, "update">,
@@ -57,8 +98,8 @@ export const sweepUnseenMailRemote = async (
 /**
  * Starts a fresh index walk without removing mail that is already usable.
  * Existing thread, message, and FTS rows are replaced by normal account-scoped
- * upserts as Gmail is walked again. Reindex progress is indeterminate because
- * those preserved rows cannot say which conversations this run has revisited.
+ * upserts as Gmail is walked again. Seen marks distinguish rows revisited by
+ * this run, so progress can ignore preserved rows until Gmail returns them.
  * Persisting `running` keeps the reset restart-safe if the process exits before
  * the in-memory run starts for the account.
  */
@@ -68,7 +109,8 @@ export const resetMailIndexRemote = async (
 ): Promise<void> => {
   const resetState = {
     completedAt: null,
-    estimatedThreads: 0,
+    estimatedMessages: null,
+    estimatedThreads: null,
     indexedMessages: 0,
     indexedThreads: 0,
     lastError: null,

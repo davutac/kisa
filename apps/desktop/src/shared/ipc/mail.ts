@@ -605,6 +605,7 @@ export type GmailIndexStatus = typeof GmailIndexStatus.Type;
 export const GmailIndexProgress = Schema.Struct({
   accountId: Schema.NonEmptyString,
   error: Schema.optional(Schema.String),
+  estimatedMessages: Schema.optional(Schema.Int),
   estimatedThreads: Schema.optional(Schema.Int),
   indexedMessages: Schema.Int,
   indexedThreads: Schema.Int,

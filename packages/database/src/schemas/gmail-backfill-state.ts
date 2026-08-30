@@ -19,6 +19,7 @@ export type GmailBackfillStatus =
 export const gmailBackfillState = sqliteTable("gmail_backfill_state", {
   accountEmail: text("account_email").primaryKey(),
   completedAt: integer("completed_at"),
+  estimatedMessages: integer("estimated_messages"),
   estimatedThreads: integer("estimated_threads"),
   indexedMessages: integer("indexed_messages").notNull().default(0),
   indexedThreads: integer("indexed_threads").notNull().default(0),

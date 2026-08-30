@@ -1,11 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
-import {
-  gmailBackfillState,
-  gmailMessages,
-  gmailThreads,
-} from "@repo/database/schemas";
+import { gmailBackfillState } from "@repo/database/schemas";
 import type { GmailBackfillStatus } from "@repo/database/schemas";
 import type { GmailError } from "@repo/gmail/errors";
 import { GmailGateway } from "@repo/gmail/gateway";
@@ -14,7 +10,6 @@ import type { PageCursor, ThreadPage } from "@repo/gmail/models";
 import { AccountId, isGmailScope } from "@repo/gmail/models";
 import { Gmail } from "@repo/gmail/service";
 import { GmailStore } from "@repo/gmail/store";
-import { count, eq } from "drizzle-orm";
 import { Effect, Layer, Schema } from "effect";
 
 import {
@@ -40,6 +35,7 @@ import { GmailMimeLive } from "./gmail-mime";
 import { GmailStoreLive } from "./gmail-store";
 import { mergeWatermark, oldestTimestamp } from "./mail-backfill-cursor";
 import {
+  readMailIndexCountsRemote,
   resetMailIndexRemote,
   sweepUnseenMailRemote,
   unmarkMailIndexRemote,
@@ -86,6 +82,7 @@ const withDatabase = <A>(
   withDatabaseClient(run).pipe(Effect.mapError(() => backfillError(message)));
 
 interface BackfillState {
+  readonly estimatedMessages: number | null;
   readonly estimatedThreads: number | null;
   readonly indexedMessages: number;
   readonly indexedThreads: number;
@@ -104,6 +101,7 @@ const readState = (accountId: string) =>
 
 interface StatePatch {
   readonly completedAt?: number;
+  readonly estimatedMessages?: number;
   readonly estimatedThreads?: number;
   readonly lastError?: string | null;
   readonly oldestIndexedAt?: number;
@@ -138,23 +136,9 @@ const writeState = (accountId: string, patch: StatePatch) =>
  * than the mailbox contains.
  */
 const readCounts = (accountId: string) =>
-  withDatabase("Could not read the mail index counts", async (database) => {
-    const messageRows = await database
-      .select({ value: count() })
-      .from(gmailMessages)
-      .where(eq(gmailMessages.accountEmail, accountId))
-      .all();
-    const threadRows = await database
-      .select({ value: count() })
-      .from(gmailThreads)
-      .where(eq(gmailThreads.accountEmail, accountId))
-      .all();
-
-    return {
-      messages: messageRows.at(0)?.value ?? 0,
-      threads: threadRows.at(0)?.value ?? 0,
-    };
-  });
+  withDatabase("Could not read the mail index counts", (database) =>
+    readMailIndexCountsRemote(database, accountId)
+  );
 
 const toProgress = (
   accountId: string,
@@ -162,6 +146,7 @@ const toProgress = (
 ): GmailIndexProgress => ({
   accountId,
   error: state.lastError ?? undefined,
+  estimatedMessages: state.estimatedMessages ?? undefined,
   estimatedThreads: state.estimatedThreads ?? undefined,
   indexedMessages: state.indexedMessages,
   indexedThreads: state.indexedThreads,
@@ -226,6 +211,7 @@ const refreshProgress = Effect.fn("mailBackfill.refreshProgress")(
 
     publishProgress(
       toProgress(accountId, {
+        estimatedMessages: row?.estimatedMessages ?? null,
         estimatedThreads: row?.estimatedThreads ?? null,
         indexedMessages: counts.messages,
         indexedThreads: counts.threads,
@@ -256,8 +242,8 @@ const listPage = (
     )
   );
 
-const estimateThreadTotal = Effect.fn("mailBackfill.estimateThreadTotal")(
-  function* estimateThreadTotal(accountId: AccountId) {
+const estimateMailboxTotals = Effect.fn("mailBackfill.estimateMailboxTotals")(
+  function* estimateMailboxTotals(accountId: AccountId) {
     const totals = yield* runGmail(
       Effect.gen(function* readTotals() {
         const store = yield* GmailStore;
@@ -276,8 +262,9 @@ const estimateThreadTotal = Effect.fn("mailBackfill.estimateThreadTotal")(
 
     // A missing or zero total is not fatal — the indicator falls back to an
     // indeterminate ring rather than the run refusing to start.
-    if (totals !== null && totals.threadsTotal > 0) {
+    if (totals !== null) {
       yield* writeState(accountId, {
+        estimatedMessages: totals.messagesTotal,
         estimatedThreads: totals.threadsTotal,
       }).pipe(Effect.ignore);
     }
@@ -448,8 +435,16 @@ const runBackfill = async (accountId: string): Promise<void> => {
     startedAt: initial?.startedAt ?? Date.now(),
   });
 
-  if ((initial?.estimatedThreads ?? null) === null) {
-    await Effect.runPromise(estimateThreadTotal(account).pipe(Effect.ignore));
+  if (
+    (initial?.estimatedMessages ?? null) === null ||
+    (initial?.estimatedThreads ?? null) === null
+  ) {
+    await Effect.runPromise(
+      estimateMailboxTotals(account).pipe(
+        Effect.andThen(refreshProgress(accountId, "running")),
+        Effect.ignore
+      )
+    );
   }
 
   let cursor: PageCursor | undefined;
@@ -652,6 +647,7 @@ export const startMailBackfill = Effect.fn("startMailBackfill")(
 
       publishProgress(
         toProgress(accountId, {
+          estimatedMessages: row?.estimatedMessages ?? null,
           estimatedThreads: row?.estimatedThreads ?? null,
           indexedMessages: counts.messages,
           indexedThreads: counts.threads,

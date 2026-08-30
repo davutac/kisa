@@ -65,7 +65,7 @@ At 3.75 threads/second, a 20,000-thread mailbox indexes in about 1.5 hours and a
 
 Bandwidth is comfortable: 3.75 threads/second at ~50 KB per thread is ~190 KB/s per account.
 
-`users.getProfile` returns `threadsTotal` and `messagesTotal` for one unit — the progress denominator, fetched once per run.
+`users.getProfile` returns `threadsTotal` and `messagesTotal` for one unit. Both estimates are persisted once per run; the titlebar reports message progress while thread throughput continues to drive its time estimate.
 
 ### The project limit is a multi-user concern, not a single-user one
 
@@ -94,7 +94,7 @@ New tables in `packages/database/src/schemas`.
 
 ### `gmail_backfill_state`
 
-One row per account: `accountEmail` (PK), `status` (`idle | running | paused | complete | failed`), `pageToken`, `oldestIndexedAt` watermark, `indexedThreads`, `indexedMessages`, `estimatedThreads`, `startedAt`, `updatedAt`, `completedAt`, `lastError`.
+One row per account: `accountEmail` (PK), `status` (`idle | running | paused | complete | failed`), `pageToken`, `oldestIndexedAt` watermark, `indexedThreads`, `indexedMessages`, `estimatedThreads`, `estimatedMessages`, `startedAt`, `updatedAt`, `completedAt`, `lastError`.
 
 ### `gmail_messages`
 
@@ -180,7 +180,7 @@ Each account has its own token bucket, charged by **every** Gmail call for that 
 
 Each account section in Settings exposes a **Reindex** action. It is deliberately manual because a complete Gmail walk is expensive: the confirmation warns that it can consume substantial Gmail API quota and take a long time for a large mailbox.
 
-Starting it resets that account's durable `gmail_backfill_state` cursor and unmarks its cached threads in one database transaction, then starts the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available while the walk runs. Pages mark and refresh what Gmail still returns; successful completion removes anything still unmarked. Because the preserved rows do not distinguish how much of the current run has been revisited, manual reindex progress is indeterminate; the oldest-indexed date still advances as Gmail is walked. Reindex is disabled while the account is already running.
+Starting it resets that account's durable `gmail_backfill_state` cursor and unmarks its cached threads in one database transaction, then starts the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available while the walk runs. Pages mark and refresh what Gmail still returns; successful completion removes anything still unmarked. Progress counts only messages and conversations marked by the current walk, so reindex starts at zero and becomes determinate as soon as Gmail returns the mailbox totals. The oldest-indexed date advances alongside those counts. Reindex is disabled while the account is already running.
 
 The first index for a newly connected readable account still starts automatically. Gmail history cursor expiry does not automatically trigger another complete index; normal cursor recovery remains bounded, and the user can choose Reindex if they suspect historical gaps.
 
@@ -227,7 +227,7 @@ User-label filtering belongs to the horizontal mailbox label bar rather than the
 
 Startup warms an account-scoped, main-process snapshot of the 10,000 most-used unique correspondents from the local message index. Compose keystrokes filter that snapshot in memory instead of expanding the message address JSON in SQLite each time, and therefore skip the database-search debounce. Startup does not wait for the scan, and schedules it after the first mailbox page has had a chance to load; an unusually early compose request fills a missing account snapshot on demand. Message details committed by foreground sync or backfill fold newly observed From, To, Cc, and Bcc addresses into an already-loaded snapshot, and disconnect removes the account snapshot with the rest of its private data.
 
-**Progress travels on its own channel.** `onThreadsChanged` triggers a full first-page reload in `use-mailbox-threads.ts`; firing it per backfill page would hammer the list. A new `MAIL_INDEX_PROGRESS_CHANNEL` carries `{ accountId, status, indexedThreads, estimatedThreads, oldestIndexedAt, error? }`, throttled to ~1/second, with a matching getter for initial state and a `useAccountIndexProgress` hook alongside the existing `useSyncingAccountIds`. `threads-changed` keeps firing only for head-of-mailbox changes, as today.
+**Progress travels on its own channel.** `onThreadsChanged` triggers a full first-page reload in `use-mailbox-threads.ts`; firing it per backfill page would hammer the list. `MAIL_INDEX_PROGRESS_CHANNEL` carries `{ accountId, status, indexedMessages, estimatedMessages, indexedThreads, estimatedThreads, oldestIndexedAt, error? }`, throttled to ~1/second, with a matching getter for initial state and a `useAccountIndexProgress` hook alongside the existing `useSyncingAccountIds`. The current-run counts include only rows marked seen by this full walk, so a reindex starts at zero without deleting usable cached mail. `threads-changed` keeps firing only for head-of-mailbox changes, as today.
 
 **Indicators.** The account button and title bar show active progress. The thread list shows a passive footer such as "Indexing your mail — back to March 2019", and Settings provides the manual Reindex action plus running, paused, and failed lifecycle copy.
 

@@ -22,7 +22,7 @@ describe(getNativeMailIndexProgress, () => {
     expect(getNativeMailIndexProgress([])).toBe(HIDDEN_MAIL_INDEX_PROGRESS);
     expect(
       getNativeMailIndexProgress([
-        progress({ estimatedThreads: 100, status: "complete" }),
+        progress({ estimatedMessages: 100, status: "complete" }),
       ])
     ).toBe(HIDDEN_MAIL_INDEX_PROGRESS);
   });
@@ -33,25 +33,25 @@ describe(getNativeMailIndexProgress, () => {
     );
     expect(
       getNativeMailIndexProgress([
-        progress({ estimatedThreads: 0, indexedThreads: 18_000 }),
+        progress({ estimatedMessages: 0, indexedMessages: 18_000 }),
       ])
     ).toBe(INDETERMINATE_MAIL_INDEX_PROGRESS);
     expect(
       getNativeMailIndexProgress([
-        progress({ estimatedThreads: 100 }),
+        progress({ estimatedMessages: 100 }),
         progress({ accountId: "other@example.com" }),
       ])
     ).toBe(INDETERMINATE_MAIL_INDEX_PROGRESS);
   });
 
-  it("weights active accounts by their estimated thread totals", () => {
+  it("weights active accounts by their estimated email totals", () => {
     expect(
       getNativeMailIndexProgress([
-        progress({ estimatedThreads: 200, indexedThreads: 100 }),
+        progress({ estimatedMessages: 200, indexedMessages: 100 }),
         progress({
           accountId: "other@example.com",
-          estimatedThreads: 100,
-          indexedThreads: 50,
+          estimatedMessages: 100,
+          indexedMessages: 50,
         }),
       ])
     ).toBe(0.5);
@@ -60,7 +60,7 @@ describe(getNativeMailIndexProgress, () => {
   it("clamps an account whose Gmail estimate is lower than its index", () => {
     expect(
       getNativeMailIndexProgress([
-        progress({ estimatedThreads: 100, indexedThreads: 120 }),
+        progress({ estimatedMessages: 100, indexedMessages: 120 }),
       ])
     ).toBe(1);
   });
