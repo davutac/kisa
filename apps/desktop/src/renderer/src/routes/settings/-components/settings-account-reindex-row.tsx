@@ -27,8 +27,7 @@ const SettingsAccountReindexRow = ({
   const progress = useAccountIndexProgress(accountId);
   const [isStarting, setIsStarting] = useState(false);
   const titleId = `account-${accountId}-reindex-title`;
-  const isIndexing =
-    progress?.status === "queued" || progress?.status === "running";
+  const isIndexing = progress?.status === "running";
   const isBusy = isStarting || isIndexing;
 
   const requestReindex = async (): Promise<void> => {

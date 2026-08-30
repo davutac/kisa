@@ -75,9 +75,7 @@ The governor does not model this: it buckets per account only. A project-level 4
 
 ## Concurrency
 
-Up to two accounts index at once. Since quota is per-user, concurrency costs no per-account headroom — the cap exists only for the resources accounts genuinely share: sustained bandwidth and the serialized SQLite operation queue in the database utility process. Accounts beyond the cap wait in a FIFO queue and report a `queued` status so they still show an indicator rather than appearing stalled.
-
-`queued` is renderer-only and never persisted: whether an account is waiting is a fact about the current process, not about the account.
+Every connected account can index concurrently. Gmail quota and backoff are account-scoped, while database operations remain safely serialized by the utility process. Kisa does not impose a speculative global concurrency cap; shared bandwidth or database limits should be introduced only in response to measured contention.
 
 ## Cursor design
 
@@ -151,7 +149,7 @@ The consequence beyond backfill: a thread the user scrolled past is already stor
 
 ## Index service
 
-`apps/desktop/src/main/mail/mail-backfill.ts` runs one Effect-owned job per active account, with at most two accounts indexing at once. Additional accounts wait in a FIFO queue.
+`apps/desktop/src/main/mail/mail-backfill.ts` runs one Effect-owned job per active account.
 
 ```
 resume state from gmail_backfill_state
@@ -174,7 +172,7 @@ A token bucket over quota units, shared by **every** Gmail call rather than scop
 
 Each account section in Settings exposes a **Reindex** action. It is deliberately manual because a complete Gmail walk is expensive: the confirmation warns that it can consume substantial Gmail API quota and take a long time for a large mailbox.
 
-Starting it resets only that account's durable `gmail_backfill_state` cursor and then queues the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available and are refreshed through normal account-scoped upserts. Because preserved rows cannot distinguish conversations revisited by the current run, manual reindex progress is indeterminate; the oldest-indexed date still advances as Gmail is walked. Reindex is disabled while the account is already queued or running.
+Starting it resets only that account's durable `gmail_backfill_state` cursor and then starts the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available and are refreshed through normal account-scoped upserts. Because preserved rows cannot distinguish conversations revisited by the current run, manual reindex progress is indeterminate; the oldest-indexed date still advances as Gmail is walked. Reindex is disabled while the account is already running.
 
 The first index for a newly connected readable account still starts automatically. Gmail history cursor expiry does not automatically trigger another complete index; normal cursor recovery remains bounded, and the user can choose Reindex if they suspect historical gaps.
 
@@ -196,7 +194,7 @@ Access tokens expire hourly, but `withAuthorization` re-reads authorization per 
 
 `forgetAccountMailData` must be extended to clear `gmail_messages`, the FTS rows, and `gmail_backfill_state` — it is the single place disconnect cleans up, and the invariant is that nothing survives a disconnect.
 
-Foreground polling and historical backfill register with one account-scoped work supervisor. Disconnect suspends that account before cleanup, which rejects new poll and queued-backfill work, aborts active work, and waits for every run to settle. Scheduling resumes only after cleanup finishes so reconnecting the same address in the current process remains supported.
+Foreground polling and historical backfill register with one account-scoped work supervisor. Disconnect suspends that account before cleanup, which rejects new poll and backfill work, aborts active work, and waits for every run to settle. Scheduling resumes only after cleanup finishes so reconnecting the same address in the current process remains supported.
 
 ## Database process isolation
 

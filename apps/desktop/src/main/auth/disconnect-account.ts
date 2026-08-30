@@ -46,7 +46,7 @@ const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
 
 export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
   function* disconnectGoogleAccount(email: string) {
-    // Prevent another poll or queued index run from starting, then wait until
+    // Prevent another poll or index run from starting, then wait until
     // every already-authorized writer has stopped before deleting local data.
     cancelMailBackfill(email);
     cancelThreadCategorization(email);

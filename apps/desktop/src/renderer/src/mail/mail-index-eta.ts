@@ -115,8 +115,8 @@ export const advanceEtas = (
 
   for (const entry of progress) {
     if (entry.status !== "running") {
-      // Dropping the samples restarts the measurement, so a paused or requeued
-      // account does not carry stale throughput across the gap.
+      // Dropping the samples restarts the measurement, so a paused account does
+      // not carry stale throughput across the gap.
       samples.delete(entry.accountId);
       continue;
     }

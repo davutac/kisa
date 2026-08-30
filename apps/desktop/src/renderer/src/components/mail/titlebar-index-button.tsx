@@ -40,12 +40,7 @@ const toCounts = (entry: GmailIndexProgress): string => {
  */
 const TitlebarIndexButton = () => {
   const { accounts: progress, etas } = useMailIndexState();
-  // Queued counts as active: an account waiting its turn is still work in
-  // flight, and hiding it makes the indicator disappear the moment a third
-  // account is connected.
-  const active = progress.filter(
-    (entry) => entry.status === "running" || entry.status === "queued"
-  );
+  const active = progress.filter((entry) => entry.status === "running");
 
   if (active.length === 0) {
     return null;
@@ -110,7 +105,6 @@ const TitlebarIndexButton = () => {
           {active.map((entry) => {
             const ratio = toIndexRatio(entry);
             const eta = etas.get(entry.accountId);
-            const isQueued = entry.status === "queued";
 
             return (
               <span
@@ -126,21 +120,19 @@ const TitlebarIndexButton = () => {
                     has been observed to estimate it honestly.
                   */}
                   <span className="shrink-0 tabular-nums opacity-60">
-                    {isQueued || ratio === undefined
-                      ? ""
-                      : `${Math.round(ratio * 100)}%`}
+                    {ratio === undefined ? "" : `${Math.round(ratio * 100)}%`}
                     {eta === undefined ? "" : ` · ${formatRemaining(eta)}`}
                   </span>
                 </span>
                 <span className="bg-background/20 h-0.5 w-full overflow-hidden rounded-full">
                   <span
                     className="bg-background block h-full rounded-full"
-                    style={{ width: `${(isQueued ? 0 : (ratio ?? 0)) * 100}%` }}
+                    style={{ width: `${(ratio ?? 0) * 100}%` }}
                   />
                 </span>
                 <span className="opacity-60">
-                  {isQueued ? "Waiting its turn" : toCounts(entry)}
-                  {isQueued || entry.oldestIndexedAt === undefined
+                  {toCounts(entry)}
+                  {entry.oldestIndexedAt === undefined
                     ? ""
                     : ` · back to ${MONTH_FORMAT.format(new Date(entry.oldestIndexedAt))}`}
                 </span>

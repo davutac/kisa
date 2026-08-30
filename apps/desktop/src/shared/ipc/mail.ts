@@ -587,17 +587,11 @@ export const GmailSenderSuggestions = Schema.Struct({
 });
 export type GmailSenderSuggestions = typeof GmailSenderSuggestions.Type;
 
-/**
- * `queued` is renderer-only and never persisted: it means the account is
- * waiting behind another account's index. Whether it is queued is a fact about
- * the current process, not about the account, so it must not survive a restart.
- */
 export const GmailIndexStatus = Schema.Literals([
   "complete",
   "failed",
   "idle",
   "paused",
-  "queued",
   "running",
 ]);
 export type GmailIndexStatus = typeof GmailIndexStatus.Type;

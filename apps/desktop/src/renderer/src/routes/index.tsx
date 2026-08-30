@@ -103,8 +103,7 @@ function getIndexingMessage(
 ): string | undefined {
   const running = progress.filter(
     (entry) =>
-      (entry.status === "running" || entry.status === "queued") &&
-      accountIds.includes(entry.accountId)
+      entry.status === "running" && accountIds.includes(entry.accountId)
   );
 
   if (running.length === 0) {

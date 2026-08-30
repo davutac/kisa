@@ -4,7 +4,7 @@ export const HIDDEN_MAIL_INDEX_PROGRESS = -1;
 export const INDETERMINATE_MAIL_INDEX_PROGRESS = 2;
 
 const isActive = (progress: GmailIndexProgress): boolean =>
-  progress.status === "queued" || progress.status === "running";
+  progress.status === "running";
 
 /**
  * Converts per-account indexing progress into Electron's single application

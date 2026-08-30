@@ -44,21 +44,6 @@ import { refreshUnreadBadge } from "./unread-badge";
 const PAGE_QUOTA_UNITS =
   QUOTA_UNITS.threadsList + MAIL_INDEX_PAGE_SIZE * QUOTA_UNITS.threadsGet;
 
-/**
- * How many accounts index at once.
- *
- * Not one. Gmail's rate limit is per *user*, and every call is made with that
- * account's own credentials, so two accounts draw on two independent budgets —
- * the governor already keys its buckets by account id. Serialising them buys no
- * quota headroom and makes the second mailbox wait out the whole of the first.
- *
- * The cap exists for the resources accounts genuinely share: sustained
- * bandwidth (~750 KB/s per indexer) and the synchronous main-thread SQLite
- * writes. Two is enough to cover the common multi-account case without letting
- * a five-account setup saturate either.
- */
-const MAX_CONCURRENT_BACKFILLS = 2;
-
 const PROGRESS_THROTTLE_MS = 1000;
 const MAX_PAGE_ATTEMPTS = 5;
 const RETRY_BASE_DELAY_MS = 2000;
@@ -281,17 +266,14 @@ const estimateThreadTotal = Effect.fn("mailBackfill.estimateThreadTotal")(
 );
 
 const cancellations = new Set<string>();
-const queued: string[] = [];
-const active = new Set<string>();
+const activeAccounts = new Set<string>();
 const pendingReindexes = new Set<string>();
 
-const isMailIndexScheduled = (accountId: string): boolean =>
-  active.has(accountId) ||
-  queued.includes(accountId) ||
-  pendingReindexes.has(accountId);
+const isMailIndexBusy = (accountId: string): boolean =>
+  activeAccounts.has(accountId) || pendingReindexes.has(accountId);
 
 const ensureMailIndexCanStart = (accountId: string) => {
-  if (isMailIndexScheduled(accountId)) {
+  if (isMailIndexBusy(accountId)) {
     return Effect.fail(backfillError("Mail is already being indexed"));
   }
 
@@ -468,89 +450,47 @@ const runBackfill = async (accountId: string): Promise<void> => {
   }
 };
 
-/**
- * Runs up to `MAX_CONCURRENT_BACKFILLS` accounts at once; the rest wait in a
- * FIFO queue and start as slots free up.
- */
-const drainQueue = (): void => {
-  while (active.size < MAX_CONCURRENT_BACKFILLS) {
-    const next = queued.shift();
-
-    if (next === undefined) {
-      return;
-    }
-
-    if (isCancelled(next)) {
-      cancellations.delete(next);
-      continue;
-    }
-
-    active.add(next);
-
-    // Not awaited: the loop keeps filling the remaining slots. Each run frees
-    // its own slot and re-drains when it settles, so a finished account is
-    // replaced immediately rather than waiting for something else to poke the
-    // queue.
-    const runQueuedBackfill = async (): Promise<void> => {
-      try {
-        await accountMailWorkSupervisor.run(next, async (signal) => {
-          const cancel = (): void => {
-            cancellations.add(next);
-          };
-          signal.addEventListener("abort", cancel, { once: true });
-          if (signal.aborted) {
-            cancel();
-          }
-
-          try {
-            await runBackfill(next);
-          } catch {
-            // `runBackfill` records its own terminal state; a throw here must not
-            // take the rest of the queue down with it.
-          } finally {
-            signal.removeEventListener("abort", cancel);
-          }
-        });
-      } finally {
-        active.delete(next);
-        cancellations.delete(next);
-        drainQueue();
+const runAccountBackfill = async (accountId: string): Promise<void> => {
+  try {
+    await accountMailWorkSupervisor.run(accountId, async (signal) => {
+      const cancel = (): void => {
+        cancellations.add(accountId);
+      };
+      signal.addEventListener("abort", cancel, { once: true });
+      if (signal.aborted) {
+        cancel();
       }
-    };
 
-    void runQueuedBackfill();
+      try {
+        await runBackfill(accountId);
+      } catch {
+        // Expected failures are persisted by `runBackfill`.
+      } finally {
+        signal.removeEventListener("abort", cancel);
+      }
+    });
+  } finally {
+    activeAccounts.delete(accountId);
+    cancellations.delete(accountId);
   }
 };
 
 export const requestMailBackfill = (accountId: string): void => {
   if (
     accountMailWorkSupervisor.isSuspended(accountId) ||
-    isMailIndexScheduled(accountId)
+    isMailIndexBusy(accountId)
   ) {
     return;
   }
 
   cancellations.delete(accountId);
-  queued.push(accountId);
-  drainQueue();
-
-  // Still queued means every slot was taken. Publish that, or an account
-  // waiting its turn would show no indicator at all and read as broken.
-  if (queued.includes(accountId)) {
-    void Effect.runPromise(
-      refreshProgress(accountId, "queued").pipe(Effect.ignore)
-    );
-  }
+  activeAccounts.add(accountId);
+  void runAccountBackfill(accountId);
 };
 
 /** Disconnect path: stop the run before `clearAccount` deletes its rows. */
 export const cancelMailBackfill = (accountId: string): void => {
   cancellations.add(accountId);
-  for (let index = queued.length - 1; index >= 0; index -= 1) {
-    if (queued[index] === accountId) {
-      queued.splice(index, 1);
-    }
-  }
   progressByAccount.delete(accountId);
   sendProgress();
 };

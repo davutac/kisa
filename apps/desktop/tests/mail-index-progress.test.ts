@@ -39,7 +39,7 @@ describe(getNativeMailIndexProgress, () => {
     expect(
       getNativeMailIndexProgress([
         progress({ estimatedThreads: 100 }),
-        progress({ accountId: "other@example.com", status: "queued" }),
+        progress({ accountId: "other@example.com" }),
       ])
     ).toBe(INDETERMINATE_MAIL_INDEX_PROGRESS);
   });
@@ -52,7 +52,6 @@ describe(getNativeMailIndexProgress, () => {
           accountId: "other@example.com",
           estimatedThreads: 100,
           indexedThreads: 50,
-          status: "queued",
         }),
       ])
     ).toBe(0.5);
