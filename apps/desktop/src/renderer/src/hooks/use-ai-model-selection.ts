@@ -54,5 +54,5 @@ export const useAiModelSelection = () => {
       .join(" · ");
   }
 
-  return { label, selection };
+  return { isLoading, label, selection };
 };

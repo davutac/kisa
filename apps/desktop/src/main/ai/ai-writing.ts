@@ -13,8 +13,8 @@ import type {
   AiReplyRequest,
 } from "../../shared/ipc/ai";
 import { getAiSettings } from "./ai-settings";
-import { AiModelSelectionError } from "./errors";
 import { AiCleanupGeneration } from "./generation-schemas";
+import { requireAiModelSelection } from "./model-selection";
 import {
   AI_DRAFT_CLEANUP_SYSTEM_INSTRUCTIONS,
   AI_REPLY_SYSTEM_INSTRUCTIONS,
@@ -30,28 +30,7 @@ const loadGenerationSettings = Effect.fn("loadAiGenerationSettings")(
     operation: "cleanup" | "reply"
   ) {
     const settings = yield* getAiSettings();
-    const configuredModel =
-      settings.activeProvider === null
-        ? null
-        : settings.providerModels[settings.activeProvider];
-    const configuredReasoning =
-      settings.activeProvider === null
-        ? null
-        : settings.providerReasoning[settings.activeProvider];
-    const model =
-      requestModel ??
-      (settings.activeProvider === null || configuredModel === null
-        ? null
-        : {
-            model: configuredModel,
-            provider: settings.activeProvider,
-            reasoning: configuredReasoning ?? undefined,
-          });
-    if (model === null) {
-      return yield* new AiModelSelectionError({
-        message: "Choose an AI model before generating email text",
-      });
-    }
+    const model = yield* requireAiModelSelection(settings, requestModel);
     const instructions =
       operation === "reply"
         ? {

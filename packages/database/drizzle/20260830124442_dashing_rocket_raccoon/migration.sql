@@ -1,0 +1,1 @@
+ALTER TABLE `account_settings` ADD `categorization_enabled` integer DEFAULT false NOT NULL;

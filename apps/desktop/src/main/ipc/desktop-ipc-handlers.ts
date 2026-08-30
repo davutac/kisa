@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 
 import { DesktopIpc } from "./desktop-ipc";
 import {
+  categorizeMailThread,
   cleanupDraft,
   generateReply,
   getAiWritingSettings,
@@ -80,6 +81,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(updateAiWritingSettings);
   yield* ipc.handle(generateReply);
   yield* ipc.handle(cleanupDraft);
+  yield* ipc.handle(categorizeMailThread);
   yield* ipc.handle(startApp);
   yield* ipc.handle(openThreadWindow);
   yield* ipc.handle(getLoginItemSettings);

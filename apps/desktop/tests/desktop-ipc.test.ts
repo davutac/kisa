@@ -8,6 +8,11 @@ import type { IpcMainInvokeEvent } from "electron";
 import * as DesktopIpc from "../src/main/ipc/desktop-ipc";
 import { DesktopIpcRegistrationError } from "../src/main/ipc/desktop-ipc-registration-error";
 import {
+  AiThreadCategorizationReply,
+  AiThreadCategorizationRequest,
+} from "../src/shared/ipc/ai";
+import {
+  AI_CATEGORIZE_THREAD_CHANNEL,
   MAIL_CREATE_LABEL_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
@@ -147,6 +152,36 @@ describe(DesktopIpc.DesktopIpc, () => {
       expect(requests).toStrictEqual([request]);
       expect(
         (yield* Effect.exit(method.handler({ ...request, labelId: "" })))._tag
+      ).toBe("Failure");
+    })
+  );
+
+  it.effect("validates the manual categorization boundary", () =>
+    Effect.gen(function* validatesManualCategorization() {
+      const requests: unknown[] = [];
+      const method = DesktopIpc.makeIpcMethod({
+        channel: AI_CATEGORIZE_THREAD_CHANNEL,
+        handler: (request) =>
+          Effect.sync(() => {
+            requests.push(request);
+            return { data: { labelIds: ["Label_1"] }, ok: true as const };
+          }),
+        payload: AiThreadCategorizationRequest,
+        result: AiThreadCategorizationReply,
+      });
+      const request = {
+        accountId: "person@example.com",
+        threadId: "thread-1",
+      };
+
+      expect(method.channel).toBe("desktop:ai:categorize-thread");
+      expect(yield* method.handler(request)).toStrictEqual({
+        data: { labelIds: ["Label_1"] },
+        ok: true,
+      });
+      expect(requests).toStrictEqual([request]);
+      expect(
+        (yield* Effect.exit(method.handler({ ...request, threadId: "" })))._tag
       ).toBe("Failure");
     })
   );

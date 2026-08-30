@@ -2,6 +2,7 @@ import { googleAccounts } from "@repo/database/schemas";
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
+import { cancelThreadCategorization } from "../ai/thread-categorization";
 import { withDatabaseClient } from "../database";
 import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor";
 import { cancelMailBackfill } from "../mail/mail-backfill";
@@ -48,6 +49,7 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
     // Prevent another poll or queued index run from starting, then wait until
     // every already-authorized writer has stopped before deleting local data.
     cancelMailBackfill(email);
+    cancelThreadCategorization(email);
     return yield* Effect.acquireUseRelease(
       accountMailWorkSupervisor.suspend(email),
       () =>

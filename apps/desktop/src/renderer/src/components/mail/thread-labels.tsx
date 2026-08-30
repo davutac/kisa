@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 
 import MailLabelBadges from "@/components/mail/label-badges";
 import LabelDialog from "@/components/mail/label-dialog";
+import ThreadCategorizeButton from "@/components/mail/thread-categorize-button";
 import ThreadLabelPicker from "@/components/mail/thread-label-picker";
 import type { ThreadLabelChange } from "@/components/mail/thread-label-picker";
 import { Badge } from "@/components/ui/badge";
@@ -143,6 +144,7 @@ const ThreadLabels = ({
         }}
         pendingLabelIds={pendingLabelIds}
       />
+      <ThreadCategorizeButton accountId={accountId} threadId={threadId} />
       {catalog === undefined || mailApi === undefined ? null : (
         <LabelDialog
           accountId={accountId}

@@ -7,6 +7,8 @@ import type {
   AiReplyRequest,
   AiSettingsReply,
   AiSettingsUpdateRequest,
+  AiThreadCategorizationReply,
+  AiThreadCategorizationRequest,
 } from "./ai";
 import type {
   AppSettingsReply,
@@ -105,6 +107,9 @@ export interface ElectronVersions {
 }
 
 export interface DesktopBridge {
+  categorizeThread: (
+    request: AiThreadCategorizationRequest
+  ) => Promise<AiThreadCategorizationReply>;
   cleanupEmailDraft: (
     request: AiCleanupDraftRequest
   ) => Promise<AiCleanupDraftReply>;

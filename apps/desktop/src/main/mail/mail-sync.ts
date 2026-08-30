@@ -73,6 +73,7 @@ import type {
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
+import { isAutomaticCategorizationEnabled } from "../settings/account-settings";
 import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
 import { planBulkThreadMutation } from "./bulk-mutation-quota";
 import { forgetCachedCorrespondents } from "./correspondent-cache";
@@ -97,6 +98,7 @@ import {
   dismissThreadNotifications,
   showNewMailNotifications,
 } from "./new-mail-notifications";
+import { publishNewGmailThreads } from "./new-thread-events";
 import { outgoingAttachmentAuthorizations } from "./outgoing-attachment-authorizations";
 import { mailQuotaGovernor, QUOTA_UNITS } from "./quota-governor";
 import { addUnreadLabel, removeUnreadLabel } from "./read-state";
@@ -1999,6 +2001,21 @@ const syncAccount = Effect.fn("syncAccount")(function* syncAccount(
   // wait for background quota.
   if (result.changedThreadIds.length > 0) {
     yield* publishCachedThreadListChanges(accountId, result.changedThreadIds);
+  }
+
+  if (result.type === "partial" && result.newThreadIds.length > 0) {
+    const categorizationEnabled = yield* isAutomaticCategorizationEnabled(
+      accountId
+    ).pipe(Effect.orElseSucceed(() => false));
+
+    if (categorizationEnabled) {
+      yield* Effect.sync(() =>
+        publishNewGmailThreads({
+          accountId,
+          threadIds: result.newThreadIds,
+        })
+      );
+    }
   }
 
   if (result.type === "partial" && result.addedMessageIds.length > 0) {

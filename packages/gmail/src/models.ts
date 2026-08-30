@@ -338,15 +338,18 @@ export type SyncResult =
   | {
       readonly addedMessageIds: readonly MessageId[];
       readonly changedThreadIds: readonly ThreadId[];
+      readonly newThreadIds: readonly ThreadId[];
       readonly type: "initial";
     }
   | {
       readonly addedMessageIds: readonly MessageId[];
       readonly changedThreadIds: readonly ThreadId[];
+      readonly newThreadIds: readonly ThreadId[];
       readonly type: "partial";
     }
   | {
       readonly addedMessageIds: readonly MessageId[];
       readonly changedThreadIds: readonly ThreadId[];
+      readonly newThreadIds: readonly ThreadId[];
       readonly type: "cursor-recovered";
     };

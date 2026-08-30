@@ -8,6 +8,8 @@ import { IpcReply } from "./reply";
 
 export const AccountSettings = Schema.Struct({
   accountId: Schema.String,
+  /** Whether brand-new conversations may be categorized once in the background. */
+  categorizationEnabled: Schema.Boolean,
   /** Rich-text sign-off inserted into drafts sent from this account. */
   emailSignature: EmailSignatureBody,
   /** Whether newly synced unread Inbox messages may produce an OS alert. */
@@ -19,12 +21,17 @@ export type AccountSettings = typeof AccountSettings.Type;
 
 /** Accounts without a stored row behave as if they had these settings. */
 export const DEFAULT_ACCOUNT_SETTINGS = {
+  categorizationEnabled: false,
   emailSignature: EMPTY_EMAIL_SIGNATURE_BODY,
   notificationsEnabled: true,
   showSystemLabels: true,
 } as const satisfies Omit<AccountSettings, "accountId">;
 
 export const AccountSettingsUpdateRequest = Schema.Union([
+  Schema.Struct({
+    accountId: Schema.NonEmptyString,
+    categorizationEnabled: Schema.Boolean,
+  }),
   Schema.Struct({
     accountId: Schema.NonEmptyString,
     emailSignature: EmailSignatureBody,

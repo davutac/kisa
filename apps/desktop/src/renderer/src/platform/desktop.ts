@@ -23,6 +23,7 @@ export interface AppLifecycleApi {
 }
 
 export interface AiApi {
+  categorizeThread: DesktopBridge["categorizeThread"];
   cleanupDraft: DesktopBridge["cleanupEmailDraft"];
   generateReply: DesktopBridge["generateEmailReply"];
   getSettings: DesktopBridge["getAiSettings"];
@@ -154,6 +155,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
 
   const capabilities: DesktopCapabilities = {
     ai: {
+      categorizeThread: bridge.categorizeThread,
       cleanupDraft: bridge.cleanupEmailDraft,
       generateReply: bridge.generateEmailReply,
       getSettings: bridge.getAiSettings,

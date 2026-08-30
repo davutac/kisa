@@ -96,6 +96,36 @@ describe("Gmail label store", () => {
 
   afterAll(() => connection.close());
 
+  it("finds cached thread ids without crossing account boundaries", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const otherAccountId = "other@example.com";
+    const insertThread = connection.prepare(
+      `INSERT INTO gmail_threads (
+         account_email, "from", is_in_inbox, is_unread, labels, latest_at,
+         message_count, snippet, subject, thread_id, updated_at
+       ) VALUES (?, 'sender@example.com', 1, 0, '[]', 1, 1, '',
+         'Subject', ?, 1)`
+    );
+    insertThread.run(accountId, "shared-thread");
+    insertThread.run(otherAccountId, "shared-thread");
+    insertThread.run(otherAccountId, "other-only-thread");
+
+    const existing = await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) =>
+          store.getExistingThreadIds(accountId, [
+            ThreadId.make("shared-thread"),
+            ThreadId.make("other-only-thread"),
+            ThreadId.make("missing-thread"),
+          ])
+        ),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
+    expect(existing).toStrictEqual(["shared-thread"]);
+  });
+
   it("persists and restores optional label colors", async () => {
     const accountId = AccountId.make("person@example.com");
     const colored = new GmailLabel({

@@ -10,6 +10,7 @@ import type {
   AiReasoningOption,
   AiProviderStatus,
 } from "../../../shared/ipc/ai";
+import { logDevelopmentAiCommandExit } from "../development-logging";
 import {
   aiProcessEnvironment,
   resolveAiExecutablePath,
@@ -340,6 +341,11 @@ export const generateWithClaude = Effect.fn("generateWithClaude")(
       timeoutMs: GENERATION_TIMEOUT_MS,
     }).pipe(Effect.mapError((error) => commandFailure("claude", error)));
     if (result.exitCode !== 0) {
+      logDevelopmentAiCommandExit({
+        exitCode: result.exitCode,
+        operation: "Claude generation",
+        stderr: result.stderr,
+      });
       return yield* providerFailure(
         "claude",
         "Claude could not generate email text. Check its login and model settings"

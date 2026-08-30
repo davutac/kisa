@@ -26,3 +26,8 @@ export class AiProviderError extends Schema.TaggedError<AiProviderError>()(
     provider: AiProvider,
   }
 ) {}
+
+export class AiCategorizationError extends Schema.TaggedError<AiCategorizationError>()(
+  "AiCategorizationError",
+  { message: Schema.String }
+) {}

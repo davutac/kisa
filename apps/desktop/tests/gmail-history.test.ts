@@ -5,17 +5,22 @@ import { collectHistoryIds } from "../src/main/mail/gmail-gateway";
 
 const collect = (records: readonly gmail_v1.Schema$History[]) => {
   const addedMessageIds = new Set<string>();
+  const addedMessageIdsByThreadId = new Map<string, Set<string>>();
   const changedThreadIds = new Set<string>();
   const removedThreadIds = new Set<string>();
 
   collectHistoryIds(records, {
     addedMessageIds,
+    addedMessageIdsByThreadId,
     changedThreadIds,
     removedThreadIds,
   });
 
   return {
     addedMessageIds: [...addedMessageIds],
+    addedMessageIdsByThreadId: [...addedMessageIdsByThreadId].map(
+      ([threadId, messageIds]) => [threadId, [...messageIds]]
+    ),
     changedThreadIds: [...changedThreadIds],
     removedThreadIds: [...removedThreadIds],
   };
@@ -32,6 +37,7 @@ describe(collectHistoryIds, () => {
       ])
     ).toStrictEqual({
       addedMessageIds: ["new"],
+      addedMessageIdsByThreadId: [["thread-2", ["new"]]],
       changedThreadIds: ["thread-2", "thread-1"],
       removedThreadIds: [],
     });
@@ -45,6 +51,7 @@ describe(collectHistoryIds, () => {
       ])
     ).toStrictEqual({
       addedMessageIds: ["new"],
+      addedMessageIdsByThreadId: [["thread-1", ["new"]]],
       changedThreadIds: ["thread-1"],
       removedThreadIds: [],
     });

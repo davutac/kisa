@@ -13,6 +13,7 @@ import type {
   AiProviderStatus,
   AiReasoningOption,
 } from "../../../shared/ipc/ai";
+import { logDevelopmentAiCommandExit } from "../development-logging";
 import {
   aiProcessEnvironment,
   resolveAiSpawnCommand,
@@ -433,6 +434,11 @@ export const generateWithCodex = Effect.fn("generateWithCodex")(
       timeoutMs: GENERATION_TIMEOUT_MS,
     }).pipe(Effect.mapError((error) => commandFailure("codex", error)));
     if (result.exitCode !== 0) {
+      logDevelopmentAiCommandExit({
+        exitCode: result.exitCode,
+        operation: "Codex generation",
+        stderr: result.stderr,
+      });
       return yield* providerFailure(
         "codex",
         "Codex could not generate email text. Check its login and model settings"

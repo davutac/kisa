@@ -2,6 +2,7 @@ import { ipcRenderer } from "electron";
 
 import type { DesktopBridge } from "../shared/ipc/bridge";
 import {
+  AI_CATEGORIZE_THREAD_CHANNEL,
   AI_CLEANUP_DRAFT_CHANNEL,
   AI_GENERATE_REPLY_CHANNEL,
   AI_GET_SETTINGS_CHANNEL,
@@ -11,12 +12,15 @@ import {
 
 export const aiApi: Pick<
   DesktopBridge,
+  | "categorizeThread"
   | "cleanupEmailDraft"
   | "generateEmailReply"
   | "getAiSettings"
   | "listAiProviders"
   | "updateAiSettings"
 > = {
+  categorizeThread: (request) =>
+    ipcRenderer.invoke(AI_CATEGORIZE_THREAD_CHANNEL, request),
   cleanupEmailDraft: (request) =>
     ipcRenderer.invoke(AI_CLEANUP_DRAFT_CHANNEL, request),
   generateEmailReply: (request) =>

@@ -7,6 +7,11 @@ export interface StoredEmailSignature {
 
 export const accountSettings = sqliteTable("account_settings", {
   accountEmail: text("account_email").primaryKey(),
+  categorizationEnabled: integer("categorization_enabled", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   emailSignature: text("email_signature", { mode: "json" })
     .$type<StoredEmailSignature>()
     .notNull()
