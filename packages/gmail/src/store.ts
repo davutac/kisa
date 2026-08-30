@@ -97,9 +97,11 @@ export interface GmailStoreService {
   /**
    * The single write path for cached mail. Summaries and their messages land in
    * one transaction so a crash mid-page cannot leave a thread row without the
-   * bodies it claims to have, and so the indexer's per-page checkpoint is
-   * atomic. `details` may be shorter than `threads` when a thread's MIME could
-   * not be parsed; the summary still persists so the thread stays readable.
+   * bodies it claims to have. The indexer advances its checkpoint only after
+   * this write succeeds, so an interruption can replay but never skip the page.
+   * `details` may be shorter than `threads` when a thread's MIME could not be
+   * parsed; the summary still persists so the thread stays readable. A parsed
+   * detail is authoritative for message membership in that thread.
    */
   readonly upsertThreadDetails: (
     accountId: AccountId,

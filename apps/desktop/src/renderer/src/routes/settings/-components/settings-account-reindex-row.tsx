@@ -11,6 +11,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { toMailIndexDescription } from "@/mail/mail-index-progress-view";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import type { MailApi } from "@/platform/desktop";
 
@@ -79,9 +80,7 @@ const SettingsAccountReindexRow = ({
       <SettingsRowContent>
         <SettingsRowTitle id={titleId}>Mail history</SettingsRowTitle>
         <SettingsRowDescription>
-          {isIndexing
-            ? "Reindexing your complete Gmail history…"
-            : "Refresh the local copy of your complete Gmail history."}
+          {toMailIndexDescription(progress)}
         </SettingsRowDescription>
       </SettingsRowContent>
       <SettingsRowActions>

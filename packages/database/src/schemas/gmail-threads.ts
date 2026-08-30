@@ -46,6 +46,10 @@ export const gmailThreads = sqliteTable(
     isInTrash: integer("is_in_trash", { mode: "boolean" })
       .notNull()
       .default(false),
+    /** Reconciliation mark for the current full-account index generation. */
+    isIndexSeen: integer("is_index_seen", { mode: "boolean" })
+      .notNull()
+      .default(true),
     isUnread: integer("is_unread", { mode: "boolean" }).notNull(),
     labels: text("labels", { mode: "json" }).$type<readonly string[]>(),
     latestAt: integer("latest_at").notNull(),

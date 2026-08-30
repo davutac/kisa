@@ -13,9 +13,13 @@ import type {
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import {
   AccountId,
+  GmailMessage,
+  GmailThread,
   GmailLabel,
+  HistoryId,
   LabelColor,
   LabelId,
+  Mailbox,
   MessageId,
   ThreadId,
   ThreadSummary,
@@ -157,6 +161,104 @@ describe("Gmail label store", () => {
     );
 
     expect(existing).toStrictEqual(["shared-thread"]);
+  });
+
+  it("marks fetched threads and removes messages no longer in Gmail", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const otherAccountId = AccountId.make("other@example.com");
+    const threadId = ThreadId.make("shared-thread");
+    const insertThread = connection.prepare(
+      `INSERT INTO gmail_threads (
+        account_email, "from", is_in_inbox, is_index_seen, is_unread,
+        latest_at, message_count, snippet, subject, thread_id, updated_at
+      ) VALUES (?, 'sender@example.com', 1, 0, 0, 1, 2, '',
+        'Subject', ?, 1)`
+    );
+    const insertMessage = connection.prepare(
+      `INSERT INTO gmail_messages (
+        account_email, body_text, from_address, internal_date, message_id,
+        schema_version, subject, thread_id, updated_at
+      ) VALUES (?, 'stale body', 'sender@example.com', 1, ?, 1,
+        'Subject', ?, 1)`
+    );
+    const summary = new ThreadSummary({
+      attachments: [],
+      hasAttachments: false,
+      hasUnread: false,
+      id: threadId,
+      labelIds: [LabelId.make("INBOX")],
+      latestAt: "2",
+      latestMessageId: MessageId.make("current-message"),
+      messageCount: 1,
+      participants: [],
+      snippet: "Current",
+      subject: "Subject",
+    });
+    const detail = new GmailThread({
+      historyId: HistoryId.make("history-1"),
+      id: threadId,
+      labelIds: [LabelId.make("INBOX")],
+      messages: [
+        new GmailMessage({
+          attachments: [],
+          bcc: [],
+          body: { text: "current body", type: "text" },
+          cc: [],
+          from: new Mailbox({ address: "sender@example.com" }),
+          id: MessageId.make("current-message"),
+          labelIds: [LabelId.make("INBOX")],
+          sentAt: "2",
+          subject: "Subject",
+          threadId,
+          to: [],
+        }),
+      ],
+    });
+
+    for (const id of [accountId, otherAccountId]) {
+      insertThread.run(id, threadId);
+      insertMessage.run(id, "stale-message", threadId);
+    }
+
+    await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) =>
+          store.upsertThreadDetails(accountId, [summary], [detail])
+        ),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
+    expect(
+      connection
+        .prepare(
+          `SELECT is_index_seen
+           FROM gmail_threads
+           WHERE account_email = ? AND thread_id = ?`
+        )
+        .get(accountId, threadId)
+    ).toStrictEqual({ is_index_seen: 1 });
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, body_text, message_id
+           FROM gmail_messages
+           WHERE thread_id = ?
+           ORDER BY account_email, message_id`
+        )
+        .all(threadId)
+    ).toStrictEqual([
+      {
+        account_email: otherAccountId,
+        body_text: "stale body",
+        message_id: "stale-message",
+      },
+      {
+        account_email: accountId,
+        body_text: "current body",
+        message_id: "current-message",
+      },
+    ]);
   });
 
   it("persists and restores optional label colors", async () => {

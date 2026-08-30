@@ -10,7 +10,10 @@ import type { DatabaseRemoteCallback } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { resetMailIndexRemote } from "../src/main/mail/mail-index-reindex";
+import {
+  resetMailIndexRemote,
+  sweepUnseenMailRemote,
+} from "../src/main/mail/mail-index-reindex";
 
 const connection = openDatabaseConnection(":memory:");
 applyDatabaseMigrations(
@@ -63,7 +66,7 @@ const insertMessage = connection.prepare(
   ) VALUES (?, 'sender@example.com', 1, ?, 1, 'Subject', ?, 1)`
 );
 
-describe(resetMailIndexRemote, () => {
+describe("mail index reconciliation", () => {
   beforeEach(() => {
     connection.prepare("DELETE FROM gmail_messages").run();
     connection.prepare("DELETE FROM gmail_threads").run();
@@ -121,12 +124,22 @@ describe(resetMailIndexRemote, () => {
     expect(
       connection
         .prepare(
-          "SELECT account_email, thread_id FROM gmail_threads ORDER BY account_email"
+          `SELECT account_email, is_index_seen, thread_id
+           FROM gmail_threads
+           ORDER BY account_email`
         )
         .all()
     ).toStrictEqual([
-      { account_email: "one@example.com", thread_id: "thread-1" },
-      { account_email: "two@example.com", thread_id: "thread-1" },
+      {
+        account_email: "one@example.com",
+        is_index_seen: 0,
+        thread_id: "thread-1",
+      },
+      {
+        account_email: "two@example.com",
+        is_index_seen: 1,
+        thread_id: "thread-1",
+      },
     ]);
     expect(
       connection
@@ -137,6 +150,53 @@ describe(resetMailIndexRemote, () => {
     ).toStrictEqual([
       { account_email: "one@example.com", message_id: "message-1" },
       { account_email: "two@example.com", message_id: "message-1" },
+    ]);
+  });
+
+  it("sweeps only unseen mail for the completed account", async () => {
+    insertThread.run("one@example.com", "seen-thread");
+    insertMessage.run("one@example.com", "seen-message", "seen-thread");
+    connection
+      .prepare(
+        `UPDATE gmail_threads
+         SET is_index_seen = false
+         WHERE account_email = ? AND thread_id = ?`
+      )
+      .run("one@example.com", "thread-1");
+
+    await sweepUnseenMailRemote(database, "one@example.com");
+
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, thread_id
+           FROM gmail_threads
+           ORDER BY account_email, thread_id`
+        )
+        .all()
+    ).toStrictEqual([
+      { account_email: "one@example.com", thread_id: "seen-thread" },
+      { account_email: "two@example.com", thread_id: "thread-1" },
+    ]);
+    expect(
+      connection
+        .prepare(
+          `SELECT account_email, message_id, thread_id
+           FROM gmail_messages
+           ORDER BY account_email, message_id`
+        )
+        .all()
+    ).toStrictEqual([
+      {
+        account_email: "one@example.com",
+        message_id: "seen-message",
+        thread_id: "seen-thread",
+      },
+      {
+        account_email: "two@example.com",
+        message_id: "message-1",
+        thread_id: "thread-1",
+      },
     ]);
   });
 });

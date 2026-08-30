@@ -190,7 +190,8 @@ describe("database migrations", () => {
       expect(
         connection
           .prepare(
-            `SELECT thread_id, is_in_inbox, is_in_sent, is_in_trash
+            `SELECT thread_id, is_in_inbox, is_in_sent, is_in_trash,
+                    is_index_seen
              FROM gmail_threads
              ORDER BY thread_id`
           )
@@ -200,30 +201,35 @@ describe("database migrations", () => {
           is_in_inbox: 0,
           is_in_sent: 0,
           is_in_trash: 0,
+          is_index_seen: 1,
           thread_id: "t-archived",
         },
         {
           is_in_inbox: 1,
           is_in_sent: 0,
           is_in_trash: 0,
+          is_index_seen: 1,
           thread_id: "t-inbox",
         },
         {
           is_in_inbox: 0,
           is_in_sent: 1,
           is_in_trash: 0,
+          is_index_seen: 1,
           thread_id: "t-sent",
         },
         {
           is_in_inbox: 0,
           is_in_sent: 0,
           is_in_trash: 0,
+          is_index_seen: 1,
           thread_id: "t-spam",
         },
         {
           is_in_inbox: 0,
           is_in_sent: 1,
           is_in_trash: 1,
+          is_index_seen: 1,
           thread_id: "t-trash",
         },
       ]);

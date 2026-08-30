@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  toMailIndexDescription,
   toIndexRatio,
   toOverallIndexRatio,
 } from "../src/renderer/src/mail/mail-index-progress-view";
 
 describe("mail index progress view", () => {
+  it("reports running, paused, and failed lifecycle states safely", () => {
+    expect(toMailIndexDescription({ status: "running" })).toBe(
+      "Indexing your complete Gmail history…"
+    );
+    expect(toMailIndexDescription({ status: "paused" })).toBe(
+      "Mail history indexing is paused until this account is reconnected."
+    );
+    expect(toMailIndexDescription({ status: "failed" })).toBe(
+      "Mail history indexing stopped. Reindex to try again."
+    );
+    expect(toMailIndexDescription({ status: "complete" })).toBe(
+      "Refresh the local copy of your complete Gmail history."
+    );
+  });
+
   it("treats a manual reindex sentinel as indeterminate", () => {
     expect(
       toIndexRatio({ estimatedThreads: 0, indexedThreads: 18_000 })

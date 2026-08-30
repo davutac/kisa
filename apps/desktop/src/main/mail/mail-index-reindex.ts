@@ -1,5 +1,58 @@
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
-import { gmailBackfillState } from "@repo/database/schemas";
+import {
+  gmailBackfillState,
+  gmailMessages,
+  gmailThreads,
+} from "@repo/database/schemas";
+import { and, eq, inArray } from "drizzle-orm";
+
+export const unmarkMailIndexRemote = async (
+  database: Pick<RemoteDatabaseClient, "update">,
+  accountId: string
+): Promise<void> => {
+  await database
+    .update(gmailThreads)
+    .set({ isIndexSeen: false })
+    .where(eq(gmailThreads.accountEmail, accountId))
+    .run();
+};
+
+/** Delete only after a complete walk proves which Gmail threads still exist. */
+export const sweepUnseenMailRemote = async (
+  database: RemoteDatabaseClient,
+  accountId: string
+): Promise<void> => {
+  await database.transaction(async (transaction) => {
+    const unseenThreadIds = transaction
+      .select({ threadId: gmailThreads.threadId })
+      .from(gmailThreads)
+      .where(
+        and(
+          eq(gmailThreads.accountEmail, accountId),
+          eq(gmailThreads.isIndexSeen, false)
+        )
+      );
+
+    await transaction
+      .delete(gmailMessages)
+      .where(
+        and(
+          eq(gmailMessages.accountEmail, accountId),
+          inArray(gmailMessages.threadId, unseenThreadIds)
+        )
+      )
+      .run();
+    await transaction
+      .delete(gmailThreads)
+      .where(
+        and(
+          eq(gmailThreads.accountEmail, accountId),
+          eq(gmailThreads.isIndexSeen, false)
+        )
+      )
+      .run();
+  });
+};
 
 /**
  * Starts a fresh index walk without removing mail that is already usable.
@@ -7,7 +60,7 @@ import { gmailBackfillState } from "@repo/database/schemas";
  * upserts as Gmail is walked again. Reindex progress is indeterminate because
  * those preserved rows cannot say which conversations this run has revisited.
  * Persisting `running` keeps the reset restart-safe if the process exits before
- * the in-memory queue starts the account.
+ * the in-memory run starts for the account.
  */
 export const resetMailIndexRemote = async (
   database: RemoteDatabaseClient,
@@ -26,12 +79,15 @@ export const resetMailIndexRemote = async (
     updatedAt: Date.now(),
   };
 
-  await database
-    .insert(gmailBackfillState)
-    .values({ accountEmail: accountId, ...resetState })
-    .onConflictDoUpdate({
-      set: resetState,
-      target: gmailBackfillState.accountEmail,
-    })
-    .run();
+  await database.transaction(async (transaction) => {
+    await unmarkMailIndexRemote(transaction, accountId);
+    await transaction
+      .insert(gmailBackfillState)
+      .values({ accountEmail: accountId, ...resetState })
+      .onConflictDoUpdate({
+        set: resetState,
+        target: gmailBackfillState.accountEmail,
+      })
+      .run();
+  });
 };

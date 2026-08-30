@@ -82,9 +82,9 @@ Every connected account can index concurrently. Gmail quota and backoff are acco
 Resumability is the core of "robust", so the cursor is two-level.
 
 - **Session cursor** — the `pageToken` from `threads.list`. Fast, exact, used for as long as a single run lasts.
-- **Durable watermark** — the oldest `internalDate` committed so far. On resume after a restart, an invalidated page token, or a reconnect, the run restarts from `q=before:YYYY/MM/DD` at the watermark and skips ids already present.
+- **Durable watermark** — the oldest `internalDate` committed so far. On resume after a restart, an invalidated page token, or a reconnect, the run restarts from `q=before:YYYY/MM/DD` at the watermark and safely replays the overlap.
 
-The watermark is advanced in the same transaction that commits the page's rows, so a crash can only ever replay a page, never skip one. Replay is harmless because every write is an upsert keyed by `(account_email, thread_id)` or `(account_email, message_id)`.
+Each page's cache transaction completes before the watermark advances, so a crash between the two can only replay a page, never skip one. Replay is harmless because every write is an upsert keyed by `(account_email, thread_id)` or `(account_email, message_id)`.
 
 The watermark doubles as user-visible progress: "indexed back to March 2019" means more to a reader than a percentage.
 
@@ -118,7 +118,7 @@ Rows are maintained by SQLite triggers rather than by the write path. The origin
 
 ### Changes to `gmail_threads`
 
-Two changes, both needed _because_ the cache is about to hold all mail rather than just the inbox.
+The mailbox projections are needed because the cache holds all mail rather than just the inbox, and the reconciliation mark lets a completed full walk remove rows Gmail no longer returns.
 
 **Add an indexed `is_in_inbox` column.** `listCachedThreadPage` currently pages 50 rows and then filters to INBOX in JavaScript. That is fine today, when the cache only ever contains inbox threads. Once archived mail lands in the same table, a page of 50 rows may yield two visible threads, and the list appears to stall while paging through archived mail it will never show. The INBOX predicate has to move into the SQL `WHERE` clause, and a JSON `LIKE` over the `labels` column will not use an index. A denormalized boolean maintained on upsert will.
 
@@ -128,7 +128,7 @@ The index is `(is_in_inbox, latest_at DESC, account_email, thread_id)`. The mixe
 
 Sent and Trash membership are projected the same way into indexed `is_in_sent` and `is_in_trash` columns. The primary mailbox combines Inbox and Sent while excluding Trash, and the title-bar toggles narrow to the requested projection. Existing cached rows derive both projections from their stored label array during migration, so the views do not wait for a fresh Gmail sync.
 
-Both are worth doing on their own merits, before any backfill code exists.
+`is_index_seen` is an internal reconciliation mark. A fresh full-account walk unmarks every cached thread for that account, and every authoritative Gmail fetch marks the threads it sees. Only successful completion deletes rows that remain unmarked. Existing rows migrate as marked so an upgrade cannot delete mail before the next complete walk proves it stale.
 
 ## Write path
 
@@ -141,58 +141,69 @@ store.upsertThreadDetails(accountId, threads)
   → gmail_messages_fts
 ```
 
-Called by `initialSync`, by history sync, by foreground `listThreads`, and by the backfill. The gateway's `fetchThreadSummaries` returns `{ summary, detail }` pairs instead of discarding the raw thread, and the summaries and their messages land in one transaction.
+Called by `initialSync`, by history sync, by foreground `listThreads`, and by the backfill. The gateway's `fetchThreadSummaries` returns `{ summary, detail }` pairs instead of discarding the raw thread, and the summaries and their messages land in one transaction. A parsed full thread is authoritative for message membership, so that transaction also removes cached messages no longer present in Gmail; a failed MIME parse preserves the previous bodies.
 
 **Reading back from the cache is deliberately not part of this.** The plan called for `GmailStoreLive.getThread` to start serving the cache, but the desktop's actual thread-open path (`loadFullThread`) does not go through `Gmail.getThread` at all — it calls the gateway directly, because it needs the raw MIME headers that BIMI sender-brand discovery reads, and the index does not store them. A cache path there would need per-message header storage to avoid silently losing sender branding, which is its own change. `getThread` therefore still goes to the network, and instant offline thread opens remain a follow-up with a named prerequisite.
 
-The consequence beyond backfill: a thread the user scrolled past is already stored, so opening it is instant and works offline.
+The stored body and FTS data make full-history local search possible. Serving thread opens from that cache remains the separate follow-up described above.
 
 ## Index service
 
-`apps/desktop/src/main/mail/mail-backfill.ts` runs one Effect-owned job per active account.
+`apps/desktop/src/main/mail/mail-backfill.ts` runs one supervised job per active account.
 
 ```
-resume state from gmail_backfill_state
-getProfile → estimatedThreads
+read the account checkpoint
+stop immediately if it is already complete
+if this is a fresh generation, unmark every cached thread for the account
+set status = running
+estimate the initial total when the run is determinate
 loop:
-  threads.list(pageToken ?? before:watermark, pageSize 100)
-  drop ids already indexed at the current historyId
-  threads.get full × page, through the governor
-  parse via GmailMime
-  ONE transaction: upsert details + advance cursor + counters
-  emit throttled progress
-until no nextPageToken → status = complete
+  stop if the account was cancelled
+  wait for this account's background quota budget
+  list and fetch one Gmail page through the shared Gmail service
+  parse MIME, mark its threads, and transactionally reconcile the page
+  retry retryable page failures up to the bounded attempt limit
+  after the page commit, advance the restart watermark
+  emit throttled progress from cached row counts
+until no next cursor:
+  transactionally delete unmarked threads and their messages
+  status = complete and flush progress immediately
 ```
+
+The exact page cursor is used only during the live run. The oldest indexed date is the durable restart point; a restart begins before that date to overlap the last committed work. Because page data commits before the watermark advances, an interruption can replay a page but cannot skip one. A `running` or `paused` resume keeps its existing reconciliation marks; unmarking again would make already completed pages look absent and is therefore reserved for a genuinely fresh generation.
 
 ### Quota governor
 
-A token bucket over quota units, shared by **every** Gmail call rather than scoped to the backfill — that is what makes foreground priority possible. Refill ~150 units/s. Foreground calls (thread open, search, poll) acquire ahead of the backfill, which yields.
+Each account has its own token bucket, charged by **every** Gmail call for that account rather than scoped to the backfill. That is what makes foreground priority possible without making accounts compete with each other. Refill is about 150 units/s per account. Foreground calls (thread open, search, poll) can spend immediately; only the backfill waits for the budget to recover.
 
 ### Manual reindex
 
 Each account section in Settings exposes a **Reindex** action. It is deliberately manual because a complete Gmail walk is expensive: the confirmation warns that it can consume substantial Gmail API quota and take a long time for a large mailbox.
 
-Starting it resets only that account's durable `gmail_backfill_state` cursor and then starts the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available and are refreshed through normal account-scoped upserts. Because preserved rows cannot distinguish conversations revisited by the current run, manual reindex progress is indeterminate; the oldest-indexed date still advances as Gmail is walked. Reindex is disabled while the account is already running.
+Starting it resets that account's durable `gmail_backfill_state` cursor and unmarks its cached threads in one database transaction, then starts the normal resumable indexer. Existing cached threads, messages, and FTS rows remain available while the walk runs. Pages mark and refresh what Gmail still returns; successful completion removes anything still unmarked. Because the preserved rows do not distinguish how much of the current run has been revisited, manual reindex progress is indeterminate; the oldest-indexed date still advances as Gmail is walked. Reindex is disabled while the account is already running.
 
 The first index for a newly connected readable account still starts automatically. Gmail history cursor expiry does not automatically trigger another complete index; normal cursor recovery remains bounded, and the user can choose Reindex if they suspect historical gaps.
 
-On `GmailRateLimitError` — which the gateway already classifies correctly, including Gmail's habit of reporting quota exhaustion as 403-with-reason rather than 429 — halve the rate, back off exponentially with jitter, and recover slowly. `MAX_SYNC_RETRIES` and the existing `Schedule.exponential(1000).pipe(Schedule.jittered)` in `syncAllAccounts` are the pattern to follow.
+Initial indexing, restart recovery, reconnect recovery, and manual reindex all converge on the same account-scoped runner. The only special reindex step is resetting that account's checkpoint while preserving its cached mail; it then calls the same `requestMailBackfill` entry point as every other start. There is no global account queue: each account runs independently through its own quota budget, while foreground mail work retains priority.
+
+On `GmailRateLimitError` — which the gateway classifies including Gmail's 403-with-reason response — the gateway halves only that account's rate. The current page retries with bounded exponential backoff, and the account's rate recovers slowly after the limit stops firing.
 
 ### Pausing and failure
 
 | Trigger | Behaviour |
 | --- | --- |
-| App quit | Cursor is already checkpointed per page; fiber interrupted |
-| App start | Any `running` or `paused` row resumes automatically |
-| Network loss | Pause, retry with backoff |
-| 401 / reauth required | Pause, surface a reauth prompt, resume after |
-| Rate limit | Governor absorbs it; no status change |
+| App quit | The latest completed page remains checkpointed as `running`; the process can stop without skipping mail |
+| App start | A missing row starts; `running` resumes; `complete`, `failed`, and `paused` remain idle |
+| Retryable network/API failure | Retry the current page with bounded exponential backoff; settle as `failed` after the retry budget |
+| 401 / reauth required | Settle as `paused`; reconnecting the account starts the same runner from its checkpoint |
+| Rate limit | The per-account governor paces work; repeated API failures use the same bounded page retry budget |
 | Account disconnected | Suspend the account, abort and join all mail work, then delete |
-| User pause | `paused`, resumable from settings |
+
+There is no separate user-pause mode. Failed work stays stopped so launch cannot create an automatic failure loop; Settings reports the failure and offers Reindex as the explicit retry. Running progress is throttled to about once per second, terminal states flush immediately, and disconnect removes the account's progress without allowing an in-flight page to republish it.
 
 Access tokens expire hourly, but `withAuthorization` re-reads authorization per call and `getGoogleAccessToken` refreshes directly with Google from Electron main, so a multi-hour run needs no special handling.
 
-`forgetAccountMailData` must be extended to clear `gmail_messages`, the FTS rows, and `gmail_backfill_state` — it is the single place disconnect cleans up, and the invariant is that nothing survives a disconnect.
+`forgetAccountMailData` clears the account through the shared Gmail store, including messages, FTS rows, index state, thread rows, labels, and sync state. It is the single mail-data cleanup path, and the invariant is that nothing survives a disconnect.
 
 Foreground polling and historical backfill register with one account-scoped work supervisor. Disconnect suspends that account before cleanup, which rejects new poll and backfill work, aborts active work, and waits for every run to settle. Scheduling resumes only after cleanup finishes so reconnecting the same address in the current process remains supported.
 
@@ -218,9 +229,9 @@ Startup warms an account-scoped, main-process snapshot of the 10,000 most-used u
 
 **Progress travels on its own channel.** `onThreadsChanged` triggers a full first-page reload in `use-mailbox-threads.ts`; firing it per backfill page would hammer the list. A new `MAIL_INDEX_PROGRESS_CHANNEL` carries `{ accountId, status, indexedThreads, estimatedThreads, oldestIndexedAt, error? }`, throttled to ~1/second, with a matching getter for initial state and a `useAccountIndexProgress` hook alongside the existing `useSyncingAccountIds`. `threads-changed` keeps firing only for head-of-mailbox changes, as today.
 
-**Indicators.** The account button already has an `isSyncing` spinner slot — a determinate ring goes there. The thread list gains a footer row ("Indexing your mail — 12,430 of ~48,000 · back to March 2019"), and settings gains a row with pause/resume and a size readout.
+**Indicators.** The account button and title bar show active progress. The thread list shows a passive footer such as "Indexing your mail — back to March 2019", and Settings provides the manual Reindex action plus running, paused, and failed lifecycle copy.
 
-**`hasNextPage` while indexing.** Reaching the end of the cache during a backfill should render "indexing…", not a hard stop. `hasNextPage` becomes true whenever a backfill is running for any selected account.
+**`hasNextPage` while indexing.** Reaching the end of the cache during a backfill renders the passive indexing footer rather than pretending another cached page exists. `hasNextPage` remains tied to the real cache cursor, so the status row cannot create an automatic paging loop.
 
 Separately, and independent of this work: with an empty query the inbox list paginates over the cache only, and `nextPageTokens` is populated exclusively by the search path, so today the list simply ends when the cache does. Backfill makes that end far deeper, but the on-demand Gmail fallback is still the correct belt-and-braces fix for a user who outruns the index.
 

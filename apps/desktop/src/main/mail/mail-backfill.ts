@@ -17,8 +17,14 @@ import { GmailStore } from "@repo/gmail/store";
 import { count, eq } from "drizzle-orm";
 import { Effect, Layer, Schema } from "effect";
 
-import { MAIL_INDEX_PROGRESS_CHANNEL } from "../../shared/ipc/channels";
-import { GmailIndexProgressList } from "../../shared/ipc/mail";
+import {
+  MAIL_INDEX_PROGRESS_CHANNEL,
+  MAIL_THREAD_LIST_UPDATED_CHANNEL,
+} from "../../shared/ipc/channels";
+import {
+  GmailIndexProgressList,
+  GmailThreadListUpdated,
+} from "../../shared/ipc/mail";
 import type {
   GmailIndexProgress,
   GmailIndexStatus,
@@ -28,11 +34,16 @@ import { onGoogleAccountConnected } from "../auth/account-events";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
+import { forgetCachedCorrespondents } from "./correspondent-cache";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
 import { GmailStoreLive } from "./gmail-store";
 import { mergeWatermark, oldestTimestamp } from "./mail-backfill-cursor";
-import { resetMailIndexRemote } from "./mail-index-reindex";
+import {
+  resetMailIndexRemote,
+  sweepUnseenMailRemote,
+  unmarkMailIndexRemote,
+} from "./mail-index-reindex";
 import {
   MAIL_INDEX_PAGE_SIZE,
   toMailIndexPageRequest,
@@ -159,6 +170,7 @@ const toProgress = (
 });
 
 const progressByAccount = new Map<string, GmailIndexProgress>();
+const cancellations = new Set<string>();
 let lastProgressSentAt = 0;
 let pendingProgressTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -176,6 +188,13 @@ const sendProgress = (): void => {
  * cannot be left running after the work stopped.
  */
 const publishProgress = (progress: GmailIndexProgress): void => {
+  // Disconnect clears the account immediately. An in-flight Gmail page may
+  // still finish while the supervisor joins it, but it must not resurrect a
+  // stale running indicator after the account has disappeared.
+  if (cancellations.has(progress.accountId)) {
+    return;
+  }
+
   progressByAccount.set(progress.accountId, progress);
 
   const isSettled = progress.status !== "running";
@@ -265,7 +284,6 @@ const estimateThreadTotal = Effect.fn("mailBackfill.estimateThreadTotal")(
   }
 );
 
-const cancellations = new Set<string>();
 const activeAccounts = new Set<string>();
 const pendingReindexes = new Set<string>();
 
@@ -363,8 +381,9 @@ const runPage = async (
  *
  * The cursor is two-level on purpose: `page.nextCursor` is exact and used for
  * as long as this run lasts, while `oldest_indexed_at` is written every page as
- * the durable restart point. Both advance inside the page's own transaction, so
- * an interrupted run can only ever replay a page, never skip one.
+ * the durable restart point. The cache page commits before that restart point
+ * advances, so an interruption between them can only replay a page, never skip
+ * one.
  */
 const settle = async (
   accountId: string,
@@ -380,6 +399,30 @@ const settle = async (
   );
 };
 
+const isFreshMailIndex = (
+  state: { readonly status: GmailBackfillStatus } | null | undefined
+): boolean => state === null || state === undefined || state.status === "idle";
+
+const completeMailIndex = async (
+  accountId: string,
+  oldestIndexedAt: number | null
+): Promise<void> => {
+  await Effect.runPromise(
+    withDatabase("Could not reconcile the mail index", (database) =>
+      sweepUnseenMailRemote(database, accountId)
+    )
+  );
+  forgetCachedCorrespondents(accountId);
+  sendRendererEvent(MAIL_THREAD_LIST_UPDATED_CHANNEL, GmailThreadListUpdated, {
+    changes: [{ accountId, kind: "reload" }],
+  });
+  await settle(accountId, "complete", {
+    completedAt: Date.now(),
+    oldestIndexedAt: oldestIndexedAt ?? undefined,
+    pageToken: null,
+  });
+};
+
 const runBackfill = async (accountId: string): Promise<void> => {
   const account = AccountId.make(accountId);
   const initial = await Effect.runPromise(
@@ -388,6 +431,16 @@ const runBackfill = async (accountId: string): Promise<void> => {
 
   if (initial?.status === "complete") {
     return;
+  }
+
+  // A missing/idle row begins a new generation. Persisted running and paused
+  // rows are resumes, so their marks must survive process and auth restarts.
+  if (isFreshMailIndex(initial)) {
+    await Effect.runPromise(
+      withDatabase("Could not start mail reconciliation", (database) =>
+        unmarkMailIndexRemote(database, accountId)
+      )
+    );
   }
 
   await settle(accountId, "running", {
@@ -437,16 +490,19 @@ const runBackfill = async (accountId: string): Promise<void> => {
 
     const isDone = cursor === undefined;
 
-    // oxlint-disable-next-line eslint/no-await-in-loop
-    await settle(accountId, isDone ? "complete" : "running", {
-      completedAt: isDone ? Date.now() : undefined,
-      oldestIndexedAt: oldestIndexedAt ?? undefined,
-      pageToken: cursor ?? null,
-    });
-
     if (isDone) {
+      // Sweep only after Gmail returned the final page. Any failed, paused, or
+      // cancelled walk leaves the preserved cache intact for a safe resume.
+      // oxlint-disable-next-line eslint/no-await-in-loop
+      await completeMailIndex(accountId, oldestIndexedAt);
       return;
     }
+
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    await settle(accountId, "running", {
+      oldestIndexedAt: oldestIndexedAt ?? undefined,
+      pageToken: cursor,
+    });
   }
 };
 
@@ -464,7 +520,14 @@ const runAccountBackfill = async (accountId: string): Promise<void> => {
       try {
         await runBackfill(accountId);
       } catch {
-        // Expected failures are persisted by `runBackfill`.
+        // Typed Gmail failures are persisted by `runBackfill`. A defect at an
+        // unexpected boundary must still stop the spinner and leave an
+        // explicit retry path instead of silently stranding `running` state.
+        if (!isCancelled(accountId)) {
+          await settle(accountId, "failed", {
+            lastError: "Mail indexing stopped unexpectedly",
+          });
+        }
       } finally {
         signal.removeEventListener("abort", cancel);
       }

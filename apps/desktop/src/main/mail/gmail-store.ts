@@ -27,7 +27,7 @@ import {
   isGmailScope,
 } from "@repo/gmail/models";
 import { GmailStore } from "@repo/gmail/store";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { Effect, Layer, Option, Redacted } from "effect";
 
 import { getGoogleAccessToken } from "../auth/auth";
@@ -872,8 +872,9 @@ export const GmailStoreLive = Layer.succeed(
         );
 
         // One transaction for the whole page: a crash mid-page must not leave a
-        // thread row claiming messages that were never written, and it is what
-        // makes the indexer's per-page checkpoint atomic.
+        // thread row claiming messages that were never written. The indexer
+        // advances its checkpoint only after this transaction succeeds, so a
+        // crash between the two safely replays the page.
         await database.transaction(async (transaction) => {
           for (const thread of threads) {
             const isInSpam = thread.labelIds.includes(SPAM_LABEL_ID);
@@ -896,6 +897,7 @@ export const GmailStoreLive = Layer.succeed(
               isInSent: thread.labelIds.includes(SENT_LABEL_ID),
               isInSpam,
               isInTrash: thread.labelIds.includes(TRASH_LABEL_ID),
+              isIndexSeen: true,
               isUnread: thread.hasUnread,
               labels: thread.labelIds.map(
                 (labelId) => namesById.get(labelId) ?? labelId
@@ -932,6 +934,29 @@ export const GmailStoreLive = Layer.succeed(
           }
 
           for (const detail of details) {
+            const currentMessageIds = detail.messages.map(({ id }) => id);
+            const threadMessages = and(
+              eq(gmailMessages.accountEmail, accountId),
+              eq(gmailMessages.threadId, detail.id)
+            );
+
+            // A full Gmail thread is authoritative for message membership.
+            // Do not do this for an unparsed detail: a malformed MIME payload
+            // must not erase previously usable cached bodies.
+            // Page writes must remain ordered within this transaction.
+            // oxlint-disable-next-line eslint/no-await-in-loop
+            await transaction
+              .delete(gmailMessages)
+              .where(
+                currentMessageIds.length === 0
+                  ? threadMessages
+                  : and(
+                      threadMessages,
+                      notInArray(gmailMessages.messageId, currentMessageIds)
+                    )
+              )
+              .run();
+
             for (const message of detail.messages) {
               const values = toMessageValues(accountId, message, now);
 

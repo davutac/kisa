@@ -13,8 +13,8 @@ export type GmailBackfillStatus =
  * The cursor is deliberately two-level. `page_token` is the fast path within a
  * single run, but it does not survive a restart or an invalidated token, so
  * `oldest_indexed_at` is kept as the durable watermark a `before:` query can
- * restart from. Both advance in the same transaction as the page's rows, so a
- * crash can only replay a page, never skip one.
+ * restart from. Page rows commit before the watermark advances, so a crash can
+ * only replay a page, never skip one.
  */
 export const gmailBackfillState = sqliteTable("gmail_backfill_state", {
   accountEmail: text("account_email").primaryKey(),
