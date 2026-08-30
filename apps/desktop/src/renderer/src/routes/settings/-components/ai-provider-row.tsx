@@ -51,6 +51,17 @@ const getModelOptions = (
     : [{ label: currentModel, model: currentModel }];
 };
 
+const getModelGenerationOptions = (
+  status: AiProviderStatus | undefined,
+  currentModel: string | null
+) => {
+  const selectedModel = status?.models.find(({ id }) => id === currentModel);
+  return {
+    optionLabel: selectedModel?.optionLabel ?? "Reasoning",
+    reasoningOptions: selectedModel?.reasoningOptions ?? [],
+  };
+};
+
 const AiProviderStatusText = ({
   id,
   presentation,
@@ -104,9 +115,10 @@ const AiProviderRow = ({
   const modelOptions = getModelOptions(status, currentModel);
   const hasSelectableModel =
     status?.installed === true && status.models.length > 0;
-  const reasoningOptions =
-    status?.models.find(({ id }) => id === currentModel)?.reasoningOptions ??
-    [];
+  const { optionLabel, reasoningOptions } = getModelGenerationOptions(
+    status,
+    currentModel
+  );
   const canActivateProvider = modelOptions.some(
     (option) => option.model === currentModel
   );
@@ -166,6 +178,7 @@ const AiProviderRow = ({
           <AiReasoningSelect
             currentReasoning={currentReasoning}
             onSelectReasoning={onSelectReasoning}
+            optionLabel={optionLabel}
             provider={provider}
             reasoningOptions={reasoningOptions}
           />

@@ -38,6 +38,20 @@ const claudeReasoningOptions = (
 
 const CLAUDE_EFFORTS = ["low", "medium", "high", "max"] as const;
 const CLAUDE_XHIGH_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+const CLAUDE_THINKING_OPTIONS: readonly AiReasoningOption[] = [
+  { id: "disabled", isDefault: true, label: "Off" },
+  { id: "enabled", label: "On" },
+];
+
+const CLAUDE_MODEL_VERSION_GATES = [
+  { id: "claude-fable-5", minimumVersion: "2.1.169" },
+  { id: "claude-opus-4-7", minimumVersion: "2.1.111" },
+  { id: "claude-opus-4-8", minimumVersion: "2.1.154" },
+  { id: "claude-opus-5", minimumVersion: "2.1.219" },
+] as const;
+
+const getClaudeModelVersionGate = (model: string) =>
+  CLAUDE_MODEL_VERSION_GATES.find(({ id }) => id === model);
 
 const claudeModel = (
   id: string,
@@ -60,8 +74,52 @@ export const CLAUDE_MODELS: readonly AiModel[] = [
   claudeModel("claude-opus-4-6", "Opus 4.6", CLAUDE_EFFORTS, "high"),
   claudeModel("claude-opus-4-5", "Opus 4.5", CLAUDE_EFFORTS, "high"),
   claudeModel("claude-sonnet-4-6", "Sonnet 4.6", CLAUDE_EFFORTS, "high"),
-  claudeModel("claude-haiku-4-5", "Haiku 4.5", []),
+  {
+    ...claudeModel("claude-haiku-4-5", "Haiku 4.5", []),
+    optionLabel: "Thinking",
+    reasoningOptions: CLAUDE_THINKING_OPTIONS,
+  },
 ];
+
+const compareVersions = (left: string, right: string): number => {
+  const leftParts = left.split(".").map(Number);
+  const rightParts = right.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+  return 0;
+};
+
+export const getClaudeModelsForVersion = (
+  version?: string
+): readonly AiModel[] =>
+  CLAUDE_MODELS.filter((model) => {
+    const gate = getClaudeModelVersionGate(model.id);
+    return (
+      gate === undefined ||
+      (version !== undefined &&
+        compareVersions(version, gate.minimumVersion) >= 0)
+    );
+  });
+
+const getClaudeUpgradeMessage = (version: string | undefined) => {
+  let message: string | undefined;
+  for (const model of CLAUDE_MODELS) {
+    const gate = getClaudeModelVersionGate(model.id);
+    if (
+      gate !== undefined &&
+      (version === undefined ||
+        compareVersions(version, gate.minimumVersion) < 0)
+    ) {
+      message = `Upgrade Claude Code to v${gate.minimumVersion} or newer to access ${model.name}.`;
+      break;
+    }
+  }
+  return message;
+};
 
 const waitForAbortSignal = (signal: AbortSignal): Promise<void> => {
   if (signal.aborted) {
@@ -199,7 +257,8 @@ export const getClaudeStatus = Effect.fn("getClaudeStatus")(
       authLabel: account === undefined ? undefined : claudeAuthLabel(account),
       authentication,
       installed: true,
-      models: CLAUDE_MODELS,
+      message: getClaudeUpgradeMessage(cliVersion),
+      models: getClaudeModelsForVersion(cliVersion),
       provider: "claude",
       version: cliVersion,
     } satisfies AiProviderStatus;
@@ -232,10 +291,21 @@ const normalizeClaudeReasoning = (
 export const getClaudeReasoningArgs = (
   reasoning?: string,
   model?: string
-): readonly string[] =>
-  reasoning === undefined
-    ? []
-    : ["--effort", normalizeClaudeReasoning(reasoning, model)];
+): readonly string[] => {
+  if (reasoning === undefined) {
+    return [];
+  }
+  if (model === "claude-haiku-4-5") {
+    if (reasoning === "enabled" || reasoning === "disabled") {
+      return [
+        "--settings",
+        JSON.stringify({ alwaysThinkingEnabled: reasoning === "enabled" }),
+      ];
+    }
+    return [];
+  }
+  return ["--effort", normalizeClaudeReasoning(reasoning, model)];
+};
 
 export const generateWithClaude = Effect.fn("generateWithClaude")(
   function* generateWithClaude<S extends Schema.Top>(

@@ -64,4 +64,39 @@ describe("AI provider settings row", () => {
     expect(markup).toContain("Codex model, GPT-5.6 Luna");
     expect(markup).not.toContain("Codex reasoning");
   });
+
+  it("uses the model-owned label and choice names for non-effort options", () => {
+    const markup = renderToString(
+      <RadioGroup value="claude">
+        <AiProviderRow
+          activeProvider="claude"
+          currentModel="claude-haiku-4-5"
+          currentReasoning="enabled"
+          isLoading={false}
+          onSelectModel={() => null}
+          onSelectReasoning={() => null}
+          provider="claude"
+          status={{
+            authentication: "authenticated",
+            installed: true,
+            models: [
+              {
+                id: "claude-haiku-4-5",
+                isDefault: false,
+                name: "Haiku 4.5",
+                optionLabel: "Thinking",
+                reasoningOptions: [
+                  { id: "disabled", isDefault: true, label: "Off" },
+                  { id: "enabled", label: "On" },
+                ],
+              },
+            ],
+            provider: "claude",
+          }}
+        />
+      </RadioGroup>
+    );
+
+    expect(markup).toContain("Claude thinking, On");
+  });
 });

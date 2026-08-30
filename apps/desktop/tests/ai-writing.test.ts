@@ -9,9 +9,13 @@ import {
 } from "../src/main/ai/prompts";
 import {
   CLAUDE_MODELS,
+  getClaudeModelsForVersion,
   getClaudeReasoningArgs,
 } from "../src/main/ai/providers/claude";
-import { getCodexReasoningArgs } from "../src/main/ai/providers/codex";
+import {
+  getCodexReasoningArgs,
+  mapCodexReasoningOptions,
+} from "../src/main/ai/providers/codex";
 import {
   getOpenCodeReasoningInput,
   inferOpenCodeDefaultVariant,
@@ -179,10 +183,41 @@ describe("AI provider output parsing", () => {
     });
   });
 
+  it("maps Claude Haiku thinking to the native settings shape", () => {
+    expect(getClaudeReasoningArgs("enabled", "claude-haiku-4-5")).toStrictEqual(
+      ["--settings", JSON.stringify({ alwaysThinkingEnabled: true })]
+    );
+    expect(
+      getClaudeReasoningArgs("disabled", "claude-haiku-4-5")
+    ).toStrictEqual([
+      "--settings",
+      JSON.stringify({ alwaysThinkingEnabled: false }),
+    ]);
+  });
+
   it("omits reasoning when no explicit value is available", () => {
     expect(getCodexReasoningArgs()).toStrictEqual([]);
     expect(getClaudeReasoningArgs()).toStrictEqual([]);
     expect(getOpenCodeReasoningInput()).toStrictEqual({});
+  });
+
+  it("preserves current and future Codex reasoning ids from app-server", () => {
+    expect(
+      mapCodexReasoningOptions(
+        [
+          { description: "Maximum reasoning", reasoningEffort: "ultra" },
+          { description: "Future effort", reasoningEffort: "future" },
+        ],
+        "ultra"
+      )
+    ).toStrictEqual([
+      {
+        description: "Maximum reasoning",
+        id: "ultra",
+        isDefault: true,
+      },
+      { description: "Future effort", id: "future" },
+    ]);
   });
 
   it("uses Claude's explicit model and effort catalog", () => {
@@ -209,6 +244,36 @@ describe("AI provider output parsing", () => {
     expect(
       CLAUDE_MODELS.find(({ id }) => id === "claude-opus-4-7")?.reasoningOptions
     ).toContainEqual({ id: "xhigh", isDefault: true });
+    expect(
+      CLAUDE_MODELS.find(({ id }) => id === "claude-haiku-4-5")
+    ).toMatchObject({
+      optionLabel: "Thinking",
+      reasoningOptions: [
+        { id: "disabled", isDefault: true, label: "Off" },
+        { id: "enabled", label: "On" },
+      ],
+    });
+  });
+
+  it("only reports Claude models supported by the installed CLI", () => {
+    expect(
+      getClaudeModelsForVersion("2.1.110").map(({ id }) => id)
+    ).not.toContain("claude-opus-4-7");
+    expect(getClaudeModelsForVersion("2.1.169").map(({ id }) => id)).toContain(
+      "claude-fable-5"
+    );
+    expect(
+      getClaudeModelsForVersion("2.1.169").map(({ id }) => id)
+    ).not.toContain("claude-opus-5");
+    expect(getClaudeModelsForVersion("2.1.219")).toHaveLength(
+      CLAUDE_MODELS.length
+    );
+    expect(getClaudeModelsForVersion()).toStrictEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "claude-sonnet-5" }),
+        expect.objectContaining({ id: "claude-haiku-4-5" }),
+      ])
+    );
   });
 
   it("uses a provider-compatible schema for cleanup generation", () => {
@@ -235,12 +300,14 @@ describe("AI provider output parsing", () => {
         id: "anthropic/claude-sonnet-5",
         isDefault: false,
         name: "Claude Sonnet 5",
+        optionLabel: "Variant",
         reasoningOptions: [],
       },
       {
         id: "openai/gpt-5.6-luna",
         isDefault: false,
         name: "GPT-5.6 Luna",
+        optionLabel: "Variant",
         reasoningOptions: [],
       },
     ]);
@@ -260,6 +327,7 @@ describe("AI provider output parsing", () => {
         id: "anthropic/claude-sonnet-5",
         isDefault: false,
         name: "Claude Sonnet 5",
+        optionLabel: "Variant",
         reasoningOptions: [],
       },
     ]);
@@ -283,6 +351,7 @@ describe("AI provider output parsing", () => {
         id: "openai/gpt-5.6-luna",
         isDefault: false,
         name: "GPT-5.6 Luna",
+        optionLabel: "Variant",
         reasoningOptions: [{ id: "high", isDefault: true }, { id: "low" }],
       },
     ]);
