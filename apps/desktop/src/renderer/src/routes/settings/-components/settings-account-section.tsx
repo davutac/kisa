@@ -15,6 +15,7 @@ import SettingsAccountCategorizationRow from "./settings-account-categorization-
 import SettingsAccountDisconnectRow from "./settings-account-disconnect-row";
 import SettingsAccountLabelsRow from "./settings-account-labels-row";
 import SettingsAccountNotificationsRow from "./settings-account-notifications-row";
+import SettingsAccountReindexRow from "./settings-account-reindex-row";
 import SettingsAccountSignatureRow from "./settings-account-signature-row";
 import SettingsAccountSystemLabelsRow from "./settings-account-system-labels-row";
 
@@ -79,6 +80,12 @@ const SettingsAccountSection = ({
         )}
         {mailApi === undefined ? null : (
           <SettingsAccountLabelsRow
+            accountId={account.email}
+            mailApi={mailApi}
+          />
+        )}
+        {mailApi === undefined ? null : (
+          <SettingsAccountReindexRow
             accountId={account.email}
             mailApi={mailApi}
           />

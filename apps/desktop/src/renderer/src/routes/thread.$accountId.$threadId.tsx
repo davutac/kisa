@@ -14,7 +14,7 @@ function closeWindow(): void {
 
 function ThreadWindowRoute() {
   const { accountId, threadId } = Route.useParams();
-  const { deleteSpam, notSpam, setLabel, toggleRead, trash } =
+  const { deleteForever, notSpam, setLabel, toggleRead, trash } =
     useThreadActions();
 
   useHotkeyLayer("thread", true);
@@ -25,7 +25,7 @@ function ThreadWindowRoute() {
         accountId={accountId}
         closeLabel="Close window"
         onClose={closeWindow}
-        onDeleteSpam={deleteSpam}
+        onDeleteForever={deleteForever}
         onNotSpam={notSpam}
         onSetLabel={setLabel}
         onToggleRead={toggleRead}

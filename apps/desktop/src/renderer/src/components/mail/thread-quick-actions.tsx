@@ -29,7 +29,7 @@ interface MailThreadQuickActionsProps {
   hotkeysEnabled: boolean;
   isRevealed: boolean;
   isUnread: boolean;
-  onDeleteSpam?: () => void;
+  onDeleteForever?: () => void;
   onNotSpam?: () => void;
   onToggleRead?: () => void;
   onTrash?: () => void;
@@ -39,7 +39,7 @@ const MailThreadQuickActions = ({
   hotkeysEnabled,
   isRevealed,
   isUnread,
-  onDeleteSpam,
+  onDeleteForever,
   onNotSpam,
   onToggleRead,
   onTrash,
@@ -50,8 +50,8 @@ const MailThreadQuickActions = ({
   const trashKeys = getHotkeyDisplay("mailbox.trashThread");
   const trashShortcutLabel = trashKeys.bindings.join(" / ");
   const destructiveLabel =
-    onDeleteSpam === undefined ? trashKeys.label : "Delete forever";
-  const destructiveAction = onDeleteSpam ?? onTrash;
+    onDeleteForever === undefined ? trashKeys.label : "Delete forever";
+  const destructiveAction = onDeleteForever ?? onTrash;
   const hasSecondaryAction = [onNotSpam, destructiveAction].some(
     (action) => action !== undefined
   );

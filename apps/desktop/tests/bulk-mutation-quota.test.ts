@@ -38,7 +38,7 @@ describe(planBulkThreadMutation, () => {
 
   it("never plans message-level permanent deletion", () => {
     expect(
-      planBulkThreadMutation("deleteSpam", [1, 1, 1, 1, 1, 1])
+      planBulkThreadMutation("deleteForever", [1, 1, 1, 1, 1, 1])
     ).toStrictEqual({
       batches: [],
       fallback: [0, 1, 2, 3, 4, 5],

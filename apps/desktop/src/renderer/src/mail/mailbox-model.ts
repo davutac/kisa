@@ -6,7 +6,12 @@ import type {
   GmailThreadSummary,
 } from "@/shared/ipc/mail";
 
-import { hasInboxLabel, hasSpamLabel } from "./label";
+import {
+  hasInboxLabel,
+  hasSentLabel,
+  hasSpamLabel,
+  hasTrashLabel,
+} from "./label";
 import {
   normalizeMailboxLabelSelection,
   threadMatchesMailboxLabels,
@@ -51,6 +56,28 @@ export const mergeAndSortThreads = (
   });
 };
 
+const threadMatchesMailbox = (
+  labels: readonly string[],
+  mailbox: GmailMailbox
+): boolean => {
+  if (mailbox === "spam") {
+    return hasSpamLabel(labels);
+  }
+  if (mailbox === "trash") {
+    return hasTrashLabel(labels);
+  }
+  if (mailbox === "sent") {
+    return (
+      hasSentLabel(labels) && !hasSpamLabel(labels) && !hasTrashLabel(labels)
+    );
+  }
+  return (
+    (hasInboxLabel(labels) || hasSentLabel(labels)) &&
+    !hasSpamLabel(labels) &&
+    !hasTrashLabel(labels)
+  );
+};
+
 export const filterThreadsByScope = (
   threads: readonly GmailThreadSummary[],
   accountIds: readonly string[],
@@ -61,7 +88,7 @@ export const filterThreadsByScope = (
   threads.filter(
     ({ accountId, isUnread, labels }) =>
       accountIds.includes(accountId) &&
-      (mailbox === "spam" ? hasSpamLabel(labels) : hasInboxLabel(labels)) &&
+      threadMatchesMailbox(labels, mailbox) &&
       (!unreadOnly || isUnread) &&
       threadMatchesMailboxLabels(labels, labelNames)
   );

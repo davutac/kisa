@@ -112,7 +112,9 @@ const createLegacyDatabase = () => {
     ) VALUES
       ('user@example.com', 'a@example.com', 0, '["INBOX","IMPORTANT"]', 20, 1, 's', 'Inbox thread', 't-inbox', 1),
       ('user@example.com', 'b@example.com', 0, '["ARCHIVE"]', 10, 1, 's', 'Archived thread', 't-archived', 1),
-      ('user@example.com', 'c@example.com', 1, '["SPAM","UNREAD"]', 30, 1, 's', 'Spam thread', 't-spam', 1);
+      ('user@example.com', 'd@example.com', 0, '["SENT"]', 40, 1, 's', 'Sent thread', 't-sent', 1),
+      ('user@example.com', 'c@example.com', 1, '["SPAM","UNREAD"]', 30, 1, 's', 'Spam thread', 't-spam', 1),
+      ('user@example.com', 'e@example.com', 0, '["SENT","TRASH"]', 50, 1, 's', 'Trash thread', 't-trash', 1);
     CREATE TABLE gmail_sender_brands (
       authority_url text,
       domain text PRIMARY KEY NOT NULL,
@@ -176,7 +178,7 @@ describe("database migrations", () => {
     }
   });
 
-  it("derives is_in_inbox for threads cached before the column existed", () => {
+  it("derives mailbox projections for previously cached threads", () => {
     const connection = createLegacyDatabase();
 
     try {
@@ -188,13 +190,42 @@ describe("database migrations", () => {
       expect(
         connection
           .prepare(
-            "SELECT thread_id, is_in_inbox FROM gmail_threads ORDER BY thread_id"
+            `SELECT thread_id, is_in_inbox, is_in_sent, is_in_trash
+             FROM gmail_threads
+             ORDER BY thread_id`
           )
           .all()
       ).toStrictEqual([
-        { is_in_inbox: 0, thread_id: "t-archived" },
-        { is_in_inbox: 1, thread_id: "t-inbox" },
-        { is_in_inbox: 0, thread_id: "t-spam" },
+        {
+          is_in_inbox: 0,
+          is_in_sent: 0,
+          is_in_trash: 0,
+          thread_id: "t-archived",
+        },
+        {
+          is_in_inbox: 1,
+          is_in_sent: 0,
+          is_in_trash: 0,
+          thread_id: "t-inbox",
+        },
+        {
+          is_in_inbox: 0,
+          is_in_sent: 1,
+          is_in_trash: 0,
+          thread_id: "t-sent",
+        },
+        {
+          is_in_inbox: 0,
+          is_in_sent: 0,
+          is_in_trash: 0,
+          thread_id: "t-spam",
+        },
+        {
+          is_in_inbox: 0,
+          is_in_sent: 1,
+          is_in_trash: 1,
+          thread_id: "t-trash",
+        },
       ]);
     } finally {
       connection.close();

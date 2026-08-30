@@ -210,6 +210,18 @@ const toThreadConditions = (
         return [sql`t.is_in_spam = 1`];
       }
 
+      if (value === "trash") {
+        return [sql`t.is_in_trash = 1`];
+      }
+
+      if (value === "sent") {
+        return [
+          sql`t.is_in_sent = 1`,
+          sql`t.is_in_spam = 0`,
+          sql`t.is_in_trash = 0`,
+        ];
+      }
+
       return [
         sql`EXISTS (
           SELECT 1

@@ -85,7 +85,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     deleteGmailLabel: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
-    deleteSpamThread: () =>
+    deleteThreadForever: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     discardMailDraft: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
@@ -165,6 +165,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     prepareOutgoingAttachments: () =>
       Promise.resolve({ data: [], ok: true as const }),
+    reindexMail: () => Promise.resolve({ data: undefined, ok: true as const }),
     reorderGoogleAccounts: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     saveAttachment: () =>
@@ -270,7 +271,7 @@ describe(getRuntimeCapabilities, () => {
         bulkMutateThreads: desktopBridge.bulkMutateThreads,
         createLabel: desktopBridge.createGmailLabel,
         deleteLabel: desktopBridge.deleteGmailLabel,
-        deleteSpamThread: desktopBridge.deleteSpamThread,
+        deleteThreadForever: desktopBridge.deleteThreadForever,
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
         getSpamStatus: desktopBridge.getSpamStatus,
@@ -293,6 +294,7 @@ describe(getRuntimeCapabilities, () => {
           desktopBridge.onTrustedImageSendersChanged,
         openAttachmentPreview: desktopBridge.openAttachmentPreview,
         prepareOutgoingAttachments: desktopBridge.prepareOutgoingAttachments,
+        reindex: desktopBridge.reindexMail,
         saveAttachment: desktopBridge.saveAttachment,
         saveDraft: desktopBridge.saveMailDraft,
         search: desktopBridge.searchMail,

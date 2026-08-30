@@ -1,13 +1,19 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { InboxIcon, SearchIcon, ShieldAlertIcon } from "lucide-react";
+import {
+  InboxIcon,
+  SearchIcon,
+  SendIcon,
+  ShieldAlertIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
 import {
-  getBulkDeleteSpamConfirmation,
-  getDeleteSpamConfirmation,
-} from "@/components/mail/delete-spam-confirmation";
+  getBulkDeleteForeverConfirmation,
+  getDeleteForeverConfirmation,
+} from "@/components/mail/delete-forever-confirmation";
 import MailThreadItem from "@/components/mail/thread-item";
 import ThreadSelectionBar from "@/components/mail/thread-selection-bar";
 import {
@@ -19,6 +25,10 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
+import {
+  getBulkThreadDestructiveAction,
+  getThreadDestructiveAction,
+} from "@/mail/thread-destructive-action";
 import type { ThreadSelectionDirection } from "@/mail/thread-selection";
 import {
   getNextThreadSelectionIndex,
@@ -56,6 +66,22 @@ export interface MailThreadListProps {
 
 const RAPID_SELECTION_INTERVAL_MS = 150;
 
+const getRowDestructiveActions = (
+  thread: GmailThreadSummary,
+  onDeleteForever: (thread: GmailThreadSummary) => void,
+  onTrash: ThreadActions["trash"]
+) =>
+  getThreadDestructiveAction(thread.labels) === "deleteForever"
+    ? { onDeleteForever, onTrash: undefined }
+    : { onDeleteForever: undefined, onTrash };
+
+const hasDestructiveTarget = (
+  checkedCount: number,
+  bulkAction: ReturnType<typeof getBulkThreadDestructiveAction>,
+  selectedThread: GmailThreadSummary | undefined
+): boolean =>
+  checkedCount === 0 ? selectedThread !== undefined : bulkAction !== undefined;
+
 interface ThreadListPresentation {
   readonly emptyIcon: React.ReactNode;
   readonly label: string;
@@ -70,6 +96,12 @@ const getThreadListPresentation = (
   }
   if (mailbox === "spam") {
     return { emptyIcon: <ShieldAlertIcon />, label: "Spam" };
+  }
+  if (mailbox === "sent") {
+    return { emptyIcon: <SendIcon />, label: "Sent" };
+  }
+  if (mailbox === "trash") {
+    return { emptyIcon: <Trash2Icon />, label: "Trash" };
   }
   return { emptyIcon: <InboxIcon />, label: "Inbox" };
 };
@@ -147,34 +179,38 @@ const MailThreadList = ({
       ),
     [checkedThreadIds, threads]
   );
+  const bulkDestructiveAction = getBulkThreadDestructiveAction(checkedThreads);
   const handleToggleRead = actions.toggleRead;
-  const handleTrash = mailbox === "spam" ? undefined : actions.trash;
-  const requestDeleteSpam = useCallback(
+  const requestDeleteForever = useCallback(
     async (thread: GmailThreadSummary): Promise<void> => {
       const confirmed = await confirm(
-        getDeleteSpamConfirmation(thread.subject)
+        getDeleteForeverConfirmation(thread.subject)
       );
 
       if (confirmed) {
-        actions.deleteSpam(thread);
+        actions.deleteForever(thread);
       }
     },
     [actions, confirm]
   );
-  const requestBulkTrash = useCallback(async (): Promise<void> => {
-    if (mailbox === "spam") {
-      const confirmed = await confirm(
-        getBulkDeleteSpamConfirmation(checkedThreads.length)
-      );
+  const handleDeleteForever = useCallback(
+    (thread: GmailThreadSummary): void => {
+      void requestDeleteForever(thread);
+    },
+    [requestDeleteForever]
+  );
+  const requestBulkDeleteForever = useCallback(async (): Promise<void> => {
+    const confirmed = await confirm(
+      getBulkDeleteForeverConfirmation(checkedThreads.length)
+    );
 
-      if (confirmed) {
-        await actions.bulkDeleteSpam(checkedThreads);
-      }
-      return;
+    if (confirmed) {
+      await actions.bulkDeleteForever(checkedThreads);
     }
-
+  }, [actions, checkedThreads, confirm]);
+  const requestBulkTrash = useCallback(async (): Promise<void> => {
     await actions.bulkTrash(checkedThreads);
-  }, [actions, checkedThreads, confirm, mailbox]);
+  }, [actions, checkedThreads]);
   const getVisibleSelectionIndex = (
     direction: ThreadSelectionDirection
   ): number | null => {
@@ -302,25 +338,33 @@ const MailThreadList = ({
         actions.toggleRead(selectedThread);
       }
     },
-    {
-      enabled: selectedThread !== undefined || checkedThreads.length > 0,
-    }
+    { enabled: selectedThread !== undefined || checkedThreads.length > 0 }
   );
   useAppCommand(
     "mailbox.trashThread",
     () => {
       if (checkedThreads.length > 0) {
-        void requestBulkTrash();
+        if (bulkDestructiveAction === "deleteForever") {
+          void requestBulkDeleteForever();
+        } else if (bulkDestructiveAction === "trash") {
+          void requestBulkTrash();
+        }
       } else if (selectedThread !== undefined) {
-        if (mailbox === "spam") {
-          void requestDeleteSpam(selectedThread);
+        if (
+          getThreadDestructiveAction(selectedThread.labels) === "deleteForever"
+        ) {
+          void requestDeleteForever(selectedThread);
         } else {
           actions.trash(selectedThread);
         }
       }
     },
     {
-      enabled: selectedThread !== undefined || checkedThreads.length > 0,
+      enabled: hasDestructiveTarget(
+        checkedThreads.length,
+        bulkDestructiveAction,
+        selectedThread
+      ),
     }
   );
 
@@ -421,13 +465,11 @@ const MailThreadList = ({
                     getThreadSelectionKey(thread) === selectedThreadKey
                   }
                   key={virtualRow.key}
-                  onDeleteSpam={
-                    mailbox === "spam"
-                      ? (target) => {
-                          void requestDeleteSpam(target);
-                        }
-                      : undefined
-                  }
+                  {...getRowDestructiveActions(
+                    thread,
+                    handleDeleteForever,
+                    actions.trash
+                  )}
                   onOpen={(target, event) => {
                     if (dragSelection.consumeSuppressedOpen(event.detail)) {
                       return;
@@ -466,7 +508,6 @@ const MailThreadList = ({
                     checkThread(key, !checkedThreadIds.has(key));
                     selectThread(key);
                   }}
-                  onTrash={handleTrash}
                   position={virtualRow.index + 1}
                   ref={rowVirtualizer.measureElement}
                   setSize={threads.length}
@@ -484,9 +525,15 @@ const MailThreadList = ({
           <ThreadSelectionBar
             actions={actions}
             key="thread-selection-bar"
-            mailbox={mailbox}
             onClear={clearCheckedThreads}
-            onTrash={requestBulkTrash}
+            onDeleteForever={
+              bulkDestructiveAction === "deleteForever"
+                ? requestBulkDeleteForever
+                : undefined
+            }
+            onTrash={
+              bulkDestructiveAction === "trash" ? requestBulkTrash : undefined
+            }
             threads={checkedThreads}
           />
         )}

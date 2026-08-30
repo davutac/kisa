@@ -5,12 +5,34 @@ import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import type {
   GmailCachedThreadPage,
   GmailCachedThreadPageRequest,
+  GmailMailbox,
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
 
 export const THREAD_PAGE_SIZE = 50;
 
 export type CachedThreadRow = typeof gmailThreads.$inferSelect;
+
+const getMailboxCondition = (mailbox: GmailMailbox) => {
+  if (mailbox === "spam") {
+    return eq(gmailThreads.isInSpam, true);
+  }
+  if (mailbox === "trash") {
+    return eq(gmailThreads.isInTrash, true);
+  }
+  if (mailbox === "sent") {
+    return and(
+      eq(gmailThreads.isInSent, true),
+      eq(gmailThreads.isInSpam, false),
+      eq(gmailThreads.isInTrash, false)
+    );
+  }
+  return and(
+    or(eq(gmailThreads.isInInbox, true), eq(gmailThreads.isInSent, true)),
+    eq(gmailThreads.isInSpam, false),
+    eq(gmailThreads.isInTrash, false)
+  );
+};
 
 export const toCachedThreadSummary = (
   row: CachedThreadRow
@@ -56,9 +78,7 @@ export const listCachedThreadPageFromDatabase = async (
         inArray(gmailThreads.accountEmail, [...request.accountIds]),
         // These predicates stay in SQL so sparse labels cannot produce short
         // pages while the cursor walks unrelated cached threads.
-        mailbox === "spam"
-          ? eq(gmailThreads.isInSpam, true)
-          : eq(gmailThreads.isInInbox, true),
+        getMailboxCondition(mailbox),
         request.unreadOnly === true
           ? eq(gmailThreads.isUnread, true)
           : undefined,

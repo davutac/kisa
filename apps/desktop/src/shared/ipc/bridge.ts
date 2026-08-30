@@ -58,6 +58,8 @@ import type {
   GmailOutgoingAttachmentPrepareReply,
   GmailOutgoingAttachmentPrepareRequest,
   GmailOutgoingAttachmentSelectionReply,
+  GmailReindexReply,
+  GmailReindexRequest,
   GmailSearchRequest,
   GmailSearchResultsReply,
   GmailSenderSuggestionRequest,
@@ -130,7 +132,7 @@ export interface DesktopBridge {
   deleteComposerTemplate: (
     request: ComposerTemplateDeleteRequest
   ) => Promise<ComposerTemplateDeleteReply>;
-  deleteSpamThread: (
+  deleteThreadForever: (
     request: GmailThreadRequest
   ) => Promise<GmailThreadMutationReply>;
   deleteGmailLabel: (
@@ -232,6 +234,7 @@ export interface DesktopBridge {
   prepareOutgoingAttachments: (
     request: GmailOutgoingAttachmentPrepareRequest
   ) => Promise<GmailOutgoingAttachmentPrepareReply>;
+  reindexMail: (request: GmailReindexRequest) => Promise<GmailReindexReply>;
   reorderGoogleAccounts: (
     request: GoogleAccountReorderRequest
   ) => Promise<GoogleAccountReorderReply>;

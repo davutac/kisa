@@ -53,7 +53,7 @@ Account commands are static and cover the supported maximum of nine accounts. Th
 
 In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, and keeps the dialog open. On a blank form, it opens the stash picker when saved stashes are available. The command can be pressed again without releasing `Mod`, while operating-system key repeat from holding `S` is ignored. The same command definition drives the Stash button hint and ARIA metadata.
 
-`U` toggles the unread-only mailbox filter. `S` toggles the Spam mailbox.
+`U` toggles the unread-only mailbox filter. `Shift+S` toggles Sent, `S` toggles Spam, and `T` toggles Trash. Pressing an active mailbox toggle returns to the combined Inbox and Sent list.
 
 `Mod+Z` runs the latest application Undo while its eight-second toast is available. The command ignores text inputs and rich-text editors, where native editing history continues to own the same shortcut.
 
@@ -63,7 +63,7 @@ While the inline mail search field owns focus, `Tab` or `Shift+Tab` dismisses it
 
 The mailbox label bar is a horizontal multi-toggle group. Mailbox-scoped `ArrowLeft` and `ArrowRight` commands move between label toggles, including when no label owns DOM focus yet. A fresh move starts from the first or last visible label, matching mailbox thread navigation; subsequent moves stop at the list edges and keep the focused toggle centered when possible. The commands ignore text inputs, while native `Space` toggles a focused label. `Escape` clears that label focus together with ordinary mailbox selection without changing the active label filters. `Mod+Shift+L` clears every active label filter, matching the X button and its shortcut tooltip. The same binding remains registered in the search scope while the inline search field owns focus.
 
-When conversations are checked, Apple Mail-style `Mod+Shift+U` applies to the full selection: it marks the selection unread only when every selected conversation is currently read; otherwise it marks the selection read. `Mod+D` moves the selection to trash, or opens the permanent-delete confirmation in Spam. Without a bulk selection these commands continue to target the focused conversation. These commands are not registered for hover-only quick actions.
+When conversations are checked, Apple Mail-style `Mod+Shift+U` applies to the full selection: it marks the selection unread only when every selected conversation is currently read; otherwise it marks the selection read. `Mod+D` moves the selection to trash, or opens the permanent-delete confirmation in Spam and Trash. Without a bulk selection these commands continue to target the focused conversation. Mixed selections spanning ordinary and permanently deletable search results do not expose a destructive bulk action. These commands are not registered for hover-only quick actions.
 
 The floating selection toolbar exposes explicit mark-read and mark-unread actions. `Mod+L` opens its label dropdown while a bulk selection exists. The dropdown groups selected conversations by account because Gmail label ids are account-owned; toggling a label only changes selected conversations in that account group.
 

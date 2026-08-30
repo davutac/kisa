@@ -2,7 +2,7 @@ import { MailOpenIcon } from "lucide-react";
 import { useCallback } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
-import { getDeleteSpamConfirmation } from "@/components/mail/delete-spam-confirmation";
+import { getDeleteForeverConfirmation } from "@/components/mail/delete-forever-confirmation";
 import MailThreadConversation from "@/components/mail/thread-conversation";
 import MailThreadHeader from "@/components/mail/thread-header";
 import ThreadLabels from "@/components/mail/thread-labels";
@@ -14,7 +14,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { hasSpamLabel } from "@/mail/label";
+import { hasSpamLabel, hasTrashLabel } from "@/mail/label";
 import { useMailThread } from "@/mail/use-mail-thread";
 import type {
   ThreadActions,
@@ -59,7 +59,7 @@ interface MailThreadViewProps {
   accountId: string;
   closeLabel?: string;
   onClose: () => void;
-  onDeleteSpam: ThreadActions["deleteSpam"];
+  onDeleteForever: ThreadActions["deleteForever"];
   onPopOut?: (
     target: Pick<ThreadActionTarget, "accountId" | "threadId">
   ) => Promise<void>;
@@ -73,7 +73,7 @@ interface MailThreadViewProps {
 
 interface MailThreadContentProps {
   onClose: () => void;
-  onDeleteSpam: ThreadActions["deleteSpam"];
+  onDeleteForever: ThreadActions["deleteForever"];
   onNotSpam: ThreadActions["notSpam"];
   onPopOut?: MailThreadViewProps["onPopOut"];
   onSetLabel: ThreadActions["setLabel"];
@@ -85,7 +85,7 @@ interface MailThreadContentProps {
 
 const MailThreadContent = ({
   onClose,
-  onDeleteSpam,
+  onDeleteForever,
   onNotSpam,
   onPopOut,
   onSetLabel,
@@ -97,6 +97,8 @@ const MailThreadContent = ({
   const confirm = useConfirm();
   const { accountId, threadId } = thread;
   const isSpam = hasSpamLabel(thread.labels);
+  const isTrash = hasTrashLabel(thread.labels);
+  const canDeleteForever = isSpam || isTrash;
   const isUnread = thread.labels.includes("UNREAD");
   const handleToggleRead = useCallback((): void => {
     onToggleRead({
@@ -111,16 +113,18 @@ const MailThreadContent = ({
       onClose
     );
   }, [accountId, isUnread, onClose, onTrash, threadId]);
-  const requestDeleteSpam = useCallback(async (): Promise<void> => {
-    const confirmed = await confirm(getDeleteSpamConfirmation(thread.subject));
+  const requestDeleteForever = useCallback(async (): Promise<void> => {
+    const confirmed = await confirm(
+      getDeleteForeverConfirmation(thread.subject)
+    );
 
     if (confirmed) {
-      onDeleteSpam({ accountId, threadId }, onClose);
+      onDeleteForever({ accountId, threadId }, onClose);
     }
-  }, [accountId, confirm, onClose, onDeleteSpam, thread.subject, threadId]);
-  const handleDeleteSpam = useCallback((): void => {
-    void requestDeleteSpam();
-  }, [requestDeleteSpam]);
+  }, [accountId, confirm, onClose, onDeleteForever, thread.subject, threadId]);
+  const handleDeleteForever = useCallback((): void => {
+    void requestDeleteForever();
+  }, [requestDeleteForever]);
   const handleNotSpam = useCallback((): void => {
     onNotSpam({ accountId, threadId }, onClose);
   }, [accountId, onClose, onNotSpam, threadId]);
@@ -143,11 +147,11 @@ const MailThreadContent = ({
         isUnread={isUnread}
         latestAt={latestMessage?.sentAt}
         onClose={onClose}
-        onDeleteSpam={handleDeleteSpam}
+        onDeleteForever={canDeleteForever ? handleDeleteForever : undefined}
         onNotSpam={handleNotSpam}
         onPopOut={onPopOut === undefined ? undefined : handlePopOut}
         onToggleRead={handleToggleRead}
-        onTrash={handleTrash}
+        onTrash={canDeleteForever ? undefined : handleTrash}
         showCloseButton={showCloseButton}
         subject={thread.subject}
       />
@@ -170,7 +174,7 @@ const MailThreadView = ({
   accountId,
   closeLabel = "Back to inbox",
   onClose,
-  onDeleteSpam,
+  onDeleteForever,
   onNotSpam,
   onPopOut,
   onSetLabel,
@@ -198,7 +202,7 @@ const MailThreadView = ({
   return (
     <MailThreadContent
       onClose={onClose}
-      onDeleteSpam={onDeleteSpam}
+      onDeleteForever={onDeleteForever}
       onNotSpam={onNotSpam}
       onPopOut={onPopOut}
       onSetLabel={onSetLabel}

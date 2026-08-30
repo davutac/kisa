@@ -86,6 +86,32 @@ describe(applyExternalMailSearchScope, () => {
       text: "",
     });
   });
+
+  it("adds Sent without exposing a visible search pill", () => {
+    expect(
+      applyExternalMailSearchScope(EMPTY_SEARCH_QUERY, {
+        labelNames: [],
+        mailbox: "sent",
+        unreadOnly: false,
+      })
+    ).toStrictEqual({
+      filters: [{ field: "label", value: "sent" }],
+      text: "",
+    });
+  });
+
+  it("adds Trash without exposing a visible search pill", () => {
+    expect(
+      applyExternalMailSearchScope(EMPTY_SEARCH_QUERY, {
+        labelNames: [],
+        mailbox: "trash",
+        unreadOnly: false,
+      })
+    ).toStrictEqual({
+      filters: [{ field: "label", value: "trash" }],
+      text: "",
+    });
+  });
 });
 
 describe(formatSearchQuery, () => {

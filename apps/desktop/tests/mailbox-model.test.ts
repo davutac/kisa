@@ -44,7 +44,7 @@ describe(mergeAndSortThreads, () => {
 });
 
 describe(filterThreadsByScope, () => {
-  it("keeps Inbox threads for the selected accounts and unread scope", () => {
+  it("shows Inbox and Sent conversations in Inbox while preserving unread scope", () => {
     const unread = makeThread("one@example.com", "unread", 300, {
       isUnread: true,
     });
@@ -56,14 +56,37 @@ describe(filterThreadsByScope, () => {
     const otherAccount = makeThread("two@example.com", "other", 400, {
       isUnread: true,
     });
+    const sent = makeThread("one@example.com", "sent", 350, {
+      isUnread: true,
+      labels: ["SENT"],
+    });
+    const sentTrash = makeThread("one@example.com", "sent-trash", 325, {
+      labels: ["SENT", "TRASH"],
+    });
 
     expect(
       filterThreadsByScope(
-        [unread, read, trashed, otherAccount],
+        [unread, read, sent, sentTrash, trashed, otherAccount],
         ["one@example.com"],
         true
       )
-    ).toStrictEqual([unread]);
+    ).toStrictEqual([unread, sent]);
+    expect(
+      filterThreadsByScope(
+        [unread, read, sent, sentTrash, trashed, otherAccount],
+        ["one@example.com"],
+        false,
+        "sent"
+      )
+    ).toStrictEqual([sent]);
+    expect(
+      filterThreadsByScope(
+        [unread, read, sent, sentTrash, trashed, otherAccount],
+        ["one@example.com"],
+        false,
+        "trash"
+      )
+    ).toStrictEqual([sentTrash, trashed]);
   });
 
   it("keeps Spam separate from Inbox for colliding thread ids", () => {

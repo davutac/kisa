@@ -72,11 +72,11 @@ interface MailThreadHeaderProps {
   isUnread: boolean;
   latestAt?: number;
   onClose: () => void;
-  onDeleteSpam: () => void;
+  onDeleteForever?: () => void;
   onNotSpam: () => void;
   onPopOut?: () => void;
   onToggleRead: () => void;
-  onTrash: () => void;
+  onTrash?: () => void;
   showCloseButton?: boolean;
   subject: string;
 }
@@ -86,7 +86,7 @@ const MailThreadHeader = ({
   isUnread,
   latestAt,
   onClose,
-  onDeleteSpam,
+  onDeleteForever,
   onNotSpam,
   onPopOut,
   onToggleRead,
@@ -98,12 +98,17 @@ const MailThreadHeader = ({
   const closeDisplay = getHotkeyDisplay("thread.close");
   const popOutDisplay = getHotkeyDisplay("thread.popout");
   const trashDisplay = getHotkeyDisplay("thread.trashThread");
-  const destructiveLabel = isSpam ? "Delete forever" : trashDisplay.label;
-  const destructiveAction = isSpam ? onDeleteSpam : onTrash;
+  const isDeleteForever = onDeleteForever !== undefined;
+  const destructiveLabel = isDeleteForever
+    ? "Delete forever"
+    : trashDisplay.label;
+  const destructiveAction = onDeleteForever ?? onTrash;
 
   useAppCommand("thread.close", onClose);
   useAppCommand("thread.toggleThreadRead", onToggleRead);
-  useAppCommand("thread.trashThread", destructiveAction);
+  useAppCommand("thread.trashThread", () => destructiveAction?.(), {
+    enabled: destructiveAction !== undefined,
+  });
 
   return (
     // Sticking at top-0 with an opaque pt-4 gutter reads as a top-4 offset
@@ -146,14 +151,16 @@ const MailThreadHeader = ({
           >
             {isUnread ? <MailOpenIcon /> : <MailIcon />}
           </MailThreadHeaderAction>
-          <MailThreadHeaderAction
-            className="hover:bg-destructive/10 hover:text-destructive"
-            command="thread.trashThread"
-            label={destructiveLabel}
-            onClick={destructiveAction}
-          >
-            <Trash2Icon />
-          </MailThreadHeaderAction>
+          {destructiveAction === undefined ? null : (
+            <MailThreadHeaderAction
+              className="hover:bg-destructive/10 hover:text-destructive"
+              command="thread.trashThread"
+              label={destructiveLabel}
+              onClick={destructiveAction}
+            >
+              <Trash2Icon />
+            </MailThreadHeaderAction>
+          )}
         </div>
         {latestAt === undefined ? null : (
           <MailRelativeTime

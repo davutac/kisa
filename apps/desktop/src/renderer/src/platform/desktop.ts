@@ -49,7 +49,7 @@ export interface MailApi {
   createLabel: DesktopBridge["createGmailLabel"];
   deleteLabel: DesktopBridge["deleteGmailLabel"];
   updateLabel: DesktopBridge["updateGmailLabel"];
-  deleteSpamThread: DesktopBridge["deleteSpamThread"];
+  deleteThreadForever: DesktopBridge["deleteThreadForever"];
   discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
   getSyncStatus: DesktopBridge["getMailSyncStatus"];
@@ -71,6 +71,7 @@ export interface MailApi {
   onTrustedImageSendersChanged: DesktopBridge["onTrustedImageSendersChanged"];
   openAttachmentPreview: DesktopBridge["openAttachmentPreview"];
   prepareOutgoingAttachments: DesktopBridge["prepareOutgoingAttachments"];
+  reindex: DesktopBridge["reindexMail"];
   search: DesktopBridge["searchMail"];
   saveAttachment: DesktopBridge["saveAttachment"];
   saveDraft: DesktopBridge["saveMailDraft"];
@@ -184,7 +185,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       bulkMutateThreads: bridge.bulkMutateThreads,
       createLabel: bridge.createGmailLabel,
       deleteLabel: bridge.deleteGmailLabel,
-      deleteSpamThread: bridge.deleteSpamThread,
+      deleteThreadForever: bridge.deleteThreadForever,
       discardDraft: bridge.discardMailDraft,
       getIndexProgress: bridge.getMailIndexProgress,
       getSpamStatus: bridge.getSpamStatus,
@@ -206,6 +207,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       openAttachmentPreview: bridge.openAttachmentPreview,
       prepareOutgoingAttachments: bridge.prepareOutgoingAttachments,
+      reindex: bridge.reindexMail,
       saveAttachment: bridge.saveAttachment,
       saveDraft: bridge.saveMailDraft,
       search: bridge.searchMail,

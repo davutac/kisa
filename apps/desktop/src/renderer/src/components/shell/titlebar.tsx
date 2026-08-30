@@ -5,7 +5,9 @@ import { useRef } from "react";
 import TitlebarIndexButton from "@/components/mail/titlebar-index-button";
 import TitlebarMailSearch from "@/components/shell/mail-search";
 import TitlebarNewMessage from "@/components/shell/new-message";
+import TitlebarSentToggle from "@/components/shell/sent-toggle";
 import TitlebarSpamToggle from "@/components/shell/spam-toggle";
+import TitlebarTrashToggle from "@/components/shell/trash-toggle";
 import TitlebarUnreadToggle from "@/components/shell/unread-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,7 +117,9 @@ const Titlebar = () => {
         <div className="app-titlebar-interactive flex min-w-0 items-center gap-1">
           <TitlebarMailSearch />
           <TitlebarUnreadToggle />
+          <TitlebarSentToggle />
           <TitlebarSpamToggle />
+          <TitlebarTrashToggle />
         </div>
         <div className="app-titlebar-interactive flex min-w-0 items-center gap-1">
           <TitlebarWorkspaceButton

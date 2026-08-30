@@ -3,7 +3,7 @@ import { QUOTA_UNITS } from "./quota-governor";
 export type BatchableThreadMutationKind = "setLabel" | "setReadState" | "trash";
 export type ThreadMutationKind =
   | BatchableThreadMutationKind
-  | "deleteSpam"
+  | "deleteForever"
   | "moveToInbox"
   | "moveToSpam";
 
@@ -39,7 +39,7 @@ export const planBulkThreadMutation = (
   messageCounts: readonly (number | undefined)[]
 ): BulkThreadMutationPlan => {
   if (
-    kind === "deleteSpam" ||
+    kind === "deleteForever" ||
     kind === "moveToInbox" ||
     kind === "moveToSpam"
   ) {

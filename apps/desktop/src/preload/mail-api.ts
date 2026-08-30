@@ -8,7 +8,7 @@ import {
   MAIL_CREATE_LABEL_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
   MAIL_UPDATE_LABEL_CHANNEL,
-  MAIL_DELETE_SPAM_THREAD_CHANNEL,
+  MAIL_DELETE_THREAD_FOREVER_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_DRAFT_CHANGED_CHANNEL,
@@ -22,6 +22,7 @@ import {
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
+  MAIL_REINDEX_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SAVE_DRAFT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
@@ -57,7 +58,7 @@ export const mailApi: Pick<
   | "createGmailLabel"
   | "deleteGmailLabel"
   | "updateGmailLabel"
-  | "deleteSpamThread"
+  | "deleteThreadForever"
   | "getMailIndexProgress"
   | "getMailSyncStatus"
   | "getSpamStatus"
@@ -71,6 +72,7 @@ export const mailApi: Pick<
   | "markThreadNotSpam"
   | "openAttachmentPreview"
   | "prepareOutgoingAttachments"
+  | "reindexMail"
   | "onMailDraftChanged"
   | "onMailIndexProgressChanged"
   | "onMailLabelCatalogChanged"
@@ -104,8 +106,8 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_CREATE_LABEL_CHANNEL, request),
   deleteGmailLabel: (request) =>
     ipcRenderer.invoke(MAIL_DELETE_LABEL_CHANNEL, request),
-  deleteSpamThread: (request) =>
-    ipcRenderer.invoke(MAIL_DELETE_SPAM_THREAD_CHANNEL, request),
+  deleteThreadForever: (request) =>
+    ipcRenderer.invoke(MAIL_DELETE_THREAD_FOREVER_CHANNEL, request),
   discardMailDraft: (request) =>
     ipcRenderer.invoke(MAIL_DISCARD_DRAFT_CHANNEL, request),
   getMailIndexProgress: () => ipcRenderer.invoke(MAIL_INDEX_PROGRESS_CHANNEL),
@@ -158,6 +160,7 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL, request),
   prepareOutgoingAttachments: (request) =>
     ipcRenderer.invoke(MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL, request),
+  reindexMail: (request) => ipcRenderer.invoke(MAIL_REINDEX_CHANNEL, request),
   saveAttachment: (request) =>
     ipcRenderer.invoke(MAIL_SAVE_ATTACHMENT_CHANNEL, request),
   saveMailDraft: (request) =>

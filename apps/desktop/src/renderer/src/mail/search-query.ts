@@ -148,8 +148,8 @@ export const applyExternalMailSearchScope = (
     value,
   }));
 
-  if (mailbox === "spam") {
-    scopeFilters.push({ field: "label", value: "spam" });
+  if (mailbox !== "inbox") {
+    scopeFilters.push({ field: "label", value: mailbox });
   }
   if (unreadOnly) {
     scopeFilters.push({ field: "is", value: "unread" });
