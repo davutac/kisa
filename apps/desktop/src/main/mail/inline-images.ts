@@ -4,13 +4,13 @@
 // images this costs the reader nothing in privacy: the parts are already part
 // of the message, so displaying them tells the sender nothing.
 
+import {
+  MAX_INLINE_IMAGE_BYTES,
+  MAX_INLINE_MESSAGE_BYTES,
+} from "../../shared/attachments";
+
 const CID_URL_PATTERN = /cid:(?<id>[^"'\s)>]+)/giu;
 const IMAGE_MEDIA_TYPE_PATTERN = /^image\/[\w.+-]+$/iu;
-
-/** A single image is inlined up to this size, base64 growth included. */
-const MAX_INLINE_IMAGE_BYTES = 2 * 1024 * 1024;
-/** And a message carries at most this much of them across all its parts. */
-const MAX_INLINE_MESSAGE_BYTES = 8 * 1024 * 1024;
 
 export interface InlineImageCandidate {
   readonly contentId?: string;

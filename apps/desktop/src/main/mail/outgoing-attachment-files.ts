@@ -6,22 +6,28 @@ import path from "node:path";
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
 import { Option, Schema } from "effect";
 
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "../../shared/ipc/mail";
+import {
+  GmailOutgoingInlineContentId,
+  MAX_GMAIL_ATTACHMENT_BYTES,
+} from "../../shared/ipc/mail";
 import type { GmailOutgoingAttachmentSelectionRequest } from "../../shared/ipc/mail";
 import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-authorization-error";
 
 const AUTHORIZATION_VERSION = 1 as const;
+const MEDIA_TYPE_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/u;
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
+const MediaType = Schema.String.check(Schema.isPattern(MEDIA_TYPE_PATTERN));
 
 const StoredAuthorizedAttachment = Schema.Struct({
   authorizationVersion: Schema.Literal(AUTHORIZATION_VERSION),
   birthtimeMs: NonNegativeNumber,
+  contentId: Schema.optional(GmailOutgoingInlineContentId),
   device: Schema.NonEmptyString,
   filename: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
   inode: Schema.NonEmptyString,
-  mediaType: Schema.NonEmptyString,
+  mediaType: MediaType,
   mtimeMs: NonNegativeNumber,
   path: Schema.NonEmptyString,
   size: NonNegativeInt,
@@ -42,6 +48,7 @@ export interface OpenedOutgoingAttachment {
 
 export interface LoadedOutgoingAttachment {
   readonly bytes: Uint8Array;
+  readonly contentId?: string;
   readonly filename: string;
   readonly mediaType: string;
 }
@@ -77,6 +84,12 @@ export const authorizeOutgoingAttachmentFiles = async (
     selections.map(async (selection) => {
       let file: FileHandle | undefined;
       try {
+        if (
+          selection.mediaType.length > 0 &&
+          !MEDIA_TYPE_PATTERN.test(selection.mediaType)
+        ) {
+          throw authorizationError("Attachment media type is invalid");
+        }
         const canonicalPath = await realpath(selection.path);
         file = await open(canonicalPath, "r");
         const stats = await file.stat();
@@ -172,6 +185,7 @@ export const readOutgoingAttachment = async (
   }
   return {
     bytes: buffer.subarray(0, offset),
+    contentId: entry.record.contentId,
     filename: entry.record.filename,
     mediaType: entry.record.mediaType,
   };

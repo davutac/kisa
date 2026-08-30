@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
-import { useOutgoingAttachments } from "@/components/mail/outgoing-attachments";
+import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import {
   isDraftBodyOnlySignature,
@@ -48,13 +48,13 @@ export const useReplyWorkspace = ({
   const aiApi = useMemo(() => getAiApi(), []);
   const aiModel = useAiModelSelection();
   const mailApi = useMemo(() => getMailApi(), []);
-  const {
-    addAttachments,
-    attachments,
-    inputRef,
-    prepareAttachments,
-    setAttachments,
-  } = useOutgoingAttachments(mailApi, draft.attachments);
+  const outgoingAttachments = useOutgoingAttachments(
+    mailApi,
+    draft.attachments,
+    draft.body.html
+  );
+  const { activeAttachments, isAuthorizing, prepareAttachments } =
+    outgoingAttachments;
   const [composer, setComposer] = useState<EmailComposerValue>(() =>
     toMailDraftComposerValue(draft)
   );
@@ -87,17 +87,25 @@ export const useReplyWorkspace = ({
   const currentDraft = useMemo<MailDraftInput>(
     () => ({
       ...draft,
-      attachments,
+      attachments: activeAttachments,
       bcc: recipients.bcc,
       body: { html: composer.html, text: composer.text },
       cc: recipients.cc,
       signature,
       to: recipients.to,
     }),
-    [attachments, composer.html, composer.text, draft, recipients, signature]
+    [
+      activeAttachments,
+      composer.html,
+      composer.text,
+      draft,
+      recipients,
+      signature,
+    ]
   );
   const currentDraftRef = useRef(currentDraft);
-  const isBusy = cleanHistory.isCleaning || isCreatingReply || isSending;
+  const isBusy =
+    cleanHistory.isCleaning || isAuthorizing || isCreatingReply || isSending;
   const canCreateReply = canCreateAiReply(aiModel.selection, action, isBusy);
   const isBodyOnlySignature = isDraftBodyOnlySignature(currentDraft);
 
@@ -121,7 +129,7 @@ export const useReplyWorkspace = ({
     };
     const timeout = window.setTimeout(save, 450);
     return () => window.clearTimeout(timeout);
-  }, [attachments, composer, mailApi, recipients]);
+  }, [currentDraft, mailApi]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -162,7 +170,9 @@ export const useReplyWorkspace = ({
     }
     setIsSending(true);
     try {
-      const preparedAttachments = await prepareAttachments();
+      const preparedAttachments = await prepareAttachments(
+        currentDraft.attachments
+      );
       if (preparedAttachments === undefined) {
         return;
       }
@@ -278,9 +288,7 @@ export const useReplyWorkspace = ({
   };
 
   return {
-    addAttachments,
     aiModelLabel: aiModel.label,
-    attachments,
     canClean: cleanHistory.canClean,
     canCreateReply,
     canSend: mailApi !== undefined && !composer.isEmpty && !isBusy,
@@ -291,17 +299,16 @@ export const useReplyWorkspace = ({
     currentDraft,
     discard,
     dismissCleanVersion: cleanHistory.dismissVersion,
-    inputRef,
     isBodyOnlySignature,
     isBusy,
     isCreatingReply,
     isInputDisabled: isCreatingReply || isSending,
     isSending,
+    outgoingAttachments,
     recipients,
     selectCleanVersion: cleanHistory.selectVersion,
     selectedCleanVersionId: cleanHistory.selectedVersionId,
     send,
-    setAttachments,
     setComposer: updateComposer,
     setRecipients,
   };

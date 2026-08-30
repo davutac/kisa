@@ -3,6 +3,26 @@ const IMAGE_FILENAME_PATTERN =
 const PDF_FILENAME_PATTERN = /\.pdf$/iu;
 const FILENAME_EXTENSION_PATTERN = /\.(?<extension>[a-z\d]{1,8})$/iu;
 
+// These are also the incoming-message data URL budgets. Composer limits must
+// match them so a sent image remains renderable when the message is reopened.
+export const MAX_INLINE_IMAGE_BYTES = 2 * 1024 * 1024;
+export const MAX_INLINE_MESSAGE_BYTES = 8 * 1024 * 1024;
+
+const normalizeMediaType = (mediaType: string): string =>
+  mediaType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+
+const OUTGOING_INLINE_IMAGE_MEDIA_TYPES = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+export const isSupportedOutgoingInlineImageMediaType = (
+  mediaType: string
+): boolean =>
+  OUTGOING_INLINE_IMAGE_MEDIA_TYPES.has(normalizeMediaType(mediaType));
+
 const MEDIA_TYPE_LABELS = {
   "application/gzip": "GZIP",
   "application/msword": "DOC",
@@ -24,9 +44,6 @@ const MEDIA_TYPE_LABELS = {
 } satisfies Readonly<Record<string, string>>;
 
 export type AttachmentPreviewKind = "image" | "pdf";
-
-const normalizeMediaType = (mediaType: string): string =>
-  mediaType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
 
 export const getAttachmentPreviewKind = (
   filename: string,

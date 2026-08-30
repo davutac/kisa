@@ -12,6 +12,10 @@ interface NewMessageDialogShellProps {
   onFiles: (files: FileList) => void;
 }
 
+const isComposerDropTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element &&
+  target.closest("[data-composer-drop-target]") !== null;
+
 const NewMessageDialogShell = ({
   children,
   initialFocus,
@@ -20,6 +24,10 @@ const NewMessageDialogShell = ({
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const fileDragDepthRef = useRef(0);
   const shouldReduceMotion = useReducedMotionConfig();
+  const resetFileDrag = (): void => {
+    fileDragDepthRef.current = 0;
+    setIsDraggingFiles(false);
+  };
 
   return (
     <DialogContent
@@ -29,12 +37,19 @@ const NewMessageDialogShell = ({
         if (!event.dataTransfer.types.includes("Files")) {
           return;
         }
+        if (isComposerDropTarget(event.target)) {
+          resetFileDrag();
+          return;
+        }
         event.stopPropagation();
-        fileDragDepthRef.current = 0;
-        setIsDraggingFiles(false);
+        resetFileDrag();
       }}
       onDragEnterCapture={(event) => {
         if (!event.dataTransfer.types.includes("Files")) {
+          return;
+        }
+        if (isComposerDropTarget(event.target)) {
+          resetFileDrag();
           return;
         }
         event.preventDefault();
@@ -46,6 +61,10 @@ const NewMessageDialogShell = ({
         if (!event.dataTransfer.types.includes("Files")) {
           return;
         }
+        if (isComposerDropTarget(event.target)) {
+          resetFileDrag();
+          return;
+        }
         event.stopPropagation();
         fileDragDepthRef.current = Math.max(fileDragDepthRef.current - 1, 0);
         if (fileDragDepthRef.current === 0) {
@@ -53,6 +72,10 @@ const NewMessageDialogShell = ({
         }
       }}
       onDragOverCapture={(event) => {
+        if (isComposerDropTarget(event.target)) {
+          resetFileDrag();
+          return;
+        }
         if (event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
           event.stopPropagation();
@@ -63,10 +86,13 @@ const NewMessageDialogShell = ({
         if (!event.dataTransfer.types.includes("Files")) {
           return;
         }
+        if (isComposerDropTarget(event.target)) {
+          resetFileDrag();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
-        fileDragDepthRef.current = 0;
-        setIsDraggingFiles(false);
+        resetFileDrag();
         onFiles(event.dataTransfer.files);
       }}
       onKeyDown={(event) => {

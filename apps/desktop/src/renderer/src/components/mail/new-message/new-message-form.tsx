@@ -4,13 +4,13 @@ import {
   SendIcon,
   SparklesIcon,
 } from "lucide-react";
-import type { RefObject } from "react";
 
 import AccountPicker from "@/components/accounts/account-picker";
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import MailComposer from "@/components/mail/mail-composer";
+import type { OutgoingAttachmentComposerController } from "@/components/mail/outgoing-attachments";
 import type { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +21,6 @@ import {
 import { getHotkeyAriaLabel, HotkeyHint } from "@/hotkeys";
 import { MAX_GMAIL_SUBJECT_LENGTH } from "@/shared/gmail-subject";
 import type { GoogleAccount } from "@/shared/ipc/auth";
-import type { MailDraftAttachment } from "@/shared/ipc/mail";
 import type {
   ComposerTemplate,
   ComposerTemplateInput,
@@ -31,15 +30,12 @@ import { useNewMessageStore } from "./new-message-store";
 
 interface NewMessageFormProps {
   accounts: readonly GoogleAccount[];
-  addAttachments: (files: FileList | null) => void;
   applyTemplate: (template: ComposerTemplateInput) => void;
-  attachments: readonly MailDraftAttachment[];
   canClean: boolean;
   canSend: boolean;
   canStash: boolean;
   cleanupModelLabel: string;
   focus: ReturnType<typeof useComposerFocus>;
-  inputRef: RefObject<HTMLInputElement | null>;
   onClean: () => Promise<void>;
   onAccountSelect: (accountId: string) => void;
   onComposerChange: (composer: EmailComposerValue) => void;
@@ -49,28 +45,19 @@ interface NewMessageFormProps {
   onStash: () => void;
   selectedAccountId: string;
   sendShortcutLabel: string;
-  setAttachments: (
-    update:
-      | readonly MailDraftAttachment[]
-      | ((
-          current: readonly MailDraftAttachment[]
-        ) => readonly MailDraftAttachment[])
-  ) => void;
+  outgoingAttachments: OutgoingAttachmentComposerController;
   onSubjectChange: (subject: string) => void;
   templates: readonly ComposerTemplate[];
 }
 
 const NewMessageForm = ({
   accounts,
-  addAttachments,
   applyTemplate,
-  attachments,
   canClean,
   canSend,
   canStash,
   cleanupModelLabel,
   focus,
-  inputRef,
   onClean,
   onAccountSelect,
   onComposerChange,
@@ -80,7 +67,7 @@ const NewMessageForm = ({
   onStash,
   selectedAccountId,
   sendShortcutLabel,
-  setAttachments,
+  outgoingAttachments,
   onSubjectChange,
   templates,
 }: NewMessageFormProps) => {
@@ -158,14 +145,8 @@ const NewMessageForm = ({
         ariaLabel="Message"
         attachments={{
           command: "composer.attach",
-          files: attachments,
+          controller: outgoingAttachments,
           focusRef: focus.refFor("attachment"),
-          inputRef,
-          onAdd: addAttachments,
-          onRemove: (attachmentId) =>
-            setAttachments((current) =>
-              current.filter(({ id }) => id !== attachmentId)
-            ),
         }}
         className="min-h-40 flex-1 border-0"
         consumeModEnter

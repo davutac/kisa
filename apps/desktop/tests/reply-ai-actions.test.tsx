@@ -90,17 +90,7 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
   }) => {
     const isForward = action === "forward";
     return {
-      addAttachments: () => Promise.resolve(),
       aiModelLabel: "Codex · gpt-5.6-luna",
-      attachments: [
-        {
-          filename: "notes.txt",
-          id: "attachment-1",
-          mediaType: "text/plain",
-          referenceId: "reference-1",
-          size: 1200,
-        },
-      ],
       canClean: isForward,
       canCreateReply: !isForward,
       canSend: true,
@@ -132,17 +122,38 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
       currentDraft: draft,
       discard: () => Promise.resolve(),
       dismissCleanVersion: () => null,
-      inputRef: { current: null },
       isBodyOnlySignature: false,
       isBusy: false,
       isCreatingReply: false,
       isInputDisabled: false,
       isSending: false,
+      outgoingAttachments: {
+        activeAttachments: [],
+        addAttachments: () => Promise.resolve(),
+        addInlineImages: () => Promise.resolve([]),
+        attachments: [
+          {
+            filename: "notes.txt",
+            id: "attachment-1",
+            mediaType: "text/plain",
+            referenceId: "reference-1",
+            size: 1200,
+          },
+        ],
+        discardInlineImages: () => null,
+        fallbackInlineImagesToAttachments: () => null,
+        getInlineImagePreview: () => null,
+        inputRef: { current: null },
+        isAuthorizing: false,
+        prepareAttachments: () => Promise.resolve([]),
+        removeAttachment: () => null,
+        replaceAttachments: () => null,
+        setReferencedInlineContentIds: () => null,
+      },
       recipients: { bcc: [], cc: [], to: [] },
       selectCleanVersion: () => null,
       selectedCleanVersionId: isForward ? "original" : null,
       send: () => Promise.resolve(),
-      setAttachments: () => null,
       setComposer: () => null,
       setRecipients: () => null,
     };

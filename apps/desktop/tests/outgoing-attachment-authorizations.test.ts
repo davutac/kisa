@@ -12,11 +12,12 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { OutgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-attachment-authorizations";
+import { MAX_INLINE_IMAGE_BYTES } from "../src/shared/attachments";
 
 const temporaryDirectories: string[] = [];
 
 const makeAttachment = async (
-  contents = "user-selected contents"
+  contents: string | Uint8Array = "user-selected contents"
 ): Promise<{ directory: string; filePath: string }> => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "kisa-attachment-"));
   temporaryDirectories.push(directory);
@@ -99,21 +100,112 @@ describe("outgoing attachment authorizations", () => {
     ]);
   });
 
+  it("persists inline content ids without exposing file paths", async () => {
+    const { filePath } = await makeAttachment();
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    const [attachment] = await authorizations.authorizeSelections(11, {
+      files: [{ mediaType: "image/png", path: filePath }],
+    });
+    if (attachment === undefined) {
+      throw new Error("Expected an authorized attachment");
+    }
+
+    const stored = authorizations.serializeDraftAttachments(11, [
+      { ...attachment, contentId: "image@inline.kisa.email" },
+    ]);
+    expect(stored[0]).toMatchObject({
+      contentId: "image@inline.kisa.email",
+      mediaType: "image/png",
+    });
+    const [restored] = authorizations.restoreDraftAttachments(12, stored);
+    expect(restored).toMatchObject({
+      contentId: "image@inline.kisa.email",
+      mediaType: "image/png",
+    });
+    expect(restored).not.toHaveProperty("path");
+
+    await Promise.all([
+      authorizations.releaseOwner(11),
+      authorizations.releaseOwner(12),
+    ]);
+  });
+
+  it("rejects unsupported, oversized, and duplicate inline metadata", async () => {
+    const unsupportedFile = await makeAttachment();
+    const oversizedFile = await makeAttachment(
+      new Uint8Array(MAX_INLINE_IMAGE_BYTES + 1)
+    );
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    await expect(
+      authorizations.authorizeSelections(13, {
+        files: [
+          {
+            mediaType: "image/png\r\nX-Injected: true",
+            path: unsupportedFile.filePath,
+          },
+        ],
+      })
+    ).rejects.toThrow("media type is invalid");
+    const [unsupported] = await authorizations.authorizeSelections(13, {
+      files: [{ mediaType: "image/heic", path: unsupportedFile.filePath }],
+    });
+    const [oversized] = await authorizations.authorizeSelections(13, {
+      files: [{ mediaType: "image/png", path: oversizedFile.filePath }],
+    });
+    const duplicates = await authorizations.authorizeSelections(13, {
+      files: [
+        { mediaType: "image/png", path: unsupportedFile.filePath },
+        { mediaType: "image/png", path: unsupportedFile.filePath },
+      ],
+    });
+    if (unsupported === undefined || oversized === undefined) {
+      throw new Error("Expected authorized attachments");
+    }
+
+    expect(() =>
+      authorizations.serializeDraftAttachments(13, [
+        { ...unsupported, contentId: "unsupported@inline.kisa.email" },
+      ])
+    ).toThrow("JPEG, PNG, GIF, and WebP");
+    await expect(
+      authorizations.prepare(13, [
+        {
+          contentId: "oversized@inline.kisa.email",
+          referenceId: oversized.referenceId,
+        },
+      ])
+    ).rejects.toThrow("up to 2 MB");
+    await expect(
+      authorizations.prepare(
+        13,
+        duplicates.map(({ referenceId }) => ({
+          contentId: "duplicate@inline.kisa.email",
+          referenceId,
+        }))
+      )
+    ).rejects.toThrow("invalid");
+
+    await authorizations.releaseOwner(13);
+  });
+
   it("binds one-use send capabilities to the caller and open descriptor", async () => {
     const { directory, filePath } = await makeAttachment("original");
     const authorizations = new OutgoingAttachmentAuthorizations();
     const [attachment] = await authorizations.authorizeSelections(21, {
-      files: [{ mediaType: "text/plain", path: filePath }],
+      files: [{ mediaType: "image/png", path: filePath }],
     });
     if (attachment === undefined) {
       throw new Error("Expected an authorized attachment");
     }
 
     await expect(
-      authorizations.prepare(22, [attachment.referenceId])
+      authorizations.prepare(22, [{ referenceId: attachment.referenceId }])
     ).rejects.toThrow("no longer authorized");
     const [prepared] = await authorizations.prepare(21, [
-      attachment.referenceId,
+      {
+        contentId: "image@inline.kisa.email",
+        referenceId: attachment.referenceId,
+      },
     ]);
     if (prepared === undefined) {
       throw new Error("Expected a prepared attachment");
@@ -125,8 +217,13 @@ describe("outgoing attachment authorizations", () => {
       authorizations.consume(22, [prepared.capability])
     ).rejects.toThrow("expired");
     const [loaded] = await authorizations.consume(21, [prepared.capability]);
-    expect(loaded).toBeDefined();
-    expect(Buffer.from(loaded?.bytes ?? []).toString()).toBe("original");
+    expect({
+      contentId: loaded?.contentId,
+      contents: Buffer.from(loaded?.bytes ?? []).toString(),
+    }).toStrictEqual({
+      contentId: "image@inline.kisa.email",
+      contents: "original",
+    });
     await expect(
       authorizations.consume(21, [prepared.capability])
     ).rejects.toThrow("expired");
@@ -156,7 +253,7 @@ describe("outgoing attachment authorizations", () => {
       throw new Error("Expected a restored attachment");
     }
     await expect(
-      authorizations.prepare(31, [restored.referenceId])
+      authorizations.prepare(31, [{ referenceId: restored.referenceId }])
     ).rejects.toThrow("Could not read attachment");
 
     const replacement = await authorizations.authorizeSelections(31, {
@@ -166,7 +263,9 @@ describe("outgoing attachment authorizations", () => {
     await utimes(filePath, new Date(1000), new Date(Date.now() + 60_000));
     await expect(
       authorizations.prepare(31, [
-        replacement[0]?.referenceId ?? "missing-reference",
+        {
+          referenceId: replacement[0]?.referenceId ?? "missing-reference",
+        },
       ])
     ).rejects.toThrow("Could not read attachment");
 
@@ -174,7 +273,7 @@ describe("outgoing attachment authorizations", () => {
       files: [{ mediaType: "text/plain", path: filePath }],
     });
     const [prepared] = await authorizations.prepare(31, [
-      current[0]?.referenceId ?? "missing-reference",
+      { referenceId: current[0]?.referenceId ?? "missing-reference" },
     ]);
     if (prepared === undefined) {
       throw new Error("Expected a prepared attachment");

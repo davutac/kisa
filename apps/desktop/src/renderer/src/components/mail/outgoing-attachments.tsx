@@ -1,14 +1,25 @@
 import { PaperclipIcon, XIcon } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
 import type { Ref, RefObject } from "react";
-import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
-import type { MailApi } from "@/platform/desktop";
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
+
+import type { OutgoingAttachmentController } from "./use-outgoing-attachments";
+
+export type OutgoingAttachmentComposerController = Pick<
+  OutgoingAttachmentController,
+  | "addAttachments"
+  | "addInlineImages"
+  | "attachments"
+  | "discardInlineImages"
+  | "fallbackInlineImagesToAttachments"
+  | "getInlineImagePreview"
+  | "inputRef"
+  | "removeAttachment"
+  | "setReferencedInlineContentIds"
+>;
 
 const formatAttachmentSize = (bytes: number): string => {
   if (bytes < 1000) {
@@ -20,79 +31,6 @@ const formatAttachmentSize = (bytes: number): string => {
   }
 
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
-};
-
-export const useOutgoingAttachments = (
-  mailApi: MailApi | undefined,
-  initialAttachments: readonly MailDraftAttachment[] = []
-) => {
-  const [attachments, setAttachments] =
-    useState<readonly MailDraftAttachment[]>(initialAttachments);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const addAttachments = useCallback(
-    async (fileList: FileList | null): Promise<void> => {
-      const files = [...(fileList ?? [])];
-      if (files.length === 0 || mailApi === undefined) {
-        return;
-      }
-
-      try {
-        const reply = await mailApi.authorizeOutgoingAttachments(files);
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
-        }
-        setAttachments((current) => {
-          const currentBytes = current.reduce(
-            (total, attachment) => total + attachment.size,
-            0
-          );
-          const selectedBytes = reply.data.reduce(
-            (total, attachment) => total + attachment.size,
-            0
-          );
-          if (currentBytes + selectedBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
-            toast.error("Attachments can total up to 25 MB");
-            return current;
-          }
-          return [...current, ...reply.data];
-        });
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Could not attach files"
-        );
-      } finally {
-        if (inputRef.current !== null) {
-          inputRef.current.value = "";
-        }
-      }
-    },
-    [mailApi]
-  );
-
-  const prepareAttachments = useCallback(async () => {
-    if (mailApi === undefined) {
-      return;
-    }
-
-    const reply = await mailApi.prepareOutgoingAttachments({
-      referenceIds: attachments.map(({ referenceId }) => referenceId),
-    });
-    if (!reply.ok) {
-      toast.error(reply.error);
-      return;
-    }
-    return reply.data;
-  }, [attachments, mailApi]);
-
-  return {
-    addAttachments,
-    attachments,
-    inputRef,
-    prepareAttachments,
-    setAttachments,
-  };
 };
 
 interface OutgoingAttachmentButtonProps {

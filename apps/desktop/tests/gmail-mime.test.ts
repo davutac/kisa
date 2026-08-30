@@ -299,7 +299,88 @@ describe("GmailMime sending", () => {
     );
   });
 
-  it("composes a new forwarded message with inline attachments", () => {
+  it("keeps composer images at their CID body position", () => {
+    const message = Effect.runSync(
+      GmailMime.pipe(
+        Effect.flatMap((mime) =>
+          mime.composeMessage({
+            accountId: AccountId.make("me@example.com"),
+            attachments: [
+              {
+                bytes: new Uint8Array([1, 2, 3]),
+                contentId: "photo@inline.kisa.email",
+                filename: "photo.png",
+                mediaType: "image/png",
+              },
+            ],
+            body: {
+              html: '<p>Before</p><img alt="photo.png" src="cid:photo@inline.kisa.email"><p>After</p>',
+              text: "Before\n[Image: photo.png]\nAfter",
+              type: "html",
+            },
+            subject: "Inline photo",
+            to: [new Mailbox({ address: "carol@example.com" })],
+          })
+        ),
+        Effect.provide(GmailMimeLive)
+      )
+    );
+    const raw = decodeRaw(message.raw);
+    const bodies = decodeTransferBodies(raw);
+
+    expect(raw).toContain("Content-Type: multipart/related");
+    expect(raw).toContain("Content-ID: <photo@inline.kisa.email>");
+    expect(raw).toContain("Content-Disposition: inline;");
+    expect(bodies).toContainEqual(
+      expect.stringContaining('src="cid:photo@inline.kisa.email"')
+    );
+  });
+
+  it("nests inline images with the body before regular attachments", () => {
+    const message = Effect.runSync(
+      GmailMime.pipe(
+        Effect.flatMap((mime) =>
+          mime.composeMessage({
+            accountId: AccountId.make("me@example.com"),
+            attachments: [
+              {
+                bytes: new Uint8Array([1, 2, 3]),
+                contentId: "photo@inline.kisa.email",
+                filename: "photo.png",
+                mediaType: "image/png",
+              },
+              {
+                bytes: new TextEncoder().encode("Notes"),
+                filename: "notes.txt",
+                mediaType: "text/plain",
+              },
+            ],
+            body: {
+              html: '<p>Before</p><img src="cid:photo@inline.kisa.email">',
+              text: "Before\n[Image: photo.png]",
+              type: "html",
+            },
+            subject: "Inline photo and notes",
+            to: [new Mailbox({ address: "carol@example.com" })],
+          })
+        ),
+        Effect.provide(GmailMimeLive)
+      )
+    );
+    const raw = decodeRaw(message.raw);
+    const relatedEnd = raw.indexOf("--", raw.indexOf("Content-ID:"));
+    const regularAttachment = raw.indexOf(
+      'Content-Disposition: attachment; filename="notes.txt"'
+    );
+
+    expect(raw).toContain("Content-Type: multipart/mixed");
+    expect(raw).toContain("Content-Type: multipart/related");
+    expect(raw).toContain("Content-ID: <photo@inline.kisa.email>");
+    expect(relatedEnd).toBeGreaterThan(raw.indexOf("Content-ID:"));
+    expect(regularAttachment).toBeGreaterThan(relatedEnd);
+  });
+
+  it("falls back to an attachment when the body does not reference its CID", () => {
     const message = Effect.runSync(
       GmailMime.pipe(
         Effect.flatMap((mime) =>
@@ -329,14 +410,20 @@ describe("GmailMime sending", () => {
     const bodies = decodeTransferBodies(raw);
 
     expect({
+      hasAttachmentDisposition: raw.includes(
+        'Content-Disposition: attachment; filename="logo.png"'
+      ),
       hasContentId: raw.includes("Content-ID: <logo@example.com>"),
       hasInlineDisposition: raw.includes("Content-Disposition: inline;"),
+      hasRelatedBody: raw.includes("Content-Type: multipart/related"),
       hasSubject: raw.includes("Subject: Fwd: Project update"),
       hasTo: raw.includes("To: carol@example.com"),
       threadId: message.threadId,
     }).toStrictEqual({
-      hasContentId: true,
-      hasInlineDisposition: true,
+      hasAttachmentDisposition: true,
+      hasContentId: false,
+      hasInlineDisposition: false,
+      hasRelatedBody: false,
       hasSubject: true,
       hasTo: true,
       threadId: undefined,
