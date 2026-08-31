@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { JoinedScheduledMessage } from "../src/main/mail/scheduled-mail-database";
-import { toScheduledMailSummary } from "../src/main/mail/scheduled-mail-summary";
+import {
+  scheduledMailSummarySelection,
+  toScheduledMailSummary,
+} from "../src/main/mail/scheduled-mail-summary";
 
 const row = {
   draft: {
@@ -57,6 +60,28 @@ const row = {
 } satisfies JoinedScheduledMessage;
 
 describe(toScheduledMailSummary, () => {
+  it("loads only the draft fields needed by a list summary", () => {
+    expect(Object.keys(scheduledMailSummarySelection.draft)).toStrictEqual([
+      "accountEmail",
+      "attachments",
+      "bcc",
+      "bodyText",
+      "cc",
+      "id",
+      "subject",
+      "to",
+    ]);
+    expect(Object.keys(scheduledMailSummarySelection.schedule)).toStrictEqual([
+      "attemptCount",
+      "attentionReason",
+      "nextAttemptAt",
+      "rateLimitStartedAt",
+      "revision",
+      "scheduledAt",
+      "status",
+    ]);
+  });
+
   it("exposes only attachment metadata needed by the list pill", () => {
     const summary = toScheduledMailSummary(row);
 

@@ -68,7 +68,10 @@ import {
   dispatchPendingScheduledMailNotifications,
   releaseStaleScheduledMailNotificationClaims,
 } from "./scheduled-mail-notifications";
-import { toScheduledMailSummary } from "./scheduled-mail-summary";
+import {
+  scheduledMailSummarySelection,
+  toScheduledMailSummary,
+} from "./scheduled-mail-summary";
 
 const keySerial = new ScheduledMailKeyedSerial();
 
@@ -166,7 +169,7 @@ export const listScheduledMailPage = Effect.fn("listScheduledMailPage")(
     const rows = yield* withScheduledMailDatabase(
       (database) =>
         database
-          .select(joinedScheduledMessageSelection)
+          .select(scheduledMailSummarySelection)
           .from(scheduledMessages)
           .innerJoin(mailDrafts, eq(mailDrafts.id, scheduledMessages.draftId))
           .where(

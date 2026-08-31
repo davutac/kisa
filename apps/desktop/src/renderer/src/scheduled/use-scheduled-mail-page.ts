@@ -3,75 +3,138 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getScheduledMailApi } from "@/platform/desktop";
 import type { ScheduledMailSummary } from "@/shared/ipc/scheduled-mail";
 
+import {
+  getScheduledMailScopeKey,
+  getScheduledMailSnapshot,
+  invalidateScheduledMailSnapshotsForAccount,
+  setScheduledMailSnapshot,
+} from "./scheduled-mail-cache";
 import { getScheduledMailKey } from "./scheduled-mail-view";
+
+interface ScheduledMailPageState {
+  readonly error?: string;
+  readonly isInitialLoading: boolean;
+  readonly isLoadingMore: boolean;
+  readonly items: readonly ScheduledMailSummary[];
+  readonly nextCursor?: string;
+  readonly scopeKey: string;
+}
 
 export const useScheduledMailPage = (accountIds: readonly string[]) => {
   const api = useMemo(() => getScheduledMailApi(), []);
-  const [items, setItems] = useState<readonly ScheduledMailSummary[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | undefined>();
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const scopeKey = JSON.stringify(accountIds);
-  const [loadedScopeKey, setLoadedScopeKey] = useState(scopeKey);
-  const [error, setError] = useState<
-    { message: string; scopeKey: string } | undefined
-  >();
+  const scopeKey = getScheduledMailScopeKey(accountIds);
+  const createStartingResult = (): ScheduledMailPageState => {
+    const snapshot = getScheduledMailSnapshot(scopeKey);
+    return snapshot === undefined
+      ? {
+          isInitialLoading: api !== undefined,
+          isLoadingMore: false,
+          items: [],
+          scopeKey,
+        }
+      : {
+          ...snapshot,
+          isInitialLoading: false,
+          isLoadingMore: false,
+        };
+  };
+  const [result, setResult] =
+    useState<ScheduledMailPageState>(createStartingResult);
+  const [scopeKeyInState, setScopeKeyInState] = useState(scopeKey);
   const loadMoreInFlightRef = useRef(false);
   const requestRevisionRef = useRef(0);
-  const isCurrentScope = loadedScopeKey === scopeKey;
-  const visibleItems = isCurrentScope ? items : [];
-  const visibleNextCursor = isCurrentScope ? nextCursor : undefined;
+  const resultRef = useRef(result);
 
-  const loadFirstPage = useCallback(async (): Promise<void> => {
-    if (api === undefined) {
-      setItems([]);
-      setNextCursor(undefined);
-      setLoadedScopeKey(scopeKey);
-      setError({
-        message: "Scheduled email is unavailable in this build",
-        scopeKey,
-      });
-      setIsInitialLoading(false);
-      return;
-    }
-    const revision = requestRevisionRef.current + 1;
-    requestRevisionRef.current = revision;
-    setIsInitialLoading(true);
-    try {
-      const reply = await api.listPage({ accountIds });
-      if (requestRevisionRef.current !== revision) {
+  if (scopeKeyInState !== scopeKey) {
+    setScopeKeyInState(scopeKey);
+    setResult(createStartingResult());
+  }
+
+  const isCurrentScope = result.scopeKey === scopeKey;
+  const visibleItems = isCurrentScope ? result.items : [];
+  const visibleNextCursor = isCurrentScope ? result.nextCursor : undefined;
+
+  const loadFirstPage = useCallback(
+    async (showLoading: boolean) => {
+      if (api === undefined) {
+        setResult({
+          error: "Scheduled email is unavailable in this build",
+          isInitialLoading: false,
+          isLoadingMore: false,
+          items: [],
+          scopeKey,
+        });
         return;
       }
-      if (!reply.ok) {
-        setError({ message: reply.error, scopeKey });
-        return;
+      const revision = requestRevisionRef.current + 1;
+      requestRevisionRef.current = revision;
+      setResult((current) =>
+        current.scopeKey === scopeKey
+          ? {
+              ...current,
+              error: undefined,
+              isInitialLoading: showLoading && current.items.length === 0,
+            }
+          : current
+      );
+      try {
+        const reply = await api.listPage({ accountIds });
+        if (requestRevisionRef.current !== revision) {
+          return;
+        }
+        if (!reply.ok) {
+          setResult((current) =>
+            current.scopeKey === scopeKey
+              ? {
+                  ...current,
+                  error: reply.error,
+                  isInitialLoading: false,
+                }
+              : current
+          );
+          return;
+        }
+        const snapshot = {
+          accountIds,
+          items: reply.data.items,
+          nextCursor: reply.data.nextCursor,
+          scopeKey,
+        };
+        setScheduledMailSnapshot(snapshot);
+        setResult({
+          ...snapshot,
+          isInitialLoading: false,
+          isLoadingMore: false,
+        });
+      } catch {
+        if (requestRevisionRef.current === revision) {
+          setResult((current) =>
+            current.scopeKey === scopeKey
+              ? {
+                  ...current,
+                  error: "Could not load scheduled emails",
+                  isInitialLoading: false,
+                }
+              : current
+          );
+        }
       }
-      setError(undefined);
-      setItems(reply.data.items);
-      setLoadedScopeKey(scopeKey);
-      setNextCursor(reply.data.nextCursor);
-    } catch {
-      if (requestRevisionRef.current === revision) {
-        setError({ message: "Could not load scheduled emails", scopeKey });
-      }
-    } finally {
-      if (requestRevisionRef.current === revision) {
-        setIsInitialLoading(false);
-      }
-    }
-  }, [accountIds, api, scopeKey]);
+    },
+    [accountIds, api, scopeKey]
+  );
 
   useEffect(() => {
     let active = true;
+    const showLoading = getScheduledMailSnapshot(scopeKey) === undefined;
     queueMicrotask(() => {
       if (active) {
-        void loadFirstPage();
+        void loadFirstPage(showLoading);
       }
     });
     return () => {
       active = false;
     };
-  }, [loadFirstPage]);
+  }, [loadFirstPage, scopeKey]);
 
   useEffect(() => {
     if (api === undefined) {
@@ -79,11 +142,16 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
     }
     const scope = new Set(accountIds);
     return api.onChanged((change) => {
+      invalidateScheduledMailSnapshotsForAccount(change.accountId);
       if (scope.has(change.accountId)) {
-        void loadFirstPage();
+        void loadFirstPage(false);
       }
     });
   }, [accountIds, api, loadFirstPage]);
+
+  useEffect(() => {
+    resultRef.current = result;
+  }, [result]);
 
   const loadMore = useCallback(async (): Promise<void> => {
     if (
@@ -95,7 +163,11 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
     }
     const revision = requestRevisionRef.current;
     loadMoreInFlightRef.current = true;
-    setIsLoadingMore(true);
+    setResult((current) =>
+      current.scopeKey === scopeKey
+        ? { ...current, isLoadingMore: true }
+        : current
+    );
     try {
       const reply = await api.listPage({
         accountIds,
@@ -105,46 +177,89 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
         return;
       }
       if (!reply.ok) {
-        setError({ message: reply.error, scopeKey });
+        setResult((current) =>
+          current.scopeKey === scopeKey
+            ? { ...current, error: reply.error }
+            : current
+        );
         return;
       }
-      setError(undefined);
-      setItems((current) => {
-        const byKey = new Map(
-          current.map((item) => [getScheduledMailKey(item), item] as const)
-        );
-        for (const item of reply.data.items) {
-          byKey.set(getScheduledMailKey(item), item);
-        }
-        return [...byKey.values()];
+      const { current } = resultRef;
+      if (current.scopeKey !== scopeKey) {
+        return;
+      }
+      const byKey = new Map(
+        current.items.map((item) => [getScheduledMailKey(item), item] as const)
+      );
+      for (const item of reply.data.items) {
+        byKey.set(getScheduledMailKey(item), item);
+      }
+      const next: ScheduledMailPageState = {
+        ...current,
+        error: undefined,
+        items: [...byKey.values()],
+        nextCursor: reply.data.nextCursor,
+      };
+      setScheduledMailSnapshot({
+        accountIds,
+        items: next.items,
+        nextCursor: next.nextCursor,
+        scopeKey,
       });
-      setNextCursor(reply.data.nextCursor);
+      resultRef.current = next;
+      setResult(next);
     } catch {
       if (requestRevisionRef.current === revision) {
-        setError({ message: "Could not load more scheduled emails", scopeKey });
+        setResult((current) =>
+          current.scopeKey === scopeKey
+            ? {
+                ...current,
+                error: "Could not load more scheduled emails",
+              }
+            : current
+        );
       }
     } finally {
       loadMoreInFlightRef.current = false;
-      setIsLoadingMore(false);
+      setResult((current) =>
+        current.scopeKey === scopeKey
+          ? { ...current, isLoadingMore: false }
+          : current
+      );
     }
   }, [accountIds, api, scopeKey, visibleNextCursor]);
 
   const removeOptimistically = (item: ScheduledMailSummary): void => {
     const key = getScheduledMailKey(item);
-    setItems((current) =>
-      current.filter((candidate) => getScheduledMailKey(candidate) !== key)
-    );
+    const { current } = resultRef;
+    if (current.scopeKey !== scopeKey) {
+      return;
+    }
+    const next: ScheduledMailPageState = {
+      ...current,
+      items: current.items.filter(
+        (candidate) => getScheduledMailKey(candidate) !== key
+      ),
+    };
+    setScheduledMailSnapshot({
+      accountIds,
+      items: next.items,
+      nextCursor: next.nextCursor,
+      scopeKey,
+    });
+    resultRef.current = next;
+    setResult(next);
   };
 
   return {
     api,
-    error: error?.scopeKey === scopeKey ? error.message : undefined,
-    isInitialLoading: !isCurrentScope || isInitialLoading,
-    isLoadingMore: isCurrentScope && isLoadingMore,
+    error: isCurrentScope ? result.error : undefined,
+    isInitialLoading: !isCurrentScope || result.isInitialLoading,
+    isLoadingMore: isCurrentScope && result.isLoadingMore,
     items: visibleItems,
     loadMore,
     nextCursor: visibleNextCursor,
-    reload: loadFirstPage,
+    reload: () => loadFirstPage(true),
     removeOptimistically,
   };
 };
