@@ -48,4 +48,21 @@ describe("account picker", () => {
     expect(markup).toContain("Keep current account");
     expect(markup).toContain('aria-pressed="true"');
   });
+
+  it("locks a scheduled email to its single From account without hotkeys", () => {
+    const markup = renderToString(
+      <AccountPicker
+        accounts={[accounts[0]]}
+        enableHotkeys
+        locked
+        onSelect={() => {}}
+        selectedAccountId="first@example.com"
+      />
+    );
+
+    expect(markup).toContain('aria-label="From first@example.com"');
+    expect(markup).toContain("disabled");
+    expect(markup).not.toContain("aria-keyshortcuts");
+    expect(markup).not.toContain("second@example.com");
+  });
 });

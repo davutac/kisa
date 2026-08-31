@@ -4,6 +4,7 @@ import {
   getNextThreadSelectionIndex,
   getThreadSelectionAutoScrollDelta,
   getThreadSelectionRangeChanges,
+  getThreadSelectionScrollBehavior,
   getThreadSelectionKey,
   getVisibleThreadSelectionIndex,
   hasThreadSelectionDragStarted,
@@ -44,6 +45,16 @@ describe(getNextThreadSelectionIndex, () => {
 
   it("does not select anything in an empty list", () => {
     expect(getNextThreadSelectionIndex([], null, 1)).toBeNull();
+  });
+});
+
+describe(getThreadSelectionScrollBehavior, () => {
+  it("smoothly centers ordinary moves and keeps rapid repeats responsive", () => {
+    expect({
+      first: getThreadSelectionScrollBehavior(null, 1000),
+      rapid: getThreadSelectionScrollBehavior(1000, 1149),
+      settled: getThreadSelectionScrollBehavior(1000, 1150),
+    }).toStrictEqual({ first: "smooth", rapid: "auto", settled: "smooth" });
   });
 });
 

@@ -18,9 +18,10 @@ interface ComposerTemplateApplicationState {
 
 export const applyComposerTemplate = (
   current: ComposerTemplateApplicationState,
-  template: ComposerTemplateInput
+  template: ComposerTemplateInput,
+  fixedAccountId?: string
 ): ComposerTemplateApplicationState => ({
-  accountId: template.accountId ?? current.accountId,
+  accountId: fixedAccountId ?? template.accountId ?? current.accountId,
   attachments: current.attachments,
   bcc: template.bcc,
   body: template.body,

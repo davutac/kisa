@@ -33,6 +33,7 @@ import type { ThreadSelectionDirection } from "@/mail/thread-selection";
 import {
   getNextThreadSelectionIndex,
   getThreadSelectionKey,
+  getThreadSelectionScrollBehavior,
   getVisibleThreadSelectionIndex,
 } from "@/mail/thread-selection";
 import { blurFocusedMailboxLabel } from "@/mail/use-mailbox-label-navigation";
@@ -63,8 +64,6 @@ export interface MailThreadListProps {
   showAccount?: boolean;
   threads: readonly GmailThreadSummary[];
 }
-
-const RAPID_SELECTION_INTERVAL_MS = 150;
 
 const getRowDestructiveActions = (
   thread: GmailThreadSummary,
@@ -255,14 +254,14 @@ const MailThreadList = ({
 
     selectThread(getThreadSelectionKey(nextThread));
     const now = performance.now();
-    const lastSelectionMoveAt = lastSelectionMoveAtRef.current;
-    const isRapidSelectionMove =
-      lastSelectionMoveAt !== null &&
-      now - lastSelectionMoveAt < RAPID_SELECTION_INTERVAL_MS;
+    const scrollBehavior = getThreadSelectionScrollBehavior(
+      lastSelectionMoveAtRef.current,
+      now
+    );
     lastSelectionMoveAtRef.current = now;
     rowVirtualizer.scrollToIndex(nextIndex, {
       align: "center",
-      behavior: isRapidSelectionMove ? "auto" : "smooth",
+      behavior: scrollBehavior,
     });
   };
 

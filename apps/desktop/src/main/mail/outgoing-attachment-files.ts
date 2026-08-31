@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import type { Stats } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import { open, realpath } from "node:fs/promises";
@@ -25,6 +26,7 @@ const StoredAuthorizedAttachment = Schema.Struct({
   mtimeMs: NonNegativeNumber,
   path: Schema.NonEmptyString,
   size: NonNegativeInt,
+  storage: Schema.optional(Schema.Literal("app-owned")),
 });
 
 const decodeStoredAttachment = Schema.decodeUnknownOption(
@@ -33,6 +35,19 @@ const decodeStoredAttachment = Schema.decodeUnknownOption(
 const decodeStoredAttachmentArray = Schema.decodeUnknownOption(
   Schema.Array(Schema.Unknown)
 );
+const decodeStrictStoredAttachmentArray = Schema.decodeUnknownOption(
+  Schema.Array(StoredAuthorizedAttachment)
+);
+const decodeFileSystemError = Schema.decodeUnknownOption(
+  Schema.Struct({ code: Schema.optional(Schema.String) })
+);
+/* oxlint-disable eslint/no-bitwise -- Node open flags are bit masks. */
+const SAFE_READ_FLAGS =
+  constants.O_RDONLY |
+  (process.platform === "win32"
+    ? 0
+    : constants.O_NONBLOCK | constants.O_NOFOLLOW);
+/* oxlint-enable eslint/no-bitwise */
 
 export interface OpenedOutgoingAttachment {
   readonly file: FileHandle;
@@ -117,23 +132,39 @@ export const authorizeOutgoingAttachmentFiles = async (
   return records;
 };
 
-export const decodeStoredOutgoingAttachments = <Input>(
+export const decodeStoredOutgoingAttachmentEntries = <Input>(
   input: Input
-): readonly StoredMailDraftAttachment[] => {
+): readonly (StoredMailDraftAttachment | undefined)[] | undefined => {
   const values = decodeStoredAttachmentArray(input);
   if (Option.isNone(values)) {
-    return [];
+    return;
   }
-  return values.value.flatMap((value) => {
-    const decoded = decodeStoredAttachment(value);
-    return Option.isSome(decoded) ? [decoded.value] : [];
-  });
+  return values.value.map((value) =>
+    Option.getOrUndefined(decodeStoredAttachment(value))
+  );
 };
+
+export const decodeStoredOutgoingAttachmentsStrict = <Input>(
+  input: Input
+): readonly StoredMailDraftAttachment[] | undefined =>
+  Option.getOrUndefined(decodeStrictStoredAttachmentArray(input));
 
 export const openOutgoingAttachment = async (
   record: StoredMailDraftAttachment
 ): Promise<OpenedOutgoingAttachment> => {
-  const file = await open(record.path, "r");
+  let file: FileHandle;
+  try {
+    file = await open(record.path, SAFE_READ_FLAGS);
+  } catch (error) {
+    const fileSystemError = decodeFileSystemError(error);
+    if (
+      Option.isSome(fileSystemError) &&
+      fileSystemError.value.code === "ENOENT"
+    ) {
+      throw error;
+    }
+    throw authorizationError(`Could not read attachment: ${record.filename}`);
+  }
   try {
     const stats = await file.stat();
     if (!isSameFile(record, stats)) {

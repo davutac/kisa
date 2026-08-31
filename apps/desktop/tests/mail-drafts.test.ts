@@ -259,6 +259,43 @@ describe("mail drafts", () => {
     ).rejects.toMatchObject({ message: "Could not save draft" });
   });
 
+  it("does not let ordinary draft mutations bypass scheduled-mail rules", async () => {
+    const scheduledDraft = {
+      ...newDraft,
+      accountId: "person@example.com",
+      id: "scheduled-draft",
+    };
+    await Effect.runPromise(saveMailDraft(scheduledDraft, 7));
+    connection
+      .prepare(
+        `INSERT INTO scheduled_messages (
+          attempt_count, created_at, draft_id, next_attempt_at, revision,
+          rfc_message_id, scheduled_at, status, updated_at
+        ) VALUES (0, 1, ?, 2, 1, '<stable@scheduled.kisa.invalid>', 2,
+          'scheduled', 1)`
+      )
+      .run(scheduledDraft.id);
+
+    await expect(
+      Effect.runPromise(
+        saveMailDraft({ ...scheduledDraft, subject: "Bypass" }, 7)
+      )
+    ).rejects.toMatchObject({ message: "Could not save draft" });
+    await expect(
+      Effect.runPromise(
+        discardMailDraft({
+          accountId: scheduledDraft.accountId,
+          draftId: scheduledDraft.id,
+        })
+      )
+    ).rejects.toMatchObject({ message: "Could not discard draft" });
+    expect(
+      connection
+        .prepare("SELECT subject FROM mail_drafts WHERE id = ?")
+        .get(scheduledDraft.id)
+    ).toMatchObject({ subject: "Hello" });
+  });
+
   it("broadcasts attachment references scoped to each window", async () => {
     const [attachment] =
       outgoingAttachmentAuthorizations.restoreDraftAttachments(7, [

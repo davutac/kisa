@@ -24,6 +24,7 @@ interface AccountPickerBaseProps {
   readonly enableHotkeys?: boolean;
   readonly focusRefForAccount?: (accountId: string) => Ref<HTMLButtonElement>;
   readonly label?: string;
+  readonly locked?: boolean;
 }
 
 interface RequiredAccountPickerProps extends AccountPickerBaseProps {
@@ -50,6 +51,7 @@ interface AccountOptionButtonProps {
   readonly ariaLabel: string;
   readonly command?: HotkeyCommandId;
   readonly description?: string;
+  readonly disabled?: boolean;
   readonly focusRef?: Ref<HTMLButtonElement>;
   readonly isSelected: boolean;
   readonly label: string;
@@ -73,6 +75,7 @@ const AccountOptionButton = ({
   ariaLabel,
   command,
   description,
+  disabled = false,
   focusRef,
   isSelected,
   label,
@@ -91,6 +94,7 @@ const AccountOptionButton = ({
             aria-label={ariaLabel}
             aria-pressed={isSelected}
             className="h-7 min-w-7 shrink justify-start gap-0 overflow-visible rounded-full p-0"
+            disabled={disabled}
             onClick={onSelect}
             ref={focusRef}
             type="button"
@@ -141,6 +145,7 @@ const AccountPicker = (props: AccountPickerProps) => {
     enableHotkeys = false,
     focusRefForAccount,
     label = "From",
+    locked = false,
     nullOption,
     selectedAccountId,
   } = props;
@@ -158,15 +163,17 @@ const AccountPicker = (props: AccountPickerProps) => {
           <AccountOptionButton
             ariaLabel={nullOption.label}
             description={nullOption.description}
+            disabled={locked}
             isSelected={selectedAccountId === null}
             label={nullOption.label}
             onSelect={() => props.onSelect(null)}
           />
         )}
         {accounts.map((account, index) => {
-          const command = enableHotkeys
-            ? COMPOSER_ACCOUNT_COMMAND_IDS[index]
-            : undefined;
+          const command =
+            enableHotkeys && !locked
+              ? COMPOSER_ACCOUNT_COMMAND_IDS[index]
+              : undefined;
           const selectAccount = (): void => props.onSelect(account.email);
 
           return (
@@ -176,8 +183,11 @@ const AccountPicker = (props: AccountPickerProps) => {
               )}
               <AccountOptionButton
                 account={account}
-                ariaLabel={`Select ${account.email}`}
+                ariaLabel={
+                  locked ? `From ${account.email}` : `Select ${account.email}`
+                }
                 command={command}
+                disabled={locked}
                 focusRef={focusRefForAccount?.(account.email)}
                 isSelected={account.email === selectedAccountId}
                 label={account.email}

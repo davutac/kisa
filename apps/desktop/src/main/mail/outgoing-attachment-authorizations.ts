@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
 
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "../../shared/ipc/mail";
+import {
+  MAX_GMAIL_ATTACHMENT_BYTES,
+  MAX_GMAIL_ATTACHMENT_COUNT,
+} from "../../shared/ipc/mail";
 import type {
   GmailOutgoingAttachmentCapability,
   GmailOutgoingAttachmentSelectionRequest,
@@ -12,7 +15,7 @@ import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-auth
 import {
   authorizeOutgoingAttachmentFiles,
   closeOutgoingAttachment,
-  decodeStoredOutgoingAttachments,
+  decodeStoredOutgoingAttachmentEntries,
   openOutgoingAttachment,
   readOutgoingAttachment,
 } from "./outgoing-attachment-files";
@@ -24,7 +27,6 @@ import type {
 export { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-authorization-error";
 
 const DEFAULT_CAPABILITY_TTL_MS = 60_000;
-const MAX_ATTACHMENT_COUNT = 100;
 
 interface AttachmentReference {
   readonly ownerId: number;
@@ -49,6 +51,17 @@ const authorizationError = (
 ): OutgoingAttachmentAuthorizationError =>
   new OutgoingAttachmentAuthorizationError({ message });
 
+const assertValidAttachmentReferenceIds = (
+  referenceIds: readonly string[]
+): void => {
+  if (
+    referenceIds.length > MAX_GMAIL_ATTACHMENT_COUNT ||
+    new Set(referenceIds).size !== referenceIds.length
+  ) {
+    throw authorizationError("Attachment authorization is invalid");
+  }
+};
+
 export class OutgoingAttachmentAuthorizations {
   readonly #capabilities = new Map<string, PreparedAttachment>();
   readonly #capabilityTtlMs: number;
@@ -68,7 +81,7 @@ export class OutgoingAttachmentAuthorizations {
     ownerId: number,
     request: GmailOutgoingAttachmentSelectionRequest
   ): Promise<readonly MailDraftAttachment[]> {
-    if (request.files.length > MAX_ATTACHMENT_COUNT) {
+    if (request.files.length > MAX_GMAIL_ATTACHMENT_COUNT) {
       throw authorizationError("Too many attachments were selected");
     }
 
@@ -84,8 +97,14 @@ export class OutgoingAttachmentAuthorizations {
     ownerId: number,
     input: Input
   ): readonly MailDraftAttachment[] {
-    return decodeStoredOutgoingAttachments(input).map((record) =>
-      this.#registerReference(ownerId, record)
+    const entries = decodeStoredOutgoingAttachmentEntries(input);
+    if (entries === undefined || entries.length > MAX_GMAIL_ATTACHMENT_COUNT) {
+      return [this.#unavailableAttachment(0)];
+    }
+    return entries.map((record, index) =>
+      record === undefined
+        ? this.#unavailableAttachment(index)
+        : this.#registerReference(ownerId, record)
     );
   }
 
@@ -93,7 +112,9 @@ export class OutgoingAttachmentAuthorizations {
     ownerId: number,
     attachments: readonly MailDraftAttachment[]
   ): readonly StoredMailDraftAttachment[] {
-    return attachments.map(({ referenceId }) => {
+    const referenceIds = attachments.map(({ referenceId }) => referenceId);
+    assertValidAttachmentReferenceIds(referenceIds);
+    const records = attachments.map(({ referenceId }) => {
       const reference = this.#references.get(referenceId);
       if (reference === undefined || reference.ownerId !== ownerId) {
         throw authorizationError(
@@ -102,6 +123,14 @@ export class OutgoingAttachmentAuthorizations {
       }
       return reference.record;
     });
+    const totalBytes = records.reduce(
+      (total, record) => total + record.size,
+      0
+    );
+    if (totalBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+      throw authorizationError("Attachments can total up to 25 MB");
+    }
+    return records;
   }
 
   async prepare(
@@ -109,12 +138,7 @@ export class OutgoingAttachmentAuthorizations {
     referenceIds: readonly string[]
   ): Promise<readonly GmailOutgoingAttachmentCapability[]> {
     this.#expireCapabilities();
-    if (
-      referenceIds.length > MAX_ATTACHMENT_COUNT ||
-      new Set(referenceIds).size !== referenceIds.length
-    ) {
-      throw authorizationError("Attachment authorization is invalid");
-    }
+    assertValidAttachmentReferenceIds(referenceIds);
 
     const settled = await Promise.allSettled(
       referenceIds.map((referenceId) => {
@@ -172,12 +196,7 @@ export class OutgoingAttachmentAuthorizations {
     capabilityIds: readonly string[]
   ): Promise<readonly LoadedOutgoingAttachment[]> {
     this.#expireCapabilities();
-    if (
-      capabilityIds.length > MAX_ATTACHMENT_COUNT ||
-      new Set(capabilityIds).size !== capabilityIds.length
-    ) {
-      throw authorizationError("Attachment authorization is invalid");
-    }
+    assertValidAttachmentReferenceIds(capabilityIds);
 
     const prepared = capabilityIds.map((capability) => {
       const entry = this.#capabilities.get(capability);
@@ -247,6 +266,17 @@ export class OutgoingAttachmentAuthorizations {
       mediaType: record.mediaType,
       referenceId,
       size: record.size,
+    };
+  }
+
+  #unavailableAttachment(index: number): MailDraftAttachment {
+    const id = `unavailable-${this.#randomId()}-${index}`;
+    return {
+      filename: "Attachment unavailable — remove and reattach",
+      id,
+      mediaType: "application/octet-stream",
+      referenceId: id,
+      size: 0,
     };
   }
 

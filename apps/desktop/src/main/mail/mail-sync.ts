@@ -14,6 +14,8 @@ import type {
   GmailLabel,
   GmailThread as GmailDomainThread,
   Mailbox,
+  OutgoingAttachment,
+  SentMessage,
 } from "@repo/gmail/models";
 import {
   AccountId,
@@ -125,11 +127,22 @@ const MAX_BULK_THREAD_COUNT = 5000;
 // client multiplexes this bounded burst over HTTP/2.
 const BULK_THREAD_FALLBACK_CONCURRENCY = 25;
 
-// oxlint-disable-next-line unicorn/throw-new-error
-class MailSyncError extends Schema.TaggedError<MailSyncError>()(
+const MailDeliveryErrorKind = Schema.Literals([
+  "account-action-required",
+  "delivery-rejected",
+  "message-invalid",
+  "outcome-unknown",
+  "rate-limited",
+]);
+type MailDeliveryErrorKind = typeof MailDeliveryErrorKind.Type;
+
+// oxlint-disable-next-line unicorn/throw-new-error -- Effect Schema tagged errors are declared as generated classes.
+export class MailSyncError extends Schema.TaggedError<MailSyncError>()(
   "MailSyncError",
   {
+    kind: Schema.optional(MailDeliveryErrorKind),
     message: Schema.String,
+    retryAfterMs: Schema.optional(Schema.Int),
     retryable: Schema.optional(Schema.Boolean),
     status: Schema.optional(Schema.Int),
   }
@@ -168,11 +181,46 @@ const getMailSyncErrorMessage = (error: GmailError): string => {
   return error.message;
 };
 
-const toMailSyncError = (error: GmailError): MailSyncError =>
-  new MailSyncError({
+const getMailDeliveryErrorKind = (error: GmailError): MailDeliveryErrorKind => {
+  switch (error._tag) {
+    case "GmailRateLimitError": {
+      return "rate-limited";
+    }
+    case "GmailSendOutcomeUnknownError": {
+      return "outcome-unknown";
+    }
+    case "AccountNotFoundError":
+    case "GmailPermissionError":
+    case "GmailReauthorizationRequiredError": {
+      return "account-action-required";
+    }
+    case "GmailMimeError":
+    case "GmailValidationError": {
+      return "message-invalid";
+    }
+    default: {
+      return "delivery-rejected";
+    }
+  }
+};
+
+const toMailSyncError = (error: GmailError): MailSyncError => {
+  const fields = {
+    kind: getMailDeliveryErrorKind(error),
     message: getMailSyncErrorMessage(error),
     retryable: isRetryableGmailError(error),
-  });
+  };
+  if (
+    error._tag === "GmailRateLimitError" &&
+    error.retryAfterMs !== undefined
+  ) {
+    return new MailSyncError({
+      ...fields,
+      retryAfterMs: error.retryAfterMs,
+    });
+  }
+  return new MailSyncError(fields);
+};
 
 /**
  * The layer is rebuilt per call rather than held in a `ManagedRuntime`, so the
@@ -1482,11 +1530,22 @@ const consumeOutgoingAttachments = Effect.fn("consumeOutgoingAttachments")(
   }
 );
 
-export const sendNewMessage = Effect.fn("sendNewMessage")(
-  function* sendNewMessage(
-    request: GmailMessageSendRequest,
-    ownerWebContentsId: number
-  ) {
+interface NewMessageDeliveryRequest {
+  readonly accountId: string;
+  readonly bcc: readonly string[];
+  readonly body: { readonly html: string; readonly text: string };
+  readonly cc: readonly string[];
+  readonly rfc822MessageId?: string;
+  readonly subject: string;
+  readonly to: readonly string[];
+}
+
+/** Shared send boundary for immediate and locally scheduled new messages. */
+export const deliverNewMessage = Effect.fn("deliverNewMessage")(
+  function* deliverNewMessage(
+    request: NewMessageDeliveryRequest,
+    attachments: readonly OutgoingAttachment[]
+  ): Effect.fn.Return<SentMessage, MailSyncError> {
     const [to, cc, bcc] = yield* Effect.all([
       parseRecipients(request.to),
       parseRecipients(request.cc),
@@ -1496,16 +1555,12 @@ export const sendNewMessage = Effect.fn("sendNewMessage")(
 
     if (recipientCount === 0) {
       return yield* new MailSyncError({
+        kind: "message-invalid",
         message: "Add at least one recipient before sending",
       });
     }
 
-    const attachments = yield* consumeOutgoingAttachments(
-      ownerWebContentsId,
-      request.attachments
-    );
-
-    yield* runGmail(
+    const sent = yield* runGmail(
       Gmail.pipe(
         Effect.flatMap((gmail) =>
           gmail.sendMessage({
@@ -1518,6 +1573,7 @@ export const sendNewMessage = Effect.fn("sendNewMessage")(
               type: "html",
             },
             cc,
+            rfc822MessageId: request.rfc822MessageId,
             subject: request.subject,
             to,
           })
@@ -1526,6 +1582,42 @@ export const sendNewMessage = Effect.fn("sendNewMessage")(
     );
 
     yield* refreshAfterNewMessage(request.accountId);
+    return sent;
+  }
+);
+
+export const findSentNewMessageByRfc822MessageId = Effect.fn(
+  "findSentNewMessageByRfc822MessageId"
+)(function* findSentNewMessageByRfc822MessageId(
+  accountId: string,
+  rfc822MessageId: string
+) {
+  const sent = yield* runGmail(
+    Gmail.pipe(
+      Effect.flatMap((gmail) =>
+        gmail.findSentMessageByRfc822MessageId(
+          AccountId.make(accountId),
+          rfc822MessageId
+        )
+      )
+    )
+  );
+  if (sent !== undefined) {
+    yield* refreshAfterNewMessage(accountId);
+  }
+  return sent;
+});
+
+export const sendNewMessage = Effect.fn("sendNewMessage")(
+  function* sendNewMessage(
+    request: GmailMessageSendRequest,
+    ownerWebContentsId: number
+  ) {
+    const attachments = yield* consumeOutgoingAttachments(
+      ownerWebContentsId,
+      request.attachments
+    );
+    yield* deliverNewMessage(request, attachments);
   }
 );
 

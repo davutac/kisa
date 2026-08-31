@@ -321,6 +321,7 @@ interface ComposeHeaders {
   readonly bcc?: readonly Mailbox[];
   readonly cc?: readonly Mailbox[];
   readonly inReplyTo?: string;
+  readonly messageId?: string;
   readonly references?: string;
   readonly subject: string;
   readonly to: readonly Mailbox[];
@@ -338,6 +339,9 @@ const composeRaw = (
     `To: ${formatMailboxList(headers.to)}`,
     `Subject: ${encodeHeaderValue(headers.subject)}`,
     "MIME-Version: 1.0",
+    ...(headers.messageId === undefined
+      ? []
+      : [`Message-ID: ${headers.messageId.replaceAll(/[\r\n]/gu, "")}`]),
     ...(headers.cc === undefined || headers.cc.length === 0
       ? []
       : [`Cc: ${formatMailboxList(headers.cc)}`]),
@@ -414,6 +418,7 @@ export const GmailMimeLive = Layer.succeed(
             {
               bcc: input.bcc,
               cc: input.cc,
+              messageId: input.rfc822MessageId,
               subject: input.subject,
               to: input.to,
             },

@@ -10,11 +10,17 @@ import { cn } from "@/lib/utils";
 
 interface MailRelativeTimeProps {
   className?: string;
+  exactDateLabel?: string;
   timestamp: number;
 }
 
-const MailRelativeTime = ({ className, timestamp }: MailRelativeTimeProps) => {
-  const fullDate = format(timestamp, "PPpp", { locale: enUS });
+const MailRelativeTime = ({
+  className,
+  exactDateLabel,
+  timestamp,
+}: MailRelativeTimeProps) => {
+  const fullDate =
+    exactDateLabel ?? format(timestamp, "PPpp", { locale: enUS });
   const relativeTime = formatDistanceToNow(timestamp, {
     includeSeconds: false,
     locale: enUS,

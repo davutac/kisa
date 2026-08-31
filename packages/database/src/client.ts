@@ -61,6 +61,7 @@ const configureCipher = (connection: DatabaseConnection): void => {
 };
 
 const configureWalConnection = (connection: DatabaseConnection): void => {
+  connection.pragma("foreign_keys = ON");
   connection.pragma("journal_mode = WAL");
   connection.pragma("synchronous = NORMAL");
   connection.pragma("busy_timeout = 5000");
@@ -82,6 +83,7 @@ const encryptPlaintextDatabase = (
   const connection = new Database(databasePath);
 
   try {
+    connection.pragma("foreign_keys = ON");
     connection.pragma("wal_checkpoint(TRUNCATE)");
     connection.pragma("journal_mode = DELETE");
     configureCipher(connection);

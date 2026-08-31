@@ -51,7 +51,10 @@ export const useDraftPersistence = (mailApi: MailApi | undefined) => {
   );
 
   const popDraft = useCallback(
-    async (draft: MailDraftInput): Promise<boolean> => {
+    async (
+      draft: MailDraftInput,
+      preserveAttachments = false
+    ): Promise<boolean> => {
       if (mailApi === undefined) {
         return false;
       }
@@ -59,6 +62,7 @@ export const useDraftPersistence = (mailApi: MailApi | undefined) => {
         const reply = await mailApi.discardDraft({
           accountId: draft.accountId,
           draftId: draft.id,
+          preserveAttachments,
         });
         if (!reply.ok) {
           toast.error(reply.error);

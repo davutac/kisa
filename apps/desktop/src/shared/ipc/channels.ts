@@ -82,6 +82,26 @@ export const MAIL_TRUST_IMAGE_SENDER_CHANNEL =
 export const MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL =
   "desktop:mail:trusted-image-senders-changed";
 
+export const SCHEDULED_MAIL_ATTENTION_COUNT_CHANNEL =
+  "desktop:scheduled-mail:attention-count";
+export const SCHEDULED_MAIL_BEGIN_EDIT_CHANNEL =
+  "desktop:scheduled-mail:begin-edit";
+export const SCHEDULED_MAIL_CANCEL_TO_STASH_CHANNEL =
+  "desktop:scheduled-mail:cancel-to-stash";
+export const SCHEDULED_MAIL_CHANGED_CHANNEL = "desktop:scheduled-mail:changed";
+export const SCHEDULED_MAIL_DISCARD_CHANNEL = "desktop:scheduled-mail:discard";
+export const SCHEDULED_MAIL_FINISH_EDIT_CHANNEL =
+  "desktop:scheduled-mail:finish-edit";
+export const SCHEDULED_MAIL_LIST_PAGE_CHANNEL =
+  "desktop:scheduled-mail:list-page";
+export const SCHEDULED_MAIL_OUTCOME_CHANNEL = "desktop:scheduled-mail:outcome";
+export const SCHEDULED_MAIL_OUTCOME_READINESS_CHANNEL =
+  "desktop:scheduled-mail:outcome-readiness";
+export const SCHEDULED_MAIL_SCHEDULE_CHANNEL =
+  "desktop:scheduled-mail:schedule";
+export const SCHEDULED_MAIL_SEND_NOW_CHANNEL =
+  "desktop:scheduled-mail:send-now";
+
 export const ATTACHMENT_PREVIEW_LOAD_CHANNEL =
   "desktop:attachment-preview:load";
 export const ATTACHMENT_PREVIEW_SAVE_CHANNEL =

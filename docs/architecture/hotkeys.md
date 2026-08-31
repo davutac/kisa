@@ -14,7 +14,7 @@ command registry ──> useAppCommand ──> TanStack Hotkeys ──> keyboard
 
 The hotkey module owns commands that apply to an application screen or interaction mode:
 
-- App navigation, search, templates, and message composition
+- App navigation, search, templates, Scheduled, and message composition
 - Mailbox focus and multi-selection, thread opening, read-state toggling, and trashing
 - Closing the active thread and acting on the conversation being read
 - Selecting messages within a conversation and replying to or forwarding the selected message
@@ -59,6 +59,8 @@ In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, a
 
 `J`, `K`, and the arrow keys move mailbox focus. `X` adds or removes the focused conversation from the bulk selection. A revealed row checkbox provides the same action with the mouse. Pressing and dragging anywhere across a conversation row paints that row's checked or unchecked state across every row crossed; reversing the drag restores the rows crossed on the way back. A 15-pixel movement tolerance keeps ordinary clicks opening the conversation. `Escape` clears both bulk selection and mailbox focus.
 
+`Mod+Shift+S` toggles the Scheduled workspace while its title-bar button is available. The workspace mirrors mailbox row navigation without bulk selection: `Tab`, `ArrowDown`, or `J` moves to the next scheduled email; `Shift+Tab`, `ArrowUp`, or `K` moves to the previous one; and `Enter` opens the focused item. `Mod+S` cancels the focused schedule and moves its draft to Stash, matching the composer's stash/save shortcut. `Mod+D` opens the permanent-discard confirmation, matching the mailbox destructive-action shortcut. These actions target keyboard focus, not a hover-only row. A fresh move starts from the first or last visible row. Ordinary moves center smoothly, while rapid repeated moves switch to instant scrolling to stay responsive. `Escape` clears the active row, collapses its quick actions, and returns focus to the Scheduled heading. Scheduled does not register `X` or render selection checkboxes.
+
 While the inline mail search field owns focus, `Tab` or `Shift+Tab` dismisses its completion menu and hands keyboard control to the next or previous visible search result. The ordinary mailbox bindings then continue result navigation, and `Enter` opens the selected conversation.
 
 The mailbox label bar is a horizontal multi-toggle group. Mailbox-scoped `ArrowLeft` and `ArrowRight` commands move between label toggles, including when no label owns DOM focus yet. A fresh move starts from the first or last visible label, matching mailbox thread navigation; subsequent moves stop at the list edges and keep the focused toggle centered when possible. The commands ignore text inputs, while native `Space` toggles a focused label. `Escape` clears that label focus together with ordinary mailbox selection without changing the active label filters. `Mod+Shift+L` clears every active label filter, matching the X button and its shortcut tooltip. The same binding remains registered in the search scope while the inline search field owns focus.
@@ -77,9 +79,11 @@ Within a conversation, `J` or `ArrowDown` selects and opens the next newer messa
 
 `Mod+Shift+A` opens the attachment picker while composing a new email, reply, reply-all, or forward.
 
+In the new-email composer, `Mod+Shift+Enter` opens Schedule send. Once a delivery time is selected, the same command schedules or reschedules the email. `Mod+Enter` remains Send now. While editing an existing scheduled email, `Mod+D` opens its permanent-discard confirmation and `Mod+S` saves changed content without closing the editor.
+
 `Mod+Shift+C` cleans up the current new-email draft using the provider and model shown in the Clean button tooltip. The command remains available while focus is in the subject or message editor and is disabled for an empty draft or while another compose action is running.
 
-`Mod+,` and `Mod+Shift+T` toggle Settings and Templates. Pressing the active workspace's shortcut again restores the previous titlebar view. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
+`Mod+,`, `Mod+Shift+S`, and `Mod+Shift+T` toggle Settings, Scheduled, and Templates. Pressing the active workspace's shortcut again restores the previous titlebar view. The Scheduled command is registered only while scheduled mail exists or the workspace is already open. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
 
 ## Interaction layers
 
@@ -95,6 +99,7 @@ The provider stores each declaration under a unique token. The highest-priority,
 | ----------------- | ---------------------------------- |
 | None              | `always`, `app`                    |
 | `mailbox`         | `always`, `app`, `mailbox`         |
+| `scheduled`       | `always`, `app`, `scheduled`       |
 | `thread`          | `always`, `app`, `thread`          |
 | `thread-composer` | `always`, `app`, `thread-composer` |
 | `settings`        | `always`, `app`, `settings`        |
@@ -119,6 +124,7 @@ const LAYER_PRIORITY = {
   thread: 20,
   "thread-composer": 50,
   mailbox: 10,
+  scheduled: 10,
   settings: 10,
   templates: 10,
 } as const;

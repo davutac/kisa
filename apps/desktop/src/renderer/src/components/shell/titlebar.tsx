@@ -22,12 +22,14 @@ import {
   HotkeyHint,
   useAppCommand,
 } from "@/hotkeys";
+import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 import { getRuntimeCapabilities } from "@/platform/desktop";
-import { useSelectedAccountId } from "@/state/mailbox";
+import { useScheduledTitlebarState } from "@/scheduled/use-scheduled-titlebar-state";
 
 import {
   resolveTitlebarViewToggle,
+  shouldShowTitlebarScheduledButton,
   toTitlebarViewPath,
 } from "./titlebar-view-toggle";
 import type {
@@ -35,16 +37,19 @@ import type {
   TitlebarWorkspacePath,
 } from "./titlebar-view-toggle";
 import TitlebarAccountSwitcher from "./titlebar/titlebar-account-switcher";
+import TitlebarScheduledButton from "./titlebar/titlebar-scheduled-button";
 import TitlebarWorkspaceButton from "./titlebar/titlebar-workspace-button";
 
 const Titlebar = () => {
   const { updates } = getRuntimeCapabilities();
-  const selectedAccountId = useSelectedAccountId();
+  const { selectedAccountId } = useMailboxAccountScope();
+  const { attentionCount, hasScheduledMail } = useScheduledTitlebarState();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const previousPathsRef = useRef<
     Record<TitlebarWorkspacePath, TitlebarViewPath | null>
   >({
+    "/scheduled": null,
     "/settings": null,
     "/templates": null,
   });
@@ -52,7 +57,12 @@ const Titlebar = () => {
   const allAccountsDisplay = getHotkeyDisplay("app.openAllAccounts");
   const currentPath = toTitlebarViewPath(pathname);
   const isSettingsOpen = currentPath === "/settings";
+  const isScheduledOpen = currentPath === "/scheduled";
   const isTemplatesOpen = currentPath === "/templates";
+  const showScheduledButton = shouldShowTitlebarScheduledButton(
+    isScheduledOpen,
+    hasScheduledMail
+  );
 
   const toggleView = (targetPath: TitlebarWorkspacePath): void => {
     const previousPath = previousPathsRef.current[targetPath];
@@ -70,14 +80,29 @@ const Titlebar = () => {
   };
 
   const toggleSettings = (): void => toggleView("/settings");
+  const toggleScheduled = (): void => toggleView("/scheduled");
   const toggleTemplates = (): void => toggleView("/templates");
 
   useAppCommand("app.openAllAccounts", openAllAccounts);
+  useAppCommand("app.openScheduled", toggleScheduled, {
+    enabled: showScheduledButton,
+  });
 
   return (
     <header className="app-titlebar bg-background fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-2">
       <div className="flex items-center gap-3">
-        <TitlebarNewMessage />
+        <div className="flex items-center gap-1">
+          <TitlebarNewMessage />
+          {showScheduledButton ? (
+            <div className="app-titlebar-interactive">
+              <TitlebarScheduledButton
+                attentionCount={attentionCount}
+                isOpen={isScheduledOpen}
+                onToggle={toggleScheduled}
+              />
+            </div>
+          ) : null}
+        </div>
         <div className="app-titlebar-interactive flex min-w-0 items-center gap-1">
           <Tooltip>
             <TooltipTrigger
@@ -89,7 +114,8 @@ const Titlebar = () => {
                   size="icon"
                   type="button"
                   variant={
-                    currentPath === "/" && selectedAccountId === null
+                    (currentPath === "/" || currentPath === "/scheduled") &&
+                    selectedAccountId === null
                       ? "secondary"
                       : "ghost"
                   }

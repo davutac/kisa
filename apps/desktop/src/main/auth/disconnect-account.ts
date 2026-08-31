@@ -8,6 +8,7 @@ import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor"
 import { cancelMailBackfill } from "../mail/mail-backfill";
 import { forgetAccountDrafts } from "../mail/mail-drafts";
 import { forgetAccountMailData } from "../mail/mail-sync";
+import { forgetAccountScheduledMail } from "../mail/scheduled-mail";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
 import { forgetAccountSettings } from "../settings/account-settings";
 import { notifyComposerTemplatesChanged } from "../templates/composer-templates";
@@ -57,6 +58,9 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
           yield* revokeGoogleAccountAccess(email);
           yield* deleteAccountRecord(email);
           yield* forgetAccountMailData(email).pipe(
+            Effect.mapError(toDisconnectError)
+          );
+          yield* forgetAccountScheduledMail(email).pipe(
             Effect.mapError(toDisconnectError)
           );
           yield* forgetAccountSettings(email).pipe(

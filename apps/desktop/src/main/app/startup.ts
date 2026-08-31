@@ -1,4 +1,5 @@
 import { Effect, Exit, Option } from "effect";
+import { app } from "electron";
 
 import type {
   AppStartupErrorPayload,
@@ -7,9 +8,15 @@ import type {
 import { startThreadCategorization } from "../ai/thread-categorization";
 import { startDatabase } from "../database";
 import type { DatabaseError } from "../database";
+import { configureDraftAttachmentStore } from "../mail/draft-attachment-store";
 import { startMailBackfill } from "../mail/mail-backfill";
+import { reconcileDraftAttachmentStore } from "../mail/mail-drafts";
 import { warmCorrespondentCache } from "../mail/mail-search";
 import { startMailSync } from "../mail/mail-sync";
+import {
+  adoptLegacyScheduledMailAttachments,
+  startScheduledMail,
+} from "../mail/scheduled-mail";
 import { refreshUnreadBadge } from "../mail/unread-badge";
 import { getCurrentAppSettings } from "../settings/app-settings";
 
@@ -25,9 +32,17 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
   if (Exit.isFailure(exit)) {
     startupPromise = null;
   } else {
-    await Effect.runPromise(refreshUnreadBadge().pipe(Effect.ignore));
+    configureDraftAttachmentStore(app.getPath("userData"));
+    await Effect.runPromise(
+      Effect.gen(function* prepareMailState() {
+        yield* adoptLegacyScheduledMailAttachments().pipe(Effect.ignore);
+        yield* reconcileDraftAttachmentStore().pipe(Effect.ignore);
+        yield* refreshUnreadBadge().pipe(Effect.ignore);
+      })
+    );
     startThreadCategorization();
     startMailSync();
+    void startScheduledMail();
     // Picks up any account whose index was still running when the app last
     // closed, and seeds the renderer's progress state for the rest.
     void Effect.runPromise(startMailBackfill().pipe(Effect.ignore));

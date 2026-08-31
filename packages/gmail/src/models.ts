@@ -300,6 +300,8 @@ export interface SendMessageInput {
   readonly bcc?: readonly Mailbox[];
   readonly body: ComposerBody;
   readonly cc?: readonly Mailbox[];
+  /** Stable RFC 822 Message-ID used to reconcile an ambiguous scheduled send. */
+  readonly rfc822MessageId?: string;
   readonly subject: string;
   readonly to: readonly Mailbox[];
 }

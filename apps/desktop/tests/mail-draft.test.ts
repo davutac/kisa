@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import type { EmailRecipients } from "../src/renderer/src/components/mail/email-recipient-fields";
 import {
+  areMailDraftInputsEqual,
   changeNewMailDraftAccount,
   createNewMailDraft,
   createThreadMailDraft,
@@ -12,7 +13,7 @@ import {
   isDraftBodyOnlySignature,
   isThreadMailDraftEmpty,
 } from "../src/renderer/src/mail/mail-draft";
-import type { MailDraftInput } from "../src/shared/ipc/mail";
+import type { MailDraft, MailDraftInput } from "../src/shared/ipc/mail";
 
 const accountId = "person@example.com";
 const signature = (text: string) => ({ html: `<p>${text}</p>`, text });
@@ -29,6 +30,24 @@ describe("mail draft lifecycle", () => {
       "First line Second line"
     );
     expect(getDraftBodyPreview(" \n\t ")).toBe("");
+  });
+
+  it("normalizes a persisted draft to its editable input fields", () => {
+    const input = newDraft({
+      body: { html: "<p>Hello</p>", text: "Hello" },
+      subject: "Hello",
+      to: ["friend@example.com"],
+    });
+    const persisted: MailDraft = {
+      ...input,
+      createdAt: 100,
+      updatedAt: 200,
+    };
+
+    expect(areMailDraftInputsEqual(persisted, input)).toBeTruthy();
+    expect(
+      areMailDraftInputsEqual(persisted, { ...input, subject: "Changed" })
+    ).toBeFalsy();
   });
 
   it("focuses the first incomplete field when resuming a stash", () => {

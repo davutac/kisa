@@ -1,4 +1,4 @@
-import { mailDrafts } from "@repo/database/schemas";
+import { mailDrafts, scheduledMessages } from "@repo/database/schemas";
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { Clock, Effect, Schema } from "effect";
@@ -18,10 +18,16 @@ import {
   sendRendererEvent,
   sendRendererEventToEachWindow,
 } from "../electron/renderer-events";
+import type { DraftAttachmentStore } from "./draft-attachment-store";
+import {
+  bestEffortDraftAttachmentCleanup,
+  getOptionalDraftAttachmentStore,
+} from "./draft-attachment-store";
 import {
   bindOutgoingAttachmentOwner,
   outgoingAttachmentAuthorizations,
 } from "./outgoing-attachment-authorizations";
+import { decodeStoredOutgoingAttachmentsStrict } from "./outgoing-attachment-files";
 
 // oxlint-disable-next-line unicorn/throw-new-error
 class MailDraftError extends Schema.TaggedError<MailDraftError>()(
@@ -30,6 +36,22 @@ class MailDraftError extends Schema.TaggedError<MailDraftError>()(
 ) {}
 
 type MailDraftRow = typeof mailDrafts.$inferSelect;
+
+const decodeStoredAttachments = (
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Stored JSON is strictly decoded at the database boundary.
+  input: unknown
+): readonly StoredMailDraftAttachment[] =>
+  decodeStoredOutgoingAttachmentsStrict(input) ?? [];
+
+const cleanupOwnedAttachments = (
+  cleanup: (store: DraftAttachmentStore) => Effect.Effect<void, unknown>
+): Effect.Effect<void> => {
+  const store = getOptionalDraftAttachmentStore();
+  if (store === undefined) {
+    return Effect.void;
+  }
+  return bestEffortDraftAttachmentCleanup(cleanup(store));
+};
 
 const toMailDraftSignature = (
   row: MailDraftRow
@@ -76,7 +98,7 @@ const hasValidDraftContext = (input: MailDraftInput): boolean =>
       input.messageId !== undefined &&
       input.threadId !== undefined) && hasValidDraftSignature(input);
 
-const toMailDraft = (
+export const toMailDraft = (
   row: MailDraftRow,
   ownerWebContentsId: number
 ): MailDraft => ({
@@ -103,7 +125,14 @@ const notifyDraftChanged = (change: MailDraftChanged): void => {
   sendRendererEvent(MAIL_DRAFT_CHANGED_CHANNEL, MailDraftChanged, change);
 };
 
-const notifyDraftUpserted = (
+export const notifyDraftRemoved = (
+  draftId: string,
+  accountId: string
+): void => {
+  notifyDraftChanged({ accountId, draftId, kind: "remove" });
+};
+
+export const notifyDraftUpserted = (
   draft: MailDraft,
   sourceOwnerId: number,
   storedAttachments: readonly StoredMailDraftAttachment[]
@@ -130,6 +159,17 @@ const notifyDraftUpserted = (
   );
 };
 
+export const notifyStoredDraftUpserted = (row: MailDraftRow): void => {
+  sendRendererEventToEachWindow(
+    MAIL_DRAFT_CHANGED_CHANNEL,
+    MailDraftChanged,
+    (webContents) => ({
+      draft: toMailDraft(row, bindOutgoingAttachmentOwner(webContents)),
+      kind: "upsert" as const,
+    })
+  );
+};
+
 export const listStashedDrafts = Effect.fn("listStashedDrafts")(
   function* listStashedDrafts(
     request: MailDraftListRequest,
@@ -139,9 +179,14 @@ export const listStashedDrafts = Effect.fn("listStashedDrafts")(
       database
         .select()
         .from(mailDrafts)
+        .leftJoin(
+          scheduledMessages,
+          eq(scheduledMessages.draftId, mailDrafts.id)
+        )
         .where(
           and(
             eq(mailDrafts.kind, "new"),
+            isNull(scheduledMessages.draftId),
             request.accountIds.length === 0
               ? isNull(mailDrafts.accountEmail)
               : or(
@@ -158,7 +203,9 @@ export const listStashedDrafts = Effect.fn("listStashedDrafts")(
       )
     );
 
-    return rows.map((row) => toMailDraft(row, ownerWebContentsId));
+    return rows.map(({ mail_drafts: row }) =>
+      toMailDraft(row, ownerWebContentsId)
+    );
   }
 );
 
@@ -227,6 +274,15 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
       const existing = await transaction.query.mailDrafts.findFirst({
         where: { id: input.id },
       });
+      const scheduled = await transaction.query.scheduledMessages.findFirst({
+        columns: { draftId: true },
+        where: { draftId: input.id },
+      });
+      if (scheduled !== undefined) {
+        throw new Error(
+          "Scheduled drafts must be edited through scheduled mail"
+        );
+      }
       const replaced =
         input.threadId === undefined || input.accountId === undefined
           ? undefined
@@ -298,6 +354,12 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
 
       return {
         createdAt: values.createdAt,
+        previousAttachments: [
+          ...decodeStoredAttachments(existing?.attachments),
+          ...(replaced?.id === existing?.id
+            ? []
+            : decodeStoredAttachments(replaced?.attachments)),
+        ],
         replacedDraftId: replaced?.id === input.id ? undefined : replaced?.id,
       };
     })
@@ -307,6 +369,10 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
     )
   );
   const draft: MailDraft = { ...input, createdAt: saved.createdAt, updatedAt };
+
+  yield* cleanupOwnedAttachments((store) =>
+    store.deleteNotRetained(saved.previousAttachments, storedAttachments)
+  );
 
   if (saved.replacedDraftId !== undefined) {
     notifyDraftChanged({
@@ -339,6 +405,17 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
         const [draft] = drafts;
 
         if (draft !== undefined) {
+          const scheduled = await transaction.query.scheduledMessages.findFirst(
+            {
+              columns: { draftId: true },
+              where: { draftId: request.draftId },
+            }
+          );
+          if (scheduled !== undefined) {
+            throw new Error(
+              "Scheduled drafts must be discarded through scheduled mail"
+            );
+          }
           await transaction
             .delete(mailDrafts)
             .where(eq(mailDrafts.id, request.draftId))
@@ -361,20 +438,62 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
         threadId: removed.threadId ?? undefined,
       });
     }
+    if (request.preserveAttachments !== true) {
+      yield* cleanupOwnedAttachments((store) =>
+        store
+          .delete(decodeStoredAttachments(removed?.attachments))
+          .pipe(Effect.andThen(store.deleteDraft(request.draftId)))
+      );
+    }
   }
 );
 
 export const forgetAccountDrafts = Effect.fn("forgetAccountDrafts")(
   function* forgetAccountDrafts(accountId: string) {
-    yield* withDatabaseClient((database) =>
-      database
-        .delete(mailDrafts)
-        .where(eq(mailDrafts.accountEmail, accountId))
-        .run()
+    const removed = yield* withDatabaseClient((database) =>
+      database.transaction(async (transaction) => {
+        const rows = await transaction
+          .select({ attachments: mailDrafts.attachments })
+          .from(mailDrafts)
+          .where(eq(mailDrafts.accountEmail, accountId))
+          .all();
+        await transaction
+          .delete(mailDrafts)
+          .where(eq(mailDrafts.accountEmail, accountId))
+          .run();
+        return rows;
+      })
     ).pipe(
       Effect.mapError(
         () => new MailDraftError({ message: "Could not delete account drafts" })
       )
     );
+    yield* cleanupOwnedAttachments((store) =>
+      store.delete(
+        removed.flatMap(({ attachments }) =>
+          decodeStoredAttachments(attachments)
+        )
+      )
+    );
   }
 );
+
+export const reconcileDraftAttachmentStore = Effect.fn(
+  "reconcileDraftAttachmentStore"
+)(function* reconcileDraftAttachmentStore() {
+  const rows = yield* withDatabaseClient((database) =>
+    database
+      .select({ attachments: mailDrafts.attachments })
+      .from(mailDrafts)
+      .all()
+  ).pipe(
+    Effect.mapError(
+      () => new MailDraftError({ message: "Could not reconcile draft files" })
+    )
+  );
+  yield* cleanupOwnedAttachments((store) =>
+    store.cleanupOrphans(
+      rows.flatMap(({ attachments }) => decodeStoredAttachments(attachments))
+    )
+  );
+});

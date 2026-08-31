@@ -139,6 +139,10 @@ export interface GmailGatewayService {
   readonly getMailboxTotals: (
     authorization: GmailAuthorization
   ) => Effect.Effect<GatewayResult<GatewayMailboxTotals>, GmailGatewayError>;
+  readonly findSentMessageByRfc822MessageId: (
+    authorization: GmailAuthorization,
+    rfc822MessageId: string
+  ) => Effect.Effect<GatewayResult<SentMessage | undefined>, GmailGatewayError>;
   readonly getThread: (
     authorization: GmailAuthorization,
     threadId: ThreadId

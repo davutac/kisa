@@ -84,6 +84,19 @@ export interface MailApi {
   trustImageSender: DesktopBridge["trustImageSender"];
 }
 
+export interface ScheduledMailApi {
+  beginEdit: DesktopBridge["beginScheduledMailEdit"];
+  cancelToStash: DesktopBridge["cancelScheduledMailToStash"];
+  discard: DesktopBridge["discardScheduledMail"];
+  finishEdit: DesktopBridge["finishScheduledMailEdit"];
+  getAttentionCount: DesktopBridge["getScheduledMailAttentionCount"];
+  listPage: DesktopBridge["listScheduledMailPage"];
+  onChanged: DesktopBridge["onScheduledMailChanged"];
+  onOutcome: DesktopBridge["onScheduledMailOutcome"];
+  schedule: DesktopBridge["scheduleMail"];
+  sendNow: DesktopBridge["sendScheduledMailNow"];
+}
+
 export interface SettingsApi {
   beginDatabaseImport: DesktopBridge["beginDatabaseImport"];
   cancelDatabaseImport: DesktopBridge["cancelDatabaseImport"];
@@ -120,6 +133,7 @@ export interface RuntimeCapabilities {
   lifecycle?: AppLifecycleApi;
   loginItemSettings?: LoginItemSettingsApi;
   mail?: MailApi;
+  scheduledMail?: ScheduledMailApi;
   settings?: SettingsApi;
   startup?: AppStartupApi;
   templates?: TemplateApi;
@@ -135,6 +149,7 @@ interface DesktopCapabilities {
   lifecycle: AppLifecycleApi;
   loginItemSettings?: LoginItemSettingsApi;
   mail: MailApi;
+  scheduledMail: ScheduledMailApi;
   settings: SettingsApi;
   startup: AppStartupApi;
   templates: TemplateApi;
@@ -220,6 +235,18 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       trustImageSender: bridge.trustImageSender,
       updateLabel: bridge.updateGmailLabel,
     },
+    scheduledMail: {
+      beginEdit: bridge.beginScheduledMailEdit,
+      cancelToStash: bridge.cancelScheduledMailToStash,
+      discard: bridge.discardScheduledMail,
+      finishEdit: bridge.finishScheduledMailEdit,
+      getAttentionCount: bridge.getScheduledMailAttentionCount,
+      listPage: bridge.listScheduledMailPage,
+      onChanged: bridge.onScheduledMailChanged,
+      onOutcome: bridge.onScheduledMailOutcome,
+      schedule: bridge.scheduleMail,
+      sendNow: bridge.sendScheduledMailNow,
+    },
     settings: {
       beginDatabaseImport: bridge.beginDatabaseImport,
       cancelDatabaseImport: bridge.cancelDatabaseImport,
@@ -270,6 +297,7 @@ export const getRuntimeCapabilities = (
       lifecycle: undefined,
       loginItemSettings: undefined,
       mail: undefined,
+      scheduledMail: undefined,
       settings: undefined,
       startup: undefined,
       templates: undefined,
@@ -298,6 +326,9 @@ export const getAiApi = (): AiApi | undefined => getRuntimeCapabilities().ai;
 
 export const getMailApi = (): MailApi | undefined =>
   getRuntimeCapabilities().mail;
+
+export const getScheduledMailApi = (): ScheduledMailApi | undefined =>
+  getRuntimeCapabilities().scheduledMail;
 
 export const getSettingsApi = (): SettingsApi | undefined =>
   getRuntimeCapabilities().settings;

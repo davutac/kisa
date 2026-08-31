@@ -100,6 +100,11 @@ const RATE_LIMIT_REASONS = new Set([
   "userRateLimitExceeded",
 ]);
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+const RetryAfterHeader = Schema.Union([Schema.Finite, Schema.String]);
+const RetryAfterHeaders = Schema.Struct({
+  "Retry-After": Schema.optional(RetryAfterHeader),
+  "retry-after": Schema.optional(RetryAfterHeader),
+});
 
 const GaxiosLikeError = Schema.Struct({
   code: Schema.optional(Schema.Union([Schema.Finite, Schema.String])),
@@ -107,6 +112,9 @@ const GaxiosLikeError = Schema.Struct({
     Schema.Array(Schema.Struct({ reason: Schema.optional(Schema.String) }))
   ),
   message: Schema.optional(Schema.String),
+  response: Schema.optional(
+    Schema.Struct({ headers: Schema.optional(RetryAfterHeaders) })
+  ),
   status: Schema.optional(Schema.Finite),
 });
 type GaxiosLikeError = typeof GaxiosLikeError.Type;
@@ -140,6 +148,28 @@ const readErrorMessage = (
   fallback: string
 ): string => candidate?.message ?? fallback;
 
+const readRetryAfterMs = (
+  candidate: GaxiosLikeError | undefined,
+  now: number
+): number | undefined => {
+  const header =
+    candidate?.response?.headers?.["retry-after"] ??
+    candidate?.response?.headers?.["Retry-After"];
+  if (header === undefined) {
+    return undefined;
+  }
+
+  const value = String(header).trim();
+  if (/^\d+$/u.test(value)) {
+    const seconds = Number(value);
+    const milliseconds = seconds * 1000;
+    return Number.isSafeInteger(milliseconds) ? milliseconds : undefined;
+  }
+
+  const retryAt = Date.parse(value);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : undefined;
+};
+
 /**
  * Translates a `@googleapis/gmail` rejection into the domain errors that
  * `GmailService` already branches on. Callers opt into the meaning of 404:
@@ -164,14 +194,17 @@ const toGatewayError = <ErrorInput>(
 
   if (
     status === 429 ||
-    reasons.some((reason) => RATE_LIMIT_REASONS.has(reason))
+    (status === 403 && reasons.some((reason) => RATE_LIMIT_REASONS.has(reason)))
   ) {
     // Every rate limit is reported, whoever provoked it: the budget is
     // per-user, so a foreground burst tripping the limit has to slow the
     // indexer too.
     mailQuotaGovernor.reportRateLimited(accountId);
 
-    return new GmailRateLimitError({ accountId, message });
+    const retryAfterMs = readRetryAfterMs(candidate, Date.now());
+    return retryAfterMs === undefined
+      ? new GmailRateLimitError({ accountId, message })
+      : new GmailRateLimitError({ accountId, message, retryAfterMs });
   }
 
   if (status === 404 && options.historyExpiredOnNotFound === true) {
@@ -618,6 +651,35 @@ export const GmailGatewayLive = Layer.succeed(
         },
       }),
 
+    findSentMessageByRfc822MessageId: (authorization, rfc822MessageId) =>
+      Effect.tryPromise({
+        catch: (error) => toGatewayError(authorization.account.id, error),
+        try: async (): Promise<GatewayResult<SentMessage | undefined>> => {
+          const client = createClient(authorization.credentials);
+
+          mailQuotaGovernor.charge(
+            authorization.account.id,
+            QUOTA_UNITS.messagesList
+          );
+          const response = await client.users.messages.list({
+            includeSpamTrash: true,
+            maxResults: 1,
+            q: `in:sent rfc822msgid:${rfc822MessageId.replaceAll(/^<|>$/gu, "")}`,
+            userId: "me",
+          });
+          const match = response.data.messages?.[0];
+
+          return succeed(
+            !isPresent(match?.id) || !isPresent(match.threadId)
+              ? undefined
+              : new SentMessage({
+                  id: MessageId.make(match.id),
+                  threadId: ThreadId.make(match.threadId),
+                })
+          );
+        },
+      }),
+
     getAttachment: (authorization, request) =>
       Effect.tryPromise({
         catch: (error) =>
@@ -715,7 +777,6 @@ export const GmailGatewayLive = Layer.succeed(
           });
         },
       }),
-
     getThread: (authorization, threadId) =>
       Effect.tryPromise({
         catch: (error) =>

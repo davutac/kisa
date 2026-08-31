@@ -14,4 +14,9 @@ export { gmailTrustedImageSenders } from "./gmail-trusted-image-senders";
 export { gmailThreads } from "./gmail-threads";
 export { mailDrafts } from "./mail-drafts";
 export type { MailDraftKind, StoredMailDraftAttachment } from "./mail-drafts";
+export { scheduledMessages } from "./scheduled-messages";
+export type {
+  ScheduledMessageAttentionReason,
+  ScheduledMessageStatus,
+} from "./scheduled-messages";
 export { test } from "./test";

@@ -23,7 +23,7 @@ const Providers = ({ children }: { children: React.ReactNode }) => (
       <AppHotkeysProvider>
         <UndoProvider>
           <ConfirmDialogProvider>
-            <TooltipProvider>
+            <TooltipProvider delay={0}>
               {children}
               <Toaster />
             </TooltipProvider>

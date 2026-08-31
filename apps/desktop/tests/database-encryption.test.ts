@@ -31,6 +31,7 @@ describe(openEncryptedDatabaseConnection, () => {
     const databasePath = makeDatabasePath();
     const key = Buffer.alloc(32, 1);
     const created = openEncryptedDatabaseConnection(databasePath, key);
+    expect(created.pragma("foreign_keys", { simple: true })).toBe(1);
     created.exec("CREATE TABLE examples (value TEXT)");
     created.prepare("INSERT INTO examples VALUES (?)").run("Kisa");
     created.close();
@@ -39,6 +40,7 @@ describe(openEncryptedDatabaseConnection, () => {
 
     const reopened = openEncryptedDatabaseConnection(databasePath, key);
     try {
+      expect(reopened.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(
         reopened.prepare("SELECT value FROM examples").get()
       ).toStrictEqual({ value: "Kisa" });
@@ -61,6 +63,7 @@ describe(openEncryptedDatabaseConnection, () => {
       Buffer.alloc(32, 2)
     );
     try {
+      expect(encrypted.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(
         encrypted.prepare("SELECT value FROM examples").get()
       ).toStrictEqual({ value: "migrated" });

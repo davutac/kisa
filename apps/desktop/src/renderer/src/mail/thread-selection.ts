@@ -13,6 +13,7 @@ interface ThreadSelectionDragPoint {
 }
 
 const THREAD_SELECTION_DRAG_THRESHOLD = 15;
+const THREAD_SELECTION_RAPID_NAVIGATION_INTERVAL_MS = 150;
 const THREAD_SELECTION_SCROLL_EDGE = 64;
 const THREAD_SELECTION_MAX_SCROLL_SPEED = 18;
 
@@ -51,6 +52,15 @@ export const getThreadSelectionAutoScrollDelta = (
 export const getThreadSelectionKey = (
   thread: Pick<GmailThreadSummary, "accountId" | "threadId">
 ): string => `${thread.accountId}:${thread.threadId}`;
+
+export const getThreadSelectionScrollBehavior = (
+  previousMoveAt: number | null,
+  currentMoveAt: number
+): "auto" | "smooth" =>
+  previousMoveAt !== null &&
+  currentMoveAt - previousMoveAt < THREAD_SELECTION_RAPID_NAVIGATION_INTERVAL_MS
+    ? "auto"
+    : "smooth";
 
 export const parseThreadSelectionKey = (
   key: string
