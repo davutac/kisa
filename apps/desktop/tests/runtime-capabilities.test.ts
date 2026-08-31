@@ -16,6 +16,7 @@ describe(getRuntimeCapabilities, () => {
       lifecycle: undefined,
       loginItemSettings: undefined,
       mail: undefined,
+      scheduledMail: undefined,
       settings: undefined,
       startup: undefined,
       templates: undefined,
@@ -38,6 +39,7 @@ describe(getRuntimeCapabilities, () => {
       lifecycle: undefined,
       loginItemSettings: undefined,
       mail: undefined,
+      scheduledMail: undefined,
       settings: undefined,
       startup: undefined,
       templates: undefined,
@@ -64,12 +66,16 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: [], ok: true as const }),
     beginDatabaseImport: () =>
       Promise.resolve({ data: { sessionId: "import-1" }, ok: true as const }),
+    beginScheduledMailEdit: () =>
+      Promise.resolve({ error: "unused", ok: false as const }),
     bulkMutateThreads: () =>
       Promise.resolve({
         data: { failed: [], succeeded: [] },
         ok: true as const,
       }),
     cancelDatabaseImport: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
+    cancelScheduledMailToStash: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     categorizeThread: () =>
       Promise.resolve({ data: { labelIds: [] }, ok: true as const }),
@@ -89,6 +95,8 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     discardMailDraft: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    discardScheduledMail: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     disconnectGoogleAccount: () =>
       Promise.resolve({ data: [], ok: true as const }),
     downloadUpdate: () => Promise.resolve({ state: "idle" as const }),
@@ -96,6 +104,11 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
     exportDatabaseRecoveryKey: () =>
       Promise.resolve({ data: "saved" as const, ok: true as const }),
+    finishScheduledMailEdit: () =>
+      Promise.resolve({
+        data: { kind: "finished" as const },
+        ok: true as const,
+      }),
     generateEmailReply: () =>
       Promise.resolve({ data: { body: "Reply" }, ok: true }),
     getAiSettings: () =>
@@ -110,6 +123,11 @@ describe(getRuntimeCapabilities, () => {
       }),
     getMailIndexProgress: () => Promise.resolve({ accounts: [] }),
     getMailSyncStatus: () => Promise.resolve({ accountIds: [] }),
+    getScheduledMailAttentionCount: () =>
+      Promise.resolve({
+        data: { count: 0, hasScheduledMail: false },
+        ok: true as const,
+      }),
     getSpamStatus: () =>
       Promise.resolve({ data: { hasUnreadSpam: false }, ok: true as const }),
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
@@ -129,9 +147,16 @@ describe(getRuntimeCapabilities, () => {
     listGmailSenders: () =>
       Promise.resolve({ data: { senders: [] }, ok: true as const }),
     listGoogleAccounts: () => Promise.resolve({ data: [], ok: true as const }),
+    listScheduledMailPage: () =>
+      Promise.resolve({ data: { items: [] }, ok: true as const }),
     listStashedDrafts: () => Promise.resolve({ data: [], ok: true as const }),
     listTrustedImageSenders: () =>
       Promise.resolve({ data: [], ok: true as const }),
+    loadOutgoingInlineImagePreview: () =>
+      Promise.resolve({
+        data: { bytes: new Uint8Array(), mediaType: "image/png" },
+        ok: true as const,
+      }),
     loadThread: () =>
       Promise.resolve({
         data: {
@@ -157,6 +182,8 @@ describe(getRuntimeCapabilities, () => {
     onMailSyncStatusChanged: () => () => {},
     onMailThreadListUpdated: () => () => {},
     onMailThreadUpdated: () => () => {},
+    onScheduledMailChanged: () => () => {},
+    onScheduledMailOutcome: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
     onUpdateStatus: () => () => {},
     openAttachmentPreview: () =>
@@ -180,6 +207,8 @@ describe(getRuntimeCapabilities, () => {
         data: { ...request, createdAt: 1, updatedAt: 1 },
         ok: true as const,
       }),
+    scheduleMail: () =>
+      Promise.resolve({ error: "unused", ok: false as const }),
     searchMail: () =>
       Promise.resolve({
         data: { hasMore: false, threads: [] },
@@ -188,6 +217,8 @@ describe(getRuntimeCapabilities, () => {
     selectDatabaseImportFile: () =>
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
     sendMessage: () => Promise.resolve({ data: undefined, ok: true as const }),
+    sendScheduledMailNow: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     setAppSettings: (request) =>
@@ -281,6 +312,8 @@ describe(getRuntimeCapabilities, () => {
         listSenders: desktopBridge.listGmailSenders,
         listStashedDrafts: desktopBridge.listStashedDrafts,
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
+        loadOutgoingInlineImagePreview:
+          desktopBridge.loadOutgoingInlineImagePreview,
         loadThread: desktopBridge.loadThread,
         loadThreadDraft: desktopBridge.loadThreadDraft,
         markThreadNotSpam: desktopBridge.markThreadNotSpam,
@@ -306,6 +339,18 @@ describe(getRuntimeCapabilities, () => {
         trashThread: desktopBridge.trashThread,
         trustImageSender: desktopBridge.trustImageSender,
         updateLabel: desktopBridge.updateGmailLabel,
+      },
+      scheduledMail: {
+        beginEdit: desktopBridge.beginScheduledMailEdit,
+        cancelToStash: desktopBridge.cancelScheduledMailToStash,
+        discard: desktopBridge.discardScheduledMail,
+        finishEdit: desktopBridge.finishScheduledMailEdit,
+        getAttentionCount: desktopBridge.getScheduledMailAttentionCount,
+        listPage: desktopBridge.listScheduledMailPage,
+        onChanged: desktopBridge.onScheduledMailChanged,
+        onOutcome: desktopBridge.onScheduledMailOutcome,
+        schedule: desktopBridge.scheduleMail,
+        sendNow: desktopBridge.sendScheduledMailNow,
       },
       settings: {
         beginDatabaseImport: desktopBridge.beginDatabaseImport,
@@ -359,12 +404,14 @@ describe(getRuntimeCapabilities, () => {
       nextCapabilities.lifecycle === capabilities.lifecycle,
       nextCapabilities.loginItemSettings === capabilities.loginItemSettings,
       nextCapabilities.mail === capabilities.mail,
+      nextCapabilities.scheduledMail === capabilities.scheduledMail,
       nextCapabilities.settings === capabilities.settings,
       nextCapabilities.startup === capabilities.startup,
       nextCapabilities.templates === capabilities.templates,
       nextCapabilities.updates === capabilities.updates,
       nextCapabilities.window === capabilities.window,
     ]).toStrictEqual([
+      true,
       true,
       true,
       true,

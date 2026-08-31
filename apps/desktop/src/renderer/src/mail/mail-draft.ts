@@ -13,6 +13,28 @@ import type {
   MailDraftSignature,
 } from "@/shared/ipc/mail";
 
+const toMailDraftInputSnapshot = (draft: MailDraftInput): MailDraftInput => ({
+  accountId: draft.accountId,
+  attachments: draft.attachments,
+  bcc: draft.bcc,
+  body: draft.body,
+  cc: draft.cc,
+  id: draft.id,
+  kind: draft.kind,
+  messageId: draft.messageId,
+  signature: draft.signature,
+  subject: draft.subject,
+  threadId: draft.threadId,
+  to: draft.to,
+});
+
+export const areMailDraftInputsEqual = (
+  left: MailDraftInput,
+  right: MailDraftInput
+): boolean =>
+  JSON.stringify(toMailDraftInputSnapshot(left)) ===
+  JSON.stringify(toMailDraftInputSnapshot(right));
+
 const sameAddresses = (
   left: readonly string[],
   right: readonly string[]

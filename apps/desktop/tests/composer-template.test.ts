@@ -87,6 +87,33 @@ describe(applyComposerTemplate, () => {
     expect(result.accountId).toBe("template@example.com");
   });
 
+  it("keeps a scheduled email on its fixed account", () => {
+    const result = applyComposerTemplate(
+      {
+        accountId: "scheduled@example.com",
+        attachments: [],
+        bcc: [],
+        body: { html: "", text: "" },
+        cc: [],
+        subject: "",
+        to: [],
+      },
+      {
+        accountId: "template@example.com",
+        bcc: [],
+        body: { html: "<p>Hello</p>", text: "Hello" },
+        cc: [],
+        id: "template-1",
+        name: "Introduction",
+        subject: "Hello",
+        to: ["friend@example.com"],
+      },
+      "scheduled@example.com"
+    );
+
+    expect(result.accountId).toBe("scheduled@example.com");
+  });
+
   it("builds variables from the final template account and sole To recipient", () => {
     expect(
       createTemplateVariableContext(

@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import type { Stats } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import { open, realpath } from "node:fs/promises";
@@ -6,6 +7,10 @@ import path from "node:path";
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
 import { Option, Schema } from "effect";
 
+import {
+  isSupportedOutgoingInlineImageMediaType,
+  MAX_INLINE_IMAGE_BYTES,
+} from "../../shared/attachments";
 import {
   GmailOutgoingInlineContentId,
   MAX_GMAIL_ATTACHMENT_BYTES,
@@ -18,6 +23,11 @@ const MEDIA_TYPE_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/u;
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 const MediaType = Schema.String.check(Schema.isPattern(MEDIA_TYPE_PATTERN));
+const COMPOSER_INLINE_IMAGE_TAG = /<img\b(?<attributes>[^>]*)>/giu;
+const COMPOSER_INLINE_IMAGE_SOURCE =
+  /\bsrc\s*=\s*(?:"cid:(?<doubleQuoted>[^"]+)"|'cid:(?<singleQuoted>[^']+)')/iu;
+const COMPOSER_INLINE_IMAGE_ALT =
+  /\balt\s*=\s*(?:"(?<doubleQuoted>[^"]*)"|'(?<singleQuoted>[^']*)')/iu;
 
 const StoredAuthorizedAttachment = Schema.Struct({
   authorizationVersion: Schema.Literal(AUTHORIZATION_VERSION),
@@ -31,6 +41,7 @@ const StoredAuthorizedAttachment = Schema.Struct({
   mtimeMs: NonNegativeNumber,
   path: Schema.NonEmptyString,
   size: NonNegativeInt,
+  storage: Schema.optional(Schema.Literal("app-owned")),
 });
 
 const decodeStoredAttachment = Schema.decodeUnknownOption(
@@ -39,6 +50,20 @@ const decodeStoredAttachment = Schema.decodeUnknownOption(
 const decodeStoredAttachmentArray = Schema.decodeUnknownOption(
   Schema.Array(Schema.Unknown)
 );
+const decodeStrictStoredAttachmentArray = Schema.decodeUnknownOption(
+  Schema.Array(StoredAuthorizedAttachment)
+);
+const isGmailOutgoingInlineContentId = Schema.is(GmailOutgoingInlineContentId);
+const decodeFileSystemError = Schema.decodeUnknownOption(
+  Schema.Struct({ code: Schema.optional(Schema.String) })
+);
+/* oxlint-disable eslint/no-bitwise -- Node open flags are bit masks. */
+const SAFE_READ_FLAGS =
+  constants.O_RDONLY |
+  (process.platform === "win32"
+    ? 0
+    : constants.O_NONBLOCK | constants.O_NOFOLLOW);
+/* oxlint-enable eslint/no-bitwise */
 
 export interface OpenedOutgoingAttachment {
   readonly file: FileHandle;
@@ -130,23 +155,97 @@ export const authorizeOutgoingAttachmentFiles = async (
   return records;
 };
 
-export const decodeStoredOutgoingAttachments = <Input>(
+export const decodeStoredOutgoingAttachmentEntries = <Input>(
   input: Input
-): readonly StoredMailDraftAttachment[] => {
+): readonly (StoredMailDraftAttachment | undefined)[] | undefined => {
   const values = decodeStoredAttachmentArray(input);
   if (Option.isNone(values)) {
-    return [];
+    return;
   }
-  return values.value.flatMap((value) => {
-    const decoded = decodeStoredAttachment(value);
-    return Option.isSome(decoded) ? [decoded.value] : [];
-  });
+  return values.value.map((value) =>
+    Option.getOrUndefined(decodeStoredAttachment(value))
+  );
+};
+
+export const decodeStoredOutgoingAttachmentsStrict = <Input>(
+  input: Input
+): readonly StoredMailDraftAttachment[] | undefined =>
+  Option.getOrUndefined(decodeStrictStoredAttachmentArray(input));
+
+const decodeComposerAttribute = (value: string): string =>
+  value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+
+// App-owned copies created by older scheduling builds lost contentId. The
+// composer HTML still owns the original cid-to-filename association, so each
+// matching supported attachment can be restored at most once.
+export const recoverMissingInlineContentIds = (
+  bodyHtml: string,
+  attachments: readonly StoredMailDraftAttachment[]
+): readonly StoredMailDraftAttachment[] => {
+  const recovered = [...attachments];
+  const assignedContentIds = new Set(
+    attachments.flatMap(({ contentId }) =>
+      contentId === undefined ? [] : [contentId]
+    )
+  );
+  const assignedAttachmentIndexes = new Set<number>();
+
+  for (const tag of bodyHtml.matchAll(COMPOSER_INLINE_IMAGE_TAG)) {
+    const attributes = tag.groups?.attributes ?? "";
+    const source = COMPOSER_INLINE_IMAGE_SOURCE.exec(attributes);
+    const contentId =
+      source?.groups?.doubleQuoted ?? source?.groups?.singleQuoted;
+    const alt = COMPOSER_INLINE_IMAGE_ALT.exec(attributes);
+    const filename = alt?.groups?.doubleQuoted ?? alt?.groups?.singleQuoted;
+    if (
+      contentId === undefined ||
+      filename === undefined ||
+      !isGmailOutgoingInlineContentId(contentId) ||
+      assignedContentIds.has(contentId)
+    ) {
+      continue;
+    }
+    const attachmentIndex = recovered.findIndex(
+      (attachment, index) =>
+        !assignedAttachmentIndexes.has(index) &&
+        attachment.contentId === undefined &&
+        attachment.filename === decodeComposerAttribute(filename) &&
+        isSupportedOutgoingInlineImageMediaType(attachment.mediaType) &&
+        attachment.size <= MAX_INLINE_IMAGE_BYTES
+    );
+    const attachment = recovered[attachmentIndex];
+    if (attachment === undefined) {
+      continue;
+    }
+    recovered[attachmentIndex] = { ...attachment, contentId };
+    assignedAttachmentIndexes.add(attachmentIndex);
+    assignedContentIds.add(contentId);
+  }
+
+  return recovered;
 };
 
 export const openOutgoingAttachment = async (
   record: StoredMailDraftAttachment
 ): Promise<OpenedOutgoingAttachment> => {
-  const file = await open(record.path, "r");
+  let file: FileHandle;
+  try {
+    file = await open(record.path, SAFE_READ_FLAGS);
+  } catch (error) {
+    const fileSystemError = decodeFileSystemError(error);
+    if (
+      Option.isSome(fileSystemError) &&
+      fileSystemError.value.code === "ENOENT"
+    ) {
+      throw error;
+    }
+    throw authorizationError(`Could not read attachment: ${record.filename}`);
+  }
   try {
     const stats = await file.stat();
     if (!isSameFile(record, stats)) {

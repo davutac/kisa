@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { toast } from "sonner";
 
@@ -29,6 +30,7 @@ import {
 import type { EmailSignatureBody } from "@/shared/email-signature";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
+import type { ScheduledMailEditSession } from "@/shared/ipc/scheduled-mail";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
 import { useAllAccountSettings } from "@/state/account-settings";
 import { useComposerTemplates } from "@/state/composer-templates";
@@ -42,21 +44,27 @@ import {
 } from "./new-message-draft-persistence";
 import { useNewMessageStore, useNewMessageStoreApi } from "./new-message-store";
 import { useNewMessageCleanHistory } from "./use-new-message-clean-history";
+import { useScheduledComposer } from "./use-scheduled-composer";
 
 export const useNewMessageWorkspace = ({
   accounts,
   isOpen,
   onOpenChange,
+  onScheduledEditChange,
+  scheduledEdit,
 }: {
   accounts: readonly GoogleAccount[];
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  onScheduledEditChange?: (session: ScheduledMailEditSession) => void;
+  scheduledEdit?: ScheduledMailEditSession;
 }) => {
   const store = useNewMessageStoreApi();
   const accountId = useNewMessageStore((state) => state.accountId);
   const composer = useNewMessageStore((state) => state.composer);
   const draftId = useNewMessageStore((state) => state.draftId);
   const isSending = useNewMessageStore((state) => state.isSending);
+  const isScheduling = useNewMessageStore((state) => state.isScheduling);
   const recipients = useNewMessageStore((state) => state.recipients);
   const stashes = useNewMessageStore((state) => state.stashes);
   const signature = useNewMessageStore((state) => state.signature);
@@ -77,8 +85,13 @@ export const useNewMessageWorkspace = ({
   const accountSettings = useAllAccountSettings();
   const draftOperationQueueRef = useRef(Promise.resolve());
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [hasPendingReschedule, setHasPendingReschedule] = useState(false);
   const mailApi = useMemo(() => getMailApi(), []);
-  const outgoingAttachments = useOutgoingAttachments(mailApi);
+  const outgoingAttachments = useOutgoingAttachments(
+    mailApi,
+    scheduledEdit?.draft.attachments,
+    scheduledEdit?.draft.body.html
+  );
   const {
     activeAttachments,
     isAuthorizing,
@@ -133,6 +146,18 @@ export const useNewMessageWorkspace = ({
     currentDraftRef.current = currentDraft;
   }, [currentDraft]);
 
+  const applyDraft = (draft: MailDraftInput): void => {
+    cleanup.reset();
+    currentDraftRef.current = draft;
+    setAccountId(draft.accountId ?? "");
+    replaceAttachments(draft.attachments, draft.body.html);
+    setComposer(toMailDraftComposerValue(draft));
+    setDraftId(draft.id);
+    setRecipients({ bcc: draft.bcc, cc: draft.cc, to: draft.to });
+    setSubject(draft.subject);
+    setSignature(draft.signature);
+  };
+
   useLayoutEffect(() => {
     focus.restorePending();
   }, [draftId, focus]);
@@ -142,8 +167,15 @@ export const useNewMessageWorkspace = ({
     currentDraft,
     availableStashes.length > 0
   );
-  const isBusy = cleanup.isCleaning || isAuthorizing || isSending;
-  const canStash = stashCommandAction === "stash" && !isBusy;
+  const isBusy = [
+    cleanup.isCleaning,
+    isAuthorizing,
+    isScheduling,
+    isSending,
+  ].some(Boolean);
+  const isScheduledEdit = scheduledEdit !== undefined;
+  const canStash =
+    !isScheduledEdit && stashCommandAction === "stash" && !isBusy;
   const canSend =
     mailApi !== undefined &&
     selectedAccountId.length > 0 &&
@@ -151,9 +183,22 @@ export const useNewMessageWorkspace = ({
     currentDraft.subject.trim().length > 0 &&
     !composer.isEmpty &&
     !isBusy;
+  const scheduled = useScheduledComposer({
+    canSend,
+    currentDraft,
+    hasPendingReschedule,
+    isBusy,
+    onOpenChange,
+    onSessionChange: (session) => {
+      applyDraft(session.draft);
+      onScheduledEditChange?.(session);
+    },
+    scheduledEdit,
+    selectedAccountId,
+  });
 
   useEffect(() => {
-    if (mailApi === undefined) {
+    if (mailApi === undefined || scheduledEdit !== undefined) {
       return;
     }
     let active = true;
@@ -196,19 +241,7 @@ export const useNewMessageWorkspace = ({
       active = false;
       unsubscribe();
     };
-  }, [accounts, mailApi, setStashes, updateStashes]);
-
-  const applyDraft = (draft: MailDraftInput): void => {
-    cleanup.reset();
-    currentDraftRef.current = draft;
-    setAccountId(draft.accountId ?? "");
-    replaceAttachments(draft.attachments, draft.body.html);
-    setComposer(toMailDraftComposerValue(draft));
-    setDraftId(draft.id);
-    setRecipients({ bcc: draft.bcc, cc: draft.cc, to: draft.to });
-    setSubject(draft.subject);
-    setSignature(draft.signature);
-  };
+  }, [accounts, mailApi, scheduledEdit, setStashes, updateStashes]);
 
   const getEmailSignature = (nextAccountId: string): EmailSignatureBody =>
     accountSettings.find(({ accountId: id }) => id === nextAccountId)
@@ -244,7 +277,8 @@ export const useNewMessageWorkspace = ({
         subject,
         to: recipients.to,
       },
-      applicableTemplate
+      applicableTemplate,
+      scheduledEdit?.item.accountId
     );
     const signatureBody = createEmailSignatureBody(
       getEmailSignature(applied.accountId)
@@ -314,7 +348,7 @@ export const useNewMessageWorkspace = ({
     focus.requestRestore(getDraftResumeFocusTarget(next));
     applyDraft(next);
     enqueueDraftOperation(async () => {
-      const succeeded = await popDraft(next);
+      const succeeded = await popDraft(next, true);
       if (!succeeded) {
         updateStashes((current) => upsertStash(current, next));
       }
@@ -323,6 +357,10 @@ export const useNewMessageWorkspace = ({
 
   const send = async (): Promise<void> => {
     if (!(canSend && mailApi)) {
+      return;
+    }
+    if (scheduled.isEdit) {
+      await scheduled.sendNow();
       return;
     }
     setIsSending(true);
@@ -383,14 +421,18 @@ export const useNewMessageWorkspace = ({
   useAppCommand(
     "composer.stash",
     () => {
-      if (stashCommandAction === "open-picker") {
+      if (scheduled.isEdit) {
+        void scheduled.save();
+      } else if (stashCommandAction === "open-picker") {
         stashPickerTriggerRef.current?.click();
       } else if (stashCommandAction === "stash") {
         stashCurrentDraft();
       }
     },
     {
-      enabled: isOpen && !isBusy && stashCommandAction !== "none",
+      enabled: scheduled.isEdit
+        ? isOpen && scheduled.isDirty && canSend
+        : isOpen && !isBusy && stashCommandAction !== "none",
     }
   );
 
@@ -406,6 +448,17 @@ export const useNewMessageWorkspace = ({
     focus,
     isCleaning: cleanup.isCleaning,
     outgoingAttachments,
+    requestClose: scheduled.requestClose,
+    scheduled: {
+      canSchedule: scheduled.canSchedule,
+      isDirty: scheduled.isDirty,
+      isEdit: scheduled.isEdit,
+      onDiscard: scheduled.discard,
+      onPendingScheduleChange: setHasPendingReschedule,
+      onSave: scheduled.save,
+      onSchedule: scheduled.schedule,
+      scheduledAt: scheduledEdit?.item.scheduledAt,
+    },
     selectAccount,
     selectCleanVersion: cleanup.selectVersion,
     selectedAccountId,

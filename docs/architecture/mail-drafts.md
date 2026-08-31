@@ -22,6 +22,8 @@ New email initially focuses To whether or not an account is selected. Stashing r
 
 Changing the From account changes where the composition is stored the next time it is stashed. Disconnecting an account removes all of its stored drafts along with its credentials, cached mail, settings, and sender trust.
 
+New-email drafts may instead be scheduled for local delivery. While scheduled, the same `mail_drafts` row remains authoritative but is excluded from the ordinary stash picker and draft-upsert stream. Canceling a schedule deliberately returns that row to the stash. See [Scheduled new-email delivery](scheduled-mail.md) for the worker, edit-lease, retry, and recovery contract.
+
 ## Account signatures
 
 Each connected account may have one local rich-text signature with a plain-text alternative of up to 10,000 characters. Kisa edits it with the same constrained Tiptap surface used for message composition and stores the validated HTML/text pair together in the account setting. Kisa inserts the signature visibly when a new-message, reply, reply-all, or forward draft is created, and persists the matching text and HTML fragments with the draft. The signature remains editable or removable like the rest of the body. A signature by itself does not make a draft sendable or worth saving.
@@ -34,7 +36,7 @@ Dropping JPEG, PNG, GIF, or WebP files inside either mail editor inserts preview
 
 The renderer receives only attachment display metadata and opaque references. Preload resolves paths only from Electron `File` objects produced by an actual file selection, and main opens each selection to record its canonical path and file identity. Draft storage keeps that main-validated record so stashes remain usable after restart; records written by older versions without the authorization marker are not reopened and must be attached again.
 
-Immediately before send, main verifies that each reference belongs to the invoking `WebContents`, reopens the canonical file, checks its identity and aggregate size, and returns a short-lived capability. Send consumes every capability once and reads through the descriptor that was already opened during preparation. The renderer cannot submit a path, reuse a consumed capability, use another window's reference, or swap the selected path to a different file. Kisa still does not copy attachment bytes into the database, so a missing, replaced, or changed file remains a send-time attachment error.
+Immediately before send, main verifies that each reference belongs to the invoking `WebContents`, reopens the canonical file, checks its identity and aggregate size, and returns a short-lived capability. Send consumes every capability once and reads through the descriptor that was already opened during preparation. The renderer cannot submit a path, reuse a consumed capability, use another window's reference, or swap the selected path to a different file. Kisa never copies attachment bytes into the database. Ordinary stashes continue to reference the selected source, while scheduling copies the verified file into app-owned storage as described in `scheduled-mail.md`; canceling that schedule returns the app-owned reference with the stash until it is sent or discarded.
 
 ## Multi-window behavior
 

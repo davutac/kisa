@@ -3,6 +3,7 @@ import { toast } from "sonner";
 
 import { clearMailboxThreadsSnapshots } from "@/mail/mailbox-cache";
 import { getAuthApi } from "@/platform/desktop";
+import { clearScheduledMailSnapshots } from "@/scheduled/scheduled-mail-cache";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { AuthGateState } from "@/startup/auth-gate";
 import { AccountSettingsProvider } from "@/state/account-settings";
@@ -87,6 +88,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
       }
 
       clearMailboxThreadsSnapshots();
+      clearScheduledMailSnapshots();
       dropDisconnectedAccountSelection(reply.data);
       setAccounts(reply.data);
       setIsAuthenticated(reply.data.length > 0);

@@ -58,6 +58,8 @@ import type {
   GmailOutgoingAttachmentPrepareReply,
   GmailOutgoingAttachmentPrepareRequest,
   GmailOutgoingAttachmentSelectionReply,
+  GmailOutgoingInlineImagePreviewReply,
+  GmailOutgoingInlineImagePreviewRequest,
   GmailReindexReply,
   GmailReindexRequest,
   GmailSearchRequest,
@@ -79,6 +81,22 @@ import type {
   GmailTrustedImageSenderRequest,
   GmailTrustedImageSendersReply,
 } from "./mail";
+import type {
+  ScheduledMailActionReply,
+  ScheduledMailAttentionCountReply,
+  ScheduledMailChanged,
+  ScheduledMailEditSessionReply,
+  ScheduledMailFinishEditReply,
+  ScheduledMailFinishEditRequest,
+  ScheduledMailKey,
+  ScheduledMailOutcome,
+  ScheduledMailPageReply,
+  ScheduledMailPageRequest,
+  ScheduledMailScheduleRequest,
+  ScheduledMailScope,
+  ScheduledMailSendNowRequest,
+  ScheduledMailSummaryReply,
+} from "./scheduled-mail";
 import type {
   AccountSettingsReply,
   AccountSettingsUpdateRequest,
@@ -118,6 +136,9 @@ export interface DesktopBridge {
   authorizeOutgoingAttachments: (
     files: readonly File[]
   ) => Promise<GmailOutgoingAttachmentSelectionReply>;
+  beginScheduledMailEdit: (
+    request: ScheduledMailKey
+  ) => Promise<ScheduledMailEditSessionReply>;
   beginDatabaseImport: () => Promise<DatabaseImportSessionReply>;
   bulkMutateThreads: (
     request: GmailBulkThreadMutationRequest
@@ -144,6 +165,12 @@ export interface DesktopBridge {
   discardMailDraft: (
     request: MailDraftDiscardRequest
   ) => Promise<MailDraftDiscardReply>;
+  cancelScheduledMailToStash: (
+    request: ScheduledMailKey
+  ) => Promise<ScheduledMailActionReply>;
+  discardScheduledMail: (
+    request: ScheduledMailKey
+  ) => Promise<ScheduledMailActionReply>;
   disconnectGoogleAccount: (
     request: GoogleAccountDisconnectRequest
   ) => Promise<GoogleAccountsReply>;
@@ -155,6 +182,9 @@ export interface DesktopBridge {
   }) => Promise<DatabaseImportFileSelectionReply>;
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
   getMailIndexProgress: () => Promise<GmailIndexProgressList>;
+  getScheduledMailAttentionCount: (
+    request: ScheduledMailScope
+  ) => Promise<ScheduledMailAttentionCountReply>;
   getLoginItemSettings: () => Promise<LoginItemSettingsReply>;
   getAiSettings: () => Promise<AiSettingsReply>;
   getMailSyncStatus: () => Promise<GmailSyncStatus>;
@@ -184,7 +214,13 @@ export interface DesktopBridge {
   listStashedDrafts: (
     request: MailDraftListRequest
   ) => Promise<MailDraftListReply>;
+  listScheduledMailPage: (
+    request: ScheduledMailPageRequest
+  ) => Promise<ScheduledMailPageReply>;
   listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
+  loadOutgoingInlineImagePreview: (
+    request: GmailOutgoingInlineImagePreviewRequest
+  ) => Promise<GmailOutgoingInlineImagePreviewReply>;
   loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
   loadThreadDraft: (request: GmailThreadRequest) => Promise<MailDraftLoadReply>;
   markThreadNotSpam: (
@@ -224,6 +260,12 @@ export interface DesktopBridge {
   onMailThreadListUpdated: (
     listener: (payload: GmailThreadListUpdated) => void
   ) => () => void;
+  onScheduledMailChanged: (
+    listener: (change: ScheduledMailChanged) => void
+  ) => () => void;
+  onScheduledMailOutcome: (
+    listener: (outcome: ScheduledMailOutcome) => void
+  ) => () => void;
   onTrustedImageSendersChanged: (
     listener: (reply: GmailTrustedImageSendersReply) => void
   ) => () => void;
@@ -246,6 +288,9 @@ export interface DesktopBridge {
     request: GmailAttachmentRequest
   ) => Promise<GmailAttachmentSaveReply>;
   saveMailDraft: (request: MailDraftInput) => Promise<MailDraftReply>;
+  scheduleMail: (
+    request: ScheduledMailScheduleRequest
+  ) => Promise<ScheduledMailSummaryReply>;
   saveComposerTemplate: (
     request: ComposerTemplateInput
   ) => Promise<ComposerTemplateSaveReply>;
@@ -255,6 +300,9 @@ export interface DesktopBridge {
   sendMessage: (
     request: GmailMessageSendRequest
   ) => Promise<GmailMessageSendReply>;
+  sendScheduledMailNow: (
+    request: ScheduledMailSendNowRequest
+  ) => Promise<ScheduledMailActionReply>;
   sendThreadMessage: (
     request: GmailThreadMessageSendRequest
   ) => Promise<GmailThreadMessageSendReply>;
@@ -278,6 +326,9 @@ export interface DesktopBridge {
   updateAccountSettings: (
     request: AccountSettingsUpdateRequest
   ) => Promise<AccountSettingsReply>;
+  finishScheduledMailEdit: (
+    request: ScheduledMailFinishEditRequest
+  ) => Promise<ScheduledMailFinishEditReply>;
   setAppSettings: (
     request: AppSettingsUpdateRequest
   ) => Promise<AppSettingsReply>;

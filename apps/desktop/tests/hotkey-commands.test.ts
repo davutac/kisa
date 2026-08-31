@@ -40,6 +40,9 @@ describe("hotkey command registry", () => {
     expect(HOTKEY_COMMANDS["app.openSettings"].bindings).toStrictEqual([
       "Mod+,",
     ]);
+    expect(HOTKEY_COMMANDS["app.openScheduled"].bindings).toStrictEqual([
+      "Mod+Shift+S",
+    ]);
   });
 
   it("assigns the same number row to composer From accounts", () => {
@@ -95,6 +98,7 @@ describe("hotkey command registry", () => {
 
   it("keeps workspace toggles usable when navigation consumes keyup", () => {
     for (const commandId of [
+      "app.openScheduled",
       "app.openSettings",
       "app.openTemplates",
     ] as const) {
@@ -104,6 +108,7 @@ describe("hotkey command registry", () => {
 
   it("does not make reversible state toggles depend on keyup", () => {
     for (const commandId of [
+      "app.openScheduled",
       "app.openSettings",
       "app.openTemplates",
       "app.toggleSpam",
@@ -146,6 +151,24 @@ describe("hotkey command registry", () => {
     expect(getHotkeyAriaLabel("composer.clean", "mac")).toBe("Meta+Shift+C");
   });
 
+  it("assigns scheduled composer actions", () => {
+    expect(HOTKEY_COMMANDS["composer.schedule"]).toMatchObject({
+      bindings: ["Mod+Shift+Enter"],
+      input: "allow",
+      repeat: "once",
+      scope: "composer",
+    });
+    expect(HOTKEY_COMMANDS["composer.discardScheduled"]).toMatchObject({
+      bindings: ["Mod+D"],
+      input: "allow",
+      repeat: "once",
+      scope: "composer",
+    });
+    expect(getHotkeyAriaLabel("composer.schedule", "mac")).toBe(
+      "Meta+Shift+Enter"
+    );
+  });
+
   it("allows repeated stash key presses while ignoring keydown auto-repeat", () => {
     expect(shouldRunHotkeyCommand("ignore-key-repeat", false)).toBeTruthy();
     expect(shouldRunHotkeyCommand("ignore-key-repeat", true)).toBeFalsy();
@@ -164,6 +187,44 @@ describe("hotkey command registry", () => {
     expect(HOTKEY_COMMANDS["mailbox.trashThread"].bindings).toStrictEqual([
       "Mod+D",
     ]);
+  });
+
+  it("assigns scheduled row navigation and actions without selection", () => {
+    const scheduledCommandIds = Object.entries(HOTKEY_COMMANDS)
+      .filter(([, command]) => command.scope === "scheduled")
+      .map(([commandId]) => commandId)
+      .toSorted();
+
+    expect({
+      cancel: HOTKEY_COMMANDS["scheduled.cancel"].bindings,
+      clear: HOTKEY_COMMANDS["scheduled.clearActiveRow"],
+      commandIds: scheduledCommandIds,
+      discard: HOTKEY_COMMANDS["scheduled.discard"].bindings,
+      next: HOTKEY_COMMANDS["scheduled.next"].bindings,
+      open: HOTKEY_COMMANDS["scheduled.open"].bindings,
+      previous: HOTKEY_COMMANDS["scheduled.previous"].bindings,
+    }).toStrictEqual({
+      cancel: ["Mod+S"],
+      clear: {
+        bindings: ["Escape"],
+        input: "ignore",
+        label: "Clear active scheduled email",
+        repeat: "once",
+        scope: "scheduled",
+      },
+      commandIds: [
+        "scheduled.cancel",
+        "scheduled.clearActiveRow",
+        "scheduled.discard",
+        "scheduled.next",
+        "scheduled.open",
+        "scheduled.previous",
+      ],
+      discard: HOTKEY_COMMANDS["mailbox.trashThread"].bindings,
+      next: HOTKEY_COMMANDS["mailbox.nextThread"].bindings,
+      open: HOTKEY_COMMANDS["mailbox.openThread"].bindings,
+      previous: HOTKEY_COMMANDS["mailbox.previousThread"].bindings,
+    });
   });
 
   it("assigns mailbox label navigation", () => {

@@ -27,6 +27,8 @@ const googleApi = vi.hoisted(() => ({
   labelDeletes: [] as gmail_v1.Params$Resource$Users$Labels$Delete[],
   labelError: undefined as unknown,
   labelPatches: [] as gmail_v1.Params$Resource$Users$Labels$Patch[],
+  messageListRequests: [] as gmail_v1.Params$Resource$Users$Messages$List[],
+  messageListResponse: { messages: [] } as gmail_v1.Schema$ListMessagesResponse,
   pendingRequest: Promise.withResolvers<undefined>().promise,
   threadResponses: new Map<string, gmail_v1.Schema$Thread>(),
   trashError: undefined as unknown,
@@ -94,6 +96,12 @@ vi.mock(import("@googleapis/gmail"), async (importOriginal) => {
           googleApi.batchError === undefined
             ? Promise.resolve()
             : Promise.reject(googleApi.batchError),
+      });
+      Object.defineProperty(client.users.messages, "list", {
+        value: (request: gmail_v1.Params$Resource$Users$Messages$List) => {
+          googleApi.messageListRequests.push(request);
+          return Promise.resolve({ data: googleApi.messageListResponse });
+        },
       });
       Object.defineProperty(client.users.messages.attachments, "get", {
         value: () =>
@@ -189,6 +197,8 @@ describe("Gmail gateway", () => {
     googleApi.labelCreates.length = 0;
     googleApi.labelDeletes.length = 0;
     googleApi.labelPatches.length = 0;
+    googleApi.messageListRequests.length = 0;
+    googleApi.messageListResponse = { messages: [] };
     googleApi.threadResponses.clear();
     googleApi.trashError = undefined;
   });
@@ -297,6 +307,37 @@ describe("Gmail gateway", () => {
         startHistoryId: "history-before",
         userId: "me",
       }),
+    ]);
+  });
+
+  it("finds a sent message by stable RFC Message-ID", async () => {
+    googleApi.messageListResponse = {
+      messages: [{ id: "sent-message", threadId: "sent-thread" }],
+    };
+
+    const result = await Effect.runPromise(
+      GmailGateway.pipe(
+        Effect.flatMap((gateway) =>
+          gateway.findSentMessageByRfc822MessageId(
+            authorization,
+            "<stable@scheduled.kisa.invalid>"
+          )
+        ),
+        Effect.provide(GmailGatewayLive)
+      )
+    );
+
+    expect(result.value).toMatchObject({
+      id: "sent-message",
+      threadId: "sent-thread",
+    });
+    expect(googleApi.messageListRequests).toStrictEqual([
+      {
+        includeSpamTrash: true,
+        maxResults: 1,
+        q: "in:sent rfc822msgid:stable@scheduled.kisa.invalid",
+        userId: "me",
+      },
     ]);
   });
 
@@ -418,6 +459,81 @@ describe("Gmail gateway", () => {
       retryable: false,
       status: 404,
     });
+  });
+
+  it("honors a Retry-After delay on Gmail 429 responses", async () => {
+    googleApi.labelError = {
+      message: "Too many requests",
+      response: { headers: { "retry-after": "17" } },
+      status: 429,
+    };
+
+    const error = await Effect.runPromise(
+      GmailGateway.pipe(
+        Effect.flatMap((gateway) =>
+          gateway.createLabel(authorization, "Rate limited")
+        ),
+        Effect.provide(GmailGatewayLive),
+        Effect.flip
+      )
+    );
+
+    expect(error).toMatchObject({
+      _tag: "GmailRateLimitError",
+      retryAfterMs: 17_000,
+    });
+  });
+
+  it("parses an HTTP-date Retry-After only for explicit Gmail rate limits", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-30T12:00:00.000Z"));
+    try {
+      googleApi.labelError = {
+        errors: [{ reason: "userRateLimitExceeded" }],
+        message: "Quota exceeded",
+        response: {
+          headers: { "Retry-After": "Sun, 30 Aug 2026 12:02:00 GMT" },
+        },
+        status: 403,
+      };
+
+      const error = await Effect.runPromise(
+        GmailGateway.pipe(
+          Effect.flatMap((gateway) =>
+            gateway.createLabel(authorization, "Rate limited")
+          ),
+          Effect.provide(GmailGatewayLive),
+          Effect.flip
+        )
+      );
+
+      expect(error).toMatchObject({
+        _tag: "GmailRateLimitError",
+        retryAfterMs: 120_000,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not treat a rate-limit reason on a non-403 response as quota", async () => {
+    googleApi.labelError = {
+      errors: [{ reason: "rateLimitExceeded" }],
+      message: "Bad request",
+      status: 400,
+    };
+
+    const error = await Effect.runPromise(
+      GmailGateway.pipe(
+        Effect.flatMap((gateway) =>
+          gateway.createLabel(authorization, "Invalid")
+        ),
+        Effect.provide(GmailGatewayLive),
+        Effect.flip
+      )
+    );
+
+    expect(error).toMatchObject({ _tag: "GmailApiError", status: 400 });
   });
 
   it("classifies missing attachments and batch messages distinctly", async () => {

@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
 
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
+import { Effect } from "effect";
 
 import {
   isSupportedOutgoingInlineImageMediaType,
   MAX_INLINE_IMAGE_BYTES,
   MAX_INLINE_MESSAGE_BYTES,
 } from "../../shared/attachments";
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "../../shared/ipc/mail";
+import {
+  MAX_GMAIL_ATTACHMENT_BYTES,
+  MAX_GMAIL_ATTACHMENT_COUNT,
+} from "../../shared/ipc/mail";
 import type {
   GmailOutgoingAttachmentCapability,
   GmailOutgoingAttachmentPrepareRequest,
@@ -18,9 +22,10 @@ import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-auth
 import {
   authorizeOutgoingAttachmentFiles,
   closeOutgoingAttachment,
-  decodeStoredOutgoingAttachments,
+  decodeStoredOutgoingAttachmentEntries,
   openOutgoingAttachment,
   readOutgoingAttachment,
+  recoverMissingInlineContentIds,
 } from "./outgoing-attachment-files";
 import type {
   LoadedOutgoingAttachment,
@@ -30,7 +35,6 @@ import type {
 export { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-authorization-error";
 
 const DEFAULT_CAPABILITY_TTL_MS = 60_000;
-const MAX_ATTACHMENT_COUNT = 100;
 
 interface AttachmentReference {
   readonly ownerId: number;
@@ -54,6 +58,17 @@ const authorizationError = (
   message: string
 ): OutgoingAttachmentAuthorizationError =>
   new OutgoingAttachmentAuthorizationError({ message });
+
+const assertValidAttachmentReferenceIds = (
+  referenceIds: readonly string[]
+): void => {
+  if (
+    referenceIds.length > MAX_GMAIL_ATTACHMENT_COUNT ||
+    new Set(referenceIds).size !== referenceIds.length
+  ) {
+    throw authorizationError("Attachment authorization is invalid");
+  }
+};
 
 const withContentId = (
   record: StoredMailDraftAttachment,
@@ -98,6 +113,44 @@ const validateInlineImageTotal = (
   }
 };
 
+const mapPreviewLoadError = (
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Promise rejections are narrowed to the authorization error at this filesystem boundary.
+  error: unknown
+): OutgoingAttachmentAuthorizationError =>
+  error instanceof OutgoingAttachmentAuthorizationError
+    ? error
+    : authorizationError("Could not load inline image preview");
+
+const loadInlineImagePreview = Effect.fn(
+  "OutgoingAttachmentAuthorizations.loadInlineImagePreview"
+)(function* loadInlineImagePreview(record: StoredMailDraftAttachment) {
+  if (
+    record.contentId === undefined ||
+    !isSupportedOutgoingInlineImageMediaType(record.mediaType) ||
+    record.size > MAX_INLINE_IMAGE_BYTES
+  ) {
+    return yield* authorizationError("Inline image preview is unavailable");
+  }
+
+  return yield* Effect.acquireUseRelease(
+    Effect.tryPromise({
+      catch: mapPreviewLoadError,
+      try: () => openOutgoingAttachment(record),
+    }),
+    (opened) =>
+      Effect.tryPromise({
+        catch: mapPreviewLoadError,
+        try: () => readOutgoingAttachment(opened),
+      }).pipe(
+        Effect.map((loaded) => ({
+          bytes: new Uint8Array(loaded.bytes),
+          mediaType: loaded.mediaType,
+        }))
+      ),
+    ({ file }) => Effect.promise(() => closeOutgoingAttachment(file))
+  );
+});
+
 export class OutgoingAttachmentAuthorizations {
   readonly #capabilities = new Map<string, PreparedAttachment>();
   readonly #capabilityTtlMs: number;
@@ -117,7 +170,7 @@ export class OutgoingAttachmentAuthorizations {
     ownerId: number,
     request: GmailOutgoingAttachmentSelectionRequest
   ): Promise<readonly MailDraftAttachment[]> {
-    if (request.files.length > MAX_ATTACHMENT_COUNT) {
+    if (request.files.length > MAX_GMAIL_ATTACHMENT_COUNT) {
       throw authorizationError("Too many attachments were selected");
     }
 
@@ -131,10 +184,21 @@ export class OutgoingAttachmentAuthorizations {
 
   restoreDraftAttachments<Input>(
     ownerId: number,
-    input: Input
+    input: Input,
+    bodyHtml?: string
   ): readonly MailDraftAttachment[] {
-    return decodeStoredOutgoingAttachments(input).map((record) =>
-      this.#registerReference(ownerId, record)
+    const entries = decodeStoredOutgoingAttachmentEntries(input);
+    if (entries === undefined || entries.length > MAX_GMAIL_ATTACHMENT_COUNT) {
+      return [this.#unavailableAttachment(0)];
+    }
+    const restorableEntries =
+      bodyHtml !== undefined && entries.every((entry) => entry !== undefined)
+        ? recoverMissingInlineContentIds(bodyHtml, entries)
+        : entries;
+    return restorableEntries.map((record, index) =>
+      record === undefined
+        ? this.#unavailableAttachment(index)
+        : this.#registerReference(ownerId, record)
     );
   }
 
@@ -142,6 +206,8 @@ export class OutgoingAttachmentAuthorizations {
     ownerId: number,
     attachments: readonly MailDraftAttachment[]
   ): readonly StoredMailDraftAttachment[] {
+    const referenceIds = attachments.map(({ referenceId }) => referenceId);
+    assertValidAttachmentReferenceIds(referenceIds);
     const contentIds = attachments.flatMap(({ contentId }) =>
       contentId === undefined ? [] : [contentId]
     );
@@ -157,6 +223,9 @@ export class OutgoingAttachmentAuthorizations {
       }
       return withContentId(reference.record, contentId);
     });
+    if (getAttachmentBytes(records) > MAX_GMAIL_ATTACHMENT_BYTES) {
+      throw authorizationError("Attachments can total up to 25 MB");
+    }
     validateInlineImageTotal(records);
     return records;
   }
@@ -167,14 +236,11 @@ export class OutgoingAttachmentAuthorizations {
   ): Promise<readonly GmailOutgoingAttachmentCapability[]> {
     this.#expireCapabilities();
     const referenceIds = attachments.map(({ referenceId }) => referenceId);
+    assertValidAttachmentReferenceIds(referenceIds);
     const contentIds = attachments.flatMap(({ contentId }) =>
       contentId === undefined ? [] : [contentId]
     );
-    if (
-      referenceIds.length > MAX_ATTACHMENT_COUNT ||
-      hasDuplicates(referenceIds) ||
-      hasDuplicates(contentIds)
-    ) {
+    if (hasDuplicates(contentIds)) {
       throw authorizationError("Attachment authorization is invalid");
     }
 
@@ -234,17 +300,24 @@ export class OutgoingAttachmentAuthorizations {
     });
   }
 
+  loadInlineImagePreview(ownerId: number, referenceId: string) {
+    const reference = this.#references.get(referenceId);
+    if (reference === undefined || reference.ownerId !== ownerId) {
+      return Effect.fail(
+        authorizationError(
+          "An attachment is no longer authorized; attach it again"
+        )
+      );
+    }
+    return loadInlineImagePreview(reference.record);
+  }
+
   async consume(
     ownerId: number,
     capabilityIds: readonly string[]
   ): Promise<readonly LoadedOutgoingAttachment[]> {
     this.#expireCapabilities();
-    if (
-      capabilityIds.length > MAX_ATTACHMENT_COUNT ||
-      new Set(capabilityIds).size !== capabilityIds.length
-    ) {
-      throw authorizationError("Attachment authorization is invalid");
-    }
+    assertValidAttachmentReferenceIds(capabilityIds);
 
     const prepared = capabilityIds.map((capability) => {
       const entry = this.#capabilities.get(capability);
@@ -315,6 +388,17 @@ export class OutgoingAttachmentAuthorizations {
       mediaType: record.mediaType,
       referenceId,
       size: record.size,
+    };
+  }
+
+  #unavailableAttachment(index: number): MailDraftAttachment {
+    const id = `unavailable-${this.#randomId()}-${index}`;
+    return {
+      filename: "Attachment unavailable — remove and reattach",
+      id,
+      mediaType: "application/octet-stream",
+      referenceId: id,
+      size: 0,
     };
   }
 

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { SelectedDeliveryTime } from "../src/renderer/src/components/mail/new-message/new-message-footer";
 import NewMessageForm from "../src/renderer/src/components/mail/new-message/new-message-form";
 import {
   createNewMessageStore,
@@ -14,6 +15,7 @@ import type {
   TooltipContent as TooltipContentComponent,
   TooltipTrigger as TooltipTriggerComponent,
 } from "../src/renderer/src/components/ui/tooltip";
+import { formatScheduledAt } from "../src/renderer/src/scheduled/schedule-time";
 
 type TooltipProps = Parameters<typeof TooltipComponent>[0];
 type TooltipContentProps = Parameters<typeof TooltipContentComponent>[0];
@@ -87,7 +89,13 @@ const focus = {
   restorePending: () => null,
 } satisfies ReturnType<typeof useComposerFocus>;
 
-const renderForm = ({ canClean }: { canClean: boolean }): string => {
+const renderForm = ({
+  canClean,
+  scheduledEdit = false,
+}: {
+  canClean: boolean;
+  scheduledEdit?: boolean;
+}): string => {
   const store = createNewMessageStore("");
   const outgoingAttachments = {
     addAttachments: () => Promise.resolve(),
@@ -97,6 +105,7 @@ const renderForm = ({ canClean }: { canClean: boolean }): string => {
     fallbackInlineImagesToAttachments: () => {},
     getInlineImagePreview: () => null,
     inputRef: { current: null },
+    loadInlineImagePreview: () => Promise.resolve(null),
     removeAttachment: () => {},
     setReferencedInlineContentIds: () => {},
   } satisfies OutgoingAttachmentComposerController;
@@ -107,7 +116,7 @@ const renderForm = ({ canClean }: { canClean: boolean }): string => {
         accounts={[]}
         applyTemplate={() => null}
         canClean={canClean}
-        canSend={false}
+        canSend={scheduledEdit}
         canStash={false}
         cleanupModelLabel="Codex · gpt-5.6-luna"
         focus={focus}
@@ -122,6 +131,18 @@ const renderForm = ({ canClean }: { canClean: boolean }): string => {
         outgoingAttachments={outgoingAttachments}
         selectedAccountId=""
         sendShortcutLabel="Send"
+        scheduled={{
+          canSchedule: scheduledEdit,
+          isDirty: scheduledEdit,
+          isEdit: scheduledEdit,
+          onDiscard: () => Promise.resolve(false),
+          onPendingScheduleChange: () => null,
+          onSave: () => Promise.resolve(false),
+          onSchedule: () => Promise.resolve(false),
+          scheduledAt: scheduledEdit
+            ? new Date(2030, 4, 20, 13).getTime()
+            : undefined,
+        }}
         templates={[]}
       />
     </NewMessageStoreProvider>
@@ -170,5 +191,69 @@ describe("new message cleanup", () => {
     const markup = renderForm({ canClean: true });
 
     expect(markup).not.toContain("Draft history");
+  });
+
+  it("separates the footer schedule selector with a gap", () => {
+    const markup = renderForm({ canClean: true });
+    const sendOptions = markup.match(
+      /<fieldset[^>]*aria-label="Send options"[^>]*>/u
+    )?.[0];
+    const scheduleSelector = markup.match(
+      /<button[^>]*aria-label="Schedule send"[^>]*>/u
+    )?.[0];
+
+    expect(sendOptions).toContain("gap-px");
+    expect(scheduleSelector).toContain("aria-keyshortcuts");
+    expect(scheduleSelector).toContain("rounded-none!");
+    expect(scheduleSelector).not.toContain("border-l");
+  });
+
+  it("keeps only permanent delete as the scheduled editor cancel action", () => {
+    const markup = renderForm({ canClean: true, scheduledEdit: true });
+
+    expect(markup).toContain(
+      'aria-label="Permanently discard scheduled email"'
+    );
+    expect(markup).toContain(">Save<");
+    expect(markup).toContain("Send now");
+    expect(markup).not.toContain('aria-label="Stash draft"');
+    expect(markup).not.toContain("Cancel schedule and move to Stash");
+  });
+
+  it("keeps the scheduled editor Save action content-width", () => {
+    const markup = renderForm({ canClean: true, scheduledEdit: true });
+    const saveButton = markup.match(
+      /<button[^>]*title="Save scheduled email[^>]*>/u
+    )?.[0];
+
+    expect(saveButton).toContain("w-fit");
+    expect(saveButton).toContain("flex-none");
+    expect(saveButton).not.toContain("flex-1");
+  });
+
+  it("shows the persisted delivery time without a redundant edit-row action", () => {
+    const markup = renderForm({ canClean: true, scheduledEdit: true });
+
+    expect(markup).toContain("Send at");
+    expect(markup).toContain('aria-label="Scheduled send time"');
+    expect(markup).not.toContain('aria-label="Clear selected send time"');
+  });
+
+  it("renders a semantic selected delivery row with a clear action", () => {
+    const scheduledAt = new Date(2030, 4, 20, 13).getTime();
+    const markup = renderToString(
+      <SelectedDeliveryTime onRemove={() => null} scheduledAt={scheduledAt} />
+    );
+    const animatedRow = markup.match(
+      /<div[^>]*class="[^"]*overflow-hidden[^"]*"[^>]*>/u
+    )?.[0];
+
+    expect(markup).toContain('aria-label="Selected send time"');
+    expect(animatedRow).toContain("shrink-0");
+    expect(markup).toContain(
+      `dateTime="${new Date(scheduledAt).toISOString()}"`
+    );
+    expect(markup).toContain(formatScheduledAt(scheduledAt));
+    expect(markup).toContain('aria-label="Clear selected send time"');
   });
 });

@@ -30,6 +30,7 @@ import {
   getSpamStatus,
   getSyncStatus,
   loadAttachmentPreview,
+  loadOutgoingInlineImagePreview,
   listCachedPage,
   listImageSenders,
   listLabels,
@@ -54,6 +55,17 @@ import {
   updateLabel,
 } from "./methods/mail";
 import { getIndexProgress, reindexMail } from "./methods/mail-index";
+import {
+  beginScheduledMailEdit,
+  cancelScheduledMailToStash,
+  discardScheduledMail,
+  finishScheduledMailEdit,
+  getScheduledMailAttentionCount,
+  listScheduledMailPage,
+  scheduleMail,
+  sendScheduledMailNow,
+  setScheduledMailOutcomeReadiness,
+} from "./methods/scheduled-mail";
 import {
   beginImport,
   cancelImport,
@@ -112,6 +124,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(openAttachmentPreview);
   yield* ipc.handle(authorizeOutgoingAttachments);
   yield* ipc.handle(prepareOutgoingAttachments);
+  yield* ipc.handle(loadOutgoingInlineImagePreview);
   yield* ipc.handle(saveAttachment);
   yield* ipc.handle(loadAttachmentPreview);
   yield* ipc.handle(saveAttachmentPreview);
@@ -127,6 +140,15 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(markThreadNotSpam);
   yield* ipc.handle(listImageSenders);
   yield* ipc.handle(trustImages);
+  yield* ipc.handle(listScheduledMailPage);
+  yield* ipc.handle(getScheduledMailAttentionCount);
+  yield* ipc.handle(scheduleMail);
+  yield* ipc.handle(beginScheduledMailEdit);
+  yield* ipc.handle(finishScheduledMailEdit);
+  yield* ipc.handle(cancelScheduledMailToStash);
+  yield* ipc.handle(discardScheduledMail);
+  yield* ipc.handle(sendScheduledMailNow);
+  yield* ipc.handle(setScheduledMailOutcomeReadiness);
   yield* ipc.handle(beginImport);
   yield* ipc.handle(cancelImport);
   yield* ipc.handle(dropImportFile);

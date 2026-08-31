@@ -97,6 +97,34 @@ describe("account mail work supervisor", () => {
     expect(runs).toStrictEqual(["other", "resumed"]);
   });
 
+  it("stays suspended until every concurrent suspension is resumed", async () => {
+    const supervisor = makeAccountMailWorkSupervisor();
+    const runs: string[] = [];
+
+    await Promise.all([
+      Effect.runPromise(supervisor.suspend("paused@example.com")),
+      Effect.runPromise(supervisor.suspend("paused@example.com")),
+    ]);
+    expect(supervisor.isSuspended("paused@example.com")).toBeTruthy();
+
+    supervisor.resume("paused@example.com");
+    await supervisor.run("paused@example.com", () => {
+      runs.push("too-early");
+      return Promise.resolve();
+    });
+    expect(supervisor.isSuspended("paused@example.com")).toBeTruthy();
+    expect(runs).toStrictEqual([]);
+
+    supervisor.resume("paused@example.com");
+    await supervisor.run("paused@example.com", () => {
+      runs.push("after-all-resumed");
+      return Promise.resolve();
+    });
+
+    expect(supervisor.isSuspended("paused@example.com")).toBeFalsy();
+    expect(runs).toStrictEqual(["after-all-resumed"]);
+  });
+
   it("aborts supervised work when its parent is interrupted", async () => {
     const supervisor = makeAccountMailWorkSupervisor();
     const parent = new AbortController();

@@ -41,6 +41,8 @@ export const MAIL_DELETE_THREAD_FOREVER_CHANNEL =
   "desktop:mail:delete-thread-forever";
 export const MAIL_LIST_STASHED_DRAFTS_CHANNEL =
   "desktop:mail:list-stashed-drafts";
+export const MAIL_LOAD_OUTGOING_INLINE_IMAGE_PREVIEW_CHANNEL =
+  "desktop:mail:load-outgoing-inline-image-preview";
 export const MAIL_LOAD_THREAD_DRAFT_CHANNEL = "desktop:mail:load-thread-draft";
 export const MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL =
   "desktop:mail:open-attachment-preview";
@@ -81,6 +83,26 @@ export const MAIL_TRUST_IMAGE_SENDER_CHANNEL =
   "desktop:mail:trust-image-sender";
 export const MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL =
   "desktop:mail:trusted-image-senders-changed";
+
+export const SCHEDULED_MAIL_ATTENTION_COUNT_CHANNEL =
+  "desktop:scheduled-mail:attention-count";
+export const SCHEDULED_MAIL_BEGIN_EDIT_CHANNEL =
+  "desktop:scheduled-mail:begin-edit";
+export const SCHEDULED_MAIL_CANCEL_TO_STASH_CHANNEL =
+  "desktop:scheduled-mail:cancel-to-stash";
+export const SCHEDULED_MAIL_CHANGED_CHANNEL = "desktop:scheduled-mail:changed";
+export const SCHEDULED_MAIL_DISCARD_CHANNEL = "desktop:scheduled-mail:discard";
+export const SCHEDULED_MAIL_FINISH_EDIT_CHANNEL =
+  "desktop:scheduled-mail:finish-edit";
+export const SCHEDULED_MAIL_LIST_PAGE_CHANNEL =
+  "desktop:scheduled-mail:list-page";
+export const SCHEDULED_MAIL_OUTCOME_CHANNEL = "desktop:scheduled-mail:outcome";
+export const SCHEDULED_MAIL_OUTCOME_READINESS_CHANNEL =
+  "desktop:scheduled-mail:outcome-readiness";
+export const SCHEDULED_MAIL_SCHEDULE_CHANNEL =
+  "desktop:scheduled-mail:schedule";
+export const SCHEDULED_MAIL_SEND_NOW_CHANNEL =
+  "desktop:scheduled-mail:send-now";
 
 export const ATTACHMENT_PREVIEW_LOAD_CHANNEL =
   "desktop:attachment-preview:load";

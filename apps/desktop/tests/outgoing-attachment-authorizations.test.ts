@@ -1,20 +1,27 @@
+import { execFile } from "node:child_process";
 import {
   mkdtemp,
   realpath,
   rename,
   rm,
+  symlink,
+  unlink,
   utimes,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { OutgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-attachment-authorizations";
+import { decodeStoredOutgoingAttachmentsStrict } from "../src/main/mail/outgoing-attachment-files";
 import { MAX_INLINE_IMAGE_BYTES } from "../src/shared/attachments";
 
 const temporaryDirectories: string[] = [];
+const execFileAsync = promisify(execFile);
 
 const makeAttachment = async (
   contents: string | Uint8Array = "user-selected contents"
@@ -33,6 +40,16 @@ describe("outgoing attachment authorizations", () => {
         .splice(0)
         .map((directory) => rm(directory, { force: true, recursive: true }))
     );
+  });
+
+  it("rejects malformed stored attachment collections as a whole", () => {
+    expect(decodeStoredOutgoingAttachmentsStrict("")).toBeUndefined();
+    expect(
+      decodeStoredOutgoingAttachmentsStrict({ length: 0 })
+    ).toBeUndefined();
+    expect(
+      decodeStoredOutgoingAttachmentsStrict([{ filename: "partial" }])
+    ).toBeUndefined();
   });
 
   it("keeps canonical paths in main-owned draft records", async () => {
@@ -82,22 +99,93 @@ describe("outgoing attachment authorizations", () => {
     expect(restored).toHaveLength(1);
     expect(restored[0]?.referenceId).not.toBe(attachment.referenceId);
     expect(restoredAgain[0]?.referenceId).toBe(restored[0]?.referenceId);
-    expect(
-      authorizations.restoreDraftAttachments(12, [
-        {
-          filename: "legacy.txt",
-          id: "legacy",
-          mediaType: "text/plain",
-          path: "/tmp/renderer-controlled.txt",
-          size: 1,
-        },
-      ])
-    ).toStrictEqual([]);
 
     await Promise.all([
       authorizations.releaseOwner(11),
       authorizations.releaseOwner(12),
     ]);
+  });
+
+  it("returns unavailable placeholders for unmarked records", async () => {
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    const [unavailable] = authorizations.restoreDraftAttachments(12, [
+      {
+        filename: "legacy.txt",
+        id: "legacy",
+        mediaType: "text/plain",
+        path: "/tmp/renderer-controlled.txt",
+        size: 1,
+      },
+    ]);
+    expect(unavailable).toMatchObject({
+      filename: "Attachment unavailable — remove and reattach",
+      mediaType: "application/octet-stream",
+      size: 0,
+    });
+    expect(unavailable).not.toHaveProperty("path");
+    await expect(
+      authorizations.prepare(12, [
+        { referenceId: unavailable?.referenceId ?? "missing" },
+      ])
+    ).rejects.toThrow("no longer authorized");
+    expect(() =>
+      authorizations.serializeDraftAttachments(
+        12,
+        unavailable === undefined ? [] : [unavailable]
+      )
+    ).toThrow("no longer authorized");
+
+    await authorizations.releaseOwner(12);
+  });
+
+  it("bounds malformed restored draft collections", async () => {
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    expect(authorizations.restoreDraftAttachments(12, "")).toHaveLength(1);
+    expect(
+      authorizations.restoreDraftAttachments(
+        12,
+        Array.from({ length: 101 }, () => ({ invalid: true }))
+      )
+    ).toHaveLength(1);
+
+    await authorizations.releaseOwner(12);
+  });
+
+  it("bounds and validates attachment collections before serialization", async () => {
+    const { filePath } = await makeAttachment();
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    const [attachment] = await authorizations.authorizeSelections(13, {
+      files: [{ mediaType: "text/plain", path: filePath }],
+    });
+    if (attachment === undefined) {
+      throw new Error("Expected an authorized attachment");
+    }
+
+    expect(() =>
+      authorizations.serializeDraftAttachments(
+        13,
+        Array.from({ length: 101 }, () => attachment)
+      )
+    ).toThrow("invalid");
+    expect(() =>
+      authorizations.serializeDraftAttachments(13, [attachment, attachment])
+    ).toThrow("invalid");
+
+    const [record] = authorizations.serializeDraftAttachments(13, [attachment]);
+    if (record === undefined) {
+      throw new Error("Expected a stored attachment");
+    }
+    const oversized = [1, 2, 3].map((index) => ({
+      ...record,
+      id: `oversized-${index}`,
+      size: 10_000_000,
+    }));
+    const restored = authorizations.restoreDraftAttachments(13, oversized);
+    expect(() =>
+      authorizations.serializeDraftAttachments(13, restored)
+    ).toThrow("25 MB");
+
+    await authorizations.releaseOwner(13);
   });
 
   it("persists inline content ids without exposing file paths", async () => {
@@ -123,6 +211,41 @@ describe("outgoing attachment authorizations", () => {
       mediaType: "image/png",
     });
     expect(restored).not.toHaveProperty("path");
+
+    await Promise.all([
+      authorizations.releaseOwner(11),
+      authorizations.releaseOwner(12),
+    ]);
+  });
+
+  it("reloads an inline image preview from a restored draft reference", async () => {
+    const bytes = Uint8Array.from([137, 80, 78, 71]);
+    const { filePath } = await makeAttachment(bytes);
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    const [attachment] = await authorizations.authorizeSelections(11, {
+      files: [{ mediaType: "image/png", path: filePath }],
+    });
+    if (attachment === undefined) {
+      throw new Error("Expected an authorized attachment");
+    }
+    const stored = authorizations.serializeDraftAttachments(11, [
+      { ...attachment, contentId: "image@inline.kisa.email" },
+    ]);
+    const [restored] = authorizations.restoreDraftAttachments(12, stored);
+    if (restored === undefined) {
+      throw new Error("Expected a restored attachment");
+    }
+
+    await expect(
+      Effect.runPromise(
+        authorizations.loadInlineImagePreview(11, restored.referenceId)
+      )
+    ).rejects.toThrow("no longer authorized");
+    await expect(
+      Effect.runPromise(
+        authorizations.loadInlineImagePreview(12, restored.referenceId)
+      )
+    ).resolves.toStrictEqual({ bytes, mediaType: "image/png" });
 
     await Promise.all([
       authorizations.releaseOwner(11),
@@ -285,6 +408,43 @@ describe("outgoing attachment authorizations", () => {
 
     await authorizations.releaseOwner(31);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "rejects FIFO and symlink replacements without blocking",
+    async () => {
+      const { directory, filePath } = await makeAttachment("original");
+      const authorizations = new OutgoingAttachmentAuthorizations();
+      const [attachment] = await authorizations.authorizeSelections(35, {
+        files: [{ mediaType: "text/plain", path: filePath }],
+      });
+      if (attachment === undefined) {
+        throw new Error("Expected an authorized attachment");
+      }
+      const stored = authorizations.serializeDraftAttachments(35, [attachment]);
+
+      await unlink(filePath);
+      await execFileAsync("mkfifo", [filePath]);
+      const [fifo] = authorizations.restoreDraftAttachments(35, stored);
+      await expect(
+        authorizations.prepare(35, [
+          { referenceId: fifo?.referenceId ?? "missing-reference" },
+        ])
+      ).rejects.toThrow("Could not read attachment");
+
+      await unlink(filePath);
+      const replacement = path.join(directory, "replacement.txt");
+      await writeFile(replacement, "original");
+      await symlink(replacement, filePath);
+      const [link] = authorizations.restoreDraftAttachments(35, stored);
+      await expect(
+        authorizations.prepare(35, [
+          { referenceId: link?.referenceId ?? "missing-reference" },
+        ])
+      ).rejects.toThrow("Could not read attachment");
+
+      await authorizations.releaseOwner(35);
+    }
+  );
 
   it("bounds capability consumption", async () => {
     const authorizations = new OutgoingAttachmentAuthorizations();

@@ -61,8 +61,11 @@ const SettingsAccountDisconnectRow = ({
         <ConfirmMessage subject={account.email}>
           Access will be revoked and everything stored for this account on this
           device will be deleted: saved sign-in, downloaded mail, labels,
-          settings, and sync state. Nothing will be deleted from Gmail, and you
-          can connect the account again at any time.
+          settings, sync state, scheduled emails, and unresolved delivery
+          evidence. Unsent scheduled emails will no longer be delivered. A
+          scheduled email with an unknown outcome may already have reached
+          Gmail, so check Sent before disconnecting. Nothing will be deleted
+          from Gmail, and you can connect the account again at any time.
         </ConfirmMessage>
       ),
       title: "Disconnect account?",

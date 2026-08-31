@@ -21,6 +21,7 @@ export interface StoredMailDraftAttachment {
   readonly mtimeMs: number;
   readonly path: string;
   readonly size: number;
+  readonly storage?: "app-owned";
 }
 
 /** Local compositions. Thread drafts are unique per account and conversation. */

@@ -326,6 +326,8 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
             });
             return { value: undefined };
           }),
+    findSentMessageByRfc822MessageId: () =>
+      Effect.succeed({ value: undefined }),
     getAttachment: (_authorization, request) =>
       options.attachmentNotFound === true
         ? Effect.fail(missingEntity(_authorization.account.id, "attachment"))

@@ -17,6 +17,7 @@ import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailSync } from "./mail/mail-sync";
+import { stopScheduledMail } from "./mail/scheduled-mail";
 import {
   flushAppSettings,
   getCurrentAppSettings,
@@ -97,6 +98,7 @@ const finishShutdown = async (): Promise<void> => {
   stopGoogleAuth();
   destroyBackgroundTray();
   await stopThreadCategorization();
+  await stopScheduledMail();
   await Promise.allSettled([
     flushAppSettings(),
     Effect.runPromise(closeDatabase()),

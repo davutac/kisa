@@ -5,7 +5,9 @@ import { useMemo } from "react";
 import NewMessageDialogShell from "@/components/mail/new-message-dialog-shell";
 import { Dialog } from "@/components/ui/dialog";
 import { getInitialComposerAccountId } from "@/mail/composer-account";
+import { getDraftResumeFocusTarget } from "@/mail/mail-draft";
 import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { ScheduledMailEditSession } from "@/shared/ipc/scheduled-mail";
 import { useAccountSettings } from "@/state/account-settings";
 
 import NewMessageForm from "./new-message-form";
@@ -13,7 +15,6 @@ import NewMessageHeader from "./new-message-header";
 import {
   createNewMessageStore,
   NewMessageStoreProvider,
-  useNewMessageStore,
 } from "./new-message-store";
 import { useNewMessageWorkspace } from "./use-new-message-workspace";
 
@@ -22,15 +23,24 @@ interface NewMessageDialogProps {
   initialAccountId: string | null;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  onScheduledEditChange?: (session: ScheduledMailEditSession) => void;
+  scheduledEdit?: ScheduledMailEditSession;
 }
 
 const NewMessageDialogContent = ({
   accounts,
   isOpen,
   onOpenChange,
+  onScheduledEditChange,
+  scheduledEdit,
 }: Omit<NewMessageDialogProps, "initialAccountId">) => {
-  const isSending = useNewMessageStore((state) => state.isSending);
-  const workspace = useNewMessageWorkspace({ accounts, isOpen, onOpenChange });
+  const workspace = useNewMessageWorkspace({
+    accounts,
+    isOpen,
+    onOpenChange,
+    onScheduledEditChange,
+    scheduledEdit,
+  });
   const [sendBinding] = workspace.sendDisplay.bindings;
   const handleClean = workspace.cleanDraft;
   const handleAccountSelect = workspace.selectAccount;
@@ -46,14 +56,20 @@ const NewMessageDialogContent = ({
   return (
     <Dialog
       onOpenChange={(open) => {
-        if (!open && !isSending) {
-          onOpenChange(false);
+        if (!open) {
+          void workspace.requestClose();
         }
       }}
       open={isOpen}
     >
       <NewMessageDialogShell
-        initialFocus={() => workspace.focus.getElement("to")}
+        initialFocus={() =>
+          workspace.focus.getElement(
+            scheduledEdit === undefined
+              ? "to"
+              : getDraftResumeFocusTarget(scheduledEdit.draft)
+          )
+        }
         onFiles={handleFiles}
       >
         <NewMessageHeader
@@ -63,6 +79,7 @@ const NewMessageDialogContent = ({
           isCleaning={workspace.isCleaning}
           onSelectDraft={handleSelectDraft}
           stashPickerTriggerRef={workspace.stashPickerTriggerRef}
+          scheduledEdit={scheduledEdit}
         />
         <NewMessageForm
           accounts={accounts}
@@ -83,6 +100,7 @@ const NewMessageDialogContent = ({
           outgoingAttachments={workspace.outgoingAttachments}
           selectedAccountId={workspace.selectedAccountId}
           sendShortcutLabel={`${workspace.sendDisplay.label} (${sendBinding})`}
+          scheduled={workspace.scheduled}
           templates={workspace.templates}
         />
       </NewMessageDialogShell>
@@ -95,14 +113,21 @@ const NewMessageDialog = ({
   initialAccountId,
   isOpen,
   onOpenChange,
+  onScheduledEditChange,
+  scheduledEdit,
 }: NewMessageDialogProps) => {
   const initialComposerAccountId = getInitialComposerAccountId(
     accounts,
-    initialAccountId
+    scheduledEdit?.draft.accountId ?? initialAccountId
   );
   const { emailSignature } = useAccountSettings(initialComposerAccountId);
   const store = useMemo(
-    () => createNewMessageStore(initialComposerAccountId, emailSignature),
+    () =>
+      createNewMessageStore(
+        initialComposerAccountId,
+        emailSignature,
+        scheduledEdit?.draft
+      ),
     // The parent keys each newly opened composer. Account changes while that
     // composer is open must not replace its draft store.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -115,6 +140,8 @@ const NewMessageDialog = ({
         accounts={accounts}
         isOpen={isOpen}
         onOpenChange={onOpenChange}
+        onScheduledEditChange={onScheduledEditChange}
+        scheduledEdit={scheduledEdit}
       />
     </NewMessageStoreProvider>
   );

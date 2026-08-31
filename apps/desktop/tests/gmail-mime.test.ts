@@ -270,6 +270,7 @@ describe("GmailMime sending", () => {
               },
             ],
             body: { html: "<p>Hello</p>", text: "Hello", type: "html" },
+            rfc822MessageId: "<scheduled-message@scheduled.kisa.invalid>",
             subject: "Attached notes",
             to: [new Mailbox({ address: "carol@example.com" })],
           })
@@ -286,11 +287,15 @@ describe("GmailMime sending", () => {
       hasAttachmentType: raw.includes(
         'Content-Type: text/plain; name="notes.txt"'
       ),
+      hasMessageId: raw.includes(
+        "Message-ID: <scheduled-message@scheduled.kisa.invalid>"
+      ),
       hasMixedBody: raw.includes("Content-Type: multipart/mixed"),
       hasSubject: raw.includes("Subject: Attached notes"),
     }).toStrictEqual({
       hasAttachmentDisposition: true,
       hasAttachmentType: true,
+      hasMessageId: true,
       hasMixedBody: true,
       hasSubject: true,
     });

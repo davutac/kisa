@@ -13,7 +13,11 @@ import {
 import { EMPTY_EMAIL_SIGNATURE_BODY } from "@/shared/email-signature";
 import type { EmailSignatureBody } from "@/shared/email-signature";
 import { truncateGmailSubject } from "@/shared/gmail-subject";
-import type { MailDraft, MailDraftSignature } from "@/shared/ipc/mail";
+import type {
+  MailDraft,
+  MailDraftInput,
+  MailDraftSignature,
+} from "@/shared/ipc/mail";
 
 export const EMPTY_RECIPIENTS: EmailRecipients = { bcc: [], cc: [], to: [] };
 
@@ -22,6 +26,7 @@ interface NewMessageState {
   cleanHistory: readonly CleanDraftVersion[];
   composer: EmailComposerValue;
   draftId: string;
+  isScheduling: boolean;
   isSending: boolean;
   recipientResetVersion: number;
   recipients: EmailRecipients;
@@ -35,6 +40,7 @@ interface NewMessageState {
   setCleanHistory: (history: readonly CleanDraftVersion[]) => void;
   setComposer: (composer: EmailComposerValue) => void;
   setDraftId: (draftId: string) => void;
+  setIsScheduling: (isScheduling: boolean) => void;
   setIsSending: (isSending: boolean) => void;
   setRecipients: (recipients: EmailRecipients) => void;
   setSelectedCleanVersionId: (versionId: string | null) => void;
@@ -50,15 +56,18 @@ export type NewMessageStore = ReturnType<typeof createNewMessageStore>;
 
 export const createNewMessageStore = (
   accountId: string,
-  emailSignature: EmailSignatureBody = EMPTY_EMAIL_SIGNATURE_BODY
+  emailSignature: EmailSignatureBody = EMPTY_EMAIL_SIGNATURE_BODY,
+  restoredDraft?: MailDraftInput
 ) => {
-  const initialDraft = createNewMailDraft(
-    accountId.length === 0 ? undefined : accountId,
-    emailSignature
-  );
+  const initialDraft =
+    restoredDraft ??
+    createNewMailDraft(
+      accountId.length === 0 ? undefined : accountId,
+      emailSignature
+    );
 
   return createStore<NewMessageState>()((set) => ({
-    accountId,
+    accountId: initialDraft.accountId ?? accountId,
     cleanHistory: [],
     composer: toMailDraftComposerValue(initialDraft),
     draftId: initialDraft.id,
@@ -66,9 +75,14 @@ export const createNewMessageStore = (
       set((state) => ({
         recipientResetVersion: state.recipientResetVersion + 1,
       })),
+    isScheduling: false,
     isSending: false,
     recipientResetVersion: 0,
-    recipients: EMPTY_RECIPIENTS,
+    recipients: {
+      bcc: initialDraft.bcc,
+      cc: initialDraft.cc,
+      to: initialDraft.to,
+    },
     resetCleanHistory: () =>
       set({ cleanHistory: [], selectedCleanVersionId: null }),
     selectedCleanVersionId: null,
@@ -76,6 +90,7 @@ export const createNewMessageStore = (
     setCleanHistory: (cleanHistory) => set({ cleanHistory }),
     setComposer: (composer) => set({ composer }),
     setDraftId: (draftId) => set({ draftId }),
+    setIsScheduling: (isScheduling) => set({ isScheduling }),
     setIsSending: (isSending) => set({ isSending }),
     setRecipients: (recipients) => set({ recipients }),
     setSelectedCleanVersionId: (selectedCleanVersionId) =>
@@ -85,7 +100,7 @@ export const createNewMessageStore = (
     setSubject: (subject) => set({ subject: truncateGmailSubject(subject) }),
     signature: initialDraft.signature,
     stashes: [],
-    subject: "",
+    subject: initialDraft.subject,
     updateStashes: (update) =>
       set((state) => ({ stashes: update(state.stashes) })),
   }));

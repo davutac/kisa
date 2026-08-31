@@ -21,7 +21,7 @@ export interface AccountMailWorkSupervisor {
 
 export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
   const activeByAccount = new Map<string, Set<ActiveAccountMailWork>>();
-  const suspendedAccounts = new Set<string>();
+  const suspensionCountByAccount = new Map<string, number>();
 
   const remove = (accountId: string, token: symbol): void => {
     const active = activeByAccount.get(accountId);
@@ -46,7 +46,10 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
     work: AccountMailWork,
     parentSignal?: AbortSignal
   ): Promise<void> => {
-    if (suspendedAccounts.has(accountId) || parentSignal?.aborted === true) {
+    if (
+      (suspensionCountByAccount.get(accountId) ?? 0) > 0 ||
+      parentSignal?.aborted === true
+    ) {
       return Promise.resolve();
     }
 
@@ -80,7 +83,10 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
   const suspend = Effect.fn("AccountMailWorkSupervisor.suspend")(
     function* suspendAccountMailWork(accountId: string) {
       const completions = yield* Effect.sync(() => {
-        suspendedAccounts.add(accountId);
+        suspensionCountByAccount.set(
+          accountId,
+          (suspensionCountByAccount.get(accountId) ?? 0) + 1
+        );
         const active = [...(activeByAccount.get(accountId) ?? [])];
 
         for (const entry of active) {
@@ -96,11 +102,16 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
   );
 
   const resume = (accountId: string): void => {
-    suspendedAccounts.delete(accountId);
+    const count = suspensionCountByAccount.get(accountId) ?? 0;
+    if (count <= 1) {
+      suspensionCountByAccount.delete(accountId);
+      return;
+    }
+    suspensionCountByAccount.set(accountId, count - 1);
   };
 
   const isSuspended = (accountId: string): boolean =>
-    suspendedAccounts.has(accountId);
+    (suspensionCountByAccount.get(accountId) ?? 0) > 0;
 
   return { isSuspended, resume, run, suspend };
 };

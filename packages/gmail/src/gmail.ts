@@ -177,6 +177,10 @@ export interface GmailService {
   readonly getAttachment: (
     request: GetAttachmentRequest
   ) => Effect.Effect<GmailAttachment, GmailError>;
+  readonly findSentMessageByRfc822MessageId: (
+    accountId: AccountId,
+    rfc822MessageId: string
+  ) => Effect.Effect<SentMessage | undefined, GmailError>;
   readonly getThread: (
     request: GetThreadRequest
   ) => Effect.Effect<GmailThread, GmailError>;
@@ -968,6 +972,20 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         );
       });
 
+      const findSentMessageByRfc822MessageId = Effect.fn(
+        "Gmail.findSentMessageByRfc822MessageId"
+      )(function* findSentMessageByRfc822MessageId(
+        accountId: AccountId,
+        rfc822MessageId: string
+      ) {
+        return yield* withAuthorization(accountId, "read", (authorization) =>
+          gateway.findSentMessageByRfc822MessageId(
+            authorization,
+            rfc822MessageId
+          )
+        );
+      });
+
       const forward = Effect.fn("Gmail.forward")(function* forward(
         input: ForwardInput
       ) {
@@ -1115,6 +1133,7 @@ export class Gmail extends Context.Service<Gmail, GmailService>()(
         deleteLabel,
         deleteThread,
         disconnectAccount,
+        findSentMessageByRfc822MessageId,
         forward,
         getAccount,
         getAttachment,

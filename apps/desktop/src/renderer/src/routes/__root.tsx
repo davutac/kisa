@@ -8,6 +8,7 @@ import {
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
 import AccountGate from "@/components/accounts/account-gate";
+import ScheduledMailOutcomeListener from "@/components/scheduled/scheduled-mail-outcome-listener";
 import Titlebar from "@/components/shell/titlebar";
 import StartupSplash from "@/components/startup/startup-splash";
 import { resolveInitialAuthGateState } from "@/startup/auth-gate";
@@ -30,6 +31,7 @@ function RootLayout() {
 
   return (
     <AccountGate initialState={authGateState}>
+      <ScheduledMailOutcomeListener />
       <div className="app-content flex h-svh flex-col scroll-smooth antialiased">
         {isThreadWindow ? (
           <header

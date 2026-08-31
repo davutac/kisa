@@ -1,9 +1,4 @@
-import {
-  ArchiveIcon,
-  LoaderCircleIcon,
-  SendIcon,
-  SparklesIcon,
-} from "lucide-react";
+import { SparklesIcon } from "lucide-react";
 
 import AccountPicker from "@/components/accounts/account-picker";
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
@@ -12,13 +7,11 @@ import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import MailComposer from "@/components/mail/mail-composer";
 import type { OutgoingAttachmentComposerController } from "@/components/mail/outgoing-attachments";
 import type { useComposerFocus } from "@/components/mail/use-composer-focus";
-import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { getHotkeyAriaLabel, HotkeyHint } from "@/hotkeys";
 import { MAX_GMAIL_SUBJECT_LENGTH } from "@/shared/gmail-subject";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type {
@@ -26,6 +19,8 @@ import type {
   ComposerTemplateInput,
 } from "@/shared/ipc/templates";
 
+import NewMessageFooter from "./new-message-footer";
+import type { ScheduledComposerControls } from "./new-message-footer";
 import { useNewMessageStore } from "./new-message-store";
 
 interface NewMessageFormProps {
@@ -47,6 +42,7 @@ interface NewMessageFormProps {
   sendShortcutLabel: string;
   outgoingAttachments: OutgoingAttachmentComposerController;
   onSubjectChange: (subject: string) => void;
+  scheduled: ScheduledComposerControls;
   templates: readonly ComposerTemplate[];
 }
 
@@ -69,6 +65,7 @@ const NewMessageForm = ({
   sendShortcutLabel,
   outgoingAttachments,
   onSubjectChange,
+  scheduled,
   templates,
 }: NewMessageFormProps) => {
   const handleFocusCapture = focus.onFocusCapture;
@@ -76,6 +73,8 @@ const NewMessageForm = ({
   const cleanHistory = useNewMessageStore((state) => state.cleanHistory);
   const draftId = useNewMessageStore((state) => state.draftId);
   const isSending = useNewMessageStore((state) => state.isSending);
+  const isScheduling = useNewMessageStore((state) => state.isScheduling);
+  const isBusy = isSending || isScheduling;
   const recipientResetVersion = useNewMessageStore(
     (state) => state.recipientResetVersion
   );
@@ -85,6 +84,10 @@ const NewMessageForm = ({
   );
   const subject = useNewMessageStore((state) => state.subject);
   const setRecipients = useNewMessageStore((state) => state.setRecipients);
+  const { isEdit } = scheduled;
+  const fromAccounts = isEdit
+    ? accounts.filter(({ email }) => email === selectedAccountId)
+    : accounts;
   return (
     <form
       className="bg-background flex min-h-0 flex-1 flex-col gap-px overflow-hidden"
@@ -95,9 +98,10 @@ const NewMessageForm = ({
       }}
     >
       <AccountPicker
-        accounts={accounts}
-        enableHotkeys
+        accounts={fromAccounts}
+        enableHotkeys={!isEdit}
         focusRefForAccount={(email) => focus.refFor(`account:${email}`)}
+        locked={isEdit}
         onSelect={onAccountSelect}
         selectedAccountId={selectedAccountId}
       />
@@ -120,7 +124,7 @@ const NewMessageForm = ({
         <InputGroupInput
           className="h-8 px-0 text-sm md:text-sm"
           id="new-message-subject"
-          disabled={isSending}
+          disabled={isBusy}
           maxLength={MAX_GMAIL_SUBJECT_LENGTH}
           onChange={(event) => onSubjectChange(event.currentTarget.value)}
           ref={focus.refFor("subject")}
@@ -152,7 +156,7 @@ const NewMessageForm = ({
         consumeModEnter
         contentKey={draftId}
         defaultValue={composer.html}
-        disabled={isSending}
+        disabled={isBusy}
         enableTemplateSlashMenu
         focusHandleRef={focus.handleRefFor("message")}
         focusAtStart={composer.isEmpty}
@@ -169,39 +173,17 @@ const NewMessageForm = ({
           versions: cleanHistory,
         }}
       />
-      <div className="bg-background flex shrink-0 items-stretch gap-0">
-        <Button
-          aria-label="Stash draft"
-          aria-keyshortcuts={getHotkeyAriaLabel("composer.stash")}
-          className="border-background border-r"
-          disabled={!canStash}
-          onClick={onStash}
-          onMouseDown={(event) => event.preventDefault()}
-          size="footer-icon"
-          title="Stash draft"
-          type="button"
-          variant="secondary"
-        >
-          <ArchiveIcon />
-        </Button>
-        <Button
-          aria-keyshortcuts={getHotkeyAriaLabel("composer.send")}
-          className="relative"
-          disabled={!canSend}
-          size="footer"
-          title={sendShortcutLabel}
-          type="submit"
-          variant="secondary"
-        >
-          {isSending ? (
-            <LoaderCircleIcon className="animate-spin" />
-          ) : (
-            <SendIcon />
-          )}
-          {isSending ? "Sending…" : "Send"}
-          <HotkeyHint className="absolute right-4" command="composer.send" />
-        </Button>
-      </div>
+      <NewMessageFooter
+        canSend={canSend}
+        canStash={canStash}
+        isScheduling={isScheduling}
+        isSending={isSending}
+        key={draftId}
+        onSend={onSend}
+        onStash={onStash}
+        scheduled={scheduled}
+        sendShortcutLabel={sendShortcutLabel}
+      />
     </form>
   );
 };
