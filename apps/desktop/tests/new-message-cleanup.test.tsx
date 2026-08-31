@@ -8,6 +8,7 @@ import {
   createNewMessageStore,
   NewMessageStoreProvider,
 } from "../src/renderer/src/components/mail/new-message/new-message-store";
+import type { OutgoingAttachmentComposerController } from "../src/renderer/src/components/mail/outgoing-attachments";
 import type { useComposerFocus } from "../src/renderer/src/components/mail/use-composer-focus";
 import type {
   Tooltip as TooltipComponent,
@@ -96,20 +97,28 @@ const renderForm = ({
   scheduledEdit?: boolean;
 }): string => {
   const store = createNewMessageStore("");
+  const outgoingAttachments = {
+    addAttachments: () => Promise.resolve(),
+    addInlineImages: () => Promise.resolve([]),
+    attachments: [],
+    discardInlineImages: () => {},
+    fallbackInlineImagesToAttachments: () => {},
+    getInlineImagePreview: () => null,
+    inputRef: { current: null },
+    removeAttachment: () => {},
+    setReferencedInlineContentIds: () => {},
+  } satisfies OutgoingAttachmentComposerController;
 
   return renderToString(
     <NewMessageStoreProvider store={store}>
       <NewMessageForm
         accounts={[]}
-        addAttachments={() => null}
         applyTemplate={() => null}
-        attachments={[]}
         canClean={canClean}
         canSend={scheduledEdit}
         canStash={false}
         cleanupModelLabel="Codex · gpt-5.6-luna"
         focus={focus}
-        inputRef={{ current: null }}
         onAccountSelect={() => null}
         onClean={() => Promise.resolve()}
         onComposerChange={() => null}
@@ -118,9 +127,9 @@ const renderForm = ({
         onSend={() => Promise.resolve()}
         onStash={() => null}
         onSubjectChange={() => null}
+        outgoingAttachments={outgoingAttachments}
         selectedAccountId=""
         sendShortcutLabel="Send"
-        setAttachments={() => null}
         scheduled={{
           canSchedule: scheduledEdit,
           isDirty: scheduledEdit,

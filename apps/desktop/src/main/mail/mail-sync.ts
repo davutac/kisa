@@ -19,6 +19,7 @@ import type {
 } from "@repo/gmail/models";
 import {
   AccountId,
+  AttachmentId,
   isGmailScope,
   LabelColor,
   LabelId,
@@ -278,9 +279,15 @@ type CachedMessageRow = typeof gmailMessages.$inferSelect;
 
 interface CachedConversation {
   readonly cachedAt: number;
+  readonly inlineImageSources: readonly InlineImageMessageSource[];
   readonly isUnread: boolean;
   readonly thread: GmailThreadDto;
 }
+
+type InlineImageMessageSource = Pick<
+  GmailDomainThread["messages"][number],
+  "attachments" | "id" | "threadId"
+>;
 
 const formatCachedAddresses = (addresses: readonly string[] | null): string =>
   (addresses ?? []).join(", ");
@@ -371,10 +378,28 @@ const readCachedConversation = Effect.fn("readCachedConversation")(
           cachedAt: Math.min(
             ...messageRows.map((message) => message.updatedAt)
           ),
+          inlineImageSources: messageRows.map((row) => ({
+            attachments: (row.attachments ?? []).flatMap((attachment) =>
+              attachment.attachmentId === undefined
+                ? []
+                : [
+                    {
+                      attachmentId: AttachmentId.make(attachment.attachmentId),
+                      contentId: attachment.contentId,
+                      filename: attachment.filename,
+                      mediaType: attachment.mediaType,
+                      messageId: MessageId.make(attachment.messageId),
+                      size: attachment.size,
+                    },
+                  ]
+            ),
+            id: MessageId.make(row.messageId),
+            threadId: ThreadId.make(row.threadId),
+          })),
           isUnread: threadRow.isUnread,
           thread: {
             accountId: request.accountId,
-            labels: threadRow.labels ?? [],
+            labels: removeUnreadLabel(threadRow.labels ?? []),
             messages: completeMessages,
             subject: completeMessages[0]?.subject ?? "(No subject)",
             threadId: request.threadId,
@@ -680,29 +705,24 @@ const toThreadMessage = (
 const withInlineImages = Effect.fn("withInlineImages")(
   function* withInlineImages(
     accountId: AccountId,
-    parsedMessages: GmailDomainThread["messages"],
+    sourceMessages: readonly InlineImageMessageSource[],
     messages: readonly GmailThreadMessage[]
   ) {
-    const attachmentsById = new Map<
-      string,
-      GmailDomainThread["messages"][number]["attachments"]
-    >(parsedMessages.map((message) => [message.id, message.attachments]));
-    const threadIdsByMessageId = new Map<string, ThreadId>(
-      parsedMessages.map((message) => [message.id, message.threadId])
+    const sourcesByMessageId = new Map<string, InlineImageMessageSource>(
+      sourceMessages.map((message) => [message.id, message])
     );
     const wanted = messages.flatMap((message) => {
-      const threadId = threadIdsByMessageId.get(message.id);
+      const source = sourcesByMessageId.get(message.id);
 
-      return message.body.html === undefined || threadId === undefined
+      return message.body.html === undefined || source === undefined
         ? []
-        : selectInlineImages(
-            message.body.html,
-            attachmentsById.get(message.id) ?? []
-          ).map((attachment) => ({
-            attachment,
-            messageId: message.id,
-            threadId,
-          }));
+        : selectInlineImages(message.body.html, source.attachments).map(
+            (attachment) => ({
+              attachment,
+              messageId: message.id,
+              threadId: source.threadId,
+            })
+          );
     });
 
     if (wanted.length === 0) {
@@ -726,6 +746,7 @@ const withInlineImages = Effect.fn("withInlineImages")(
                 })
                 .pipe(
                   Effect.map((image) => ({
+                    attachmentId: attachment.attachmentId,
                     contentId: attachment.contentId,
                     dataUrl: toImageDataUrl(image.mediaType, image.bytes),
                     messageId,
@@ -737,30 +758,48 @@ const withInlineImages = Effect.fn("withInlineImages")(
         )
       )
     );
-    const dataUrlsByMessage = new Map<string, Map<string, string>>();
+    const hydratedByMessage = new Map<
+      string,
+      {
+        readonly attachmentIds: Set<string>;
+        readonly dataUrls: Map<string, string>;
+      }
+    >();
 
     for (const image of loaded) {
       if (image === null || image.dataUrl === undefined) {
         continue;
       }
 
-      const dataUrls =
-        dataUrlsByMessage.get(image.messageId) ?? new Map<string, string>();
+      const hydrated = hydratedByMessage.get(image.messageId) ?? {
+        attachmentIds: new Set<string>(),
+        dataUrls: new Map<string, string>(),
+      };
 
-      dataUrls.set(normalizeContentId(image.contentId), image.dataUrl);
-      dataUrlsByMessage.set(image.messageId, dataUrls);
+      hydrated.attachmentIds.add(image.attachmentId);
+      hydrated.dataUrls.set(normalizeContentId(image.contentId), image.dataUrl);
+      hydratedByMessage.set(image.messageId, hydrated);
+    }
+
+    if (hydratedByMessage.size === 0) {
+      return messages;
     }
 
     return messages.map((message) => {
-      const dataUrls = dataUrlsByMessage.get(message.id);
+      const hydrated = hydratedByMessage.get(message.id);
 
-      return dataUrls === undefined || message.body.html === undefined
+      return hydrated === undefined || message.body.html === undefined
         ? message
         : {
             ...message,
+            attachments: message.attachments.filter(
+              (attachment) =>
+                attachment.attachmentId === undefined ||
+                !hydrated.attachmentIds.has(attachment.attachmentId)
+            ),
             body: {
               ...message.body,
-              html: inlineImageDataUrls(message.body.html, dataUrls),
+              html: inlineImageDataUrls(message.body.html, hydrated.dataUrls),
             },
           };
     });
@@ -1047,11 +1086,22 @@ export const loadFullThread = Effect.fn("loadFullThread")(
 
     if (getThreadCacheState(cached.cachedAt, now) === "stale") {
       yield* Effect.sync(() => requestThreadRefresh(request));
-    } else if (cached.isUnread) {
+      return cached.thread;
+    }
+
+    if (cached.isUnread) {
       yield* Effect.sync(() => requestCachedThreadRead(request));
     }
 
-    return cached.thread;
+    const messages = yield* withInlineImages(
+      AccountId.make(request.accountId),
+      cached.inlineImageSources,
+      cached.thread.messages
+    );
+
+    return messages === cached.thread.messages
+      ? cached.thread
+      : { ...cached.thread, messages };
   }
 );
 

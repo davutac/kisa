@@ -9,8 +9,8 @@ import {
 import { toast } from "sonner";
 
 import type { EmailComposerValue } from "@/components/mail/email-composer";
-import { useOutgoingAttachments } from "@/components/mail/outgoing-attachments";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
+import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import {
   changeNewMailDraftAccount,
@@ -87,13 +87,17 @@ export const useNewMessageWorkspace = ({
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [hasPendingReschedule, setHasPendingReschedule] = useState(false);
   const mailApi = useMemo(() => getMailApi(), []);
+  const outgoingAttachments = useOutgoingAttachments(
+    mailApi,
+    scheduledEdit?.draft.attachments,
+    scheduledEdit?.draft.body.html
+  );
   const {
-    addAttachments,
-    attachments,
-    inputRef,
+    activeAttachments,
+    isAuthorizing,
     prepareAttachments,
-    setAttachments,
-  } = useOutgoingAttachments(mailApi, scheduledEdit?.draft.attachments);
+    replaceAttachments,
+  } = outgoingAttachments;
   const { persistDraft, popDraft } = useDraftPersistence(mailApi);
   const focus = useComposerFocus();
   const cleanup = useNewMessageCleanHistory({ focus, isOpen });
@@ -103,7 +107,7 @@ export const useNewMessageWorkspace = ({
   const currentDraft = useMemo<MailDraftInput>(
     () => ({
       accountId: selectedAccountId.length === 0 ? undefined : selectedAccountId,
-      attachments,
+      attachments: activeAttachments,
       bcc: recipients.bcc,
       body: { html: composer.html, text: composer.text },
       cc: recipients.cc,
@@ -114,7 +118,7 @@ export const useNewMessageWorkspace = ({
       to: recipients.to,
     }),
     [
-      attachments,
+      activeAttachments,
       composer.html,
       composer.text,
       draftId,
@@ -146,7 +150,7 @@ export const useNewMessageWorkspace = ({
     cleanup.reset();
     currentDraftRef.current = draft;
     setAccountId(draft.accountId ?? "");
-    setAttachments(draft.attachments);
+    replaceAttachments(draft.attachments, draft.body.html);
     setComposer(toMailDraftComposerValue(draft));
     setDraftId(draft.id);
     setRecipients({ bcc: draft.bcc, cc: draft.cc, to: draft.to });
@@ -163,7 +167,12 @@ export const useNewMessageWorkspace = ({
     currentDraft,
     availableStashes.length > 0
   );
-  const isBusy = cleanup.isCleaning || isScheduling || isSending;
+  const isBusy = [
+    cleanup.isCleaning,
+    isAuthorizing,
+    isScheduling,
+    isSending,
+  ].some(Boolean);
   const isScheduledEdit = scheduledEdit !== undefined;
   const canStash =
     !isScheduledEdit && stashCommandAction === "stash" && !isBusy;
@@ -261,7 +270,7 @@ export const useNewMessageWorkspace = ({
     const applied = applyComposerTemplate(
       {
         accountId: selectedAccountId,
-        attachments,
+        attachments: currentDraft.attachments,
         bcc: recipients.bcc,
         body: { html: composer.html, text: composer.text },
         cc: recipients.cc,
@@ -356,7 +365,9 @@ export const useNewMessageWorkspace = ({
     }
     setIsSending(true);
     try {
-      const preparedAttachments = await prepareAttachments();
+      const preparedAttachments = await prepareAttachments(
+        currentDraft.attachments
+      );
       if (preparedAttachments === undefined) {
         return;
       }
@@ -426,9 +437,7 @@ export const useNewMessageWorkspace = ({
   );
 
   return {
-    addAttachments,
     applyTemplate,
-    attachments,
     availableStashes,
     canClean: cleanup.canClean,
     canSend,
@@ -437,8 +446,8 @@ export const useNewMessageWorkspace = ({
     cleanupModelLabel: cleanup.modelLabel,
     dismissCleanVersion: cleanup.dismissVersion,
     focus,
-    inputRef,
     isCleaning: cleanup.isCleaning,
+    outgoingAttachments,
     requestClose: scheduled.requestClose,
     scheduled: {
       canSchedule: scheduled.canSchedule,
@@ -455,7 +464,6 @@ export const useNewMessageWorkspace = ({
     selectedAccountId,
     send,
     sendDisplay: getHotkeyDisplay("composer.send"),
-    setAttachments,
     stashCurrentDraft,
     stashPickerTriggerRef,
     switchDraft,

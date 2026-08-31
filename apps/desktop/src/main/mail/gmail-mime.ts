@@ -20,6 +20,10 @@ import {
 import { Effect, Layer } from "effect";
 
 import { collectAttachments, isPresent, parseMailbox } from "./gmail-payload";
+import {
+  collectReferencedContentIds,
+  normalizeContentId,
+} from "./inline-images";
 import { toIndexText } from "./message-text";
 
 interface RawPart {
@@ -335,6 +339,7 @@ const composeRaw = (
 ): string => {
   const alternativeBoundary = makeBoundary("alt", `${seed}-alt`);
   const mixedBoundary = makeBoundary("mix", `${seed}-mix`);
+  const relatedBoundary = makeBoundary("rel", `${seed}-rel`);
   const headerLines = [
     `To: ${formatMailboxList(headers.to)}`,
     `Subject: ${encodeHeaderValue(headers.subject)}`,
@@ -360,13 +365,48 @@ const composeRaw = (
     return [...headerLines, bodyParts(body, alternativeBoundary)].join(CRLF);
   }
 
+  const referencedContentIds = collectReferencedContentIds(
+    getComposerHtml(body)
+  );
+  const inlineAttachments: OutgoingAttachment[] = [];
+  const regularAttachments: OutgoingAttachment[] = [];
+  for (const attachment of attachments) {
+    if (
+      attachment.contentId !== undefined &&
+      referencedContentIds.has(normalizeContentId(attachment.contentId))
+    ) {
+      inlineAttachments.push(attachment);
+    } else if (attachment.contentId === undefined) {
+      regularAttachments.push(attachment);
+    } else {
+      regularAttachments.push({ ...attachment, contentId: undefined });
+    }
+  }
+  const bodyWithInlineAttachments =
+    inlineAttachments.length === 0
+      ? bodyParts(body, alternativeBoundary)
+      : [
+          `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
+          "",
+          `--${relatedBoundary}`,
+          bodyParts(body, alternativeBoundary),
+          ...inlineAttachments.map((attachment) =>
+            attachmentPart(attachment, relatedBoundary)
+          ),
+          `--${relatedBoundary}--`,
+        ].join(CRLF);
+
+  if (regularAttachments.length === 0) {
+    return [...headerLines, bodyWithInlineAttachments].join(CRLF);
+  }
+
   return [
     ...headerLines,
     `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
     "",
     `--${mixedBoundary}`,
-    bodyParts(body, alternativeBoundary),
-    ...attachments.map((attachment) =>
+    bodyWithInlineAttachments,
+    ...regularAttachments.map((attachment) =>
       attachmentPart(attachment, mixedBoundary)
     ),
     `--${mixedBoundary}--`,

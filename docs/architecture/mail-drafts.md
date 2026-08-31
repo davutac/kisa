@@ -4,7 +4,7 @@ Kisa stores unfinished compositions in the encrypted local SQLite database. It d
 
 ## Model
 
-A draft contains its optional account owner, kind, recipients, subject, rich-text body, local attachment references, and creation/update timestamps. New-email drafts may remain unassigned; reply, reply-all, and forward drafts require an account and also retain the Gmail thread and source-message IDs needed to send the composition correctly.
+A draft contains its optional account owner, kind, recipients, subject, rich-text body, local attachment references, and creation/update timestamps. New-email drafts may remain unassigned; reply, reply-all, and forward drafts require an account and also retain the Gmail thread and source-message IDs needed to send the composition correctly. An inline image is stored as the same main-owned local attachment reference plus a generated Content-ID; the TipTap body points to it with a `cid:` URL, so draft persistence never embeds a temporary renderer blob URL or the file bytes in HTML.
 
 New-email drafts have independent IDs, so an account can keep several stashes. A partial unique index permits only one draft for a given `(account_email, thread_id)` while still permitting different accounts to use the same Gmail thread ID.
 
@@ -29,6 +29,8 @@ New-email drafts may instead be scheduled for local delivery. While scheduled, t
 Each connected account may have one local rich-text signature with a plain-text alternative of up to 10,000 characters. Kisa edits it with the same constrained Tiptap surface used for message composition and stores the validated HTML/text pair together in the account setting. Kisa inserts the signature visibly when a new-message, reply, reply-all, or forward draft is created, and persists the matching text and HTML fragments with the draft. The signature remains editable or removable like the rest of the body. A signature by itself does not make a draft sendable or worth saving.
 
 Automatic-signature metadata records the owning account and exact generated fragment. Switching the From account replaces the fragment only while it is still untouched; edited signature text is ordinary user content and is preserved. Existing drafts retain the signature they were created with when the account setting changes, so the visible draft matches the MIME body sent to Gmail. Kisa does not write Gmail's `SendAs.signature`: Gmail documents that setting for its web composer, while API clients send complete client-authored MIME messages.
+
+Dropping JPEG, PNG, GIF, or WebP files inside either mail editor inserts previews at the TipTap drop position and sends the files as MIME inline parts with matching Content-IDs. Inline images are limited to 2 MiB each and 8 MiB per message, matching the incoming-message rendering budget; unsupported or over-budget images use the ordinary attachment path, as do non-image files. Dropping files elsewhere on the new-message dialog also attaches them. Deleting an inline image excludes its local attachment reference from the saved or sent draft while keeping undo available; if TipTap cannot insert an authorized image node, Kisa keeps the file as a normal attachment instead. Temporary blob preview URLs are not persisted, so a restored draft shows a filename placeholder at the same body position until it is sent.
 
 ## Attachments
 

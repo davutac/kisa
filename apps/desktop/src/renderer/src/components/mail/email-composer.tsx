@@ -1,10 +1,14 @@
 import { Placeholder } from "@tiptap/extensions";
+import { Fragment } from "@tiptap/pm/model";
+import type { EditorView } from "@tiptap/pm/view";
 import { EditorContent, Extension, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { ComposerInlineImageNode } from "@/components/mail/composer-inline-images";
+import type { ComposerInlineImage } from "@/components/mail/composer-inline-images";
 import EmailComposerToolbar from "@/components/mail/email-composer-toolbar";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
 import { resetEditorHistory } from "@/editor/reset-history";
@@ -45,9 +49,15 @@ interface EmailComposerProps {
   enableTemplateSlashMenu?: boolean;
   focusHandleRef?: (handle: ComposerFocusHandle | null) => void;
   focusAtStart?: boolean;
+  getInlineImagePreview?: (contentId: string) => string | null;
   enableTemplateVariables?: boolean;
   onApplyTemplate?: (template: ComposerTemplateInput) => void;
   onChange?: (value: EmailComposerValue) => void;
+  onComposerFiles?: (
+    files: readonly File[]
+  ) => Promise<readonly ComposerInlineImage[]>;
+  onInlineImageInsertDiscard?: (contentIds: readonly string[]) => void;
+  onInlineImageInsertFailure?: (contentIds: readonly string[]) => void;
   placeholder?: string;
   templateFallbackAccountId?: string;
   templateAccounts?: readonly GoogleAccount[];
@@ -79,6 +89,52 @@ const toComposerValue = (
 
 const NO_TEMPLATES: readonly ComposerTemplate[] = [];
 const NO_ACCOUNTS: readonly GoogleAccount[] = [];
+const NO_INLINE_IMAGE_PREVIEW = (): null => null;
+
+const insertComposerFiles = async (
+  view: EditorView,
+  files: readonly File[],
+  position: number,
+  isCurrentContent: () => boolean,
+  onComposerFiles: NonNullable<EmailComposerProps["onComposerFiles"]>,
+  onInlineImageInsertDiscard:
+    | EmailComposerProps["onInlineImageInsertDiscard"]
+    | undefined,
+  onInlineImageInsertFailure:
+    | EmailComposerProps["onInlineImageInsertFailure"]
+    | undefined
+): Promise<void> => {
+  const originalDocument = view.state.doc;
+  const images = await onComposerFiles(files);
+  if (images.length === 0) {
+    return;
+  }
+
+  const contentIds = images.map(({ contentId }) => contentId);
+  if (view.isDestroyed || !isCurrentContent()) {
+    onInlineImageInsertDiscard?.(contentIds);
+    return;
+  }
+  if (view.state.doc !== originalDocument) {
+    onInlineImageInsertFailure?.(contentIds);
+    return;
+  }
+
+  try {
+    const nodes = images.map(({ contentId, filename }) =>
+      view.state.schema.nodeFromJSON({
+        attrs: { contentId, filename },
+        type: "composerInlineImage",
+      })
+    );
+    const insertAt = Math.min(position, view.state.doc.content.size);
+    view.dispatch(
+      view.state.tr.insert(insertAt, Fragment.fromArray(nodes)).scrollIntoView()
+    );
+  } catch {
+    onInlineImageInsertFailure?.(contentIds);
+  }
+};
 
 const resolveComposerTemplate = (
   editor: NonNullable<ReturnType<typeof useEditor>>,
@@ -128,8 +184,12 @@ const EmailComposer = ({
   enableTemplateVariables = false,
   focusHandleRef,
   focusAtStart = false,
+  getInlineImagePreview = NO_INLINE_IMAGE_PREVIEW,
   onApplyTemplate,
   onChange,
+  onComposerFiles,
+  onInlineImageInsertDiscard,
+  onInlineImageInsertFailure,
   placeholder = "Write a message",
   templateFallbackAccountId = "",
   templateAccounts = NO_ACCOUNTS,
@@ -147,8 +207,37 @@ const EmailComposer = ({
         class:
           "flex-1 px-4 py-2 text-sm leading-relaxed outline-none select-text",
       },
+      handleDrop:
+        onComposerFiles === undefined
+          ? undefined
+          : (view: EditorView, event: DragEvent) => {
+              const files = [...(event.dataTransfer?.files ?? [])];
+              if (files.length === 0) {
+                return false;
+              }
+              event.preventDefault();
+              const position =
+                view.posAtCoords({ left: event.clientX, top: event.clientY })
+                  ?.pos ?? view.state.selection.from;
+              void insertComposerFiles(
+                view,
+                files,
+                position,
+                () => contentKeyRef.current === contentKey,
+                onComposerFiles,
+                onInlineImageInsertDiscard,
+                onInlineImageInsertFailure
+              );
+              return true;
+            },
     }),
-    [ariaLabel]
+    [
+      ariaLabel,
+      contentKey,
+      onComposerFiles,
+      onInlineImageInsertDiscard,
+      onInlineImageInsertFailure,
+    ]
   );
   const extensions = useMemo(
     () => [
@@ -159,6 +248,9 @@ const EmailComposer = ({
         },
       }),
       Placeholder.configure({ placeholder }),
+      ComposerInlineImageNode.configure({
+        getPreviewUrl: getInlineImagePreview,
+      }),
       enableTemplateVariables ? TemplateVariable : TemplateVariableDisplay,
       ...(enableTemplateSlashMenu ? [TemplateSlashCommand] : []),
       ...(consumeModEnter ? [ComposerSendHotkeyGuard] : []),
@@ -167,6 +259,7 @@ const EmailComposer = ({
       consumeModEnter,
       enableTemplateSlashMenu,
       enableTemplateVariables,
+      getInlineImagePreview,
       placeholder,
     ]
   );
@@ -268,6 +361,7 @@ const EmailComposer = ({
     >
       <EditorContent
         className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+        data-composer-drop-target=""
         editor={editor}
       />
       {toolbarHeader}

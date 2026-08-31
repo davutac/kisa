@@ -1,16 +1,24 @@
-import type { ComponentProps, Ref, RefObject } from "react";
+import { useCallback } from "react";
+import type { ComponentProps, Ref } from "react";
 
 import AiComposerButton from "@/components/mail/ai-composer-button";
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
 import CleanDraftHistoryStrip from "@/components/mail/clean-draft-history-strip";
+import {
+  collectComposerInlineContentIds,
+  getRetainedComposerInlineBytes,
+  partitionComposerFiles,
+} from "@/components/mail/composer-inline-images";
 import EmailComposer from "@/components/mail/email-composer";
+import type { EmailComposerValue } from "@/components/mail/email-composer";
+import type { OutgoingAttachmentComposerController } from "@/components/mail/outgoing-attachments";
 import {
   OutgoingAttachmentButton,
   OutgoingAttachmentList,
 } from "@/components/mail/outgoing-attachments";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { useAppCommand } from "@/hotkeys";
-import type { MailDraftAttachment } from "@/shared/ipc/mail";
+import type { ComposerTemplateInput } from "@/shared/ipc/templates";
 
 type MailComposerAiAction = Omit<
   ComponentProps<typeof AiComposerButton>,
@@ -19,11 +27,8 @@ type MailComposerAiAction = Omit<
 
 interface MailComposerAttachmentOptions {
   readonly command: "composer.attach" | "threadComposer.attach";
-  readonly files: readonly MailDraftAttachment[];
+  readonly controller: OutgoingAttachmentComposerController;
   readonly focusRef?: Ref<HTMLButtonElement>;
-  readonly inputRef: RefObject<HTMLInputElement | null>;
-  readonly onAdd: (files: FileList | null) => void;
-  readonly onRemove: (attachmentId: string) => void;
 }
 
 interface MailComposerHistoryOptions {
@@ -46,6 +51,104 @@ interface MailComposerProps extends Omit<
 
 const NO_AI_ACTIONS: readonly MailComposerAiAction[] = [];
 
+const getDetachedInlineContentIds = (
+  controller: OutgoingAttachmentComposerController,
+  referencedContentIds: ReadonlySet<string>
+): readonly string[] =>
+  controller.attachments.flatMap(({ contentId }) =>
+    contentId !== undefined && !referencedContentIds.has(contentId)
+      ? [contentId]
+      : []
+  );
+
+const useMailComposerAttachmentHandlers = (
+  controller: OutgoingAttachmentComposerController | undefined,
+  onApplyTemplate: MailComposerProps["onApplyTemplate"],
+  onChange: MailComposerProps["onChange"]
+) => {
+  const addAttachments = controller?.addAttachments;
+  const addInlineImages = controller?.addInlineImages;
+  const fallbackInlineImagesToAttachments =
+    controller?.fallbackInlineImagesToAttachments;
+  const setReferencedInlineContentIds =
+    controller?.setReferencedInlineContentIds;
+
+  const handleComposerFiles = useCallback(
+    async (files: readonly File[]) => {
+      if (addAttachments === undefined || addInlineImages === undefined) {
+        return [];
+      }
+      const existingInlineBytes = getRetainedComposerInlineBytes(
+        controller?.attachments ?? []
+      );
+      const partitioned = partitionComposerFiles(files, existingInlineBytes);
+      const inlineImages = await addInlineImages(partitioned.inlineImages);
+      if (partitioned.attachments.length > 0) {
+        void addAttachments(partitioned.attachments);
+      }
+      return inlineImages;
+    },
+    [addAttachments, addInlineImages, controller?.attachments]
+  );
+
+  const handleChange = useCallback(
+    (value: EmailComposerValue) => {
+      setReferencedInlineContentIds?.(
+        collectComposerInlineContentIds(value.html)
+      );
+      onChange?.(value);
+    },
+    [onChange, setReferencedInlineContentIds]
+  );
+
+  const handleApplyTemplate = useCallback(
+    (template: ComposerTemplateInput) => {
+      const referencedContentIds = collectComposerInlineContentIds(
+        template.body.html
+      );
+      setReferencedInlineContentIds?.(referencedContentIds);
+      if (controller !== undefined) {
+        const detachedContentIds = getDetachedInlineContentIds(
+          controller,
+          referencedContentIds
+        );
+        if (detachedContentIds.length > 0) {
+          fallbackInlineImagesToAttachments?.(detachedContentIds);
+        }
+      }
+      onApplyTemplate?.(template);
+    },
+    [
+      controller,
+      fallbackInlineImagesToAttachments,
+      onApplyTemplate,
+      setReferencedInlineContentIds,
+    ]
+  );
+
+  const handleAttachmentFiles = useCallback(
+    (files: FileList | null): void => {
+      void addAttachments?.(files);
+    },
+    [addAttachments]
+  );
+
+  const handleAttachmentRemove = useCallback(
+    (attachmentId: string): void => {
+      controller?.removeAttachment(attachmentId);
+    },
+    [controller]
+  );
+
+  return {
+    handleApplyTemplate,
+    handleAttachmentFiles,
+    handleAttachmentRemove,
+    handleChange,
+    handleComposerFiles,
+  };
+};
+
 const MailComposer = ({
   aiActionGroupLabel = "AI composer actions",
   aiActions = NO_AI_ACTIONS,
@@ -53,12 +156,26 @@ const MailComposer = ({
   disabled = false,
   groupAiActions = false,
   history,
+  onApplyTemplate,
+  onChange,
   ...composerProps
 }: MailComposerProps) => {
+  const attachmentController = attachments?.controller;
+  const {
+    handleApplyTemplate,
+    handleAttachmentFiles,
+    handleAttachmentRemove,
+    handleChange,
+    handleComposerFiles,
+  } = useMailComposerAttachmentHandlers(
+    attachmentController,
+    onApplyTemplate,
+    onChange
+  );
   const attachmentCommand = attachments?.command ?? "composer.attach";
   useAppCommand(
     attachmentCommand,
-    () => attachments?.inputRef.current?.click(),
+    () => attachmentController?.inputRef.current?.click(),
     { enabled: attachments !== undefined && !disabled }
   );
 
@@ -102,6 +219,16 @@ const MailComposer = ({
       <EmailComposer
         {...composerProps}
         disabled={disabled}
+        getInlineImagePreview={attachmentController?.getInlineImagePreview}
+        onApplyTemplate={handleApplyTemplate}
+        onChange={handleChange}
+        onComposerFiles={
+          attachmentController === undefined ? undefined : handleComposerFiles
+        }
+        onInlineImageInsertDiscard={attachmentController?.discardInlineImages}
+        onInlineImageInsertFailure={
+          attachmentController?.fallbackInlineImagesToAttachments
+        }
         toolbarActions={
           <>
             {aiControls}
@@ -110,8 +237,8 @@ const MailComposer = ({
                 command={attachments.command}
                 disabled={disabled}
                 focusRef={attachments.focusRef}
-                inputRef={attachments.inputRef}
-                onFiles={(files) => attachments.onAdd(files)}
+                inputRef={attachments.controller.inputRef}
+                onFiles={handleAttachmentFiles}
               />
             )}
           </>
@@ -130,8 +257,10 @@ const MailComposer = ({
       />
       {attachments === undefined ? null : (
         <OutgoingAttachmentList
-          attachments={attachments.files}
-          onRemove={(attachmentId) => attachments.onRemove(attachmentId)}
+          attachments={attachments.controller.attachments.filter(
+            ({ contentId }) => contentId === undefined
+          )}
+          onRemove={handleAttachmentRemove}
         />
       )}
     </>
