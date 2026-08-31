@@ -59,6 +59,7 @@ export interface MailApi {
   listSenders: DesktopBridge["listGmailSenders"];
   listStashedDrafts: DesktopBridge["listStashedDrafts"];
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
+  loadOutgoingInlineImagePreview: DesktopBridge["loadOutgoingInlineImagePreview"];
   loadThread: DesktopBridge["loadThread"];
   loadThreadDraft: DesktopBridge["loadThreadDraft"];
   markThreadNotSpam: DesktopBridge["markThreadNotSpam"];
@@ -210,6 +211,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       listSenders: bridge.listGmailSenders,
       listStashedDrafts: bridge.listStashedDrafts,
       listTrustedImageSenders: bridge.listTrustedImageSenders,
+      loadOutgoingInlineImagePreview: bridge.loadOutgoingInlineImagePreview,
       loadThread: bridge.loadThread,
       loadThreadDraft: bridge.loadThreadDraft,
       markThreadNotSpam: bridge.markThreadNotSpam,

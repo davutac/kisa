@@ -56,7 +56,7 @@ export const SelectedDeliveryTime = ({
       {scheduledAt === undefined || formatted === undefined ? null : (
         <m.div
           animate={{ height: "auto", opacity: 1 }}
-          className="overflow-hidden"
+          className="shrink-0 overflow-hidden"
           exit={{ height: 0, opacity: 0 }}
           initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
           key="selected-delivery-time"

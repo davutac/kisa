@@ -220,6 +220,7 @@ const MailComposer = ({
         {...composerProps}
         disabled={disabled}
         getInlineImagePreview={attachmentController?.getInlineImagePreview}
+        loadInlineImagePreview={attachmentController?.loadInlineImagePreview}
         onApplyTemplate={handleApplyTemplate}
         onChange={handleChange}
         onComposerFiles={

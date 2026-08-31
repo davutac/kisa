@@ -17,6 +17,7 @@ export type OutgoingAttachmentComposerController = Pick<
   | "fallbackInlineImagesToAttachments"
   | "getInlineImagePreview"
   | "inputRef"
+  | "loadInlineImagePreview"
   | "removeAttachment"
   | "setReferencedInlineContentIds"
 >;

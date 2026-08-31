@@ -105,6 +105,7 @@ const renderForm = ({
     fallbackInlineImagesToAttachments: () => {},
     getInlineImagePreview: () => null,
     inputRef: { current: null },
+    loadInlineImagePreview: () => Promise.resolve(null),
     removeAttachment: () => {},
     setReferencedInlineContentIds: () => {},
   } satisfies OutgoingAttachmentComposerController;
@@ -243,8 +244,12 @@ describe("new message cleanup", () => {
     const markup = renderToString(
       <SelectedDeliveryTime onRemove={() => null} scheduledAt={scheduledAt} />
     );
+    const animatedRow = markup.match(
+      /<div[^>]*class="[^"]*overflow-hidden[^"]*"[^>]*>/u
+    )?.[0];
 
     expect(markup).toContain('aria-label="Selected send time"');
+    expect(animatedRow).toContain("shrink-0");
     expect(markup).toContain(
       `dateTime="${new Date(scheduledAt).toISOString()}"`
     );

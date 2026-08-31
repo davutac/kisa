@@ -18,9 +18,11 @@ export interface ComposerInlineImage {
 
 interface ComposerInlineImageOptions {
   readonly getPreviewUrl: (contentId: string) => string | null;
+  readonly loadPreviewUrl: (contentId: string) => Promise<string | null>;
 }
 
 const NO_INLINE_IMAGE_PREVIEW = (): null => null;
+const NO_INLINE_IMAGE_PREVIEW_LOAD = (): Promise<null> => Promise.resolve(null);
 
 const readStringAttribute = (node: ProseMirrorNode, name: string): string => {
   const value: unknown = node.attrs[name];
@@ -30,10 +32,28 @@ const readStringAttribute = (node: ProseMirrorNode, name: string): string => {
 const contentIdFromSource = (source: string | null): string =>
   source?.startsWith("cid:") === true ? source.slice(4) : "";
 
+const loadImageElementPreview = async (
+  image: HTMLImageElement,
+  contentId: string,
+  loadPreviewUrl: ComposerInlineImageOptions["loadPreviewUrl"]
+): Promise<void> => {
+  try {
+    const loadedPreviewUrl = await loadPreviewUrl(contentId);
+    if (loadedPreviewUrl === null || image.dataset.contentId !== contentId) {
+      return;
+    }
+    image.classList.remove("composer-inline-image-missing");
+    image.src = loadedPreviewUrl;
+  } catch {
+    // The attachment controller reports preview failures to the user.
+  }
+};
+
 const updateImageElement = (
   image: HTMLImageElement,
   node: ProseMirrorNode,
-  getPreviewUrl: ComposerInlineImageOptions["getPreviewUrl"]
+  getPreviewUrl: ComposerInlineImageOptions["getPreviewUrl"],
+  loadPreviewUrl: ComposerInlineImageOptions["loadPreviewUrl"]
 ): void => {
   const contentId = readStringAttribute(node, "contentId");
   const filename = readStringAttribute(node, "filename");
@@ -44,6 +64,9 @@ const updateImageElement = (
   image.classList.toggle("composer-inline-image-missing", previewUrl === null);
   if (previewUrl === null) {
     image.removeAttribute("src");
+    if (contentId.length > 0) {
+      void loadImageElementPreview(image, contentId, loadPreviewUrl);
+    }
   } else {
     image.src = previewUrl;
   }
@@ -64,12 +87,12 @@ export const ComposerInlineImageNode = Node.create<ComposerInlineImageOptions>({
     };
   },
   addNodeView() {
-    const { getPreviewUrl } = this.options;
+    const { getPreviewUrl, loadPreviewUrl } = this.options;
 
     return ({ node }) => {
       const image = document.createElement("img");
       image.className = "composer-inline-image";
-      updateImageElement(image, node, getPreviewUrl);
+      updateImageElement(image, node, getPreviewUrl, loadPreviewUrl);
 
       return {
         dom: image,
@@ -77,14 +100,17 @@ export const ComposerInlineImageNode = Node.create<ComposerInlineImageOptions>({
           if (nextNode.type !== node.type) {
             return false;
           }
-          updateImageElement(image, nextNode, getPreviewUrl);
+          updateImageElement(image, nextNode, getPreviewUrl, loadPreviewUrl);
           return true;
         },
       };
     };
   },
   addOptions() {
-    return { getPreviewUrl: NO_INLINE_IMAGE_PREVIEW };
+    return {
+      getPreviewUrl: NO_INLINE_IMAGE_PREVIEW,
+      loadPreviewUrl: NO_INLINE_IMAGE_PREVIEW_LOAD,
+    };
   },
   atom: true,
   draggable: true,

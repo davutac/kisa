@@ -8,6 +8,10 @@ import type { StoredMailDraftAttachment } from "@repo/database/schemas";
 import { Option, Schema } from "effect";
 
 import {
+  isSupportedOutgoingInlineImageMediaType,
+  MAX_INLINE_IMAGE_BYTES,
+} from "../../shared/attachments";
+import {
   GmailOutgoingInlineContentId,
   MAX_GMAIL_ATTACHMENT_BYTES,
 } from "../../shared/ipc/mail";
@@ -19,6 +23,11 @@ const MEDIA_TYPE_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/u;
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 const MediaType = Schema.String.check(Schema.isPattern(MEDIA_TYPE_PATTERN));
+const COMPOSER_INLINE_IMAGE_TAG = /<img\b(?<attributes>[^>]*)>/giu;
+const COMPOSER_INLINE_IMAGE_SOURCE =
+  /\bsrc\s*=\s*(?:"cid:(?<doubleQuoted>[^"]+)"|'cid:(?<singleQuoted>[^']+)')/iu;
+const COMPOSER_INLINE_IMAGE_ALT =
+  /\balt\s*=\s*(?:"(?<doubleQuoted>[^"]*)"|'(?<singleQuoted>[^']*)')/iu;
 
 const StoredAuthorizedAttachment = Schema.Struct({
   authorizationVersion: Schema.Literal(AUTHORIZATION_VERSION),
@@ -44,6 +53,7 @@ const decodeStoredAttachmentArray = Schema.decodeUnknownOption(
 const decodeStrictStoredAttachmentArray = Schema.decodeUnknownOption(
   Schema.Array(StoredAuthorizedAttachment)
 );
+const isGmailOutgoingInlineContentId = Schema.is(GmailOutgoingInlineContentId);
 const decodeFileSystemError = Schema.decodeUnknownOption(
   Schema.Struct({ code: Schema.optional(Schema.String) })
 );
@@ -161,6 +171,64 @@ export const decodeStoredOutgoingAttachmentsStrict = <Input>(
   input: Input
 ): readonly StoredMailDraftAttachment[] | undefined =>
   Option.getOrUndefined(decodeStrictStoredAttachmentArray(input));
+
+const decodeComposerAttribute = (value: string): string =>
+  value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+
+// App-owned copies created by older scheduling builds lost contentId. The
+// composer HTML still owns the original cid-to-filename association, so each
+// matching supported attachment can be restored at most once.
+export const recoverMissingInlineContentIds = (
+  bodyHtml: string,
+  attachments: readonly StoredMailDraftAttachment[]
+): readonly StoredMailDraftAttachment[] => {
+  const recovered = [...attachments];
+  const assignedContentIds = new Set(
+    attachments.flatMap(({ contentId }) =>
+      contentId === undefined ? [] : [contentId]
+    )
+  );
+  const assignedAttachmentIndexes = new Set<number>();
+
+  for (const tag of bodyHtml.matchAll(COMPOSER_INLINE_IMAGE_TAG)) {
+    const attributes = tag.groups?.attributes ?? "";
+    const source = COMPOSER_INLINE_IMAGE_SOURCE.exec(attributes);
+    const contentId =
+      source?.groups?.doubleQuoted ?? source?.groups?.singleQuoted;
+    const alt = COMPOSER_INLINE_IMAGE_ALT.exec(attributes);
+    const filename = alt?.groups?.doubleQuoted ?? alt?.groups?.singleQuoted;
+    if (
+      contentId === undefined ||
+      filename === undefined ||
+      !isGmailOutgoingInlineContentId(contentId) ||
+      assignedContentIds.has(contentId)
+    ) {
+      continue;
+    }
+    const attachmentIndex = recovered.findIndex(
+      (attachment, index) =>
+        !assignedAttachmentIndexes.has(index) &&
+        attachment.contentId === undefined &&
+        attachment.filename === decodeComposerAttribute(filename) &&
+        isSupportedOutgoingInlineImageMediaType(attachment.mediaType) &&
+        attachment.size <= MAX_INLINE_IMAGE_BYTES
+    );
+    const attachment = recovered[attachmentIndex];
+    if (attachment === undefined) {
+      continue;
+    }
+    recovered[attachmentIndex] = { ...attachment, contentId };
+    assignedAttachmentIndexes.add(attachmentIndex);
+    assignedContentIds.add(contentId);
+  }
+
+  return recovered;
+};
 
 export const openOutgoingAttachment = async (
   record: StoredMailDraftAttachment

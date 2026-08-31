@@ -50,6 +50,7 @@ interface EmailComposerProps {
   focusHandleRef?: (handle: ComposerFocusHandle | null) => void;
   focusAtStart?: boolean;
   getInlineImagePreview?: (contentId: string) => string | null;
+  loadInlineImagePreview?: (contentId: string) => Promise<string | null>;
   enableTemplateVariables?: boolean;
   onApplyTemplate?: (template: ComposerTemplateInput) => void;
   onChange?: (value: EmailComposerValue) => void;
@@ -90,6 +91,7 @@ const toComposerValue = (
 const NO_TEMPLATES: readonly ComposerTemplate[] = [];
 const NO_ACCOUNTS: readonly GoogleAccount[] = [];
 const NO_INLINE_IMAGE_PREVIEW = (): null => null;
+const NO_INLINE_IMAGE_PREVIEW_LOAD = (): Promise<null> => Promise.resolve(null);
 
 const insertComposerFiles = async (
   view: EditorView,
@@ -185,6 +187,7 @@ const EmailComposer = ({
   focusHandleRef,
   focusAtStart = false,
   getInlineImagePreview = NO_INLINE_IMAGE_PREVIEW,
+  loadInlineImagePreview = NO_INLINE_IMAGE_PREVIEW_LOAD,
   onApplyTemplate,
   onChange,
   onComposerFiles,
@@ -250,6 +253,7 @@ const EmailComposer = ({
       Placeholder.configure({ placeholder }),
       ComposerInlineImageNode.configure({
         getPreviewUrl: getInlineImagePreview,
+        loadPreviewUrl: loadInlineImagePreview,
       }),
       enableTemplateVariables ? TemplateVariable : TemplateVariableDisplay,
       ...(enableTemplateSlashMenu ? [TemplateSlashCommand] : []),
@@ -260,6 +264,7 @@ const EmailComposer = ({
       enableTemplateSlashMenu,
       enableTemplateVariables,
       getInlineImagePreview,
+      loadInlineImagePreview,
       placeholder,
     ]
   );

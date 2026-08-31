@@ -30,6 +30,7 @@ import {
   getSpamStatus,
   getSyncStatus,
   loadAttachmentPreview,
+  loadOutgoingInlineImagePreview,
   listCachedPage,
   listImageSenders,
   listLabels,
@@ -123,6 +124,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(openAttachmentPreview);
   yield* ipc.handle(authorizeOutgoingAttachments);
   yield* ipc.handle(prepareOutgoingAttachments);
+  yield* ipc.handle(loadOutgoingInlineImagePreview);
   yield* ipc.handle(saveAttachment);
   yield* ipc.handle(loadAttachmentPreview);
   yield* ipc.handle(saveAttachmentPreview);

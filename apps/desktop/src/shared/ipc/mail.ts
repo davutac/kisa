@@ -397,6 +397,19 @@ export const GmailOutgoingAttachmentSelectionRequest = Schema.Struct({
 export type GmailOutgoingAttachmentSelectionRequest =
   typeof GmailOutgoingAttachmentSelectionRequest.Type;
 
+export const GmailOutgoingInlineImagePreviewRequest = Schema.Struct({
+  referenceId: Schema.NonEmptyString,
+});
+export type GmailOutgoingInlineImagePreviewRequest =
+  typeof GmailOutgoingInlineImagePreviewRequest.Type;
+
+export const GmailOutgoingInlineImagePreview = Schema.Struct({
+  bytes: Schema.Uint8Array,
+  mediaType: Schema.NonEmptyString,
+});
+export type GmailOutgoingInlineImagePreview =
+  typeof GmailOutgoingInlineImagePreview.Type;
+
 export const GmailMessageSendRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   attachments: GmailOutgoingAttachmentCapabilities,
@@ -709,6 +722,11 @@ export const GmailOutgoingAttachmentSelectionReply = IpcReply(
 );
 export type GmailOutgoingAttachmentSelectionReply =
   typeof GmailOutgoingAttachmentSelectionReply.Type;
+export const GmailOutgoingInlineImagePreviewReply = IpcReply(
+  GmailOutgoingInlineImagePreview
+);
+export type GmailOutgoingInlineImagePreviewReply =
+  typeof GmailOutgoingInlineImagePreviewReply.Type;
 export const MailDraftReply = IpcReply(MailDraft);
 export type MailDraftReply = typeof MailDraftReply.Type;
 export const MailDraftListReply = IpcReply(Schema.Array(MailDraft));

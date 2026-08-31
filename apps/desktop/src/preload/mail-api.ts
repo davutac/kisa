@@ -17,6 +17,7 @@ import {
   MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LIST_STASHED_DRAFTS_CHANNEL,
+  MAIL_LOAD_OUTGOING_INLINE_IMAGE_PREVIEW_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
@@ -67,6 +68,7 @@ export const mailApi: Pick<
   | "listGmailSenders"
   | "listStashedDrafts"
   | "listTrustedImageSenders"
+  | "loadOutgoingInlineImagePreview"
   | "loadThread"
   | "loadThreadDraft"
   | "markThreadNotSpam"
@@ -124,6 +126,11 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_LIST_STASHED_DRAFTS_CHANNEL, request),
   listTrustedImageSenders: () =>
     ipcRenderer.invoke(MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL),
+  loadOutgoingInlineImagePreview: (request) =>
+    ipcRenderer.invoke(
+      MAIL_LOAD_OUTGOING_INLINE_IMAGE_PREVIEW_CHANNEL,
+      request
+    ),
   loadThread: (request) =>
     ipcRenderer.invoke(MAIL_LOAD_THREAD_CHANNEL, request),
   loadThreadDraft: (request) =>

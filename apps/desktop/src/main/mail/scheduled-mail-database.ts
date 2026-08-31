@@ -26,6 +26,7 @@ import { GmailOutgoingSubject } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database-query";
 import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
 import { parseMailbox } from "./gmail-payload";
+import { recoverMissingInlineContentIds } from "./outgoing-attachment-files";
 import { claimFirstAvailableScheduledMail } from "./scheduled-mail-claim-pages";
 import { ScheduledMailError, scheduledMailError } from "./scheduled-mail-error";
 import type {
@@ -194,7 +195,10 @@ const toClaimedScheduledMail = (
 ): ClaimedScheduledMail => {
   const claimed: ClaimedScheduledMail = {
     accountId: row.draft.accountEmail ?? "",
-    attachments: row.draft.attachments,
+    attachments: recoverMissingInlineContentIds(
+      row.draft.bodyHtml,
+      row.draft.attachments
+    ),
     attemptCount: row.schedule.attemptCount,
     attemptId,
     bcc: row.draft.bcc,

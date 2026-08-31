@@ -152,6 +152,11 @@ describe(getRuntimeCapabilities, () => {
     listStashedDrafts: () => Promise.resolve({ data: [], ok: true as const }),
     listTrustedImageSenders: () =>
       Promise.resolve({ data: [], ok: true as const }),
+    loadOutgoingInlineImagePreview: () =>
+      Promise.resolve({
+        data: { bytes: new Uint8Array(), mediaType: "image/png" },
+        ok: true as const,
+      }),
     loadThread: () =>
       Promise.resolve({
         data: {
@@ -307,6 +312,8 @@ describe(getRuntimeCapabilities, () => {
         listSenders: desktopBridge.listGmailSenders,
         listStashedDrafts: desktopBridge.listStashedDrafts,
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
+        loadOutgoingInlineImagePreview:
+          desktopBridge.loadOutgoingInlineImagePreview,
         loadThread: desktopBridge.loadThread,
         loadThreadDraft: desktopBridge.loadThreadDraft,
         markThreadNotSpam: desktopBridge.markThreadNotSpam,

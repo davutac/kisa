@@ -17,6 +17,7 @@ import {
   MAIL_LIST_SENDERS_CHANNEL,
   MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL,
   MAIL_LIST_STASHED_DRAFTS_CHANNEL,
+  MAIL_LOAD_OUTGOING_INLINE_IMAGE_PREVIEW_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
@@ -58,6 +59,8 @@ import {
   GmailOutgoingAttachmentPrepareRequest,
   GmailOutgoingAttachmentSelectionReply,
   GmailOutgoingAttachmentSelectionRequest,
+  GmailOutgoingInlineImagePreviewReply,
+  GmailOutgoingInlineImagePreviewRequest,
   GmailSearchRequest,
   GmailSearchResultsReply,
   GmailSenderSuggestionRequest,
@@ -183,6 +186,25 @@ export const prepareOutgoingAttachments = makeIpcMethod({
         ),
   payload: GmailOutgoingAttachmentPrepareRequest,
   result: GmailOutgoingAttachmentPrepareReply,
+});
+
+export const loadOutgoingInlineImagePreview = makeIpcMethod({
+  channel: MAIL_LOAD_OUTGOING_INLINE_IMAGE_PREVIEW_CHANNEL,
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Inline image preview is unavailable",
+          ok: false as const,
+        })
+      : toIpcReply(
+          outgoingAttachmentAuthorizations.loadInlineImagePreview(
+            bindOutgoingAttachmentOwner(event.sender),
+            request.referenceId
+          ),
+          "Could not load inline image preview"
+        ),
+  payload: GmailOutgoingInlineImagePreviewRequest,
+  result: GmailOutgoingInlineImagePreviewReply,
 });
 
 export const openAttachmentPreview = makeIpcMethod({

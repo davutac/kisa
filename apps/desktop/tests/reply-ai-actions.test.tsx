@@ -145,6 +145,7 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
         getInlineImagePreview: () => null,
         inputRef: { current: null },
         isAuthorizing: false,
+        loadInlineImagePreview: () => Promise.resolve(null),
         prepareAttachments: () => Promise.resolve([]),
         removeAttachment: () => null,
         replaceAttachments: () => null,

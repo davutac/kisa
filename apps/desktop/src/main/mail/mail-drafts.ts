@@ -105,7 +105,8 @@ export const toMailDraft = (
   accountId: row.accountEmail ?? undefined,
   attachments: outgoingAttachmentAuthorizations.restoreDraftAttachments(
     ownerWebContentsId,
-    row.attachments
+    row.attachments,
+    row.bodyHtml
   ),
   bcc: row.bcc,
   body: { html: row.bodyHtml, text: row.bodyText },

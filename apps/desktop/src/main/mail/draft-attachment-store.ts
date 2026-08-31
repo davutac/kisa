@@ -55,6 +55,7 @@ const toStoredRecord = (
 ): StoredMailDraftAttachment => ({
   authorizationVersion: 1,
   birthtimeMs: stats.birthtimeMs,
+  contentId: source.contentId,
   device: String(stats.dev),
   filename: source.filename,
   id: source.id,

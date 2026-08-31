@@ -41,6 +41,8 @@ export const MAIL_DELETE_THREAD_FOREVER_CHANNEL =
   "desktop:mail:delete-thread-forever";
 export const MAIL_LIST_STASHED_DRAFTS_CHANNEL =
   "desktop:mail:list-stashed-drafts";
+export const MAIL_LOAD_OUTGOING_INLINE_IMAGE_PREVIEW_CHANNEL =
+  "desktop:mail:load-outgoing-inline-image-preview";
 export const MAIL_LOAD_THREAD_DRAFT_CHANNEL = "desktop:mail:load-thread-draft";
 export const MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL =
   "desktop:mail:open-attachment-preview";

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
+import { Effect } from "effect";
 
 import {
   isSupportedOutgoingInlineImageMediaType,
@@ -24,6 +25,7 @@ import {
   decodeStoredOutgoingAttachmentEntries,
   openOutgoingAttachment,
   readOutgoingAttachment,
+  recoverMissingInlineContentIds,
 } from "./outgoing-attachment-files";
 import type {
   LoadedOutgoingAttachment,
@@ -111,6 +113,44 @@ const validateInlineImageTotal = (
   }
 };
 
+const mapPreviewLoadError = (
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Promise rejections are narrowed to the authorization error at this filesystem boundary.
+  error: unknown
+): OutgoingAttachmentAuthorizationError =>
+  error instanceof OutgoingAttachmentAuthorizationError
+    ? error
+    : authorizationError("Could not load inline image preview");
+
+const loadInlineImagePreview = Effect.fn(
+  "OutgoingAttachmentAuthorizations.loadInlineImagePreview"
+)(function* loadInlineImagePreview(record: StoredMailDraftAttachment) {
+  if (
+    record.contentId === undefined ||
+    !isSupportedOutgoingInlineImageMediaType(record.mediaType) ||
+    record.size > MAX_INLINE_IMAGE_BYTES
+  ) {
+    return yield* authorizationError("Inline image preview is unavailable");
+  }
+
+  return yield* Effect.acquireUseRelease(
+    Effect.tryPromise({
+      catch: mapPreviewLoadError,
+      try: () => openOutgoingAttachment(record),
+    }),
+    (opened) =>
+      Effect.tryPromise({
+        catch: mapPreviewLoadError,
+        try: () => readOutgoingAttachment(opened),
+      }).pipe(
+        Effect.map((loaded) => ({
+          bytes: new Uint8Array(loaded.bytes),
+          mediaType: loaded.mediaType,
+        }))
+      ),
+    ({ file }) => Effect.promise(() => closeOutgoingAttachment(file))
+  );
+});
+
 export class OutgoingAttachmentAuthorizations {
   readonly #capabilities = new Map<string, PreparedAttachment>();
   readonly #capabilityTtlMs: number;
@@ -144,13 +184,18 @@ export class OutgoingAttachmentAuthorizations {
 
   restoreDraftAttachments<Input>(
     ownerId: number,
-    input: Input
+    input: Input,
+    bodyHtml?: string
   ): readonly MailDraftAttachment[] {
     const entries = decodeStoredOutgoingAttachmentEntries(input);
     if (entries === undefined || entries.length > MAX_GMAIL_ATTACHMENT_COUNT) {
       return [this.#unavailableAttachment(0)];
     }
-    return entries.map((record, index) =>
+    const restorableEntries =
+      bodyHtml !== undefined && entries.every((entry) => entry !== undefined)
+        ? recoverMissingInlineContentIds(bodyHtml, entries)
+        : entries;
+    return restorableEntries.map((record, index) =>
       record === undefined
         ? this.#unavailableAttachment(index)
         : this.#registerReference(ownerId, record)
@@ -253,6 +298,18 @@ export class OutgoingAttachmentAuthorizations {
       });
       return { capability };
     });
+  }
+
+  loadInlineImagePreview(ownerId: number, referenceId: string) {
+    const reference = this.#references.get(referenceId);
+    if (reference === undefined || reference.ownerId !== ownerId) {
+      return Effect.fail(
+        authorizationError(
+          "An attachment is no longer authorized; attach it again"
+        )
+      );
+    }
+    return loadInlineImagePreview(reference.record);
   }
 
   async consume(

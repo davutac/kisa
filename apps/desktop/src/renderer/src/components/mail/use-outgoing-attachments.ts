@@ -16,6 +16,17 @@ import type { MailDraftAttachment } from "@/shared/ipc/mail";
 const makeInlineContentId = (): string =>
   `${crypto.randomUUID()}@inline.kisa.email`;
 
+const clearSettledPreviewLoad = async (
+  previewLoads: Map<string, Promise<string | null>>,
+  contentId: string,
+  load: Promise<string | null>
+): Promise<void> => {
+  await load;
+  if (previewLoads.get(contentId) === load) {
+    previewLoads.delete(contentId);
+  }
+};
+
 export const useOutgoingAttachments = (
   mailApi: MailApi | undefined,
   initialAttachments: readonly MailDraftAttachment[] = [],
@@ -27,6 +38,7 @@ export const useOutgoingAttachments = (
   const activeRef = useRef(true);
   const attachmentsRef = useRef(attachmentState);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previewLoadsRef = useRef(new Map<string, Promise<string | null>>());
   const previewUrlsRef = useRef(new Map<string, string>());
   const [referencedContentIds, setReferencedContentIds] = useState(() =>
     collectComposerInlineContentIds(initialBodyHtml)
@@ -53,6 +65,7 @@ export const useOutgoingAttachments = (
 
   useEffect(() => {
     const active = activeRef;
+    const previewLoads = previewLoadsRef.current;
     const previewUrls = previewUrlsRef.current;
     const revision = revisionRef;
     active.current = true;
@@ -62,6 +75,7 @@ export const useOutgoingAttachments = (
       for (const url of previewUrls.values()) {
         URL.revokeObjectURL(url);
       }
+      previewLoads.clear();
       previewUrls.clear();
     };
   }, []);
@@ -69,6 +83,7 @@ export const useOutgoingAttachments = (
   const revokeInlinePreviews = useCallback(
     (contentIds: ReadonlySet<string>): void => {
       for (const contentId of contentIds) {
+        previewLoadsRef.current.delete(contentId);
         const previewUrl = previewUrlsRef.current.get(contentId);
         if (previewUrl !== undefined) {
           URL.revokeObjectURL(previewUrl);
@@ -222,6 +237,71 @@ export const useOutgoingAttachments = (
     []
   );
 
+  const loadInlineImagePreview = useCallback(
+    (contentId: string): Promise<string | null> => {
+      const cached = previewUrlsRef.current.get(contentId);
+      if (cached !== undefined) {
+        return Promise.resolve(cached);
+      }
+      const pending = previewLoadsRef.current.get(contentId);
+      if (pending !== undefined) {
+        return pending;
+      }
+      const attachment = attachmentsRef.current.find(
+        (candidate) => candidate.contentId === contentId
+      );
+      if (attachment === undefined || mailApi === undefined) {
+        return Promise.resolve(null);
+      }
+      const revision = revisionRef.current;
+      const load = (async (): Promise<string | null> => {
+        try {
+          const reply = await mailApi.loadOutgoingInlineImagePreview({
+            referenceId: attachment.referenceId,
+          });
+          if (!reply.ok) {
+            if (activeRef.current && revisionRef.current === revision) {
+              toast.error(reply.error);
+            }
+            return null;
+          }
+          const isCurrentAttachment = attachmentsRef.current.some(
+            (candidate) =>
+              candidate.contentId === contentId &&
+              candidate.referenceId === attachment.referenceId
+          );
+          if (
+            !activeRef.current ||
+            revisionRef.current !== revision ||
+            !isCurrentAttachment
+          ) {
+            return null;
+          }
+          const previewUrl = URL.createObjectURL(
+            new Blob([Uint8Array.from(reply.data.bytes)], {
+              type: reply.data.mediaType,
+            })
+          );
+          previewUrlsRef.current.set(contentId, previewUrl);
+          return previewUrl;
+        } catch (error) {
+          if (activeRef.current && revisionRef.current === revision) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : "Could not load inline image preview"
+            );
+          }
+          return null;
+        }
+      })();
+      previewLoadsRef.current.set(contentId, load);
+      void clearSettledPreviewLoad(previewLoadsRef.current, contentId, load);
+      return load;
+    },
+    [mailApi]
+  );
+
   const prepareAttachments = useCallback(
     async (attachments: readonly MailDraftAttachment[]) => {
       if (mailApi === undefined) {
@@ -253,6 +333,7 @@ export const useOutgoingAttachments = (
     getInlineImagePreview,
     inputRef,
     isAuthorizing: pendingAuthorizations > 0,
+    loadInlineImagePreview,
     prepareAttachments,
     removeAttachment,
     replaceAttachments,

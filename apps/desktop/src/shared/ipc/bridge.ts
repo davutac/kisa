@@ -58,6 +58,8 @@ import type {
   GmailOutgoingAttachmentPrepareReply,
   GmailOutgoingAttachmentPrepareRequest,
   GmailOutgoingAttachmentSelectionReply,
+  GmailOutgoingInlineImagePreviewReply,
+  GmailOutgoingInlineImagePreviewRequest,
   GmailReindexReply,
   GmailReindexRequest,
   GmailSearchRequest,
@@ -216,6 +218,9 @@ export interface DesktopBridge {
     request: ScheduledMailPageRequest
   ) => Promise<ScheduledMailPageReply>;
   listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
+  loadOutgoingInlineImagePreview: (
+    request: GmailOutgoingInlineImagePreviewRequest
+  ) => Promise<GmailOutgoingInlineImagePreviewReply>;
   loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
   loadThreadDraft: (request: GmailThreadRequest) => Promise<MailDraftLoadReply>;
   markThreadNotSpam: (

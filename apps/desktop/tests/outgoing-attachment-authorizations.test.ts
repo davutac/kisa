@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { OutgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-attachment-authorizations";
@@ -210,6 +211,41 @@ describe("outgoing attachment authorizations", () => {
       mediaType: "image/png",
     });
     expect(restored).not.toHaveProperty("path");
+
+    await Promise.all([
+      authorizations.releaseOwner(11),
+      authorizations.releaseOwner(12),
+    ]);
+  });
+
+  it("reloads an inline image preview from a restored draft reference", async () => {
+    const bytes = Uint8Array.from([137, 80, 78, 71]);
+    const { filePath } = await makeAttachment(bytes);
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    const [attachment] = await authorizations.authorizeSelections(11, {
+      files: [{ mediaType: "image/png", path: filePath }],
+    });
+    if (attachment === undefined) {
+      throw new Error("Expected an authorized attachment");
+    }
+    const stored = authorizations.serializeDraftAttachments(11, [
+      { ...attachment, contentId: "image@inline.kisa.email" },
+    ]);
+    const [restored] = authorizations.restoreDraftAttachments(12, stored);
+    if (restored === undefined) {
+      throw new Error("Expected a restored attachment");
+    }
+
+    await expect(
+      Effect.runPromise(
+        authorizations.loadInlineImagePreview(11, restored.referenceId)
+      )
+    ).rejects.toThrow("no longer authorized");
+    await expect(
+      Effect.runPromise(
+        authorizations.loadInlineImagePreview(12, restored.referenceId)
+      )
+    ).resolves.toStrictEqual({ bytes, mediaType: "image/png" });
 
     await Promise.all([
       authorizations.releaseOwner(11),

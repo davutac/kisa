@@ -29,6 +29,7 @@ import type {
   deliverNewMessage,
   findSentNewMessageByRfc822MessageId,
 } from "../src/main/mail/mail-sync";
+import { decodeStoredOutgoingAttachmentsStrict } from "../src/main/mail/outgoing-attachment-files";
 import type {
   closeScheduledMailNotifications,
   dispatchPendingScheduledMailNotifications,
@@ -445,6 +446,92 @@ describe("scheduled mail in-place save", () => {
     } finally {
       await stopScheduledMail();
     }
+  });
+
+  it("preserves an inline image across app-owned storage and reopen", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "kisa-scheduled-inline-image-")
+    );
+    temporaryDirectories.push(directory);
+    configureDraftAttachmentStore(path.join(directory, "user-data"));
+    const sourcePath = path.join(directory, "inline.jpg");
+    const bytes = Uint8Array.from([255, 216, 255, 217]);
+    await writeFile(sourcePath, bytes);
+    const [attachment] =
+      await outgoingAttachmentAuthorizations.authorizeSelections(104, {
+        files: [{ mediaType: "image/jpeg", path: sourcePath }],
+      });
+    if (attachment === undefined) {
+      throw new Error("Expected an authorized attachment");
+    }
+    const contentId = "saved@inline.kisa.email";
+    const opened = await Effect.runPromise(
+      beginScheduledMailEdit({ accountId, draftId }, 104)
+    );
+
+    await Effect.runPromise(
+      finishScheduledMailEdit(
+        {
+          accountId,
+          action: {
+            draft: {
+              ...opened.draft,
+              attachments: [{ ...attachment, contentId }],
+              body: {
+                html: `<p>Hello</p><img alt="inline.jpg" src="cid:${contentId}">`,
+                text: "Hello\n[Image: inline.jpg]",
+              },
+            },
+            kind: "save",
+          },
+          draftId,
+        },
+        104
+      )
+    );
+    const stored = connection
+      .prepare("SELECT attachments FROM mail_drafts WHERE id = ?")
+      .get(draftId) as { readonly attachments: string };
+    const storedAttachments = decodeStoredOutgoingAttachmentsStrict(
+      JSON.parse(stored.attachments)
+    );
+    if (storedAttachments === undefined) {
+      throw new Error("Expected stored attachments");
+    }
+    expect(storedAttachments[0]?.contentId).toBe(contentId);
+    connection
+      .prepare("UPDATE mail_drafts SET attachments = ? WHERE id = ?")
+      .run(
+        JSON.stringify(
+          storedAttachments.map(
+            ({ contentId: _lostContentId, ...storedAttachment }) =>
+              storedAttachment
+          )
+        ),
+        draftId
+      );
+    const reopened = await Effect.runPromise(
+      beginScheduledMailEdit({ accountId, draftId }, 105)
+    );
+    const [restored] = reopened.draft.attachments;
+    if (restored === undefined) {
+      throw new Error("Expected a restored attachment");
+    }
+
+    expect(restored.contentId).toBe(contentId);
+    await expect(
+      Effect.runPromise(
+        outgoingAttachmentAuthorizations.loadInlineImagePreview(
+          105,
+          restored.referenceId
+        )
+      )
+    ).resolves.toStrictEqual({ bytes, mediaType: "image/jpeg" });
+
+    await Promise.all([
+      outgoingAttachmentAuthorizations.releaseOwner(104),
+      outgoingAttachmentAuthorizations.releaseOwner(105),
+    ]);
   });
 
   it("removes the app-owned attachment when the schedule is discarded", async () => {
