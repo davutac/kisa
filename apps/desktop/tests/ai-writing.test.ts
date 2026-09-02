@@ -178,6 +178,10 @@ describe("AI provider output parsing", () => {
       "--effort",
       "max",
     ]);
+    expect(getClaudeReasoningArgs("xhigh", "claude-fable-5-1")).toStrictEqual([
+      "--effort",
+      "xhigh",
+    ]);
     expect(getOpenCodeReasoningInput("high")).toStrictEqual({
       variant: "high",
     });
@@ -222,6 +226,7 @@ describe("AI provider output parsing", () => {
 
   it("uses Claude's explicit model and effort catalog", () => {
     expect(CLAUDE_MODELS.map(({ id }) => id)).toStrictEqual([
+      "claude-fable-5-1",
       "claude-fable-5",
       "claude-opus-5",
       "claude-sonnet-5",
@@ -265,7 +270,7 @@ describe("AI provider output parsing", () => {
     expect(
       getClaudeModelsForVersion("2.1.169").map(({ id }) => id)
     ).not.toContain("claude-opus-5");
-    expect(getClaudeModelsForVersion("2.1.219")).toHaveLength(
+    expect(getClaudeModelsForVersion("2.1.257")).toHaveLength(
       CLAUDE_MODELS.length
     );
     expect(getClaudeModelsForVersion()).toStrictEqual(
@@ -273,6 +278,15 @@ describe("AI provider output parsing", () => {
         expect.objectContaining({ id: "claude-sonnet-5" }),
         expect.objectContaining({ id: "claude-haiku-4-5" }),
       ])
+    );
+  });
+
+  it("requires Claude Code 2.1.257 for Fable 5.1", () => {
+    expect(
+      getClaudeModelsForVersion("2.1.256").map(({ id }) => id)
+    ).not.toContain("claude-fable-5-1");
+    expect(getClaudeModelsForVersion("2.1.257").map(({ id }) => id)).toContain(
+      "claude-fable-5-1"
     );
   });
 
