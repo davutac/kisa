@@ -45,6 +45,7 @@ const CLAUDE_THINKING_OPTIONS: readonly AiReasoningOption[] = [
 ];
 
 const CLAUDE_MODEL_VERSION_GATES = [
+  { id: "claude-fable-5-1", minimumVersion: "2.1.257" },
   { id: "claude-fable-5", minimumVersion: "2.1.169" },
   { id: "claude-opus-4-7", minimumVersion: "2.1.111" },
   { id: "claude-opus-4-8", minimumVersion: "2.1.154" },
@@ -67,6 +68,7 @@ const claudeModel = (
 });
 
 export const CLAUDE_MODELS: readonly AiModel[] = [
+  claudeModel("claude-fable-5-1", "Fable 5.1", CLAUDE_XHIGH_EFFORTS, "high"),
   claudeModel("claude-fable-5", "Fable 5", CLAUDE_XHIGH_EFFORTS, "high"),
   claudeModel("claude-opus-5", "Opus 5", CLAUDE_XHIGH_EFFORTS, "high"),
   claudeModel("claude-sonnet-5", "Sonnet 5", CLAUDE_XHIGH_EFFORTS, "high"),
@@ -276,6 +278,7 @@ const normalizeClaudeReasoning = (
 ): string => {
   if (
     reasoning === "xhigh" &&
+    model !== "claude-fable-5-1" &&
     model !== "claude-fable-5" &&
     model !== "claude-opus-5" &&
     model !== "claude-opus-4-8" &&
