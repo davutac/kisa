@@ -59,9 +59,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build app
-        env:
-          MAIN_VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          MAIN_VITE_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
         run: pnpm build
 
       - name: Build package

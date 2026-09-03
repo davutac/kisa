@@ -82,13 +82,7 @@ pnpm --dir apps/desktop dev
 
 Development uses `<userData>/database/app.dev.sqlite` and its own sealed key, separate from the installed app's `app.sqlite` database and key.
 
-Google authorization uses a Desktop OAuth client, the system browser, PKCE, and a temporary loopback callback. For local development, copy the template and fill in the matching Desktop client credentials:
-
-```bash
-cp apps/desktop/.env.example apps/desktop/.env.local
-```
-
-electron-vite exposes both `MAIN_VITE_*` values only to the main-process bundle. Release builds receive the same values from the `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` secrets in GitHub's `Prod` environment.
+Google authorization uses the user's own Desktop OAuth client, the system browser, PKCE, and a temporary loopback callback. Kisa does not ship shared Google credentials. Follow [Connect Kisa to Google](docs/google-oauth-setup.md) to create a personal Google Cloud project and import its credentials JSON.
 
 ## Verification
 

@@ -6,16 +6,22 @@ import {
   GoogleAccountReorderRequest,
   GoogleAccountsReply,
   GoogleAuthStartReply,
+  GoogleOAuthClientSetupReply,
+  GoogleOAuthClientStatusReply,
 } from "../../../shared/ipc/auth";
 import {
   AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL,
   AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL,
+  AUTH_GOOGLE_OAUTH_CLIENT_SETUP_CHANNEL,
+  AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL,
   AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL,
   AUTH_GOOGLE_START_CHANNEL,
 } from "../../../shared/ipc/channels";
 import {
+  getGoogleOAuthClientStatus,
   listGoogleAccounts,
   reorderGoogleAccounts,
+  setupGoogleOAuthClient,
   startGoogleAuth,
 } from "../../auth/auth";
 import { disconnectGoogleAccount } from "../../auth/disconnect-account";
@@ -27,6 +33,25 @@ export const startGoogle = makeIpcMethod({
   handler: () => toIpcReply(startGoogleAuth(), "Google authentication failed"),
   payload: Schema.Void,
   result: GoogleAuthStartReply,
+});
+
+export const getGoogleOAuthStatus = makeIpcMethod({
+  channel: AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL,
+  handler: () =>
+    toIpcReply(
+      getGoogleOAuthClientStatus(),
+      "Could not load Google setup status"
+    ),
+  payload: Schema.Void,
+  result: GoogleOAuthClientStatusReply,
+});
+
+export const setupGoogleOAuth = makeIpcMethod({
+  channel: AUTH_GOOGLE_OAUTH_CLIENT_SETUP_CHANNEL,
+  handler: () =>
+    toIpcReply(setupGoogleOAuthClient(), "Could not save Google setup"),
+  payload: Schema.Void,
+  result: GoogleOAuthClientSetupReply,
 });
 
 export const listAccounts = makeIpcMethod({

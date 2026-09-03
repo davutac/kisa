@@ -49,7 +49,7 @@ Reversible state toggles use `ignore-key-repeat`: each distinct keydown is accep
 
 Dynamic lists use the renderless `AppCommand` component, which delegates to the same hook without calling hooks inside a loop.
 
-Account commands are static and cover the supported maximum of nine accounts. The app uses `1` through `9` for account navigation and the composer uses `Mod+1` through `Mod+9` for its From account.
+Account commands are static for the first nine accounts. The app uses `1` through `9` for account navigation and the composer uses `Mod+1` through `Mod+9` for its From account. Additional accounts remain available through the account switcher and composer picker without a numbered shortcut.
 
 In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, and keeps the dialog open. On a blank form, it opens the stash picker when saved stashes are available. The command can be pressed again without releasing `Mod`, while operating-system key repeat from holding `S` is ignored. The same command definition drives the Stash button hint and ARIA metadata.
 

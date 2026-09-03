@@ -6,6 +6,8 @@ import {
   AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL,
   AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL,
   AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL,
+  AUTH_GOOGLE_OAUTH_CLIENT_SETUP_CHANNEL,
+  AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL,
   AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL,
   AUTH_GOOGLE_START_CHANNEL,
 } from "../shared/ipc/channels";
@@ -14,13 +16,17 @@ import { subscribe } from "./subscribe";
 export const authApi: Pick<
   DesktopBridge,
   | "disconnectGoogleAccount"
+  | "getGoogleOAuthClientStatus"
   | "listGoogleAccounts"
   | "onGoogleAccountsChanged"
   | "reorderGoogleAccounts"
+  | "setupGoogleOAuthClient"
   | "startGoogleAuth"
 > = {
   disconnectGoogleAccount: (request) =>
     ipcRenderer.invoke(AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL, request),
+  getGoogleOAuthClientStatus: () =>
+    ipcRenderer.invoke(AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL),
   listGoogleAccounts: () =>
     ipcRenderer.invoke(AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL),
   onGoogleAccountsChanged: (listener) =>
@@ -31,5 +37,7 @@ export const authApi: Pick<
     ),
   reorderGoogleAccounts: (request) =>
     ipcRenderer.invoke(AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL, request),
+  setupGoogleOAuthClient: () =>
+    ipcRenderer.invoke(AUTH_GOOGLE_OAUTH_CLIENT_SETUP_CHANNEL),
   startGoogleAuth: () => ipcRenderer.invoke(AUTH_GOOGLE_START_CHANNEL),
 };
