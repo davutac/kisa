@@ -10,6 +10,7 @@ import { IpcReply } from "./reply";
 
 export const SCHEDULED_MAIL_PAGE_SIZE = 50;
 export const MAX_SCHEDULED_MAIL_PREVIEW_LENGTH = 240;
+// Bound IPC payloads without imposing a product-level account limit.
 export const MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT = 1000;
 
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));

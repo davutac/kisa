@@ -56,7 +56,7 @@ const LoginScreen = ({
               type="button"
               variant="outline"
             >
-              Setup Google
+              Set up Google
             </Button>
             <Button
               className="h-10 w-full gap-2.5"
@@ -71,7 +71,7 @@ const LoginScreen = ({
                 className="size-4"
                 src={googleLogo}
               />
-              {isStarting ? "Opening Google..." : "Login with Google"}
+              {isStarting ? "Opening Google…" : "Login with Google"}
             </Button>
           </div>
         </section>

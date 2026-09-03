@@ -31,11 +31,11 @@ class GoogleOAuthCredentialsError extends Schema.TaggedError<GoogleOAuthCredenti
   { message: Schema.String }
 ) {}
 
-const decodeGoogleDesktopOAuthFile = Schema.decodeUnknownSync(
-  GoogleDesktopOAuthFile
+const decodeGoogleDesktopOAuthFile = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(GoogleDesktopOAuthFile)
 );
-const decodeStoredGoogleOAuthCredentials = Schema.decodeUnknownSync(
-  StoredGoogleOAuthCredentials
+const decodeStoredGoogleOAuthCredentials = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(StoredGoogleOAuthCredentials)
 );
 
 const getStoredGoogleOAuthCredentialsPath = (): string =>
@@ -47,28 +47,36 @@ const invalidGoogleOAuthFile = (): GoogleOAuthCredentialsError =>
       "Choose the Desktop OAuth credentials JSON downloaded from Google Cloud",
   });
 
-const parseGoogleOAuthCredentials = (
-  raw: string
-): Effect.Effect<GoogleOAuthCredentials, GoogleOAuthCredentialsError> =>
-  Effect.try({
-    catch: invalidGoogleOAuthFile,
-    try: () => {
-      const { installed } = decodeGoogleDesktopOAuthFile(JSON.parse(raw));
-      const clientId = installed.client_id.trim();
-      const clientSecret = installed.client_secret?.trim();
-
-      if (
-        !clientId.endsWith(".apps.googleusercontent.com") ||
-        clientId.length > 512 ||
-        clientSecret?.length === 0 ||
-        (clientSecret?.length ?? 0) > 512
-      ) {
-        throw new Error("invalid Google Desktop OAuth credentials");
-      }
-
-      return { clientId, clientSecret };
-    },
+const unavailableStoredGoogleOAuthCredentials = () =>
+  new GoogleOAuthCredentialsError({
+    message: "Stored Google OAuth credentials are unavailable",
   });
+
+const saveGoogleOAuthCredentialsError = () =>
+  new GoogleOAuthCredentialsError({
+    message: "Could not securely save Google OAuth credentials",
+  });
+
+const parseGoogleOAuthCredentials = Effect.fn("parseGoogleOAuthCredentials")(
+  function* parseGoogleOAuthCredentials(raw: string) {
+    const { installed } = yield* decodeGoogleDesktopOAuthFile(raw).pipe(
+      Effect.mapError(invalidGoogleOAuthFile)
+    );
+    const clientId = installed.client_id.trim();
+    const clientSecret = installed.client_secret?.trim();
+
+    if (
+      !clientId.endsWith(".apps.googleusercontent.com") ||
+      clientId.length > 512 ||
+      clientSecret?.length === 0 ||
+      (clientSecret?.length ?? 0) > 512
+    ) {
+      return yield* invalidGoogleOAuthFile();
+    }
+
+    return { clientId, clientSecret } satisfies GoogleOAuthCredentials;
+  }
+);
 
 export const chooseGoogleOAuthCredentials = Effect.fn(
   "chooseGoogleOAuthCredentials"
@@ -113,58 +121,82 @@ export const chooseGoogleOAuthCredentials = Effect.fn(
 export const loadStoredGoogleOAuthCredentials = Effect.fn(
   "loadStoredGoogleOAuthCredentials"
 )(() =>
-  Effect.promise(async () => {
-    try {
-      const credentialsPath = getStoredGoogleOAuthCredentialsPath();
-      const fileInfo = await stat(credentialsPath);
+  Effect.gen(function* loadStoredCredentials() {
+    const credentialsPath = getStoredGoogleOAuthCredentialsPath();
+    const fileInfo = yield* Effect.tryPromise({
+      catch: unavailableStoredGoogleOAuthCredentials,
+      try: () => stat(credentialsPath),
+    });
 
-      if (
-        !fileInfo.isFile() ||
-        fileInfo.size > ENCRYPTED_GOOGLE_OAUTH_CREDENTIALS_MAX_BYTES
-      ) {
-        return null;
-      }
-
-      const encrypted = await readFile(credentialsPath);
-      return decodeStoredGoogleOAuthCredentials(
-        JSON.parse(safeStorage.decryptString(encrypted))
-      );
-    } catch {
-      return null;
+    if (
+      !fileInfo.isFile() ||
+      fileInfo.size > ENCRYPTED_GOOGLE_OAUTH_CREDENTIALS_MAX_BYTES
+    ) {
+      return yield* unavailableStoredGoogleOAuthCredentials();
     }
-  })
+
+    const encrypted = yield* Effect.tryPromise({
+      catch: unavailableStoredGoogleOAuthCredentials,
+      try: () => readFile(credentialsPath),
+    });
+    const decrypted = yield* Effect.try({
+      catch: unavailableStoredGoogleOAuthCredentials,
+      try: () => safeStorage.decryptString(encrypted),
+    });
+
+    return yield* decodeStoredGoogleOAuthCredentials(decrypted).pipe(
+      Effect.mapError(unavailableStoredGoogleOAuthCredentials)
+    );
+  }).pipe(Effect.orElseSucceed(() => null))
 );
 
 export const persistGoogleOAuthCredentials = Effect.fn(
   "persistGoogleOAuthCredentials"
 )(function* persistGoogleOAuthCredentials(oauth: GoogleOAuthCredentials) {
-  yield* Effect.tryPromise({
-    catch: () =>
-      new GoogleOAuthCredentialsError({
-        message: "Could not securely save Google OAuth credentials",
-      }),
-    try: async () => {
+  const prepared = yield* Effect.try({
+    catch: saveGoogleOAuthCredentialsError,
+    try: () => {
       const userDataPath = app.getPath("userData");
-      const credentialsPath = getStoredGoogleOAuthCredentialsPath();
-      const temporaryPath = `${credentialsPath}.${randomUUID()}.tmp`;
-      const encrypted = safeStorage.encryptString(JSON.stringify(oauth));
+      const credentialsPath = path.join(
+        userDataPath,
+        GOOGLE_OAUTH_CREDENTIALS_FILENAME
+      );
 
-      await mkdir(userDataPath, { recursive: true });
-      try {
-        await writeFile(temporaryPath, encrypted, { mode: 0o600 });
-        await rename(temporaryPath, credentialsPath);
-      } finally {
-        await rm(temporaryPath, { force: true });
-      }
+      return {
+        credentialsPath,
+        encrypted: safeStorage.encryptString(JSON.stringify(oauth)),
+        temporaryPath: `${credentialsPath}.${randomUUID()}.tmp`,
+        userDataPath,
+      };
     },
   });
+
+  yield* Effect.tryPromise({
+    catch: saveGoogleOAuthCredentialsError,
+    try: async () => {
+      await mkdir(prepared.userDataPath, { recursive: true });
+      await writeFile(prepared.temporaryPath, prepared.encrypted, {
+        mode: 0o600,
+      });
+      await rename(prepared.temporaryPath, prepared.credentialsPath);
+    },
+  }).pipe(
+    Effect.ensuring(
+      Effect.tryPromise({
+        catch: saveGoogleOAuthCredentialsError,
+        try: () => rm(prepared.temporaryPath, { force: true }),
+      }).pipe(Effect.ignore)
+    ),
+    Effect.uninterruptible
+  );
 });
 
 export const createGoogleTokenRequestBody = (
   oauth: GoogleOAuthCredentials,
   values: Readonly<Record<string, string>>
 ): URLSearchParams => {
-  const body = new URLSearchParams({ client_id: oauth.clientId, ...values });
+  const body = new URLSearchParams(values);
+  body.set("client_id", oauth.clientId);
 
   if (oauth.clientSecret !== undefined) {
     body.set("client_secret", oauth.clientSecret);

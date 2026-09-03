@@ -6,7 +6,7 @@ import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { googleAccounts } from "@repo/database/schemas";
 import { GMAIL_FULL_ACCESS_SCOPE } from "@repo/gmail/models";
 import { eq as equals } from "drizzle-orm";
-import { Effect, Predicate, Schema } from "effect";
+import { Effect, Option, Predicate, Schema } from "effect";
 import { app, safeStorage, shell } from "electron";
 
 import type { GoogleAccount, GoogleAccountsReply } from "../../shared/ipc/auth";
@@ -119,17 +119,26 @@ const decodeGoogleTokenResponse =
 const decodeGoogleRefreshResponse = Schema.decodeUnknownPromise(
   GoogleRefreshResponse
 );
-const decodeGoogleOAuthErrorResponse = Schema.decodeUnknownPromise(
+const decodeGoogleOAuthErrorResponse = Schema.decodeUnknownEffect(
   GoogleOAuthErrorResponse
 );
 const decodeGoogleUserInfo = Schema.decodeUnknownPromise(GoogleUserInfo);
 
+const decryptStoredCredentials = (credentials: Buffer) =>
+  decodeStoredCredentials(JSON.parse(safeStorage.decryptString(credentials)));
+
+const readStoredCredentials = Effect.fn("readStoredCredentials")(
+  (credentials: Buffer) =>
+    Effect.try({
+      catch: () =>
+        new GoogleAuthError({ message: "Could not read saved credentials" }),
+      try: () => decryptStoredCredentials(credentials),
+    })
+);
+
 const isUserOwnedOAuthClient = (credentials: Buffer): boolean => {
   try {
-    const stored = decodeStoredCredentials(
-      JSON.parse(safeStorage.decryptString(credentials))
-    );
-    return stored.oauthClient === "user-owned";
+    return decryptStoredCredentials(credentials).oauthClient === "user-owned";
   } catch {
     return false;
   }
@@ -137,23 +146,20 @@ const isUserOwnedOAuthClient = (credentials: Buffer): boolean => {
 
 const describeGoogleOAuthFailure = Effect.fn("describeGoogleOAuthFailure")(
   function* describeGoogleOAuthFailure(response: Response, prefix: string) {
-    const payload = yield* Effect.promise(async () => {
-      try {
-        return await decodeGoogleOAuthErrorResponse(await response.json());
-      } catch {
-        return null;
-      }
-    });
+    const payload = yield* Effect.tryPromise(() => response.json()).pipe(
+      Effect.flatMap(decodeGoogleOAuthErrorResponse),
+      Effect.option
+    );
 
-    if (payload === null) {
+    if (Option.isNone(payload)) {
       return `${prefix} (${response.status})`;
     }
 
-    const description = payload.error_description;
+    const description = payload.value.error_description;
     const safeDescription =
       description === "client_secret is missing." ? `: ${description}` : "";
 
-    return `${prefix} (${response.status}, ${payload.error})${safeDescription}`;
+    return `${prefix} (${response.status}, ${payload.value.error})${safeDescription}`;
   }
 );
 
@@ -349,25 +355,17 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
           where: { email: profile.emailAddress },
         })
     );
-    const existingOAuthState = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not read saved credentials" }),
-      try: () => {
-        if (existing === undefined) {
-          return;
-        }
-
-        const credentials = decodeStoredCredentials(
-          JSON.parse(safeStorage.decryptString(existing.credentials))
-        );
-        return credentials.clientId === handoff.clientId
-          ? {
-              clientSecret: credentials.clientSecret,
-              refreshToken: credentials.refreshToken,
-            }
-          : undefined;
-      },
-    });
+    const existingCredentials =
+      existing === undefined
+        ? undefined
+        : yield* readStoredCredentials(existing.credentials);
+    const existingOAuthState =
+      existingCredentials?.clientId === handoff.clientId
+        ? {
+            clientSecret: existingCredentials.clientSecret,
+            refreshToken: existingCredentials.refreshToken,
+          }
+        : undefined;
     const encryptedCredentials = safeStorage.encryptString(
       JSON.stringify({
         accessToken: handoff.accessToken,
@@ -486,14 +484,7 @@ export const getGoogleAccessToken = Effect.fn("getGoogleAccessToken")(
       });
     }
 
-    const stored = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not read saved credentials" }),
-      try: () =>
-        decodeStoredCredentials(
-          JSON.parse(safeStorage.decryptString(account.credentials))
-        ),
-    });
+    const stored = yield* readStoredCredentials(account.credentials);
     if (stored.oauthClient !== "user-owned") {
       return yield* new GoogleAuthError({
         message:
@@ -652,9 +643,7 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
       return cached;
     }
 
-    const stored = decodeStoredCredentials(
-      JSON.parse(safeStorage.decryptString(row.credentials))
-    );
+    const stored = yield* readStoredCredentials(row.credentials);
     const credentials =
       stored.expiresAt !== undefined &&
       stored.expiresAt <= Date.now() + TOKEN_EXPIRY_BUFFER_MS
@@ -838,14 +827,7 @@ const revokeStoredCredentials = Effect.fn("revokeStoredCredentials")(
       return;
     }
 
-    const stored = yield* Effect.try({
-      catch: () =>
-        new GoogleAuthError({ message: "Could not read saved credentials" }),
-      try: () =>
-        decodeStoredCredentials(
-          JSON.parse(safeStorage.decryptString(account.credentials))
-        ),
-    });
+    const stored = yield* readStoredCredentials(account.credentials);
 
     yield* Effect.tryPromise({
       catch: () =>

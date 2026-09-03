@@ -400,7 +400,7 @@ describe("Google authentication startup", () => {
       );
     }
 
-    stubSuccessfulGoogleAuthorization("person-10@example.com", "Person 10");
+    stubSuccessfulGoogleAuthorization("person-9@example.com", "Person 9");
     const { state } = await startAuthorization();
 
     await handleGoogleAuthCallback({ code: "authorization-code", state });
@@ -417,8 +417,8 @@ describe("Google authentication startup", () => {
       {
         data: expect.arrayContaining([
           expect.objectContaining({
-            displayName: "Person 10",
-            email: "person-10@example.com",
+            displayName: "Person 9",
+            email: "person-9@example.com",
           }),
         ]),
         ok: true,

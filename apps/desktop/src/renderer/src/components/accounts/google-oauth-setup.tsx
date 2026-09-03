@@ -279,7 +279,7 @@ export const GoogleOAuthSetupDialog = ({
             type="button"
           >
             <FileJsonIcon />
-            {isUploading ? "Uploading..." : "Upload credentials JSON"}
+            {isUploading ? "Uploading…" : "Upload credentials JSON"}
           </Button>
         </DialogFooter>
       </DialogContent>

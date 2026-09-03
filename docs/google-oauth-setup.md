@@ -73,7 +73,7 @@ Open **Audience**, select **Publish app**, and confirm. The publishing status sh
 
 ## 5. Connect the account
 
-1. In Kisa, select **Setup Google**.
+1. In Kisa, select **Set up Google**.
 2. Follow the displayed instructions, select **Upload credentials JSON**, and choose the file downloaded from Google. You only need to upload it once.
 3. After setup completes, select **Login with Google**.
 4. Kisa opens Google's authorization page in your default browser.

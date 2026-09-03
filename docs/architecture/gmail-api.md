@@ -77,7 +77,7 @@ Request the narrowest set that implements the product. Google's current classifi
 
 Kisa requests `mail.google.com` because Spam supports immediate permanent deletion; requesting `gmail.modify` alongside it would add no capability. Accounts connected with a narrower scope must connect again.
 
-Google requires applications requesting restricted Gmail scopes to complete an annual security assessment, including local desktop clients. Kisa does not ship a shared OAuth client. Each user creates a personal Google Cloud project and imports its Desktop OAuth credentials. See [Connect Kisa to Google](../google-oauth-setup.md).
+Public applications requesting restricted Gmail scopes generally require OAuth verification and a security assessment, including local desktop clients. Kisa does not ship a shared public OAuth client. Each user instead creates a personal Google Cloud project and imports its Desktop OAuth credentials. See [Connect Kisa to Google](../google-oauth-setup.md).
 
 Electron main opens the JSON file picker for the first connection and accepts only the `installed` Desktop-client shape. The file is bounded to 64 KiB and its contents never cross renderer IPC. The selected client is encrypted once behind `safeStorage` in the app's user-data directory and reused for later account connections. The client identity is also encrypted with each account's access and refresh tokens because Google refresh tokens belong to the OAuth client that issued them.
 

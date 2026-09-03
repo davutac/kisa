@@ -59,7 +59,7 @@ describe("Google OAuth setup guide", () => {
     const beforeSetup = renderLogin(false);
     const afterSetup = renderLogin(true);
 
-    expect(beforeSetup).toContain("Setup Google");
+    expect(beforeSetup).toContain("Set up Google");
     expect(getLoginButton(beforeSetup)).toContain('disabled=""');
     expect(getLoginButton(afterSetup)).not.toContain('disabled=""');
   });
