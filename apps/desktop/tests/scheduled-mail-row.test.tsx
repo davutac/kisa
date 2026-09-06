@@ -180,7 +180,7 @@ describe("scheduled mail row surface", () => {
       ),
       hasArchiveRestoreIcon: hiddenMarkup.includes("lucide-archive-restore"),
       hasSelectionCheckbox: hiddenMarkup.includes('data-slot="checkbox"'),
-      hasTrashIcon: hiddenMarkup.includes("lucide-trash-2"),
+      hasTrashIcon: hiddenMarkup.includes("lucide-trash"),
       hasVisibleButtonCopy: hiddenMarkup.includes(">Cancel schedule<"),
       hiddenIsInert: hiddenRail?.includes("inert"),
       revealedIsInert: revealedRail?.includes("inert"),
