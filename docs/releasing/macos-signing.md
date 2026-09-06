@@ -4,6 +4,8 @@ Kisa's macOS builds are signed with a **Developer ID Application** certificate a
 
 Windows and Linux artifacts stay unsigned. `CSC_IDENTITY_AUTO_DISCOVERY` is set per matrix entry in `.github/workflows/release.yml` so only the macOS job looks for an identity.
 
+The macOS release runner is pinned to `macos-15` (Apple Silicon), and `electron-builder` is pinned to the published 26.15.3 package. The macOS 26.6 runner behind `macos-latest` fails during temporary signing-keychain setup with `SecKeychainUnlock`; the same builder successfully signed the previous release on macOS 26.5.2. Upgrade the runner only after verifying signing and notarization with the published builder package.
+
 ## One-time setup
 
 ### 1. Certificate

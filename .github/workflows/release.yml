@@ -23,7 +23,8 @@ jobs:
       matrix:
         include:
           - name: macOS
-            os: macos-latest
+            # macOS 26.6 rejects electron-builder's temporary signing-keychain setup.
+            os: macos-15
             target: --mac
             artifact: macos
             signed: true
