@@ -90,7 +90,7 @@ const Titlebar = () => {
 
   return (
     <header className="app-titlebar bg-background fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <div className="flex items-center gap-1">
           <TitlebarNewMessage />
           {showScheduledButton ? (

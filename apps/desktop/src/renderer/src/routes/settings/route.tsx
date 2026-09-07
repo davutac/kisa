@@ -23,6 +23,7 @@ import { useLoginItemSettings } from "@/state/login-item-settings";
 import SettingsAccountsSection from "./-components/settings-accounts-section";
 import SettingsAiSection from "./-components/settings-ai-section";
 import SettingsDatabaseSection from "./-components/settings-database-section";
+import SettingsGoogleOAuthRow from "./-components/settings-google-oauth-row";
 import SettingsUpdateRow from "./-components/settings-update-row";
 
 export const Route = createFileRoute("/settings")({
@@ -68,6 +69,9 @@ function SettingsRoute() {
           </SettingsSectionHeader>
 
           <SettingsRows>
+            {auth === undefined ? null : (
+              <SettingsGoogleOAuthRow authApi={auth} />
+            )}
             <SettingsRow>
               <SettingsRowContent>
                 <SettingsRowTitle id="theme-title">Theme</SettingsRowTitle>

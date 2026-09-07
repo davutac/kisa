@@ -1,0 +1,7 @@
+{
+  "web": {
+    "client_id": "test-client-id.apps.googleusercontent.com",
+    "client_secret": "test-web-client-secret",
+    "redirect_uris": ["https://example.com/oauth/callback"]
+  }
+}

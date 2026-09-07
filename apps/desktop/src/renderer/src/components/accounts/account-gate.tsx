@@ -15,6 +15,7 @@ import { useMailboxStore } from "@/state/mailbox";
 import { TrustedImageSendersProvider } from "@/state/trusted-image-senders";
 
 import LoginScreen from "./login-screen";
+import { useGoogleOAuthSetup } from "./use-google-oauth-setup";
 
 interface AccountGateProps {
   children: React.ReactNode;
@@ -43,8 +44,14 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   const [isAuthenticated, setIsAuthenticated] = useState(
     initialState.status === "authenticated"
   );
+  const [hasGoogleSetup, setHasGoogleSetup] = useState(false);
   const [isStartingLogin, setIsStartingLogin] = useState(false);
   const accountOrderVersion = useRef(0);
+  const googleSetupVersion = useRef(0);
+  const { isSettingUp, setupGoogle } = useGoogleOAuthSetup(getAuthApi(), () => {
+    googleSetupVersion.current += 1;
+    setHasGoogleSetup(true);
+  });
   const accountIds = useMemo(
     () => accounts.map(({ email }) => email),
     [accounts]
@@ -95,10 +102,43 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     });
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      return;
+    }
+
+    const auth = getAuthApi();
+    const version = googleSetupVersion.current;
+    let isActive = true;
+
+    const loadGoogleSetupStatus = async (): Promise<void> => {
+      if (auth === undefined) {
+        return;
+      }
+
+      const reply = await auth.getGoogleOAuthClientStatus();
+      if (!isActive || version !== googleSetupVersion.current) {
+        return;
+      }
+
+      if (reply.ok) {
+        setHasGoogleSetup(reply.data);
+      } else {
+        toast.error(reply.error);
+      }
+    };
+
+    void loadGoogleSetupStatus();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isAuthenticated]);
+
   const startLogin = async (): Promise<void> => {
     const auth = getAuthApi();
 
-    if (auth === undefined) {
+    if (auth === undefined || !hasGoogleSetup) {
       return;
     }
 
@@ -112,7 +152,15 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   };
 
   if (!isAuthenticated) {
-    return <LoginScreen isStarting={isStartingLogin} onLogin={startLogin} />;
+    return (
+      <LoginScreen
+        hasGoogleSetup={hasGoogleSetup}
+        isSettingUp={isSettingUp}
+        isStarting={isStartingLogin}
+        onLogin={startLogin}
+        onSetup={setupGoogle}
+      />
+    );
   }
 
   return (

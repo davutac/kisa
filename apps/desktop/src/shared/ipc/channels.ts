@@ -20,6 +20,10 @@ export const AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL =
   "desktop:auth:google-disconnect-account";
 export const AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL =
   "desktop:auth:google-list-accounts";
+export const AUTH_GOOGLE_OAUTH_CLIENT_SETUP_CHANNEL =
+  "desktop:auth:google-oauth-client-setup";
+export const AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL =
+  "desktop:auth:google-oauth-client-status";
 export const AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL =
   "desktop:auth:google-reorder-accounts";
 export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";

@@ -1,0 +1,10 @@
+{
+  "installed": {
+    "client_id": "test-client-id.apps.googleusercontent.com",
+    "project_id": "kisa-test",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "client_secret": "test-desktop-client-secret",
+    "redirect_uris": ["http://localhost"]
+  }
+}

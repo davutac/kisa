@@ -9,7 +9,6 @@ import {
   shouldRunHotkeyCommand,
   validateHotkeyCommands,
 } from "../src/renderer/src/hotkeys/commands";
-import { MAX_GOOGLE_ACCOUNTS } from "../src/shared/ipc/auth";
 
 describe("hotkey command registry", () => {
   it("has no conflicts on any supported platform", () => {
@@ -36,7 +35,6 @@ describe("hotkey command registry", () => {
         (commandId) => HOTKEY_COMMANDS[commandId].bindings[0]
       )
     ).toStrictEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
-    expect(OPEN_ACCOUNT_COMMAND_IDS).toHaveLength(MAX_GOOGLE_ACCOUNTS);
     expect(HOTKEY_COMMANDS["app.openSettings"].bindings).toStrictEqual([
       "Mod+,",
     ]);
@@ -61,7 +59,6 @@ describe("hotkey command registry", () => {
       "Mod+8",
       "Mod+9",
     ]);
-    expect(COMPOSER_ACCOUNT_COMMAND_IDS).toHaveLength(MAX_GOOGLE_ACCOUNTS);
   });
 
   it("assigns the composer stash shortcut", () => {

@@ -2,8 +2,6 @@ import * as Schema from "effect/Schema";
 
 import { IpcReply } from "./reply";
 
-export const MAX_GOOGLE_ACCOUNTS = 9;
-
 export const GoogleAccount = Schema.Struct({
   avatarUrl: Schema.optional(Schema.String),
   displayName: Schema.optional(Schema.String),
@@ -32,3 +30,11 @@ export type GoogleAccountReorderReply = typeof GoogleAccountReorderReply.Type;
 
 export const GoogleAuthStartReply = IpcReply(Schema.Void);
 export type GoogleAuthStartReply = typeof GoogleAuthStartReply.Type;
+
+export const GoogleOAuthClientStatusReply = IpcReply(Schema.Boolean);
+export type GoogleOAuthClientStatusReply =
+  typeof GoogleOAuthClientStatusReply.Type;
+
+export const GoogleOAuthClientSetupReply = IpcReply(Schema.Boolean);
+export type GoogleOAuthClientSetupReply =
+  typeof GoogleOAuthClientSetupReply.Type;
