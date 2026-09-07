@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { GoogleOAuthSetupSteps } from "../src/renderer/src/components/accounts/google-oauth-setup";
 import LoginScreen from "../src/renderer/src/components/accounts/login-screen";
+import SettingsGoogleOAuthRow from "../src/renderer/src/routes/settings/-components/settings-google-oauth-row";
 
 const renderLogin = (hasGoogleSetup: boolean) =>
   renderToString(
@@ -62,5 +63,19 @@ describe("Google OAuth setup guide", () => {
     expect(beforeSetup).toContain("Set up Google");
     expect(getLoginButton(beforeSetup)).toContain('disabled=""');
     expect(getLoginButton(afterSetup)).not.toContain('disabled=""');
+  });
+
+  it("provides credential replacement in authenticated settings", () => {
+    const markup = renderToString(
+      <SettingsGoogleOAuthRow
+        authApi={{
+          setupGoogleOAuthClient: () =>
+            Promise.resolve({ data: false, ok: true }),
+        }}
+      />
+    );
+    expect(markup).toContain("Set up Google");
+    expect(markup).toContain("Existing accounts keep");
+    expect(markup).not.toContain('disabled=""');
   });
 });

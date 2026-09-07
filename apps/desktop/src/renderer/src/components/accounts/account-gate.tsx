@@ -15,6 +15,7 @@ import { useMailboxStore } from "@/state/mailbox";
 import { TrustedImageSendersProvider } from "@/state/trusted-image-senders";
 
 import LoginScreen from "./login-screen";
+import { useGoogleOAuthSetup } from "./use-google-oauth-setup";
 
 interface AccountGateProps {
   children: React.ReactNode;
@@ -44,10 +45,13 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     initialState.status === "authenticated"
   );
   const [hasGoogleSetup, setHasGoogleSetup] = useState(false);
-  const [isSettingUpGoogle, setIsSettingUpGoogle] = useState(false);
   const [isStartingLogin, setIsStartingLogin] = useState(false);
   const accountOrderVersion = useRef(0);
   const googleSetupVersion = useRef(0);
+  const { isSettingUp, setupGoogle } = useGoogleOAuthSetup(getAuthApi(), () => {
+    googleSetupVersion.current += 1;
+    setHasGoogleSetup(true);
+  });
   const accountIds = useMemo(
     () => accounts.map(({ email }) => email),
     [accounts]
@@ -99,6 +103,10 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   }, []);
 
   useEffect(() => {
+    if (isAuthenticated) {
+      return;
+    }
+
     const auth = getAuthApi();
     const version = googleSetupVersion.current;
     let isActive = true;
@@ -125,30 +133,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     return () => {
       isActive = false;
     };
-  }, []);
-
-  const setupGoogle = async (): Promise<boolean> => {
-    const auth = getAuthApi();
-
-    if (auth === undefined) {
-      return false;
-    }
-
-    googleSetupVersion.current += 1;
-    setIsSettingUpGoogle(true);
-    const reply = await auth.setupGoogleOAuthClient();
-    setIsSettingUpGoogle(false);
-
-    if (!reply.ok) {
-      toast.error(reply.error);
-      return false;
-    }
-
-    if (reply.data) {
-      setHasGoogleSetup(true);
-    }
-    return reply.data;
-  };
+  }, [isAuthenticated]);
 
   const startLogin = async (): Promise<void> => {
     const auth = getAuthApi();
@@ -170,7 +155,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     return (
       <LoginScreen
         hasGoogleSetup={hasGoogleSetup}
-        isSettingUp={isSettingUpGoogle}
+        isSettingUp={isSettingUp}
         isStarting={isStartingLogin}
         onLogin={startLogin}
         onSetup={setupGoogle}

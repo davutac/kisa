@@ -92,7 +92,11 @@ Confirm that the audience is **External**, the publishing status is **In product
 
 ### Account must be connected again
 
-Download the current Desktop client JSON and connect that Gmail account again. Deleting the OAuth client, changing projects, or revoking access invalidates the saved grant.
+Download the current Desktop client JSON. If accounts are already connected, open **Settings → Google connection → Set up Google** to import it, then use **Add account** to connect that Gmail account again. You do not need to disconnect accounts first. Replacing the default client affects future connections; existing accounts keep their issuing client until reconnected.
+
+Deleting the OAuth client, changing projects, or revoking access invalidates the saved grant. A successful authorization that supplies a new refresh token can also replace unreadable saved credentials without deleting downloaded mail.
+
+Accounts connected through the retired shared client remain hidden until reconnected. Their cached mail is preserved but excluded from the native unread badge. Reconnecting immediately includes that account's unread inbox mail again.
 
 ### Remove access
 

@@ -19,8 +19,14 @@ import {
 import { withDatabaseClient } from "../database-query";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { toIpcReply } from "../ipc/reply";
+import { refreshUnreadBadge } from "../mail/unread-badge";
 import { getMainWindow } from "../window/create-window";
 import { notifyGoogleAccountConnected } from "./account-events";
+import type { StoredCredentials } from "./google-account-credentials";
+import {
+  decryptStoredCredentials,
+  isUserOwnedOAuthClient,
+} from "./google-account-credentials";
 import { renderGoogleAuthCallbackPage } from "./google-auth-callback-page";
 import type { GoogleOAuthCredentials } from "./google-oauth-credentials";
 import {
@@ -52,14 +58,6 @@ const GOOGLE_TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 const GOOGLE_AUTH_ATTEMPT_TTL_MS = 10 * 60 * 1000;
 const GOOGLE_AUTH_CALLBACK_PATH = "/oauth/google/callback";
 const GmailProfile = Schema.Struct({ emailAddress: Schema.NonEmptyString });
-const StoredCredentials = Schema.Struct({
-  accessToken: Schema.NonEmptyString,
-  clientId: Schema.optional(Schema.NonEmptyString),
-  clientSecret: Schema.optional(Schema.NonEmptyString),
-  expiresAt: Schema.optional(Schema.Finite),
-  oauthClient: Schema.optional(Schema.Literal("user-owned")),
-  refreshToken: Schema.optional(Schema.NonEmptyString),
-});
 const StoredScopes = Schema.Array(Schema.NonEmptyString);
 const GoogleTokenResponse = Schema.Struct({
   access_token: Schema.NonEmptyString,
@@ -112,7 +110,6 @@ interface PendingGoogleAuthAttempt {
 const pendingGoogleAuthAttempts = new Map<string, PendingGoogleAuthAttempt>();
 
 const decodeProfile = Schema.decodeUnknownPromise(GmailProfile);
-const decodeStoredCredentials = Schema.decodeUnknownSync(StoredCredentials);
 const decodeStoredScopes = Schema.decodeUnknownSync(StoredScopes);
 const decodeGoogleTokenResponse =
   Schema.decodeUnknownPromise(GoogleTokenResponse);
@@ -124,9 +121,6 @@ const decodeGoogleOAuthErrorResponse = Schema.decodeUnknownEffect(
 );
 const decodeGoogleUserInfo = Schema.decodeUnknownPromise(GoogleUserInfo);
 
-const decryptStoredCredentials = (credentials: Buffer) =>
-  decodeStoredCredentials(JSON.parse(safeStorage.decryptString(credentials)));
-
 const readStoredCredentials = Effect.fn("readStoredCredentials")(
   (credentials: Buffer) =>
     Effect.try({
@@ -135,14 +129,6 @@ const readStoredCredentials = Effect.fn("readStoredCredentials")(
       try: () => decryptStoredCredentials(credentials),
     })
 );
-
-const isUserOwnedOAuthClient = (credentials: Buffer): boolean => {
-  try {
-    return decryptStoredCredentials(credentials).oauthClient === "user-owned";
-  } catch {
-    return false;
-  }
-};
 
 const describeGoogleOAuthFailure = Effect.fn("describeGoogleOAuthFailure")(
   function* describeGoogleOAuthFailure(response: Response, prefix: string) {
@@ -358,7 +344,13 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
     const existingCredentials =
       existing === undefined
         ? undefined
-        : yield* readStoredCredentials(existing.credentials);
+        : yield* readStoredCredentials(existing.credentials).pipe(
+            // A fresh refresh token can replace an unreadable saved grant.
+            Effect.catchIf(
+              () => handoff.refreshToken !== undefined,
+              () => Effect.succeed(null)
+            )
+          );
     const existingOAuthState =
       existingCredentials?.clientId === handoff.clientId
         ? {
@@ -891,6 +883,8 @@ export const handleGoogleAuthCallback = async (
     const email = await Effect.runPromise(
       exchangeCode(result.code, pending).pipe(Effect.flatMap(saveAuthorization))
     );
+
+    await Effect.runPromise(refreshUnreadBadge().pipe(Effect.ignore));
 
     // Reconnecting an already-indexed account is a no-op: the indexer ignores
     // the request once its state row reads `complete`.

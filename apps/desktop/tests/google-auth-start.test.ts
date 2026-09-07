@@ -1,6 +1,6 @@
 /// <reference types="electron-vite/node" />
 
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +26,7 @@ import {
   vi,
 } from "vitest";
 
+import { setNativeUnreadBadgeCount } from "../src/main/app/native-unread-badge";
 import type { notifyGoogleAccountConnected } from "../src/main/auth/account-events";
 import {
   getGoogleAccessToken,
@@ -38,6 +39,7 @@ import {
   stopGoogleAuth,
 } from "../src/main/auth/auth";
 import { sendRendererEvent } from "../src/main/electron/renderer-events";
+import { refreshUnreadBadge } from "../src/main/mail/unread-badge";
 import type { getMainWindow } from "../src/main/window/create-window";
 
 const electronState = vi.hoisted(() => {
@@ -145,6 +147,10 @@ vi.mock(import("../src/main/auth/account-events"), () => ({
   notifyGoogleAccountConnected: vi.fn<typeof notifyGoogleAccountConnected>(),
 }));
 
+vi.mock(import("../src/main/app/native-unread-badge"), () => ({
+  setNativeUnreadBadgeCount: vi.fn<typeof setNativeUnreadBadgeCount>(),
+}));
+
 vi.mock(import("../src/main/window/create-window"), () => ({
   getMainWindow: vi.fn<typeof getMainWindow>(),
 }));
@@ -213,14 +219,30 @@ const createUserOwnedCredentials = (): Buffer =>
     })
   );
 
-const stubSuccessfulGoogleAuthorization = (email: string, name: string) => {
+const insertUnreadThread = (
+  accountId: string,
+  threadId = "shared-id"
+): void => {
+  connection
+    .prepare(`INSERT INTO gmail_threads (
+    account_email, "from", is_in_inbox, is_unread, labels, latest_at,
+    message_count, snippet, subject, thread_id, updated_at
+  ) VALUES (?, 'sender@example.com', 1, 1, '[]', 1, 1, '', '', ?, 1)`)
+    .run(accountId, threadId);
+};
+
+const stubSuccessfulGoogleAuthorization = (
+  email: string,
+  name: string,
+  refreshToken: string | null = "new-refresh-token"
+) => {
   const fetchMock = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(
       Response.json({
         access_token: "new-access-token",
         expires_in: 3600,
-        refresh_token: "new-refresh-token",
+        refresh_token: refreshToken ?? undefined,
         scope: "openid email profile https://mail.google.com/",
         token_type: "Bearer",
       })
@@ -229,6 +251,25 @@ const stubSuccessfulGoogleAuthorization = (email: string, name: string) => {
     .mockResolvedValueOnce(Response.json({ email, name }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+};
+
+const captureAccountRefreshRequest = async (
+  email: string
+): Promise<URLSearchParams> => {
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      access_token: "refreshed-access-token",
+      expires_in: 3600,
+      token_type: "Bearer",
+    })
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  await Effect.runPromise(getGoogleAccessToken(email, { forceRefresh: true }));
+  const body = fetchMock.mock.calls[0]?.[1]?.body;
+  if (!(body instanceof URLSearchParams)) {
+    throw new TypeError("Expected a Google token request form");
+  }
+  return body;
 };
 
 const startAuthorization = async () => {
@@ -270,6 +311,7 @@ describe("Google authentication startup", () => {
       new URL("fixtures/google-desktop-oauth.json", import.meta.url)
     );
     electronState.openedUrls = [];
+    connection.prepare("DELETE FROM gmail_threads").run();
     connection.prepare("DELETE FROM google_accounts").run();
   });
 
@@ -602,6 +644,157 @@ describe("Google authentication startup", () => {
     ).rejects.toThrow(
       "Google account must be connected again with your own credentials JSON"
     );
+  });
+
+  it.each(["not valid JSON", "{}"])(
+    "reconnects an unreadable account without deleting its mail (%s)",
+    async (invalidCredentials) => {
+      insertAccount("person@example.com", Buffer.from(invalidCredentials));
+      insertUnreadThread("person@example.com");
+      await expect(
+        Effect.runPromise(listGoogleAccounts())
+      ).resolves.toStrictEqual([]);
+      await Effect.runPromise(refreshUnreadBadge());
+
+      stubSuccessfulGoogleAuthorization("person@example.com", "Person");
+      const { state } = await startAuthorization();
+      await handleGoogleAuthCallback({ code: "authorization-code", state });
+
+      expect(sendRendererEvent).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.anything(),
+        {
+          data: [expect.objectContaining({ email: "person@example.com" })],
+          ok: true,
+        }
+      );
+      await expect(
+        Effect.runPromise(getGoogleAccessToken("person@example.com"))
+      ).resolves.toBe("new-access-token");
+      expect(
+        connection.prepare("SELECT count(*) FROM gmail_threads").pluck().get()
+      ).toBe(1);
+      expect(vi.mocked(setNativeUnreadBadgeCount).mock.calls).toStrictEqual([
+        [0],
+        [1],
+      ]);
+    }
+  );
+
+  it("preserves an unreadable grant if fresh authorization has no refresh token", async () => {
+    const original = Buffer.from("not valid JSON");
+    insertAccount("person@example.com", original);
+    stubSuccessfulGoogleAuthorization("person@example.com", "Person", null);
+    const { state } = await startAuthorization();
+    await handleGoogleAuthCallback({ code: "authorization-code", state });
+
+    expect(sendRendererEvent).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.anything(),
+      { error: "Could not read saved credentials", ok: false }
+    );
+    expect(
+      connection
+        .prepare("SELECT credentials FROM google_accounts")
+        .pluck()
+        .get()
+    ).toStrictEqual(original);
+  });
+
+  it("preserves a readable same-client refresh token during reconnection", async () => {
+    insertAccount("person@example.com", createUserOwnedCredentials());
+    stubSuccessfulGoogleAuthorization("person@example.com", "Person", null);
+    const { state } = await startAuthorization();
+    await handleGoogleAuthCallback({ code: "authorization-code", state });
+
+    const body = await captureAccountRefreshRequest("person@example.com");
+    expect(body.get("refresh_token")).toBe("refresh-token");
+  });
+
+  it("counts only visible accounts and tracks read, reconnect, and disconnect changes", async () => {
+    insertAccount("first@example.com", createUserOwnedCredentials());
+    insertAccount("second@example.com", createUserOwnedCredentials());
+    insertAccount(
+      "legacy@example.com",
+      Buffer.from(JSON.stringify({ accessToken: "legacy-token" }))
+    );
+    insertAccount("broken@example.com", Buffer.from("{}"));
+    for (const accountId of [
+      "first@example.com",
+      "second@example.com",
+      "legacy@example.com",
+      "broken@example.com",
+    ]) {
+      insertUnreadThread(accountId);
+    }
+    await Effect.runPromise(refreshUnreadBadge());
+    expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(2);
+
+    connection
+      .prepare("UPDATE gmail_threads SET is_unread = 0 WHERE account_email = ?")
+      .run("first@example.com");
+    await Effect.runPromise(refreshUnreadBadge());
+    expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(1);
+    connection
+      .prepare(
+        "UPDATE gmail_threads SET is_unread = 1, is_in_inbox = 0 WHERE account_email = ?"
+      )
+      .run("first@example.com");
+    await Effect.runPromise(refreshUnreadBadge());
+    expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(1);
+
+    connection
+      .prepare("UPDATE google_accounts SET credentials = ? WHERE email = ?")
+      .run(createUserOwnedCredentials(), "legacy@example.com");
+    await Effect.runPromise(refreshUnreadBadge());
+    expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(2);
+
+    connection.prepare("DELETE FROM google_accounts").run();
+    await Effect.runPromise(refreshUnreadBadge());
+    expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(0);
+  });
+
+  it("replaces a missing default client while keeping connected account grants", async () => {
+    await Effect.runPromise(setupGoogleOAuthClient());
+    insertAccount("person@example.com", createUserOwnedCredentials());
+    await rm(path.join(electronState.userDataPath, "google-oauth-client.bin"));
+    await expect(
+      Effect.runPromise(getGoogleOAuthClientStatus())
+    ).resolves.toBeFalsy();
+    await expect(Effect.runPromise(listGoogleAccounts())).resolves.toHaveLength(
+      1
+    );
+
+    electronState.credentialsPath = path.join(
+      electronState.userDataPath,
+      "replacement.json"
+    );
+    const replacementClientId = "replacement.apps.googleusercontent.com";
+    await writeFile(
+      electronState.credentialsPath,
+      JSON.stringify({
+        installed: {
+          client_id: replacementClientId,
+          client_secret: "replacement-secret",
+        },
+      })
+    );
+    await expect(
+      Effect.runPromise(setupGoogleOAuthClient())
+    ).resolves.toBeTruthy();
+    const { authorizationUrl } = await startAuthorization();
+    expect(authorizationUrl.searchParams.get("client_id")).toBe(
+      replacementClientId
+    );
+
+    const body = await captureAccountRefreshRequest("person@example.com");
+    expect({
+      clientId: body.get("client_id"),
+      refreshToken: body.get("refresh_token"),
+    }).toStrictEqual({
+      clientId: electronState.clientId,
+      refreshToken: "refresh-token",
+    });
   });
 
   it("reorders reconnected accounts while legacy accounts remain hidden", async () => {
