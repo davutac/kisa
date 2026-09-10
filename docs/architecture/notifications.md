@@ -14,7 +14,7 @@ A notification may use a BIMI sender logo only when Kisa already has a valid, un
 
 If the logo cannot be validated or converted to a native image, the notification falls back to the normal app presentation. Clicking an alert—or its Open action on platforms that expose notification actions—opens and focuses the exact account-scoped conversation in a thread window. The Mark as read action applies the same account-scoped Gmail and local-cache mutation as the mailbox, without opening a window. If a conversation window cannot be created, Kisa restores and focuses the main window instead.
 
-When Kisa successfully marks a thread as read, it closes any still-active notifications for that account and Gmail thread. The account scope prevents colliding Gmail thread IDs from dismissing another account's alerts.
+Kisa closes active notifications when it marks a thread as read or publishes a saved thread update showing it is read. This includes external read-state changes discovered by sync. Unread threads and reload events leave alerts alone. Dismissal matches both the account and Gmail thread ID, so another account's alerts stay visible.
 
 ## Platform behavior
 
