@@ -5,6 +5,7 @@ import sharp from "sharp";
 
 import type {
   GmailSenderBrand,
+  GmailThreadListChange,
   GmailThreadRequest,
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database-query";
@@ -225,6 +226,19 @@ export const dismissThreadNotifications = (
       notification.close();
     } catch {
       // Notification dismissal is best-effort after the mail mutation succeeds.
+    }
+  }
+};
+
+export const dismissReadThreadNotifications = (
+  changes: readonly GmailThreadListChange[]
+): void => {
+  for (const change of changes) {
+    if (change.kind === "upsert" && !change.thread.isUnread) {
+      dismissThreadNotifications(
+        change.thread.accountId,
+        change.thread.threadId
+      );
     }
   }
 };

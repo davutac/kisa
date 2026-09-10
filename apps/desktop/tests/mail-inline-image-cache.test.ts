@@ -12,6 +12,7 @@ import type { withDatabaseClient } from "../src/main/database";
 import type { sendRendererEvent } from "../src/main/electron/renderer-events";
 import { loadFullThread } from "../src/main/mail/mail-sync";
 import type {
+  dismissReadThreadNotifications,
   dismissThreadNotifications,
   showNewMailNotifications,
 } from "../src/main/mail/new-mail-notifications";
@@ -39,6 +40,8 @@ vi.mock(import("../src/main/electron/renderer-events"), () => ({
 }));
 
 vi.mock(import("../src/main/mail/new-mail-notifications"), () => ({
+  dismissReadThreadNotifications:
+    vi.fn<typeof dismissReadThreadNotifications>(),
   dismissThreadNotifications: vi.fn<typeof dismissThreadNotifications>(),
   showNewMailNotifications: vi.fn<typeof showNewMailNotifications>(),
 }));
