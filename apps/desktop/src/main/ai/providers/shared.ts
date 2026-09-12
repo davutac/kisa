@@ -17,7 +17,7 @@ export const GENERATION_TIMEOUT_MS = 180_000;
 export const PROVIDER_PROBE_TIMEOUT_MS = 15_000;
 
 export const parseCliVersion = (output: string): string | undefined =>
-  /\b(?<version>\d+\.\d+\.\d+)\b/u.exec(output)?.groups?.["version"];
+  /\bv?(?<version>\d+\.\d+\.\d+)\b/u.exec(output)?.groups?.["version"];
 
 const PROVIDER_NAMES = {
   claude: "Claude Code",

@@ -28,7 +28,7 @@ catalog:
   "@electron-toolkit/utils": ^4.0.0
   "@fontsource-variable/geist": ^5.3.0
   "@googleapis/gmail": ^18.0.0
-  "@opencode-ai/sdk": ^1.18.29
+  "@opencode/client": ^2.0.2
   "@oxlint/plugins": ^1.81.0
   "@rolldown/plugin-babel": ^0.2.3
   "@tailwindcss/vite": ^4.3.3
@@ -105,6 +105,9 @@ minimumReleaseAgeExclude:
   - "@turbo/*"
   - turbo
   - ultracite
+  - "@opencode/client@2.0.2"
+  - "@opencode/protocol@2.0.2"
+  - "@opencode/schema@2.0.2"
 
 # effect-tsgo ships replacements for exact upstream tool versions. Upgrade this
 # cohort together only after the matching artifacts appear in its platform packages.

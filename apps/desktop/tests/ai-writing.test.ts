@@ -16,12 +16,11 @@ import {
   getCodexReasoningArgs,
   mapCodexReasoningOptions,
 } from "../src/main/ai/providers/codex";
+import { extractJsonObject } from "../src/main/ai/providers/opencode";
 import {
-  getOpenCodeReasoningInput,
   inferOpenCodeDefaultVariant,
-  extractJsonObject,
-  parseOpenCodeModels,
-} from "../src/main/ai/providers/opencode";
+  mapOpenCodeModels,
+} from "../src/main/ai/providers/opencode-catalog";
 import {
   parseCliVersion,
   toJsonSchemaObject,
@@ -182,9 +181,6 @@ describe("AI provider output parsing", () => {
       "--effort",
       "xhigh",
     ]);
-    expect(getOpenCodeReasoningInput("high")).toStrictEqual({
-      variant: "high",
-    });
   });
 
   it("maps Claude Haiku thinking to the native settings shape", () => {
@@ -202,7 +198,6 @@ describe("AI provider output parsing", () => {
   it("omits reasoning when no explicit value is available", () => {
     expect(getCodexReasoningArgs()).toStrictEqual([]);
     expect(getClaudeReasoningArgs()).toStrictEqual([]);
-    expect(getOpenCodeReasoningInput()).toStrictEqual({});
   });
 
   it("preserves current and future Codex reasoning ids from app-server", () => {
@@ -298,18 +293,29 @@ describe("AI provider output parsing", () => {
 
   it("extracts a semantic version from provider CLI output", () => {
     expect(parseCliVersion("codex-cli 0.147.0 beta")).toBe("0.147.0");
+    expect(parseCliVersion("opencode v2.0.2")).toBe("2.0.2");
     expect(parseCliVersion("version unknown")).toBeUndefined();
   });
 
-  it("parses OpenCode's verbose provider/model inventory", () => {
-    const output = [
-      "anthropic/claude-sonnet-5",
-      JSON.stringify({ name: "Claude Sonnet 5", providerID: "anthropic" }),
-      "openai/gpt-5.6-luna",
-      JSON.stringify({ name: "GPT-5.6 Luna", providerID: "openai" }),
-    ].join("\n");
-
-    expect(parseOpenCodeModels(output)).toStrictEqual([
+  it("maps OpenCode's V2 model catalog", () => {
+    expect(
+      mapOpenCodeModels([
+        {
+          enabled: true,
+          id: "claude-sonnet-5",
+          name: "Claude Sonnet 5",
+          providerID: "anthropic",
+          variants: [],
+        },
+        {
+          enabled: true,
+          id: "gpt-5.6-luna",
+          name: "GPT-5.6 Luna",
+          providerID: "openai",
+          variants: [],
+        },
+      ])
+    ).toStrictEqual([
       {
         id: "anthropic/claude-sonnet-5",
         isDefault: false,
@@ -327,20 +333,33 @@ describe("AI provider output parsing", () => {
     ]);
   });
 
-  it("parses multiline OpenCode model metadata", () => {
-    const output = [
-      "anthropic/claude-sonnet-5",
-      "{",
-      '  "name": "Claude Sonnet 5",',
-      '  "providerID": "anthropic"',
-      "}",
-    ].join("\n");
-
-    expect(parseOpenCodeModels(output)).toStrictEqual([
+  it("excludes disabled and duplicate models while preserving provider identity", () => {
+    const model = {
+      enabled: true,
+      id: "alias/model",
+      name: "",
+      providerID: "local",
+      variants: [],
+    };
+    expect(
+      mapOpenCodeModels([
+        model,
+        model,
+        { ...model, enabled: false, providerID: "disabled" },
+        { ...model, providerID: "other" },
+      ])
+    ).toStrictEqual([
       {
-        id: "anthropic/claude-sonnet-5",
+        id: "local/alias/model",
         isDefault: false,
-        name: "Claude Sonnet 5",
+        name: "local/alias/model",
+        optionLabel: "Variant",
+        reasoningOptions: [],
+      },
+      {
+        id: "other/alias/model",
+        isDefault: false,
+        name: "other/alias/model",
         optionLabel: "Variant",
         reasoningOptions: [],
       },
@@ -349,18 +368,16 @@ describe("AI provider output parsing", () => {
 
   it("reads model-specific OpenCode reasoning variants", () => {
     const output = [
-      "openai/gpt-5.6-luna",
-      JSON.stringify({
+      {
+        enabled: true,
+        id: "gpt-5.6-luna",
         name: "GPT-5.6 Luna",
-        variants: {
-          high: { reasoningEffort: "high" },
-          low: { reasoningEffort: "low" },
-          unavailable: { disabled: true },
-        },
-      }),
-    ].join("\n");
+        providerID: "openai",
+        variants: [{ id: "high" }, { id: "low" }],
+      },
+    ];
 
-    expect(parseOpenCodeModels(output)).toStrictEqual([
+    expect(mapOpenCodeModels(output)).toStrictEqual([
       {
         id: "openai/gpt-5.6-luna",
         isDefault: false,
