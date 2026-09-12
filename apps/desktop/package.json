@@ -36,7 +36,7 @@
     "@electron-toolkit/utils": "catalog:",
     "@fontsource-variable/geist": "catalog:",
     "@googleapis/gmail": "catalog:",
-    "@opencode-ai/sdk": "catalog:",
+    "@opencode/client": "catalog:",
     "@repo/database": "workspace:*",
     "@repo/gmail": "workspace:*",
     "@tanstack/react-hotkeys": "catalog:",
