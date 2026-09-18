@@ -99,9 +99,27 @@ const loadOpenCodeModels = Effect.fn("loadOpenCodeModels")(
       ).pipe(Effect.timeoutOption(5000), Effect.ignore)
     );
     const inventory = yield* Effect.gen(function* readInventory() {
-      yield* catalogRequest((signal) =>
-        client.plugin.awaitActivation({ location }, { signal })
-      );
+      yield* catalogRequest(async (signal) => {
+        let locationDirectory: string | undefined;
+        // Subscribe before creating the location so cold-start plugin updates cannot be missed.
+        for await (const event of client.event.subscribe({ signal })) {
+          if (
+            event.type === "server.connected" &&
+            locationDirectory === undefined
+          ) {
+            const info = await client.location.get({ location }, { signal });
+            locationDirectory = info.directory;
+          }
+          if (
+            event.type === "plugin.updated" &&
+            locationDirectory !== undefined &&
+            event.location?.directory === locationDirectory
+          ) {
+            return;
+          }
+        }
+        throw new Error("OpenCode plugin event stream ended before activation");
+      });
       return yield* Effect.all(
         {
           models: catalogRequest((signal) =>

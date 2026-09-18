@@ -67,11 +67,13 @@ See the [desktop architecture](docs/architecture/desktop.md) and [Gmail API capa
 
 ## Run from source
 
-pnpm 12.3.4 is pinned through `packageManager`.
+pnpm 12.4.2 is pinned through `packageManager`.
 
-Dependency versions live in `pnpm-workspace.yaml`. Effect and `@effect/vitest` use the same v4 release candidate; Vitest stays on v4 until that integration supports v5. Astro's checker uses the separate TypeScript 6 catalog because it requires the JavaScript compiler API. Upgrade `@effect/tsgo`, TypeScript, Oxlint, and `oxlint-tsgolint` together after checking the matching patch artifacts.
+Dependency versions live in `pnpm-workspace.yaml`. Effect and `@effect/vitest` use the same v4 release candidate (currently RC 115) with Vitest 5. Astro's checker uses the separate TypeScript 6 catalog because it requires the JavaScript compiler API. Upgrade `@effect/tsgo`, TypeScript, Oxlint, and `oxlint-tsgolint` together after checking the matching patch artifacts.
 
 The verified lint toolchain is `@effect/tsgo` 0.36.5, Oxlint 1.78.0, and Ultracite 7.10.5. Newer releases require a separate React Compiler lint migration and currently flag valid TypeScript schema/type name pairs as redeclarations. Keep these versions together until they can pass the existing checks without additional suppressions.
+
+OpenCode uses the 2.0.8 client. Scoped overrides keep its Effect peer and schema/protocol dependencies on the workspace Effect catalog. See [AI writing](docs/architecture/ai-writing.md) for provider lifecycle and isolation details.
 
 ```bash
 pnpm install
