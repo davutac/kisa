@@ -99,7 +99,7 @@ import {
 import type { CachedThreadRow } from "./mailbox-page";
 import type { NewMailNotificationMessage } from "./new-mail-notifications";
 import {
-  dismissReadThreadNotifications,
+  dismissInactiveThreadNotifications,
   dismissThreadNotifications,
   showNewMailNotifications,
 } from "./new-mail-notifications";
@@ -456,7 +456,7 @@ const publishThreadListUpdated = Effect.fn("publishThreadListUpdated")(
   function* publishThreadListUpdated(
     changes: readonly GmailThreadListChange[]
   ) {
-    yield* Effect.sync(() => dismissReadThreadNotifications(changes));
+    yield* Effect.sync(() => dismissInactiveThreadNotifications(changes));
     yield* Effect.try({
       catch: () =>
         new MailSyncError({ message: "Could not publish email update" }),

@@ -230,11 +230,19 @@ export const dismissThreadNotifications = (
   }
 };
 
-export const dismissReadThreadNotifications = (
+export const dismissInactiveThreadNotifications = (
   changes: readonly GmailThreadListChange[]
 ): void => {
   for (const change of changes) {
-    if (change.kind === "upsert" && !change.thread.isUnread) {
+    if (change.kind === "remove") {
+      dismissThreadNotifications(change.accountId, change.threadId);
+    } else if (
+      change.kind === "upsert" &&
+      (!change.thread.isUnread ||
+        !change.thread.labels.includes(GMAIL_INBOX_LABEL) ||
+        change.thread.labels.includes("TRASH") ||
+        change.thread.labels.includes("SPAM"))
+    ) {
       dismissThreadNotifications(
         change.thread.accountId,
         change.thread.threadId

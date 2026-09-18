@@ -4,7 +4,7 @@ import type * as Electron from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  dismissReadThreadNotifications,
+  dismissInactiveThreadNotifications,
   dismissThreadNotifications,
   selectNewMailNotificationMessages,
   showNewMailNotifications,
@@ -277,80 +277,105 @@ describe(showNewMailNotifications, () => {
     });
   });
 
-  it("dismisses only notifications for the matching account and thread", async () => {
-    mocks.messages = [
-      { ...makeMessage("first", ["INBOX", "UNREAD"]), threadId: "shared" },
-      { ...makeMessage("second", ["INBOX", "UNREAD"]), threadId: "shared" },
-      makeMessage("other", ["INBOX", "UNREAD"]),
-    ];
-    mocks.threads = [
-      { snippet: "Shared", threadId: "shared" },
-      { snippet: "Other", threadId: "thread-other" },
-    ];
-
-    await Effect.runPromise(
-      showNotifications("user@example.com", ["first", "second", "other"], () =>
-        Effect.succeed(null)
-      )
-    );
-    mocks.messages = [
-      { ...makeMessage("first", ["INBOX", "UNREAD"]), threadId: "shared" },
-    ];
-    await Effect.runPromise(
-      showNotifications("other@example.com", ["first"], () =>
-        Effect.succeed(null)
-      )
-    );
-
-    dismissThreadNotifications("user@example.com", "shared");
-
-    expect(mocks.closedNotificationIds).toStrictEqual([
-      "user@example.com:first",
-      "user@example.com:second",
-    ]);
-  });
-
-  it("dismisses synced read threads while preserving unread and other-account alerts", async () => {
-    mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
-    mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
-    await Promise.all(
-      ["user@example.com", "other@example.com"].map((accountId) =>
-        Effect.runPromise(
-          showNotifications(accountId, ["new"], () => Effect.succeed(null))
+  it.each(["direct dismissal", "saved removal"])(
+    "dismisses only the matching account and thread via %s",
+    async (source) => {
+      mocks.messages = [
+        { ...makeMessage("first", ["INBOX", "UNREAD"]), threadId: "shared" },
+        { ...makeMessage("second", ["INBOX", "UNREAD"]), threadId: "shared" },
+        makeMessage("other", ["INBOX", "UNREAD"]),
+      ];
+      await Promise.all(
+        ["user@example.com", "other@example.com"].map((accountId) =>
+          Effect.runPromise(
+            showNotifications(accountId, ["first", "second", "other"], () =>
+              Effect.succeed(null)
+            )
+          )
         )
-      )
-    );
+      );
 
-    const thread = {
-      accountId: "user@example.com",
-      attachments: [],
-      from: "sender@example.com",
-      hasAttachments: false,
+      if (source === "direct dismissal") {
+        dismissThreadNotifications("user@example.com", "shared");
+      } else {
+        const removal = {
+          accountId: "user@example.com",
+          kind: "remove" as const,
+          threadId: "shared",
+        };
+        dismissInactiveThreadNotifications([removal, removal]);
+      }
+
+      expect(mocks.closedNotificationIds).toStrictEqual([
+        "user@example.com:first",
+        "user@example.com:second",
+      ]);
+    }
+  );
+
+  it.each([
+    { isUnread: false, labels: ["INBOX"], state: "read" },
+    { isUnread: true, labels: [], state: "archived" },
+    { isUnread: true, labels: ["TRASH"], state: "trashed" },
+    { isUnread: true, labels: ["SPAM"], state: "spam" },
+    {
       isUnread: true,
-      labels: ["INBOX"],
-      latestAt: 1,
-      messageCount: 1,
-      snippet: "Preview",
-      subject: "Subject",
-      threadId: "thread-new",
-    };
-    dismissReadThreadNotifications([
-      { accountId: thread.accountId, kind: "reload" },
-      { kind: "upsert", thread },
-    ]);
-    expect(mocks.closedNotificationIds).toStrictEqual([]);
+      labels: ["INBOX", "TRASH"],
+      state: "trashed with Inbox label",
+    },
+    {
+      isUnread: true,
+      labels: ["INBOX", "SPAM"],
+      state: "spam with Inbox label",
+    },
+  ])(
+    "dismisses $state threads while preserving unread Inbox and other-account alerts",
+    async ({ isUnread, labels }) => {
+      mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
+      mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
+      await Promise.all(
+        ["user@example.com", "other@example.com"].map((accountId) =>
+          Effect.runPromise(
+            showNotifications(accountId, ["new"], () => Effect.succeed(null))
+          )
+        )
+      );
 
-    dismissReadThreadNotifications([
-      { kind: "upsert", thread: { ...thread, isUnread: false } },
-    ]);
-    expect(mocks.closedNotificationIds).toStrictEqual(["user@example.com:new"]);
+      const thread = {
+        accountId: "user@example.com",
+        attachments: [],
+        from: "sender@example.com",
+        hasAttachments: false,
+        isUnread: true,
+        labels: ["INBOX"],
+        latestAt: 1,
+        messageCount: 1,
+        snippet: "Preview",
+        subject: "Subject",
+        threadId: "thread-new",
+      };
+      dismissInactiveThreadNotifications([
+        { accountId: thread.accountId, kind: "reload" },
+        { kind: "upsert", thread },
+      ]);
+      expect(mocks.closedNotificationIds).toStrictEqual([]);
 
-    // Replayed sync results must not close an already dismissed alert again.
-    dismissReadThreadNotifications([
-      { kind: "upsert", thread: { ...thread, isUnread: false } },
-    ]);
-    expect(mocks.closedNotificationIds).toStrictEqual(["user@example.com:new"]);
-  });
+      dismissInactiveThreadNotifications([
+        { kind: "upsert", thread: { ...thread, isUnread, labels } },
+      ]);
+      expect(mocks.closedNotificationIds).toStrictEqual([
+        "user@example.com:new",
+      ]);
+
+      // Replayed sync results must not close an already dismissed alert again.
+      dismissInactiveThreadNotifications([
+        { kind: "upsert", thread: { ...thread, isUnread, labels } },
+      ]);
+      expect(mocks.closedNotificationIds).toStrictEqual([
+        "user@example.com:new",
+      ]);
+    }
+  );
 
   it.each([
     ["Open action", "action", { actionIndex: 0 }],
