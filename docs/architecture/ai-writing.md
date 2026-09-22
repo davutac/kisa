@@ -14,6 +14,8 @@ Kisa uses the user's existing command-line subscriptions and credentials. It doe
 
 The OpenCode model picker groups models into submenus by their upstream provider while preserving the explicit `provider/model` value for selection and generation.
 
+The Claude catalog includes [Opus 5.5](https://platform.claude.com/docs/en/models/opus-5-5/overview) (`claude-opus-5-5`) with low, medium, high, xhigh, and max effort; medium is its default. It requires Claude Code 2.1.280 or later, matching its [CLI introduction](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21280).
+
 The process environment includes the interactive login shell's `PATH` so a packaged desktop app can locate user-installed CLIs. Provider stderr and raw failures never cross IPC. Generation has startup and request timeouts. Interruption terminates Kisa-owned child processes and aborts OpenCode HTTP requests. Kisa does not stop the shared OpenCode service.
 
 This provider design is adapted from [T3 Code](https://github.com/pingdotgg/t3code), pinned during implementation at commit `97db94c9bf6fa5d83f94c8fff85566d7fc96276e`. The provider/model alignment was reviewed again against upstream commit `2daff8c25adf701fddd062ae93b94cc57d420ec2`; see [the dated comparison](../research/2026-08-30-t3code-provider-model-options-alignment.md). See the root third-party notice for its license.

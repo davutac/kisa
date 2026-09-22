@@ -181,6 +181,10 @@ describe("AI provider output parsing", () => {
       "--effort",
       "xhigh",
     ]);
+    expect(getClaudeReasoningArgs("xhigh", "claude-opus-5-5")).toStrictEqual([
+      "--effort",
+      "xhigh",
+    ]);
   });
 
   it("maps Claude Haiku thinking to the native settings shape", () => {
@@ -223,6 +227,7 @@ describe("AI provider output parsing", () => {
     expect(CLAUDE_MODELS.map(({ id }) => id)).toStrictEqual([
       "claude-fable-5-1",
       "claude-fable-5",
+      "claude-opus-5-5",
       "claude-opus-5",
       "claude-sonnet-5",
       "claude-opus-4-8",
@@ -265,7 +270,7 @@ describe("AI provider output parsing", () => {
     expect(
       getClaudeModelsForVersion("2.1.169").map(({ id }) => id)
     ).not.toContain("claude-opus-5");
-    expect(getClaudeModelsForVersion("2.1.257")).toHaveLength(
+    expect(getClaudeModelsForVersion("2.1.280")).toHaveLength(
       CLAUDE_MODELS.length
     );
     expect(getClaudeModelsForVersion()).toStrictEqual(
@@ -283,6 +288,28 @@ describe("AI provider output parsing", () => {
     expect(getClaudeModelsForVersion("2.1.257").map(({ id }) => id)).toContain(
       "claude-fable-5-1"
     );
+  });
+
+  it("requires Claude Code 2.1.280 for Opus 5.5 and defaults to medium effort", () => {
+    for (const version of [undefined, "2.1.279"]) {
+      expect(
+        getClaudeModelsForVersion(version).map(({ id }) => id)
+      ).not.toContain("claude-opus-5-5");
+    }
+    expect(
+      getClaudeModelsForVersion("2.1.280").find(
+        ({ id }) => id === "claude-opus-5-5"
+      )
+    ).toMatchObject({
+      name: "Opus 5.5",
+      reasoningOptions: [
+        { id: "low" },
+        { id: "medium", isDefault: true },
+        { id: "high" },
+        { id: "xhigh" },
+        { id: "max" },
+      ],
+    });
   });
 
   it("uses a provider-compatible schema for cleanup generation", () => {
