@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { useRemeasureOnScrollSettle } from "@/hooks/use-remeasure-on-scroll-settle";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
 import type { ThreadSelectionDirection } from "@/mail/thread-selection";
 import {
@@ -73,6 +74,7 @@ export const useScheduledMailWorkspace = () => {
   const openingKeyRef = useRef<string | null>(null);
   const pendingFocusKeyRef = useRef<string | null | false>(false);
   const editOriginKeyRef = useRef<string | null>(null);
+  const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
   const virtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
     count:
       items.length + (nextCursor === undefined || error !== undefined ? 0 : 1),
@@ -84,6 +86,7 @@ export const useScheduledMailWorkspace = () => {
         : getScheduledMailKey(item);
     },
     getScrollElement: () => scrollRef.current,
+    onChange: remeasureOnScrollSettle,
     overscan: 8,
     scrollPaddingEnd: 24,
     scrollPaddingStart: 24,

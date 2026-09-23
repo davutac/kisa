@@ -24,6 +24,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { useRemeasureOnScrollSettle } from "@/hooks/use-remeasure-on-scroll-settle";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
 import {
   getBulkThreadDestructiveAction,
@@ -152,6 +153,7 @@ const MailThreadList = ({
   // keys off `hasNextPage`, so a note cannot start a paging loop.
   const hasTrailingRow = hasNextPage || trailingMessage !== undefined;
   const presentation = getThreadListPresentation(searchResults, mailbox);
+  const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
     count: threads.length + (hasTrailingRow ? 1 : 0),
     estimateSize: () => 88,
@@ -162,6 +164,7 @@ const MailThreadList = ({
         : `${thread.accountId}:${thread.threadId}`;
     },
     getScrollElement: () => scrollElementRef.current,
+    onChange: remeasureOnScrollSettle,
     overscan: 8,
     scrollPaddingEnd: 24,
     scrollPaddingStart: 24,
