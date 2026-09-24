@@ -196,6 +196,7 @@ const toMessageValues = (
       filename: attachment.filename,
       mediaType: attachment.mediaType,
       messageId: attachment.messageId,
+      partId: attachment.partId,
       size: attachment.size,
     })),
     bccAddresses: toAddresses(message.bcc),
@@ -562,6 +563,7 @@ export const GmailStoreLive = Layer.succeed(
             filename: attachment.filename,
             mediaType: attachment.mediaType,
             messageId: attachment.messageId,
+            partId: attachment.partId,
             size: attachment.size,
           }))
         );
@@ -885,6 +887,7 @@ export const GmailStoreLive = Layer.succeed(
                 filename: attachment.filename,
                 mediaType: attachment.mediaType,
                 messageId: attachment.messageId,
+                partId: attachment.partId,
                 size: attachment.size,
               })),
               // `participants[0]` is the newest message's sender.

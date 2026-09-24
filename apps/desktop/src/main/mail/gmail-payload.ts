@@ -25,6 +25,7 @@ export interface PayloadPart {
   readonly filename?: string | null;
   readonly headers?: readonly PayloadHeader[];
   readonly mimeType?: string | null;
+  readonly partId?: string | null;
   readonly parts?: readonly PayloadPart[];
 }
 
@@ -85,6 +86,7 @@ export const collectAttachments = (
       filename,
       mediaType: part.mimeType ?? "application/octet-stream",
       messageId: MessageId.make(messageId),
+      partId: part.partId ?? undefined,
       size: part.body?.size ?? 0,
     }),
     ...nested,

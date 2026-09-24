@@ -317,6 +317,7 @@ const toCachedThreadMessage = (
       filename: attachment.filename,
       mediaType: attachment.mediaType,
       messageId: attachment.messageId,
+      partId: attachment.partId,
       size: attachment.size,
     })),
     bcc: bcc.length === 0 ? undefined : bcc,
@@ -390,6 +391,7 @@ const readCachedConversation = Effect.fn("readCachedConversation")(
                       filename: attachment.filename,
                       mediaType: attachment.mediaType,
                       messageId: MessageId.make(attachment.messageId),
+                      partId: attachment.partId,
                       size: attachment.size,
                     },
                   ]
@@ -680,6 +682,7 @@ const toThreadMessage = (
       filename: attachment.filename,
       mediaType: attachment.mediaType,
       messageId: attachment.messageId,
+      partId: attachment.partId,
       size: attachment.size,
     })),
     bcc: bcc.length === 0 ? undefined : bcc,

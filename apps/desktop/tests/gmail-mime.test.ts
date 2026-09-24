@@ -177,6 +177,7 @@ describe("GmailMime.parseThread", () => {
           filename: "logo.png",
           headers: [{ name: "Content-ID", value: "<logo@example>" }],
           mimeType: "image/png",
+          partId: "1",
         },
       ],
     });
@@ -187,6 +188,7 @@ describe("GmailMime.parseThread", () => {
         contentId: "logo@example",
         filename: "logo.png",
         mediaType: "image/png",
+        partId: "1",
         size: 12,
       }),
     ]);

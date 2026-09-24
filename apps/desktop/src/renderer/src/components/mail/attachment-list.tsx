@@ -33,6 +33,7 @@ const MailAttachmentList = ({
       accountId,
       attachmentId: attachment.attachmentId,
       messageId: attachment.messageId,
+      partId: attachment.partId,
     };
     setActiveAttachment(key);
 

@@ -116,6 +116,11 @@ export class AttachmentSummary extends Schema.Class<AttachmentSummary>(
   filename: Schema.NonEmptyString,
   mediaType: Schema.NonEmptyString,
   messageId: MessageId,
+  /**
+   * Gmail mints a new `attachmentId` on every fetch of a message, so it cannot
+   * identify an attachment across cache rewrites. The MIME part id can.
+   */
+  partId: Schema.optional(Schema.String),
   size: NonNegativeInt,
 }) {}
 
