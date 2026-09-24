@@ -9,6 +9,7 @@ export const GmailAttachmentSummary = Schema.Struct({
   filename: Schema.String,
   mediaType: Schema.String,
   messageId: Schema.String,
+  partId: Schema.optional(Schema.String),
   size: Schema.Finite,
 });
 export type GmailAttachmentSummary = typeof GmailAttachmentSummary.Type;
@@ -17,6 +18,7 @@ export const GmailAttachmentRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   attachmentId: Schema.NonEmptyString,
   messageId: Schema.NonEmptyString,
+  partId: Schema.optional(Schema.String),
 });
 export type GmailAttachmentRequest = typeof GmailAttachmentRequest.Type;
 

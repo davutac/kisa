@@ -32,6 +32,7 @@ const regularAttachment = {
   filename: "notes.pdf",
   mediaType: "application/pdf",
   messageId: "message-1",
+  partId: "2",
   size: 42,
 };
 
@@ -158,6 +159,7 @@ describe("cached inline images", () => {
             filename: "photo.png",
             mediaType: "image/png",
             messageId: "message-1",
+            partId: "1",
             size: Buffer.from(state.inlineImageBase64, "base64").byteLength,
           },
           regularAttachment,

@@ -118,11 +118,22 @@ const resolveAttachment = Effect.fn("resolveAttachment")(
         },
       })
     ).pipe(Effect.mapError(() => actionError("Could not find attachment")));
-    const attachment = row?.attachments?.find(
-      (candidate) => candidate.attachmentId === request.attachmentId
-    );
+    // Refetches rewrite the cached attachment id, so the renderer's may be
+    // stale; fall back to the stable part id and fetch with the cached id.
+    const attachments = row?.attachments ?? [];
+    const attachment =
+      attachments.find(
+        (candidate) => candidate.attachmentId === request.attachmentId
+      ) ??
+      (request.partId === undefined
+        ? undefined
+        : attachments.find((candidate) => candidate.partId === request.partId));
 
-    if (row === undefined || attachment === undefined) {
+    if (
+      row === undefined ||
+      attachment === undefined ||
+      attachment.attachmentId === undefined
+    ) {
       return yield* actionError("This attachment is not available yet");
     }
 
@@ -132,7 +143,7 @@ const resolveAttachment = Effect.fn("resolveAttachment")(
 
     return {
       accountId: request.accountId,
-      attachmentId: request.attachmentId,
+      attachmentId: attachment.attachmentId,
       filename: sanitizeAttachmentFilename(attachment.filename),
       mediaType: attachment.mediaType,
       messageId: request.messageId,

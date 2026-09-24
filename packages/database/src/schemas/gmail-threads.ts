@@ -12,6 +12,7 @@ export interface CachedGmailAttachment {
   filename: string;
   mediaType: string;
   messageId: string;
+  partId?: string;
   size: number;
 }
 

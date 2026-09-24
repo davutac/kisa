@@ -109,6 +109,7 @@ vi.mock("../src/main/database", () => ({
                     filename: "report.pdf",
                     mediaType: "application/pdf",
                     messageId: "message-1",
+                    partId: "1",
                     size: 1024,
                   },
                 ],
@@ -159,6 +160,20 @@ describe("attachment actions", () => {
       expect.stringContaining("attachment-preview.html")
     );
     expect(state.databaseReads).toBe(2);
+  });
+
+  it("resolves an attachment whose Gmail id was reminted by its stable part id", async () => {
+    const stale = { ...request, attachmentId: "attachment-from-earlier-fetch" };
+
+    await Effect.runPromise(openAttachmentPreview({ ...stale, partId: "1" }));
+    expect(state.createdWindows).toHaveLength(1);
+
+    await expect(
+      Effect.runPromise(openAttachmentPreview(stale))
+    ).rejects.toThrow("This attachment is not available yet");
+    await expect(
+      Effect.runPromise(openAttachmentPreview({ ...stale, partId: "2" }))
+    ).rejects.toThrow("This attachment is not available yet");
   });
 
   it("restores and saves attachment preview window state", async () => {

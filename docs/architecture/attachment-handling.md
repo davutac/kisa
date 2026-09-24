@@ -14,7 +14,9 @@ Mailbox and message metadata may be available offline, but attachment bytes are 
 
 ## Runtime ownership
 
-The normal renderer sends only `accountId`, `messageId`, and `attachmentId`. Main resolves the authoritative filename, media type, and declared size from the cached message using the composite account/message key. Renderer-supplied paths, filenames, media types, or bytes are never accepted.
+The normal renderer sends only `accountId`, `messageId`, `attachmentId`, and the MIME `partId` when known. Main resolves the authoritative filename, media type, and declared size from the cached message using the composite account/message key. Renderer-supplied paths, filenames, media types, or bytes are never accepted.
+
+Gmail mints a new `attachmentId` every time a message is fetched, and any refetch (opening a thread, background refresh, history sync, backfill) rewrites the cached one. A renderer can therefore hold an id the cache no longer contains. Main matches the exact `attachmentId` first, then falls back to the stable `partId` within the same message, and always downloads with the cached id.
 
 Main owns four narrow capabilities:
 
