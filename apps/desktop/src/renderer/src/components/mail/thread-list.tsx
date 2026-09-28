@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { MouseEvent, PointerEvent } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
 import {
@@ -182,6 +183,62 @@ const MailThreadList = ({
     [checkedThreadIds, threads]
   );
   const bulkDestructiveAction = getBulkThreadDestructiveAction(checkedThreads);
+  // This component calls `useVirtualizer`, so React Compiler skips it and every
+  // scroll range change re-renders it. Row props stay referentially stable so
+  // memoized rows skip that render; checked state is read at event time rather
+  // than captured, so toggling one row does not re-render the others.
+  const {
+    consumeSuppressedOpen,
+    onRowPointerDown,
+    onSelectionPointerDown,
+    onSelectionPointerEnter,
+  } = dragSelection;
+  const handleOpen = useCallback(
+    (target: GmailThreadSummary, event: MouseEvent): void => {
+      if (consumeSuppressedOpen(event.detail)) {
+        return;
+      }
+
+      const { checkedThreadIds: currentCheckedThreadIds } =
+        useMailboxStore.getState();
+
+      if (currentCheckedThreadIds.size === 0) {
+        openThread(target);
+        return;
+      }
+
+      const key = getThreadSelectionKey(target);
+      checkThread(key, !currentCheckedThreadIds.has(key));
+      selectThread(key);
+    },
+    [checkThread, consumeSuppressedOpen, openThread, selectThread]
+  );
+  const handleToggleSelection = useCallback(
+    (target: GmailThreadSummary): void => {
+      const key = getThreadSelectionKey(target);
+      checkThread(key, !useMailboxStore.getState().checkedThreadIds.has(key));
+      selectThread(key);
+    },
+    [checkThread, selectThread]
+  );
+  const handleRowPointerDown = useCallback(
+    (target: GmailThreadSummary, event: PointerEvent<HTMLButtonElement>) => {
+      onRowPointerDown(getThreadSelectionKey(target), event);
+    },
+    [onRowPointerDown]
+  );
+  const handleSelectionPointerDown = useCallback(
+    (target: GmailThreadSummary, event: PointerEvent) => {
+      onSelectionPointerDown(getThreadSelectionKey(target), event);
+    },
+    [onSelectionPointerDown]
+  );
+  const handleSelectionPointerEnter = useCallback(
+    (target: GmailThreadSummary) => {
+      onSelectionPointerEnter(getThreadSelectionKey(target));
+    },
+    [onSelectionPointerEnter]
+  );
   const handleToggleRead = actions.toggleRead;
   const requestDeleteForever = useCallback(
     async (thread: GmailThreadSummary): Promise<void> => {
@@ -472,49 +529,18 @@ const MailThreadList = ({
                     handleDeleteForever,
                     actions.trash
                   )}
-                  onOpen={(target, event) => {
-                    if (dragSelection.consumeSuppressedOpen(event.detail)) {
-                      return;
-                    }
-
-                    if (checkedThreadIds.size === 0) {
-                      openThread(target);
-                      return;
-                    }
-
-                    const key = getThreadSelectionKey(target);
-                    checkThread(key, !checkedThreadIds.has(key));
-                    selectThread(key);
-                  }}
-                  onRowPointerDown={(target, event) => {
-                    dragSelection.onRowPointerDown(
-                      getThreadSelectionKey(target),
-                      event
-                    );
-                  }}
+                  onOpen={handleOpen}
+                  onRowPointerDown={handleRowPointerDown}
                   onNotSpam={mailbox === "spam" ? actions.notSpam : undefined}
-                  onSelectionPointerDown={(target, event) => {
-                    dragSelection.onSelectionPointerDown(
-                      getThreadSelectionKey(target),
-                      event
-                    );
-                  }}
-                  onSelectionPointerEnter={(target) => {
-                    dragSelection.onSelectionPointerEnter(
-                      getThreadSelectionKey(target)
-                    );
-                  }}
+                  onSelectionPointerDown={handleSelectionPointerDown}
+                  onSelectionPointerEnter={handleSelectionPointerEnter}
                   onToggleRead={handleToggleRead}
-                  onToggleSelection={(target) => {
-                    const key = getThreadSelectionKey(target);
-                    checkThread(key, !checkedThreadIds.has(key));
-                    selectThread(key);
-                  }}
+                  onToggleSelection={handleToggleSelection}
                   position={virtualRow.index + 1}
                   ref={rowVirtualizer.measureElement}
                   setSize={threads.length}
                   showAccount={showAccount}
-                  style={{ top: virtualRow.start }}
+                  top={virtualRow.start}
                   thread={thread}
                 />
               );

@@ -1,5 +1,6 @@
 // oxlint-disable typescript/no-unsafe-type-assertion
 import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
 
 import {
   applyDatabaseMigrations,
@@ -120,6 +121,25 @@ const upsertThreadLabels = (
       Effect.provide(GmailStoreLive)
     )
   );
+
+const makeIndexedMessage = (thread: number, message: number, subject: string) =>
+  new GmailMessage({
+    attachments: [],
+    bcc: [],
+    body: {
+      hasBlockedRemoteImages: false,
+      sanitizedHtml: `<p>${subject} body ${thread}-${message}</p>`,
+      type: "html",
+    },
+    cc: [],
+    from: new Mailbox({ address: `sender-${thread}@example.com` }),
+    id: MessageId.make(`message-${thread}-${message}`),
+    labelIds: [LabelId.make("INBOX")],
+    sentAt: String(1000 + thread * 10 + message),
+    subject,
+    threadId: ThreadId.make(`thread-${thread}`),
+    to: [],
+  });
 
 describe("Gmail label store", () => {
   beforeEach(() => {
@@ -845,6 +865,104 @@ describe("Gmail label store", () => {
       is_in_spam: 1,
       spam_added_at: 400,
     });
+  });
+
+  it("writes a page spanning several statements and replaces changed rows", async () => {
+    const accountId = AccountId.make("person@example.com");
+    const otherAccountId = AccountId.make("other@example.com");
+    const threadCount = 120;
+    const makePage = (subject: string, messageCount: number) => ({
+      details: Array.from({ length: threadCount }, (_, thread) => {
+        const threadId = ThreadId.make(`thread-${thread}`);
+        return new GmailThread({
+          historyId: HistoryId.make("history-1"),
+          id: threadId,
+          labelIds: [LabelId.make("INBOX")],
+          messages: Array.from({ length: messageCount }, (_unused, message) =>
+            makeIndexedMessage(thread, message, subject)
+          ),
+        });
+      }),
+      summaries: Array.from(
+        { length: threadCount },
+        (_, thread) =>
+          new ThreadSummary({
+            attachments: [],
+            hasAttachments: false,
+            hasUnread: false,
+            id: ThreadId.make(`thread-${thread}`),
+            labelIds: [LabelId.make("INBOX")],
+            latestAt: String(1000 + thread * 10),
+            latestMessageId: MessageId.make(`message-${thread}-0`),
+            messageCount,
+            participants: [],
+            snippet: subject,
+            subject,
+          })
+      ),
+    });
+    const upsertPage = (page: ReturnType<typeof makePage>) =>
+      Effect.runPromise(
+        GmailStore.pipe(
+          Effect.flatMap((store) =>
+            store.upsertThreadDetails(accountId, page.summaries, page.details)
+          ),
+          Effect.provide(GmailStoreLive)
+        )
+      );
+    connection
+      .prepare(
+        `INSERT INTO gmail_messages (
+          account_email, body_text, from_address, internal_date, message_id,
+          schema_version, subject, thread_id, updated_at
+        ) VALUES (?, 'other body', 'sender@example.com', 1, 'message-0-2', 1,
+          'Other', 'thread-0', 1)`
+      )
+      .run(otherAccountId);
+
+    await upsertPage(makePage("First", 3));
+    await upsertPage(makePage("Second", 2));
+
+    expect(
+      connection
+        .prepare(
+          `SELECT count(*) AS threads, min(subject) AS first, max(subject) AS last
+           FROM gmail_threads WHERE account_email = ?`
+        )
+        .get(accountId)
+    ).toStrictEqual({ first: "Second", last: "Second", threads: threadCount });
+    expect(
+      connection
+        .prepare(
+          `SELECT count(*) AS messages, min(subject) AS first, max(subject) AS last
+           FROM gmail_messages WHERE account_email = ?`
+        )
+        .get(accountId)
+    ).toStrictEqual({
+      first: "Second",
+      last: "Second",
+      messages: threadCount * 2,
+    });
+    expect(
+      connection
+        .prepare(
+          `SELECT body_text FROM gmail_messages
+           WHERE account_email = ? AND message_id = 'message-0-2'`
+        )
+        .get(otherAccountId)
+    ).toStrictEqual({ body_text: "other body" });
+
+    const row = connection
+      .prepare(
+        `SELECT body_html, body_text FROM gmail_messages
+         WHERE account_email = ? AND message_id = 'message-119-1'`
+      )
+      .get(accountId) as { body_html: Buffer; body_text: string };
+
+    expect(gunzipSync(row.body_html).toString("utf-8")).toBe(
+      "<p>Second body 119-1</p>"
+    );
+    expect(row.body_text).toBe("Second body 119-1");
   });
 
   it("projects Sent and Trash membership from synchronized labels", async () => {
