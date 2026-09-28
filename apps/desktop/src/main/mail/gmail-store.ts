@@ -1,4 +1,5 @@
-import { gzipSync } from "node:zlib";
+import { promisify } from "node:util";
+import { gzip } from "node:zlib";
 
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import {
@@ -13,6 +14,7 @@ import type {
   GmailAuthorization,
   GmailMessage,
   GmailScope,
+  GmailThread,
   Mailbox,
 } from "@repo/gmail/models";
 import {
@@ -27,7 +29,9 @@ import {
   isGmailScope,
 } from "@repo/gmail/models";
 import { GmailStore } from "@repo/gmail/store";
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, getColumns, inArray, notInArray, sql } from "drizzle-orm";
+import type { InferInsertModel, SQL } from "drizzle-orm";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { Effect, Layer, Option, Redacted } from "effect";
 
 import { getGoogleAccessToken } from "../auth/auth";
@@ -39,6 +43,91 @@ import {
 import { toIndexText } from "./message-text";
 
 const storeError = (message: string) => new GmailStoreError({ message });
+
+const gzipAsync = promisify(gzip);
+
+/**
+ * Each statement is a round trip to the database process made while holding
+ * the connection that foreground reads wait on, so page writes are sent as
+ * multi-row statements. Chunks stay under SQLite's historical 999 bound
+ * parameter limit, counting every column as a parameter.
+ */
+const MAX_BOUND_PARAMETERS = 999;
+
+const chunkRows = <A>(
+  rows: readonly A[],
+  table: SQLiteTable
+): readonly (readonly A[])[] => {
+  const size = Math.max(
+    1,
+    Math.floor(MAX_BOUND_PARAMETERS / Object.keys(getColumns(table)).length)
+  );
+  const chunks: A[][] = [];
+
+  for (let index = 0; index < rows.length; index += size) {
+    chunks.push(rows.slice(index, index + size));
+  }
+
+  return chunks;
+};
+
+interface DetailMembership {
+  readonly messageIds: string[];
+  readonly threadIds: string[];
+}
+
+/** Groups threads so each stale-message delete stays under the limit. */
+const chunkDetailMembership = (
+  details: readonly GmailThread[]
+): readonly DetailMembership[] => {
+  const chunks: DetailMembership[] = [];
+  let current: DetailMembership = { messageIds: [], threadIds: [] };
+
+  for (const detail of details) {
+    const parameters = 1 + detail.messages.length;
+
+    if (
+      current.threadIds.length > 0 &&
+      1 + current.threadIds.length + current.messageIds.length + parameters >
+        MAX_BOUND_PARAMETERS
+    ) {
+      chunks.push(current);
+      current = { messageIds: [], threadIds: [] };
+    }
+
+    current.threadIds.push(detail.id);
+    current.messageIds.push(...detail.messages.map(({ id }) => id));
+  }
+
+  if (current.threadIds.length > 0) {
+    chunks.push(current);
+  }
+
+  return chunks;
+};
+
+/**
+ * A multi-row upsert cannot bind per-row values in its update clause, so the
+ * conflict update reads each inserted column back from `excluded`. Only the
+ * columns being written are named, so a column this write does not own keeps
+ * its stored value.
+ */
+const excludedColumns = <TTable extends SQLiteTable>(
+  table: TTable,
+  rows: readonly InferInsertModel<TTable>[]
+): Record<string, SQL> => {
+  const columns = getColumns(table);
+
+  return Object.fromEntries(
+    Object.keys(rows[0] ?? {}).flatMap((key) => {
+      const column = columns[key];
+
+      return column === undefined
+        ? []
+        : [[key, sql`excluded.${sql.identifier(column.name)}`] as const];
+    })
+  );
+};
 
 const INBOX_LABEL_ID = LabelId.make("INBOX");
 const SENT_LABEL_ID = LabelId.make("SENT");
@@ -180,13 +269,17 @@ const toLabelValues = (
  * external content; `body_html` is gzipped, which is where nearly all of the
  * bytes are. An HTML message still gets a text rendition so search matches it —
  * most mail is HTML, and indexing only `text/plain` parts would miss it.
+ * Compression runs on the libuv pool so a large page never stalls Electron main.
  */
-const toMessageValues = (
+const toMessageValues = async (
   accountId: string,
   message: GmailMessage,
   now: number
 ) => {
   const isHtml = message.body.type === "html";
+  const bodyHtml = isHtml
+    ? await gzipAsync(Buffer.from(message.body.sanitizedHtml, "utf-8"))
+    : null;
 
   return {
     accountEmail: accountId,
@@ -200,9 +293,7 @@ const toMessageValues = (
       size: attachment.size,
     })),
     bccAddresses: toAddresses(message.bcc),
-    bodyHtml: isHtml
-      ? gzipSync(Buffer.from(message.body.sanitizedHtml, "utf-8"))
-      : null,
+    bodyHtml,
     bodyText: isHtml
       ? toIndexText(message.body.sanitizedHtml)
       : message.body.text,
@@ -228,6 +319,40 @@ const withDatabase = <A>(
   message: string,
   run: (database: RemoteDatabaseClient) => Promise<A>
 ) => withDatabaseClient(run).pipe(Effect.mapError(() => storeError(message)));
+
+/**
+ * Prepared before taking the connection so compression never holds it. Small
+ * groups keep the synchronous text extraction from stalling main for a whole
+ * page at once while still compressing in parallel.
+ */
+const MESSAGE_PREPARE_GROUP_SIZE = 16;
+
+const prepareMessageValues = (
+  accountId: string,
+  messages: readonly GmailMessage[],
+  now: number
+) =>
+  Effect.tryPromise({
+    catch: () => storeError("Could not prepare Gmail messages"),
+    try: async () => {
+      const values: Awaited<ReturnType<typeof toMessageValues>>[] = [];
+
+      for (
+        let index = 0;
+        index < messages.length;
+        index += MESSAGE_PREPARE_GROUP_SIZE
+      ) {
+        const group = messages.slice(index, index + MESSAGE_PREPARE_GROUP_SIZE);
+        // oxlint-disable-next-line eslint/no-await-in-loop
+        const prepared = await Promise.all(
+          group.map((message) => toMessageValues(accountId, message, now))
+        );
+        values.push(...prepared);
+      }
+
+      return values;
+    },
+  });
 
 const decodeScopes = (raw: string): readonly GmailScope[] => {
   try {
@@ -542,97 +667,103 @@ export const GmailStoreLive = Layer.succeed(
           .run();
       }),
 
-    saveThread: (accountId, thread) =>
-      withDatabase("Could not save Gmail thread", async (database) => {
-        const now = Date.now();
-        const isInSpam = thread.labelIds.includes(SPAM_LABEL_ID);
-        const [firstMessage] = thread.messages;
-        let latestMessage = firstMessage;
+    saveThread: (accountId, thread) => {
+      const now = Date.now();
 
-        for (const message of thread.messages) {
-          if (
-            latestMessage === undefined ||
-            Number(message.sentAt) > Number(latestMessage.sentAt)
-          ) {
-            latestMessage = message;
-          }
-        }
-        const attachments = thread.messages.flatMap((message) =>
-          message.attachments.map((attachment) => ({
-            attachmentId: attachment.attachmentId,
-            filename: attachment.filename,
-            mediaType: attachment.mediaType,
-            messageId: attachment.messageId,
-            partId: attachment.partId,
-            size: attachment.size,
-          }))
-        );
-        const labelRows = await database.query.gmailLabels.findMany({
-          where: { accountEmail: accountId },
-        });
-        const namesById = new Map(
-          labelRows.map((row) => [row.labelId, row.name] as const)
-        );
+      return prepareMessageValues(accountId, thread.messages, now).pipe(
+        Effect.flatMap((messageValues) =>
+          withDatabase("Could not save Gmail thread", async (database) => {
+            const isInSpam = thread.labelIds.includes(SPAM_LABEL_ID);
+            const [firstMessage] = thread.messages;
+            let latestMessage = firstMessage;
 
-        await database.transaction(async (transaction) => {
-          await transaction
-            .delete(gmailMessages)
-            .where(
-              and(
-                eq(gmailMessages.accountEmail, accountId),
-                eq(gmailMessages.threadId, thread.id)
-              )
-            )
-            .run();
+            for (const message of thread.messages) {
+              if (
+                latestMessage === undefined ||
+                Number(message.sentAt) > Number(latestMessage.sentAt)
+              ) {
+                latestMessage = message;
+              }
+            }
+            const attachments = thread.messages.flatMap((message) =>
+              message.attachments.map((attachment) => ({
+                attachmentId: attachment.attachmentId,
+                filename: attachment.filename,
+                mediaType: attachment.mediaType,
+                messageId: attachment.messageId,
+                partId: attachment.partId,
+                size: attachment.size,
+              }))
+            );
+            const labelRows = await database.query.gmailLabels.findMany({
+              where: { accountEmail: accountId },
+            });
+            const namesById = new Map(
+              labelRows.map((row) => [row.labelId, row.name] as const)
+            );
 
-          for (const message of thread.messages) {
-            // Message writes must remain ordered within this transaction.
-            // oxlint-disable-next-line eslint/no-await-in-loop
-            await transaction
-              .insert(gmailMessages)
-              .values(toMessageValues(accountId, message, now))
-              .run();
-          }
+            await database.transaction(async (transaction) => {
+              await transaction
+                .delete(gmailMessages)
+                .where(
+                  and(
+                    eq(gmailMessages.accountEmail, accountId),
+                    eq(gmailMessages.threadId, thread.id)
+                  )
+                )
+                .run();
 
-          await transaction
-            .update(gmailThreads)
-            .set({
-              attachments,
-              from: latestMessage?.from.address ?? "Unknown sender",
-              hasAttachments: attachments.length > 0,
-              isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
-              isInSent: thread.labelIds.includes(SENT_LABEL_ID),
-              isInSpam,
-              isInTrash: thread.labelIds.includes(TRASH_LABEL_ID),
-              isUnread: thread.messages.some((message) =>
-                message.labelIds.includes(LabelId.make("UNREAD"))
-              ),
-              labels: thread.labelIds.map(
-                (labelId) => namesById.get(labelId) ?? labelId
-              ),
-              latestAt: Number(latestMessage?.sentAt ?? 0),
-              messageCount: thread.messages.length,
-              spamAddedAt: isInSpam
-                ? sql`coalesce(${gmailThreads.spamAddedAt}, ${now})`
-                : null,
-              subject: thread.messages[0]?.subject ?? "(No subject)",
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(gmailThreads.accountEmail, accountId),
-                eq(gmailThreads.threadId, thread.id)
-              )
-            )
-            .run();
-        });
+              for (const chunk of chunkRows(messageValues, gmailMessages)) {
+                // Message writes must remain ordered within this transaction.
+                // oxlint-disable-next-line eslint/no-await-in-loop
+                await transaction
+                  .insert(gmailMessages)
+                  .values([...chunk])
+                  .run();
+              }
 
-        if (isInSpam) {
-          forgetCachedCorrespondents(accountId);
-        } else {
-          rememberCorrespondentMessages(accountId, thread.messages);
-        }
-      }),
+              await transaction
+                .update(gmailThreads)
+                .set({
+                  attachments,
+                  from: latestMessage?.from.address ?? "Unknown sender",
+                  hasAttachments: attachments.length > 0,
+                  isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+                  isInSent: thread.labelIds.includes(SENT_LABEL_ID),
+                  isInSpam,
+                  isInTrash: thread.labelIds.includes(TRASH_LABEL_ID),
+                  isUnread: thread.messages.some((message) =>
+                    message.labelIds.includes(LabelId.make("UNREAD"))
+                  ),
+                  labels: thread.labelIds.map(
+                    (labelId) => namesById.get(labelId) ?? labelId
+                  ),
+                  latestAt: Number(latestMessage?.sentAt ?? 0),
+                  messageCount: thread.messages.length,
+                  spamAddedAt: isInSpam
+                    ? sql`coalesce(${gmailThreads.spamAddedAt}, ${now})`
+                    : null,
+                  subject: thread.messages[0]?.subject ?? "(No subject)",
+                  updatedAt: now,
+                })
+                .where(
+                  and(
+                    eq(gmailThreads.accountEmail, accountId),
+                    eq(gmailThreads.threadId, thread.id)
+                  )
+                )
+                .run();
+            });
+
+            if (isInSpam) {
+              forgetCachedCorrespondents(accountId);
+            } else {
+              rememberCorrespondentMessages(accountId, thread.messages);
+            }
+          })
+        )
+      );
+    },
 
     setThreadLabel: (accountId, threadId, label, applied) =>
       withDatabase("Could not update Gmail thread labels", async (database) => {
@@ -855,136 +986,150 @@ export const GmailStoreLive = Layer.succeed(
           .run();
       }),
 
-    upsertThreadDetails: (accountId, threads, details) =>
-      withDatabase("Could not save Gmail threads", async (database) => {
-        if (threads.length === 0 && details.length === 0) {
-          return;
-        }
+    upsertThreadDetails: (accountId, threads, details) => {
+      if (threads.length === 0 && details.length === 0) {
+        return Effect.void;
+      }
 
-        const now = Date.now();
-        // The cached row stores label *names*: the renderer renders this column
-        // directly as badges, and `listCachedThreadPage` filters the inbox on
-        // it. System label ids double as their names, so an unknown id (a label
-        // created since the last catalog refresh) falls back to the id.
-        const labelRows = await database.query.gmailLabels.findMany({
-          where: { accountEmail: accountId },
-        });
-        const namesById = new Map(
-          labelRows.map((row) => [row.labelId, row.name] as const)
-        );
+      const now = Date.now();
 
-        // One transaction for the whole page: a crash mid-page must not leave a
-        // thread row claiming messages that were never written. The indexer
-        // advances its checkpoint only after this transaction succeeds, so a
-        // crash between the two safely replays the page.
-        await database.transaction(async (transaction) => {
-          for (const thread of threads) {
-            const isInSpam = thread.labelIds.includes(SPAM_LABEL_ID);
-            const values = {
-              accountEmail: accountId,
-              attachments: thread.attachments.map((attachment) => ({
-                attachmentId: attachment.attachmentId,
-                filename: attachment.filename,
-                mediaType: attachment.mediaType,
-                messageId: attachment.messageId,
-                partId: attachment.partId,
-                size: attachment.size,
-              })),
-              // `participants[0]` is the newest message's sender.
-              from: thread.participants[0]?.address ?? "Unknown sender",
-              hasAttachments: thread.hasAttachments,
-              // Read off the label *ids*, not the mapped names above: the
-              // mapping falls back to the id for unknown labels, so a stale
-              // catalog would otherwise be able to change what counts as inbox.
-              isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
-              isInSent: thread.labelIds.includes(SENT_LABEL_ID),
-              isInSpam,
-              isInTrash: thread.labelIds.includes(TRASH_LABEL_ID),
-              isIndexSeen: true,
-              isUnread: thread.hasUnread,
-              labels: thread.labelIds.map(
-                (labelId) => namesById.get(labelId) ?? labelId
-              ),
-              latestAt: Number(thread.latestAt),
-              messageCount: thread.messageCount,
-              snippet: thread.snippet,
-              spamAddedAt: isInSpam ? now : null,
-              subject: thread.subject,
-              threadId: thread.id,
-              updatedAt: now,
-            };
-
-            // Page writes must remain ordered within this transaction.
-            // oxlint-disable-next-line eslint/no-await-in-loop
-            await transaction
-              .insert(gmailThreads)
-              .values(values)
-              .onConflictDoUpdate({
-                set: {
-                  ...values,
-                  // Preserve the first local SPAM transition across later
-                  // history refreshes; leaving Spam clears it, so a future
-                  // transition receives a fresh timestamp.
-                  spamAddedAt: sql`CASE
-                    WHEN excluded.is_in_spam = 0 THEN NULL
-                    WHEN ${gmailThreads.isInSpam} = 1 THEN ${gmailThreads.spamAddedAt}
-                    ELSE excluded.spam_added_at
-                  END`,
-                },
-                target: [gmailThreads.accountEmail, gmailThreads.threadId],
-              })
-              .run();
-          }
-
-          for (const detail of details) {
-            const currentMessageIds = detail.messages.map(({ id }) => id);
-            const threadMessages = and(
-              eq(gmailMessages.accountEmail, accountId),
-              eq(gmailMessages.threadId, detail.id)
+      return prepareMessageValues(
+        accountId,
+        details.flatMap(({ messages }) => messages),
+        now
+      ).pipe(
+        Effect.flatMap((messageValues) =>
+          withDatabase("Could not save Gmail threads", async (database) => {
+            // The cached row stores label *names*: the renderer renders this
+            // column directly as badges, and `listCachedThreadPage` filters the
+            // inbox on it. System label ids double as their names, so an
+            // unknown id (a label created since the last catalog refresh)
+            // falls back to the id.
+            const labelRows = await database.query.gmailLabels.findMany({
+              where: { accountEmail: accountId },
+            });
+            const namesById = new Map(
+              labelRows.map((row) => [row.labelId, row.name] as const)
             );
+            const threadValues = threads.map((thread) => {
+              const isInSpam = thread.labelIds.includes(SPAM_LABEL_ID);
 
-            // A full Gmail thread is authoritative for message membership.
-            // Do not do this for an unparsed detail: a malformed MIME payload
-            // must not erase previously usable cached bodies.
-            // Page writes must remain ordered within this transaction.
-            // oxlint-disable-next-line eslint/no-await-in-loop
-            await transaction
-              .delete(gmailMessages)
-              .where(
-                currentMessageIds.length === 0
-                  ? threadMessages
-                  : and(
-                      threadMessages,
-                      notInArray(gmailMessages.messageId, currentMessageIds)
+              return {
+                accountEmail: accountId,
+                attachments: thread.attachments.map((attachment) => ({
+                  attachmentId: attachment.attachmentId,
+                  filename: attachment.filename,
+                  mediaType: attachment.mediaType,
+                  messageId: attachment.messageId,
+                  partId: attachment.partId,
+                  size: attachment.size,
+                })),
+                // `participants[0]` is the newest message's sender.
+                from: thread.participants[0]?.address ?? "Unknown sender",
+                hasAttachments: thread.hasAttachments,
+                // Read off the label *ids*, not the mapped names above: the
+                // mapping falls back to the id for unknown labels, so a stale
+                // catalog would otherwise be able to change what counts as
+                // inbox.
+                isInInbox: thread.labelIds.includes(INBOX_LABEL_ID),
+                isInSent: thread.labelIds.includes(SENT_LABEL_ID),
+                isInSpam,
+                isInTrash: thread.labelIds.includes(TRASH_LABEL_ID),
+                isIndexSeen: true,
+                isUnread: thread.hasUnread,
+                labels: thread.labelIds.map(
+                  (labelId) => namesById.get(labelId) ?? labelId
+                ),
+                latestAt: Number(thread.latestAt),
+                messageCount: thread.messageCount,
+                snippet: thread.snippet,
+                spamAddedAt: isInSpam ? now : null,
+                subject: thread.subject,
+                threadId: thread.id,
+                updatedAt: now,
+              };
+            });
+
+            // One transaction for the whole page: a crash mid-page must not
+            // leave a thread row claiming messages that were never written.
+            // The indexer advances its checkpoint only after this transaction
+            // succeeds, so a crash between the two safely replays the page.
+            await database.transaction(async (transaction) => {
+              for (const chunk of chunkRows(threadValues, gmailThreads)) {
+                // Page writes must remain ordered within this transaction.
+                // oxlint-disable-next-line eslint/no-await-in-loop
+                await transaction
+                  .insert(gmailThreads)
+                  .values([...chunk])
+                  .onConflictDoUpdate({
+                    set: {
+                      ...excludedColumns(gmailThreads, chunk),
+                      // Preserve the first local SPAM transition across later
+                      // history refreshes; leaving Spam clears it, so a future
+                      // transition receives a fresh timestamp.
+                      spamAddedAt: sql`CASE
+                        WHEN excluded.is_in_spam = 0 THEN NULL
+                        WHEN ${gmailThreads.isInSpam} = 1 THEN ${gmailThreads.spamAddedAt}
+                        ELSE excluded.spam_added_at
+                      END`,
+                    },
+                    target: [gmailThreads.accountEmail, gmailThreads.threadId],
+                  })
+                  .run();
+              }
+
+              // A full Gmail thread is authoritative for message membership.
+              // Do not do this for an unparsed detail: a malformed MIME payload
+              // must not erase previously usable cached bodies. Batching several
+              // threads can only keep a row that moved between two of them, and
+              // the upsert below rewrites that row with its current thread.
+              for (const chunk of chunkDetailMembership(details)) {
+                // Page writes must remain ordered within this transaction.
+                // oxlint-disable-next-line eslint/no-await-in-loop
+                await transaction
+                  .delete(gmailMessages)
+                  .where(
+                    and(
+                      eq(gmailMessages.accountEmail, accountId),
+                      inArray(gmailMessages.threadId, chunk.threadIds),
+                      chunk.messageIds.length === 0
+                        ? undefined
+                        : notInArray(gmailMessages.messageId, chunk.messageIds)
                     )
-              )
-              .run();
+                  )
+                  .run();
+              }
 
-            for (const message of detail.messages) {
-              const values = toMessageValues(accountId, message, now);
+              for (const chunk of chunkRows(messageValues, gmailMessages)) {
+                // Page writes must remain ordered within this transaction.
+                // oxlint-disable-next-line eslint/no-await-in-loop
+                await transaction
+                  .insert(gmailMessages)
+                  .values([...chunk])
+                  .onConflictDoUpdate({
+                    set: excludedColumns(gmailMessages, chunk),
+                    target: [
+                      gmailMessages.accountEmail,
+                      gmailMessages.messageId,
+                    ],
+                  })
+                  .run();
+              }
+            });
 
-              // Page writes must remain ordered within this transaction.
-              // oxlint-disable-next-line eslint/no-await-in-loop
-              await transaction
-                .insert(gmailMessages)
-                .values(values)
-                .onConflictDoUpdate({
-                  set: values,
-                  target: [gmailMessages.accountEmail, gmailMessages.messageId],
-                })
-                .run();
+            if (
+              threads.some((thread) => thread.labelIds.includes(SPAM_LABEL_ID))
+            ) {
+              forgetCachedCorrespondents(accountId);
+            } else {
+              rememberCorrespondentMessages(
+                accountId,
+                details.flatMap(({ messages }) => messages)
+              );
             }
-          }
-        });
-
-        if (threads.some((thread) => thread.labelIds.includes(SPAM_LABEL_ID))) {
-          forgetCachedCorrespondents(accountId);
-        } else {
-          rememberCorrespondentMessages(
-            accountId,
-            details.flatMap(({ messages }) => messages)
-          );
-        }
-      }),
+          })
+        )
+      );
+    },
   })
 );
