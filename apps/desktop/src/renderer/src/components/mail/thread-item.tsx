@@ -1,7 +1,7 @@
 import { SendIcon } from "lucide-react";
 import type { HTMLMotionProps } from "motion/react";
 import { m, useReducedMotionConfig } from "motion/react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 
 import MailAttachmentList from "@/components/mail/attachment-list";
@@ -28,7 +28,10 @@ import type { GmailThreadSummary } from "@/shared/ipc/mail";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
 
-interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
+interface MailThreadItemProps extends Omit<
+  HTMLMotionProps<"li">,
+  "children" | "style"
+> {
   hasCheckedThreads?: boolean;
   isChecked?: boolean;
   isSelected?: boolean;
@@ -54,6 +57,8 @@ interface MailThreadItemProps extends Omit<HTMLMotionProps<"li">, "children"> {
   setSize: number;
   showAccount?: boolean;
   thread: GmailThreadSummary;
+  /** Virtual row offset, passed as a number so memoized rows compare equal. */
+  top: number;
 }
 
 const bindThreadAction = (
@@ -205,6 +210,7 @@ const MailThreadItem = ({
   setSize,
   showAccount = false,
   thread,
+  top,
   ...props
 }: MailThreadItemProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
@@ -251,6 +257,7 @@ const MailThreadItem = ({
       onPointerEnter={() => {
         onSelectionPointerEnter(thread);
       }}
+      style={{ top }}
       {...props}
     >
       <m.div
@@ -378,4 +385,6 @@ const MailThreadItem = ({
   );
 };
 
-export default MailThreadItem;
+// The list renders outside React Compiler (see thread-list.tsx), so rows are
+// memoized explicitly to skip renders when only the scroll range changed.
+export default memo(MailThreadItem);
