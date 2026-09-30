@@ -1,4 +1,3 @@
-import type { RefObject } from "react";
 import { useRef } from "react";
 
 import { useAppCommand } from "@/hotkeys";
@@ -7,7 +6,6 @@ const RAPID_LABEL_MOVE_INTERVAL_MS = 150;
 const LABEL_SELECTOR = "[data-mailbox-label]";
 
 interface MailboxLabelNavigation {
-  readonly labelScrollRef: RefObject<HTMLDivElement | null>;
   readonly takeFocusAnimation: () => boolean;
 }
 
@@ -53,13 +51,12 @@ const getVisibleLabelIndex = (
 };
 
 export const useMailboxLabelNavigation = ({
-  enabled,
+  labelScroller,
   shouldReduceMotion,
 }: {
-  readonly enabled: boolean;
+  readonly labelScroller: HTMLDivElement | null;
   readonly shouldReduceMotion: boolean;
 }): MailboxLabelNavigation => {
-  const labelScrollRef = useRef<HTMLDivElement>(null);
   const lastLabelMoveAtRef = useRef<number | null>(null);
   const animateNextFocusRef = useRef(true);
 
@@ -70,13 +67,12 @@ export const useMailboxLabelNavigation = ({
   };
 
   const moveLabelFocus = (direction: -1 | 1): void => {
-    const labelScroll = labelScrollRef.current;
-    if (labelScroll === null) {
+    if (labelScroller === null) {
       return;
     }
 
     const labels = [
-      ...labelScroll.querySelectorAll<HTMLButtonElement>(LABEL_SELECTOR),
+      ...labelScroller.querySelectorAll<HTMLButtonElement>(LABEL_SELECTOR),
     ];
     if (labels.length === 0) {
       return;
@@ -92,7 +88,7 @@ export const useMailboxLabelNavigation = ({
       currentIndex === -1
         ? (getVisibleLabelIndex(
             labels,
-            labelScroll.getBoundingClientRect(),
+            labelScroller.getBoundingClientRect(),
             direction
           ) ?? edgeIndex)
         : Math.max(0, Math.min(labels.length - 1, currentIndex + direction));
@@ -125,15 +121,15 @@ export const useMailboxLabelNavigation = ({
     () => {
       moveLabelFocus(1);
     },
-    { enabled }
+    { enabled: labelScroller !== null }
   );
   useAppCommand(
     "mailbox.previousLabel",
     () => {
       moveLabelFocus(-1);
     },
-    { enabled }
+    { enabled: labelScroller !== null }
   );
 
-  return { labelScrollRef, takeFocusAnimation };
+  return { takeFocusAnimation };
 };
