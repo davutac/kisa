@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { LinkIcon } from "lucide-react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ const EmailComposerLinkButton = ({
     }
   };
 
-  const applyLink = (event: FormEvent<HTMLFormElement>): void => {
+  const applyLink = (event: SubmitEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (href.trim().length === 0) {
       setValidationError("Enter a link");

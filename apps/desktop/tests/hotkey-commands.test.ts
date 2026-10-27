@@ -254,7 +254,7 @@ describe("hotkey command registry", () => {
   it("formats selected-thread quick actions", () => {
     expect(
       getHotkeyDisplay("mailbox.toggleThreadRead", "mac").bindings
-    ).toStrictEqual(["⌘ ⇧ U"]);
+    ).toStrictEqual(["⇧ ⌘ U"]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "mac").bindings
     ).toStrictEqual(["⌘ D"]);

@@ -1,9 +1,8 @@
 import {
   detectPlatform,
   formatForDisplay,
-  normalizeRegisterableHotkey,
+  normalizeHotkey,
 } from "@tanstack/react-hotkeys";
-import type { RegisterableHotkey } from "@tanstack/react-hotkeys";
 
 import { HOTKEY_LAYERS, isHotkeyScopeActive } from "@/hotkeys/layer-model";
 import type { HotkeyScope } from "@/hotkeys/layer-model";
@@ -621,7 +620,7 @@ export const getHotkeyAriaLabel = (
 
   return HOTKEY_COMMANDS[commandId].bindings
     .map((binding) =>
-      normalizeRegisterableHotkey(binding, resolvedPlatform)
+      normalizeHotkey(binding, resolvedPlatform)
         .split("+")
         .map((part) => resolveAriaModifier(part, resolvedPlatform))
         .join("+")
@@ -645,9 +644,7 @@ const normalizeBindingSequence = (
   binding
     .trim()
     .split(/\s+/u)
-    .map((part) =>
-      normalizeRegisterableHotkey(part as RegisterableHotkey, platform)
-    );
+    .map((part) => normalizeHotkey(part, platform));
 
 const isSequencePrefix = (
   left: readonly string[],

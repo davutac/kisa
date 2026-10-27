@@ -1,6 +1,6 @@
 import { LoaderCircleIcon } from "lucide-react";
 import { useId, useState } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import { toast } from "sonner";
 
 import LabelColorField, {
@@ -133,7 +133,7 @@ const LabelDialog = ({
     onOpenChange(open);
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!canSubmit) {

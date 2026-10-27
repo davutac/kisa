@@ -1,5 +1,5 @@
 import { Cause, Effect, Layer, Schema } from "effect";
-import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import * as RpcServer from "effect/rpc/RpcServer";
 
 import { DatabaseRpcs } from "../../shared/database-rpc";
 import { DatabaseUnlock } from "../../shared/database-unlock";

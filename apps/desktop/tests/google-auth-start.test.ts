@@ -94,18 +94,22 @@ vi.mock(import("electron"), async (importOriginal) => {
     },
     safeStorage: {
       ...original.safeStorage,
-      decryptString: vi.fn<typeof Electron.safeStorage.decryptString>((value) =>
-        value.toString("utf-8")
+      decryptStringAsync: vi.fn<typeof Electron.safeStorage.decryptStringAsync>(
+        (value) =>
+          Promise.resolve({
+            result: value.toString("utf-8"),
+            shouldReEncrypt: false,
+          })
       ),
-      encryptString: vi.fn<typeof Electron.safeStorage.encryptString>((value) =>
-        Buffer.from(value)
+      encryptStringAsync: vi.fn<typeof Electron.safeStorage.encryptStringAsync>(
+        (value) => Promise.resolve(Buffer.from(value))
       ),
       getSelectedStorageBackend: vi.fn<
         typeof Electron.safeStorage.getSelectedStorageBackend
       >(() => "gnome_libsecret"),
-      isEncryptionAvailable: vi.fn<
-        typeof Electron.safeStorage.isEncryptionAvailable
-      >(() => true),
+      isAsyncEncryptionAvailable: vi.fn<
+        typeof Electron.safeStorage.isAsyncEncryptionAvailable
+      >(() => Promise.resolve(true)),
     },
     shell: {
       ...original.shell,
@@ -365,7 +369,7 @@ describe("Google authentication startup", () => {
 
     expect(electronState.openedUrls).toHaveLength(2);
     expect(dialog.showOpenDialog).toHaveBeenCalledOnce();
-    expect(safeStorage.encryptString).toHaveBeenCalledWith(
+    expect(safeStorage.encryptStringAsync).toHaveBeenCalledWith(
       JSON.stringify({
         clientId: electronState.clientId,
         clientSecret: electronState.clientSecret,

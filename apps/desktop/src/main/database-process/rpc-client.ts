@@ -1,8 +1,8 @@
 import { Context, Layer } from "effect";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import type { WorkerError } from "effect/unstable/workers/WorkerError";
+import * as RpcClient from "effect/rpc/RpcClient";
+import type { RpcClientError } from "effect/rpc/RpcClientError";
+import type * as RpcGroup from "effect/rpc/RpcGroup";
+import type { WorkerError } from "effect/workers/WorkerError";
 import type { UtilityProcess } from "electron";
 
 import { DatabaseRpcs } from "../../shared/database-rpc";

@@ -41,9 +41,14 @@ export const refreshUnreadBadge = Effect.fn("refreshUnreadBadge")(
     );
 
     // SQLite counts at mailbox scale; main only checks one grant per account.
-    const unreadCount = accountCounts.reduce(
-      (total, { credentials, value }) =>
-        total + (isUserOwnedOAuthClient(credentials) ? value : 0),
+    const userOwnedCounts = yield* Effect.filter(
+      accountCounts,
+      ({ credentials }) =>
+        Effect.promise(() => isUserOwnedOAuthClient(credentials)),
+      { concurrency: 4 }
+    );
+    const unreadCount = userOwnedCounts.reduce(
+      (total, { value }) => total + value,
       0
     );
 

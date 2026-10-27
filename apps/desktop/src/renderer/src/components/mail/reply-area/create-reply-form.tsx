@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FormEvent, RefObject } from "react";
+import type { SubmitEvent, RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import { PopoverDescription, PopoverTitle } from "@/components/ui/popover";
@@ -20,7 +20,7 @@ const CreateReplyForm = ({
   const [instructions, setInstructions] = useState("");
 
   const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>
+    event: SubmitEvent<HTMLFormElement>
   ): Promise<void> => {
     event.preventDefault();
     const requestInstructions = instructions.trim() || undefined;

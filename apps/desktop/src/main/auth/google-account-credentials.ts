@@ -12,12 +12,17 @@ export const StoredCredentials = Schema.Struct({
 
 const decodeStoredCredentials = Schema.decodeUnknownSync(StoredCredentials);
 
-export const decryptStoredCredentials = (credentials: Buffer) =>
-  decodeStoredCredentials(JSON.parse(safeStorage.decryptString(credentials)));
+export const decryptStoredCredentials = async (credentials: Buffer) => {
+  const { result } = await safeStorage.decryptStringAsync(credentials);
+  return decodeStoredCredentials(JSON.parse(result));
+};
 
-export const isUserOwnedOAuthClient = (credentials: Buffer): boolean => {
+export const isUserOwnedOAuthClient = async (
+  credentials: Buffer
+): Promise<boolean> => {
   try {
-    return decryptStoredCredentials(credentials).oauthClient === "user-owned";
+    const stored = await decryptStoredCredentials(credentials);
+    return stored.oauthClient === "user-owned";
   } catch {
     return false;
   }

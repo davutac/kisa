@@ -254,7 +254,6 @@ const MailMessageBody = ({
           ref={emailFrameRef}
           referrerPolicy="no-referrer"
           sandbox="allow-popups allow-same-origin"
-          scrolling="no"
           srcDoc={emailDocument}
           title="Email message content"
         />

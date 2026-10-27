@@ -2,11 +2,8 @@
 // is not the DOM API and the protocol callback shape is prescribed by Effect.
 // oxlint-disable eslint/sort-keys typescript/no-invalid-void-type unicorn/require-post-message-target-origin
 import { Deferred, Effect, Exit, Layer, Scope } from "effect";
-import * as Worker from "effect/unstable/workers/Worker";
-import {
-  WorkerError,
-  WorkerReceiveError,
-} from "effect/unstable/workers/WorkerError";
+import * as Worker from "effect/workers/Worker";
+import { WorkerError, WorkerReceiveError } from "effect/workers/WorkerError";
 import type { UtilityProcess } from "electron";
 
 const layerPlatform: Layer.Layer<Worker.WorkerPlatform> = Layer.succeed(

@@ -451,7 +451,7 @@ const isPublicAddress = (address: string): boolean => {
 const selectPublicAddress = async (
   hostname: string
 ): Promise<{ address: string; family: 4 | 6 }> => {
-  const addresses = await lookup(hostname, { all: true, verbatim: true });
+  const addresses = await lookup(hostname, { all: true, order: "verbatim" });
 
   if (
     addresses.length === 0 ||

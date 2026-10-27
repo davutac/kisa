@@ -139,9 +139,9 @@ export const loadStoredGoogleOAuthCredentials = Effect.fn(
       catch: unavailableStoredGoogleOAuthCredentials,
       try: () => readFile(credentialsPath),
     });
-    const decrypted = yield* Effect.try({
+    const { result: decrypted } = yield* Effect.tryPromise({
       catch: unavailableStoredGoogleOAuthCredentials,
-      try: () => safeStorage.decryptString(encrypted),
+      try: () => safeStorage.decryptStringAsync(encrypted),
     });
 
     return yield* decodeStoredGoogleOAuthCredentials(decrypted).pipe(
@@ -153,9 +153,9 @@ export const loadStoredGoogleOAuthCredentials = Effect.fn(
 export const persistGoogleOAuthCredentials = Effect.fn(
   "persistGoogleOAuthCredentials"
 )(function* persistGoogleOAuthCredentials(oauth: GoogleOAuthCredentials) {
-  const prepared = yield* Effect.try({
+  const prepared = yield* Effect.tryPromise({
     catch: saveGoogleOAuthCredentialsError,
-    try: () => {
+    try: async () => {
       const userDataPath = app.getPath("userData");
       const credentialsPath = path.join(
         userDataPath,
@@ -164,7 +164,7 @@ export const persistGoogleOAuthCredentials = Effect.fn(
 
       return {
         credentialsPath,
-        encrypted: safeStorage.encryptString(JSON.stringify(oauth)),
+        encrypted: await safeStorage.encryptStringAsync(JSON.stringify(oauth)),
         temporaryPath: `${credentialsPath}.${randomUUID()}.tmp`,
         userDataPath,
       };

@@ -6,8 +6,8 @@ import {
   WorkerError,
   WorkerReceiveError,
   WorkerSpawnError,
-} from "effect/unstable/workers/WorkerError";
-import * as WorkerRunner from "effect/unstable/workers/WorkerRunner";
+} from "effect/workers/WorkerError";
+import * as WorkerRunner from "effect/workers/WorkerRunner";
 
 export const layer: Layer.Layer<WorkerRunner.WorkerRunnerPlatform> =
   Layer.succeed(WorkerRunner.WorkerRunnerPlatform, {

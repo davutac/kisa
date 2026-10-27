@@ -123,10 +123,19 @@ const decodeGoogleUserInfo = Schema.decodeUnknownPromise(GoogleUserInfo);
 
 const readStoredCredentials = Effect.fn("readStoredCredentials")(
   (credentials: Buffer) =>
-    Effect.try({
+    Effect.tryPromise({
       catch: () =>
         new GoogleAuthError({ message: "Could not read saved credentials" }),
       try: () => decryptStoredCredentials(credentials),
+    })
+);
+
+const encryptStoredCredentials = Effect.fn("encryptStoredCredentials")(
+  (credentials: typeof StoredCredentials.Type) =>
+    Effect.tryPromise({
+      catch: () =>
+        new GoogleAuthError({ message: "Secure credential storage failed" }),
+      try: () => safeStorage.encryptStringAsync(JSON.stringify(credentials)),
     })
 );
 
@@ -221,11 +230,11 @@ export const stopGoogleAuth = (): void => {
 };
 
 const requireSecureStorage = (): Effect.Effect<void, GoogleAuthError> =>
-  Effect.try({
+  Effect.tryPromise({
     catch: () =>
       new GoogleAuthError({ message: "Secure credential storage failed" }),
-    try: () => {
-      if (!safeStorage.isEncryptionAvailable()) {
+    try: async () => {
+      if (!(await safeStorage.isAsyncEncryptionAvailable())) {
         throw new Error("encryption unavailable");
       }
 
@@ -358,16 +367,14 @@ const saveAuthorization = Effect.fn("saveAuthorization")(
             refreshToken: existingCredentials.refreshToken,
           }
         : undefined;
-    const encryptedCredentials = safeStorage.encryptString(
-      JSON.stringify({
-        accessToken: handoff.accessToken,
-        clientId: handoff.clientId,
-        clientSecret: handoff.clientSecret ?? existingOAuthState?.clientSecret,
-        expiresAt: handoff.expiresAt,
-        oauthClient: "user-owned",
-        refreshToken: handoff.refreshToken ?? existingOAuthState?.refreshToken,
-      })
-    );
+    const encryptedCredentials = yield* encryptStoredCredentials({
+      accessToken: handoff.accessToken,
+      clientId: handoff.clientId,
+      clientSecret: handoff.clientSecret ?? existingOAuthState?.clientSecret,
+      expiresAt: handoff.expiresAt,
+      oauthClient: "user-owned",
+      refreshToken: handoff.refreshToken ?? existingOAuthState?.refreshToken,
+    });
     const now = Date.now();
 
     yield* withDatabase("Could not save Google account", (database) =>
@@ -493,9 +500,7 @@ export const getGoogleAccessToken = Effect.fn("getGoogleAccessToken")(
     }
 
     const refreshed = yield* refreshCredentials(stored);
-    const encryptedCredentials = safeStorage.encryptString(
-      JSON.stringify(refreshed)
-    );
+    const encryptedCredentials = yield* encryptStoredCredentials(refreshed);
 
     yield* withDatabase("Could not save refreshed credentials", (database) =>
       database
@@ -652,7 +657,7 @@ const refreshAccountProfile = Effect.fn("refreshAccountProfile")(
     const encryptedCredentials =
       credentials === stored
         ? row.credentials
-        : safeStorage.encryptString(JSON.stringify(credentials));
+        : yield* encryptStoredCredentials(credentials);
     const now = Date.now();
     const avatar =
       row.avatarData !== null && row.avatarUrl === (profile.picture ?? null)
@@ -733,8 +738,10 @@ export const listGoogleAccounts = Effect.fn("listGoogleAccounts")(
         })
     );
 
-    const userOwnedRows = rows.filter((row) =>
-      isUserOwnedOAuthClient(row.credentials)
+    const userOwnedRows = yield* Effect.filter(
+      rows,
+      (row) => Effect.promise(() => isUserOwnedOAuthClient(row.credentials)),
+      { concurrency: 4 }
     );
 
     return yield* Effect.forEach(
@@ -770,9 +777,14 @@ export const reorderGoogleAccounts = Effect.fn("reorderGoogleAccounts")(
             })
             .from(googleAccounts)
             .all();
+          const userOwned = await Promise.all(
+            accountRows.map(({ credentials }) =>
+              isUserOwnedOAuthClient(credentials)
+            )
+          );
           const storedEmails = new Set(
             accountRows
-              .filter(({ credentials }) => isUserOwnedOAuthClient(credentials))
+              .filter((_, index) => userOwned[index])
               .map(({ email }) => email)
           );
 
