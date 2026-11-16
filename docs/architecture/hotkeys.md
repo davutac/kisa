@@ -43,7 +43,7 @@ useAppCommand("mailbox.nextThread", () => moveSelection(1), {
 });
 ```
 
-The hook expands alternative bindings and unregisters inactive commands. It intentionally exposes only `enabled` and an optional element target; callers cannot override registry policy.
+The hook expands alternative bindings and unregisters inactive commands. It intentionally exposes only `enabled` and an optional element target; callers cannot override registry policy. Without a target, the registration omits TanStack's `target` option entirely and listens on the document. A present but unset target registers nothing until its element mounts.
 
 Reversible state toggles use `ignore-key-repeat`: each distinct keydown is accepted without depending on a later keyup, while operating-system repeats from holding the key are ignored. One-way commands may use `once` when suppressing another invocation until the chord is released is part of the interaction.
 

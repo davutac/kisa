@@ -4,14 +4,24 @@ import * as Effect from "effect/Effect";
 
 import { parseCliVersion, providerFailure, runProbeCommand } from "./shared";
 
+// Stateless generation moved to /api/experimental/generate/text in OpenCode 2.2.
+const MINIMUM_MINOR_VERSION = 2;
+
+export const isSupportedOpenCodeVersion = (version: string | undefined) => {
+  const match = /^(?<major>\d+)\.(?<minor>\d+)\./u.exec(version ?? "");
+  return (
+    match?.groups?.["major"] === "2" &&
+    Number(match.groups["minor"]) >= MINIMUM_MINOR_VERSION
+  );
+};
+
 const discoverOpenCode = Effect.tryPromise({
   catch: () =>
     providerFailure(
       "opencode",
-      "Could not connect to the OpenCode 2.x service"
+      "Could not connect to the OpenCode 2.2+ service"
     ),
-  try: () =>
-    Service.discover({ version: (version) => version.startsWith("2.") }),
+  try: () => Service.discover({ version: isSupportedOpenCodeVersion }),
 });
 
 export const connectOpenCode = Effect.fn("connectOpenCode")(
@@ -23,10 +33,10 @@ export const connectOpenCode = Effect.fn("connectOpenCode")(
         version?.exitCode === 0
           ? parseCliVersion(`${version.stdout}\n${version.stderr}`)
           : undefined;
-      if (!cliVersion?.startsWith("2.")) {
+      if (!isSupportedOpenCodeVersion(cliVersion)) {
         return yield* providerFailure(
           "opencode",
-          "OpenCode 2.x is required. Install or update OpenCode, then refresh providers."
+          "OpenCode 2.2 or later is required. Install or update OpenCode, then refresh providers."
         );
       }
       // The CLI owns the shared service lifetime; Kisa only owns its HTTP requests.
@@ -34,7 +44,7 @@ export const connectOpenCode = Effect.fn("connectOpenCode")(
       if (started?.exitCode !== 0) {
         return yield* providerFailure(
           "opencode",
-          "Could not start the OpenCode 2.x service"
+          "Could not start the OpenCode 2.2+ service"
         );
       }
       endpoint = yield* discoverOpenCode;
@@ -42,7 +52,7 @@ export const connectOpenCode = Effect.fn("connectOpenCode")(
     if (endpoint === undefined) {
       return yield* providerFailure(
         "opencode",
-        "Could not connect to the OpenCode 2.x service"
+        "Could not connect to the OpenCode 2.2+ service"
       );
     }
     return OpenCode.make({

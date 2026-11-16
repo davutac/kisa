@@ -144,11 +144,8 @@ const toThreadSummary = (row: SearchThreadRow): GmailThreadSummary => {
   };
 };
 
-const clampLimit = (
-  limit: number | undefined,
-  fallback: number,
-  max: number
-) => (limit === undefined ? fallback : Math.min(Math.max(1, limit), max));
+const clampLimit = (limit: number | undefined, fallback: number, max: number) =>
+  limit === undefined ? fallback : Math.min(Math.max(1, limit), max);
 
 const toAccountList = (accountIds: readonly string[]): SQL =>
   sql.join(

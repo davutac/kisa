@@ -68,7 +68,7 @@ export const generateWithOpenCode = Effect.fn("generateWithOpenCode")(
       catch: () =>
         providerFailure("opencode", "OpenCode could not generate email text"),
       try: (signal) =>
-        client.generate.text(
+        client.experimental.generate.text(
           {
             model: {
               id: input.model.slice(separator + 1),

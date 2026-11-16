@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import type { AiModel, AiProviderStatus } from "../../../shared/ipc/ai";
-import { connectOpenCode } from "./opencode-client";
+import { connectOpenCode, isSupportedOpenCodeVersion } from "./opencode-client";
 import {
   makeTemporaryDirectory,
   parseCliVersion,
@@ -182,11 +182,11 @@ export const getOpenCodeStatus = Effect.fn("getOpenCodeStatus")(
       provider: "opencode",
       version: cliVersion,
     } satisfies AiProviderStatus;
-    if (!cliVersion?.startsWith("2.")) {
+    if (!isSupportedOpenCodeVersion(cliVersion)) {
       return {
         ...unavailable,
         error:
-          "OpenCode 2.x is required. Update OpenCode, then refresh providers.",
+          "OpenCode 2.2 or later is required. Update OpenCode, then refresh providers.",
       };
     }
     const models = yield* loadOpenCodeModels().pipe(Effect.result);

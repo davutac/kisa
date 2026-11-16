@@ -8,6 +8,7 @@ import {
   generateWithOpenCode,
   getOpenCodeStatus,
 } from "../src/main/ai/providers/opencode";
+import { isSupportedOpenCodeVersion } from "../src/main/ai/providers/opencode-client";
 import {
   GENERATION_TIMEOUT_MS,
   PROVIDER_PROBE_TIMEOUT_MS,
@@ -115,7 +116,7 @@ describe("OpenCode V2", () => {
     mocks.probe
       .mockReset()
       .mockReturnValue(
-        Effect.succeed({ exitCode: 0, stderr: "", stdout: "opencode v2.0.8" })
+        Effect.succeed({ exitCode: 0, stderr: "", stdout: "opencode v2.2.7" })
       );
     fetchMock
       .mockReset()
@@ -134,7 +135,7 @@ describe("OpenCode V2", () => {
       expect(fetchMock).toHaveBeenCalledOnce();
       const [url, request] = fetchMock.mock.calls[0] ?? [];
       expect(String(url)).toBe(
-        "http://127.0.0.1:4096/api/experimental/generate"
+        "http://127.0.0.1:4096/api/experimental/generate/text"
       );
       expect(new Headers(request?.headers).get("authorization")).toBe(
         `Basic ${Buffer.from("test:synthetic").toString("base64")}`
@@ -244,12 +245,26 @@ describe("OpenCode V2", () => {
       expect(mocks.discover).toHaveBeenCalledTimes(2);
     });
 
+    it.each([
+      ["2.2.0", true],
+      ["2.3.0", true],
+      ["2.10.1", true],
+      ["2.1.4", false],
+      ["1.18.29", false],
+      ["3.0.0", false],
+      [undefined, false],
+    ])("accepts OpenCode %s only from 2.2 within V2", (version, supported) => {
+      expect(isSupportedOpenCodeVersion(version)).toBe(supported);
+    });
+
     it("requires V2 before starting a missing service", async () => {
       mocks.discover.mockResolvedValue(absentEndpoint);
       mocks.probe.mockReturnValue(
         Effect.succeed({ exitCode: 0, stderr: "", stdout: "1.18.29" })
       );
-      await expect(generate()).rejects.toThrow("OpenCode 2.x is required");
+      await expect(generate()).rejects.toThrow(
+        "OpenCode 2.2 or later is required"
+      );
       expect(fetchMock).not.toHaveBeenCalled();
       expect(mocks.probe).toHaveBeenCalledOnce();
     });
@@ -264,7 +279,7 @@ describe("OpenCode V2", () => {
       mocks.discover.mockResolvedValue(absentEndpoint);
       mocks.probe
         .mockReturnValueOnce(
-          Effect.succeed({ exitCode: 0, stderr: "", stdout: "opencode v2.0.8" })
+          Effect.succeed({ exitCode: 0, stderr: "", stdout: "opencode v2.2.7" })
         )
         .mockReturnValueOnce(
           Effect.succeed({
@@ -274,7 +289,7 @@ describe("OpenCode V2", () => {
           })
         );
       await expect(generate()).rejects.toThrow(
-        "Could not start the OpenCode 2.x service"
+        "Could not start the OpenCode 2.2+ service"
       );
       expect(fetchMock).not.toHaveBeenCalled();
     });
@@ -369,7 +384,16 @@ describe("OpenCode V2", () => {
 
     it.each([
       [undefined, false, "not installed"],
-      [{ exitCode: 0, stderr: "", stdout: "1.18.29" }, true, "2.x is required"],
+      [
+        { exitCode: 0, stderr: "", stdout: "1.18.29" },
+        true,
+        "2.2 or later is required",
+      ],
+      [
+        { exitCode: 0, stderr: "", stdout: "opencode v2.1.4" },
+        true,
+        "2.2 or later is required",
+      ],
     ])(
       "reports installation and version failures",
       async (probe, installed, message) => {
