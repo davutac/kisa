@@ -13,6 +13,8 @@ interface MailLabelBadgesProps {
   accountId: string;
   empty?: ReactNode;
   labels: readonly string[];
+  /** A label implied by where the badges are shown, such as the mailbox. */
+  omitLabel?: string;
   onRemoveLabel?: (label: string) => void;
   removableLabels?: ReadonlySet<string>;
   size?: "compact" | "default";
@@ -22,6 +24,7 @@ const MailLabelBadges = ({
   accountId,
   empty = null,
   labels,
+  omitLabel,
   onRemoveLabel,
   removableLabels,
   size = "default",
@@ -29,7 +32,9 @@ const MailLabelBadges = ({
   const { showSystemLabels } = useAccountSettings(accountId);
   const colorsByName = useGmailLabelColors(accountId, labels);
   const visibleLabels = sortGmailLabelNames(
-    visibleGmailLabels(labels, showSystemLabels)
+    visibleGmailLabels(labels, showSystemLabels).filter(
+      (label) => label !== omitLabel
+    )
   );
 
   if (visibleLabels.length === 0) {

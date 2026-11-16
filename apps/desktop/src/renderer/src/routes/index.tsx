@@ -153,7 +153,7 @@ function getMailboxThreadListView({
   loadNextPage,
   mailbox,
   reloadRevision,
-  selectedAccountId,
+  showAccount,
   threads,
 }: {
   readonly emptyState: MailboxEmptyState;
@@ -164,7 +164,8 @@ function getMailboxThreadListView({
   readonly loadNextPage: () => Promise<boolean>;
   readonly mailbox: GmailMailbox;
   readonly reloadRevision: number | string;
-  readonly selectedAccountId: string | null;
+  /** Only when rows from several accounts can mix; one account needs no badge. */
+  readonly showAccount: boolean;
   readonly threads: MailThreadListProps["threads"];
 }): ThreadListView {
   return {
@@ -177,14 +178,14 @@ function getMailboxThreadListView({
     mailbox,
     scrollResetKey: reloadRevision,
     searchResults: false,
-    showAccount: selectedAccountId === null,
+    showAccount,
     threads,
     trailingMessage: indexingMessage,
   };
 }
 
 function HomeRoute() {
-  const { accountIds, selectedAccountId } = useMailboxAccountScope();
+  const { accountIds } = useMailboxAccountScope();
   const mailbox = useMailbox();
   const showUnread = useShowUnread();
   const selectedLabelNames = useSelectedLabelNames();
@@ -240,7 +241,7 @@ function HomeRoute() {
         loadNextPage,
         mailbox,
         reloadRevision: JSON.stringify([reloadRevision, selectedLabelNames]),
-        selectedAccountId,
+        showAccount: accountIds.length > 1,
         threads,
       });
   const popOutThread = useCallback(

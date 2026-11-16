@@ -17,7 +17,13 @@ import {
   HotkeyHint,
   useAppCommand,
 } from "@/hotkeys";
+import {
+  primaryFooterActionClassName,
+  primaryFooterHintClassName,
+  quietDestructiveClassName,
+} from "@/lib/action-hierarchy";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { formatScheduledAt, LOCAL_TIME_ZONE } from "@/scheduled/schedule-time";
 
 import {
@@ -113,6 +119,7 @@ const ScheduledEditButtons = ({
       <Button
         aria-keyshortcuts={getHotkeyAriaLabel("composer.discardScheduled")}
         aria-label="Permanently discard scheduled email"
+        className={quietDestructiveClassName}
         disabled={disabled}
         onClick={() => {
           void onDiscard();
@@ -120,7 +127,7 @@ const ScheduledEditButtons = ({
         size="footer-icon"
         title={`Discard scheduled email (${discardDisplay.bindings[0]})`}
         type="button"
-        variant="destructive"
+        variant="secondary"
       >
         <Trash2Icon />
       </Button>
@@ -238,7 +245,7 @@ const NewMessageFooter = ({
       aria-keyshortcuts={getHotkeyAriaLabel(
         isScheduleSelected ? "composer.schedule" : "composer.send"
       )}
-      className="relative"
+      className={primaryFooterActionClassName}
       disabled={isBusy || (isScheduleSelected ? !canSchedule : !canSend)}
       onClick={() => {
         void handlePrimaryAction();
@@ -251,12 +258,12 @@ const NewMessageFooter = ({
           : sendShortcutLabel
       }
       type="button"
-      variant="secondary"
+      variant="default"
     >
       {primaryIcon}
       {primaryLabel}
       <HotkeyHint
-        className="absolute right-4"
+        className={cn("ml-2", primaryFooterHintClassName)}
         command={isScheduleSelected ? "composer.schedule" : "composer.send"}
       />
     </Button>

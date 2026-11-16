@@ -27,7 +27,7 @@ const MailRemoteImageNotice = ({
     >
       Show images below
     </Button>
-    <span aria-hidden="true">-</span>
+    <span aria-hidden="true">·</span>
     <Button
       className="h-auto min-w-0 px-0 py-0 text-xs/relaxed"
       onClick={onAlwaysShow}

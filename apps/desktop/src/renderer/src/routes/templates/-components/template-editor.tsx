@@ -14,6 +14,12 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
+import {
+  primaryFooterActionClassName,
+  primaryFooterStatusClassName,
+  quietDestructiveClassName,
+} from "@/lib/action-hierarchy";
+import { cn } from "@/lib/utils";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
 import type { TemplateVariableContext } from "@/shared/template-variables";
@@ -164,6 +170,7 @@ const TemplateEditor = ({
       <div className="bg-background flex shrink-0 items-stretch gap-px">
         <Button
           aria-label="Delete template"
+          className={quietDestructiveClassName}
           disabled={isCreating || isSaving}
           onClick={onDelete}
           size="footer-icon"
@@ -175,16 +182,21 @@ const TemplateEditor = ({
         </Button>
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel("templates.save")}
-          className="relative"
+          className={cn("relative", primaryFooterActionClassName)}
           disabled={!isDirty || isSaving}
           size="footer"
           title={`${saveDisplay.label} (${saveDisplay.bindings[0]})`}
           type="submit"
-          variant="secondary"
+          variant="default"
         >
           {saveAction.icon}
           {saveAction.label}
-          <span className="text-muted-foreground absolute right-4 text-xs font-normal">
+          <span
+            className={cn(
+              "absolute right-4 text-xs font-normal",
+              primaryFooterStatusClassName
+            )}
+          >
             {saveAction.status}
           </span>
         </Button>

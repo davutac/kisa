@@ -11,8 +11,8 @@ import type { Ref } from "react";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import MailForwardedMessage from "@/components/mail/forwarded-message";
 import MailComposer from "@/components/mail/mail-composer";
+import MailDate from "@/components/mail/mail-date";
 import MailMessageAttachments from "@/components/mail/message-attachments";
-import MailRelativeTime from "@/components/mail/relative-time";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,12 @@ import {
   useAppCommand,
   useHotkeyLayer,
 } from "@/hotkeys";
+import {
+  primaryFooterActionClassName,
+  primaryFooterHintClassName,
+  quietDestructiveClassName,
+} from "@/lib/action-hierarchy";
+import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
@@ -131,7 +137,7 @@ const MailReplyArea = ({
           {isForward ? "Forwarding message from" : "Replying to"} {targetLabel}
         </span>
         <span aria-hidden="true">·</span>
-        <MailRelativeTime timestamp={message.sentAt} />
+        <MailDate timestamp={message.sentAt} variant="detailed" />
       </div>
       <EmailRecipientFields
         accountId={accountId}
@@ -212,14 +218,27 @@ const MailReplyArea = ({
           />
         </>
       ) : null}
-      <div className="bg-background flex shrink-0 items-stretch">
+      <div className="bg-background flex shrink-0 items-stretch gap-px">
+        <Button
+          aria-label="Discard draft"
+          className={quietDestructiveClassName}
+          disabled={workspace.isBusy}
+          onClick={handleDiscard}
+          size="footer-icon"
+          title="Discard draft"
+          type="button"
+          variant="secondary"
+        >
+          <Trash2Icon />
+        </Button>
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel("threadComposer.send")}
+          className={primaryFooterActionClassName}
           disabled={!canSend}
           onClick={handleSend}
           size="footer"
           type="button"
-          variant="secondary"
+          variant="default"
         >
           {workspace.isSending ? (
             <LoaderCircleIcon
@@ -230,19 +249,10 @@ const MailReplyArea = ({
             <SendIcon data-icon="inline-start" />
           )}
           {workspace.isSending ? "Sending…" : "Send"}
-          <HotkeyHint className="ml-2" command="threadComposer.send" />
-        </Button>
-        <Button
-          aria-label="Discard draft"
-          className="border-background border-l"
-          disabled={workspace.isBusy}
-          onClick={handleDiscard}
-          size="footer-icon"
-          title="Discard draft"
-          type="button"
-          variant="secondary"
-        >
-          <Trash2Icon />
+          <HotkeyHint
+            className={cn("ml-2", primaryFooterHintClassName)}
+            command="threadComposer.send"
+          />
         </Button>
       </div>
     </section>

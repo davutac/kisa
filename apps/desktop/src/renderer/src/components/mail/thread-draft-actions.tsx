@@ -2,6 +2,7 @@ import { ForwardIcon, ReplyAllIcon, ReplyIcon, Trash2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay, HotkeyHint } from "@/hotkeys";
+import { quietDestructiveClassName } from "@/lib/action-hierarchy";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 
 const ACTION_COPY = {
@@ -41,8 +42,20 @@ const MailThreadDraftActions = ({
   return (
     <section
       aria-label="Saved draft"
-      className="bg-background flex items-stretch overflow-hidden"
+      className="bg-background flex items-stretch gap-px overflow-hidden"
     >
+      <Button
+        aria-label="Discard draft"
+        className={quietDestructiveClassName}
+        disabled={disabled}
+        onClick={onDiscard}
+        size="footer-icon"
+        title="Discard draft"
+        type="button"
+        variant="secondary"
+      >
+        <Trash2Icon />
+      </Button>
       {targetAvailable ? (
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel(command)}
@@ -62,18 +75,6 @@ const MailThreadDraftActions = ({
           The original message for this draft is unavailable.
         </p>
       )}
-      <Button
-        aria-label="Discard draft"
-        className="border-background border-l"
-        disabled={disabled}
-        onClick={onDiscard}
-        size="footer-icon"
-        title="Discard draft"
-        type="button"
-        variant="secondary"
-      >
-        <Trash2Icon />
-      </Button>
     </section>
   );
 };

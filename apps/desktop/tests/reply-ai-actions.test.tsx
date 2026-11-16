@@ -55,7 +55,7 @@ vi.mock(import("@/components/mail/message-attachments"), () => ({
   default: () => null,
 }));
 
-vi.mock(import("@/components/mail/relative-time"), () => ({
+vi.mock(import("@/components/mail/mail-date"), () => ({
   default: () => <span />,
 }));
 

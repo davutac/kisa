@@ -1,4 +1,4 @@
-import { SendIcon } from "lucide-react";
+import { MessagesSquareIcon, SendIcon } from "lucide-react";
 import type { HTMLMotionProps } from "motion/react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { memo, useState } from "react";
@@ -6,7 +6,7 @@ import type { MouseEvent, PointerEvent } from "react";
 
 import MailAttachmentList from "@/components/mail/attachment-list";
 import MailLabelBadges from "@/components/mail/label-badges";
-import MailRelativeTime from "@/components/mail/relative-time";
+import MailDate from "@/components/mail/mail-date";
 import MailThreadQuickActions, {
   getMailThreadQuickActionsWidth,
 } from "@/components/mail/thread-quick-actions";
@@ -20,10 +20,13 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@/components/ui/item";
+import { useCalendar } from "@/hooks/use-calendar";
+import type { Calendar } from "@/hooks/use-calendar";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
 import { hasSentLabel } from "@/mail/label";
+import { formatMailDate } from "@/mail/mail-date";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
@@ -35,6 +38,8 @@ interface MailThreadItemProps extends Omit<
   hasCheckedThreads?: boolean;
   isChecked?: boolean;
   isSelected?: boolean;
+  /** The listed mailbox's own system label, which every row would repeat. */
+  mailboxLabel?: string;
   onDeleteForever?: (thread: GmailThreadSummary) => void;
   onOpen: (
     thread: GmailThreadSummary,
@@ -60,6 +65,21 @@ interface MailThreadItemProps extends Omit<
   /** Virtual row offset, passed as a number so memoized rows compare equal. */
   top: number;
 }
+
+const getThreadRowLabel = (
+  thread: GmailThreadSummary,
+  calendar: Calendar
+): string =>
+  [
+    thread.subject,
+    `from ${thread.from}`,
+    formatMailDate(thread.latestAt, calendar, "detailed"),
+    thread.isUnread ? "unread" : undefined,
+    thread.messageCount > 1 ? `${thread.messageCount} messages` : undefined,
+    hasSentLabel(thread.labels) ? "sent" : undefined,
+  ]
+    .filter((part) => part !== undefined)
+    .join(", ");
 
 const bindThreadAction = (
   action: ((thread: GmailThreadSummary) => void) | undefined,
@@ -131,6 +151,7 @@ const ThreadSelectionCheckbox = ({
 const ThreadSenderHeader = ({
   isChecked,
   isSelectionRevealed,
+  mailboxLabel,
   onSelectionPointerDown,
   onToggleSelection,
   showAccount,
@@ -138,12 +159,19 @@ const ThreadSenderHeader = ({
 }: {
   isChecked: boolean;
   isSelectionRevealed: boolean;
+  mailboxLabel?: string;
   onSelectionPointerDown: (event: PointerEvent) => void;
   onToggleSelection: () => void;
   showAccount: boolean;
   thread: GmailThreadSummary;
 }) => {
   const senderMailbox = parseMailboxAddress(thread.from);
+  const hasSenderName = senderMailbox.name !== undefined;
+  // Whichever part names the sender carries the unread weight; an address
+  // shown beside a name stays secondary.
+  const senderClassName = thread.isUnread
+    ? "text-foreground font-semibold"
+    : "text-foreground/80 font-normal";
 
   return (
     <ItemHeader className="min-w-0 flex-wrap justify-start gap-2">
@@ -158,16 +186,21 @@ const ThreadSenderHeader = ({
         className="max-w-full min-w-0 gap-1.5 overflow-hidden text-xs"
         title={thread.from}
       >
-        {senderMailbox?.name === undefined ? null : (
-          <span className="min-w-0 truncate font-medium">
+        {hasSenderName ? (
+          <span className={cn("min-w-0 truncate", senderClassName)}>
             {senderMailbox.name}
           </span>
-        )}
-        <span className="text-muted-foreground min-w-0 truncate">
-          {senderMailbox?.email}
+        ) : null}
+        <span
+          className={cn(
+            "min-w-0 truncate",
+            hasSenderName ? "text-muted-foreground" : senderClassName
+          )}
+        >
+          {senderMailbox.email}
         </span>
       </ItemTitle>
-      {hasSentLabel(thread.labels) ? (
+      {hasSentLabel(thread.labels) && mailboxLabel !== "SENT" ? (
         <span
           aria-hidden="true"
           className="text-muted-foreground inline-flex shrink-0"
@@ -179,6 +212,7 @@ const ThreadSenderHeader = ({
       <MailLabelBadges
         accountId={thread.accountId}
         labels={thread.labels}
+        omitLabel={mailboxLabel}
         size="compact"
       />
       {showAccount ? (
@@ -197,6 +231,7 @@ const MailThreadItem = ({
   hasCheckedThreads = false,
   isChecked = false,
   isSelected = false,
+  mailboxLabel,
   onDeleteForever,
   onOpen,
   onRowPointerDown,
@@ -214,6 +249,7 @@ const MailThreadItem = ({
   ...props
 }: MailThreadItemProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
+  const calendar = useCalendar();
   const [isHovered, setIsHovered] = useState(false);
   const { areQuickActionsRevealed, isActive } = getThreadItemRevealState(
     hasCheckedThreads,
@@ -290,8 +326,8 @@ const MailThreadItem = ({
         >
           <Item
             className={cn(
-              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3 data-[active=true]:opacity-100",
-              thread.isUnread ? "bg-muted/30" : "opacity-60"
+              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3",
+              thread.isUnread && "bg-muted/30"
             )}
             data-active={isActive}
             data-checked={isChecked}
@@ -299,7 +335,7 @@ const MailThreadItem = ({
           >
             <button
               aria-current={isSelected}
-              aria-label={`${thread.subject}, from ${thread.from}${hasSentLabel(thread.labels) ? ", sent" : ""}`}
+              aria-label={getThreadRowLabel(thread, calendar)}
               className="absolute inset-0 z-0 rounded-md text-left outline-none"
               onClick={(event) => {
                 onOpen(thread, event);
@@ -313,6 +349,7 @@ const MailThreadItem = ({
               <ThreadSenderHeader
                 isChecked={isChecked}
                 isSelectionRevealed={isActive}
+                mailboxLabel={mailboxLabel}
                 onSelectionPointerDown={(event) => {
                   onSelectionPointerDown(thread, event);
                 }}
@@ -327,21 +364,21 @@ const MailThreadItem = ({
                   className={cn(
                     "min-w-0 truncate text-sm",
                     thread.isUnread
-                      ? "font-semibold"
-                      : "text-foreground/90 font-medium"
+                      ? "text-foreground font-semibold"
+                      : "text-foreground/80 font-normal"
                   )}
                 >
                   {thread.subject}
                 </ItemTitle>
                 {thread.messageCount > 1 ? (
-                  <Badge
-                    aria-label={`${thread.messageCount} messages in this thread`}
-                    className="h-5 px-2 text-[10px] tabular-nums"
-                    title={`${thread.messageCount} messages`}
-                    variant="secondary"
+                  // The row's label already announces the count.
+                  <span
+                    aria-hidden="true"
+                    className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-xs tabular-nums"
                   >
-                    +{thread.messageCount} messages
-                  </Badge>
+                    <MessagesSquareIcon className="size-3" />
+                    {thread.messageCount}
+                  </span>
                 ) : null}
               </div>
               <ItemDescription className="line-clamp-1 text-sm">
@@ -368,14 +405,21 @@ const MailThreadItem = ({
                 </div>
               )}
             </ItemContent>
-            <ItemActions className="pointer-events-none relative z-10 self-start pt-0.5">
-              <MailRelativeTime
+            <ItemActions className="pointer-events-none relative z-10 gap-1.5 self-start pt-0.5">
+              {thread.isUnread ? (
+                <span
+                  aria-hidden="true"
+                  className="bg-primary size-1.5 shrink-0 rounded-full"
+                />
+              ) : null}
+              <MailDate
                 className={
                   thread.isUnread
                     ? "text-foreground text-xs font-medium"
                     : "text-muted-foreground text-xs"
                 }
                 timestamp={thread.latestAt}
+                tooltip={false}
               />
             </ItemActions>
           </Item>

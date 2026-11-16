@@ -1,14 +1,14 @@
-import { formatDistanceToNow, formatISO } from "date-fns";
-import { enUS } from "date-fns/locale";
+import { formatISO } from "date-fns";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { calendarStore } from "../src/renderer/src/hooks/use-calendar";
 import { getHotkeyAriaLabel } from "../src/renderer/src/hotkeys/commands";
-import ScheduledMailRow from "../src/renderer/src/routes/scheduled/-components/scheduled-mail-row";
 import {
-  formatScheduledAt,
-  LOCAL_TIME_ZONE,
-} from "../src/renderer/src/scheduled/schedule-time";
+  formatExactMailDate,
+  formatMailDate,
+} from "../src/renderer/src/mail/mail-date";
+import ScheduledMailRow from "../src/renderer/src/routes/scheduled/-components/scheduled-mail-row";
 import type { ScheduledMailSummary } from "../src/shared/ipc/scheduled-mail";
 
 const item: ScheduledMailSummary = {
@@ -54,8 +54,13 @@ describe("scheduled mail row surface", () => {
     expect(listItem).toContain("pb-px");
     expect(rowSurface).toBeDefined();
     expect(article).toContain("data-[active=true]:bg-muted/60");
-    expect(article).toContain("opacity-60");
     expect(article).not.toContain("bg-card");
+  });
+
+  it("keeps idle rows legible instead of fading the whole row", () => {
+    const article = renderRow({}).match(/<article[^>]*>/u)?.[0];
+
+    expect(article).not.toContain("opacity-");
   });
 
   it("does not draw a focus ring or border around the activation surface", () => {
@@ -119,28 +124,30 @@ describe("scheduled mail row surface", () => {
     expect(markup).not.toContain(">2 attachments<");
   });
 
-  it("shows relative scheduled time with the exact local time as its tooltip label", () => {
+  it("shows the delivery day and time with the exact local time as its tooltip label", () => {
     const markup = renderRow({});
     const scheduledTime = markup.match(/<time[^>]*>[^<]*<\/time>/u)?.[0];
-    const exactLabel = `${formatScheduledAt(item.scheduledAt)} (${LOCAL_TIME_ZONE})`;
-    const relativeLabel = formatDistanceToNow(item.scheduledAt, {
-      includeSeconds: false,
-      locale: enUS,
-    });
+    const calendar = calendarStore.getSnapshot();
+    const exactLabel = `${formatExactMailDate(item.scheduledAt, calendar)} (${calendar.timeZone})`;
+    const deliveryLabel = formatMailDate(
+      item.scheduledAt,
+      calendarStore.getSnapshot(),
+      "detailed"
+    );
 
     expect({
+      deliveryLabel: scheduledTime?.includes(`>${deliveryLabel}</time>`),
       exactLabel: scheduledTime?.includes(`aria-label="${exactLabel}"`),
       isCompact: scheduledTime?.includes("text-xs"),
       machineTime: scheduledTime?.includes(
         `dateTime="${formatISO(item.scheduledAt)}"`
       ),
-      relativeLabel: scheduledTime?.includes(`>${relativeLabel}</time>`),
       tooltip: markup.includes('data-slot="tooltip-trigger"'),
     }).toStrictEqual({
+      deliveryLabel: true,
       exactLabel: true,
       isCompact: true,
       machineTime: true,
-      relativeLabel: true,
       tooltip: true,
     });
     expect(markup).not.toContain("lucide-calendar-clock");

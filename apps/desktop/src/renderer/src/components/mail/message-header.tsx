@@ -1,8 +1,8 @@
 import { ChevronDownIcon } from "lucide-react";
 import type { Ref } from "react";
 
+import MailDate from "@/components/mail/mail-date";
 import MailMessageParticipants from "@/components/mail/message-participants";
-import MailRelativeTime from "@/components/mail/relative-time";
 import { cn } from "@/lib/utils";
 import type { GmailThreadMessage } from "@/shared/ipc/mail";
 
@@ -45,9 +45,11 @@ const MailMessageHeader = ({
         message={message}
       />
       <div className="flex shrink-0 items-center gap-1.5">
-        <MailRelativeTime
+        <MailDate
           className="text-muted-foreground text-xs"
           timestamp={message.sentAt}
+          tooltip={false}
+          variant="detailed"
         />
         <ChevronDownIcon
           aria-hidden="true"
