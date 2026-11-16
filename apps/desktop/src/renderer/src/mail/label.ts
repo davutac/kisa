@@ -1,6 +1,10 @@
 import type { CSSProperties } from "react";
 
-import type { GmailLabelColor, GmailLabelSummary } from "@/shared/ipc/mail";
+import type {
+  GmailLabelColor,
+  GmailLabelSummary,
+  GmailMailbox,
+} from "@/shared/ipc/mail";
 
 const SYSTEM_LABEL_NAMES = {
   CATEGORY_FORUMS: "Forums",
@@ -118,6 +122,13 @@ export const visibleGmailLabels = (
   showSystemLabels
     ? labels
     : labels.filter((label) => !isSystemGmailLabel(label));
+
+/**
+ * The system label every conversation in a mailbox carries. Rows listed in
+ * that mailbox leave it out rather than repeat where the reader already is.
+ */
+export const getMailboxSystemLabel = (mailbox: GmailMailbox): string =>
+  mailbox.toUpperCase();
 
 export const hasInboxLabel = (labels: readonly string[]): boolean =>
   labels.includes("INBOX");

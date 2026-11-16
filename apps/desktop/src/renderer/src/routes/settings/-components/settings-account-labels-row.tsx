@@ -4,8 +4,8 @@ import { toast } from "sonner";
 
 import { ConfirmMessage, useConfirm } from "@/components/confirm-dialog";
 import LabelDialog from "@/components/mail/label-dialog";
+import MailDate from "@/components/mail/mail-date";
 import MailLabelBadge from "@/components/mail/mail-label-badge";
-import MailRelativeTime from "@/components/mail/relative-time";
 import { Button } from "@/components/ui/button";
 import {
   SettingsRow,
@@ -153,8 +153,8 @@ const SettingsAccountLabelsRow = ({
               : `${labels.length} label${labels.length === 1 ? "" : "s"} of your own`}
             {catalog?.syncedAt === undefined ? null : (
               <>
-                {" · synced "}
-                <MailRelativeTime timestamp={catalog.syncedAt} />
+                {" · last synced: "}
+                <MailDate timestamp={catalog.syncedAt} variant="detailed" />
               </>
             )}
           </SettingsRowDescription>

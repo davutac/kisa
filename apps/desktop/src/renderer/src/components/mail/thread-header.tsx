@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
-import MailRelativeTime from "@/components/mail/relative-time";
+import MailDate from "@/components/mail/mail-date";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -23,6 +23,7 @@ import {
   useAppCommand,
 } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
+import { quietDestructiveClassName } from "@/lib/action-hierarchy";
 import { cn } from "@/lib/utils";
 
 interface MailThreadHeaderActionProps {
@@ -135,10 +136,19 @@ const MailThreadHeader = ({
             <ArrowLeftIcon />
           </MailThreadHeaderAction>
         ) : null}
-        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold select-text">
           {subject}
         </h1>
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+        {latestAt === undefined ? null : (
+          // Compact, so the subject keeps the room in a narrow pop-out window;
+          // each message header carries the detailed time.
+          <MailDate
+            className="text-muted-foreground mr-1 text-sm"
+            timestamp={latestAt}
+            tooltipSide="bottom"
+          />
+        )}
+        <div className="flex shrink-0 items-center gap-1">
           {isSpam ? (
             <MailThreadHeaderAction label="Not spam" onClick={onNotSpam}>
               <InboxIcon />
@@ -153,7 +163,7 @@ const MailThreadHeader = ({
           </MailThreadHeaderAction>
           {destructiveAction === undefined ? null : (
             <MailThreadHeaderAction
-              className="hover:bg-destructive/10 hover:text-destructive"
+              className={quietDestructiveClassName}
               command="thread.trashThread"
               label={destructiveLabel}
               onClick={destructiveAction}
@@ -161,22 +171,21 @@ const MailThreadHeader = ({
               <Trash2Icon />
             </MailThreadHeaderAction>
           )}
+          {onPopOut === undefined ? null : (
+            <>
+              {/* A window action, kept apart from the mail actions so a
+                  slip cannot trash the conversation. */}
+              <span aria-hidden="true" className="bg-border mx-1 h-4 w-px" />
+              <MailThreadHeaderAction
+                command="thread.popout"
+                label={popOutDisplay.label}
+                onClick={onPopOut}
+              >
+                <SquareArrowOutUpRightIcon />
+              </MailThreadHeaderAction>
+            </>
+          )}
         </div>
-        {latestAt === undefined ? null : (
-          <MailRelativeTime
-            className="text-muted-foreground ml-2 shrink-0 text-sm"
-            timestamp={latestAt}
-          />
-        )}
-        {onPopOut === undefined ? null : (
-          <MailThreadHeaderAction
-            command="thread.popout"
-            label={popOutDisplay.label}
-            onClick={onPopOut}
-          >
-            <SquareArrowOutUpRightIcon />
-          </MailThreadHeaderAction>
-        )}
       </div>
     </header>
   );

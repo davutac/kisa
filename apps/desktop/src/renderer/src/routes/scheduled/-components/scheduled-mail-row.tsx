@@ -9,7 +9,7 @@ import { useState } from "react";
 import type { CSSProperties, Ref } from "react";
 
 import { MailAttachmentSummaryPill } from "@/components/mail/attachment-pill";
-import MailRelativeTime from "@/components/mail/relative-time";
+import MailDate from "@/components/mail/mail-date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,10 +20,13 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@/components/ui/item";
+import { useCalendar } from "@/hooks/use-calendar";
+import type { Calendar } from "@/hooks/use-calendar";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
+import { quietDestructiveClassName } from "@/lib/action-hierarchy";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import { formatScheduledAt, LOCAL_TIME_ZONE } from "@/scheduled/schedule-time";
+import { formatExactMailDate, formatMailDate } from "@/mail/mail-date";
 import {
   getScheduledMailAttentionCopy,
   getScheduledRecipientSummary,
@@ -38,14 +41,17 @@ const quickActionVariants = {
   revealed: { opacity: 1 },
 };
 
-const getDeliveryNotice = (item: ScheduledMailSummary): string | null => {
+const getDeliveryNotice = (
+  item: ScheduledMailSummary,
+  calendar: Calendar
+): string | null => {
   if (item.deliveryState === "attention") {
     return getScheduledMailAttentionCopy(item.attentionReason);
   }
   if (item.deliveryState === "retrying") {
     return item.nextAttemptAt === undefined
       ? "Retrying delivery"
-      : `Retrying ${formatScheduledAt(item.nextAttemptAt)}`;
+      : `Retrying · next attempt: ${formatMailDate(item.nextAttemptAt, calendar, "detailed")}`;
   }
   return item.deliveryState === "sending" ? "Sending…" : null;
 };
@@ -117,7 +123,10 @@ const ScheduledMailQuickAction = ({
       <Button
         aria-keyshortcuts={getHotkeyAriaLabel("scheduled.discard")}
         aria-label={`Discard scheduled email: ${subject}`}
-        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive h-auto w-full min-w-0 rounded-none pl-3"
+        className={cn(
+          "text-muted-foreground h-auto w-full min-w-0 rounded-none pl-3",
+          quietDestructiveClassName
+        )}
         disabled={disabled}
         onClick={onDiscard}
         size="icon"
@@ -157,17 +166,21 @@ const ScheduledMailDetails = ({
           title={`To ${recipientLabel}`}
         >
           <span className="text-muted-foreground shrink-0">To</span>
-          <span className="min-w-0 truncate font-medium">{recipientLabel}</span>
+          <span className="text-foreground/80 min-w-0 truncate">
+            {recipientLabel}
+          </span>
         </ItemTitle>
         <ItemTitle
           className="max-w-full min-w-0 gap-1.5 overflow-hidden text-xs"
           title={`From ${item.accountId}`}
         >
           <span className="text-muted-foreground shrink-0">From</span>
-          <span className="min-w-0 truncate font-medium">{item.accountId}</span>
+          <span className="text-foreground/80 min-w-0 truncate">
+            {item.accountId}
+          </span>
         </ItemTitle>
       </ItemHeader>
-      <ItemTitle className="text-foreground/90 min-w-0 truncate text-sm font-medium">
+      <ItemTitle className="text-foreground/80 min-w-0 truncate text-sm font-normal">
         {subject}
       </ItemTitle>
       {item.preview.length === 0 ? null : (
@@ -246,10 +259,15 @@ const ScheduledMailRow = ({
     null
   );
   const isHovered = hoveredAtRevision === quickActionResetRevision;
-  const scheduledLabel = formatScheduledAt(item.scheduledAt);
+  // The visible date, its tooltip, and the spoken summary all read the same
+  // calendar, so a time-zone change while Scheduled is open moves them
+  // together.
+  const calendar = useCalendar();
+  const scheduledLabel = formatExactMailDate(item.scheduledAt, calendar);
+  const timeZoneLabel = calendar.timeZone ?? "local time";
   const recipientLabel = getScheduledRecipientSummary(item.recipients);
   const subject = item.subject.trim() || "No subject";
-  const deliveryNotice = getDeliveryNotice(item);
+  const deliveryNotice = getDeliveryNotice(item, calendar);
   const deliverySummary =
     deliveryNotice === null
       ? `Scheduled for ${scheduledLabel}`
@@ -295,7 +313,7 @@ const ScheduledMailRow = ({
         >
           <Item
             className={cn(
-              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3 opacity-60 data-[active=true]:opacity-100",
+              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3",
               item.deliveryState === "attention" &&
                 !(selected || isHovered) &&
                 "bg-[color-mix(in_oklch,var(--card)_95%,var(--destructive))]"
@@ -331,10 +349,11 @@ const ScheduledMailRow = ({
                 }
               }}
             >
-              <MailRelativeTime
+              <MailDate
                 className="text-muted-foreground text-xs"
-                exactDateLabel={`${scheduledLabel} (${LOCAL_TIME_ZONE})`}
+                exactDateLabel={`${scheduledLabel} (${timeZoneLabel})`}
                 timestamp={item.scheduledAt}
+                variant="detailed"
               />
             </ItemActions>
           </Item>

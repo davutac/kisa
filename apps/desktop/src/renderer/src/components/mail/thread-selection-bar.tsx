@@ -19,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getHotkeyAriaLabel, getHotkeyDisplay, useAppCommand } from "@/hotkeys";
+import { quietDestructiveClassName } from "@/lib/action-hierarchy";
+import { cn } from "@/lib/utils";
 import { getBulkLabelGroups } from "@/mail/bulk-thread-selection";
 import type { ThreadActions } from "@/mail/use-thread-actions";
 import type { GmailThreadSummary } from "@/shared/ipc/mail";
@@ -85,8 +87,8 @@ const ThreadSelectionBar = ({
         aria-label="Selection"
         className="flex min-w-0 items-center border-0"
       >
-        <span className="text-muted-foreground flex h-8 min-w-8 items-center justify-center px-2 text-xs tabular-nums">
-          {threads.length}
+        <span className="text-muted-foreground flex h-8 items-center px-2.5 text-xs whitespace-nowrap tabular-nums">
+          {threads.length} selected
         </span>
         <Button
           aria-label="Clear conversation selection"
@@ -237,7 +239,7 @@ const ThreadSelectionBar = ({
                 ? "Permanently delete selected conversations"
                 : "Move selected conversations to trash"
             }
-            className="text-destructive hover:text-destructive focus-visible:text-destructive size-8 rounded-full"
+            className={cn("size-8 rounded-full", quietDestructiveClassName)}
             disabled={isPending}
             onClick={() => {
               void run(destructiveAction);

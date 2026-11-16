@@ -20,7 +20,7 @@ const ParticipantRow = ({ emails, label }: ParticipantRowProps) => (
   <div className="flex min-w-0 items-baseline gap-2">
     <dt className="text-muted-foreground shrink-0">{label}</dt>
     <dd
-      className="text-muted-foreground flex min-w-0 truncate"
+      className="text-muted-foreground -ml-1 flex min-w-0 truncate px-1"
       title={emails.join(", ")}
     >
       {emails.map((email, index) => (
@@ -69,7 +69,7 @@ const MailMessageParticipants = ({
         <div className="flex min-w-0 items-baseline gap-2">
           <dt className="text-muted-foreground shrink-0">From</dt>
           <dd
-            className="flex min-w-0 items-baseline gap-1.5 truncate"
+            className="-ml-1 flex min-w-0 items-baseline gap-2 truncate px-1"
             title={senderTitle}
           >
             {senderName === undefined ? null : (

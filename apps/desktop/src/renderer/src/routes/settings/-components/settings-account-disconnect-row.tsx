@@ -93,7 +93,7 @@ const SettingsAccountDisconnectRow = ({
             void requestDisconnect();
           }}
           type="button"
-          variant="secondary"
+          variant="destructive"
         >
           {isDisconnecting ? (
             <LoaderCircleIcon className="animate-spin" />

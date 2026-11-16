@@ -3,6 +3,7 @@ import { m, useReducedMotionConfig } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
+import { quietDestructiveClassName } from "@/lib/action-hierarchy";
 import { MOTION_EASE, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -116,7 +117,7 @@ const MailThreadQuickActions = ({
           aria-label={destructiveLabel}
           className={cn(
             quickActionClassName,
-            "hover:bg-destructive/10 hover:text-destructive",
+            quietDestructiveClassName,
             hasThreeActions ? "row-span-2" : "pl-3"
           )}
           onClick={destructiveAction}

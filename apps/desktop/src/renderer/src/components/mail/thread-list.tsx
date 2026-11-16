@@ -27,6 +27,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useRemeasureOnScrollSettle } from "@/hooks/use-remeasure-on-scroll-settle";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
+import { getMailboxSystemLabel } from "@/mail/label";
 import {
   getBulkThreadDestructiveAction,
   getThreadDestructiveAction,
@@ -86,6 +87,11 @@ const hasDestructiveTarget = (
 interface ThreadListPresentation {
   readonly emptyIcon: React.ReactNode;
   readonly label: string;
+  /**
+   * The mailbox's own system label, left off its rows. Search spans every
+   * mailbox, so its rows keep the label that says where each one lives.
+   */
+  readonly mailboxLabel?: string;
 }
 
 const getThreadListPresentation = (
@@ -95,16 +101,17 @@ const getThreadListPresentation = (
   if (searchResults) {
     return { emptyIcon: <SearchIcon />, label: "Search results" };
   }
+  const mailboxLabel = getMailboxSystemLabel(mailbox);
   if (mailbox === "spam") {
-    return { emptyIcon: <ShieldAlertIcon />, label: "Spam" };
+    return { emptyIcon: <ShieldAlertIcon />, label: "Spam", mailboxLabel };
   }
   if (mailbox === "sent") {
-    return { emptyIcon: <SendIcon />, label: "Sent" };
+    return { emptyIcon: <SendIcon />, label: "Sent", mailboxLabel };
   }
   if (mailbox === "trash") {
-    return { emptyIcon: <Trash2Icon />, label: "Trash" };
+    return { emptyIcon: <Trash2Icon />, label: "Trash", mailboxLabel };
   }
-  return { emptyIcon: <InboxIcon />, label: "Inbox" };
+  return { emptyIcon: <InboxIcon />, label: "Inbox", mailboxLabel };
 };
 
 const MailThreadList = ({
@@ -154,6 +161,9 @@ const MailThreadList = ({
   // keys off `hasNextPage`, so a note cannot start a paging loop.
   const hasTrailingRow = hasNextPage || trailingMessage !== undefined;
   const presentation = getThreadListPresentation(searchResults, mailbox);
+  // The floating selection bar (bottom-4 plus its 44px height) would cover
+  // the last row, so the list reserves room below it while it is shown.
+  const bottomClearance = checkedThreadIds.size > 0 ? 80 : 16;
   const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
     count: threads.length + (hasTrailingRow ? 1 : 0),
@@ -167,7 +177,7 @@ const MailThreadList = ({
     getScrollElement: () => scrollElementRef.current,
     onChange: remeasureOnScrollSettle,
     overscan: 8,
-    scrollPaddingEnd: 24,
+    scrollPaddingEnd: bottomClearance + 8,
     scrollPaddingStart: 24,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -464,8 +474,9 @@ const MailThreadList = ({
     <>
       <section
         aria-label={presentation.label}
-        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4"
+        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4"
         ref={scrollElementRef}
+        style={{ paddingBottom: bottomClearance }}
         tabIndex={-1}
       >
         {threads.length === 0 ? (
@@ -524,6 +535,7 @@ const MailThreadList = ({
                     getThreadSelectionKey(thread) === selectedThreadKey
                   }
                   key={virtualRow.key}
+                  mailboxLabel={presentation.mailboxLabel}
                   {...getRowDestructiveActions(
                     thread,
                     handleDeleteForever,

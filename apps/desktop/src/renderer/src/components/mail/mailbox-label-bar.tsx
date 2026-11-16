@@ -23,10 +23,7 @@ import {
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { createMailboxLabelItems } from "@/mail/mailbox-labels";
-import type {
-  MailboxLabelCatalog,
-  MailboxLabelItem,
-} from "@/mail/mailbox-labels";
+import type { MailboxLabelItem } from "@/mail/mailbox-labels";
 import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
 import {
   centerMailboxLabel,
@@ -35,71 +32,6 @@ import {
 import { useMailboxLabelScroll } from "@/mail/use-mailbox-label-scroll";
 import { useGmailLabelCatalogSnapshot } from "@/state/gmail-labels";
 import { useMailboxStore, useSelectedLabelNames } from "@/state/mailbox";
-
-// TEMP: dev-only sample labels for testing strip overflow. Remove before commit.
-const DEV_SAMPLE_LABEL_COLORS = [
-  { background: "#16a766", text: "#ffffff" },
-  { background: "#4a86e8", text: "#ffffff" },
-  { background: "#fad165", text: "#000000" },
-  { background: "#f691b3", text: "#994a64" },
-  { background: "#8e63ce", text: "#ffffff" },
-  { background: "#fb4c2f", text: "#ffffff" },
-  { background: "#2da2bb", text: "#ffffff" },
-] as const;
-const DEV_SAMPLE_LABEL_NAMES = [
-  "Receipts",
-  "Travel",
-  "Newsletters",
-  "Family",
-  "Steuern 2025",
-  "Projects/Kisa",
-  "A very long label name that should truncate nicely",
-  "Invoices",
-  "Recruiting",
-  "Conferences",
-  "Design Reviews",
-  "Photos",
-  "Insurance",
-  "Wohnung",
-  "Bank",
-  "Subscriptions",
-  "Follow up",
-  "Waiting on reply",
-  "Read later",
-  "Car",
-  "Health",
-  "Open Source",
-  "Shipping",
-  "Events",
-  "Legal",
-  "Support Tickets",
-];
-const createDevSampleLabelCatalog = (
-  accountId: string,
-  names: readonly string[]
-): MailboxLabelCatalog => ({
-  accountId,
-  labels: names.map((name, index) => ({
-    color: DEV_SAMPLE_LABEL_COLORS[index % DEV_SAMPLE_LABEL_COLORS.length],
-    id: `dev-sample-${index}`,
-    name,
-    type: "user",
-  })),
-});
-const DEV_SAMPLE_LABEL_CATALOGS: readonly MailboxLabelCatalog[] = import.meta
-  .env.DEV
-  ? [
-      createDevSampleLabelCatalog(
-        "sample-one@example.test",
-        DEV_SAMPLE_LABEL_NAMES
-      ),
-      // Every third label also exists in a second account for the count badge.
-      createDevSampleLabelCatalog(
-        "sample-two@example.test",
-        DEV_SAMPLE_LABEL_NAMES.filter((_, index) => index % 3 === 0)
-      ),
-    ]
-  : [];
 
 interface MailboxLabelChipsProps {
   readonly items: readonly MailboxLabelItem[];
@@ -393,13 +325,12 @@ const MailboxLabelBar = () => {
   };
   const items = useMemo(
     () =>
-      createMailboxLabelItems([
-        ...accountIds.flatMap((accountId) => {
+      createMailboxLabelItems(
+        accountIds.flatMap((accountId) => {
           const labels = catalogs.get(accountId);
           return labels === undefined ? [] : [{ accountId, labels }];
-        }),
-        ...DEV_SAMPLE_LABEL_CATALOGS,
-      ]),
+        })
+      ),
     [accountIds, catalogs]
   );
   const visibleNames = useMemo(
