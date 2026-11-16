@@ -137,6 +137,7 @@ export class ThreadSummary extends Schema.Class<ThreadSummary>(
   latestMessageId: MessageId,
   messageCount: PositiveInt,
   participants: Schema.Array(Mailbox),
+  /** Gmail's snippet verbatim, HTML entities still escaped; decode to show. */
   snippet: Schema.String,
   subject: Schema.String,
 }) {}

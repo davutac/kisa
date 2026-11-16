@@ -14,6 +14,7 @@ import {
   getMainWindow,
   openThreadWindow,
 } from "../window/create-window";
+import { decodeGmailSnippet } from "./html-entities";
 
 const GMAIL_INBOX_LABEL = "INBOX";
 const GMAIL_UNREAD_LABEL = "UNREAD";
@@ -136,8 +137,21 @@ const truncateNotificationText = (value: string, maxBytes: number): string => {
   return `${truncated.trimEnd()}${ellipsis}`;
 };
 
+// Linux notification servers that advertise `body-markup` (GNOME, KDE, Xfce,
+// mako, dunst) read the body as a markup subset, and Electron hands it to
+// libnotify unescaped. The snippet is sender-controlled, so there it is
+// escaped back to text after truncation, which can never split an entity.
+// The summary (title) is plain text by specification; macOS and Windows show
+// the body as plain text too.
+const escapeNotificationMarkup = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
 export const toNewMailNotificationCopy = (
-  message: NewMailNotificationMessage
+  message: NewMailNotificationMessage,
+  platform: NodeJS.Platform = process.platform
 ): NewMailNotificationCopy => {
   const senderName = cleanNotificationText(message.fromName ?? "");
   const senderAddress = cleanNotificationText(message.fromAddress);
@@ -149,7 +163,12 @@ export const toNewMailNotificationCopy = (
       : `${senderName} <${senderAddress}>`;
 
   return {
-    body: truncateNotificationText(snippet, MAX_NOTIFICATION_BODY_BYTES),
+    body:
+      platform === "linux"
+        ? escapeNotificationMarkup(
+            truncateNotificationText(snippet, MAX_NOTIFICATION_BODY_BYTES)
+          )
+        : truncateNotificationText(snippet, MAX_NOTIFICATION_BODY_BYTES),
     subtitle: truncateNotificationText(subject, MAX_NOTIFICATION_HEADING_BYTES),
     title: truncateNotificationText(
       sender.length === 0 ? message.fromAddress : sender,
@@ -420,7 +439,9 @@ export const selectNewMailNotificationMessages = (
     )
     .slice(0, MAX_NOTIFICATIONS_PER_SYNC);
   const snippetsByThread = new Map(
-    threads.map((thread) => [thread.threadId, thread.snippet] as const)
+    threads.map(
+      (thread) => [thread.threadId, decodeGmailSnippet(thread.snippet)] as const
+    )
   );
 
   return eligible.map((message) => {

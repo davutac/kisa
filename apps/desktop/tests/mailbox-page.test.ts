@@ -122,6 +122,21 @@ describe(listCachedThreadPageFromDatabase, () => {
 
   afterAll(() => connection.close());
 
+  it("decodes Gmail's HTML-escaped snippet for display", async () => {
+    connection
+      .prepare("UPDATE gmail_threads SET snippet = ? WHERE thread_id = ?")
+      .run("Davut &lt;davut@example.com&gt; wrote: it&#39;s", "work-inbox");
+
+    const result = await listCachedThreadPageFromDatabase(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      mailbox: "inbox",
+    });
+
+    expect(
+      result.threads.find(({ threadId }) => threadId === "work-inbox")?.snippet
+    ).toBe("Davut <davut@example.com> wrote: it's");
+  });
+
   it("matches every selected label inside account and unread scope", async () => {
     const result = await listCachedThreadPageFromDatabase(remoteDatabase, {
       accountIds: ["one@example.com"],

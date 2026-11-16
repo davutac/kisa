@@ -56,6 +56,7 @@ Google recommends poll-based synchronization for installed applications. Gmail a
 - List operations generally return identifiers and thread identifiers. Fetching message content requires additional `get` operations.
 - Search supports most, but not all, behavior from Gmail's web interface. Results are paginated with at most 500 messages per page. See [listing messages](https://developers.google.com/workspace/gmail/api/guides/list-messages) and [search differences](https://developers.google.com/workspace/gmail/api/guides/filtering).
 - A reply joins an existing Gmail thread only when it supplies the target `threadId`, a matching subject, and valid `References` and `In-Reply-To` headers.
+- A message `snippet` is plain text with HTML special characters escaped (`it&#39;s`, `&lt;a@example.com&gt;`). The gateway and `gmail_threads.snippet` keep it exactly as Gmail sent it; mailbox rows, search results, and notifications decode it once with `decodeGmailSnippet` as they present it. Decoding at presentation keeps existing cached rows correct without a migration and cannot decode twice. React still renders the decoded text as text, never markup.
 - Message content is MIME data, not safe application markup. Kisa remains responsible for HTML isolation, remote-image blocking, URL validation, and safe attachment handling.
 - Gmail message and thread IDs are only unique within their account. Every cached record, cursor, event, and mutation must remain account-scoped.
 

@@ -93,7 +93,7 @@ describe("mail search", () => {
       '["Important"]',
       1,
       1,
-      "Archived thread",
+      "Archived &lt;thread&gt; it&#39;s",
       "Archived thread",
       "archived-thread",
       1
@@ -202,6 +202,18 @@ describe("mail search", () => {
       "inbox-thread",
       "archived-thread",
     ]);
+  });
+
+  it("decodes Gmail's HTML-escaped snippets in results", async () => {
+    const important = await runIndexedThreadSearchRemote(remoteDatabase, {
+      accountIds: ["one@example.com"],
+      filters: [{ field: "label", value: "important" }],
+    });
+
+    expect(
+      important.threads.find(({ threadId }) => threadId === "archived-thread")
+        ?.snippet
+    ).toBe("Archived <thread> it's");
   });
 
   it("keeps Spam out of default results unless explicitly requested", async () => {

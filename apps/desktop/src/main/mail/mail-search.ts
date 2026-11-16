@@ -17,6 +17,7 @@ import {
   listCachedCorrespondents,
   loadCachedCorrespondentsRemote,
 } from "./correspondent-cache";
+import { decodeGmailSnippet } from "./html-entities";
 import { toContainsPattern, toFtsMatchQuery } from "./search-match";
 
 const DEFAULT_RESULT_LIMIT = 50;
@@ -138,7 +139,7 @@ const toThreadSummary = (row: SearchThreadRow): GmailThreadSummary => {
     labels: parseJsonArray<string>(row.labels),
     latestAt: row.latest_at,
     messageCount: row.message_count,
-    snippet: row.snippet,
+    snippet: decodeGmailSnippet(row.snippet),
     subject: row.subject,
     threadId: row.thread_id,
   };
