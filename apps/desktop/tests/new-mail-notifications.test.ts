@@ -244,6 +244,37 @@ describe(showNewMailNotifications, () => {
     expect(mocks.createdNotifications).toStrictEqual([]);
   });
 
+  it("shows Gmail's HTML-escaped snippet as plain text", () => {
+    const [notification] = selectNewMailNotificationMessages(
+      "user@example.com",
+      [makeMessage("new", ["INBOX", "UNREAD"])],
+      [{ snippet: "it&#39;s &lt;here&gt; &amp; now", threadId: "thread-new" }]
+    );
+
+    expect(notification?.snippet).toBe("it's <here> & now");
+  });
+
+  it("escapes the decoded body back to text only for Linux markup servers", () => {
+    const message = {
+      accountId: "user@example.com",
+      fromAddress: "sender@example.com",
+      messageId: "new",
+      snippet: "Davut <davut@example.com> wrote: a & b",
+      subject: "Subject",
+      threadId: "thread-new",
+    };
+
+    expect({
+      linux: toNewMailNotificationCopy(message, "linux").body,
+      macOS: toNewMailNotificationCopy(message, "darwin").body,
+      windows: toNewMailNotificationCopy(message, "win32").body,
+    }).toStrictEqual({
+      linux: "Davut &lt;davut@example.com&gt; wrote: a &amp; b",
+      macOS: "Davut <davut@example.com> wrote: a & b",
+      windows: "Davut <davut@example.com> wrote: a & b",
+    });
+  });
+
   it("notifies only for unread Inbox messages", async () => {
     mocks.messages = [
       makeMessage("new", ["INBOX", "UNREAD"]),

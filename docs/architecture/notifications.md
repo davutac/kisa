@@ -18,4 +18,6 @@ Kisa closes active notifications when a thread is marked as read, leaves Inbox (
 
 ## Platform behavior
 
+The body is the thread's Gmail snippet, decoded from Gmail's HTML escaping like every other displayed snippet, stripped of control and bidirectional characters, and bounded in bytes. Electron hands the body to libnotify unescaped, and Linux notification servers that advertise `body-markup` read it as a markup subset, so on Linux the bounded body is escaped back to text; sender-controlled text never becomes notification markup. The title is plain text by the notification specification, and macOS and Windows show the body as plain text.
+
 Electron's main-process `Notification` API owns delivery. macOS requires a code-signed app for notifications to appear; Windows packaged notifications use Kisa's configured AppUserModelID; Linux delivery depends on the desktop's notification service. OS-level permission or focus settings remain controlled by the user.

@@ -8,6 +8,7 @@ import type {
   GmailMailbox,
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
+import { decodeGmailSnippet } from "./html-entities";
 
 export const THREAD_PAGE_SIZE = 50;
 
@@ -48,7 +49,7 @@ export const toCachedThreadSummary = (
     labels: row.labels ?? [],
     latestAt: row.latestAt,
     messageCount: row.messageCount,
-    snippet: row.snippet,
+    snippet: decodeGmailSnippet(row.snippet),
     subject: row.subject,
     threadId: row.threadId,
   };
