@@ -55,6 +55,12 @@ export const gmailMessages = sqliteTable(
      * this so stale output can be invalidated rather than silently served.
      */
     schemaVersion: integer("schema_version").notNull(),
+    /**
+     * Whether Gmail authenticated the From domain. `null` for rows stored
+     * before Kisa recorded it; readers treat that as not authenticated until
+     * the message is fetched again.
+     */
+    senderAuthenticated: integer("sender_authenticated", { mode: "boolean" }),
     subject: text("subject").notNull(),
     threadId: text("thread_id").notNull(),
     toAddresses: text("to_addresses", { mode: "json" }).$type<

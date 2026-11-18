@@ -13,6 +13,7 @@ import type {
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
+import { toDisplayedAttachment } from "./attachment-filename";
 import {
   listCachedCorrespondents,
   loadCachedCorrespondentsRemote,
@@ -125,7 +126,7 @@ const parseJsonArray = <A>(value: string | null): readonly A[] => {
 const toThreadSummary = (row: SearchThreadRow): GmailThreadSummary => {
   const attachments = parseJsonArray<GmailThreadSummary["attachments"][number]>(
     row.attachments
-  );
+  ).map(toDisplayedAttachment);
 
   return {
     accountId: row.account_email,

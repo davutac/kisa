@@ -64,22 +64,28 @@ export const getAttachmentPreviewKind = (
     : undefined;
 };
 
+/**
+ * The short type shown beside an attachment's name. The extension decides
+ * first, because it is what decides how the operating system opens the file;
+ * the media type is only the sender's claim, and labelling `invoice.scr` as
+ * CSV because it was declared `text/csv` would hide what it is.
+ */
 export const getAttachmentTypeLabel = (
   filename: string,
   mediaType: string
 ): string => {
-  const normalizedMediaType = normalizeMediaType(mediaType);
-  const knownLabel = MEDIA_TYPE_LABELS[normalizedMediaType];
-
-  if (knownLabel !== undefined) {
-    return knownLabel;
-  }
-
   const extension =
     FILENAME_EXTENSION_PATTERN.exec(filename)?.groups?.["extension"];
 
   if (extension !== undefined) {
     return extension.toUpperCase();
+  }
+
+  const normalizedMediaType = normalizeMediaType(mediaType);
+  const knownLabel = MEDIA_TYPE_LABELS[normalizedMediaType];
+
+  if (knownLabel !== undefined) {
+    return knownLabel;
   }
 
   const [category] = normalizedMediaType.split("/", 1);

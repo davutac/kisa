@@ -15,14 +15,17 @@ export interface EmailDocumentOptions {
 }
 
 // Stripping the markup hides the blocked images; this policy is what keeps the
-// message from reaching the network behind that.
+// message from reaching the network behind that. Shown images load over
+// HTTPS only: `http:` URLs are upgraded first, so an image on a router or
+// another plain-HTTP device on the reader's network cannot be requested.
 const createContentSecurityPolicy = (allowRemoteImages: boolean): string =>
   [
     "default-src 'none'",
     "font-src data:",
     "form-action 'none'",
-    `img-src data: cid:${allowRemoteImages ? " https: http:" : ""}`,
+    `img-src data: cid:${allowRemoteImages ? " https:" : ""}`,
     "style-src 'unsafe-inline'",
+    "upgrade-insecure-requests",
   ].join("; ");
 
 // The HTML parser only creates a `<link>` element from these characters, in

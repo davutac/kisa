@@ -18,6 +18,7 @@ const messageFrom = (
   from,
   id,
   labelIds: [],
+  senderAuthenticated: false,
   sentAt: 0,
   snippet: "",
   subject: "",

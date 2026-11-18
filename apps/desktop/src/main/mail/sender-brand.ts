@@ -9,6 +9,11 @@ import { getDomain } from "tldts";
 
 import type { GmailSenderBrand } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
+import {
+  extractSenderDomain,
+  getGmailAuthentication,
+  getHeaderValues,
+} from "./sender-authentication";
 
 const AVAILABLE_TTL_MS = 24 * 60 * 60 * 1000;
 const MISSING_TTL_MS = 60 * 60 * 1000;
@@ -37,7 +42,6 @@ export interface SenderBrandRequest {
 export interface BimiDiscoveryTarget {
   readonly authorDomain: string;
   readonly selector: string;
-  readonly trustIndicator: boolean;
 }
 
 interface BimiLocation {
@@ -68,47 +72,6 @@ export class SenderBrandError extends Schema.TaggedError<SenderBrandError>()(
   { message: Schema.String }
 ) {}
 
-const getHeaderValues = (
-  headers: readonly MessageHeader[],
-  name: string
-): readonly string[] =>
-  headers
-    .filter((header) => header.name.toLowerCase() === name)
-    .map(({ value }) => value);
-
-export const extractSenderDomain = (from: string): string | null => {
-  const angleBracketDomain = from.match(
-    /<\s*[^<>\s@]+@(?<domain>[^\s<>,;@"']+)\s*>/u
-  )?.groups?.domain;
-  const domain = (
-    angleBracketDomain ??
-    from.match(/@(?<domain>[^\s<>,;@"']+)/u)?.groups?.domain
-  )
-    ?.replaceAll(/\.+$/gu, "")
-    .toLowerCase();
-
-  if (
-    domain === undefined ||
-    domain.length > 253 ||
-    !domain.includes(".") ||
-    isIP(domain) !== 0
-  ) {
-    return null;
-  }
-
-  return domain;
-};
-
-const isAlignedBimiResult = (
-  senderDomain: string,
-  bimiDomain: string | undefined,
-  selector: string
-): boolean =>
-  bimiDomain !== undefined &&
-  selector.length <= 63 &&
-  /^[a-z\d](?:[a-z\d-]*[a-z\d])?$/u.test(selector) &&
-  (senderDomain === bimiDomain || senderDomain.endsWith(`.${bimiDomain}`));
-
 const isValidSelector = (selector: string): boolean =>
   selector.length <= 253 &&
   selector
@@ -117,101 +80,6 @@ const isValidSelector = (selector: string): boolean =>
       (label) =>
         label.length <= 63 && /^[a-z\d](?:[a-z\d-]*[a-z\d])?$/u.test(label)
     );
-
-const isAlignedDomain = (
-  domain: string,
-  authenticatedDomain: string
-): boolean =>
-  domain === authenticatedDomain || domain.endsWith(`.${authenticatedDomain}`);
-
-interface BimiAuthentication {
-  readonly bimiPassed: boolean;
-  readonly selector: string;
-}
-
-const getBimiAuthentication = (
-  authentication: string,
-  senderDomain: string
-): BimiAuthentication => {
-  const bimiProperties = authentication.match(
-    /\bbimi=pass\b(?<properties>[^;]*)/iu
-  )?.groups?.properties;
-  const bimiDomain = bimiProperties
-    ?.match(/\bheader\.d=(?<domain>[^\s;]+)/iu)
-    ?.groups?.domain?.toLowerCase();
-  const selector =
-    bimiProperties
-      ?.match(/\bheader\.selector=(?<selector>[^\s;]+)/iu)
-      ?.groups?.selector?.toLowerCase() ?? "default";
-
-  return {
-    bimiPassed: isAlignedBimiResult(senderDomain, bimiDomain, selector),
-    selector,
-  };
-};
-
-const hasEligibleDmarcPolicy = (dmarcProperties: string): boolean => {
-  const policy = dmarcProperties
-    .match(/\bp=(?<policy>none|quarantine|reject)\b/iu)
-    ?.groups?.policy?.toLowerCase();
-  const subdomainPolicy = dmarcProperties
-    .match(/\bsp=(?<policy>none|quarantine|reject)\b/iu)
-    ?.groups?.policy?.toLowerCase();
-  const percentage = dmarcProperties.match(/\bpct=(?<value>\d{1,3})\b/iu)
-    ?.groups?.value;
-
-  return (
-    subdomainPolicy !== "none" &&
-    (policy === "reject" ||
-      (policy === "quarantine" &&
-        (percentage === undefined || percentage === "100")))
-  );
-};
-
-// Authentication-Results is accepted only from Gmail's receiving boundary.
-// Sender-provided BIMI headers alone never authorize an indicator.
-const getTrustedAuthentication = (
-  headers: readonly MessageHeader[],
-  senderDomain: string
-): {
-  bimiPassed: boolean;
-  domain: string;
-  hasEligibleDmarcPolicy: boolean;
-  selector: string;
-} | null => {
-  const authentication = getHeaderValues(
-    headers,
-    "authentication-results"
-  ).find((value) => /^\s*mx\.google\.com\s*;/iu.test(value));
-
-  if (authentication === undefined) {
-    return null;
-  }
-
-  const dmarcProperties = authentication.match(
-    /\bdmarc=pass\b(?<properties>[^;]*)/iu
-  )?.groups?.properties;
-  const authenticatedFrom = dmarcProperties
-    ?.match(/\bheader\.from=(?<domain>[^\s;]+)/iu)
-    ?.groups?.domain?.toLowerCase();
-
-  if (
-    dmarcProperties === undefined ||
-    authenticatedFrom === undefined ||
-    !isAlignedDomain(senderDomain, authenticatedFrom)
-  ) {
-    return null;
-  }
-
-  const bimi = getBimiAuthentication(authentication, senderDomain);
-
-  return {
-    bimiPassed: bimi.bimiPassed,
-    domain: authenticatedFrom,
-    hasEligibleDmarcPolicy: hasEligibleDmarcPolicy(dmarcProperties),
-    selector: bimi.selector,
-  };
-};
 
 export const parseBimiSelector = (value: string): string | null => {
   const entries = value.split(";").map((entry) => entry.trim());
@@ -239,18 +107,14 @@ export const getBimiDiscoveryTarget = (
   headers: readonly MessageHeader[],
   senderDomain: string
 ): BimiDiscoveryTarget | null => {
-  const authentication = getTrustedAuthentication(headers, senderDomain);
+  const authentication = getGmailAuthentication(headers, senderDomain);
 
   if (authentication === null) {
     return null;
   }
 
   if (authentication.bimiPassed) {
-    return {
-      authorDomain: senderDomain,
-      selector: authentication.selector,
-      trustIndicator: true,
-    };
+    return { authorDomain: senderDomain, selector: authentication.selector };
   }
 
   if (!authentication.hasEligibleDmarcPolicy) {
@@ -269,9 +133,7 @@ export const getBimiDiscoveryTarget = (
       ? "default"
       : parseBimiSelector(selectorHeader);
 
-  return selector === null
-    ? null
-    : { authorDomain: senderDomain, selector, trustIndicator: false };
+  return selector === null ? null : { authorDomain: senderDomain, selector };
 };
 
 export const getBimiLookupDomains = (
@@ -603,20 +465,6 @@ const validateSvgIndicator = (data: Buffer): Buffer | null => {
   return /<svg(?:\s|>)/iu.test(source) ? data : null;
 };
 
-const decodeBimiIndicator = (value: string): Buffer | null => {
-  const encoded = value.replaceAll(/\s/gu, "");
-
-  if (encoded.length === 0 || encoded.length > MAX_INDICATOR_BYTES * 2) {
-    return null;
-  }
-
-  try {
-    return validateSvgIndicator(Buffer.from(encoded, "base64"));
-  } catch {
-    return null;
-  }
-};
-
 const toSenderBrand = (domain: string, logoData: Buffer): GmailSenderBrand => ({
   domain,
   imageDataUrl: `data:image/svg+xml;base64,${logoData.toString("base64")}`,
@@ -695,32 +543,14 @@ const storeSenderBrand = Effect.fn("storeSenderBrand")(
   }
 );
 
+/**
+ * Fetches the logo the domain itself publishes. A `BIMI-Indicator` or
+ * `BIMI-Location` header in the message is never used: Gmail does not vouch
+ * for it, and a sender who could pass one off as validated would have their
+ * picture cached as the claimed domain's logo for every later message.
+ */
 const discoverSenderBrand = Effect.fn("discoverSenderBrand")(
-  function* discoverSenderBrand(
-    domain: string,
-    headers: readonly MessageHeader[],
-    target: BimiDiscoveryTarget
-  ) {
-    const [locationHeader] = getHeaderValues(headers, "bimi-location");
-    const location =
-      locationHeader === undefined ? null : parseBimiLocation(locationHeader);
-    const [indicatorHeader] = getHeaderValues(headers, "bimi-indicator");
-    const indicator =
-      !target.trustIndicator || indicatorHeader === undefined
-        ? null
-        : decodeBimiIndicator(indicatorHeader);
-
-    if (indicator !== null) {
-      return {
-        resolved: {
-          authorityUrl: location?.authorityUrl,
-          logoData: indicator,
-          logoUrl: location?.logoUrl,
-        },
-        status: "available",
-      } satisfies SenderBrandDiscovery;
-    }
-
+  function* discoverSenderBrand(domain: string, target: BimiDiscoveryTarget) {
     const records = yield* Effect.tryPromise({
       catch: () =>
         new SenderBrandError({ message: "Could not resolve BIMI record" }),
@@ -801,11 +631,9 @@ export const getSenderBrand = Effect.fn("getSenderBrand")(
         continue;
       }
 
-      const discovery = yield* discoverSenderBrand(
-        domain,
-        request.headers,
-        target
-      ).pipe(Effect.orElseSucceed(() => ({ status: "invalid" }) as const));
+      const discovery = yield* discoverSenderBrand(domain, target).pipe(
+        Effect.orElseSucceed(() => ({ status: "invalid" }) as const)
+      );
 
       if (discovery.status === "invalid") {
         return null;

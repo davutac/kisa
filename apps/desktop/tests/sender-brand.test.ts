@@ -5,8 +5,11 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, vi } from "vitest";
 
 import {
-  createPinnedLookup,
   extractSenderDomain,
+  isAuthenticatedSender,
+} from "../src/main/mail/sender-authentication";
+import {
+  createPinnedLookup,
   getBimiDiscoveryTarget,
   getBimiLookupDomains,
   getSenderBrand,
@@ -110,6 +113,52 @@ describe(parseBimiLocation, () => {
   });
 });
 
+describe(isAuthenticatedSender, () => {
+  it("accepts an aligned DMARC pass in Gmail's own header", () => {
+    expect(
+      isAuthenticatedSender(
+        "Stripe <notifications@stripe.com>",
+        stripeAuthenticationHeaders
+      )
+    ).toBeTruthy();
+  });
+
+  it("rejects a sender whose domain Gmail did not authenticate", () => {
+    expect(
+      isAuthenticatedSender(
+        "Stripe <notifications@stripe.example>",
+        stripeAuthenticationHeaders
+      )
+    ).toBeFalsy();
+    expect(isAuthenticatedSender("notifications@stripe.com", [])).toBeFalsy();
+  });
+
+  // Gmail adds its header above the ones a message arrives with, so a
+  // lookalike further down was written by the sender.
+  it("reads only the topmost Authentication-Results header", () => {
+    const forgedBelow = {
+      name: "Authentication-Results",
+      value: "mx.google.com; dmarc=pass (p=REJECT) header.from=stripe.com",
+    };
+
+    expect(
+      isAuthenticatedSender("notifications@stripe.com", [
+        {
+          name: "Authentication-Results",
+          value: "mx.google.com; dmarc=fail (p=NONE) header.from=stripe.com",
+        },
+        forgedBelow,
+      ])
+    ).toBeFalsy();
+    expect(
+      isAuthenticatedSender("notifications@stripe.com", [
+        { name: "Authentication-Results", value: "mx.other.example; none" },
+        forgedBelow,
+      ])
+    ).toBeFalsy();
+  });
+});
+
 describe(getBimiDiscoveryTarget, () => {
   it("uses the BIMI selector exposed by Gmail for a strict DMARC sender", () => {
     expect(
@@ -117,7 +166,6 @@ describe(getBimiDiscoveryTarget, () => {
     ).toStrictEqual({
       authorDomain: "stripe.com",
       selector: "transactional",
-      trustIndicator: false,
     });
   });
 
@@ -136,7 +184,6 @@ describe(getBimiDiscoveryTarget, () => {
     ).toStrictEqual({
       authorDomain: "em1.cloudflare.com",
       selector: "default",
-      trustIndicator: false,
     });
   });
 
@@ -187,7 +234,6 @@ describe(getBimiDiscoveryTarget, () => {
     ).toStrictEqual({
       authorDomain: "amazon.de",
       selector: "default",
-      trustIndicator: false,
     });
   });
 
@@ -318,6 +364,29 @@ describe("sender brand discovery consent", () => {
       expect(testState.txtLookups).toStrictEqual([
         "transactional._bimi.stripe.com",
       ]);
+    })
+  );
+
+  it.effect("fetches the domain's own logo instead of one in the message", () =>
+    Effect.gen(function* ignoresMessageLogo() {
+      const brand = yield* getSenderBrand({
+        allowDiscovery: true,
+        from: "Stripe <notifications@stripe.com>",
+        headers: [
+          {
+            name: "Authentication-Results",
+            value:
+              "mx.google.com; dmarc=pass (p=REJECT) header.from=stripe.com; bimi=pass header.d=stripe.com header.selector=brand",
+          },
+          {
+            name: "BIMI-Indicator",
+            value: Buffer.from("<svg></svg>").toString("base64"),
+          },
+        ],
+      });
+
+      expect(brand).toBeNull();
+      expect(testState.txtLookups).toStrictEqual(["brand._bimi.stripe.com"]);
     })
   );
 });

@@ -1,6 +1,6 @@
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { Effect } from "effect";
-import { app } from "electron";
+import { app, session } from "electron";
 
 import icon from "../../build/icon.png?asset";
 import { AppClosingEvent } from "../shared/ipc/app";
@@ -24,6 +24,7 @@ import {
   hydrateAppSettings,
 } from "./settings/app-settings";
 import { createWindow, getMainWindow } from "./window/create-window";
+import { installMessageFrameCookiePolicy } from "./window/message-frame-requests";
 import { destroyBackgroundTray, setBackgroundTray } from "./window/tray";
 import { installWindowVisibility } from "./window/window-visibility";
 
@@ -62,6 +63,7 @@ if (hasSingleInstanceLock) {
       installWindowVisibility(window);
     });
 
+    installMessageFrameCookiePolicy(session.defaultSession);
     await startDesktopIpc();
     hydrateAppSettings();
     createWindow();

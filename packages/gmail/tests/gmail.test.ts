@@ -532,6 +532,7 @@ const createTestLayer = (options: TestLayerOptions = {}) => {
               from: new Mailbox({ address: "sender@example.com" }),
               id: MessageId.make("message-1"),
               labelIds: [LabelId.make("INBOX")],
+              senderAuthenticated: false,
               sentAt: "1700000000000",
               subject: "Subject",
               threadId: rawThread.id,

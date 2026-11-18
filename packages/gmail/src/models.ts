@@ -166,6 +166,11 @@ export class GmailMessage extends Schema.Class<GmailMessage>(
   id: MessageId,
   labelIds: Schema.Array(LabelId),
   replyTo: Schema.optional(Mailbox),
+  /**
+   * Whether Gmail's receiving servers authenticated the From domain. Without
+   * that, the sender's address is only the sender's own claim.
+   */
+  senderAuthenticated: Schema.Boolean,
   sentAt: Schema.String,
   subject: Schema.String,
   threadId: ThreadId,

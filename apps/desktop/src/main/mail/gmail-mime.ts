@@ -25,6 +25,7 @@ import {
   normalizeContentId,
 } from "./inline-images";
 import { toIndexText } from "./message-text";
+import { isAuthenticatedSender } from "./sender-authentication";
 
 interface RawPart {
   readonly body?: { readonly data?: string | null };
@@ -169,6 +170,9 @@ const toGmailMessage = (
     id: MessageId.make(message.id),
     labelIds: (message.labelIds ?? []).map((id) => LabelId.make(id)),
     replyTo,
+    senderAuthenticated:
+      from !== undefined &&
+      isAuthenticatedSender(from.address, message.payload?.headers ?? []),
     sentAt: message.internalDate ?? "0",
     subject: readHeader(message, "subject") ?? "",
     threadId,

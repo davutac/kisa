@@ -169,6 +169,32 @@ describe("GmailMime.parseThread", () => {
     ).toBeFalsy();
   });
 
+  it("records whether Gmail authenticated the sender's domain", () => {
+    const authenticated = (headers: readonly object[]) =>
+      parse({
+        body: { data: encodeBody("Hi") },
+        headers: [
+          { name: "From", value: "Alice <alice@example.com>" },
+          ...headers,
+        ],
+        mimeType: "text/plain",
+      })?.senderAuthenticated;
+    const gmailPass = {
+      name: "Authentication-Results",
+      value: "mx.google.com; dmarc=pass (p=NONE) header.from=example.com",
+    };
+
+    expect(authenticated([gmailPass])).toBeTruthy();
+    expect(authenticated([])).toBeFalsy();
+    // A pass written below another server's result came with the message.
+    expect(
+      authenticated([
+        { name: "Authentication-Results", value: "mx.example.net; none" },
+        gmailPass,
+      ])
+    ).toBeFalsy();
+  });
+
   it("splits recipients only on commas outside quoted names", () => {
     const message = parse({
       body: { data: encodeBody("Hi") },

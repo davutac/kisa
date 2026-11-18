@@ -167,6 +167,7 @@ const message: GmailThreadMessage = {
   from: "Sender <sender@example.com>",
   id: "message-1",
   labelIds: [],
+  senderAuthenticated: false,
   sentAt: 0,
   snippet: "Hello",
   subject: "Project update",

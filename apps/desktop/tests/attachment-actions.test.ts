@@ -7,7 +7,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   openAttachmentPreview,
-  sanitizeAttachmentFilename,
   saveAttachment,
 } from "../src/main/mail/attachment-actions";
 import {
@@ -194,18 +193,5 @@ describe("attachment actions", () => {
       Effect.runPromise(saveAttachment(request, {} as Electron.BrowserWindow))
     ).resolves.toBe("cancelled");
     expect(state.saveDialog).toHaveBeenCalledOnce();
-  });
-});
-
-describe(sanitizeAttachmentFilename, () => {
-  it("removes path traversal and reserved filename forms", () => {
-    expect(sanitizeAttachmentFilename("../../private/report.pdf")).toBe(
-      "report.pdf"
-    );
-    expect(sanitizeAttachmentFilename("..／private／report?.pdf")).toBe(
-      "report.pdf"
-    );
-    expect(sanitizeAttachmentFilename("CON.txt")).toBe("_CON.txt");
-    expect(sanitizeAttachmentFilename("bad\u0000name. ")).toBe("badname");
   });
 });

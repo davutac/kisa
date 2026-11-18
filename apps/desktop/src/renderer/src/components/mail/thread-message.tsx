@@ -8,6 +8,7 @@ import { useThreadConversationStore } from "@/components/mail/thread-conversatio
 import { parseMailboxAddress } from "@/mail/address";
 import { containsRemoteImages } from "@/mail/remote-images";
 import type { GmailThreadMessage } from "@/shared/ipc/mail";
+import { canApplySenderTrust } from "@/shared/sender-trust";
 import {
   trustImageSender,
   useIsTrustedImageSender,
@@ -37,12 +38,14 @@ const MailThreadMessage = ({
     (state) => state.toggleMessage
   );
   const senderEmail = parseMailboxAddress(message.from).email;
+  const canTrustSender = canApplySenderTrust(message);
   const isTrustedSender = useIsTrustedImageSender(accountId, senderEmail);
   const hasRemoteImages = useMemo(
     () => containsRemoteImages(message.body.html),
     [message.body.html]
   );
-  const allowRemoteImages = isTrustedSender || showRemoteImages;
+  const allowRemoteImages =
+    (canTrustSender && isTrustedSender) || showRemoteImages;
   const setHeaderRef = useCallback(
     (header: HTMLButtonElement | null): void => {
       onHeaderRef?.(message.id, header);
@@ -67,10 +70,14 @@ const MailThreadMessage = ({
           <div className="bg-card flex min-w-0 flex-col">
             {hasRemoteImages && !allowRemoteImages ? (
               <MailRemoteImageNotice
-                onAlwaysShow={() => {
-                  setShowRemoteImages(true);
-                  void trustImageSender(accountId, senderEmail);
-                }}
+                onAlwaysShow={
+                  canTrustSender
+                    ? () => {
+                        setShowRemoteImages(true);
+                        void trustImageSender(accountId, senderEmail);
+                      }
+                    : undefined
+                }
                 onShow={() => setShowRemoteImages(true)}
                 senderEmail={senderEmail}
               />

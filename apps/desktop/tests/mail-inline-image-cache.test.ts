@@ -181,6 +181,7 @@ describe("cached inline images", () => {
         messageId: "message-1",
         replyToAddress: null,
         schemaVersion: state.messageSchemaVersion,
+        senderAuthenticated: null,
         subject: "Inline photo",
         threadId: "thread-1",
         toAddresses: ["friend@example.com"],
@@ -208,6 +209,28 @@ describe("cached inline images", () => {
         threadId: "thread-1",
       },
     ]);
+  });
+
+  // Rows cached before Kisa recorded sender authentication must not let a
+  // stored "always display images" choice apply.
+  it("reads a row without sender authentication as unauthenticated", async () => {
+    const thread = await loadCachedThread();
+
+    expect(thread.messages[0]?.senderAuthenticated).toBeFalsy();
+  });
+
+  it("shows attachment names as Save As would write them", async () => {
+    state.attachmentFails = true;
+    state.messages = state.messages.map((row) => ({
+      ...row,
+      attachments: [
+        { ...regularAttachment, filename: "../invoice\u202Efdp.scr" },
+      ],
+    }));
+
+    const thread = await loadCachedThread();
+
+    expect(thread.messages[0]?.attachments[0]?.filename).toBe("invoicefdp.scr");
   });
 
   it("keeps the image as an attachment when its inline bytes are unavailable", async () => {
