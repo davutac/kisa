@@ -107,6 +107,19 @@ Google authorization is an installed-app flow owned by Electron main. On the fir
 
 After authorization, the client identity is also stored inside the account's encrypted credential blob so refreshes remain bound to the client that issued the token. An installed app cannot keep its client secret confidential, so PKCE and validated state remain the security boundary. OAuth client credentials, access tokens, and refresh tokens remain encrypted behind `safeStorage` and never enter renderer IPC. Kisa has no OAuth relay or other server.
 
+Message HTML is displayed in a `srcdoc` iframe sandboxed without scripts, under its own `default-src 'none'` policy; `renderer/src/mail/email-frame.ts` builds that document. Displaying a message must not tell its sender that it was opened until the reader allows it:
+
+- Remote images stay blocked until the reader shows them for that message or always shows them for that sender. A From address is the sender's own claim, so the standing choice applies only when Gmail authenticated the sender's domain, and never in Spam; otherwise the notice offers only the one-time choice.
+- Shown images load over HTTPS only. `http:` URLs are upgraded first, so a plain-HTTP device on the reader's network receives no request. Requests from message frames send no cookies and store none, so a cookie cannot tie one opened message to the next; the image host still sees the reader's IP address.
+- Every `<link>` start tag becomes an inert `<wbr>`, because Chromium resolves `rel="dns-prefetch"` hosts despite the frame's policy.
+- A BIMI sender logo that is not already cached is looked up only when the message would show that sender's images automatically, because the lookup queries the sender's DNS and fetches from a host their record names. The logo always comes from the domain's own record, never from a `BIMI-Indicator` or `BIMI-Location` header in the message. Notifications use cached logos only.
+
+Whether Gmail authenticated a sender is read from the topmost `Authentication-Results` header only, and only when it names `mx.google.com`: Gmail adds its header above every header a message arrives with, so anything lower was written by the sender. The result is recorded when a message is parsed and cached with it, so a thread opened from the cache applies the same rule; messages cached before the result was recorded count as unauthenticated until they are fetched again.
+
+Once the message loads, its web links and image-map areas open in a new window, which main hands to the system browser; other links, including SVG links, are disarmed. The page's `frame-src 'none'` and main's `will-frame-navigate` handler each stop the frame from navigating anywhere but its own document, so a link cannot load `file:` URLs or reach a network share.
+
+Expressions that scan message HTML or headers in main or the renderer must stay linear in their input: a pattern whose neighbouring parts can claim the same characters lets a few kilobytes of crafted markup stall the window or the main process.
+
 The sandbox preload is emitted as CommonJS and bundles its non-Electron dependencies. Sandboxed Electron preloads cannot load the application's ESM entrypoint or resolve arbitrary package imports at runtime. If Electron starts without the bridge, the root route now reports a startup failure instead of silently rendering the browser fallback with an empty account list.
 
 On quit, the main process sends a typed closing event before stopping mail synchronization and waiting for the database and IPC runtimes to dispose. The renderer keeps a route-independent closing overlay mounted so cleanup remains visible even when quit is requested during startup or from a non-mail route.

@@ -6,7 +6,8 @@ Kisa treats attachment bytes as hostile, on-demand content. Metadata belongs to 
 
 - Image and PDF attachments always open a new Kisa preview window.
 - Every other attachment opens the operating system's Save As dialog.
-- Attachment pills keep an explicit file-type label visible when their filename truncates.
+- Attachment pills keep an explicit file-type label visible when their filename truncates. The label comes from the filename's extension, which decides how the operating system opens the file, and falls back to the declared media type only for a name without one.
+- Attachment names are shown as Save As would write them: main sends the renderer the sanitized name, without path parts, control characters, or bidirectional overrides that could disguise the extension.
 - Cancelling Save As performs no Gmail attachment request and writes nothing.
 - The Download button in a preview opens Save As and writes the bytes already held by that preview session.
 
@@ -31,6 +32,6 @@ Images are displayed through an in-memory Blob URL. PDFs are parsed by the local
 
 ## Disk and failure behavior
 
-Previewing never creates a temporary file. Download-only attachments are not requested from Gmail until Save As returns a destination. Attachment writes use the sanitized cached filename as the dialog default, enforce a bounded in-memory size, and never return the destination path to a renderer.
+Previewing never creates a temporary file. Download-only attachments are not requested from Gmail until Save As returns a destination. Attachment writes use the sanitized cached filename as the dialog default, enforce a bounded in-memory size, and never return the destination path to a renderer. A saved file is marked as downloaded the way a browser marks one: a `com.apple.quarantine` attribute on macOS and a `Zone.Identifier` stream for the Internet zone on Windows, so Gatekeeper, SmartScreen, and Office Protected View check it when it is opened. A volume that cannot hold the mark still keeps the file; Linux has no equivalent that desktops honour.
 
 Account disconnect and application restart require no attachment-cache cleanup because preview bytes exist only in live window sessions. Closing a preview or quitting Electron destroys those sessions.

@@ -25,6 +25,7 @@ import {
   normalizeContentId,
 } from "./inline-images";
 import { toIndexText } from "./message-text";
+import { isAuthenticatedSender } from "./sender-authentication";
 
 interface RawPart {
   readonly body?: { readonly data?: string | null };
@@ -46,13 +47,15 @@ interface RawMessagePayload {
 }
 
 /**
- * Anything that would make the renderer reach the network. The iframe CSP in
- * `message-body.tsx` is the enforcement boundary; this flag only drives the
- * "images are hidden" affordance, so over-reporting is harmless and
- * under-reporting is not.
+ * Anything that would make the renderer reach the network. The frame policy in
+ * `renderer/src/mail/email-frame.ts` is the enforcement boundary, and the
+ * renderer runs its own scan before offering to show images, so this stored
+ * flag only has to be close. Its tag scans stop at the next `<`, which keeps a
+ * body of unclosed `<img` tags to one pass instead of one per tag, at the cost
+ * of missing a source that follows a raw `<` inside the same tag.
  */
 const REMOTE_REFERENCE_PATTERN =
-  /<img[^>]+src\s*=\s*["']?https?:|<img[^>]+srcset\s*=|url\(\s*["']?https?:/iu;
+  /<img[^<>]+src\s*=\s*["']?https?:|<img[^<>]+srcset\s*=|url\(\s*["']?https?:/iu;
 
 const decodeBodyData = (data: string): string =>
   Buffer.from(data, "base64url").toString("utf-8");
@@ -65,14 +68,36 @@ const readHeader = (
     (header) => header.name?.toLowerCase() === name.toLowerCase()
   )?.value ?? undefined;
 
+/**
+ * Splits on commas that are not inside a quoted display name: a separating
+ * comma has an even number of quotes after it. Quotes are counted once up
+ * front, because a lookahead that re-reads the rest of the header for each
+ * comma lets one long header stall the main process.
+ */
+const splitMailboxList = (value: string): readonly string[] => {
+  const entries: string[] = [];
+  let quotesAfter = value.split('"').length - 1;
+  let entryStart = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '"') {
+      quotesAfter -= 1;
+    } else if (value[index] === "," && quotesAfter % 2 === 0) {
+      entries.push(value.slice(entryStart, index));
+      entryStart = index + 1;
+    }
+  }
+
+  entries.push(value.slice(entryStart));
+  return entries;
+};
+
 const parseMailboxList = (value: string | undefined): readonly Mailbox[] => {
   if (value === undefined) {
     return [];
   }
 
-  // Split on commas that are not inside a quoted display name.
-  return value
-    .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/u)
+  return splitMailboxList(value)
     .map((entry) => parseMailbox(entry))
     .filter((mailbox): mailbox is Mailbox => mailbox !== undefined);
 };
@@ -145,6 +170,9 @@ const toGmailMessage = (
     id: MessageId.make(message.id),
     labelIds: (message.labelIds ?? []).map((id) => LabelId.make(id)),
     replyTo,
+    senderAuthenticated:
+      from !== undefined &&
+      isAuthenticatedSender(from.address, message.payload?.headers ?? []),
     sentAt: message.internalDate ?? "0",
     subject: readHeader(message, "subject") ?? "",
     threadId,

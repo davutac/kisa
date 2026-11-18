@@ -26,6 +26,8 @@ import type {
 import { withDatabaseClient } from "../database";
 import { createBrowserWindow } from "../window/browser-window";
 import { readWindowState, writeWindowState } from "../window/window-state";
+import { sanitizeAttachmentFilename } from "./attachment-filename";
+import { markAsDownloaded } from "./download-mark";
 import { GmailGatewayLive } from "./gmail-gateway";
 import { GmailMimeLive } from "./gmail-mime";
 import { GmailStoreLive } from "./gmail-store";
@@ -38,10 +40,6 @@ const PREVIEW_WINDOW_SIZE = {
   minWidth: 520,
   width: 920,
 } as const;
-const WINDOWS_RESERVED_FILENAME =
-  /^(?:aux|com[1-9]|con|lpt[1-9]|nul|prn)(?:\.|$)/iu;
-const UNSAFE_FILENAME_CHARACTERS = /[\p{Cc}\u202A-\u202E\u2066-\u2069]/gu;
-const WINDOWS_INVALID_FILENAME_CHARACTERS = /[<>:"|?*]/gu;
 
 interface ResolvedAttachment {
   readonly accountId: string;
@@ -92,21 +90,6 @@ const runGmail = <A>(
     Effect.tapErrorTag("GmailEntityNotFoundError", publishReconciledGmailError),
     Effect.mapError(() => actionError("Could not load attachment"))
   );
-
-export const sanitizeAttachmentFilename = (filename: string): string => {
-  const leaf = path.posix.basename(
-    filename.normalize("NFKC").replaceAll("\\", "/")
-  );
-  const cleaned = leaf
-    .replaceAll(UNSAFE_FILENAME_CHARACTERS, "")
-    .replaceAll(WINDOWS_INVALID_FILENAME_CHARACTERS, "")
-    .trim()
-    .replaceAll(/[. ]+$/gu, "")
-    .slice(0, 180);
-  const usable = cleaned.length === 0 ? "attachment" : cleaned;
-
-  return WINDOWS_RESERVED_FILENAME.test(usable) ? `_${usable}` : usable;
-};
 
 const resolveAttachment = Effect.fn("resolveAttachment")(
   function* resolveAttachment(request: GmailAttachmentRequest) {
@@ -216,6 +199,13 @@ const saveLoadedAttachment = Effect.fn("saveLoadedAttachment")(
 
     const attachment = yield* loaded();
     yield* writeAttachment(destination.filePath, attachment.bytes);
+    // The file is already saved; a volume that cannot hold the mark, such as
+    // FAT on Windows, should not turn that into a failure.
+    yield* markAsDownloaded(destination.filePath).pipe(
+      Effect.catch(() =>
+        Effect.logWarning("Could not mark a saved attachment as downloaded")
+      )
+    );
     return "saved" satisfies GmailAttachmentSaveOutcome;
   }
 );

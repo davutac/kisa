@@ -33,20 +33,23 @@ describe(getAttachmentPreviewKind, () => {
 });
 
 describe(getAttachmentTypeLabel, () => {
-  it("prefers authoritative media types", () => {
-    expect(getAttachmentTypeLabel("report.bin", "application/pdf")).toBe("PDF");
-    expect(
-      getAttachmentTypeLabel(
-        "budget.bin",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      )
-    ).toBe("XLSX");
-  });
-
-  it("falls back to the filename extension or media category", () => {
+  // The extension decides how the operating system opens the file; the media
+  // type is only what the sender declared.
+  it("prefers the filename extension over the declared media type", () => {
+    expect(getAttachmentTypeLabel("invoice.scr", "text/csv")).toBe("SCR");
+    expect(getAttachmentTypeLabel("report.bin", "application/pdf")).toBe("BIN");
     expect(
       getAttachmentTypeLabel("archive.ZIP", "application/octet-stream")
     ).toBe("ZIP");
+  });
+
+  it("labels an extensionless file by its media type or category", () => {
+    expect(
+      getAttachmentTypeLabel(
+        "budget",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      )
+    ).toBe("XLSX");
     expect(getAttachmentTypeLabel("photo", "image/x-custom")).toBe("IMAGE");
     expect(
       getAttachmentTypeLabel("attachment", "application/octet-stream")

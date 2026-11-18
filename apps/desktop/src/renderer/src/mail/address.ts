@@ -1,5 +1,8 @@
+// A local part only starts where a run of local-part characters starts. Every
+// later position in the same run reaches the same `@`, so trying them all would
+// rescan a long run once per character on the renderer thread.
 const EMAIL_ADDRESS_PATTERN =
-  /[\w.!#$%&'*+/=?^`{|}~-]+@[\dA-Za-z](?:[\dA-Za-z-]{0,61}[\dA-Za-z])?(?:\.[\dA-Za-z](?:[\dA-Za-z-]{0,61}[\dA-Za-z])?)*/gu;
+  /(?<![\w.!#$%&'*+/=?^`{|}~-])[\w.!#$%&'*+/=?^`{|}~-]+@[\dA-Za-z](?:[\dA-Za-z-]{0,61}[\dA-Za-z])?(?:\.[\dA-Za-z](?:[\dA-Za-z-]{0,61}[\dA-Za-z])?)*/gu;
 
 export const extractEmailAddresses = (header?: string): readonly string[] =>
   header?.match(EMAIL_ADDRESS_PATTERN) ?? [];

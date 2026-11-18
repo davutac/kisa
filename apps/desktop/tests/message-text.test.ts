@@ -46,4 +46,30 @@ describe(toIndexText, () => {
   it("returns an empty string for markup with no text", () => {
     expect(toIndexText("<div><span></span></div>")).toBe("");
   });
+
+  it("keeps the text of unclosed elements and comments", () => {
+    expect(toIndexText("<p>kept</p><style>.a{}")).toBe("kept .a{}");
+    expect(toIndexText("<p>kept</p><!-- open")).toBe("kept <!-- open");
+    expect(toIndexText("<p>kept</p><img src=x")).toBe("kept <img src=x");
+  });
+
+  it("removes a style that follows an unclosed script", () => {
+    expect(toIndexText("<script>a<style>b</style><p>c</p>")).toBe("a c");
+  });
+
+  // Each of these held Electron main for seconds with the previous patterns.
+  // A synchronous regex cannot be interrupted by the test timeout, so the
+  // bound is asserted directly.
+  it.each([
+    ["unclosed comments", "<!--".repeat(32_768)],
+    ["unclosed styles", "<style>".repeat(65_536)],
+    ["unclosed tags", "<".repeat(65_536)],
+    // Removing the comment also removes the last `>`.
+    ["unclosed tags before a comment", `${"<".repeat(65_536)}<!---->`],
+  ])("flattens %s in linear time", (_label, html) => {
+    const start = performance.now();
+    toIndexText(html);
+
+    expect(performance.now() - start).toBeLessThan(500);
+  });
 });

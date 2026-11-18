@@ -3,7 +3,8 @@ import { ImageOffIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MailRemoteImageNoticeProps {
-  onAlwaysShow: () => void;
+  /** Absent when the sender cannot be trusted by address for this message. */
+  onAlwaysShow?: () => void;
   onShow: () => void;
   senderEmail: string;
 }
@@ -27,16 +28,22 @@ const MailRemoteImageNotice = ({
     >
       Show images below
     </Button>
-    <span aria-hidden="true">·</span>
-    <Button
-      className="h-auto min-w-0 px-0 py-0 text-xs/relaxed"
-      onClick={onAlwaysShow}
-      size="xs"
-      type="button"
-      variant="link"
-    >
-      <span className="truncate">Always display images from {senderEmail}</span>
-    </Button>
+    {onAlwaysShow === undefined ? null : (
+      <>
+        <span aria-hidden="true">·</span>
+        <Button
+          className="h-auto min-w-0 px-0 py-0 text-xs/relaxed"
+          onClick={onAlwaysShow}
+          size="xs"
+          type="button"
+          variant="link"
+        >
+          <span className="truncate">
+            Always display images from {senderEmail}
+          </span>
+        </Button>
+      </>
+    )}
   </div>
 );
 

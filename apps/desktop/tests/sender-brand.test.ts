@@ -2,19 +2,54 @@
 // oxlint-disable vitest/no-standalone-expect
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 import {
-  createPinnedLookup,
   extractSenderDomain,
+  isAuthenticatedSender,
+} from "../src/main/mail/sender-authentication";
+import {
+  createPinnedLookup,
   getBimiDiscoveryTarget,
   getBimiLookupDomains,
   getSenderBrand,
   parseBimiLocation,
 } from "../src/main/mail/sender-brand";
 
+const testState = vi.hoisted(() => ({
+  databaseAvailable: false,
+  txtLookups: [] as string[],
+}));
+
+// An empty sender-brand cache. Database access stays an error unless a test
+// opts in, so header checks are proven to fail before the cache is read.
 vi.mock(import("../src/main/database"), () => ({
-  withDatabaseClient: () => Effect.die("Unexpected database access"),
+  withDatabaseClient: <A>(run: (database: never) => Promise<A>) =>
+    testState.databaseAvailable
+      ? Effect.promise(() =>
+          run({
+            insert: () => ({
+              values: () => ({
+                onConflictDoUpdate: () => ({ run: () => Promise.resolve() }),
+              }),
+            }),
+            query: {
+              gmailSenderBrands: {
+                findFirst: () => Promise.resolve(),
+                findMany: () => Promise.resolve([]),
+              },
+            },
+          } as never)
+        )
+      : Effect.die("Unexpected database access"),
+}));
+
+vi.mock(import("node:dns/promises"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveTxt: vi.fn<(name: string) => Promise<string[][]>>((name) => {
+    testState.txtLookups.push(name);
+    return Promise.resolve([]);
+  }),
 }));
 
 const stripeAuthenticationHeaders = [
@@ -78,6 +113,52 @@ describe(parseBimiLocation, () => {
   });
 });
 
+describe(isAuthenticatedSender, () => {
+  it("accepts an aligned DMARC pass in Gmail's own header", () => {
+    expect(
+      isAuthenticatedSender(
+        "Stripe <notifications@stripe.com>",
+        stripeAuthenticationHeaders
+      )
+    ).toBeTruthy();
+  });
+
+  it("rejects a sender whose domain Gmail did not authenticate", () => {
+    expect(
+      isAuthenticatedSender(
+        "Stripe <notifications@stripe.example>",
+        stripeAuthenticationHeaders
+      )
+    ).toBeFalsy();
+    expect(isAuthenticatedSender("notifications@stripe.com", [])).toBeFalsy();
+  });
+
+  // Gmail adds its header above the ones a message arrives with, so a
+  // lookalike further down was written by the sender.
+  it("reads only the topmost Authentication-Results header", () => {
+    const forgedBelow = {
+      name: "Authentication-Results",
+      value: "mx.google.com; dmarc=pass (p=REJECT) header.from=stripe.com",
+    };
+
+    expect(
+      isAuthenticatedSender("notifications@stripe.com", [
+        {
+          name: "Authentication-Results",
+          value: "mx.google.com; dmarc=fail (p=NONE) header.from=stripe.com",
+        },
+        forgedBelow,
+      ])
+    ).toBeFalsy();
+    expect(
+      isAuthenticatedSender("notifications@stripe.com", [
+        { name: "Authentication-Results", value: "mx.other.example; none" },
+        forgedBelow,
+      ])
+    ).toBeFalsy();
+  });
+});
+
 describe(getBimiDiscoveryTarget, () => {
   it("uses the BIMI selector exposed by Gmail for a strict DMARC sender", () => {
     expect(
@@ -85,7 +166,6 @@ describe(getBimiDiscoveryTarget, () => {
     ).toStrictEqual({
       authorDomain: "stripe.com",
       selector: "transactional",
-      trustIndicator: false,
     });
   });
 
@@ -104,7 +184,6 @@ describe(getBimiDiscoveryTarget, () => {
     ).toStrictEqual({
       authorDomain: "em1.cloudflare.com",
       selector: "default",
-      trustIndicator: false,
     });
   });
 
@@ -155,7 +234,6 @@ describe(getBimiDiscoveryTarget, () => {
     ).toStrictEqual({
       authorDomain: "amazon.de",
       selector: "default",
-      trustIndicator: false,
     });
   });
 
@@ -217,6 +295,7 @@ describe(getSenderBrand, () => {
   it.effect("ignores BIMI headers not validated by Gmail", () =>
     Effect.gen(function* ignoresUntrustedHeaders() {
       const brand = yield* getSenderBrand({
+        allowDiscovery: true,
         from: "Stripe <notifications@stripe.com>",
         headers: [
           {
@@ -235,6 +314,7 @@ describe(getSenderBrand, () => {
   it.effect("requires Gmail to report a successful BIMI check", () =>
     Effect.gen(function* requiresBimiPass() {
       const brand = yield* getSenderBrand({
+        allowDiscovery: true,
         from: "Stripe <notifications@stripe.com>",
         headers: [
           {
@@ -245,6 +325,68 @@ describe(getSenderBrand, () => {
       });
 
       expect(brand).toBeNull();
+    })
+  );
+});
+
+describe("sender brand discovery consent", () => {
+  beforeEach(() => {
+    testState.databaseAvailable = true;
+    testState.txtLookups.length = 0;
+  });
+
+  afterEach(() => {
+    testState.databaseAvailable = false;
+  });
+
+  it.effect("does not query the sender's DNS without consent", () =>
+    Effect.gen(function* withoutConsent() {
+      const brand = yield* getSenderBrand({
+        allowDiscovery: false,
+        from: "Stripe <notifications@stripe.com>",
+        headers: stripeAuthenticationHeaders,
+      });
+
+      expect(brand).toBeNull();
+      expect(testState.txtLookups).toStrictEqual([]);
+    })
+  );
+
+  it.effect("queries the sender's BIMI record once the reader allows it", () =>
+    Effect.gen(function* withConsent() {
+      const brand = yield* getSenderBrand({
+        allowDiscovery: true,
+        from: "Stripe <notifications@stripe.com>",
+        headers: stripeAuthenticationHeaders,
+      });
+
+      expect(brand).toBeNull();
+      expect(testState.txtLookups).toStrictEqual([
+        "transactional._bimi.stripe.com",
+      ]);
+    })
+  );
+
+  it.effect("fetches the domain's own logo instead of one in the message", () =>
+    Effect.gen(function* ignoresMessageLogo() {
+      const brand = yield* getSenderBrand({
+        allowDiscovery: true,
+        from: "Stripe <notifications@stripe.com>",
+        headers: [
+          {
+            name: "Authentication-Results",
+            value:
+              "mx.google.com; dmarc=pass (p=REJECT) header.from=stripe.com; bimi=pass header.d=stripe.com header.selector=brand",
+          },
+          {
+            name: "BIMI-Indicator",
+            value: Buffer.from("<svg></svg>").toString("base64"),
+          },
+        ],
+      });
+
+      expect(brand).toBeNull();
+      expect(testState.txtLookups).toStrictEqual(["brand._bimi.stripe.com"]);
     })
   );
 });

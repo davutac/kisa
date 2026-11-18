@@ -7,10 +7,13 @@
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <!-- The message frame is a srcdoc document, so it inherits this policy on
          top of its own: remote images stay blocked per message until the reader
-         asks for them, and this only has to stop standing in the way. -->
+         asks for them, and this only has to stop standing in the way.
+         `frame-src 'none'` still lets that srcdoc frame load, but stops a
+         message from navigating it anywhere, including to `file:` URLs that
+         `'self'` would otherwise allow in the packaged app. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: cid: https: http:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: cid: https: http:; frame-src 'none'"
     />
   </head>
 

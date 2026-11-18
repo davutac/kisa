@@ -70,6 +70,43 @@ describe(blockRemoteImages, () => {
 
     expect(blockRemoteImages(html).hasRemoteImages).toBeFalsy();
   });
+
+  it("reads a raw `<` inside an attribute as part of the tag", () => {
+    expect(
+      blockRemoteImages('<img alt="a<b" src="https://cdn.example/a.png">').html
+    ).toBe('<img alt="a<b">');
+  });
+
+  it("strips quoted style urls that contain parentheses", () => {
+    expect(
+      blockRemoteImages(
+        "<div style=\"background: url('https://cdn.example/a(1).png')\"></div>"
+      ).html
+    ).toBe('<div style="background: url(about:blank)"></div>');
+  });
+
+  it("keeps an unclosed trailing tag as written", () => {
+    expect(
+      blockRemoteImages('<p>Hi</p><img src="https://a.example/b')
+    ).toStrictEqual({
+      hasRemoteImages: false,
+      html: '<p>Hi</p><img src="https://a.example/b',
+    });
+  });
+
+  // Each of these held the renderer for seconds or more with the previous
+  // patterns. A synchronous regex cannot be interrupted by the test timeout,
+  // so the bound is asserted directly.
+  it.each([
+    ["unclosed tags", "<a".repeat(2048)],
+    ["unclosed style urls", "url(".repeat(32_768)],
+    ["whitespace inside a style url", `url(${" ".repeat(8192)}x`],
+  ])("scans %s in linear time", (_label, html) => {
+    const start = performance.now();
+    blockRemoteImages(html);
+
+    expect(performance.now() - start).toBeLessThan(500);
+  });
 });
 
 describe(containsRemoteImages, () => {

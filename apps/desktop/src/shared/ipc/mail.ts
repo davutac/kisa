@@ -73,6 +73,8 @@ export const GmailThreadMessage = Schema.Struct({
   id: Schema.String,
   labelIds: Schema.Array(Schema.String),
   replyTo: Schema.optional(Schema.String),
+  /** Whether Gmail authenticated the domain of `from`. */
+  senderAuthenticated: Schema.Boolean,
   senderBrand: Schema.optional(GmailSenderBrand),
   sentAt: Schema.Finite,
   snippet: Schema.String,

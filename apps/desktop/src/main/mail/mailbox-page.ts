@@ -8,6 +8,7 @@ import type {
   GmailMailbox,
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
+import { toDisplayedAttachment } from "./attachment-filename";
 import { decodeGmailSnippet } from "./html-entities";
 
 export const THREAD_PAGE_SIZE = 50;
@@ -38,7 +39,7 @@ const getMailboxCondition = (mailbox: GmailMailbox) => {
 export const toCachedThreadSummary = (
   row: CachedThreadRow
 ): GmailThreadSummary => {
-  const attachments = row.attachments ?? [];
+  const attachments = (row.attachments ?? []).map(toDisplayedAttachment);
 
   return {
     accountId: row.accountEmail,

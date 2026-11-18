@@ -56,6 +56,31 @@ export const listTrustedImageSenders = Effect.fn("listTrustedImageSenders")(
   }
 );
 
+/**
+ * Loads one account's trusted image senders as a check on a sender address,
+ * so a caller can test every message in a thread with a single query.
+ */
+export const loadTrustedImageSenderCheck = Effect.fn(
+  "loadTrustedImageSenderCheck"
+)(function* loadTrustedImageSenderCheck(accountId: string) {
+  const rows = yield* withDatabaseClient((database) =>
+    database.query.gmailTrustedImageSenders.findMany({
+      where: { accountEmail: normalizeAddress(accountId) },
+    })
+  ).pipe(
+    Effect.mapError(
+      () =>
+        new TrustedImageSenderError({
+          message: "Could not load the senders you trust with images",
+        })
+    )
+  );
+  const senders = new Set(rows.map((row) => row.senderEmail));
+
+  return (senderEmail: string): boolean =>
+    senders.has(normalizeAddress(senderEmail));
+});
+
 export const trustImageSender = Effect.fn("trustImageSender")(
   function* trustImageSender(request: GmailTrustedImageSenderRequest) {
     yield* withDatabaseClient((database) =>

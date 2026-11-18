@@ -12,6 +12,7 @@ import { openExternalUrl } from "../electron/shell";
 import { getCurrentAppSettings } from "../settings/app-settings";
 import { initializeAutoUpdates } from "../updates/updater";
 import { createBrowserWindow } from "./browser-window";
+import { isAllowedSubframeNavigation } from "./frame-navigation";
 import { installNativeContextMenu } from "./native-context-menu";
 import {
   MIN_WINDOW_SIZE,
@@ -71,6 +72,14 @@ const installWindowBehavior = (window: BrowserWindow): void => {
 
     event.preventDefault();
     openExternalUrl(url);
+  });
+  // Once a message loads, its web links open in a new window, which the
+  // handler above sends to the system browser. A frame that navigates anyway
+  // is not following one of those links, so it is stopped, not opened.
+  window.webContents.on("will-frame-navigate", (details) => {
+    if (!(details.isMainFrame || isAllowedSubframeNavigation(details.url))) {
+      details.preventDefault();
+    }
   });
 };
 

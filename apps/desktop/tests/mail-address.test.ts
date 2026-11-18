@@ -27,6 +27,16 @@ describe(extractEmailAddresses, () => {
   it("returns no addresses for a missing header", () => {
     expect(extractEmailAddresses()).toStrictEqual([]);
   });
+
+  // The previous pattern took seconds on this header, and a synchronous regex
+  // cannot be interrupted by the test timeout, so the bound is asserted
+  // directly.
+  it("scans a long run without an address in linear time", () => {
+    const start = performance.now();
+
+    expect(extractEmailAddresses("a".repeat(65_536))).toStrictEqual([]);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
 });
 
 describe(parseEmailAddressList, () => {

@@ -122,6 +122,30 @@ const upsertThreadLabels = (
     )
   );
 
+// One thread whose only message Gmail authenticated.
+const authenticatedThread = (threadId: ThreadId, messageId: string) =>
+  new GmailThread({
+    historyId: HistoryId.make("history-1"),
+    id: threadId,
+    labelIds: [LabelId.make("INBOX")],
+    messages: [
+      new GmailMessage({
+        attachments: [],
+        bcc: [],
+        body: { text: "body", type: "text" },
+        cc: [],
+        from: new Mailbox({ address: "sender@example.com" }),
+        id: MessageId.make(messageId),
+        labelIds: [LabelId.make("INBOX")],
+        senderAuthenticated: true,
+        sentAt: "1",
+        subject: "Subject",
+        threadId,
+        to: [],
+      }),
+    ],
+  });
+
 const makeIndexedMessage = (thread: number, message: number, subject: string) =>
   new GmailMessage({
     attachments: [],
@@ -135,6 +159,7 @@ const makeIndexedMessage = (thread: number, message: number, subject: string) =>
     from: new Mailbox({ address: `sender-${thread}@example.com` }),
     id: MessageId.make(`message-${thread}-${message}`),
     labelIds: [LabelId.make("INBOX")],
+    senderAuthenticated: false,
     sentAt: String(1000 + thread * 10 + message),
     subject,
     threadId: ThreadId.make(`thread-${thread}`),
@@ -183,6 +208,121 @@ describe("Gmail label store", () => {
     expect(existing).toStrictEqual(["shared-thread"]);
   });
 
+  it("stores whether Gmail authenticated each sender", async () => {
+    const accountId = AccountId.make("authenticated@example.com");
+    const threadId = ThreadId.make("authenticated-thread");
+    const message = (id: string, senderAuthenticated: boolean) =>
+      new GmailMessage({
+        attachments: [],
+        bcc: [],
+        body: { text: "body", type: "text" },
+        cc: [],
+        from: new Mailbox({ address: "sender@example.com" }),
+        id: MessageId.make(id),
+        labelIds: [LabelId.make("INBOX")],
+        senderAuthenticated,
+        sentAt: "1",
+        subject: "Subject",
+        threadId,
+        to: [],
+      });
+
+    await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) =>
+          store.saveThread(
+            accountId,
+            new GmailThread({
+              historyId: HistoryId.make("history-1"),
+              id: threadId,
+              labelIds: [LabelId.make("INBOX")],
+              messages: [message("signed", true), message("unsigned", false)],
+            })
+          )
+        ),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
+    expect(
+      connection
+        .prepare(
+          `SELECT message_id, sender_authenticated
+           FROM gmail_messages
+           WHERE account_email = ?
+           ORDER BY message_id`
+        )
+        .all(accountId)
+    ).toStrictEqual([
+      { message_id: "signed", sender_authenticated: 1 },
+      { message_id: "unsigned", sender_authenticated: 0 },
+    ]);
+  });
+
+  // Rows cached before the column existed hold NULL until they are written
+  // again; both the thread-open and the sync write paths must update them.
+  it("records sender authentication when an existing message is written again", async () => {
+    const accountId = AccountId.make("refetched@example.com");
+    const insertLegacyMessage = connection.prepare(
+      `INSERT INTO gmail_messages (
+        account_email, body_text, from_address, internal_date, message_id,
+        schema_version, subject, thread_id, updated_at
+      ) VALUES (?, 'body', 'sender@example.com', 1, ?, 1, 'Subject', ?, 1)`
+    );
+    const opened = ThreadId.make("opened-thread");
+    const synced = ThreadId.make("synced-thread");
+
+    insertLegacyMessage.run(accountId, "opened-message", opened);
+    insertLegacyMessage.run(accountId, "synced-message", synced);
+
+    await Effect.runPromise(
+      GmailStore.pipe(
+        Effect.flatMap((store) =>
+          Effect.all([
+            store.saveThread(
+              accountId,
+              authenticatedThread(opened, "opened-message")
+            ),
+            store.upsertThreadDetails(
+              accountId,
+              [
+                new ThreadSummary({
+                  attachments: [],
+                  hasAttachments: false,
+                  hasUnread: false,
+                  id: synced,
+                  labelIds: [LabelId.make("INBOX")],
+                  latestAt: "1",
+                  latestMessageId: MessageId.make("synced-message"),
+                  messageCount: 1,
+                  participants: [],
+                  snippet: "",
+                  subject: "Subject",
+                }),
+              ],
+              [authenticatedThread(synced, "synced-message")]
+            ),
+          ])
+        ),
+        Effect.provide(GmailStoreLive)
+      )
+    );
+
+    expect(
+      connection
+        .prepare(
+          `SELECT message_id, sender_authenticated
+           FROM gmail_messages
+           WHERE account_email = ?
+           ORDER BY message_id`
+        )
+        .all(accountId)
+    ).toStrictEqual([
+      { message_id: "opened-message", sender_authenticated: 1 },
+      { message_id: "synced-message", sender_authenticated: 1 },
+    ]);
+  });
+
   it("marks fetched threads and removes messages no longer in Gmail", async () => {
     const accountId = AccountId.make("person@example.com");
     const otherAccountId = AccountId.make("other@example.com");
@@ -227,6 +367,7 @@ describe("Gmail label store", () => {
           from: new Mailbox({ address: "sender@example.com" }),
           id: MessageId.make("current-message"),
           labelIds: [LabelId.make("INBOX")],
+          senderAuthenticated: false,
           sentAt: "2",
           subject: "Subject",
           threadId,

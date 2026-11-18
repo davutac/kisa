@@ -74,10 +74,12 @@ import type {
   GmailThreadListChange,
   GmailThreadSummary,
 } from "../../shared/ipc/mail";
+import { canApplySenderTrust } from "../../shared/sender-trust";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { isAutomaticCategorizationEnabled } from "../settings/account-settings";
 import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
+import { toDisplayedAttachment } from "./attachment-filename";
 import { planBulkThreadMutation } from "./bulk-mutation-quota";
 import { forgetCachedCorrespondents } from "./correspondent-cache";
 import { GmailGatewayLive } from "./gmail-gateway";
@@ -112,6 +114,7 @@ import { getSenderBrand, hasCachedSenderBrand } from "./sender-brand";
 import { hasUnreadSpamRemote, resetSpamBackfillRemote } from "./spam-mailbox";
 import { getThreadCacheState } from "./thread-cache-policy";
 import { publishReconciledGmailError } from "./thread-reconciliation";
+import { loadTrustedImageSenderCheck } from "./trusted-image-senders";
 import { refreshUnreadBadge } from "./unread-badge";
 
 const GMAIL_INBOX_LABEL = "INBOX";
@@ -312,14 +315,16 @@ const toCachedThreadMessage = (
   const to = formatCachedAddresses(row.toAddresses);
 
   return {
-    attachments: (row.attachments ?? []).map((attachment) => ({
-      attachmentId: attachment.attachmentId,
-      filename: attachment.filename,
-      mediaType: attachment.mediaType,
-      messageId: attachment.messageId,
-      partId: attachment.partId,
-      size: attachment.size,
-    })),
+    attachments: (row.attachments ?? []).map((attachment) =>
+      toDisplayedAttachment({
+        attachmentId: attachment.attachmentId,
+        filename: attachment.filename,
+        mediaType: attachment.mediaType,
+        messageId: attachment.messageId,
+        partId: attachment.partId,
+        size: attachment.size,
+      })
+    ),
     bcc: bcc.length === 0 ? undefined : bcc,
     body,
     cc: cc.length === 0 ? undefined : cc,
@@ -327,6 +332,9 @@ const toCachedThreadMessage = (
     id: row.messageId,
     labelIds: removeUnreadLabel(row.labelIds ?? []),
     replyTo: row.replyToAddress ?? undefined,
+    // Rows stored before Kisa recorded this read as unauthenticated until
+    // the message is fetched again.
+    senderAuthenticated: row.senderAuthenticated === true,
     sentAt: row.internalDate,
     snippet: "",
     subject: row.subject.length === 0 ? "(No subject)" : row.subject,
@@ -640,7 +648,9 @@ const loadNotificationSenderBrand = Effect.fn("loadNotificationSenderBrand")(
     }
 
     // Only known brand domains pay for this re-read. The current message's own
-    // authentication headers still have to validate the cached BIMI logo.
+    // authentication headers still have to validate the cached BIMI logo, and
+    // nothing the reader has not opened may contact the sender, so a logo that
+    // is not cached is never looked up from here.
     const rawMessages = yield* runGmail(
       loadRawThread(
         AccountId.make(message.accountId),
@@ -658,6 +668,7 @@ const loadNotificationSenderBrand = Effect.fn("loadNotificationSenderBrand")(
     }
 
     return yield* getSenderBrand({
+      allowDiscovery: false,
       from: message.fromAddress,
       headers: rawMessage.payload?.headers ?? [],
     });
@@ -677,14 +688,16 @@ const toThreadMessage = (
   const to = formatList(message.to);
 
   return {
-    attachments: message.attachments.map((attachment) => ({
-      attachmentId: attachment.attachmentId,
-      filename: attachment.filename,
-      mediaType: attachment.mediaType,
-      messageId: attachment.messageId,
-      partId: attachment.partId,
-      size: attachment.size,
-    })),
+    attachments: message.attachments.map((attachment) =>
+      toDisplayedAttachment({
+        attachmentId: attachment.attachmentId,
+        filename: attachment.filename,
+        mediaType: attachment.mediaType,
+        messageId: attachment.messageId,
+        partId: attachment.partId,
+        size: attachment.size,
+      })
+    ),
     bcc: bcc.length === 0 ? undefined : bcc,
     body:
       message.body.type === "html"
@@ -695,6 +708,7 @@ const toThreadMessage = (
     id: message.id,
     labelIds: [...message.labelIds],
     replyTo: message.replyTo?.address,
+    senderAuthenticated: message.senderAuthenticated,
     senderBrand: senderBrand ?? undefined,
     sentAt: Number(message.sentAt),
     snippet: "",
@@ -864,10 +878,19 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
           : []
       )
     );
+    // Looking up a logo the cache lacks contacts the sender's DNS and web
+    // servers, so it needs the same consent as remote images: only messages
+    // that would show a trusted sender's images automatically are looked up.
+    const isTrustedImageSender = yield* loadTrustedImageSenderCheck(
+      request.accountId
+    ).pipe(Effect.orElseSucceed(() => () => false));
     const messages = yield* Effect.forEach(
       parsed.messages,
       (message) =>
         getSenderBrand({
+          allowDiscovery:
+            canApplySenderTrust(message) &&
+            isTrustedImageSender(message.from.address),
           from: message.from.address,
           headers: headersById.get(message.id) ?? [],
         }).pipe(

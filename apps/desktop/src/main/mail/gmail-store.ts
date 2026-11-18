@@ -308,6 +308,7 @@ const toMessageValues = async (
     messageId: message.id,
     replyToAddress: message.replyTo?.address ?? null,
     schemaVersion: MESSAGE_SCHEMA_VERSION,
+    senderAuthenticated: message.senderAuthenticated,
     subject: message.subject,
     threadId: message.threadId,
     toAddresses: toAddresses(message.to),
