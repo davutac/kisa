@@ -2,10 +2,10 @@ import { CopyIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
-import type { ColorScheme } from "@/components/shell/theme-provider";
 import { useTheme } from "@/components/shell/theme-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { createEmailDocument, prepareEmailLinks } from "@/mail/email-frame";
 import { needsLightSurface } from "@/mail/email-surface";
 import { blockRemoteImages } from "@/mail/remote-images";
 import type { GmailMessageBody } from "@/shared/ipc/mail";
@@ -15,71 +15,6 @@ interface MailMessageBodyProps {
   body: GmailMessageBody;
   fallbackText: string;
 }
-
-interface EmailDocumentOptions {
-  readonly allowRemoteImages: boolean;
-  /** The app's theme, which the frame follows in place of the OS setting. */
-  readonly colorScheme: ColorScheme;
-  /** Whether the message brings colours that only work on a light page. */
-  readonly lightSurface: boolean;
-}
-
-// Stripping the markup hides the blocked images; this policy is what keeps the
-// message from reaching the network behind that.
-const createContentSecurityPolicy = (allowRemoteImages: boolean): string =>
-  [
-    "default-src 'none'",
-    "font-src data:",
-    "form-action 'none'",
-    `img-src data: cid:${allowRemoteImages ? " https: http:" : ""}`,
-    "style-src 'unsafe-inline'",
-  ].join("; ");
-const EXTERNAL_LINK_PROTOCOLS = new Set(["http:", "https:"]);
-
-const createEmailDocument = (
-  html: string,
-  { allowRemoteImages, colorScheme, lightSurface }: EmailDocumentOptions
-): string => {
-  // `Canvas` and `CanvasText` follow whichever scheme is declared here, so the
-  // scheme is the only knob: the message either sits on its own light page or
-  // blends into the app's.
-  const scheme = lightSurface ? "light" : colorScheme;
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="${createContentSecurityPolicy(allowRemoteImages)}">
-    <meta name="referrer" content="no-referrer">
-    <meta name="color-scheme" content="${scheme}">
-    <style>
-      :root { color-scheme: ${scheme}; }
-      html, body {
-        height: auto !important;
-        max-height: none !important;
-        min-height: 0 !important;
-        margin: 0;
-        overflow: hidden !important;
-        background: ${lightSurface ? "Canvas" : "transparent"};
-        color: CanvasText;
-      }
-      html { padding: 0; }
-      body {
-        box-sizing: border-box;
-        padding: ${lightSurface ? "12px 48px 12px 16px" : "0 48px 0 16px"};
-        overflow-wrap: anywhere;
-        font: 14px/1.55 system-ui, sans-serif;
-      }
-      body, body * { user-select: text !important; }
-      img { max-width: 100%; height: auto; }
-      pre { overflow: auto; white-space: pre-wrap; }
-      table { max-width: 100%; }
-      a[href] { color: LinkText; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-    </style>
-  </head>
-  <body>${html}</body>
-</html>`;
-};
 
 interface EmailFrameLayoutElement {
   readonly offsetHeight: number;
@@ -128,28 +63,6 @@ export const resizeEmailFrame = (frame: EmailFrameLayout): void => {
     );
 
     frame.style.height = `${Math.max(Math.ceil(contentHeight) + 1, 96)}px`;
-  }
-};
-
-const prepareEmailLinks = (document: Document): void => {
-  for (const link of document.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-    try {
-      const url = new URL(link.href);
-
-      if (!EXTERNAL_LINK_PROTOCOLS.has(url.protocol)) {
-        link.removeAttribute("href");
-        link.removeAttribute("target");
-        continue;
-      }
-
-      link.href = url.toString();
-      link.referrerPolicy = "no-referrer";
-      link.rel = "noopener noreferrer";
-      link.target = "_blank";
-    } catch {
-      link.removeAttribute("href");
-      link.removeAttribute("target");
-    }
   }
 };
 

@@ -16,6 +16,7 @@ interface TestWindow {
   readonly isDestroyed: () => boolean;
   readonly loadFile: ReturnType<typeof vi.fn>;
   readonly options: Electron.BrowserWindowConstructorOptions;
+  readonly webContents: { readonly on: ReturnType<typeof vi.fn> };
 }
 
 const electronState = vi.hoisted(() => ({
@@ -177,6 +178,59 @@ describe(openThreadWindow, () => {
 
     expect(second).toBe(first);
     expect(first.focus).toHaveBeenCalledOnce();
+  });
+
+  describe("message frame navigation", () => {
+    interface FrameNavigation {
+      readonly isMainFrame: boolean;
+      readonly preventDefault: () => void;
+      readonly url: string;
+    }
+
+    // Opens a window and reports whether its `will-frame-navigate` handler
+    // lets each navigation through.
+    const openNavigationPolicy = async (): Promise<
+      (url: string, isMainFrame: boolean) => boolean
+    > => {
+      await openThreadWindow({
+        accountId: "frames@example.com",
+        threadId: "frames-thread",
+      });
+      const call =
+        electronState.createdWindows[0]?.webContents.on.mock.calls.find(
+          ([event]) => event === "will-frame-navigate"
+        );
+      const handler = call?.[1] as
+        | ((details: FrameNavigation) => void)
+        | undefined;
+
+      if (handler === undefined) {
+        throw new Error("Expected a will-frame-navigate handler");
+      }
+
+      return (url, isMainFrame) => {
+        const preventDefault = vi.fn<() => void>();
+        handler({ isMainFrame, preventDefault, url });
+        return preventDefault.mock.calls.length === 0;
+      };
+    };
+
+    it("lets a frame load its own document", async () => {
+      const allows = await openNavigationPolicy();
+
+      expect(allows("about:srcdoc", false)).toBeTruthy();
+      expect(allows("about:blank", false)).toBeTruthy();
+      // The main frame keeps its existing `will-navigate` policy.
+      expect(allows("file:///index.html#/settings", true)).toBeTruthy();
+    });
+
+    it("stops a frame from navigating to files, shares or the web", async () => {
+      const allows = await openNavigationPolicy();
+
+      expect(allows("file:///etc/hosts", false)).toBeFalsy();
+      expect(allows("file://host/share/file", false)).toBeFalsy();
+      expect(allows("https://example.com/", false)).toBeFalsy();
+    });
   });
 
   it("destroys the popout when its renderer cannot load", async () => {

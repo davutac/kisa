@@ -2,7 +2,7 @@
 // oxlint-disable vitest/no-standalone-expect
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 import {
   createPinnedLookup,
@@ -13,8 +13,40 @@ import {
   parseBimiLocation,
 } from "../src/main/mail/sender-brand";
 
+const testState = vi.hoisted(() => ({
+  databaseAvailable: false,
+  txtLookups: [] as string[],
+}));
+
+// An empty sender-brand cache. Database access stays an error unless a test
+// opts in, so header checks are proven to fail before the cache is read.
 vi.mock(import("../src/main/database"), () => ({
-  withDatabaseClient: () => Effect.die("Unexpected database access"),
+  withDatabaseClient: <A>(run: (database: never) => Promise<A>) =>
+    testState.databaseAvailable
+      ? Effect.promise(() =>
+          run({
+            insert: () => ({
+              values: () => ({
+                onConflictDoUpdate: () => ({ run: () => Promise.resolve() }),
+              }),
+            }),
+            query: {
+              gmailSenderBrands: {
+                findFirst: () => Promise.resolve(),
+                findMany: () => Promise.resolve([]),
+              },
+            },
+          } as never)
+        )
+      : Effect.die("Unexpected database access"),
+}));
+
+vi.mock(import("node:dns/promises"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveTxt: vi.fn<(name: string) => Promise<string[][]>>((name) => {
+    testState.txtLookups.push(name);
+    return Promise.resolve([]);
+  }),
 }));
 
 const stripeAuthenticationHeaders = [
@@ -217,6 +249,7 @@ describe(getSenderBrand, () => {
   it.effect("ignores BIMI headers not validated by Gmail", () =>
     Effect.gen(function* ignoresUntrustedHeaders() {
       const brand = yield* getSenderBrand({
+        allowDiscovery: true,
         from: "Stripe <notifications@stripe.com>",
         headers: [
           {
@@ -235,6 +268,7 @@ describe(getSenderBrand, () => {
   it.effect("requires Gmail to report a successful BIMI check", () =>
     Effect.gen(function* requiresBimiPass() {
       const brand = yield* getSenderBrand({
+        allowDiscovery: true,
         from: "Stripe <notifications@stripe.com>",
         headers: [
           {
@@ -245,6 +279,45 @@ describe(getSenderBrand, () => {
       });
 
       expect(brand).toBeNull();
+    })
+  );
+});
+
+describe("sender brand discovery consent", () => {
+  beforeEach(() => {
+    testState.databaseAvailable = true;
+    testState.txtLookups.length = 0;
+  });
+
+  afterEach(() => {
+    testState.databaseAvailable = false;
+  });
+
+  it.effect("does not query the sender's DNS without consent", () =>
+    Effect.gen(function* withoutConsent() {
+      const brand = yield* getSenderBrand({
+        allowDiscovery: false,
+        from: "Stripe <notifications@stripe.com>",
+        headers: stripeAuthenticationHeaders,
+      });
+
+      expect(brand).toBeNull();
+      expect(testState.txtLookups).toStrictEqual([]);
+    })
+  );
+
+  it.effect("queries the sender's BIMI record once the reader allows it", () =>
+    Effect.gen(function* withConsent() {
+      const brand = yield* getSenderBrand({
+        allowDiscovery: true,
+        from: "Stripe <notifications@stripe.com>",
+        headers: stripeAuthenticationHeaders,
+      });
+
+      expect(brand).toBeNull();
+      expect(testState.txtLookups).toStrictEqual([
+        "transactional._bimi.stripe.com",
+      ]);
     })
   );
 });

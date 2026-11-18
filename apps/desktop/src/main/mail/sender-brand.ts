@@ -23,6 +23,13 @@ export interface MessageHeader {
 }
 
 export interface SenderBrandRequest {
+  /**
+   * Whether a missing logo may be looked up. Discovery queries the sender's
+   * own DNS and fetches from a host their record names, which tells them the
+   * message was opened, so it waits for the same consent as remote images.
+   * Without it, only a logo already in the cache can be returned.
+   */
+  readonly allowDiscovery: boolean;
   readonly from: string;
   readonly headers: readonly MessageHeader[];
 }
@@ -787,6 +794,10 @@ export const getSenderBrand = Effect.fn("getSenderBrand")(
           return cached.brand;
         }
 
+        continue;
+      }
+
+      if (!request.allowDiscovery) {
         continue;
       }
 

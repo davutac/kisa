@@ -169,6 +169,52 @@ describe("GmailMime.parseThread", () => {
     ).toBeFalsy();
   });
 
+  it("splits recipients only on commas outside quoted names", () => {
+    const message = parse({
+      body: { data: encodeBody("Hi") },
+      headers: [
+        {
+          name: "To",
+          value: '"Doe, John" <john@example.com>, jane@example.com',
+        },
+      ],
+      mimeType: "text/plain",
+    });
+
+    expect(
+      message?.to.map(({ address, name }) => ({ address, name }))
+    ).toStrictEqual([
+      { address: "john@example.com", name: "Doe, John" },
+      { address: "jane@example.com", name: undefined },
+    ]);
+  });
+
+  // Each of these held Electron main for seconds with the previous patterns.
+  // A synchronous regex cannot be interrupted by the test timeout, so the
+  // bound is asserted directly.
+  it("parses a body of unclosed image tags in linear time", () => {
+    const start = performance.now();
+
+    parse({
+      body: { data: encodeBody("<img ".repeat(26_214)) },
+      mimeType: "text/html",
+    });
+
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
+  it("parses a recipient header of commas in linear time", () => {
+    const start = performance.now();
+
+    parse({
+      body: { data: encodeBody("Hi") },
+      headers: [{ name: "To", value: `${",".repeat(65_536)}"` }],
+      mimeType: "text/plain",
+    });
+
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
   it("collects attachments with their content id", () => {
     const message = parse({
       parts: [

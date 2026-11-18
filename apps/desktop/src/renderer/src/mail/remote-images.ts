@@ -8,11 +8,17 @@ export interface RemoteImageScan {
   readonly html: string;
 }
 
-const TAG_PATTERN = /<(?<tag>[a-z][^\s/>]*)(?<attributes>[^>]*)>/giu;
+// These patterns run over sender-controlled HTML on the renderer thread, so
+// each has to stay linear in the length of the message. Neighbouring parts of
+// a pattern may not claim the same characters: when they can, every way of
+// splitting a long run between them is tried, and a few kilobytes of `<a<a<a`
+// hold the window for minutes. The attributes therefore start where the tag
+// name ends, and a `url()` value has one shape per kind of quoting.
+const TAG_PATTERN = /<(?<tag>[a-z][^\s/>]*)(?<attributes>(?:[\s/][^>]*)?)>/giu;
 const ATTRIBUTE_PATTERN =
   /\s(?<name>[\w:-]+)\s*=\s*(?<value>"[^"]*"|'[^']*'|[^\s"'`<=>]+)/giu;
 const CSS_URL_PATTERN =
-  /url\(\s*(?<quote>["']?)(?<url>[^"')]*)\k<quote>\s*\)/giu;
+  /url\(\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'()]+))\s*\)/giu;
 const REMOTE_URL_PATTERN = /^(?:https?:)?\/\//iu;
 const IMAGE_TAG_PATTERN = /^(?:image|img|input|picture|source|video)$/iu;
 
@@ -56,9 +62,12 @@ const isRemoteImageAttribute = (
  */
 export const blockRemoteImages = (html: string): RemoteImageScan => {
   let hasRemoteImages = false;
-  const withoutRemoteAttributes = html.replaceAll(
-    TAG_PATTERN,
-    (tag, name: string, attributes: string) => {
+  // A tag ends at a `>`, so nothing after the last one can be a tag. Scanning
+  // that tail anyway would read it to the end once for every `<` in it.
+  const markupEnd = html.lastIndexOf(">") + 1;
+  const markup = html
+    .slice(0, markupEnd)
+    .replaceAll(TAG_PATTERN, (tag, name: string, attributes: string) => {
       const keptAttributes = attributes.replaceAll(
         ATTRIBUTE_PATTERN,
         (attribute, attributeName: string, value: string) => {
@@ -72,13 +81,20 @@ export const blockRemoteImages = (html: string): RemoteImageScan => {
       );
 
       return keptAttributes === attributes ? tag : `<${name}${keptAttributes}>`;
-    }
-  );
+    });
+  const withoutRemoteAttributes = markup + html.slice(markupEnd);
   // Covers both `style` attributes and `<style>` blocks, which reach remote
   // images through `background-image` rather than through an attribute.
   const withoutRemoteStyleUrls = withoutRemoteAttributes.replaceAll(
     CSS_URL_PATTERN,
-    (declaration, _quote: string, url: string) => {
+    (
+      declaration,
+      double: string | undefined,
+      single: string | undefined,
+      bare: string | undefined
+    ) => {
+      const url = double ?? single ?? bare ?? "";
+
       if (!isRemoteUrl(url)) {
         return declaration;
       }

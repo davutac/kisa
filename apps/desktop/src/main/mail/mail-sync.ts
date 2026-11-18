@@ -112,6 +112,7 @@ import { getSenderBrand, hasCachedSenderBrand } from "./sender-brand";
 import { hasUnreadSpamRemote, resetSpamBackfillRemote } from "./spam-mailbox";
 import { getThreadCacheState } from "./thread-cache-policy";
 import { publishReconciledGmailError } from "./thread-reconciliation";
+import { loadTrustedImageSenderCheck } from "./trusted-image-senders";
 import { refreshUnreadBadge } from "./unread-badge";
 
 const GMAIL_INBOX_LABEL = "INBOX";
@@ -640,7 +641,9 @@ const loadNotificationSenderBrand = Effect.fn("loadNotificationSenderBrand")(
     }
 
     // Only known brand domains pay for this re-read. The current message's own
-    // authentication headers still have to validate the cached BIMI logo.
+    // authentication headers still have to validate the cached BIMI logo, and
+    // nothing the reader has not opened may contact the sender, so a logo that
+    // is not cached is never looked up from here.
     const rawMessages = yield* runGmail(
       loadRawThread(
         AccountId.make(message.accountId),
@@ -658,6 +661,7 @@ const loadNotificationSenderBrand = Effect.fn("loadNotificationSenderBrand")(
     }
 
     return yield* getSenderBrand({
+      allowDiscovery: false,
       from: message.fromAddress,
       headers: rawMessage.payload?.headers ?? [],
     });
@@ -864,10 +868,17 @@ const fetchFullThreadFromGmail = Effect.fn("fetchFullThreadFromGmail")(
           : []
       )
     );
+    // Looking up a logo the cache lacks contacts the sender's DNS and web
+    // servers, so it needs the same consent as remote images: only senders the
+    // reader always shows images from are looked up.
+    const isTrustedImageSender = yield* loadTrustedImageSenderCheck(
+      request.accountId
+    ).pipe(Effect.orElseSucceed(() => () => false));
     const messages = yield* Effect.forEach(
       parsed.messages,
       (message) =>
         getSenderBrand({
+          allowDiscovery: isTrustedImageSender(message.from.address),
           from: message.from.address,
           headers: headersById.get(message.id) ?? [],
         }).pipe(
