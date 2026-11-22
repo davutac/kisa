@@ -333,7 +333,8 @@ export const generateWithClaude = Effect.fn("generateWithClaude")(
         "--safe-mode",
         "--strict-mcp-config",
         "--mcp-config",
-        "{}",
+        // Claude Code rejects a bare `{}`; it requires the `mcpServers` record.
+        JSON.stringify({ mcpServers: {} }),
         "--tools",
         "",
         "--permission-mode",
