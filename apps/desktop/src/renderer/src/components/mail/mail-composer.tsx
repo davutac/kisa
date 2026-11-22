@@ -217,37 +217,46 @@ const MailComposer = ({
     );
 
   return (
-    <>
-      <EmailComposer
-        {...composerProps}
-        disabled={disabled}
-        getInlineImagePreview={attachmentController?.getInlineImagePreview}
-        loadInlineImagePreview={attachmentController?.loadInlineImagePreview}
-        onApplyTemplate={handleApplyTemplate}
-        onChange={handleChange}
-        onComposerFiles={
-          attachmentController === undefined ? undefined : handleComposerFiles
-        }
-        onInlineImageInsertDiscard={attachmentController?.discardInlineImages}
-        onInlineImageInsertFailure={
-          attachmentController?.fallbackInlineImagesToAttachments
-        }
-        toolbarActions={
-          <>
-            {aiControls}
-            {attachments === undefined ? null : (
-              <OutgoingAttachmentButton
-                command={attachments.command}
-                disabled={disabled}
-                focusRef={attachments.focusRef}
-                inputRef={attachments.controller.inputRef}
-                onFiles={handleAttachmentFiles}
-              />
-            )}
-          </>
-        }
-        toolbarHeader={
-          history === undefined ? null : (
+    <EmailComposer
+      {...composerProps}
+      disabled={disabled}
+      getInlineImagePreview={attachmentController?.getInlineImagePreview}
+      loadInlineImagePreview={attachmentController?.loadInlineImagePreview}
+      onApplyTemplate={handleApplyTemplate}
+      onChange={handleChange}
+      onComposerFiles={
+        attachmentController === undefined ? undefined : handleComposerFiles
+      }
+      onInlineImageInsertDiscard={attachmentController?.discardInlineImages}
+      onInlineImageInsertFailure={
+        attachmentController?.fallbackInlineImagesToAttachments
+      }
+      toolbarActions={
+        <>
+          {aiControls}
+          {attachments === undefined ? null : (
+            <OutgoingAttachmentButton
+              command={attachments.command}
+              disabled={disabled}
+              focusRef={attachments.focusRef}
+              inputRef={attachments.controller.inputRef}
+              onFiles={handleAttachmentFiles}
+            />
+          )}
+        </>
+      }
+      toolbarHeader={
+        <>
+          {attachments === undefined ? null : (
+            <OutgoingAttachmentList
+              className={attachments.listClassName}
+              attachments={attachments.controller.attachments.filter(
+                ({ contentId }) => contentId === undefined
+              )}
+              onRemove={handleAttachmentRemove}
+            />
+          )}
+          {history === undefined ? null : (
             <CleanDraftHistoryStrip
               disabled={disabled}
               onDismiss={(version) => history.onDismiss(version)}
@@ -255,19 +264,10 @@ const MailComposer = ({
               selectedVersionId={history.selectedVersionId}
               versions={history.versions}
             />
-          )
-        }
-      />
-      {attachments === undefined ? null : (
-        <OutgoingAttachmentList
-          className={attachments.listClassName}
-          attachments={attachments.controller.attachments.filter(
-            ({ contentId }) => contentId === undefined
           )}
-          onRemove={handleAttachmentRemove}
-        />
-      )}
-    </>
+        </>
+      }
+    />
   );
 };
 

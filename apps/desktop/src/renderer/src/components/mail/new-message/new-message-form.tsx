@@ -189,7 +189,7 @@ const NewMessageForm = ({
         }}
         className={cn(
           "min-h-40 flex-1 border-0",
-          isPage && "[&_[role=toolbar]]:border-border bg-transparent"
+          isPage && "divide-border bg-transparent"
         )}
         consumeModEnter
         contentKey={draftId}

@@ -30,7 +30,7 @@ const CleanDraftHistoryStrip = ({
   return (
     <div
       aria-label="Draft history"
-      className="border-background scroll-fade-x min-w-0 shrink-0 scrollbar-thin overflow-x-auto border-t px-2 py-1"
+      className="scroll-fade-x min-w-0 shrink-0 scrollbar-thin overflow-x-auto px-2 py-1"
     >
       <div className="flex w-max min-w-full items-center gap-1">
         <AnimatePresence mode="popLayout">

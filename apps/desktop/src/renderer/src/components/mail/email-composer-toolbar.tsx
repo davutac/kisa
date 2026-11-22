@@ -94,7 +94,7 @@ const EmailComposerToolbar = ({
   return (
     <div
       aria-label="Formatting"
-      className="border-background flex flex-wrap items-center gap-0.5 border-t px-2 py-1"
+      className="flex flex-wrap items-center gap-0.5 px-2 py-1"
       role="toolbar"
     >
       <ToolbarButton

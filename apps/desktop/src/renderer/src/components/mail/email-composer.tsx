@@ -359,7 +359,7 @@ const EmailComposer = ({
   return (
     <div
       className={cn(
-        "email-composer bg-card border-background flex flex-col overflow-hidden border-y",
+        "email-composer bg-card border-background divide-background flex flex-col divide-y overflow-hidden border-y",
         disabled && "opacity-50",
         className
       )}
