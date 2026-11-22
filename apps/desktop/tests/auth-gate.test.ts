@@ -21,7 +21,11 @@ describe(resolveInitialAuthGateState, () => {
   });
 
   it("returns the initial authenticated account state", async () => {
-    const account = { displayName: "Person", email: "person@example.com" };
+    const account = {
+      displayName: "Person",
+      email: "person@example.com",
+      provider: "gmail",
+    } as const;
 
     await expect(
       resolveInitialAuthGateState({

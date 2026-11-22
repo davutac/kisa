@@ -6,6 +6,8 @@
  * to show.
  */
 
+import type { AccountProvider } from "./ipc/accounts";
+
 export type MailServerSecurity = "starttls" | "tls";
 
 export interface MailServerSettings {
@@ -117,6 +119,28 @@ export const ACCOUNT_SETUP_HELP_URLS: ReadonlySet<string> = new Set([
 /** Whether a server is Gmail's, which also serves Google Workspace domains. */
 export const isGoogleMailHost = (host: string): boolean =>
   host.trim().toLowerCase() === GMAIL_PRESET.imap.host;
+
+/**
+ * Whose service an account is on, for its icon. The stored provider comes
+ * from the address's preset, so a Google Workspace or iCloud+ custom domain
+ * is stored as plain `imap`; its server still says whose it is.
+ */
+export const toAccountProvider = ({
+  imapHost,
+  provider,
+}: {
+  readonly imapHost: string;
+  readonly provider: AccountProvider;
+}): AccountProvider => {
+  if (provider !== "imap") {
+    return provider;
+  }
+  const host = imapHost.trim().toLowerCase();
+  if (host === GMAIL_PRESET.imap.host) {
+    return "gmail";
+  }
+  return host === ICLOUD_PRESET.imap.host ? "icloud" : "imap";
+};
 
 /**
  * A plain `local@domain.tld` address. Both halves are matched by classes the

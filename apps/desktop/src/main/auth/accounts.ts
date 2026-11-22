@@ -5,6 +5,7 @@ import { Effect, Schema } from "effect";
 import type { Account } from "../../shared/ipc/accounts";
 import { AccountsReply } from "../../shared/ipc/accounts";
 import { ACCOUNTS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
+import { toAccountProvider } from "../../shared/mail-account-presets";
 import { withDatabaseClient } from "../database-query";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { requireSecureCredentialStorage } from "./credential-storage";
@@ -29,7 +30,12 @@ export const listAccounts = Effect.fn("listAccounts")(function* listAccounts() {
   );
   const rows = yield* withDatabaseClient((database) =>
     database.query.mailAccounts.findMany({
-      columns: { displayName: true, email: true },
+      columns: {
+        displayName: true,
+        email: true,
+        imapHost: true,
+        provider: true,
+      },
       // SQL ordering follows insertion order, so these keys are semantic.
       // oxlint-disable-next-line eslint/sort-keys
       orderBy: { sortOrder: "asc", createdAt: "asc", accountId: "asc" },
@@ -43,6 +49,7 @@ export const listAccounts = Effect.fn("listAccounts")(function* listAccounts() {
   return rows.map((row): Account => ({
     displayName: row.displayName ?? undefined,
     email: row.email,
+    provider: toAccountProvider(row),
   }));
 });
 

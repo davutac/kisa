@@ -4,9 +4,13 @@ import { describe, expect, it } from "vitest";
 import AccountPicker from "../src/renderer/src/components/accounts/account-picker";
 
 const accounts = [
-  { displayName: "First Account", email: "first@example.com" },
-  { email: "second@example.com" },
-];
+  {
+    displayName: "First Account",
+    email: "first@example.com",
+    provider: "gmail",
+  },
+  { email: "second@example.com", provider: "imap" },
+] as const;
 
 describe("account picker", () => {
   it("renders required account choices through its shared interface", () => {
@@ -23,6 +27,20 @@ describe("account picker", () => {
     expect(markup).toContain("Select second@example.com");
     expect(markup).not.toContain("max-w-48");
     expect(markup).toMatch(/min-w-7 shrink.*min-w-0 overflow-hidden/u);
+  });
+
+  it("shows each account's provider logo", () => {
+    const markup = renderToString(
+      <AccountPicker
+        accounts={accounts}
+        onSelect={() => {}}
+        selectedAccountId="first@example.com"
+      />
+    );
+
+    // Gmail shows its logo; a server without a preset keeps the person glyph.
+    expect(markup.match(/<img alt="" [^>]*src=/gu)).toHaveLength(1);
+    expect(markup.match(/lucide-user-round/gu)).toHaveLength(1);
   });
 
   it("renders a selected null option for inheriting an account", () => {

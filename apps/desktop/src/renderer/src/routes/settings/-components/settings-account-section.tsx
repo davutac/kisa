@@ -1,5 +1,4 @@
-import { UserRoundIcon } from "lucide-react";
-
+import AccountProviderIcon from "@/components/accounts/account-provider-icon";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   SettingsRows,
@@ -40,7 +39,10 @@ const SettingsAccountSection = ({
         <div className="flex min-w-0 items-center gap-3 pl-4 md:pl-5">
           <Avatar size="lg">
             <AvatarFallback>
-              <UserRoundIcon aria-hidden="true" className="size-4" />
+              <AccountProviderIcon
+                className="size-4"
+                provider={account.provider}
+              />
             </AvatarFallback>
           </Avatar>
           <div className="flex min-w-0 flex-col gap-0">

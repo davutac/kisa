@@ -1,8 +1,9 @@
-import { ShuffleIcon, UserRoundIcon } from "lucide-react";
+import { ShuffleIcon } from "lucide-react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { Fragment } from "react";
 import type { Ref } from "react";
 
+import AccountProviderIcon from "@/components/accounts/account-provider-icon";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -65,7 +66,7 @@ const AccountOptionAvatar = ({ account }: { account?: Account }) =>
   account === undefined ? (
     <ShuffleIcon className="size-3.5" />
   ) : (
-    <UserRoundIcon className="size-3.5" />
+    <AccountProviderIcon className="size-3.5" provider={account.provider} />
   );
 
 const AccountOptionButton = ({

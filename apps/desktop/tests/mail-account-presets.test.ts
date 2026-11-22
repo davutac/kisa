@@ -7,6 +7,7 @@ import {
   isMicrosoftMailHost,
   microsoftServersFor,
   OUTLOOK_IMAP_HELP_URL,
+  toAccountProvider,
 } from "../src/shared/mail-account-presets";
 
 describe(isMicrosoftConsumerAddress, () => {
@@ -81,5 +82,43 @@ describe("the setup window's links", () => {
 
   it("offer no password preset for a Microsoft address", () => {
     expect(findMailAccountPreset("me@outlook.com")).toBeUndefined();
+  });
+});
+
+describe(toAccountProvider, () => {
+  it("keeps a provider the account was set up with", () => {
+    expect(
+      toAccountProvider({ imapHost: "imap.gmail.com", provider: "gmail" })
+    ).toBe("gmail");
+    expect(
+      toAccountProvider({ imapHost: "imap.mail.me.com", provider: "icloud" })
+    ).toBe("icloud");
+    expect(
+      toAccountProvider({
+        imapHost: "outlook.office365.com",
+        provider: "outlook",
+      })
+    ).toBe("outlook");
+  });
+
+  it("knows a custom domain on Gmail or iCloud by its server", () => {
+    expect(
+      toAccountProvider({ imapHost: " IMAP.gmail.com ", provider: "imap" })
+    ).toBe("gmail");
+    expect(
+      toAccountProvider({ imapHost: "imap.mail.me.com", provider: "imap" })
+    ).toBe("icloud");
+  });
+
+  it("leaves any other server as plain IMAP", () => {
+    expect(
+      toAccountProvider({ imapHost: "imap.fastmail.com", provider: "imap" })
+    ).toBe("imap");
+    expect(
+      toAccountProvider({
+        imapHost: "imap.gmail.com.evil.test",
+        provider: "imap",
+      })
+    ).toBe("imap");
   });
 });

@@ -1,14 +1,15 @@
 import { useSortable } from "@dnd-kit/react/sortable";
-import { CircleAlertIcon, GripVerticalIcon, UserRoundIcon } from "lucide-react";
+import { CircleAlertIcon, GripVerticalIcon } from "lucide-react";
 import { useId } from "react";
 
+import AccountProviderIcon from "@/components/accounts/account-provider-icon";
 import { Spinner } from "@/components/ui/spinner";
 import type { HotkeyCommandId } from "@/hotkeys";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
 import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
-import type { Account } from "@/shared/ipc/accounts";
+import type { Account, AccountProvider } from "@/shared/ipc/accounts";
 import { toMailIndexRatio } from "@/shared/mail-index-progress";
 
 import {
@@ -69,15 +70,17 @@ export const getAccountRowStatus = ({
 };
 
 /**
- * The account's glyph, the same size as every other sidebar row icon. While
+ * The account's provider logo, the same size as every other sidebar row icon. While
  * the account syncs a spinner takes its place, and while it indexes a ring
  * fills with the indexed share, or spins while that share is unknown.
  */
 const AccountStatusIcon = ({
   indexedRatio,
+  provider,
   status,
 }: {
   readonly indexedRatio: number | undefined;
+  readonly provider: AccountProvider;
   readonly status: AccountRowStatus;
 }) => {
   if (status === "syncing") {
@@ -87,7 +90,7 @@ const AccountStatusIcon = ({
     return <CircleAlertIcon className="text-destructive" />;
   }
   if (status !== "indexing") {
-    return <UserRoundIcon />;
+    return <AccountProviderIcon className="size-4" provider={provider} />;
   }
   return (
     <svg
@@ -166,7 +169,11 @@ const SidebarAccountRow = ({
             ref={iconRef}
           >
             <span className="contents group-hover/account-handle:hidden">
-              <AccountStatusIcon indexedRatio={indexedRatio} status={status} />
+              <AccountStatusIcon
+                indexedRatio={indexedRatio}
+                provider={account.provider}
+                status={status}
+              />
             </span>
             <GripVerticalIcon className="hidden group-hover/account-handle:block" />
           </span>
