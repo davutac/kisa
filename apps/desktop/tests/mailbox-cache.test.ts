@@ -13,7 +13,7 @@ import {
   getMailboxScopeKey,
 } from "../src/renderer/src/mail/mailbox-model";
 import { requestMailboxReload } from "../src/renderer/src/mail/mailbox-reload";
-import type { GmailThreadSummary } from "../src/shared/ipc/mail";
+import type { MailThreadSummary } from "../src/shared/ipc/mail";
 
 const makeSnapshot = (scopeKey: string): MailboxThreadsSnapshot => ({
   cacheCursor: {
@@ -27,7 +27,7 @@ const makeSnapshot = (scopeKey: string): MailboxThreadsSnapshot => ({
   threads: [],
 });
 
-const makeThread = (): GmailThreadSummary => ({
+const makeThread = (): MailThreadSummary => ({
   accountId: "account@example.com",
   attachments: [],
   from: "Sender <sender@example.com>",
@@ -145,19 +145,5 @@ describe("mailbox thread snapshots", () => {
     ]);
 
     expect(getMailboxThreadsSnapshot(scopeKey)?.threads).toStrictEqual([]);
-  });
-
-  it("invalidates relevant snapshots when an authoritative reload is needed", () => {
-    const accountScopeKey = getMailboxScopeKey(["account@example.com"], false);
-    const otherScopeKey = getMailboxScopeKey(["other@example.com"], false);
-
-    setMailboxThreadsSnapshot(accountScopeKey, makeSnapshot(accountScopeKey));
-    setMailboxThreadsSnapshot(otherScopeKey, makeSnapshot(otherScopeKey));
-    updateMailboxThreadsSnapshots([
-      { accountId: "account@example.com", kind: "reload" },
-    ]);
-
-    expect(getMailboxThreadsSnapshot(accountScopeKey)).toBeUndefined();
-    expect(getMailboxThreadsSnapshot(otherScopeKey)).toBeDefined();
   });
 });

@@ -1,25 +1,25 @@
-import type { AuthApi, MailApi, SettingsApi } from "@/platform/desktop";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import type { AccountsApi, MailApi, SettingsApi } from "@/platform/desktop";
+import { useAccounts } from "@/state/accounts";
 
 import SettingsAccountSection from "./settings-account-section";
 
 interface SettingsAccountsSectionProps {
-  authApi: AuthApi;
+  accountsApi: AccountsApi;
   mailApi?: MailApi;
   settingsApi?: SettingsApi;
 }
 
 const SettingsAccountsSection = ({
-  authApi,
+  accountsApi,
   mailApi,
   settingsApi,
 }: SettingsAccountsSectionProps) => {
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
 
   return accounts.map((account) => (
     <SettingsAccountSection
       account={account}
-      authApi={authApi}
+      accountsApi={accountsApi}
       key={account.email}
       mailApi={mailApi}
       settingsApi={settingsApi}

@@ -15,7 +15,7 @@ import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
 import { useMailboxThreads } from "@/mail/use-mailbox-threads";
 import { useThreadActions } from "@/mail/use-thread-actions";
 import { getWindowApi } from "@/platform/desktop";
-import type { GmailIndexProgress, GmailMailbox } from "@/shared/ipc/mail";
+import type { MailIndexProgress, Mailbox } from "@/shared/ipc/mail";
 import {
   useMailbox,
   useMailboxStore,
@@ -32,7 +32,7 @@ interface MailboxEmptyState {
 }
 
 function getEmptyState(
-  mailbox: GmailMailbox,
+  mailbox: Mailbox,
   unreadOnly: boolean,
   hasLabelFilter: boolean
 ): MailboxEmptyState {
@@ -77,7 +77,7 @@ function getEmptyState(
   };
 }
 
-function getThreadCloseLabel(mailbox: GmailMailbox): string | undefined {
+function getThreadCloseLabel(mailbox: Mailbox): string | undefined {
   if (mailbox === "spam") {
     return "Back to spam";
   }
@@ -98,7 +98,7 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
  * going quiet.
  */
 function getIndexingMessage(
-  progress: readonly GmailIndexProgress[],
+  progress: readonly MailIndexProgress[],
   accountIds: readonly string[]
 ): string | undefined {
   const running = progress.filter(
@@ -162,7 +162,7 @@ function getMailboxThreadListView({
   readonly isInitialLoading: boolean;
   readonly isLoadingNextPage: boolean;
   readonly loadNextPage: () => Promise<boolean>;
-  readonly mailbox: GmailMailbox;
+  readonly mailbox: Mailbox;
   readonly reloadRevision: number | string;
   /** Only when rows from several accounts can mix; one account needs no badge. */
   readonly showAccount: boolean;

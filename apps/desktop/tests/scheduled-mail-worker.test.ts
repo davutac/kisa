@@ -310,7 +310,7 @@ describe(ScheduledMailWorker, () => {
     await harness.worker.stop();
   });
 
-  it("releases an offline claim without consuming a Gmail attempt", async () => {
+  it("releases an offline claim without consuming a send attempt", async () => {
     const store = new FakeStore();
     const harness = makeHarness(store, { isOnline: () => false });
 
@@ -466,7 +466,7 @@ describe(ScheduledMailWorker, () => {
     await harness.worker.stop();
   });
 
-  it("fails stored-invalid content before attachment loading or Gmail", async () => {
+  it("fails stored-invalid content before attachment loading or sending", async () => {
     const store = new FakeStore();
     const originalClaimDue = store.claimDue.bind(store);
     store.claimDue = async (now, attemptId) => {
@@ -492,7 +492,7 @@ describe(ScheduledMailWorker, () => {
     await harness.worker.stop();
   });
 
-  it("rejects oversized stored attachments before opening files or calling Gmail", async () => {
+  it("rejects oversized stored attachments before opening files or sending", async () => {
     const store = new FakeStore();
     store.attachments = [1, 2, 3].map((index) => ({
       authorizationVersion: 1,
@@ -528,7 +528,7 @@ describe(ScheduledMailWorker, () => {
     "attachment-changed",
     "attachment-too-large",
   ] as const)(
-    "moves %s preparation failures to attention without dispatching to Gmail",
+    "moves %s preparation failures to attention without sending",
     async (reason) => {
       const store = new FakeStore();
       const harness = makeHarness(store, {

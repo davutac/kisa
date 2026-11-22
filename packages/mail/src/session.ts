@@ -169,19 +169,11 @@ export interface ImapSession {
   ) => Effect.Effect<MailboxState, MailTransportError>;
 }
 
-export type ImapAuth =
-  | {
-      readonly accessToken: Redacted.Redacted<string>;
-      /** When the token stops working; the connection closes before then. */
-      readonly expiresAt?: number | undefined;
-      readonly kind: "oauth";
-      readonly user: string;
-    }
-  | {
-      readonly kind: "password";
-      readonly password: Redacted.Redacted<string>;
-      readonly user: string;
-    };
+/** An account's sign-in: its app password, redacted wherever it travels. */
+export interface ImapAuth {
+  readonly password: Redacted.Redacted<string>;
+  readonly user: string;
+}
 
 export type TransportSecurity = "starttls" | "tls";
 

@@ -6,9 +6,9 @@ import {
   MAIL_REINDEX_CHANNEL,
 } from "../../../shared/ipc/channels";
 import {
-  GmailIndexProgressList,
-  GmailReindexReply,
-  GmailReindexRequest,
+  MailIndexProgressList,
+  MailReindexReply,
+  MailReindexRequest,
 } from "../../../shared/ipc/mail";
 import {
   getMailEngineIndexProgress,
@@ -22,7 +22,7 @@ export const getIndexProgress = makeIpcMethod({
   handler: () =>
     Effect.sync(() => ({ accounts: getMailEngineIndexProgress() })),
   payload: Schema.Void,
-  result: GmailIndexProgressList,
+  result: MailIndexProgressList,
 });
 
 export const reindexMail = makeIpcMethod({
@@ -36,6 +36,6 @@ export const reindexMail = makeIpcMethod({
       }),
       "Could not check for new mail"
     ),
-  payload: GmailReindexRequest,
-  result: GmailReindexReply,
+  payload: MailReindexRequest,
+  result: MailReindexReply,
 });

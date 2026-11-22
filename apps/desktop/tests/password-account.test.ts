@@ -28,6 +28,7 @@ import type {
   FakeSmtpServer,
 } from "./fixtures/fake-smtp-server";
 import {
+  GMAIL_MAILBOXES,
   ICLOUD_MAILBOXES,
   TestDatabase,
   connection,
@@ -62,9 +63,9 @@ const PASSWORD = "abcd-efgh-ijkl-mnop";
 
 interface AccountRow {
   readonly account_id: string;
-  readonly auth_kind: string;
   readonly credentials: Buffer;
   readonly dialect: string;
+  readonly display_name: string | null;
   readonly email: string;
   readonly imap_host: string;
   readonly imap_port: number;
@@ -79,15 +80,18 @@ interface AccountRow {
 const accountRows = () =>
   connection
     .prepare(
-      `SELECT account_id, auth_kind, credentials, dialect, email, imap_host,
+      `SELECT account_id, credentials, dialect, display_name, email, imap_host,
               imap_port, imap_security, provider, smtp_host, smtp_port,
               smtp_security, username
        FROM mail_accounts ORDER BY account_id`
     )
     .all() as AccountRow[];
 
-/** How the fake IMAP server answers a sign-in. */
-type ImapBehaviour = "accept" | "refuse" | "unreachable";
+/**
+ * How the fake IMAP server answers a sign-in: "accept" as a server without
+ * Gmail's extensions, "gmail" as one that advertises them.
+ */
+type ImapBehaviour = "accept" | "gmail" | "refuse" | "unreachable";
 
 let smtp: FakeSmtpServer | undefined;
 let imapRequests: ImapConnectRequest[] = [];
@@ -118,7 +122,12 @@ const layers = (imap: ImapBehaviour, smtpServer: FakeSmtpServer) =>
               );
             }
             return Effect.succeed(
-              new FakeImapServer(ICLOUD_MAILBOXES).session()
+              imap === "gmail"
+                ? new FakeImapServer(GMAIL_MAILBOXES).session()
+                : new FakeImapServer(ICLOUD_MAILBOXES, [
+                    "CONDSTORE",
+                    "IDLE",
+                  ]).session()
             );
           }),
       })
@@ -205,14 +214,9 @@ describe("adding an app password account", () => {
 
     expect(exit).toStrictEqual(Exit.succeed("name@icloud.com"));
     expect(
-      imapRequests.map(({ auth, server }) => ({
-        kind: auth.kind,
-        server,
-        user: auth.user,
-      }))
+      imapRequests.map(({ auth, server }) => ({ server, user: auth.user }))
     ).toStrictEqual([
       {
-        kind: "password",
         server: { host: "imap.mail.me.com", port: 993, security: "tls" },
         user: "Name@iCloud.com",
       },
@@ -233,8 +237,8 @@ describe("adding an app password account", () => {
     const [row] = accountRows();
     expect(row).toMatchObject({
       account_id: "name@icloud.com",
-      auth_kind: "password",
       dialect: "generic",
+      display_name: null,
       email: "name@icloud.com",
       imap_host: "imap.mail.me.com",
       imap_port: 993,
@@ -372,18 +376,91 @@ describe("adding an app password account", () => {
     expect(connected).toStrictEqual(["name@icloud.com"]);
   });
 
-  it("sends Gmail to Google sign-in and asks for servers it has no preset for", async () => {
-    const gmail = await addAccount({
-      email: "me@gmail.com",
+  it("signs in to Gmail with the app password as Google shows it, and keeps Gmail's labels", async () => {
+    const exit = await addAccount(
+      {
+        email: "Me@gmail.com",
+        name: "  Me Person ",
+        password: "abcd efgh ijkl mnop",
+      },
+      { imap: "gmail" }
+    );
+
+    expect(exit).toStrictEqual(Exit.succeed("me@gmail.com"));
+    expect({
+      imap: imapRequests[0]?.server,
+      smtp: smtpRequests[0]?.server,
+    }).toStrictEqual({
+      imap: { host: "imap.gmail.com", port: 993, security: "tls" },
+      smtp: { host: "smtp.gmail.com", port: 465, security: "tls" },
+    });
+    expect(
+      imapRequests.map(({ auth }) => Redacted.value(auth.password))
+    ).toStrictEqual(["abcdefghijklmnop"]);
+    const [row] = accountRows();
+    expect(row).toMatchObject({
+      dialect: "gmail",
+      display_name: "Me Person",
+      provider: "gmail",
+      username: "Me@gmail.com",
+    });
+    const stored = await Effect.runPromise(
+      decryptPasswordCredentials(row?.credentials ?? Buffer.alloc(0))
+    );
+    expect(Redacted.value(stored)).toBe("abcdefghijklmnop");
+  });
+
+  it("treats a hand-entered server that advertises Gmail's extensions as Gmail", async () => {
+    const exit = await addAccount(
+      {
+        email: "me@company.example",
+        password: PASSWORD,
+        servers: manualServers,
+      },
+      { imap: "gmail" }
+    );
+
+    expect(Exit.isSuccess(exit)).toBeTruthy();
+    // Only Google's own host gets its spaces dropped; this one has none.
+    expect(
+      imapRequests.map(({ auth }) => Redacted.value(auth.password))
+    ).toStrictEqual([PASSWORD]);
+    expect(accountRows()[0]).toMatchObject({
+      dialect: "gmail",
+      imap_host: "127.0.0.1",
+      provider: "gmail",
+    });
+  });
+
+  it("names Google when Gmail refuses the password, and stores nothing", async () => {
+    const exit = await addAccount(
+      { email: "me@gmail.com", password: PASSWORD },
+      { imap: "refuse" }
+    );
+
+    expect(failureMessage(exit)).toBe(
+      PASSWORD_ACCOUNT_MESSAGES.gmailPasswordRefused
+    );
+    expect(accountRows()).toStrictEqual([]);
+    expect(exposed(exit)).not.toContain(PASSWORD);
+  });
+
+  it("leaves the sender name out when it is blank", async () => {
+    await addAccount({
+      email: "name@icloud.com",
+      name: "   ",
       password: PASSWORD,
     });
-    await smtp?.close();
+
+    expect(accountRows()[0]?.display_name).toBeNull();
+  });
+
+  it("asks for servers it has no preset for", async () => {
     const noServers = await addAccount({
       email: "me@example.org",
       password: PASSWORD,
     });
 
-    expect(failureMessage(gmail)).toBe(PASSWORD_ACCOUNT_MESSAGES.gmail);
     expect(failureMessage(noServers)).toBe(
       PASSWORD_ACCOUNT_MESSAGES.serversRequired
     );
@@ -418,6 +495,18 @@ describe("the add-account request", () => {
       { email: "name@icloud.com", password: PASSWORD.repeat(100) },
     ],
     ["a non-string password", { email: "name@icloud.com", password: 1234 }],
+    [
+      "a name with a line break",
+      {
+        email: "name@icloud.com",
+        name: "Name\r\nBcc: someone@example.com",
+        password: PASSWORD,
+      },
+    ],
+    [
+      "an overlong name",
+      { email: "name@icloud.com", name: "N".repeat(129), password: PASSWORD },
+    ],
     ["no address", { password: PASSWORD }],
     ["an address without a domain", { email: "name", password: PASSWORD }],
     [

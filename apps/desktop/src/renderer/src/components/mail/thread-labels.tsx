@@ -7,13 +7,10 @@ import ThreadLabelPicker from "@/components/mail/thread-label-picker";
 import type { ThreadLabelChange } from "@/components/mail/thread-label-picker";
 import { Badge } from "@/components/ui/badge";
 import { useAppCommand } from "@/hotkeys";
-import { listUserGmailLabels, withGmailLabelState } from "@/mail/label";
+import { listUserLabels, withLabelState } from "@/mail/label";
 import type { ThreadActions } from "@/mail/use-thread-actions";
 import { getMailApi } from "@/platform/desktop";
-import {
-  useGmailLabelCatalog,
-  useUpsertGmailLabel,
-} from "@/state/gmail-labels";
+import { useLabelCatalog, useUpsertLabel } from "@/state/labels";
 
 interface ThreadLabelsProps {
   accountId: string;
@@ -41,10 +38,10 @@ const ThreadLabels = ({
     ReadonlyMap<string, OptimisticLabelState>
   >(new Map());
   const nextRequestIdRef = useRef(0);
-  const catalog = useGmailLabelCatalog(accountId);
+  const catalog = useLabelCatalog(accountId);
   const mailApi = getMailApi();
-  const upsertLabel = useUpsertGmailLabel();
-  const userLabels = listUserGmailLabels(catalog?.labels ?? []);
+  const upsertLabel = useUpsertLabel();
+  const userLabels = listUserLabels(catalog?.labels ?? []);
   const userLabelsByName = new Map(
     userLabels.map((label) => [label.name, label] as const)
   );
@@ -52,7 +49,7 @@ const ThreadLabels = ({
   let displayedLabels = labels;
 
   for (const state of optimisticLabels.values()) {
-    displayedLabels = withGmailLabelState(
+    displayedLabels = withLabelState(
       displayedLabels,
       state.labelName,
       state.applied

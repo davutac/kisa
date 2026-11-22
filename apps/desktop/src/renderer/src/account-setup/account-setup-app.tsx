@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -19,14 +19,18 @@ import {
 } from "@/components/ui/native-select";
 import { Spinner } from "@/components/ui/spinner";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
-import { APPLE_APP_PASSWORD_GUIDE_URL } from "@/shared/mail-account-presets";
-import type { MailServerSecurity } from "@/shared/mail-account-presets";
+import { MAX_DISPLAY_NAME_LENGTH } from "@/shared/mail-account-presets";
+import type {
+  MailAccountPreset,
+  MailServerSecurity,
+} from "@/shared/mail-account-presets";
 import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import {
   findAccountSetupProblem,
   getAccountSetupMode,
   INITIAL_ACCOUNT_SETUP_FORM,
+  toAccountName,
   toAccountServers,
   withServerSecurity,
 } from "./account-setup-form";
@@ -42,6 +46,7 @@ const FIELD_IDS = {
   email: "account-email",
   imapHost: "account-imap-host",
   imapPort: "account-imap-port",
+  name: "account-name",
   password: "account-password",
   smtpHost: "account-smtp-host",
   smtpPort: "account-smtp-port",
@@ -50,11 +55,36 @@ const PROBLEM_ID = "account-setup-problem";
 
 const DESCRIPTIONS = {
   address: "Sign in with an app password from your mail provider.",
-  gmail: "Sign in with an app password from your mail provider.",
   manual:
     "Enter your mail provider's server settings. Kisa checks them before saving.",
-  preset: "Kisa signs in to iCloud Mail with an app-specific password.",
-} as const satisfies Record<AccountSetupMode["kind"], string>;
+} as const satisfies Record<
+  Exclude<AccountSetupMode["kind"], "preset">,
+  string
+>;
+
+interface PresetCopy {
+  readonly description: string;
+  /** Says which password not to use, before the link to make the right one. */
+  readonly hint: string;
+  readonly linkText: string;
+  readonly passwordLabel: string;
+}
+
+/** Keyed by provider, so a new preset cannot ship without its own copy. */
+const PRESET_COPY = {
+  gmail: {
+    description: "Kisa signs in to Gmail with an app password.",
+    hint: "Your Google password won’t work, and app passwords need 2-Step Verification.",
+    linkText: "Create an app password",
+    passwordLabel: "App password",
+  },
+  icloud: {
+    description: "Kisa signs in to iCloud Mail with an app-specific password.",
+    hint: "Your Apple Account password won’t work.",
+    linkText: "Create an app-specific password",
+    passwordLabel: "App-specific password",
+  },
+} as const satisfies Record<MailAccountPreset["provider"], PresetCopy>;
 
 const SERVER_LEGENDS = {
   imap: "Incoming mail (IMAP)",
@@ -151,6 +181,13 @@ const focusField = (field: AccountSetupField): void => {
 };
 
 /**
+ * Main opens the page as a macOS sheet, which has no title bar, or as a
+ * window, which keeps a strip for its controls.
+ */
+const IS_SHEET =
+  new URLSearchParams(window.location.search).get("presentation") === "sheet";
+
+/**
  * The Add account window. It sends the sign-in to main once per attempt and
  * gets back only success or a fixed message; main closes the window once
  * the account is saved.
@@ -167,10 +204,24 @@ const AccountSetupApp = () => {
   // Uncontrolled: the password is read from the element only when sending.
   const passwordRef = useRef<HTMLInputElement>(null);
 
+  // Escape cancels, as Cancel does. This page is a dialog of its own and has
+  // no hotkey system, so its one dismissal key is handled here.
+  useEffect(() => {
+    const cancelOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        void bridge?.close();
+      }
+    };
+    window.addEventListener("keydown", cancelOnEscape);
+    return () => {
+      window.removeEventListener("keydown", cancelOnEscape);
+    };
+  }, [bridge]);
+
   const mode = getAccountSetupMode(form.email);
   const problem = findAccountSetupProblem(form, hasPassword);
-  const visibleProblem =
-    hasTriedSubmit || mode.kind === "gmail" ? problem : undefined;
+  const visibleProblem = hasTriedSubmit ? problem : undefined;
   const invalidField = visibleProblem?.field;
 
   const updateForm = (next: AccountSetupForm): void => {
@@ -195,8 +246,10 @@ const AccountSetupApp = () => {
     await runWithCleanup(
       async () => {
         try {
+          const name = toAccountName(form);
           const reply = await bridge.submit({
             email: form.email.trim(),
+            name,
             password: passwordRef.current?.value ?? "",
             servers: toAccountServers(form),
           });
@@ -219,26 +272,39 @@ const AccountSetupApp = () => {
   return (
     <main
       className="bg-background grid h-svh overflow-hidden"
-      style={{ gridTemplateRows: `${TITLEBAR_HEIGHT}px minmax(0, 1fr)` }}
+      style={{
+        gridTemplateRows: IS_SHEET
+          ? "minmax(0, 1fr)"
+          : `${TITLEBAR_HEIGHT}px minmax(0, 1fr)`,
+      }}
     >
-      <header className="app-titlebar flex items-center justify-center">
-        <span className="text-xs font-medium">Add account</span>
-      </header>
+      {IS_SHEET ? null : (
+        // The drag strip behind the window controls; the heading names it.
+        <div className="app-titlebar" />
+      )}
+
       <form
         aria-busy={isSubmitting}
         className="flex min-h-0 flex-col"
         noValidate
         onSubmit={submit}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-2 pb-4">
+        <div
+          className={`min-h-0 flex-1 overflow-y-auto px-6 pb-4 ${
+            // A sheet has no title strip above, so it pads like its sides.
+            IS_SHEET ? "pt-6" : "pt-2"
+          }`}
+        >
           <header className="mb-5">
             <h1 className="font-heading text-base font-medium">
               {mode.kind === "preset"
                 ? `Add ${mode.preset.title} account`
-                : "Add iCloud or other account"}
+                : "Add account"}
             </h1>
             <p className="text-muted-foreground mt-1 text-xs/relaxed">
-              {DESCRIPTIONS[mode.kind]}
+              {mode.kind === "preset"
+                ? PRESET_COPY[mode.preset.provider].description
+                : DESCRIPTIONS[mode.kind]}
             </p>
           </header>
 
@@ -246,20 +312,39 @@ const AccountSetupApp = () => {
               the control the user submitted from keeps its focus. */}
           <fieldset className="min-w-0">
             <FieldGroup>
+              <Field data-invalid={invalidField === "name" ? true : undefined}>
+                <FieldLabel htmlFor={FIELD_IDS.name}>Name</FieldLabel>
+                <Input
+                  aria-describedby={describe("name")}
+                  aria-invalid={invalidField === "name" ? true : undefined}
+                  autoComplete="name"
+                  // The window exists for this form, and the name comes first.
+                  // oxlint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus
+                  id={FIELD_IDS.name}
+                  maxLength={MAX_DISPLAY_NAME_LENGTH}
+                  onChange={(event) =>
+                    updateForm({ ...form, name: event.currentTarget.value })
+                  }
+                  readOnly={isSubmitting}
+                  value={form.name}
+                />
+                <FieldDescription>
+                  Optional. The name people see on mail you send.
+                </FieldDescription>
+              </Field>
+
               <Field data-invalid={invalidField === "email" ? true : undefined}>
                 <FieldLabel htmlFor={FIELD_IDS.email}>Email address</FieldLabel>
                 <Input
                   aria-describedby={describe("email")}
                   aria-invalid={invalidField === "email" ? true : undefined}
                   autoComplete="email"
-                  // The window exists for this form; the address comes first.
-                  // oxlint-disable-next-line jsx-a11y/no-autofocus
-                  autoFocus
                   id={FIELD_IDS.email}
                   onChange={(event) =>
                     updateForm({ ...form, email: event.currentTarget.value })
                   }
-                  placeholder="name@icloud.com"
+                  placeholder="name@example.com"
                   spellCheck={false}
                   readOnly={isSubmitting}
                   type="email"
@@ -272,7 +357,7 @@ const AccountSetupApp = () => {
               >
                 <FieldLabel htmlFor={FIELD_IDS.password}>
                   {mode.kind === "preset"
-                    ? "App-specific password"
+                    ? PRESET_COPY[mode.preset.provider].passwordLabel
                     : "App password"}
                 </FieldLabel>
                 <Input
@@ -291,13 +376,13 @@ const AccountSetupApp = () => {
                 />
                 {mode.kind === "preset" ? (
                   <FieldDescription>
-                    Your Apple Account password won’t work.{" "}
+                    {PRESET_COPY[mode.preset.provider].hint}{" "}
                     <a
-                      href={APPLE_APP_PASSWORD_GUIDE_URL}
+                      href={mode.preset.appPasswordUrl}
                       rel="noreferrer"
                       target="_blank"
                     >
-                      Create an app-specific password
+                      {PRESET_COPY[mode.preset.provider].linkText}
                     </a>
                   </FieldDescription>
                 ) : (

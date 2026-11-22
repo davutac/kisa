@@ -1,13 +1,9 @@
 import type { ReactNode } from "react";
 
 import MailLabelBadge from "@/components/mail/mail-label-badge";
-import {
-  formatGmailLabel,
-  sortGmailLabelNames,
-  visibleGmailLabels,
-} from "@/mail/label";
+import { formatLabel, sortLabelNames, filterVisibleLabels } from "@/mail/label";
 import { useAccountSettings } from "@/state/account-settings";
-import { useGmailLabelColors } from "@/state/gmail-labels";
+import { useLabelColors } from "@/state/labels";
 
 interface MailLabelBadgesProps {
   accountId: string;
@@ -30,9 +26,9 @@ const MailLabelBadges = ({
   size = "default",
 }: MailLabelBadgesProps) => {
   const { showSystemLabels } = useAccountSettings(accountId);
-  const colorsByName = useGmailLabelColors(accountId, labels);
-  const visibleLabels = sortGmailLabelNames(
-    visibleGmailLabels(labels, showSystemLabels).filter(
+  const colorsByName = useLabelColors(accountId, labels);
+  const visibleLabels = sortLabelNames(
+    filterVisibleLabels(labels, showSystemLabels).filter(
       (label) => label !== omitLabel
     )
   );
@@ -42,7 +38,7 @@ const MailLabelBadges = ({
   }
 
   return visibleLabels.map((label) => {
-    const displayLabel = formatGmailLabel(label);
+    const displayLabel = formatLabel(label);
     const canRemove =
       onRemoveLabel !== undefined && removableLabels?.has(label) === true;
 

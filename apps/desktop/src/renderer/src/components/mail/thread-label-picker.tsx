@@ -16,7 +16,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { getHotkeyAriaLabel, getHotkeyDisplay, HotkeyHint } from "@/hotkeys";
-import type { GmailLabelSummary } from "@/shared/ipc/mail";
+import type { MailLabelSummary } from "@/shared/ipc/mail";
 
 export interface ThreadLabelChange {
   readonly applied: boolean;
@@ -28,7 +28,7 @@ interface ThreadLabelPickerProps {
   appliedLabels: readonly string[];
   isOpen: boolean;
   isLoading: boolean;
-  labels: readonly GmailLabelSummary[];
+  labels: readonly MailLabelSummary[];
   onCreateLabel?: () => void;
   onOpenChange: (isOpen: boolean) => void;
   onSetLabel: (label: ThreadLabelChange) => void;

@@ -20,13 +20,13 @@ import {
   quietDestructiveClassName,
 } from "@/lib/action-hierarchy";
 import { cn } from "@/lib/utils";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
 import type { TemplateVariableContext } from "@/shared/template-variables";
 import TemplateSubjectEditor from "@/templates/template-subject-editor";
 
 interface TemplateEditorProps {
-  readonly accounts: readonly GoogleAccount[];
+  readonly accounts: readonly Account[];
   readonly draft: ComposerTemplateInput;
   readonly editorVersion: number;
   readonly isCreating: boolean;

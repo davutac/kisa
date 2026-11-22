@@ -9,13 +9,13 @@ import {
   MAX_INLINE_MESSAGE_BYTES,
 } from "../../shared/attachments";
 import {
-  MAX_GMAIL_ATTACHMENT_BYTES,
-  MAX_GMAIL_ATTACHMENT_COUNT,
+  MAX_OUTGOING_ATTACHMENT_BYTES,
+  MAX_OUTGOING_ATTACHMENT_COUNT,
 } from "../../shared/ipc/mail";
 import type {
-  GmailOutgoingAttachmentCapability,
-  GmailOutgoingAttachmentPrepareRequest,
-  GmailOutgoingAttachmentSelectionRequest,
+  MailOutgoingAttachmentCapability,
+  MailOutgoingAttachmentPrepareRequest,
+  MailOutgoingAttachmentSelectionRequest,
   MailDraftAttachment,
 } from "../../shared/ipc/mail";
 import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-authorization-error";
@@ -63,7 +63,7 @@ const assertValidAttachmentReferenceIds = (
   referenceIds: readonly string[]
 ): void => {
   if (
-    referenceIds.length > MAX_GMAIL_ATTACHMENT_COUNT ||
+    referenceIds.length > MAX_OUTGOING_ATTACHMENT_COUNT ||
     new Set(referenceIds).size !== referenceIds.length
   ) {
     throw authorizationError("Attachment authorization is invalid");
@@ -168,9 +168,9 @@ export class OutgoingAttachmentAuthorizations {
 
   async authorizeSelections(
     ownerId: number,
-    request: GmailOutgoingAttachmentSelectionRequest
+    request: MailOutgoingAttachmentSelectionRequest
   ): Promise<readonly MailDraftAttachment[]> {
-    if (request.files.length > MAX_GMAIL_ATTACHMENT_COUNT) {
+    if (request.files.length > MAX_OUTGOING_ATTACHMENT_COUNT) {
       throw authorizationError("Too many attachments were selected");
     }
 
@@ -188,7 +188,10 @@ export class OutgoingAttachmentAuthorizations {
     bodyHtml?: string
   ): readonly MailDraftAttachment[] {
     const entries = decodeStoredOutgoingAttachmentEntries(input);
-    if (entries === undefined || entries.length > MAX_GMAIL_ATTACHMENT_COUNT) {
+    if (
+      entries === undefined ||
+      entries.length > MAX_OUTGOING_ATTACHMENT_COUNT
+    ) {
       return [this.#unavailableAttachment(0)];
     }
     const restorableEntries =
@@ -223,7 +226,7 @@ export class OutgoingAttachmentAuthorizations {
       }
       return withContentId(reference.record, contentId);
     });
-    if (getAttachmentBytes(records) > MAX_GMAIL_ATTACHMENT_BYTES) {
+    if (getAttachmentBytes(records) > MAX_OUTGOING_ATTACHMENT_BYTES) {
       throw authorizationError("Attachments can total up to 25 MB");
     }
     validateInlineImageTotal(records);
@@ -232,8 +235,8 @@ export class OutgoingAttachmentAuthorizations {
 
   async prepare(
     ownerId: number,
-    attachments: GmailOutgoingAttachmentPrepareRequest["attachments"]
-  ): Promise<readonly GmailOutgoingAttachmentCapability[]> {
+    attachments: MailOutgoingAttachmentPrepareRequest["attachments"]
+  ): Promise<readonly MailOutgoingAttachmentCapability[]> {
     this.#expireCapabilities();
     const referenceIds = attachments.map(({ referenceId }) => referenceId);
     assertValidAttachmentReferenceIds(referenceIds);
@@ -254,7 +257,7 @@ export class OutgoingAttachmentAuthorizations {
       return withContentId(reference.record, contentId);
     });
     validateInlineImageTotal(records);
-    if (getAttachmentBytes(records) > MAX_GMAIL_ATTACHMENT_BYTES) {
+    if (getAttachmentBytes(records) > MAX_OUTGOING_ATTACHMENT_BYTES) {
       throw authorizationError("Attachments can total up to 25 MB");
     }
 
@@ -266,7 +269,7 @@ export class OutgoingAttachmentAuthorizations {
     );
     const failed = settled.find((result) => result.status === "rejected");
     const totalBytes = getAttachmentBytes(pending);
-    if (failed !== undefined || totalBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+    if (failed !== undefined || totalBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
       await Promise.all(
         pending.map(({ file }) => closeOutgoingAttachment(file))
       );

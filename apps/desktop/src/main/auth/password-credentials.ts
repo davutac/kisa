@@ -5,7 +5,7 @@ import { CredentialStorageError } from "./credential-storage";
 
 /**
  * The plaintext inside a password account's encrypted `credentials` blob.
- * The `kind` keeps it from ever being read as an OAuth grant, or one as it.
+ * The `kind` keeps any other sealed blob from ever being read as a password.
  */
 const PasswordCredentials = Schema.fromJsonString(
   Schema.Struct({

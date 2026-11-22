@@ -1,5 +1,5 @@
 import { hasSpamLabel, hasTrashLabel } from "@/mail/label";
-import type { GmailThreadSummary } from "@/shared/ipc/mail";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
 
 export type ThreadDestructiveAction = "deleteForever" | "trash";
 
@@ -9,7 +9,7 @@ export const getThreadDestructiveAction = (
   hasSpamLabel(labels) || hasTrashLabel(labels) ? "deleteForever" : "trash";
 
 export const getBulkThreadDestructiveAction = (
-  threads: readonly Pick<GmailThreadSummary, "labels">[]
+  threads: readonly Pick<MailThreadSummary, "labels">[]
 ): ThreadDestructiveAction | undefined => {
   const [first] = threads;
   if (first === undefined) {

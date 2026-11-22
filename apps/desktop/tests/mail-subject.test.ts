@@ -13,14 +13,14 @@ import {
   templateTextToVariableDocument,
 } from "../src/renderer/src/templates/template-variable";
 import {
-  MAX_GMAIL_SUBJECT_LENGTH,
-  truncateGmailSubject,
-} from "../src/shared/gmail-subject";
-import {
-  GmailMessageSendRequest,
-  GmailThreadMessageSendRequest,
+  MailMessageSendRequest,
+  MailThreadMessageSendRequest,
   MailDraftInput,
 } from "../src/shared/ipc/mail";
+import {
+  MAX_SUBJECT_LENGTH,
+  truncateSubject,
+} from "../src/shared/mail-subject";
 
 const schema = getSchema([StarterKit, TemplateVariable]);
 
@@ -37,41 +37,41 @@ const sendRequest = (subject: string) => ({
   to: ["friend@example.com"],
 });
 
-describe("Gmail subject limit", () => {
+describe("subject limit", () => {
   it("truncates new-message subjects, including programmatic updates", () => {
-    const oversized = "a".repeat(MAX_GMAIL_SUBJECT_LENGTH + 1);
+    const oversized = "a".repeat(MAX_SUBJECT_LENGTH + 1);
     const store = createNewMessageStore("person@example.com");
 
     store.getState().setSubject(oversized);
 
-    expect(store.getState().subject).toBe(truncateGmailSubject(oversized));
-    expect(store.getState().subject).toHaveLength(MAX_GMAIL_SUBJECT_LENGTH);
+    expect(store.getState().subject).toBe(truncateSubject(oversized));
+    expect(store.getState().subject).toHaveLength(MAX_SUBJECT_LENGTH);
   });
 
   it("rejects oversized subjects at the send boundary", () => {
     expect(() =>
-      Schema.decodeSync(GmailMessageSendRequest)(
-        sendRequest("a".repeat(MAX_GMAIL_SUBJECT_LENGTH))
+      Schema.decodeSync(MailMessageSendRequest)(
+        sendRequest("a".repeat(MAX_SUBJECT_LENGTH))
       )
     ).not.toThrow();
     expect(() =>
-      Schema.decodeSync(GmailMessageSendRequest)(
-        sendRequest("a".repeat(MAX_GMAIL_SUBJECT_LENGTH + 1))
+      Schema.decodeSync(MailMessageSendRequest)(
+        sendRequest("a".repeat(MAX_SUBJECT_LENGTH + 1))
       )
     ).toThrow(
-      `Expected a value with a length of at most ${MAX_GMAIL_SUBJECT_LENGTH}`
+      `Expected a value with a length of at most ${MAX_SUBJECT_LENGTH}`
     );
   });
 
   it("accepts only opaque attachment capabilities at the send boundary", () => {
     expect(() =>
-      Schema.decodeSync(GmailMessageSendRequest)({
+      Schema.decodeSync(MailMessageSendRequest)({
         ...sendRequest("Subject"),
         attachments: [{ capability: "main-issued-capability" }],
       })
     ).not.toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(GmailMessageSendRequest)({
+      Schema.decodeUnknownSync(MailMessageSendRequest)({
         ...sendRequest("Subject"),
         attachments: [
           {
@@ -98,10 +98,10 @@ describe("Gmail subject limit", () => {
     };
 
     expect(() =>
-      Schema.decodeSync(GmailThreadMessageSendRequest)(request)
+      Schema.decodeSync(MailThreadMessageSendRequest)(request)
     ).not.toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(GmailThreadMessageSendRequest)({
+      Schema.decodeUnknownSync(MailThreadMessageSendRequest)({
         ...request,
         attachments: [{ path: "/renderer-controlled/secrets.txt" }],
       })
@@ -111,7 +111,7 @@ describe("Gmail subject limit", () => {
   it("keeps stored drafts tolerant for backward compatibility", () => {
     expect(() =>
       Schema.decodeSync(MailDraftInput)({
-        ...sendRequest("a".repeat(MAX_GMAIL_SUBJECT_LENGTH + 1)),
+        ...sendRequest("a".repeat(MAX_SUBJECT_LENGTH + 1)),
         id: "draft-1",
         kind: "new",
       })
@@ -124,27 +124,27 @@ describe("Gmail subject limit", () => {
     expect(
       templateSubjectIsWithinLimit(
         subjectDocument(
-          `${"a".repeat(MAX_GMAIL_SUBJECT_LENGTH - variable.length)}${variable}`
+          `${"a".repeat(MAX_SUBJECT_LENGTH - variable.length)}${variable}`
         )
       )
     ).toBeTruthy();
     expect(
       templateSubjectIsWithinLimit(
         subjectDocument(
-          `${"a".repeat(MAX_GMAIL_SUBJECT_LENGTH - variable.length + 1)}${variable}`
+          `${"a".repeat(MAX_SUBJECT_LENGTH - variable.length + 1)}${variable}`
         )
       )
     ).toBeFalsy();
   });
 
   it("truncates pasted template subjects to the remaining space", () => {
-    const document = subjectDocument("a".repeat(MAX_GMAIL_SUBJECT_LENGTH - 2));
+    const document = subjectDocument("a".repeat(MAX_SUBJECT_LENGTH - 2));
 
     expect(truncateTemplateSubjectPaste("bcdef", document, 1, 1)).toBe("bc");
   });
 
   it("allows pasted text to replace the selected subject text", () => {
-    const document = subjectDocument("a".repeat(MAX_GMAIL_SUBJECT_LENGTH));
+    const document = subjectDocument("a".repeat(MAX_SUBJECT_LENGTH));
 
     expect(truncateTemplateSubjectPaste("bcdef", document, 1, 3)).toBe("bc");
   });

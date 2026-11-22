@@ -4,13 +4,13 @@ import type { Ref } from "react";
 import MailDate from "@/components/mail/mail-date";
 import MailMessageParticipants from "@/components/mail/message-participants";
 import { cn } from "@/lib/utils";
-import type { GmailThreadMessage } from "@/shared/ipc/mail";
+import type { ThreadMessage } from "@/shared/ipc/mail";
 
 interface MailMessageHeaderProps {
   buttonRef?: Ref<HTMLButtonElement>;
   expanded: boolean;
   fallbackRecipient: string;
-  message: GmailThreadMessage;
+  message: ThreadMessage;
   onToggle: () => void;
   selected: boolean;
 }

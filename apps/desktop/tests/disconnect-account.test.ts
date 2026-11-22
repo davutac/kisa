@@ -1,13 +1,12 @@
-// Disconnecting removes a password account the way it removes a Google one:
-// the row and its sealed credentials, then every per-account store. Only
-// Google is asked to revoke anything. Stores other than the account row are
-// replaced; each has its own tests.
+// Disconnecting removes an account's row and sealed password, then every
+// per-account store, and asks no server to revoke anything. Stores other than
+// the account row are replaced; each has its own tests.
 // oxlint-disable vitest/prefer-import-in-mock
 import { Effect } from "effect";
 import type * as Electron from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { disconnectGoogleAccount } from "../src/main/auth/disconnect-account";
+import { disconnectAccount } from "../src/main/auth/disconnect-account";
 import { sendRendererEvent } from "../src/main/electron/renderer-events";
 import { forgetMailEngineAccount } from "../src/main/mail/engine/mail-engine";
 import { forgetAccountDrafts } from "../src/main/mail/mail-drafts";
@@ -119,15 +118,6 @@ vi.mock("../src/main/window/create-window", () => ({
   getMainWindow: vi.fn<() => undefined>(),
 }));
 
-const googleCredentials = Buffer.from(
-  JSON.stringify({
-    accessToken: "access-token",
-    clientId: "client-id",
-    oauthClient: "user-owned",
-    refreshToken: "refresh-token",
-  })
-);
-
 const accountIds = () =>
   connection.prepare("SELECT account_id FROM mail_accounts").all();
 
@@ -140,16 +130,14 @@ describe("disconnecting an account", () => {
     resetDatabase();
     vi.clearAllMocks();
     vi.stubGlobal("fetch", fetchMock);
-    insertGmailAccount(connection, "person@gmail.com", {
-      credentials: googleCredentials,
-    });
+    insertGmailAccount(connection, "person@gmail.com");
     connection
       .prepare(
         `INSERT INTO mail_accounts (
-          account_id, auth_kind, created_at, credentials, dialect, email,
+          account_id, created_at, credentials, dialect, email,
           imap_host, imap_port, imap_security, provider, smtp_host, smtp_port,
           smtp_security, sort_order, updated_at, username
-        ) VALUES ('name@icloud.com', 'password', 1, X'01', 'generic',
+        ) VALUES ('name@icloud.com', 1, X'01', 'generic',
           'name@icloud.com', 'imap.mail.me.com', 993, 'tls', 'icloud',
           'smtp.mail.me.com', 587, 'starttls', 2, 1, 'name@icloud.com')`
       )
@@ -160,9 +148,9 @@ describe("disconnecting an account", () => {
     vi.unstubAllGlobals();
   });
 
-  it("removes a password account and everything cached for it, revoking nothing", async () => {
+  it("removes an account and everything cached for it, revoking nothing", async () => {
     const remaining = await Effect.runPromise(
-      disconnectGoogleAccount("name@icloud.com")
+      disconnectAccount("name@icloud.com")
     );
 
     expect(accountIds()).toStrictEqual([{ account_id: "person@gmail.com" }]);
@@ -186,13 +174,11 @@ describe("disconnecting an account", () => {
     );
   });
 
-  it("still revokes a Google account's grant", async () => {
-    await Effect.runPromise(disconnectGoogleAccount("person@gmail.com"));
+  it("removes a Gmail account without contacting Google", async () => {
+    await Effect.runPromise(disconnectAccount("person@gmail.com"));
 
     expect(accountIds()).toStrictEqual([{ account_id: "name@icloud.com" }]);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://oauth2.googleapis.com/revoke"
-    );
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(forgetMailEngineAccount).toHaveBeenCalledWith("person@gmail.com");
   });
 });

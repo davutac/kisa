@@ -24,15 +24,15 @@ import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { cn } from "@/lib/utils";
 import { getBulkLabelGroups } from "@/mail/bulk-thread-selection";
 import type { ThreadActions } from "@/mail/use-thread-actions";
-import type { GmailThreadSummary } from "@/shared/ipc/mail";
-import { useGmailLabelCatalogs } from "@/state/gmail-labels";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
+import { useLabelCatalogs } from "@/state/labels";
 
 interface ThreadSelectionBarProps {
   actions: ThreadActions;
   onClear: () => void;
   onDeleteForever?: () => Promise<void>;
   onTrash?: () => Promise<void>;
-  threads: readonly GmailThreadSummary[];
+  threads: readonly MailThreadSummary[];
 }
 
 const ThreadSelectionBar = ({
@@ -43,7 +43,7 @@ const ThreadSelectionBar = ({
   threads,
 }: ThreadSelectionBarProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
-  const catalogs = useGmailLabelCatalogs();
+  const catalogs = useLabelCatalogs();
   const [isLabelPickerOpen, setIsLabelPickerOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const labelGroups = useMemo(

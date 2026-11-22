@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { useGoogleAccounts } from "@/state/google-accounts";
+import { useAccounts } from "@/state/accounts";
 import { useSelectedAccountId } from "@/state/mailbox";
 
 interface MailboxAccountScope {
@@ -9,7 +9,7 @@ interface MailboxAccountScope {
 }
 
 export const useMailboxAccountScope = (): MailboxAccountScope => {
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const selectedAccountId = useSelectedAccountId();
   const knownAccountId = accounts.some(
     ({ email }) => email === selectedAccountId

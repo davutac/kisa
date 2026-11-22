@@ -2,15 +2,15 @@ import { LoaderCircleIcon, XIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { gmailLabelColorStyle } from "@/mail/label";
-import type { GmailLabelColor } from "@/shared/ipc/mail";
+import { labelColorStyle } from "@/mail/label";
+import type { MailLabelColor } from "@/shared/ipc/mail";
 
 export type MailLabelBadgeSize = "compact" | "default";
 
 export interface MailLabelBadgeProps {
   readonly ariaLabel?: string;
   readonly className?: string;
-  readonly color?: GmailLabelColor;
+  readonly color?: MailLabelColor;
   readonly disabled?: boolean;
   readonly isRemoving?: boolean;
   readonly label: string;
@@ -49,7 +49,7 @@ const MailLabelBadge = ({
         canRemove && "gap-0 hover:pr-1",
         className
       )}
-      style={gmailLabelColorStyle(color)}
+      style={labelColorStyle(color)}
       title={onClickAriaLabel ?? label}
       variant="secondary"
     >

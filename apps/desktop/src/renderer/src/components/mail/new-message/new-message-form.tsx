@@ -12,19 +12,19 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { MAX_GMAIL_SUBJECT_LENGTH } from "@/shared/gmail-subject";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type {
   ComposerTemplate,
   ComposerTemplateInput,
 } from "@/shared/ipc/templates";
+import { MAX_SUBJECT_LENGTH } from "@/shared/mail-subject";
 
 import NewMessageFooter from "./new-message-footer";
 import type { ScheduledComposerControls } from "./new-message-footer";
 import { useNewMessageStore } from "./new-message-store";
 
 interface NewMessageFormProps {
-  accounts: readonly GoogleAccount[];
+  accounts: readonly Account[];
   applyTemplate: (template: ComposerTemplateInput) => void;
   canClean: boolean;
   canSend: boolean;
@@ -125,7 +125,7 @@ const NewMessageForm = ({
           className="h-8 px-0 text-sm md:text-sm"
           id="new-message-subject"
           disabled={isBusy}
-          maxLength={MAX_GMAIL_SUBJECT_LENGTH}
+          maxLength={MAX_SUBJECT_LENGTH}
           onChange={(event) => onSubjectChange(event.currentTarget.value)}
           ref={focus.refFor("subject")}
           value={subject}

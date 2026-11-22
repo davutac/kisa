@@ -44,16 +44,10 @@ vi.mock("../src/main/database", async () => {
   };
 });
 
-// Google sign-in is covered elsewhere; this keeps its module graph out.
-vi.mock("../src/main/auth/auth", () => ({
-  getGoogleAccessGrant: vi.fn<() => never>(),
-}));
-
 const PASSWORD = "abcd-efgh-ijkl-mnop";
 
 const account: MailAccount = {
   accountId: AccountId.make("name@icloud.com"),
-  authKind: "password",
   dialect: "generic",
   email: "name@icloud.com",
   imap: { host: "imap.mail.me.com", port: 993, security: "tls" },
@@ -65,11 +59,11 @@ const account: MailAccount = {
 const insertPasswordAccount = (credentials: Buffer): void => {
   connection
     .prepare(
-      `INSERT INTO mail_accounts (account_id, auth_kind, created_at, credentials,
-        dialect, email, imap_host, imap_port, imap_security, provider, smtp_host,
+      `INSERT INTO mail_accounts (account_id, created_at, credentials, dialect,
+        email, imap_host, imap_port, imap_security, provider, smtp_host,
         smtp_port, smtp_security, sort_order, updated_at, username)
-       VALUES (?, 'password', 0, ?, 'generic', ?, 'imap.mail.me.com', 993, 'tls',
-        'icloud', 'smtp.mail.me.com', 587, 'starttls', 0, 0, ?)`
+       VALUES (?, 0, ?, 'generic', ?, 'imap.mail.me.com', 993, 'tls', 'icloud',
+        'smtp.mail.me.com', 587, 'starttls', 0, 0, ?)`
     )
     .run(account.accountId, credentials, account.email, account.username);
 };
@@ -91,16 +85,14 @@ describe("resolving an app password account's sign-in", () => {
 
     const auth = await Effect.runPromise(resolveImapAuth(account));
 
-    expect(auth.kind).toBe("password");
     expect(auth.user).toBe("Name@iCloud.com");
-    expect(auth.kind === "password" && Redacted.value(auth.password)).toBe(
-      PASSWORD
-    );
+    expect(Redacted.value(auth.password)).toBe(PASSWORD);
     expect(`${String(auth)} ${JSON.stringify(auth)}`).not.toContain(PASSWORD);
   });
 
   it("asks for the account again when the saved password cannot be read", async () => {
-    // An OAuth-shaped blob, as if the row had been rewritten by Google sign-in.
+    // A sealed blob that is not a password, such as an OAuth grant left by
+    // an earlier build, must never be sent to a server as one.
     insertPasswordAccount(seal(JSON.stringify({ accessToken: PASSWORD })));
 
     const exit = await Effect.runPromiseExit(resolveImapAuth(account));

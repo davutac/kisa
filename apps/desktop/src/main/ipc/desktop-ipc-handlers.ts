@@ -6,6 +6,12 @@ import {
   submitPasswordAccount,
 } from "./methods/account-setup";
 import {
+  disconnectAccount,
+  listAccounts,
+  openAccountSetup,
+  reorderAccounts,
+} from "./methods/accounts";
+import {
   categorizeMailThread,
   cleanupDraft,
   generateReply,
@@ -14,15 +20,6 @@ import {
   updateAiWritingSettings,
 } from "./methods/ai";
 import { openThreadWindow, startApp, updateAppSettings } from "./methods/app";
-import {
-  disconnectAccount,
-  getGoogleOAuthStatus,
-  listAccounts,
-  openAccountSetup,
-  reorderAccounts,
-  setupGoogleOAuth,
-  startGoogle,
-} from "./methods/auth";
 import {
   getLoginItemSettings,
   setLoginItemSettings,
@@ -106,9 +103,6 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(getLoginItemSettings);
   yield* ipc.handle(setLoginItemSettings);
   yield* ipc.handle(updateAppSettings);
-  yield* ipc.handle(getGoogleOAuthStatus);
-  yield* ipc.handle(setupGoogleOAuth);
-  yield* ipc.handle(startGoogle);
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);
   yield* ipc.handle(disconnectAccount);

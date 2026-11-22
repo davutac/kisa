@@ -15,13 +15,13 @@ import type {
 } from "../src/main/auth/password-account";
 import * as DesktopIpc from "../src/main/ipc/desktop-ipc";
 import type { AccountSetupBridge } from "../src/shared/ipc/account-setup";
-import type { GoogleAccountsReply } from "../src/shared/ipc/auth";
+import type { AccountsReply } from "../src/shared/ipc/accounts";
 import {
   ACCOUNT_SETUP_CLOSE_CHANNEL,
   ACCOUNT_SETUP_SUBMIT_CHANNEL,
-  AUTH_OPEN_ACCOUNT_SETUP_CHANNEL,
+  ACCOUNTS_OPEN_SETUP_CHANNEL,
 } from "../src/shared/ipc/channels";
-import { APPLE_APP_PASSWORD_GUIDE_URL } from "../src/shared/mail-account-presets";
+import { APP_PASSWORD_URLS } from "../src/shared/mail-account-presets";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -31,7 +31,7 @@ class FakeWindow {
   readonly handlers = new Map<string, Listener[]>();
   readonly loadFile = vi.fn<() => Promise<void>>(() => Promise.resolve());
   readonly loadURL = vi.fn<() => Promise<void>>(() => Promise.resolve());
-  readonly options: { readonly preload?: string };
+  readonly options: { readonly modalTo?: unknown; readonly preload?: string };
   readonly restore = vi.fn<() => void>();
   readonly setFullScreenable = vi.fn<(value: boolean) => void>();
   readonly setMaximizable = vi.fn<(value: boolean) => void>();
@@ -47,7 +47,10 @@ class FakeWindow {
     ) => void;
   };
 
-  constructor(id: number, options: { readonly preload?: string }) {
+  constructor(
+    id: number,
+    options: { readonly modalTo?: unknown; readonly preload?: string }
+  ) {
     this.options = options;
     const handlers = new Map<string, Listener[]>();
     this.webContents = {
@@ -99,11 +102,12 @@ const mocks = vi.hoisted(() => ({
         readonly focus: () => void;
         readonly isMinimized: () => boolean;
         readonly restore: () => void;
+        readonly setSheetOffset: (offset: number) => void;
         readonly show: () => void;
       }
     | undefined,
   nextWindowId: 40,
-  notifyAccountsChanged: vi.fn<(reply: GoogleAccountsReply) => void>(),
+  notifyAccountsChanged: vi.fn<(reply: AccountsReply) => void>(),
   openExternalUrl: vi.fn<(url: string) => boolean>(() => true),
   save: vi.fn<typeof savePasswordAccount>(),
   verify: vi.fn<typeof verifyPasswordAccount>(),
@@ -140,18 +144,18 @@ vi.mock(import("../src/main/electron/shell"), () => ({
   openExternalUrl: mocks.openExternalUrl,
 }));
 
-vi.mock(import("../src/main/auth/auth"), async () => {
+vi.mock(import("../src/main/auth/accounts"), async () => {
   const { Effect: MockEffect } = await import("effect");
   return {
-    listGoogleAccounts: (() =>
-      MockEffect.succeed([{ email: "name@icloud.com", scopes: [] }])) as never,
-    notifyGoogleAccountsChanged: mocks.notifyAccountsChanged,
+    listAccounts: (() =>
+      MockEffect.succeed([{ email: "name@icloud.com" }])) as never,
+    notifyAccountsChanged: mocks.notifyAccountsChanged,
   };
 });
 
 // Disconnecting reaches the mail engine and the database utility process.
 vi.mock(import("../src/main/auth/disconnect-account"), () => ({
-  disconnectGoogleAccount: vi.fn<() => never>() as never,
+  disconnectAccount: vi.fn<() => never>() as never,
 }));
 
 // The live database layer would start the database utility process.
@@ -178,7 +182,7 @@ vi.mock(
 
 const { closeAccountSetupWindow, submitPasswordAccount } =
   await import("../src/main/ipc/methods/account-setup");
-const { openAccountSetup } = await import("../src/main/ipc/methods/auth");
+const { openAccountSetup } = await import("../src/main/ipc/methods/accounts");
 const { PASSWORD_ACCOUNT_MESSAGES } =
   await import("../src/main/auth/password-account");
 
@@ -186,8 +190,10 @@ const PASSWORD = "abcd-efgh-ijkl-mnop";
 const validRequest = { email: "name@icloud.com", password: PASSWORD };
 const verified = {
   credentials: Buffer.from("sealed"),
+  dialect: "generic" as const,
   plan: {
     accountId: AccountId.make("name@icloud.com"),
+    displayName: undefined,
     email: "name@icloud.com",
     imap: { host: "imap.mail.me.com", port: 993, security: "tls" as const },
     provider: "icloud" as const,
@@ -262,6 +268,7 @@ describe("the Add account window", () => {
       focus: vi.fn<() => void>(),
       isMinimized: () => false,
       restore: vi.fn<() => void>(),
+      setSheetOffset: vi.fn<(offset: number) => void>(),
       show: vi.fn<() => void>(),
     };
   });
@@ -276,9 +283,30 @@ describe("the Add account window", () => {
   it("opens a fixed-size window with its own preload", async () => {
     const window = await openWindow();
 
-    expect(openAccountSetup.channel).toBe(AUTH_OPEN_ACCOUNT_SETUP_CHANNEL);
+    expect(openAccountSetup.channel).toBe(ACCOUNTS_OPEN_SETUP_CHANNEL);
     expect(window.options.preload).toMatch(/account-setup\.cjs$/u);
     expect(window.setResizable).toHaveBeenCalledWith(false);
+  });
+
+  it("opens as a dialog over the main window, a sheet on macOS", async () => {
+    const window = await openWindow();
+
+    expect(window.options.modalTo).toBe(mocks.mainWindow);
+    expect(window.loadFile).toHaveBeenCalledWith(expect.any(String), {
+      query: {
+        presentation: process.platform === "darwin" ? "sheet" : "window",
+      },
+    });
+  });
+
+  it("opens as a window of its own when there is no main window", async () => {
+    mocks.mainWindow = undefined;
+    const window = await openWindow();
+
+    expect(window.options.modalTo).toBeUndefined();
+    expect(window.loadFile).toHaveBeenCalledWith(expect.any(String), {
+      query: { presentation: "window" },
+    });
   });
 
   it("focuses the open window instead of opening another", async () => {
@@ -290,13 +318,15 @@ describe("the Add account window", () => {
     expect(window.focus).toHaveBeenCalledOnce();
   });
 
-  it("opens only Apple's guide, in the system browser, and never navigates", async () => {
+  it("opens only the providers' app password pages, in the system browser, and never navigates", async () => {
     const window = await openWindow();
     const preventDefault = vi.fn<() => void>();
 
-    expect(
-      window.webContents.openHandler?.({ url: APPLE_APP_PASSWORD_GUIDE_URL })
-    ).toStrictEqual({ action: "deny" });
+    for (const url of APP_PASSWORD_URLS) {
+      expect(window.webContents.openHandler?.({ url })).toStrictEqual({
+        action: "deny",
+      });
+    }
     expect(
       window.webContents.openHandler?.({ url: "https://example.com/" })
     ).toStrictEqual({ action: "deny" });
@@ -305,9 +335,9 @@ describe("the Add account window", () => {
       listener({ preventDefault }, "https://example.com/");
     }
 
-    expect(mocks.openExternalUrl.mock.calls).toStrictEqual([
-      [APPLE_APP_PASSWORD_GUIDE_URL],
-    ]);
+    expect(mocks.openExternalUrl.mock.calls).toStrictEqual(
+      [...APP_PASSWORD_URLS].map((url) => [url])
+    );
     expect(preventDefault).toHaveBeenCalledOnce();
   });
 
@@ -373,7 +403,7 @@ describe("the Add account window", () => {
     expect(reply).toStrictEqual({ data: undefined, ok: true });
     expect(mocks.save).toHaveBeenCalledWith(verified);
     expect(mocks.notifyAccountsChanged).toHaveBeenCalledWith({
-      data: [{ email: "name@icloud.com", scopes: [] }],
+      data: [{ email: "name@icloud.com" }],
       ok: true,
     });
     expect(window.isDestroyed()).toBeTruthy();
@@ -504,13 +534,13 @@ describe("the account setup preloads", () => {
   });
 
   it("let the mail window open the setup window and nothing more", async () => {
-    const { authApi } = await import("../src/preload/auth-api");
+    const { accountsApi } = await import("../src/preload/accounts-api");
 
-    await authApi.openAccountSetup();
+    await accountsApi.openAccountSetup();
 
     expect(mocks.invoke.mock.calls).toStrictEqual([
-      [AUTH_OPEN_ACCOUNT_SETUP_CHANNEL],
+      [ACCOUNTS_OPEN_SETUP_CHANNEL],
     ]);
-    expect(Object.keys(authApi)).not.toContain("submitPasswordAccount");
+    expect(Object.keys(accountsApi)).not.toContain("submitPasswordAccount");
   });
 });

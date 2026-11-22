@@ -12,10 +12,10 @@ import {
   MAX_INLINE_IMAGE_BYTES,
 } from "../../shared/attachments";
 import {
-  GmailOutgoingInlineContentId,
-  MAX_GMAIL_ATTACHMENT_BYTES,
+  MailOutgoingInlineContentId,
+  MAX_OUTGOING_ATTACHMENT_BYTES,
 } from "../../shared/ipc/mail";
-import type { GmailOutgoingAttachmentSelectionRequest } from "../../shared/ipc/mail";
+import type { MailOutgoingAttachmentSelectionRequest } from "../../shared/ipc/mail";
 import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-authorization-error";
 
 const AUTHORIZATION_VERSION = 1 as const;
@@ -32,7 +32,7 @@ const COMPOSER_INLINE_IMAGE_ALT =
 const StoredAuthorizedAttachment = Schema.Struct({
   authorizationVersion: Schema.Literal(AUTHORIZATION_VERSION),
   birthtimeMs: NonNegativeNumber,
-  contentId: Schema.optional(GmailOutgoingInlineContentId),
+  contentId: Schema.optional(MailOutgoingInlineContentId),
   device: Schema.NonEmptyString,
   filename: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
@@ -53,7 +53,7 @@ const decodeStoredAttachmentArray = Schema.decodeUnknownOption(
 const decodeStrictStoredAttachmentArray = Schema.decodeUnknownOption(
   Schema.Array(StoredAuthorizedAttachment)
 );
-const isGmailOutgoingInlineContentId = Schema.is(GmailOutgoingInlineContentId);
+const isOutgoingInlineContentId = Schema.is(MailOutgoingInlineContentId);
 const decodeFileSystemError = Schema.decodeUnknownOption(
   Schema.Struct({ code: Schema.optional(Schema.String) })
 );
@@ -102,7 +102,7 @@ const isSameFile = (record: StoredMailDraftAttachment, stats: Stats): boolean =>
   stats.size === record.size;
 
 export const authorizeOutgoingAttachmentFiles = async (
-  selections: GmailOutgoingAttachmentSelectionRequest["files"],
+  selections: MailOutgoingAttachmentSelectionRequest["files"],
   randomId: () => string
 ): Promise<readonly StoredMailDraftAttachment[]> => {
   const records = await Promise.all(
@@ -149,7 +149,7 @@ export const authorizeOutgoingAttachmentFiles = async (
     })
   );
   const totalBytes = records.reduce((total, record) => total + record.size, 0);
-  if (totalBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+  if (totalBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
     throw authorizationError("Attachments can total up to 25 MB");
   }
   return records;
@@ -205,7 +205,7 @@ export const recoverMissingInlineContentIds = (
     if (
       contentId === undefined ||
       filename === undefined ||
-      !isGmailOutgoingInlineContentId(contentId) ||
+      !isOutgoingInlineContentId(contentId) ||
       assignedContentIds.has(contentId)
     ) {
       continue;

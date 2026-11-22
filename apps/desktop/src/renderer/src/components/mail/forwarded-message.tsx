@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import MailMessageBody from "@/components/mail/message-body";
 import { Button } from "@/components/ui/button";
-import type { GmailThreadMessage } from "@/shared/ipc/mail";
+import type { ThreadMessage } from "@/shared/ipc/mail";
 
 const FORWARDED_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -11,7 +11,7 @@ const FORWARDED_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
 });
 
 interface MailForwardedMessageProps {
-  message: GmailThreadMessage;
+  message: ThreadMessage;
 }
 
 const MailForwardedMessage = ({ message }: MailForwardedMessageProps) => {

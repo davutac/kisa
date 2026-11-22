@@ -1,13 +1,13 @@
-import { listUserGmailLabels } from "@/mail/label";
+import { listUserLabels } from "@/mail/label";
 import type {
-  GmailLabelColor,
-  GmailLabelSummary,
-  GmailThreadSummary,
+  MailLabelColor,
+  MailLabelSummary,
+  MailThreadSummary,
 } from "@/shared/ipc/mail";
 
 export interface BulkAccountLabelOption {
   readonly appliedCount: number;
-  readonly color?: GmailLabelColor;
+  readonly color?: MailLabelColor;
   readonly id: string;
   readonly name: string;
 }
@@ -15,18 +15,18 @@ export interface BulkAccountLabelOption {
 export interface BulkAccountLabelGroup {
   readonly accountId: string;
   readonly labels: readonly BulkAccountLabelOption[];
-  readonly threads: readonly GmailThreadSummary[];
+  readonly threads: readonly MailThreadSummary[];
 }
 
 /**
- * Gmail label ids belong to one account. Keeping one picker group per selected
+ * Label ids belong to one account. Keeping one picker group per selected
  * account makes that ownership visible and scopes each mutation accordingly.
  */
 export const getBulkLabelGroups = (
-  threads: readonly GmailThreadSummary[],
-  catalogs: ReadonlyMap<string, readonly GmailLabelSummary[]>
+  threads: readonly MailThreadSummary[],
+  catalogs: ReadonlyMap<string, readonly MailLabelSummary[]>
 ): readonly BulkAccountLabelGroup[] => {
-  const accountThreads = new Map<string, GmailThreadSummary[]>();
+  const accountThreads = new Map<string, MailThreadSummary[]>();
 
   for (const thread of threads) {
     const groupedThreads = accountThreads.get(thread.accountId) ?? [];
@@ -43,7 +43,7 @@ export const getBulkLabelGroups = (
       }
     }
 
-    const labels = listUserGmailLabels(catalogs.get(accountId) ?? []).map(
+    const labels = listUserLabels(catalogs.get(accountId) ?? []).map(
       (label) => ({
         appliedCount: appliedCounts.get(label.name) ?? 0,
         color: label.color,

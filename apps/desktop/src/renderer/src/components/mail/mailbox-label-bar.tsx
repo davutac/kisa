@@ -30,7 +30,7 @@ import {
   useMailboxLabelNavigation,
 } from "@/mail/use-mailbox-label-navigation";
 import { useMailboxLabelScroll } from "@/mail/use-mailbox-label-scroll";
-import { useGmailLabelCatalogSnapshot } from "@/state/gmail-labels";
+import { useLabelCatalogSnapshot } from "@/state/labels";
 import { useMailboxStore, useSelectedLabelNames } from "@/state/mailbox";
 
 interface MailboxLabelChipsProps {
@@ -313,7 +313,7 @@ export const MailboxLabelBarView = ({
 
 const MailboxLabelBar = () => {
   const { accountIds } = useMailboxAccountScope();
-  const { catalogs, statuses } = useGmailLabelCatalogSnapshot();
+  const { catalogs, statuses } = useLabelCatalogSnapshot();
   const shouldReduceMotion = useReducedMotionConfig() ?? false;
   const selectedLabelNames = useSelectedLabelNames();
   const retainSelectedLabels = useMailboxStore(

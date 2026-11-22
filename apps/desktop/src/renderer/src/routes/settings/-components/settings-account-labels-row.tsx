@@ -15,14 +15,14 @@ import {
   SettingsRowTitle,
 } from "@/components/ui/settings";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
-import { listUserGmailLabels } from "@/mail/label";
+import { listUserLabels } from "@/mail/label";
 import type { MailApi } from "@/platform/desktop";
-import type { GmailLabelSummary } from "@/shared/ipc/mail";
+import type { MailLabelSummary } from "@/shared/ipc/mail";
 import {
-  useGmailLabelCatalog,
-  useUpsertGmailLabel,
-  useUpdateGmailLabelCatalog,
-} from "@/state/gmail-labels";
+  useLabelCatalog,
+  useUpsertLabel,
+  useUpdateLabelCatalog,
+} from "@/state/labels";
 
 interface SettingsAccountLabelsRowProps {
   accountId: string;
@@ -31,7 +31,7 @@ interface SettingsAccountLabelsRowProps {
 
 type LabelDialogState =
   | { readonly kind: "create" }
-  | { readonly kind: "edit"; readonly label: GmailLabelSummary };
+  | { readonly kind: "edit"; readonly label: MailLabelSummary };
 
 const SettingsAccountLabelsRow = ({
   accountId,
@@ -41,9 +41,9 @@ const SettingsAccountLabelsRow = ({
   const [deletingLabelId, setDeletingLabelId] = useState<string>();
   const [isSyncing, setIsSyncing] = useState(false);
   const [labelDialog, setLabelDialog] = useState<LabelDialogState>();
-  const catalog = useGmailLabelCatalog(accountId);
-  const upsertLabel = useUpsertGmailLabel();
-  const updateLabelCatalog = useUpdateGmailLabelCatalog();
+  const catalog = useLabelCatalog(accountId);
+  const upsertLabel = useUpsertLabel();
+  const updateLabelCatalog = useUpdateLabelCatalog();
 
   const handleSync = async (): Promise<void> => {
     setIsSyncing(true);
@@ -72,7 +72,7 @@ const SettingsAccountLabelsRow = ({
     );
   };
 
-  const requestDelete = async (label: GmailLabelSummary): Promise<void> => {
+  const requestDelete = async (label: MailLabelSummary): Promise<void> => {
     if (deletingLabelId !== undefined) {
       return;
     }
@@ -82,7 +82,7 @@ const SettingsAccountLabelsRow = ({
     await runWithCleanup(
       async () => {
         try {
-          // Gmail's per-label totals are remote metadata. Refresh immediately
+          // Per-label totals are remote metadata. Refresh immediately
           // before confirmation so a partial or stale local index cannot misstate
           // how many conversations will be affected.
           const syncReply = await mailApi.syncLabels({ accountId });
@@ -152,7 +152,7 @@ const SettingsAccountLabelsRow = ({
     );
   };
 
-  const labels = listUserGmailLabels(catalog?.labels ?? []);
+  const labels = listUserLabels(catalog?.labels ?? []);
 
   return (
     <>

@@ -4,11 +4,11 @@ import { Effect, Schema } from "effect";
 
 import { MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
 import type {
-  GmailTrustedImageSender,
-  GmailTrustedImageSenderRequest,
-  GmailTrustedImageSendersReply,
+  MailTrustedImageSender,
+  MailTrustedImageSenderRequest,
+  MailTrustedImageSendersReply,
 } from "../../shared/ipc/mail";
-import { GmailTrustedImageSendersReply as GmailTrustedImageSendersReplySchema } from "../../shared/ipc/mail";
+import { MailTrustedImageSendersReply as MailTrustedImageSendersReplySchema } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
@@ -24,11 +24,11 @@ const normalizeAddress = (address: string): string =>
   address.trim().toLowerCase();
 
 export const notifyTrustedImageSendersChanged = (
-  reply: GmailTrustedImageSendersReply
+  reply: MailTrustedImageSendersReply
 ): void => {
   sendRendererEvent(
     MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL,
-    GmailTrustedImageSendersReplySchema,
+    MailTrustedImageSendersReplySchema,
     reply
   );
 };
@@ -51,7 +51,7 @@ export const listTrustedImageSenders = Effect.fn("listTrustedImageSenders")(
         ({
           accountId: row.accountEmail,
           senderEmail: row.senderEmail,
-        }) satisfies GmailTrustedImageSender
+        }) satisfies MailTrustedImageSender
     );
   }
 );
@@ -82,7 +82,7 @@ export const loadTrustedImageSenderCheck = Effect.fn(
 });
 
 export const trustImageSender = Effect.fn("trustImageSender")(
-  function* trustImageSender(request: GmailTrustedImageSenderRequest) {
+  function* trustImageSender(request: MailTrustedImageSenderRequest) {
     yield* withDatabaseClient((database) =>
       database
         .insert(mailTrustedImageSenders)

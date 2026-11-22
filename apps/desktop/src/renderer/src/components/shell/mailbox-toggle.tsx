@@ -14,7 +14,7 @@ import {
   useAppCommand,
 } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
-import type { GmailMailbox } from "@/shared/ipc/mail";
+import type { Mailbox } from "@/shared/ipc/mail";
 import { useMailbox, useMailboxStore } from "@/state/mailbox";
 
 interface TitlebarMailboxToggleProps {
@@ -25,7 +25,7 @@ interface TitlebarMailboxToggleProps {
     HotkeyCommandId,
     "app.toggleSent" | "app.toggleSpam" | "app.toggleTrash"
   >;
-  mailbox: Exclude<GmailMailbox, "inbox">;
+  mailbox: Exclude<Mailbox, "inbox">;
 }
 
 const TitlebarMailboxToggle = ({

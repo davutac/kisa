@@ -1,9 +1,9 @@
 import MailAttachmentList from "@/components/mail/attachment-list";
-import type { GmailAttachmentSummary } from "@/shared/ipc/mail";
+import type { MailAttachmentSummary } from "@/shared/ipc/mail";
 
 interface MailMessageAttachmentsProps {
   accountId: string;
-  attachments: readonly GmailAttachmentSummary[];
+  attachments: readonly MailAttachmentSummary[];
 }
 
 const MailMessageAttachments = ({

@@ -16,11 +16,11 @@ import {
   useHotkeyLayer,
 } from "@/hotkeys";
 import { getMailApi } from "@/platform/desktop";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import { useAccounts } from "@/state/accounts";
 import { useSelectedAccountId } from "@/state/mailbox";
 
 const TitlebarNewMessage = () => {
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const selectedAccountId = useSelectedAccountId();
   const [composerKey, setComposerKey] = useState(0);
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);

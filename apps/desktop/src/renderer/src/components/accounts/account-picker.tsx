@@ -17,10 +17,10 @@ import {
 } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 
 interface AccountPickerBaseProps {
-  readonly accounts: readonly GoogleAccount[];
+  readonly accounts: readonly Account[];
   readonly enableHotkeys?: boolean;
   readonly focusRefForAccount?: (accountId: string) => Ref<HTMLButtonElement>;
   readonly label?: string;
@@ -47,7 +47,7 @@ type AccountPickerProps =
   | RequiredAccountPickerProps;
 
 interface AccountOptionButtonProps {
-  readonly account?: GoogleAccount;
+  readonly account?: Account;
   readonly ariaLabel: string;
   readonly command?: HotkeyCommandId;
   readonly description?: string;
@@ -58,17 +58,12 @@ interface AccountOptionButtonProps {
   readonly onSelect: () => void;
 }
 
-const AccountOptionAvatar = ({ account }: { account?: GoogleAccount }) => {
-  if (account === undefined) {
-    return <ShuffleIcon className="size-3.5" />;
-  }
-  if (account.avatarUrl === undefined) {
-    return <UserRoundIcon className="size-3.5" />;
-  }
-  return (
-    <img alt="" className="size-full object-cover" src={account.avatarUrl} />
+const AccountOptionAvatar = ({ account }: { account?: Account }) =>
+  account === undefined ? (
+    <ShuffleIcon className="size-3.5" />
+  ) : (
+    <UserRoundIcon className="size-3.5" />
   );
-};
 
 const AccountOptionButton = ({
   account,

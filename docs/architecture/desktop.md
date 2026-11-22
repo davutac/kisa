@@ -21,7 +21,7 @@ React feature / hook
 
 Events take the reverse path. `main/electron/renderer-events.ts` encodes the payload before sending it; `preload/subscribe.ts` decodes it before notifying a renderer listener. Every subscription returns an exact unsubscribe function.
 
-Conversation popouts use the same boundary. The main mailbox requests an account-scoped thread window through a schema-validated IPC method, and only closes its inline conversation after the new window's renderer has loaded. Each popout loads the dedicated `/thread/$accountId/$threadId` hash route, reuses the existing mail bridge, and has minimal window chrome. A second request for the same account and Gmail thread focuses the existing popout; the main window remains the explicit target for app activation, the local OAuth callback, and notification-click fallback.
+Conversation popouts use the same boundary. The main mailbox requests an account-scoped thread window through a schema-validated IPC method, and only closes its inline conversation after the new window's renderer has loaded. Each popout loads the dedicated `/thread/$accountId/$threadId` hash route, reuses the existing mail bridge, and has minimal window chrome. A second request for the same account and thread focuses the existing popout; the main window remains the explicit target for app activation and notification-click fallback.
 
 The app-wide Animations, "Run in background", and "Always open threads in new windows" preferences live in one `app-settings.json` file under the user data directory. Main loads them once before creating the window, and the renderer receives the hydrated settings in its app-start reply. Opening Settings therefore does not trigger another read or render temporary default values. Updates change in-memory behavior immediately, while asynchronous file writes are debounced and flushed during orderly shutdown. Theme remains renderer-owned through `next-themes`.
 
@@ -37,10 +37,10 @@ Animations default to enabled. A shared provider applies the preference to the m
 apps/desktop/src/
   main/
     app/        lifecycle and activation handling
-    auth/       Google authorization and credential access
+    auth/       accounts, the Add account window, and sealed credentials
     electron/   Electron adapters used by capabilities
     ipc/        transport runtime, method definitions, central installer
-    mail/       Gmail synchronization and message presentation adapters
+    mail/       mail engine runtime, IMAP and SMTP adapters, message presentation
     updates/    updater state machine and Electron updater integration
     window/     native window state
   preload/      the only renderer exposure of privileged capabilities
@@ -105,11 +105,7 @@ Footer and dialog actions follow one hierarchy: the action a surface exists for 
 
 The renderer is sandboxed with context isolation. Preload exposes only the application-owned `desktopBridge`; the generic Electron toolkit API is not available to page code. Unknown renderer inputs are decoded in main, and main-to-renderer event values are decoded again in preload.
 
-Google authorization is an installed-app flow owned by Electron main. On the first connection, the user chooses a Desktop OAuth credentials JSON through a main-owned native file dialog; the renderer never receives the path or file contents. Main encrypts that client configuration once in the app's user-data directory and reuses it for later account connections. Each attempt opens the system browser with PKCE and a random CSRF state, binds a temporary HTTP listener only to `127.0.0.1` on an operating-system-assigned port, and closes that listener after one valid callback or ten minutes. Main exchanges and refreshes tokens directly with Google.
-
-After authorization, the client identity is also stored inside the account's encrypted credential blob so refreshes remain bound to the client that issued the token. An installed app cannot keep its client secret confidential, so PKCE and validated state remain the security boundary. OAuth client credentials, access tokens, and refresh tokens remain encrypted behind `safeStorage` and never enter renderer IPC. Kisa has no OAuth relay or other server.
-
-App passwords for iCloud and other IMAP accounts are typed into a separate Add account window with its own preload, and cross IPC once, write-only, to main, which verifies them against the server and seals them with `safeStorage`. The [mail engine](mail-engine.md#accounts) documents that boundary.
+Every account, Gmail included, signs in with an app password. It is typed into a separate Add account window with its own preload and crosses IPC once, write-only, to main, which verifies it against the account's IMAP and SMTP servers and seals it with `safeStorage`. The mail window's bridge can list, reorder and disconnect accounts and open the Add account window, but never carries a credential. Sign-in goes straight to the provider's servers; Kisa runs no server of its own. The [mail engine](mail-engine.md#accounts) documents that boundary.
 
 Message HTML is displayed in a `srcdoc` iframe sandboxed without scripts, under its own `default-src 'none'` policy; `renderer/src/mail/email-frame.ts` builds that document. Displaying a message must not tell its sender that it was opened until the reader allows it:
 

@@ -3,8 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import type {
-  GmailSenderSuggestion,
-  GmailSenderSuggestions,
+  MailSenderSuggestion,
+  MailSenderSuggestions,
 } from "../../shared/ipc/mail";
 
 /**
@@ -34,7 +34,7 @@ type CorrespondentTuple = [
 
 const correspondentsByAccount = new Map<
   string,
-  Map<string, GmailSenderSuggestion>
+  Map<string, MailSenderSuggestion>
 >();
 
 const toAccountList = (accountIds: readonly string[]): SQL =>
@@ -46,8 +46,8 @@ const toAccountList = (accountIds: readonly string[]): SQL =>
 const toCacheKey = (address: string): string => address.trim().toLowerCase();
 
 const compareSuggestions = (
-  left: GmailSenderSuggestion,
-  right: GmailSenderSuggestion
+  left: MailSenderSuggestion,
+  right: MailSenderSuggestion
 ): number =>
   right.messageCount - left.messageCount ||
   left.address.localeCompare(right.address);
@@ -114,7 +114,7 @@ const loadAccountSnapshots = async (
   const nextByAccount = new Map(
     accountIds.map(
       (accountId) =>
-        [accountId, new Map<string, GmailSenderSuggestion>()] as const
+        [accountId, new Map<string, MailSenderSuggestion>()] as const
     )
   );
 
@@ -165,13 +165,13 @@ export const listCachedCorrespondents = (
   accountIds: readonly string[],
   query: string | undefined,
   limit: number
-): GmailSenderSuggestions | undefined => {
+): MailSenderSuggestions | undefined => {
   if (accountIds.length === 0) {
     return { senders: [] };
   }
 
   const needle = query?.trim().toLowerCase() ?? "";
-  const merged = new Map<string, GmailSenderSuggestion>();
+  const merged = new Map<string, MailSenderSuggestion>();
 
   for (const accountId of new Set(accountIds)) {
     const account = correspondentsByAccount.get(accountId);

@@ -8,9 +8,9 @@ import { dialog } from "electron";
 
 import { getAttachmentPreviewKind } from "../../shared/attachments";
 import type {
-  GmailAttachmentPreview,
-  GmailAttachmentRequest,
-  GmailAttachmentSaveOutcome,
+  MailAttachmentPreview,
+  MailAttachmentRequest,
+  MailAttachmentSaveOutcome,
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { createBrowserWindow } from "../window/browser-window";
@@ -59,7 +59,7 @@ const actionError = (message: string): AttachmentActionError =>
   new AttachmentActionError({ message });
 
 const resolveAttachment = Effect.fn("resolveAttachment")(
-  function* resolveAttachment(request: GmailAttachmentRequest) {
+  function* resolveAttachment(request: MailAttachmentRequest) {
     const row = yield* withDatabaseClient((database) =>
       database.query.mailMessages.findFirst({
         columns: { attachments: true, threadId: true },
@@ -147,7 +147,7 @@ const saveLoadedAttachment = Effect.fn("saveLoadedAttachment")(
     const destination = yield* chooseSaveDestination(window, filename);
 
     if (destination.canceled || destination.filePath.length === 0) {
-      return "cancelled" satisfies GmailAttachmentSaveOutcome;
+      return "cancelled" satisfies MailAttachmentSaveOutcome;
     }
 
     const attachment = yield* loaded();
@@ -159,7 +159,7 @@ const saveLoadedAttachment = Effect.fn("saveLoadedAttachment")(
         Effect.logWarning("Could not mark a saved attachment as downloaded")
       )
     );
-    return "saved" satisfies GmailAttachmentSaveOutcome;
+    return "saved" satisfies MailAttachmentSaveOutcome;
   }
 );
 
@@ -234,7 +234,7 @@ const createPreviewWindow = Effect.fn("createPreviewWindow")(
 );
 
 export const openAttachmentPreview = Effect.fn("openAttachmentPreview")(
-  function* openAttachmentPreview(request: GmailAttachmentRequest) {
+  function* openAttachmentPreview(request: MailAttachmentRequest) {
     const metadata = yield* resolveAttachment(request);
 
     if (
@@ -250,7 +250,7 @@ export const openAttachmentPreview = Effect.fn("openAttachmentPreview")(
 
 export const saveAttachment = Effect.fn("saveAttachment")(
   function* saveAttachment(
-    request: GmailAttachmentRequest,
+    request: MailAttachmentRequest,
     window: BrowserWindow
   ) {
     const metadata = yield* resolveAttachment(request);
@@ -290,7 +290,7 @@ export const loadAttachmentPreview = Effect.fn("loadAttachmentPreview")(
       filename: loaded.metadata.filename,
       kind,
       mediaType: loaded.metadata.mediaType,
-    } satisfies GmailAttachmentPreview;
+    } satisfies MailAttachmentPreview;
   }
 );
 

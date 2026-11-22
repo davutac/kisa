@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-import { MAX_GMAIL_SUBJECT_LENGTH } from "../gmail-subject";
+import { MAX_SUBJECT_LENGTH } from "../mail-subject";
 import { IpcReply } from "./reply";
 
 export const AiProvider = Schema.Literals(["codex", "claude", "opencode"]);
@@ -142,13 +142,13 @@ export const AiCleanupDraftRequest = Schema.Struct({
   body: Schema.String.check(Schema.isMaxLength(MAX_AI_DRAFT_BODY_LENGTH)),
   instructions: OperationInstructions,
   model: Schema.optional(AiModelSelection),
-  subject: Schema.String.check(Schema.isMaxLength(MAX_GMAIL_SUBJECT_LENGTH)),
+  subject: Schema.String.check(Schema.isMaxLength(MAX_SUBJECT_LENGTH)),
 });
 export type AiCleanupDraftRequest = typeof AiCleanupDraftRequest.Type;
 
 export const AiCleanedDraft = Schema.Struct({
   body: Schema.String,
-  subject: Schema.String.check(Schema.isMaxLength(MAX_GMAIL_SUBJECT_LENGTH)),
+  subject: Schema.String.check(Schema.isMaxLength(MAX_SUBJECT_LENGTH)),
 });
 export type AiCleanedDraft = typeof AiCleanedDraft.Type;
 

@@ -7,7 +7,7 @@ import { mailSenderBrands } from "@repo/database/schemas";
 import { Effect, Option, Schema } from "effect";
 import { getDomain } from "tldts";
 
-import type { GmailSenderBrand } from "../../shared/ipc/mail";
+import type { MailSenderBrand } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import {
   extractSenderDomain,
@@ -56,7 +56,7 @@ interface ResolvedSenderBrand {
 }
 
 interface CachedSenderBrand {
-  readonly brand: GmailSenderBrand | null;
+  readonly brand: MailSenderBrand | null;
 }
 
 type SenderBrandDiscovery =
@@ -465,7 +465,7 @@ const validateSvgIndicator = (data: Buffer): Buffer | null => {
   return /<svg(?:\s|>)/iu.test(source) ? data : null;
 };
 
-const toSenderBrand = (domain: string, logoData: Buffer): GmailSenderBrand => ({
+const toSenderBrand = (domain: string, logoData: Buffer): MailSenderBrand => ({
   domain,
   imageDataUrl: `data:image/svg+xml;base64,${logoData.toString("base64")}`,
   source: "bimi",

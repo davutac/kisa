@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/tooltip";
 import { formatRemaining } from "@/mail/mail-index-eta";
 import { useMailIndexState } from "@/mail/use-mail-index-progress";
-import type { GmailIndexProgress } from "@/shared/ipc/mail";
+import type { MailIndexProgress } from "@/shared/ipc/mail";
 import {
   toMailIndexRatio,
   toOverallMailIndexRatio,
@@ -18,7 +18,7 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
 });
 const NUMBER_FORMAT = new Intl.NumberFormat();
 
-const formatIndexedMessages = (entry: GmailIndexProgress): string =>
+const formatIndexedMessages = (entry: MailIndexProgress): string =>
   entry.estimatedMessages === undefined || entry.estimatedMessages <= 0
     ? "Checking the mailbox total…"
     : `${NUMBER_FORMAT.format(entry.indexedMessages)} / ~${NUMBER_FORMAT.format(

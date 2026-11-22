@@ -1,9 +1,9 @@
 import {
   findMailAccountPreset,
-  isGoogleMailAddress,
   isMailAddress,
   isMailHost,
   isMailPort,
+  MAX_DISPLAY_NAME_LENGTH,
 } from "@/shared/mail-account-presets";
 import type {
   MailAccountPreset,
@@ -24,6 +24,8 @@ export interface ServerFields {
 export interface AccountSetupForm {
   readonly email: string;
   readonly imap: ServerFields;
+  /** The sender name outgoing mail carries; optional. */
+  readonly name: string;
   readonly smtp: ServerFields;
 }
 
@@ -37,13 +39,13 @@ const DEFAULT_PORTS = {
 export const INITIAL_ACCOUNT_SETUP_FORM: AccountSetupForm = {
   email: "",
   imap: { host: "", port: DEFAULT_PORTS.imap.tls, security: "tls" },
+  name: "",
   smtp: { host: "", port: DEFAULT_PORTS.smtp.starttls, security: "starttls" },
 };
 
 export type AccountSetupMode =
   /** Not a complete address yet; nothing beyond the address is decided. */
   | { readonly kind: "address" }
-  | { readonly kind: "gmail" }
   | { readonly kind: "manual" }
   | { readonly kind: "preset"; readonly preset: MailAccountPreset };
 
@@ -53,9 +55,6 @@ export const getAccountSetupMode = (email: string): AccountSetupMode => {
 
   if (!isMailAddress(address)) {
     return { kind: "address" };
-  }
-  if (isGoogleMailAddress(address)) {
-    return { kind: "gmail" };
   }
 
   const preset = findMailAccountPreset(address);
@@ -83,6 +82,7 @@ export type AccountSetupField =
   | "email"
   | "imapHost"
   | "imapPort"
+  | "name"
   | "password"
   | "smtpHost"
   | "smtpPort";
@@ -119,21 +119,41 @@ const checkServer = (
   return undefined;
 };
 
-/** The first thing to fix before the form can be sent, if any. */
+// Control characters would break the From header main writes the name into.
+const CONTROL_CHARACTER = /\p{Cc}/u;
+
+const checkName = (name: string): AccountSetupProblem | undefined => {
+  const trimmed = name.trim();
+
+  if (trimmed.length > MAX_DISPLAY_NAME_LENGTH) {
+    return {
+      field: "name",
+      message: `Keep the name to ${MAX_DISPLAY_NAME_LENGTH} characters or fewer.`,
+    };
+  }
+  if (CONTROL_CHARACTER.test(trimmed)) {
+    return {
+      field: "name",
+      message: "Remove tabs and line breaks from the name.",
+    };
+  }
+  return undefined;
+};
+
+/** The first thing to fix before the form can be sent, in reading order. */
 export const findAccountSetupProblem = (
   form: AccountSetupForm,
   hasPassword: boolean
 ): AccountSetupProblem | undefined => {
+  const nameProblem = checkName(form.name);
+  if (nameProblem !== undefined) {
+    return nameProblem;
+  }
+
   const mode = getAccountSetupMode(form.email);
 
   if (mode.kind === "address") {
     return { field: "email", message: "Enter your email address." };
-  }
-  if (mode.kind === "gmail") {
-    return {
-      field: "email",
-      message: "Connect Gmail with Google sign-in instead.",
-    };
   }
   if (!hasPassword) {
     return { field: "password", message: "Enter the app password." };
@@ -160,3 +180,9 @@ export const toAccountServers = (
   getAccountSetupMode(form.email).kind === "manual"
     ? { imap: toServer(form.imap), smtp: toServer(form.smtp) }
     : undefined;
+
+/** The trimmed sender name, or `undefined` when left blank. */
+export const toAccountName = (form: AccountSetupForm): string | undefined => {
+  const name = form.name.trim();
+  return name.length === 0 ? undefined : name;
+};

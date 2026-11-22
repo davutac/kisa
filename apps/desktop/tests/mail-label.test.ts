@@ -1,68 +1,66 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import {
-  formatGmailLabel,
-  gmailLabelColorStyle,
-  gmailLabelTextColor,
+  formatLabel,
+  labelColorStyle,
+  labelTextColor,
   hasInboxLabel,
   hasSentLabel,
-  isSystemGmailLabel,
-  listUserGmailLabels,
-  sortGmailLabelCatalog,
-  sortGmailLabelNames,
-  visibleGmailLabels,
-  withGmailLabelState,
+  isSystemLabel,
+  listUserLabels,
+  sortLabelCatalog,
+  sortLabelNames,
+  filterVisibleLabels,
+  withLabelState,
 } from "../src/renderer/src/mail/label";
 
-describe(gmailLabelColorStyle, () => {
-  it("uses Gmail's paired foreground and background colors", () => {
+describe(labelColorStyle, () => {
+  it("uses the paired foreground and background colors", () => {
     expect(
-      gmailLabelColorStyle({ background: "#16a766", text: "#ffffff" })
+      labelColorStyle({ background: "#16a766", text: "#ffffff" })
     ).toStrictEqual({
       backgroundColor: "#16a766",
       color: "#ffffff",
     });
-    expect(gmailLabelColorStyle()).toBeUndefined();
+    expect(labelColorStyle()).toBeUndefined();
   });
 });
 
-describe(formatGmailLabel, () => {
-  it("formats Gmail system labels in English", () => {
-    expect(formatGmailLabel("CATEGORY_UPDATES")).toBe("Updates");
-    expect(formatGmailLabel("INBOX")).toBe("Inbox");
-    expect(formatGmailLabel("inbox")).toBe("Inbox");
-    expect(formatGmailLabel("IMPORTANT")).toBe("Important");
+describe(formatLabel, () => {
+  it("formats system labels in English", () => {
+    expect(formatLabel("INBOX")).toBe("Inbox");
+    expect(formatLabel("inbox")).toBe("Inbox");
+    expect(formatLabel("IMPORTANT")).toBe("Important");
   });
 
   it("preserves user-created label names", () => {
-    expect(formatGmailLabel("Project Kisa")).toBe("Project Kisa");
+    expect(formatLabel("Project Kisa")).toBe("Project Kisa");
   });
 });
 
-describe(gmailLabelTextColor, () => {
+describe(labelTextColor, () => {
   it("chooses an accepted contrasting text color", () => {
-    expect(gmailLabelTextColor("#fef1d1")).toBe("#000000");
-    expect(gmailLabelTextColor("#0d3472")).toBe("#ffffff");
+    expect(labelTextColor("#fef1d1")).toBe("#000000");
+    expect(labelTextColor("#0d3472")).toBe("#ffffff");
   });
 });
 
-describe(isSystemGmailLabel, () => {
-  it("recognises the labels Gmail owns", () => {
-    expect(isSystemGmailLabel("INBOX")).toBeTruthy();
-    expect(isSystemGmailLabel("CATEGORY_PROMOTIONS")).toBeTruthy();
-    expect(isSystemGmailLabel("CATEGORY_ANYTHING_GMAIL_ADDS")).toBeTruthy();
+describe(isSystemLabel, () => {
+  it("recognises system labels", () => {
+    expect(isSystemLabel("INBOX")).toBeTruthy();
+    expect(isSystemLabel("STARRED")).toBeTruthy();
   });
 
   it("leaves user-created labels alone", () => {
-    expect(isSystemGmailLabel("Project Kisa")).toBeFalsy();
-    expect(isSystemGmailLabel("constructor")).toBeFalsy();
+    expect(isSystemLabel("Project Kisa")).toBeFalsy();
+    expect(isSystemLabel("constructor")).toBeFalsy();
   });
 });
 
-describe(listUserGmailLabels, () => {
+describe(listUserLabels, () => {
   it("keeps only user labels and sorts them by name", () => {
     expect(
-      listUserGmailLabels([
+      listUserLabels([
         { id: "Label_2", name: "Travel", type: "user" },
         { id: "INBOX", name: "INBOX", type: "system" },
         { id: "Label_1", name: "Receipts", type: "user" },
@@ -75,18 +73,18 @@ describe(listUserGmailLabels, () => {
   });
 });
 
-describe(sortGmailLabelNames, () => {
+describe(sortLabelNames, () => {
   it("sorts system labels before user labels and each group by display name", () => {
-    expect(
-      sortGmailLabelNames(["test2", "Test", "CATEGORY_UPDATES", "INBOX"])
-    ).toStrictEqual(["INBOX", "CATEGORY_UPDATES", "Test", "test2"]);
+    expect(sortLabelNames(["test2", "Test", "STARRED", "INBOX"])).toStrictEqual(
+      ["INBOX", "STARRED", "Test", "test2"]
+    );
   });
 });
 
-describe(sortGmailLabelCatalog, () => {
+describe(sortLabelCatalog, () => {
   it("uses catalog type to keep every system label ahead of user labels", () => {
     expect(
-      sortGmailLabelCatalog([
+      sortLabelCatalog([
         { id: "Label_2", name: "Zulu", type: "user" },
         { id: "SYSTEM_CUSTOM", name: "Alpha", type: "system" },
         { id: "Label_1", name: "Alpha", type: "user" },
@@ -99,24 +97,24 @@ describe(sortGmailLabelCatalog, () => {
   });
 });
 
-describe(withGmailLabelState, () => {
+describe(withLabelState, () => {
   it("optimistically adds and removes a label without duplicates", () => {
-    expect(withGmailLabelState(["INBOX"], "Receipts", true)).toStrictEqual([
+    expect(withLabelState(["INBOX"], "Receipts", true)).toStrictEqual([
       "INBOX",
       "Receipts",
     ]);
     expect(
-      withGmailLabelState(["INBOX", "Receipts"], "Receipts", true)
+      withLabelState(["INBOX", "Receipts"], "Receipts", true)
     ).toStrictEqual(["INBOX", "Receipts"]);
     expect(
-      withGmailLabelState(["INBOX", "Receipts"], "Receipts", false)
+      withLabelState(["INBOX", "Receipts"], "Receipts", false)
     ).toStrictEqual(["INBOX"]);
   });
 });
 
-describe(visibleGmailLabels, () => {
+describe(filterVisibleLabels, () => {
   it("keeps every label while system labels are shown", () => {
-    expect(visibleGmailLabels(["INBOX", "Project Kisa"], true)).toStrictEqual([
+    expect(filterVisibleLabels(["INBOX", "Project Kisa"], true)).toStrictEqual([
       "INBOX",
       "Project Kisa",
     ]);
@@ -124,19 +122,19 @@ describe(visibleGmailLabels, () => {
 
   it("keeps only user labels while system labels are hidden", () => {
     expect(
-      visibleGmailLabels(["INBOX", "UNREAD", "Project Kisa"], false)
+      filterVisibleLabels(["INBOX", "UNREAD", "Project Kisa"], false)
     ).toStrictEqual(["Project Kisa"]);
   });
 
   it("is empty when a thread only has hidden system labels", () => {
-    expect(visibleGmailLabels(["INBOX", "UNREAD"], false)).toStrictEqual([]);
+    expect(filterVisibleLabels(["INBOX", "UNREAD"], false)).toStrictEqual([]);
   });
 });
 
 describe(hasInboxLabel, () => {
   it("distinguishes Inbox threads from stale Trash entries", () => {
-    expect(hasInboxLabel(["INBOX", "CATEGORY_UPDATES"])).toBeTruthy();
-    expect(hasInboxLabel(["TRASH", "CATEGORY_UPDATES"])).toBeFalsy();
+    expect(hasInboxLabel(["INBOX", "STARRED"])).toBeTruthy();
+    expect(hasInboxLabel(["TRASH", "STARRED"])).toBeFalsy();
   });
 });
 

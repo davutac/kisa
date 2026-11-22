@@ -7,13 +7,13 @@ import { SystemLabel, userLabelPath } from "@repo/mail/ids";
 import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 
 import type {
-  GmailAttachmentSummary,
-  GmailCachedThreadPage,
-  GmailCachedThreadPageRequest,
-  GmailLabelCatalog,
-  GmailMailbox,
-  GmailThreadMessage,
-  GmailThreadSummary,
+  MailAttachmentSummary,
+  MailCachedThreadPage,
+  MailCachedThreadPageRequest,
+  MailLabelCatalog,
+  Mailbox,
+  ThreadMessage,
+  MailThreadSummary,
 } from "../../../shared/ipc/mail";
 import { toDisplayedAttachment } from "../attachment-filename";
 
@@ -51,7 +51,7 @@ const fallbackFilename = (attachment: StoredMailAttachment): string => {
 export const toAttachmentSummary = (
   attachment: StoredMailAttachment,
   messageId: string
-): GmailAttachmentSummary =>
+): MailAttachmentSummary =>
   toDisplayedAttachment({
     attachmentId: attachment.section,
     filename:
@@ -66,7 +66,7 @@ export const toAttachmentSummary = (
 
 type ThreadRow = typeof mailThreads.$inferSelect;
 
-export const toThreadSummary = (row: ThreadRow): GmailThreadSummary => ({
+export const toThreadSummary = (row: ThreadRow): MailThreadSummary => ({
   accountId: row.accountId,
   attachments: row.attachments.map((attachment) =>
     toAttachmentSummary(attachment, attachment.messageId)
@@ -82,7 +82,7 @@ export const toThreadSummary = (row: ThreadRow): GmailThreadSummary => ({
   threadId: row.threadId,
 });
 
-const mailboxCondition = (mailbox: GmailMailbox) => {
+const mailboxCondition = (mailbox: Mailbox) => {
   if (mailbox === "spam") {
     return eq(mailThreads.isInSpam, true);
   }
@@ -110,8 +110,8 @@ const mailboxCondition = (mailbox: GmailMailbox) => {
  */
 export const readThreadPage = async (
   database: RemoteDatabaseClient,
-  request: GmailCachedThreadPageRequest
-): Promise<GmailCachedThreadPage> => {
+  request: MailCachedThreadPageRequest
+): Promise<MailCachedThreadPage> => {
   if (request.accountIds.length === 0) {
     return { threads: [] };
   }
@@ -183,7 +183,7 @@ export const readThreadSummaries = async (
   database: RemoteDatabaseClient,
   accountId: string,
   threadIds: readonly string[]
-): Promise<readonly GmailThreadSummary[]> => {
+): Promise<readonly MailThreadSummary[]> => {
   if (threadIds.length === 0) {
     return [];
   }
@@ -214,7 +214,7 @@ export interface ConversationMessage {
     readonly name: string;
     readonly value: string;
   }[];
-  readonly message: GmailThreadMessage;
+  readonly message: ThreadMessage;
 }
 
 export interface Conversation {
@@ -225,7 +225,7 @@ export interface Conversation {
   readonly subject: string;
 }
 
-const toBody = (row: MessageRow): GmailThreadMessage["body"] => {
+const toBody = (row: MessageRow): ThreadMessage["body"] => {
   if (row.bodyHtml !== null) {
     try {
       return { html: gunzipSync(row.bodyHtml).toString("utf-8") };
@@ -317,7 +317,7 @@ export const readConversation = async (
 export const readLabelCatalog = async (
   database: RemoteDatabaseClient,
   accountId: string
-): Promise<GmailLabelCatalog> => {
+): Promise<MailLabelCatalog> => {
   const rows = await database
     .select()
     .from(mailLabels)

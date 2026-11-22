@@ -2,20 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { clearMailboxThreadsSnapshots } from "@/mail/mailbox-cache";
-import { getAuthApi } from "@/platform/desktop";
+import { getAccountsApi } from "@/platform/desktop";
 import { clearScheduledMailSnapshots } from "@/scheduled/scheduled-mail-cache";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type { AuthGateState } from "@/startup/auth-gate";
 import { AccountSettingsProvider } from "@/state/account-settings";
+import { AccountsProvider } from "@/state/accounts";
 import { AiProviderStateProvider } from "@/state/ai-provider-state";
 import { ComposerTemplatesProvider } from "@/state/composer-templates";
-import { GmailLabelsProvider } from "@/state/gmail-labels";
-import { GoogleAccountsProvider } from "@/state/google-accounts";
+import { LabelsProvider } from "@/state/labels";
 import { useMailboxStore } from "@/state/mailbox";
 import { TrustedImageSendersProvider } from "@/state/trusted-image-senders";
 
 import LoginScreen from "./login-screen";
-import { useGoogleOAuthSetup } from "./use-google-oauth-setup";
 
 interface AccountGateProps {
   children: React.ReactNode;
@@ -25,7 +24,7 @@ interface AccountGateProps {
 // A disconnected account leaves the mailbox scoped to something that no longer
 // exists, which reads as an empty inbox rather than as a removed account.
 const dropDisconnectedAccountSelection = (
-  accounts: readonly GoogleAccount[]
+  accounts: readonly Account[]
 ): void => {
   const { selectAccount, selectedAccountId } = useMailboxStore.getState();
 
@@ -37,40 +36,25 @@ const dropDisconnectedAccountSelection = (
   }
 };
 
-const addOtherAccount = async (): Promise<void> => {
-  const reply = await getAuthApi()?.openAccountSetup();
-
-  if (reply?.ok === false) {
-    toast.error(reply.error);
-  }
-};
-
 const AccountGate = ({ children, initialState }: AccountGateProps) => {
-  const [accounts, setAccounts] = useState<readonly GoogleAccount[]>(
+  const [accounts, setAccounts] = useState<readonly Account[]>(
     initialState.status === "authenticated" ? initialState.accounts : []
   );
   const [isAuthenticated, setIsAuthenticated] = useState(
     initialState.status === "authenticated"
   );
-  const [hasGoogleSetup, setHasGoogleSetup] = useState(false);
-  const [isStartingLogin, setIsStartingLogin] = useState(false);
   const accountOrderVersion = useRef(0);
-  const googleSetupVersion = useRef(0);
-  const { isSettingUp, setupGoogle } = useGoogleOAuthSetup(getAuthApi(), () => {
-    googleSetupVersion.current += 1;
-    setHasGoogleSetup(true);
-  });
   const accountIds = useMemo(
     () => accounts.map(({ email }) => email),
     [accounts]
   );
 
   const reorderAccounts = async (
-    reorderedAccounts: readonly GoogleAccount[]
+    reorderedAccounts: readonly Account[]
   ): Promise<void> => {
-    const auth = getAuthApi();
+    const accountsApi = getAccountsApi();
 
-    if (auth === undefined) {
+    if (accountsApi === undefined) {
       return;
     }
 
@@ -78,7 +62,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     accountOrderVersion.current = version;
     const previousAccounts = accounts;
     setAccounts(reorderedAccounts);
-    const reply = await auth.reorderGoogleAccounts({
+    const reply = await accountsApi.reorderAccounts({
       emails: reorderedAccounts.map(({ email }) => email),
     });
 
@@ -87,105 +71,47 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     }
 
     toast.error(reply.error);
-    const refreshed = await auth.listGoogleAccounts();
+    const refreshed = await accountsApi.listAccounts();
     setAccounts(refreshed.ok ? refreshed.data : previousAccounts);
   };
 
-  useEffect(() => {
-    const auth = getAuthApi();
+  useEffect(
+    () =>
+      // The only path from the login screen to the mailbox: main announces the
+      // new list once the Add account window saves an account.
+      getAccountsApi()?.onAccountsChanged((reply) => {
+        if (!reply.ok) {
+          toast.error(reply.error);
+          return;
+        }
 
-    return auth?.onGoogleAccountsChanged((reply) => {
-      setIsStartingLogin(false);
-
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-
-      clearMailboxThreadsSnapshots();
-      clearScheduledMailSnapshots();
-      dropDisconnectedAccountSelection(reply.data);
-      setAccounts(reply.data);
-      setIsAuthenticated(reply.data.length > 0);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      return;
-    }
-
-    const auth = getAuthApi();
-    const version = googleSetupVersion.current;
-    let isActive = true;
-
-    const loadGoogleSetupStatus = async (): Promise<void> => {
-      if (auth === undefined) {
-        return;
-      }
-
-      const reply = await auth.getGoogleOAuthClientStatus();
-      if (!isActive || version !== googleSetupVersion.current) {
-        return;
-      }
-
-      if (reply.ok) {
-        setHasGoogleSetup(reply.data);
-      } else {
-        toast.error(reply.error);
-      }
-    };
-
-    void loadGoogleSetupStatus();
-
-    return () => {
-      isActive = false;
-    };
-  }, [isAuthenticated]);
-
-  const startLogin = async (): Promise<void> => {
-    const auth = getAuthApi();
-
-    if (auth === undefined || !hasGoogleSetup) {
-      return;
-    }
-
-    setIsStartingLogin(true);
-    const reply = await auth.startGoogle();
-
-    if (!reply.ok) {
-      setIsStartingLogin(false);
-      toast.error(reply.error);
-    }
-  };
+        clearMailboxThreadsSnapshots();
+        clearScheduledMailSnapshots();
+        dropDisconnectedAccountSelection(reply.data);
+        setAccounts(reply.data);
+        setIsAuthenticated(reply.data.length > 0);
+      }),
+    []
+  );
 
   if (!isAuthenticated) {
-    return (
-      <LoginScreen
-        hasGoogleSetup={hasGoogleSetup}
-        isSettingUp={isSettingUp}
-        isStarting={isStartingLogin}
-        onAddOtherAccount={addOtherAccount}
-        onLogin={startLogin}
-        onSetup={setupGoogle}
-      />
-    );
+    return <LoginScreen />;
   }
 
   return (
-    <GoogleAccountsProvider accounts={accounts} onReorder={reorderAccounts}>
+    <AccountsProvider accounts={accounts} onReorder={reorderAccounts}>
       <AiProviderStateProvider>
         <AccountSettingsProvider>
-          <GmailLabelsProvider accountIds={accountIds}>
+          <LabelsProvider accountIds={accountIds}>
             <ComposerTemplatesProvider>
               <TrustedImageSendersProvider>
                 {children}
               </TrustedImageSendersProvider>
             </ComposerTemplatesProvider>
-          </GmailLabelsProvider>
+          </LabelsProvider>
         </AccountSettingsProvider>
       </AiProviderStateProvider>
-    </GoogleAccountsProvider>
+    </AccountsProvider>
   );
 };
 

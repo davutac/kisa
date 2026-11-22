@@ -78,11 +78,11 @@ export const accountId = AccountId.make("test@example.com");
 export const insertAccount = (dialect: "generic" | "gmail"): void => {
   connection
     .prepare(
-      `INSERT INTO mail_accounts (account_id, auth_kind, created_at, credentials,
-        dialect, email, imap_host, imap_port, imap_security, provider, smtp_host,
+      `INSERT INTO mail_accounts (account_id, created_at, credentials, dialect,
+        email, imap_host, imap_port, imap_security, provider, smtp_host,
         smtp_port, smtp_security, sort_order, updated_at, username)
-       VALUES (?, 'password', 0, X'00', ?, ?, 'imap.example.com', 993, 'tls',
-        ?, 'smtp.example.com', 465, 'tls', 0, 0, ?)`
+       VALUES (?, 0, X'00', ?, ?, 'imap.example.com', 993, 'tls', ?,
+        'smtp.example.com', 465, 'tls', 0, 0, ?)`
     )
     .run(
       accountId,

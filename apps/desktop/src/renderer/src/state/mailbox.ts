@@ -1,14 +1,14 @@
 import { create } from "zustand";
 
 import { normalizeMailboxLabelSelection } from "@/mail/mailbox-labels";
-import type { GmailMailbox } from "@/shared/ipc/mail";
+import type { Mailbox } from "@/shared/ipc/mail";
 
 interface MailboxState {
   /** Account-qualified thread keys checked for a mailbox bulk action. */
   checkedThreadIds: ReadonlySet<string>;
   /** The thread being read, over a mailbox that stays mounted underneath. */
   openThreadId: string | null;
-  mailbox: GmailMailbox;
+  mailbox: Mailbox;
   /** `null` shows every account. */
   selectedAccountId: string | null;
   /** Case-normalized user label names used as a match-all mailbox filter. */
@@ -25,7 +25,7 @@ interface MailboxState {
   selectThread: (threadId: string | null) => void;
   retainCheckedThreads: (threadIds: ReadonlySet<string>) => void;
   retainSelectedLabels: (availableNames: ReadonlySet<string>) => void;
-  setMailbox: (mailbox: GmailMailbox) => void;
+  setMailbox: (mailbox: Mailbox) => void;
   setSelectedLabels: (labelNames: readonly string[]) => void;
   setShowUnread: (showUnread: boolean) => void;
 }
@@ -163,7 +163,7 @@ export const useOpenThreadId = (): string | null =>
 export const useCheckedThreadIds = (): ReadonlySet<string> =>
   useMailboxStore((state) => state.checkedThreadIds);
 
-export const useMailbox = (): GmailMailbox =>
+export const useMailbox = (): Mailbox =>
   useMailboxStore((state) => state.mailbox);
 
 export const useSelectedAccountId = (): string | null =>

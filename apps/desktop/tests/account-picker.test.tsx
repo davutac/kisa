@@ -4,15 +4,8 @@ import { describe, expect, it } from "vitest";
 import AccountPicker from "../src/renderer/src/components/accounts/account-picker";
 
 const accounts = [
-  {
-    displayName: "First Account",
-    email: "first@example.com",
-    scopes: [],
-  },
-  {
-    email: "second@example.com",
-    scopes: [],
-  },
+  { displayName: "First Account", email: "first@example.com" },
+  { email: "second@example.com" },
 ];
 
 describe("account picker", () => {

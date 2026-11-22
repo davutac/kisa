@@ -1,22 +1,22 @@
-import type { GmailLabelColor, GmailLabelSummary } from "@/shared/ipc/mail";
+import type { MailLabelColor, MailLabelSummary } from "@/shared/ipc/mail";
 
-import { compareGmailLabelDisplayNames } from "./label";
+import { compareLabelDisplayNames } from "./label";
 
 export interface MailboxLabelCatalog {
   readonly accountId: string;
-  readonly labels: readonly GmailLabelSummary[];
+  readonly labels: readonly MailLabelSummary[];
 }
 
 export interface MailboxLabelItem {
   readonly accountIds: readonly string[];
-  readonly color?: GmailLabelColor;
+  readonly color?: MailLabelColor;
   readonly key: string;
   readonly name: string;
 }
 
 interface MutableMailboxLabelItem {
   readonly accountIds: string[];
-  color?: GmailLabelColor;
+  color?: MailLabelColor;
   hasConflictingColor: boolean;
   readonly key: string;
   readonly name: string;
@@ -26,8 +26,8 @@ export const normalizeMailboxLabelName = (name: string): string =>
   name.trim().toLowerCase();
 
 const colorsMatch = (
-  left: GmailLabelColor | undefined,
-  right: GmailLabelColor | undefined
+  left: MailLabelColor | undefined,
+  right: MailLabelColor | undefined
 ): boolean =>
   left?.background === right?.background && left?.text === right?.text;
 
@@ -76,9 +76,7 @@ export const createMailboxLabelItems = (
       key,
       name,
     }))
-    .toSorted((left, right) =>
-      compareGmailLabelDisplayNames(left.name, right.name)
-    );
+    .toSorted((left, right) => compareLabelDisplayNames(left.name, right.name));
 };
 
 export const normalizeMailboxLabelSelection = (

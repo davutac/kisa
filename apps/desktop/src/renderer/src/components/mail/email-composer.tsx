@@ -13,7 +13,7 @@ import EmailComposerToolbar from "@/components/mail/email-composer-toolbar";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
 import { resetEditorHistory } from "@/editor/reset-history";
 import { cn } from "@/lib/utils";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type {
   ComposerTemplate,
   ComposerTemplateInput,
@@ -61,7 +61,7 @@ interface EmailComposerProps {
   onInlineImageInsertFailure?: (contentIds: readonly string[]) => void;
   placeholder?: string;
   templateFallbackAccountId?: string;
-  templateAccounts?: readonly GoogleAccount[];
+  templateAccounts?: readonly Account[];
   templateVariablePreviewContext?: Omit<TemplateVariableContext, "now">;
   templates?: readonly ComposerTemplate[];
   toolbarHeader?: ReactNode;
@@ -89,7 +89,7 @@ const toComposerValue = (
 });
 
 const NO_TEMPLATES: readonly ComposerTemplate[] = [];
-const NO_ACCOUNTS: readonly GoogleAccount[] = [];
+const NO_ACCOUNTS: readonly Account[] = [];
 const NO_INLINE_IMAGE_PREVIEW = (): null => null;
 const NO_INLINE_IMAGE_PREVIEW_LOAD = (): Promise<null> => Promise.resolve(null);
 

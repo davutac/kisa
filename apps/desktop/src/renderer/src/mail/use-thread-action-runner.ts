@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import { getMailApi } from "@/platform/desktop";
 import type { MailApi } from "@/platform/desktop";
 import type {
-  GmailBulkThreadMutationOperation,
-  GmailThreadMutationReply,
-  GmailThreadRequest,
+  MailBulkThreadMutationOperation,
+  MailThreadMutationReply,
+  MailThreadRequest,
 } from "@/shared/ipc/mail";
 import { usePrepareUndo } from "@/undo/undo-provider";
 
@@ -20,30 +20,30 @@ type ThreadUndo = UndoCopy &
   (
     | {
         readonly kind: "bulk";
-        readonly operation: GmailBulkThreadMutationOperation;
-        readonly threads: readonly GmailThreadRequest[];
+        readonly operation: MailBulkThreadMutationOperation;
+        readonly threads: readonly MailThreadRequest[];
       }
     | {
         readonly kind: "thread";
-        readonly send: (mailApi: MailApi) => Promise<GmailThreadMutationReply>;
+        readonly send: (mailApi: MailApi) => Promise<MailThreadMutationReply>;
       }
   );
 
 interface ThreadAction {
   readonly failureMessage: string;
   readonly onSuccess?: () => void;
-  readonly send: (mailApi: MailApi) => Promise<GmailThreadMutationReply>;
+  readonly send: (mailApi: MailApi) => Promise<MailThreadMutationReply>;
   readonly successMessage?: string;
   readonly undo?: ThreadUndo;
 }
 
 interface BulkAction {
   readonly failureMessage: string;
-  readonly operation: GmailBulkThreadMutationOperation;
+  readonly operation: MailBulkThreadMutationOperation;
   readonly successMessage: string;
-  readonly threads: readonly GmailThreadRequest[];
+  readonly threads: readonly MailThreadRequest[];
   readonly undo?: {
-    readonly operation: GmailBulkThreadMutationOperation;
+    readonly operation: MailBulkThreadMutationOperation;
     readonly undoneMessage: string;
   };
 }
@@ -68,8 +68,8 @@ const requireThreadMutation = async (
 
 const requireBulkMutation = async (
   mailApi: MailApi,
-  threads: readonly GmailThreadRequest[],
-  operation: GmailBulkThreadMutationOperation,
+  threads: readonly MailThreadRequest[],
+  operation: MailBulkThreadMutationOperation,
   failureMessage: string
 ): Promise<void> => {
   try {

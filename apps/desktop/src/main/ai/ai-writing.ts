@@ -5,13 +5,13 @@ import {
   DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
   DEFAULT_AI_REPLY_USER_INSTRUCTIONS,
 } from "../../shared/ai-instructions";
-import { MAX_GMAIL_SUBJECT_LENGTH } from "../../shared/gmail-subject";
 import { AiReply } from "../../shared/ipc/ai";
 import type {
   AiCleanupDraftRequest,
   AiModelSelection,
   AiReplyRequest,
 } from "../../shared/ipc/ai";
+import { MAX_SUBJECT_LENGTH } from "../../shared/mail-subject";
 import { getAiSettings } from "./ai-settings";
 import { AiCleanupGeneration } from "./generation-schemas";
 import { requireAiModelSelection } from "./model-selection";
@@ -67,7 +67,7 @@ const loadAiRuntimeContext = Effect.fn("loadAiRuntimeContext")(
 const sanitizeSubject = (subject: string): string =>
   (subject.trim().split(/\r?\n/gu)[0] ?? "")
     .trim()
-    .slice(0, MAX_GMAIL_SUBJECT_LENGTH);
+    .slice(0, MAX_SUBJECT_LENGTH);
 
 export const generateAiReply = Effect.fn("generateAiReply")(
   function* generateAiReply(request: AiReplyRequest) {

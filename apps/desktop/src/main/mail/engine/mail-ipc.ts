@@ -6,23 +6,23 @@ import { and, eq } from "drizzle-orm";
 import { Effect, Exit } from "effect";
 
 import type {
-  GmailMessageSendRequest,
-  GmailThreadMessageSendRequest,
+  MailMessageSendRequest,
+  MailThreadMessageSendRequest,
   MailSendOutcome,
-  GmailBulkThreadMutationOperation,
-  GmailBulkThreadMutationRequest,
-  GmailBulkThreadMutationResult,
-  GmailCachedThreadPageRequest,
-  GmailLabelCatalogRequest,
-  GmailLabelCreateRequest,
-  GmailLabelDeleteRequest,
-  GmailLabelInputColor,
-  GmailLabelSummary,
-  GmailLabelUpdateRequest,
-  GmailSpamStatusRequest,
-  GmailThreadLabelRequest,
-  GmailThreadReadStateRequest,
-  GmailThreadRequest,
+  MailBulkThreadMutationOperation,
+  MailBulkThreadMutationRequest,
+  MailBulkThreadMutationResult,
+  MailCachedThreadPageRequest,
+  MailLabelCatalogRequest,
+  MailLabelCreateRequest,
+  MailLabelDeleteRequest,
+  MailLabelInputColor,
+  MailLabelSummary,
+  MailLabelUpdateRequest,
+  MailSpamStatusRequest,
+  MailThreadLabelRequest,
+  MailThreadReadStateRequest,
+  MailThreadRequest,
 } from "../../../shared/ipc/mail";
 import {
   OutgoingAttachmentAuthorizationError,
@@ -63,12 +63,12 @@ const readDatabase = <A>(
     })
   );
 
-export const listCachedThreadPage = (request: GmailCachedThreadPageRequest) =>
+export const listCachedThreadPage = (request: MailCachedThreadPageRequest) =>
   readDatabase("Could not load email", (database) =>
     readThreadPage(database, request)
   );
 
-export const listLabelCatalog = (request: GmailLabelCatalogRequest) =>
+export const listLabelCatalog = (request: MailLabelCatalogRequest) =>
   readDatabase("Could not load labels", (database) =>
     readLabelCatalog(database, request.accountId)
   );
@@ -77,20 +77,20 @@ export const listLabelCatalog = (request: GmailLabelCatalogRequest) =>
  * Labels and folders are listed by every sync, so a refresh is a sync of the
  * account; the catalog returned is what the cache has now.
  */
-export const refreshLabelCatalog = (request: GmailLabelCatalogRequest) =>
+export const refreshLabelCatalog = (request: MailLabelCatalogRequest) =>
   Effect.sync(() => {
     requestMailSync(request.accountId);
   }).pipe(Effect.andThen(listLabelCatalog(request)));
 
-export const loadSpamStatus = (request: GmailSpamStatusRequest) =>
+export const loadSpamStatus = (request: MailSpamStatusRequest) =>
   readDatabase("Could not check spam", async (database) => ({
     hasUnreadSpam: await readHasUnreadSpam(database, request.accountIds),
   }));
 
-export const openThread = (request: GmailThreadRequest) =>
+export const openThread = (request: MailThreadRequest) =>
   inAccountEngine(request.accountId, loadThread(request));
 
-export const changeThreadReadState = (request: GmailThreadReadStateRequest) =>
+export const changeThreadReadState = (request: MailThreadReadStateRequest) =>
   inAccountEngine(
     request.accountId,
     setThreadReadState({
@@ -100,31 +100,31 @@ export const changeThreadReadState = (request: GmailThreadReadStateRequest) =>
     })
   );
 
-const actOnThread = (request: GmailThreadRequest, action: ThreadAction) =>
+const actOnThread = (request: MailThreadRequest, action: ThreadAction) =>
   inAccountEngine(
     request.accountId,
     applyThreadActions(request.accountId, [request.threadId], action)
   );
 
-export const setThreadLabel = (request: GmailThreadLabelRequest) =>
+export const setThreadLabel = (request: MailThreadLabelRequest) =>
   actOnThread(request, {
     applied: request.applied,
     kind: "setLabel",
     labelId: LabelId.make(request.labelId),
   });
 
-export const trashThread = (request: GmailThreadRequest) =>
+export const trashThread = (request: MailThreadRequest) =>
   actOnThread(request, { kind: "trash" });
 
-export const deleteThreadForever = (request: GmailThreadRequest) =>
+export const deleteThreadForever = (request: MailThreadRequest) =>
   actOnThread(request, { kind: "deleteForever" });
 
 /** Out of Spam (or Trash) and back into the Inbox. */
-export const markThreadNotSpam = (request: GmailThreadRequest) =>
+export const markThreadNotSpam = (request: MailThreadRequest) =>
   actOnThread(request, { kind: "moveToInbox" });
 
 const toThreadAction = (
-  operation: GmailBulkThreadMutationOperation
+  operation: MailBulkThreadMutationOperation
 ): ThreadAction => {
   switch (operation.kind) {
     case "setLabel": {
@@ -153,7 +153,7 @@ const BULK_CHUNK_SIZE = 250;
  * change so the interface can put them back.
  */
 export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
-  function* bulkMutateThreads(request: GmailBulkThreadMutationRequest) {
+  function* bulkMutateThreads(request: MailBulkThreadMutationRequest) {
     const threads = [
       ...new Map(
         request.threads.map((thread) => [
@@ -169,7 +169,7 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
     }
 
     const action = toThreadAction(request.operation);
-    const byAccount = new Map<string, GmailThreadRequest[]>();
+    const byAccount = new Map<string, MailThreadRequest[]>();
     for (const thread of threads) {
       byAccount.set(thread.accountId, [
         ...(byAccount.get(thread.accountId) ?? []),
@@ -177,8 +177,8 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
       ]);
     }
 
-    const succeeded: GmailThreadRequest[] = [];
-    const failed: GmailThreadRequest[] = [];
+    const succeeded: MailThreadRequest[] = [];
+    const failed: MailThreadRequest[] = [];
     for (const [accountId, accountThreads] of byAccount) {
       for (
         let start = 0;
@@ -200,7 +200,7 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
       }
     }
 
-    return { failed, succeeded } satisfies GmailBulkThreadMutationResult;
+    return { failed, succeeded } satisfies MailBulkThreadMutationResult;
   }
 );
 
@@ -208,7 +208,7 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
 const saveLabelColor = (
   accountId: string,
   labelId: string,
-  color: GmailLabelInputColor | undefined
+  color: MailLabelInputColor | undefined
 ) =>
   readDatabase("Could not save the label colour", (database) =>
     database
@@ -228,7 +228,7 @@ const saveLabelColor = (
 
 export const createAccountLabelFromRequest = Effect.fn(
   "MailIpc.createAccountLabel"
-)(function* createAccountLabelFromRequest(request: GmailLabelCreateRequest) {
+)(function* createAccountLabelFromRequest(request: MailLabelCreateRequest) {
   const label = yield* inAccountEngine(
     request.accountId,
     createAccountLabel(request.accountId, request.name)
@@ -241,11 +241,11 @@ export const createAccountLabelFromRequest = Effect.fn(
     id: label.id,
     name: label.name,
     type: "user",
-  } satisfies GmailLabelSummary;
+  } satisfies MailLabelSummary;
 });
 
 export const updateAccountLabel = Effect.fn("MailIpc.updateAccountLabel")(
-  function* updateAccountLabel(request: GmailLabelUpdateRequest) {
+  function* updateAccountLabel(request: MailLabelUpdateRequest) {
     const label = yield* inAccountEngine(
       request.accountId,
       renameAccountLabel(request.accountId, request.labelId, request.name)
@@ -266,7 +266,7 @@ export const updateAccountLabel = Effect.fn("MailIpc.updateAccountLabel")(
 );
 
 export const deleteAccountLabelFromRequest = (
-  request: GmailLabelDeleteRequest
+  request: MailLabelDeleteRequest
 ) =>
   inAccountEngine(
     request.accountId,
@@ -276,7 +276,7 @@ export const deleteAccountLabelFromRequest = (
 /** The files the composer attached, released to this send only. */
 const consumeAttachments = (
   ownerWebContentsId: number,
-  capabilities: GmailMessageSendRequest["attachments"]
+  capabilities: MailMessageSendRequest["attachments"]
 ) =>
   Effect.tryPromise({
     catch: (error) =>
@@ -297,7 +297,7 @@ const toOutcome = (result: { readonly refused: readonly string[] }) =>
 
 export const sendNewMessageFromRequest = Effect.fn("MailIpc.sendNewMessage")(
   function* sendNewMessageFromRequest(
-    request: GmailMessageSendRequest,
+    request: MailMessageSendRequest,
     ownerWebContentsId: number
   ) {
     const attachments = yield* consumeAttachments(
@@ -315,7 +315,7 @@ export const sendNewMessageFromRequest = Effect.fn("MailIpc.sendNewMessage")(
 export const sendThreadMessageFromRequest = Effect.fn(
   "MailIpc.sendThreadMessage"
 )(function* sendThreadMessageFromRequest(
-  request: GmailThreadMessageSendRequest,
+  request: MailThreadMessageSendRequest,
   ownerWebContentsId: number
 ) {
   const attachments = yield* consumeAttachments(

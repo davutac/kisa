@@ -12,17 +12,17 @@ import {
   SettingsRowTitle,
 } from "@/components/ui/settings";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
-import type { AuthApi } from "@/platform/desktop";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { AccountsApi } from "@/platform/desktop";
+import type { Account } from "@/shared/ipc/accounts";
 
 interface SettingsAccountDisconnectRowProps {
-  account: GoogleAccount;
-  authApi: AuthApi;
+  account: Account;
+  accountsApi: AccountsApi;
 }
 
 const SettingsAccountDisconnectRow = ({
   account,
-  authApi,
+  accountsApi,
 }: SettingsAccountDisconnectRowProps) => {
   const confirm = useConfirm();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
@@ -33,7 +33,7 @@ const SettingsAccountDisconnectRow = ({
     await runWithCleanup(
       async () => {
         try {
-          const reply = await authApi.disconnectGoogleAccount({
+          const reply = await accountsApi.disconnectAccount({
             email: account.email,
           });
           if (!reply.ok) {
@@ -72,7 +72,8 @@ const SettingsAccountDisconnectRow = ({
           scheduled email with an unknown outcome may already have reached the
           mail server, so check Sent before disconnecting. Nothing will be
           deleted from the mail server, and you can connect the account again at
-          any time.
+          any time. The app password keeps working until you remove it with your
+          mail provider.
         </ConfirmMessage>
       ),
       title: "Disconnect account?",
@@ -88,8 +89,7 @@ const SettingsAccountDisconnectRow = ({
       <SettingsRowContent>
         <SettingsRowTitle id={titleId}>Disconnect</SettingsRowTitle>
         <SettingsRowDescription>
-          Revoke access and delete everything stored for this account on this
-          device.
+          Sign out and delete everything stored for this account on this device.
         </SettingsRowDescription>
       </SettingsRowContent>
       <SettingsRowActions>

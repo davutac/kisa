@@ -8,11 +8,11 @@ import { cn } from "@/lib/utils";
 import { createEmailDocument, prepareEmailLinks } from "@/mail/email-frame";
 import { needsLightSurface } from "@/mail/email-surface";
 import { blockRemoteImages } from "@/mail/remote-images";
-import type { GmailMessageBody } from "@/shared/ipc/mail";
+import type { MessageBody } from "@/shared/ipc/mail";
 
 interface MailMessageBodyProps {
   allowRemoteImages: boolean;
-  body: GmailMessageBody;
+  body: MessageBody;
   fallbackText: string;
 }
 

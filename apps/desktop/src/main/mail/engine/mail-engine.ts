@@ -42,16 +42,17 @@ import {
   MAIL_THREAD_LIST_UPDATED_CHANNEL,
 } from "../../../shared/ipc/channels";
 import {
-  GmailIndexProgress,
-  GmailLabelCatalogChanged,
-  GmailSyncStatus,
-  GmailThreadListUpdated,
+  MailIndexProgressList,
+  MailLabelCatalogChanged,
+  MailSyncStatus,
+  MailThreadListUpdated,
 } from "../../../shared/ipc/mail";
 import type {
-  GmailThread,
-  GmailThreadListChange,
-  GmailThreadMessage,
-  GmailThreadRequest,
+  MailIndexProgress,
+  MailThread,
+  MailThreadListChange,
+  ThreadMessage,
+  MailThreadRequest,
 } from "../../../shared/ipc/mail";
 import { canApplySenderTrust } from "../../../shared/sender-trust";
 import { onAccountConnected } from "../../auth/account-events";
@@ -225,7 +226,7 @@ export const publishChanges = Effect.fn("MailEngine.publishChanges")(
     const summaries = yield* database.use("Could not load updated mail", (db) =>
       readThreadSummaries(db, accountId, changes.changed)
     );
-    const list: GmailThreadListChange[] = [
+    const list: MailThreadListChange[] = [
       ...summaries
         .toSorted((left, right) => right.latestAt - left.latestAt)
         .slice(0, MAX_UPSERTS)
@@ -241,7 +242,7 @@ export const publishChanges = Effect.fn("MailEngine.publishChanges")(
       dismissInactiveThreadNotifications(list);
       sendRendererEvent(
         MAIL_THREAD_LIST_UPDATED_CHANNEL,
-        GmailThreadListUpdated,
+        MailThreadListUpdated,
         {
           changes: list,
         }
@@ -259,12 +260,12 @@ const setSyncing = (accountId: string, isSyncing: boolean): void => {
   } else {
     syncingAccountIds.delete(accountId);
   }
-  sendRendererEvent(MAIL_SYNC_STATUS_CHANNEL, GmailSyncStatus, {
+  sendRendererEvent(MAIL_SYNC_STATUS_CHANNEL, MailSyncStatus, {
     accountIds: [...syncingAccountIds],
   });
 };
 
-export const getMailEngineSyncStatus = (): GmailSyncStatus => ({
+export const getMailEngineSyncStatus = (): MailSyncStatus => ({
   accountIds: [...syncingAccountIds],
 });
 
@@ -308,14 +309,28 @@ const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
           indexedThreads: 0,
           oldestIndexedAt: messages?.oldest ?? undefined,
           status: isComplete ? ("complete" as const) : ("running" as const),
-        } satisfies GmailIndexProgress;
+        } satisfies MailIndexProgress;
       }
     );
   }
 );
 
 const progressPublishedAt = new Map<string, number>();
-const latestProgress = new Map<string, GmailIndexProgress>();
+const latestProgress = new Map<string, MailIndexProgress>();
+
+export const getMailEngineIndexProgress = (): readonly MailIndexProgress[] => [
+  ...latestProgress.values(),
+];
+
+/**
+ * Every account's progress in one event: the renderer replaces its list with
+ * what arrives, so an event naming one account would drop the others.
+ */
+const sendIndexProgress = (): void => {
+  sendRendererEvent(MAIL_INDEX_PROGRESS_CHANNEL, MailIndexProgressList, {
+    accounts: getMailEngineIndexProgress(),
+  });
+};
 
 const publishProgress = Effect.fn("MailEngine.publishProgress")(
   function* publishProgress(accountId: string, force = false) {
@@ -329,19 +344,9 @@ const publishProgress = Effect.fn("MailEngine.publishProgress")(
     progressPublishedAt.set(accountId, now);
     const progress = yield* readIndexProgress(accountId);
     latestProgress.set(accountId, progress);
-    yield* Effect.sync(() => {
-      sendRendererEvent(
-        MAIL_INDEX_PROGRESS_CHANNEL,
-        GmailIndexProgress,
-        progress
-      );
-    });
+    yield* Effect.sync(sendIndexProgress);
   }
 );
-
-export const getMailEngineIndexProgress = (): readonly GmailIndexProgress[] => [
-  ...latestProgress.values(),
-];
 
 // --------------------------------------------------------------- background
 
@@ -624,6 +629,7 @@ export const forgetMailEngineAccount = Effect.fn("MailEngine.forgetAccount")(
     cacheLocks.delete(accountId);
     latestProgress.delete(accountId);
     progressPublishedAt.delete(accountId);
+    sendIndexProgress();
     if (syncingAccountIds.has(accountId)) {
       setSyncing(accountId, false);
     }
@@ -663,7 +669,7 @@ const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
   function* withInlineImages(
     account: MailAccount,
     sources: readonly ConversationMessage[],
-    messages: readonly GmailThreadMessage[]
+    messages: readonly ThreadMessage[]
   ) {
     const wanted = sources.flatMap((source, index) => {
       const html = messages[index]?.body.html;
@@ -755,7 +761,7 @@ const withSenderBrands = Effect.fn("MailEngine.withSenderBrands")(
           headers: source.headers,
         }).pipe(
           Effect.orElseSucceed(() => null),
-          Effect.map((brand): GmailThreadMessage =>
+          Effect.map((brand): ThreadMessage =>
             brand === null
               ? source.message
               : { ...source.message, senderBrand: brand }
@@ -835,7 +841,7 @@ const publishLabelCatalogChanged = (accountId: string) =>
   Effect.sync(() => {
     sendRendererEvent(
       MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
-      GmailLabelCatalogChanged,
+      MailLabelCatalogChanged,
       { accountId }
     );
   });
@@ -888,7 +894,7 @@ export const deleteAccountLabel = Effect.fn("MailEngine.deleteAccountLabel")(
  * unread conversation marks it read, as Gmail does.
  */
 export const loadThread = Effect.fn("MailEngine.loadThread")(
-  function* loadThread(request: GmailThreadRequest) {
+  function* loadThread(request: MailThreadRequest) {
     const database = yield* MailDatabase;
     const read = () =>
       database.use("Could not load email", (db) =>
@@ -936,7 +942,7 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
       messages,
       subject: conversation.subject,
       threadId: request.threadId,
-    } satisfies GmailThread;
+    } satisfies MailThread;
   }
 );
 
@@ -953,7 +959,7 @@ export const ensureThreadBodies = Effect.fn("MailEngine.ensureThreadBodies")(
 
 export const setThreadReadState = Effect.fn("MailEngine.setThreadReadState")(
   function* setThreadReadState(
-    request: GmailThreadRequest & { readonly isRead: boolean }
+    request: MailThreadRequest & { readonly isRead: boolean }
   ) {
     const account = yield* requireAccount(request.accountId);
     yield* markRead(account, request.threadId, request.isRead);

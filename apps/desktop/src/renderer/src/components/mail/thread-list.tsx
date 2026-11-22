@@ -43,7 +43,7 @@ import { blurFocusedMailboxLabel } from "@/mail/use-mailbox-label-navigation";
 import { useOpenThread } from "@/mail/use-open-thread";
 import type { ThreadActions } from "@/mail/use-thread-actions";
 import { useThreadDragSelection } from "@/mail/use-thread-drag-selection";
-import type { GmailMailbox, GmailThreadSummary } from "@/shared/ipc/mail";
+import type { Mailbox, MailThreadSummary } from "@/shared/ipc/mail";
 import {
   useCheckedThreadIds,
   useMailboxStore,
@@ -61,16 +61,16 @@ export interface MailThreadListProps {
   isLoadingNextPage?: boolean;
   loadingTitle?: string;
   loadNextPage?: () => Promise<boolean>;
-  mailbox?: GmailMailbox;
+  mailbox?: Mailbox;
   scrollResetKey: number | string;
   searchResults?: boolean;
   showAccount?: boolean;
-  threads: readonly GmailThreadSummary[];
+  threads: readonly MailThreadSummary[];
 }
 
 const getRowDestructiveActions = (
-  thread: GmailThreadSummary,
-  onDeleteForever: (thread: GmailThreadSummary) => void,
+  thread: MailThreadSummary,
+  onDeleteForever: (thread: MailThreadSummary) => void,
   onTrash: ThreadActions["trash"]
 ) =>
   getThreadDestructiveAction(thread.labels) === "deleteForever"
@@ -80,7 +80,7 @@ const getRowDestructiveActions = (
 const hasDestructiveTarget = (
   checkedCount: number,
   bulkAction: ReturnType<typeof getBulkThreadDestructiveAction>,
-  selectedThread: GmailThreadSummary | undefined
+  selectedThread: MailThreadSummary | undefined
 ): boolean =>
   checkedCount === 0 ? selectedThread !== undefined : bulkAction !== undefined;
 
@@ -96,7 +96,7 @@ interface ThreadListPresentation {
 
 const getThreadListPresentation = (
   searchResults: boolean,
-  mailbox: GmailMailbox
+  mailbox: Mailbox
 ): ThreadListPresentation => {
   if (searchResults) {
     return { emptyIcon: <SearchIcon />, label: "Search results" };
@@ -205,7 +205,7 @@ const MailThreadList = ({
     onSelectionPointerEnter,
   } = dragSelection;
   const handleOpen = useCallback(
-    (target: GmailThreadSummary, event: MouseEvent): void => {
+    (target: MailThreadSummary, event: MouseEvent): void => {
       if (consumeSuppressedOpen(event.detail)) {
         return;
       }
@@ -225,7 +225,7 @@ const MailThreadList = ({
     [checkThread, consumeSuppressedOpen, openThread, selectThread]
   );
   const handleToggleSelection = useCallback(
-    (target: GmailThreadSummary): void => {
+    (target: MailThreadSummary): void => {
       const key = getThreadSelectionKey(target);
       checkThread(key, !useMailboxStore.getState().checkedThreadIds.has(key));
       selectThread(key);
@@ -233,26 +233,26 @@ const MailThreadList = ({
     [checkThread, selectThread]
   );
   const handleRowPointerDown = useCallback(
-    (target: GmailThreadSummary, event: PointerEvent<HTMLButtonElement>) => {
+    (target: MailThreadSummary, event: PointerEvent<HTMLButtonElement>) => {
       onRowPointerDown(getThreadSelectionKey(target), event);
     },
     [onRowPointerDown]
   );
   const handleSelectionPointerDown = useCallback(
-    (target: GmailThreadSummary, event: PointerEvent) => {
+    (target: MailThreadSummary, event: PointerEvent) => {
       onSelectionPointerDown(getThreadSelectionKey(target), event);
     },
     [onSelectionPointerDown]
   );
   const handleSelectionPointerEnter = useCallback(
-    (target: GmailThreadSummary) => {
+    (target: MailThreadSummary) => {
       onSelectionPointerEnter(getThreadSelectionKey(target));
     },
     [onSelectionPointerEnter]
   );
   const handleToggleRead = actions.toggleRead;
   const requestDeleteForever = useCallback(
-    async (thread: GmailThreadSummary): Promise<void> => {
+    async (thread: MailThreadSummary): Promise<void> => {
       const confirmed = await confirm(
         getDeleteForeverConfirmation(thread.subject)
       );
@@ -264,7 +264,7 @@ const MailThreadList = ({
     [actions, confirm]
   );
   const handleDeleteForever = useCallback(
-    (thread: GmailThreadSummary): void => {
+    (thread: MailThreadSummary): void => {
       void requestDeleteForever(thread);
     },
     [requestDeleteForever]

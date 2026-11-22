@@ -1,4 +1,4 @@
-import { truncateGmailSubject } from "@/shared/gmail-subject";
+import { truncateSubject } from "@/shared/mail-subject";
 
 export interface CleanDraftVersion {
   body: string;
@@ -81,7 +81,7 @@ export const completePendingCleanDraftVersion = (
     ...pending,
     body: cleaned.body,
     status: "ready",
-    subject: truncateGmailSubject(cleaned.subject),
+    subject: truncateSubject(cleaned.subject),
   };
   return {
     history: history.map((current) =>

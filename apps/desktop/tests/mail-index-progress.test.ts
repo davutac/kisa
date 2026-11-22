@@ -5,11 +5,11 @@ import {
   HIDDEN_MAIL_INDEX_PROGRESS,
   INDETERMINATE_MAIL_INDEX_PROGRESS,
 } from "../src/main/app/mail-index-progress";
-import type { GmailIndexProgress } from "../src/shared/ipc/mail";
+import type { MailIndexProgress } from "../src/shared/ipc/mail";
 
 const progress = (
-  patch: Partial<GmailIndexProgress> = {}
-): GmailIndexProgress => ({
+  patch: Partial<MailIndexProgress> = {}
+): MailIndexProgress => ({
   accountId: "person@example.com",
   indexedMessages: 0,
   indexedThreads: 0,
@@ -57,7 +57,7 @@ describe(getNativeMailIndexProgress, () => {
     ).toBe(0.5);
   });
 
-  it("clamps an account whose Gmail estimate is lower than its index", () => {
+  it("clamps an account whose estimate is lower than its index", () => {
     expect(
       getNativeMailIndexProgress([
         progress({ estimatedMessages: 100, indexedMessages: 120 }),

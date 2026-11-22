@@ -11,11 +11,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import { useAccountSettings } from "@/state/account-settings";
 
 interface SettingsAccountSystemLabelsRowProps {
-  account: GoogleAccount;
+  account: Account;
   settingsApi: SettingsApi;
 }
 

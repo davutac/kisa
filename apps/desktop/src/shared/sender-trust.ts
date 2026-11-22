@@ -1,6 +1,6 @@
 // "Always display images from this sender" names an address, and a From
 // address is whatever the sender wrote. The choice therefore only applies to a
-// message whose sender Gmail authenticated, and never in Spam, where Gmail has
+// message whose sender Gmail authenticated, and never in Spam, where the server has
 // already judged the message suspicious. Main uses the same rule before it
 // looks up a sender's logo.
 

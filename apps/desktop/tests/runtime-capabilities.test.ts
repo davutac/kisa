@@ -9,9 +9,9 @@ describe(getRuntimeCapabilities, () => {
     const capabilities = getRuntimeCapabilities({});
 
     expect(capabilities).toStrictEqual({
+      accounts: undefined,
       ai: undefined,
       appSettings: undefined,
-      auth: undefined,
       isWeb: true,
       lifecycle: undefined,
       loginItemSettings: undefined,
@@ -32,9 +32,9 @@ describe(getRuntimeCapabilities, () => {
     });
 
     expect(capabilities).toStrictEqual({
+      accounts: undefined,
       ai: undefined,
       appSettings: undefined,
-      auth: undefined,
       isWeb: false,
       lifecycle: undefined,
       loginItemSettings: undefined,
@@ -82,23 +82,21 @@ describe(getRuntimeCapabilities, () => {
     checkForUpdates: () => Promise.resolve({ state: "idle" as const }),
     cleanupEmailDraft: () =>
       Promise.resolve({ data: { body: "Body", subject: "Subject" }, ok: true }),
-    createGmailLabel: (request) =>
+    createLabel: (request) =>
       Promise.resolve({
         data: { id: "Label_1", name: request.name, type: "user" },
         ok: true as const,
       }),
     deleteComposerTemplate: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
-    deleteGmailLabel: () =>
-      Promise.resolve({ data: undefined, ok: true as const }),
+    deleteLabel: () => Promise.resolve({ data: undefined, ok: true as const }),
     deleteThreadForever: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     discardMailDraft: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     discardScheduledMail: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
-    disconnectGoogleAccount: () =>
-      Promise.resolve({ data: [], ok: true as const }),
+    disconnectAccount: () => Promise.resolve({ data: [], ok: true as const }),
     downloadUpdate: () => Promise.resolve({ state: "idle" as const }),
     dropDatabaseImportFile: () =>
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
@@ -116,8 +114,6 @@ describe(getRuntimeCapabilities, () => {
         data: aiSettings,
         ok: true,
       }),
-    getGoogleOAuthClientStatus: () =>
-      Promise.resolve({ data: true, ok: true as const }),
     getLoginItemSettings: () =>
       Promise.resolve({
         data: { openAtLogin: false, requiresApproval: false },
@@ -138,17 +134,17 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: "restart-pending" as const, ok: true as const }),
     installUpdate: () => Promise.resolve(),
     launchAtLoginSupported: true,
+    listAccounts: () => Promise.resolve({ data: [], ok: true as const }),
     listAccountSettings: () => Promise.resolve({ data: [], ok: true as const }),
     listAiProviders: () => Promise.resolve({ data: [], ok: true }),
     listCachedThreadPage: () =>
       Promise.resolve({ data: { threads: [] }, ok: true as const }),
     listComposerTemplates: () =>
       Promise.resolve({ data: [], ok: true as const }),
-    listGmailLabels: () =>
+    listLabels: () =>
       Promise.resolve({ data: { labels: [] }, ok: true as const }),
-    listGmailSenders: () =>
+    listSenders: () =>
       Promise.resolve({ data: { senders: [] }, ok: true as const }),
-    listGoogleAccounts: () => Promise.resolve({ data: [], ok: true as const }),
     listScheduledMailPage: () =>
       Promise.resolve({ data: { items: [] }, ok: true as const }),
     listStashedDrafts: () => Promise.resolve({ data: [], ok: true as const }),
@@ -174,16 +170,15 @@ describe(getRuntimeCapabilities, () => {
     markThreadNotSpam: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
+    onAccountsChanged: () => () => {},
     onAppClosing: () => () => {},
     onComposerTemplateChanged: () => () => {},
     onDatabaseImportProgress: () => () => {},
-    onGoogleAccountsChanged: () => () => {},
     onMailDraftChanged: () => () => {},
     onMailIndexProgressChanged: () => () => {},
     onMailLabelCatalogChanged: () => () => {},
     onMailSyncStatusChanged: () => () => {},
     onMailThreadListUpdated: () => () => {},
-    onMailThreadUpdated: () => () => {},
     onScheduledMailChanged: () => () => {},
     onScheduledMailOutcome: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
@@ -197,7 +192,7 @@ describe(getRuntimeCapabilities, () => {
     prepareOutgoingAttachments: () =>
       Promise.resolve({ data: [], ok: true as const }),
     reindexMail: () => Promise.resolve({ data: undefined, ok: true as const }),
-    reorderGoogleAccounts: () =>
+    reorderAccounts: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     saveAttachment: () =>
       Promise.resolve({ data: "saved" as const, ok: true as const }),
@@ -240,16 +235,12 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     setThreadReadState: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
-    setupGoogleOAuthClient: () =>
-      Promise.resolve({ data: true, ok: true as const }),
     startApp: () =>
       Promise.resolve({
         appSettings: { ...DEFAULT_APP_SETTINGS, runInBackground: false },
         ok: true as const,
       }),
-    startGoogleAuth: () =>
-      Promise.resolve({ data: undefined, ok: true as const }),
-    syncGmailLabels: () =>
+    syncLabels: () =>
       Promise.resolve({ data: { labels: [] }, ok: true as const }),
     trashThread: () => Promise.resolve({ data: undefined, ok: true as const }),
     trustImageSender: () => Promise.resolve({ data: [], ok: true as const }),
@@ -260,7 +251,7 @@ describe(getRuntimeCapabilities, () => {
         data: aiSettings,
         ok: true,
       }),
-    updateGmailLabel: (request) =>
+    updateLabel: (request) =>
       Promise.resolve({
         data: {
           color: request.color,
@@ -277,6 +268,13 @@ describe(getRuntimeCapabilities, () => {
     const capabilities = getRuntimeCapabilities({ desktopBridge });
 
     expect(capabilities).toStrictEqual({
+      accounts: {
+        disconnectAccount: desktopBridge.disconnectAccount,
+        listAccounts: desktopBridge.listAccounts,
+        onAccountsChanged: desktopBridge.onAccountsChanged,
+        openAccountSetup: desktopBridge.openAccountSetup,
+        reorderAccounts: desktopBridge.reorderAccounts,
+      },
       ai: {
         categorizeThread: desktopBridge.categorizeThread,
         cleanupDraft: desktopBridge.cleanupEmailDraft,
@@ -287,16 +285,6 @@ describe(getRuntimeCapabilities, () => {
       },
       appSettings: {
         set: desktopBridge.setAppSettings,
-      },
-      auth: {
-        disconnectGoogleAccount: desktopBridge.disconnectGoogleAccount,
-        getGoogleOAuthClientStatus: desktopBridge.getGoogleOAuthClientStatus,
-        listGoogleAccounts: desktopBridge.listGoogleAccounts,
-        onGoogleAccountsChanged: desktopBridge.onGoogleAccountsChanged,
-        openAccountSetup: desktopBridge.openAccountSetup,
-        reorderGoogleAccounts: desktopBridge.reorderGoogleAccounts,
-        setupGoogleOAuthClient: desktopBridge.setupGoogleOAuthClient,
-        startGoogle: desktopBridge.startGoogleAuth,
       },
       isWeb: false,
       lifecycle: {
@@ -310,16 +298,16 @@ describe(getRuntimeCapabilities, () => {
         authorizeOutgoingAttachments:
           desktopBridge.authorizeOutgoingAttachments,
         bulkMutateThreads: desktopBridge.bulkMutateThreads,
-        createLabel: desktopBridge.createGmailLabel,
-        deleteLabel: desktopBridge.deleteGmailLabel,
+        createLabel: desktopBridge.createLabel,
+        deleteLabel: desktopBridge.deleteLabel,
         deleteThreadForever: desktopBridge.deleteThreadForever,
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
         getSpamStatus: desktopBridge.getSpamStatus,
         getSyncStatus: desktopBridge.getMailSyncStatus,
         listCachedThreadPage: desktopBridge.listCachedThreadPage,
-        listLabels: desktopBridge.listGmailLabels,
-        listSenders: desktopBridge.listGmailSenders,
+        listLabels: desktopBridge.listLabels,
+        listSenders: desktopBridge.listSenders,
         listStashedDrafts: desktopBridge.listStashedDrafts,
         listTrustedImageSenders: desktopBridge.listTrustedImageSenders,
         loadOutgoingInlineImagePreview:
@@ -332,7 +320,6 @@ describe(getRuntimeCapabilities, () => {
         onLabelCatalogChanged: desktopBridge.onMailLabelCatalogChanged,
         onSyncStatusChanged: desktopBridge.onMailSyncStatusChanged,
         onThreadListUpdated: desktopBridge.onMailThreadListUpdated,
-        onThreadUpdated: desktopBridge.onMailThreadUpdated,
         onTrustedImageSendersChanged:
           desktopBridge.onTrustedImageSendersChanged,
         openAttachmentPreview: desktopBridge.openAttachmentPreview,
@@ -345,10 +332,10 @@ describe(getRuntimeCapabilities, () => {
         sendThreadMessage: desktopBridge.sendThreadMessage,
         setThreadLabel: desktopBridge.setThreadLabel,
         setThreadReadState: desktopBridge.setThreadReadState,
-        syncLabels: desktopBridge.syncGmailLabels,
+        syncLabels: desktopBridge.syncLabels,
         trashThread: desktopBridge.trashThread,
         trustImageSender: desktopBridge.trustImageSender,
-        updateLabel: desktopBridge.updateGmailLabel,
+        updateLabel: desktopBridge.updateLabel,
       },
       scheduledMail: {
         beginEdit: desktopBridge.beginScheduledMailEdit,
@@ -408,9 +395,9 @@ describe(getRuntimeCapabilities, () => {
     const nextCapabilities = getRuntimeCapabilities({ desktopBridge });
 
     expect([
+      nextCapabilities.accounts === capabilities.accounts,
       nextCapabilities.ai === capabilities.ai,
       nextCapabilities.appSettings === capabilities.appSettings,
-      nextCapabilities.auth === capabilities.auth,
       nextCapabilities.lifecycle === capabilities.lifecycle,
       nextCapabilities.loginItemSettings === capabilities.loginItemSettings,
       nextCapabilities.mail === capabilities.mail,

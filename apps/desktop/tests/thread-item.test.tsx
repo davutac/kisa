@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import MailThreadItem from "../src/renderer/src/components/mail/thread-item";
 import { calendarStore } from "../src/renderer/src/hooks/use-calendar";
 import { formatMailDate } from "../src/renderer/src/mail/mail-date";
-import { GmailLabelsProvider } from "../src/renderer/src/state/gmail-labels";
-import type { GmailThreadSummary } from "../src/shared/ipc/mail";
+import { LabelsProvider } from "../src/renderer/src/state/labels";
+import type { MailThreadSummary } from "../src/shared/ipc/mail";
 
-const thread: GmailThreadSummary = {
+const thread: MailThreadSummary = {
   accountId: "person@example.com",
   attachments: [],
   from: "Ada Lovelace <ada@example.com>",
@@ -22,11 +22,11 @@ const thread: GmailThreadSummary = {
 };
 
 const renderRow = (
-  overrides: Partial<GmailThreadSummary>,
+  overrides: Partial<MailThreadSummary>,
   mailboxLabel?: string
 ): string =>
   renderToString(
-    <GmailLabelsProvider accountIds={[]}>
+    <LabelsProvider accountIds={[]}>
       <MailThreadItem
         mailboxLabel={mailboxLabel}
         onOpen={vi.fn<() => void>()}
@@ -39,7 +39,7 @@ const renderRow = (
         thread={{ ...thread, ...overrides }}
         top={0}
       />
-    </GmailLabelsProvider>
+    </LabelsProvider>
   );
 
 const getRowLabel = (markup: string): string | undefined =>

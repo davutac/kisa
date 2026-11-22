@@ -11,20 +11,16 @@ import { forgetAccountScheduledMail } from "../mail/scheduled-mail";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
 import { forgetAccountSettings } from "../settings/account-settings";
 import { notifyComposerTemplatesChanged } from "../templates/composer-templates";
-import {
-  listGoogleAccounts,
-  notifyGoogleAccountsChanged,
-  revokeGoogleAccountAccess,
-} from "./auth";
+import { listAccounts, notifyAccountsChanged } from "./accounts";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class GoogleAccountDisconnectError extends Schema.TaggedError<GoogleAccountDisconnectError>()(
-  "GoogleAccountDisconnectError",
+class AccountDisconnectError extends Schema.TaggedError<AccountDisconnectError>()(
+  "AccountDisconnectError",
   { message: Schema.String }
 ) {}
 
 const toDisconnectError = (error: { readonly message: string }) =>
-  new GoogleAccountDisconnectError({ message: error.message });
+  new AccountDisconnectError({ message: error.message });
 
 const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
   function* deleteAccountRecord(email: string) {
@@ -36,7 +32,7 @@ const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
     ).pipe(
       Effect.mapError(
         () =>
-          new GoogleAccountDisconnectError({
+          new AccountDisconnectError({
             message: "Could not remove the account",
           })
       )
@@ -44,8 +40,12 @@ const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
   }
 );
 
-export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
-  function* disconnectGoogleAccount(email: string) {
+/**
+ * Removes an account and everything Kisa keeps for it. Nothing is revoked
+ * remotely: the user revokes the app password in their provider's settings.
+ */
+export const disconnectAccount = Effect.fn("disconnectAccount")(
+  function* disconnectAccount(email: string) {
     // Prevent another poll or index run from starting, then wait until
     // every already-authorized writer has stopped before deleting local data.
     cancelThreadCategorization(email);
@@ -53,7 +53,6 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
       accountMailWorkSupervisor.suspend(email),
       () =>
         Effect.gen(function* disconnectSuspendedAccount() {
-          yield* revokeGoogleAccountAccess(email);
           yield* deleteAccountRecord(email);
           yield* forgetMailEngineAccount(email).pipe(
             Effect.mapError(toDisconnectError)
@@ -74,10 +73,10 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
             Effect.mapError(toDisconnectError)
           );
 
-          const accounts = yield* listGoogleAccounts().pipe(
+          const accounts = yield* listAccounts().pipe(
             Effect.mapError(toDisconnectError)
           );
-          notifyGoogleAccountsChanged({ data: accounts, ok: true });
+          notifyAccountsChanged({ data: accounts, ok: true });
           return accounts;
         }),
       () =>

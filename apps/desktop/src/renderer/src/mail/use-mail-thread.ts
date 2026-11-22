@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { getMailApi } from "@/platform/desktop";
-import type { GmailThread } from "@/shared/ipc/mail";
+import type { MailThread, MailThreadReply } from "@/shared/ipc/mail";
+
+import { toOpenThreadUpdate } from "./open-thread-update";
 
 type MailThreadState =
   | { status: "loading" }
   | { message: string; status: "error" }
-  | { status: "ready"; thread: GmailThread };
+  | { status: "ready"; thread: MailThread };
 
 interface MailThreadResult {
   accountId: string;
@@ -31,40 +33,73 @@ export const useMailThread = (
     }
 
     let isActive = true;
+    // How many messages the shown conversation holds, and whether a newer
+    // read is wanted while one is in flight.
+    let shownMessageCount: number | undefined;
+    let isLoading = false;
+    let isReloadWanted = false;
+
+    const show = (reply: MailThreadReply): void => {
+      if (reply.ok) {
+        shownMessageCount = reply.data.messages.length;
+        setResult({
+          accountId,
+          state: { status: "ready", thread: reply.data },
+          threadId,
+        });
+        return;
+      }
+
+      // A failed reread keeps the conversation already on screen.
+      setResult((current) =>
+        current.state.status === "ready" &&
+        current.accountId === accountId &&
+        current.threadId === threadId
+          ? current
+          : {
+              accountId,
+              state: { message: reply.error, status: "error" },
+              threadId,
+            }
+      );
+    };
+
     const load = async (): Promise<void> => {
-      const reply = await mailApi.loadThread({ accountId, threadId });
+      if (isLoading) {
+        isReloadWanted = true;
+        return;
+      }
+      isLoading = true;
+      let reply: MailThreadReply | undefined;
+      try {
+        reply = await mailApi.loadThread({ accountId, threadId });
+      } catch {
+        reply = { error: "Could not load email", ok: false };
+      }
+      isLoading = false;
 
       if (!isActive) {
         return;
       }
-
-      setResult({
-        accountId,
-        state: reply.ok
-          ? { status: "ready", thread: reply.data }
-          : { message: reply.error, status: "error" },
-        threadId,
-      });
+      show(reply);
+      if (isReloadWanted) {
+        isReloadWanted = false;
+        void load();
+      }
     };
 
-    const unsubscribe = mailApi.onThreadUpdated((updated) => {
-      if (updated.accountId === accountId && updated.threadId === threadId) {
-        setResult({
-          accountId,
-          state: { status: "ready", thread: updated },
-          threadId,
-        });
-      }
-    });
     const unsubscribeThreadList = mailApi.onThreadListUpdated(({ changes }) => {
-      const updated = changes.find(
-        (change) =>
-          change.kind === "upsert" &&
-          change.thread.accountId === accountId &&
-          change.thread.threadId === threadId
-      );
+      const update = toOpenThreadUpdate(changes, {
+        accountId,
+        shownMessageCount,
+        threadId,
+      });
 
-      if (updated === undefined || updated.kind !== "upsert") {
+      if (update === undefined) {
+        return;
+      }
+      if (update.kind === "reread") {
+        void load();
         return;
       }
 
@@ -76,10 +111,7 @@ export const useMailThread = (
               ...current,
               state: {
                 status: "ready",
-                thread: {
-                  ...current.state.thread,
-                  labels: updated.thread.labels,
-                },
+                thread: { ...current.state.thread, labels: update.labels },
               },
             }
           : current
@@ -90,7 +122,6 @@ export const useMailThread = (
 
     return () => {
       isActive = false;
-      unsubscribe();
       unsubscribeThreadList();
     };
   }, [accountId, mailApi, threadId]);

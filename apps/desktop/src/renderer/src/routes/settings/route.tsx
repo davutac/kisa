@@ -23,7 +23,6 @@ import { useLoginItemSettings } from "@/state/login-item-settings";
 import SettingsAccountsSection from "./-components/settings-accounts-section";
 import SettingsAiSection from "./-components/settings-ai-section";
 import SettingsDatabaseSection from "./-components/settings-database-section";
-import SettingsGoogleOAuthRow from "./-components/settings-google-oauth-row";
 import SettingsUpdateRow from "./-components/settings-update-row";
 
 export const Route = createFileRoute("/settings")({
@@ -32,9 +31,9 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsRoute() {
   const {
+    accounts,
     ai,
     appSettings,
-    auth,
     loginItemSettings: loginItemSettingsApi,
     mail,
     settings,
@@ -69,9 +68,6 @@ function SettingsRoute() {
           </SettingsSectionHeader>
 
           <SettingsRows>
-            {auth === undefined ? null : (
-              <SettingsGoogleOAuthRow authApi={auth} />
-            )}
             <SettingsRow>
               <SettingsRowContent>
                 <SettingsRowTitle id="theme-title">Theme</SettingsRowTitle>
@@ -174,9 +170,9 @@ function SettingsRoute() {
           <SettingsDatabaseSection settingsApi={settings} />
         )}
 
-        {auth === undefined ? null : (
+        {accounts === undefined ? null : (
           <SettingsAccountsSection
-            authApi={auth}
+            accountsApi={accounts}
             mailApi={mail}
             settingsApi={settings}
           />

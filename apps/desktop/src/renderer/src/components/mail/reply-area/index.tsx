@@ -29,7 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
 import type { MailMessageAction } from "@/mail/reply-recipients";
-import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 import CreateReplyForm from "./create-reply-form";
 import { useReplyWorkspace } from "./use-reply-workspace";
@@ -38,7 +38,7 @@ interface MailReplyAreaProps {
   accountId: string;
   action: MailMessageAction;
   draft: MailDraftInput;
-  message: GmailThreadMessage;
+  message: ThreadMessage;
   onCancel: () => void;
   onClose: (draft: MailDraftInput) => void;
   onSent: () => void;

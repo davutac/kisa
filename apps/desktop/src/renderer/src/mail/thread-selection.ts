@@ -1,4 +1,4 @@
-import type { GmailThreadSummary } from "@/shared/ipc/mail";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
 
 export type ThreadSelectionDirection = -1 | 1;
 
@@ -50,7 +50,7 @@ export const getThreadSelectionAutoScrollDelta = (
 };
 
 export const getThreadSelectionKey = (
-  thread: Pick<GmailThreadSummary, "accountId" | "threadId">
+  thread: Pick<MailThreadSummary, "accountId" | "threadId">
 ): string => `${thread.accountId}:${thread.threadId}`;
 
 export const getThreadSelectionScrollBehavior = (

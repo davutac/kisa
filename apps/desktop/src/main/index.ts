@@ -12,7 +12,6 @@ import { setDevelopmentDockIcon } from "./app/app-icon";
 import { configureLinuxSecretStorage } from "./app/linux-secret-storage";
 import { beginQuit } from "./app/quit-state";
 import { shouldQuitAfterAllWindowsClose } from "./app/window-lifecycle";
-import { stopGoogleAuth } from "./auth/auth";
 import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
@@ -97,7 +96,6 @@ if (hasSingleInstanceLock) {
 let shutdownStarted = false;
 
 const finishShutdown = async (): Promise<void> => {
-  stopGoogleAuth();
   destroyBackgroundTray();
   await stopThreadCategorization();
   await stopScheduledMail();

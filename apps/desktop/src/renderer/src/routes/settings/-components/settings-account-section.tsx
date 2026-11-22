@@ -1,6 +1,6 @@
 import { UserRoundIcon } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   SettingsRows,
   SettingsSection,
@@ -8,8 +8,8 @@ import {
   SettingsSectionHeader,
   SettingsSectionTitle,
 } from "@/components/ui/settings";
-import type { AuthApi, MailApi, SettingsApi } from "@/platform/desktop";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { AccountsApi, MailApi, SettingsApi } from "@/platform/desktop";
+import type { Account } from "@/shared/ipc/accounts";
 
 import SettingsAccountCategorizationRow from "./settings-account-categorization-row";
 import SettingsAccountDisconnectRow from "./settings-account-disconnect-row";
@@ -20,15 +20,15 @@ import SettingsAccountSignatureRow from "./settings-account-signature-row";
 import SettingsAccountSystemLabelsRow from "./settings-account-system-labels-row";
 
 interface SettingsAccountSectionProps {
-  account: GoogleAccount;
-  authApi: AuthApi;
+  account: Account;
+  accountsApi: AccountsApi;
   mailApi?: MailApi;
   settingsApi?: SettingsApi;
 }
 
 const SettingsAccountSection = ({
   account,
-  authApi,
+  accountsApi,
   mailApi,
   settingsApi,
 }: SettingsAccountSectionProps) => {
@@ -39,7 +39,6 @@ const SettingsAccountSection = ({
       <SettingsSectionHeader>
         <div className="flex min-w-0 items-center gap-3 pl-4 md:pl-5">
           <Avatar size="lg">
-            <AvatarImage alt="" src={account.avatarUrl} />
             <AvatarFallback>
               <UserRoundIcon aria-hidden="true" className="size-4" />
             </AvatarFallback>
@@ -96,7 +95,10 @@ const SettingsAccountSection = ({
             settingsApi={settingsApi}
           />
         )}
-        <SettingsAccountDisconnectRow account={account} authApi={authApi} />
+        <SettingsAccountDisconnectRow
+          account={account}
+          accountsApi={accountsApi}
+        />
       </SettingsRows>
     </SettingsSection>
   );

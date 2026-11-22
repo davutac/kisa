@@ -1,19 +1,19 @@
-import type { AuthApi, RuntimeCapabilities } from "@/platform/desktop";
+import type { AccountsApi, RuntimeCapabilities } from "@/platform/desktop";
 import { getRuntimeCapabilities } from "@/platform/desktop";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import { hydrateAppSettingsState } from "@/state/app-settings";
 
 import { requestStartupSession } from "./startup-session";
 
 export type AuthGateState =
   | {
-      accounts: readonly GoogleAccount[];
+      accounts: readonly Account[];
       status: "authenticated";
     }
   | { status: "unauthenticated" };
 
 type AuthGateCapabilities = Pick<RuntimeCapabilities, "isWeb" | "startup"> & {
-  auth?: Pick<AuthApi, "listGoogleAccounts">;
+  accounts?: Pick<AccountsApi, "listAccounts">;
 };
 
 const loadAuthGateState = async (
@@ -35,7 +35,7 @@ const loadAuthGateState = async (
     hydrateAppSettingsState(startup.appSettings);
   }
 
-  if (capabilities.auth === undefined) {
+  if (capabilities.accounts === undefined) {
     if (!capabilities.isWeb) {
       throw new Error(
         "The Electron preload bridge did not load. Restart the desktop app."
@@ -45,7 +45,7 @@ const loadAuthGateState = async (
     return { accounts: [], status: "authenticated" };
   }
 
-  const reply = await capabilities.auth.listGoogleAccounts();
+  const reply = await capabilities.accounts.listAccounts();
 
   if (!reply.ok) {
     throw new Error(reply.error);

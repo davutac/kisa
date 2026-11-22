@@ -14,21 +14,11 @@ export const AI_GET_SETTINGS_CHANNEL = "desktop:ai:get-settings";
 export const AI_LIST_PROVIDERS_CHANNEL = "desktop:ai:list-providers";
 export const AI_UPDATE_SETTINGS_CHANNEL = "desktop:ai:update-settings";
 
-export const AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL =
-  "desktop:auth:google-accounts-changed";
-export const AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL =
-  "desktop:auth:google-disconnect-account";
-export const AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL =
-  "desktop:auth:google-list-accounts";
-export const AUTH_GOOGLE_OAUTH_CLIENT_SETUP_CHANNEL =
-  "desktop:auth:google-oauth-client-setup";
-export const AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL =
-  "desktop:auth:google-oauth-client-status";
-export const AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL =
-  "desktop:auth:google-reorder-accounts";
-export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";
-export const AUTH_OPEN_ACCOUNT_SETUP_CHANNEL =
-  "desktop:auth:open-account-setup";
+export const ACCOUNTS_CHANGED_CHANNEL = "desktop:accounts:changed";
+export const ACCOUNTS_DISCONNECT_CHANNEL = "desktop:accounts:disconnect";
+export const ACCOUNTS_LIST_CHANNEL = "desktop:accounts:list";
+export const ACCOUNTS_OPEN_SETUP_CHANNEL = "desktop:accounts:open-setup";
+export const ACCOUNTS_REORDER_CHANNEL = "desktop:accounts:reorder";
 
 // Only the Add account window's preload uses these, and it inlines them.
 export const ACCOUNT_SETUP_CLOSE_CHANNEL = "desktop:account-setup:close";
@@ -87,7 +77,6 @@ export const MAIL_SYNC_LABELS_CHANNEL = "desktop:mail:sync-labels";
 export const MAIL_SYNC_STATUS_CHANNEL = "desktop:mail:sync-status";
 export const MAIL_THREAD_LIST_UPDATED_CHANNEL =
   "desktop:mail:thread-list-updated";
-export const MAIL_THREAD_UPDATED_CHANNEL = "desktop:mail:thread-updated";
 export const MAIL_TRASH_THREAD_CHANNEL = "desktop:mail:trash-thread";
 export const MAIL_TRUST_IMAGE_SENDER_CHANNEL =
   "desktop:mail:trust-image-sender";

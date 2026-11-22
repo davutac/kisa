@@ -5,8 +5,9 @@ import { Effect, Layer } from "effect";
 import type { BrowserWindow } from "electron";
 
 import { APP_NAME } from "@/constants";
+import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
-import { APPLE_APP_PASSWORD_GUIDE_URL } from "../../shared/mail-account-presets";
+import { APP_PASSWORD_URLS } from "../../shared/mail-account-presets";
 import { openExternalUrl } from "../electron/shell";
 import { toIpcReply } from "../ipc/reply";
 import { ImapFlowConnectorLive } from "../mail/engine/imap-session";
@@ -15,7 +16,7 @@ import { SmtpSignInLive } from "../mail/engine/smtp-sign-in";
 import { createBrowserWindow } from "../window/browser-window";
 import { getMainWindow } from "../window/create-window";
 import { installNativeContextMenu } from "../window/native-context-menu";
-import { listGoogleAccounts, notifyGoogleAccountsChanged } from "./auth";
+import { listAccounts, notifyAccountsChanged } from "./accounts";
 import {
   decodePasswordAccountRequest,
   PasswordAccountError,
@@ -24,9 +25,6 @@ import {
 } from "./password-account";
 
 const SETUP_WINDOW_SIZE = { height: 600, width: 440 } as const;
-
-/** The only pages the setup window may open, in the system browser. */
-const HELP_URLS: ReadonlySet<string> = new Set([APPLE_APP_PASSWORD_GUIDE_URL]);
 
 const PasswordAccountLive = Layer.mergeAll(
   MailDatabaseLive,
@@ -51,24 +49,37 @@ const focusWindow = (window: BrowserWindow): void => {
   window.focus();
 };
 
-const loadSetupRenderer = (window: BrowserWindow): Promise<void> => {
+/**
+ * How the page lays itself out: a macOS sheet has no title bar, while a
+ * window keeps a strip for the window controls.
+ */
+type SetupPresentation = "sheet" | "window";
+
+const loadSetupRenderer = (
+  window: BrowserWindow,
+  presentation: SetupPresentation
+): Promise<void> => {
   const rendererUrl = process.env["ELECTRON_RENDERER_URL"];
 
   if (is.dev && rendererUrl !== undefined) {
     const url = new URL(rendererUrl);
     url.pathname = `${url.pathname.replace(/\/$/u, "")}/account-setup.html`;
+    url.searchParams.set("presentation", presentation);
     return window.loadURL(url.toString());
   }
 
   return window.loadFile(
-    path.join(import.meta.dirname, "../renderer/account-setup.html")
+    path.join(import.meta.dirname, "../renderer/account-setup.html"),
+    { query: { presentation } }
   );
 };
 
 /**
  * Opens the Add account window, or focuses it when it is already open. It
  * is the only surface where a password is typed, so it never loads mail and
- * cannot navigate anywhere but its own page.
+ * cannot navigate anywhere but its own page. Over the main window it is a
+ * dialog (a sheet on macOS) yet still its own page, so the password never
+ * enters the window that renders mail.
  */
 export const openAccountSetupWindow = Effect.fn("openAccountSetupWindow")(
   function* openAccountSetupWindow() {
@@ -77,10 +88,24 @@ export const openAccountSetupWindow = Effect.fn("openAccountSetupWindow")(
       return;
     }
 
+    const parent = getMainWindow();
+    if (parent !== undefined) {
+      focusWindow(parent);
+      if (process.platform === "darwin") {
+        // The sheet slides out below Kisa's own title bar.
+        parent.setSheetOffset(TITLEBAR_HEIGHT);
+      }
+    }
+    const presentation: SetupPresentation =
+      parent !== undefined && process.platform === "darwin"
+        ? "sheet"
+        : "window";
+
     const window = createBrowserWindow({
       ...SETUP_WINDOW_SIZE,
       minHeight: SETUP_WINDOW_SIZE.height,
       minWidth: SETUP_WINDOW_SIZE.width,
+      modalTo: parent,
       preload: path.join(import.meta.dirname, "../preload/account-setup.cjs"),
       title: `Add account — ${APP_NAME}`,
     });
@@ -95,7 +120,8 @@ export const openAccountSetupWindow = Effect.fn("openAccountSetupWindow")(
 
     installNativeContextMenu(window);
     window.webContents.setWindowOpenHandler(({ url }) => {
-      if (HELP_URLS.has(url)) {
+      // The providers' app password pages are the only links it may open.
+      if (APP_PASSWORD_URLS.has(url)) {
         openExternalUrl(url);
       }
       return { action: "deny" };
@@ -117,7 +143,7 @@ export const openAccountSetupWindow = Effect.fn("openAccountSetupWindow")(
     yield* Effect.tryPromise({
       catch: () =>
         new PasswordAccountError({ message: "Could not open account setup" }),
-      try: () => loadSetupRenderer(window),
+      try: () => loadSetupRenderer(window, presentation),
     }).pipe(
       Effect.tapError(() =>
         Effect.sync(() => {
@@ -139,8 +165,8 @@ const sessionFor = (senderId: number | undefined): SetupSession | undefined =>
     : undefined;
 
 const publishAccounts = Effect.gen(function* publishAccounts() {
-  notifyGoogleAccountsChanged(
-    yield* toIpcReply(listGoogleAccounts(), "Could not load accounts")
+  notifyAccountsChanged(
+    yield* toIpcReply(listAccounts(), "Could not load accounts")
   );
 });
 

@@ -55,7 +55,7 @@ export interface ThreadActions {
 
 /**
  * All mouse and keyboard thread actions enter through this hook. Main owns the
- * Gmail/cache mutation and publishes the authoritative renderer projection.
+ * server/cache mutation and publishes the authoritative renderer projection.
  */
 export const useThreadActions = (): ThreadActions => {
   const { runBulkAction, runThreadAction } = useThreadActionRunner();

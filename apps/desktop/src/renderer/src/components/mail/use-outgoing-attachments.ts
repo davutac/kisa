@@ -11,7 +11,7 @@ import {
 import type { ComposerInlineImage } from "@/components/mail/composer-inline-images";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { MailApi } from "@/platform/desktop";
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
+import { MAX_OUTGOING_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
 
 const makeInlineContentId = (): string =>
@@ -128,7 +128,7 @@ export const useOutgoingAttachments = (
               attachmentsRef.current
             );
             const selectedBytes = getComposerAttachmentBytes(additions);
-            if (currentBytes + selectedBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+            if (currentBytes + selectedBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
               toast.error("Attachments can total up to 25 MB");
               return [];
             }

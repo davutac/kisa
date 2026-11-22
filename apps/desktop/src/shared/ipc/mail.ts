@@ -1,10 +1,10 @@
 import * as Schema from "effect/Schema";
 
 import { EmailSignatureBody } from "../email-signature";
-import { MAX_GMAIL_SUBJECT_LENGTH } from "../gmail-subject";
+import { MAX_SUBJECT_LENGTH } from "../mail-subject";
 import { IpcReply } from "./reply";
 
-export const GmailAttachmentSummary = Schema.Struct({
+export const MailAttachmentSummary = Schema.Struct({
   attachmentId: Schema.optional(Schema.String),
   filename: Schema.String,
   mediaType: Schema.String,
@@ -12,33 +12,33 @@ export const GmailAttachmentSummary = Schema.Struct({
   partId: Schema.optional(Schema.String),
   size: Schema.Finite,
 });
-export type GmailAttachmentSummary = typeof GmailAttachmentSummary.Type;
+export type MailAttachmentSummary = typeof MailAttachmentSummary.Type;
 
-export const GmailAttachmentRequest = Schema.Struct({
+export const MailAttachmentRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   attachmentId: Schema.NonEmptyString,
   messageId: Schema.NonEmptyString,
   partId: Schema.optional(Schema.String),
 });
-export type GmailAttachmentRequest = typeof GmailAttachmentRequest.Type;
+export type MailAttachmentRequest = typeof MailAttachmentRequest.Type;
 
-export const GmailAttachmentSaveOutcome = Schema.Literals([
+export const MailAttachmentSaveOutcome = Schema.Literals([
   "cancelled",
   "saved",
 ]);
-export type GmailAttachmentSaveOutcome = typeof GmailAttachmentSaveOutcome.Type;
+export type MailAttachmentSaveOutcome = typeof MailAttachmentSaveOutcome.Type;
 
-export const GmailAttachmentPreview = Schema.Struct({
+export const MailAttachmentPreview = Schema.Struct({
   bytes: Schema.Uint8Array,
   filename: Schema.NonEmptyString,
   kind: Schema.Literals(["image", "pdf"]),
   mediaType: Schema.NonEmptyString,
 });
-export type GmailAttachmentPreview = typeof GmailAttachmentPreview.Type;
+export type MailAttachmentPreview = typeof MailAttachmentPreview.Type;
 
-export const GmailThreadSummary = Schema.Struct({
+export const MailThreadSummary = Schema.Struct({
   accountId: Schema.String,
-  attachments: Schema.Array(GmailAttachmentSummary),
+  attachments: Schema.Array(MailAttachmentSummary),
   from: Schema.String,
   hasAttachments: Schema.Boolean,
   isUnread: Schema.Boolean,
@@ -49,25 +49,25 @@ export const GmailThreadSummary = Schema.Struct({
   subject: Schema.String,
   threadId: Schema.String,
 });
-export type GmailThreadSummary = typeof GmailThreadSummary.Type;
+export type MailThreadSummary = typeof MailThreadSummary.Type;
 
-export const GmailMessageBody = Schema.Struct({
+export const MessageBody = Schema.Struct({
   html: Schema.optional(Schema.String),
   text: Schema.optional(Schema.String),
 });
-export type GmailMessageBody = typeof GmailMessageBody.Type;
+export type MessageBody = typeof MessageBody.Type;
 
-export const GmailSenderBrand = Schema.Struct({
+export const MailSenderBrand = Schema.Struct({
   domain: Schema.String,
   imageDataUrl: Schema.String,
   source: Schema.Literal("bimi"),
 });
-export type GmailSenderBrand = typeof GmailSenderBrand.Type;
+export type MailSenderBrand = typeof MailSenderBrand.Type;
 
-export const GmailThreadMessage = Schema.Struct({
-  attachments: Schema.Array(GmailAttachmentSummary),
+export const ThreadMessage = Schema.Struct({
+  attachments: Schema.Array(MailAttachmentSummary),
   bcc: Schema.optional(Schema.String),
-  body: GmailMessageBody,
+  body: MessageBody,
   cc: Schema.optional(Schema.String),
   from: Schema.String,
   id: Schema.String,
@@ -75,31 +75,31 @@ export const GmailThreadMessage = Schema.Struct({
   replyTo: Schema.optional(Schema.String),
   /** Whether Gmail authenticated the domain of `from`. */
   senderAuthenticated: Schema.Boolean,
-  senderBrand: Schema.optional(GmailSenderBrand),
+  senderBrand: Schema.optional(MailSenderBrand),
   sentAt: Schema.Finite,
   snippet: Schema.String,
   subject: Schema.String,
   to: Schema.optional(Schema.String),
 });
-export type GmailThreadMessage = typeof GmailThreadMessage.Type;
+export type ThreadMessage = typeof ThreadMessage.Type;
 
-export const GmailThread = Schema.Struct({
+export const MailThread = Schema.Struct({
   accountId: Schema.String,
   labels: Schema.Array(Schema.String),
-  messages: Schema.Array(GmailThreadMessage),
+  messages: Schema.Array(ThreadMessage),
   subject: Schema.String,
   threadId: Schema.String,
 });
-export type GmailThread = typeof GmailThread.Type;
+export type MailThread = typeof MailThread.Type;
 
-export const GmailLabelColor = Schema.Struct({
+export const MailLabelColor = Schema.Struct({
   background: Schema.String,
   text: Schema.String,
 });
-export type GmailLabelColor = typeof GmailLabelColor.Type;
+export type MailLabelColor = typeof MailLabelColor.Type;
 
-/** Gmail's accepted label colors, ordered as displayed in the 12-column picker. */
-export const GMAIL_LABEL_COLOR_VALUES = [
+/** Label colors, from Gmail's palette, ordered as displayed in the 12-column picker. */
+export const LABEL_COLOR_VALUES = [
   "#000000",
   "#434343",
   "#464646",
@@ -204,105 +204,100 @@ export const GMAIL_LABEL_COLOR_VALUES = [
   "#0d3b44",
 ] as const;
 
-export const GmailLabelInputColor = Schema.Struct({
-  background: Schema.Literals(GMAIL_LABEL_COLOR_VALUES),
-  text: Schema.Literals(GMAIL_LABEL_COLOR_VALUES),
+export const MailLabelInputColor = Schema.Struct({
+  background: Schema.Literals(LABEL_COLOR_VALUES),
+  text: Schema.Literals(LABEL_COLOR_VALUES),
 });
-export type GmailLabelInputColor = typeof GmailLabelInputColor.Type;
+export type MailLabelInputColor = typeof MailLabelInputColor.Type;
 
-export const GmailLabelSummary = Schema.Struct({
-  color: Schema.optional(GmailLabelColor),
+export const MailLabelSummary = Schema.Struct({
+  color: Schema.optional(MailLabelColor),
   id: Schema.String,
   name: Schema.String,
   threadCount: Schema.optional(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
   ),
-  /** Gmail's own wording: "system" for its labels, "user" for the rest. */
+  /** The label's kind: "system" for built-in labels, "user" for the rest. */
   type: Schema.optional(Schema.String),
 });
-export type GmailLabelSummary = typeof GmailLabelSummary.Type;
+export type MailLabelSummary = typeof MailLabelSummary.Type;
 
-export const GmailLabelCatalog = Schema.Struct({
-  labels: Schema.Array(GmailLabelSummary),
+export const MailLabelCatalog = Schema.Struct({
+  labels: Schema.Array(MailLabelSummary),
   syncedAt: Schema.optional(Schema.Finite),
 });
-export type GmailLabelCatalog = typeof GmailLabelCatalog.Type;
+export type MailLabelCatalog = typeof MailLabelCatalog.Type;
 
-export const GmailLabelCatalogChanged = Schema.Struct({
+export const MailLabelCatalogChanged = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
-export type GmailLabelCatalogChanged = typeof GmailLabelCatalogChanged.Type;
+export type MailLabelCatalogChanged = typeof MailLabelCatalogChanged.Type;
 
-export const GmailLabelCatalogRequest = Schema.Struct({
+export const MailLabelCatalogRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
-export type GmailLabelCatalogRequest = typeof GmailLabelCatalogRequest.Type;
+export type MailLabelCatalogRequest = typeof MailLabelCatalogRequest.Type;
 
-export const GmailLabelCreateRequest = Schema.Struct({
+export const MailLabelCreateRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
-  color: Schema.optional(GmailLabelInputColor),
+  color: Schema.optional(MailLabelInputColor),
   name: Schema.NonEmptyString,
 });
-export type GmailLabelCreateRequest = typeof GmailLabelCreateRequest.Type;
+export type MailLabelCreateRequest = typeof MailLabelCreateRequest.Type;
 
-export const GmailLabelDeleteRequest = Schema.Struct({
+export const MailLabelDeleteRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   labelId: Schema.NonEmptyString,
 });
-export type GmailLabelDeleteRequest = typeof GmailLabelDeleteRequest.Type;
+export type MailLabelDeleteRequest = typeof MailLabelDeleteRequest.Type;
 
-export const GmailLabelUpdateRequest = Schema.Struct({
+export const MailLabelUpdateRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
-  color: Schema.optional(GmailLabelInputColor),
+  color: Schema.optional(MailLabelInputColor),
   labelId: Schema.NonEmptyString,
   name: Schema.NonEmptyString,
 });
-export type GmailLabelUpdateRequest = typeof GmailLabelUpdateRequest.Type;
+export type MailLabelUpdateRequest = typeof MailLabelUpdateRequest.Type;
 
-export const GmailThreadRequest = Schema.Struct({
+export const MailThreadRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
 });
-export type GmailThreadRequest = typeof GmailThreadRequest.Type;
+export type MailThreadRequest = typeof MailThreadRequest.Type;
 
-export const GmailThreadUpdated = GmailThread;
-export type GmailThreadUpdated = typeof GmailThreadUpdated.Type;
-
-export const GmailThreadListChange = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal("upsert"), thread: GmailThreadSummary }),
+export const MailThreadListChange = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("upsert"), thread: MailThreadSummary }),
   Schema.Struct({
     accountId: Schema.String,
     kind: Schema.Literal("remove"),
     threadId: Schema.String,
   }),
-  Schema.Struct({ accountId: Schema.String, kind: Schema.Literal("reload") }),
 ]);
-export type GmailThreadListChange = typeof GmailThreadListChange.Type;
+export type MailThreadListChange = typeof MailThreadListChange.Type;
 
 /** Ordered cached-list changes produced by one completed mail operation. */
-export const GmailThreadListUpdated = Schema.Struct({
-  changes: Schema.Array(GmailThreadListChange),
+export const MailThreadListUpdated = Schema.Struct({
+  changes: Schema.Array(MailThreadListChange),
 });
-export type GmailThreadListUpdated = typeof GmailThreadListUpdated.Type;
+export type MailThreadListUpdated = typeof MailThreadListUpdated.Type;
 
-export const GmailThreadLabelRequest = Schema.Struct({
+export const MailThreadLabelRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   applied: Schema.Boolean,
   labelId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
 });
-export type GmailThreadLabelRequest = typeof GmailThreadLabelRequest.Type;
+export type MailThreadLabelRequest = typeof MailThreadLabelRequest.Type;
 
-export const GmailThreadReadStateRequest = Schema.Struct({
+export const MailThreadReadStateRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   /** The state to move to, not the state the thread is in. */
   isUnread: Schema.Boolean,
   threadId: Schema.NonEmptyString,
 });
-export type GmailThreadReadStateRequest =
-  typeof GmailThreadReadStateRequest.Type;
+export type MailThreadReadStateRequest = typeof MailThreadReadStateRequest.Type;
 
-export const GmailBulkThreadMutationOperation = Schema.Union([
+export const MailBulkThreadMutationOperation = Schema.Union([
   Schema.Struct({
     isUnread: Schema.Boolean,
     kind: Schema.Literal("setReadState"),
@@ -317,47 +312,47 @@ export const GmailBulkThreadMutationOperation = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("moveToSpam") }),
   Schema.Struct({ kind: Schema.Literal("deleteForever") }),
 ]);
-export type GmailBulkThreadMutationOperation =
-  typeof GmailBulkThreadMutationOperation.Type;
+export type MailBulkThreadMutationOperation =
+  typeof MailBulkThreadMutationOperation.Type;
 
-export const GmailBulkThreadMutationRequest = Schema.Struct({
-  operation: GmailBulkThreadMutationOperation,
-  threads: Schema.Array(GmailThreadRequest),
+export const MailBulkThreadMutationRequest = Schema.Struct({
+  operation: MailBulkThreadMutationOperation,
+  threads: Schema.Array(MailThreadRequest),
 });
-export type GmailBulkThreadMutationRequest =
-  typeof GmailBulkThreadMutationRequest.Type;
+export type MailBulkThreadMutationRequest =
+  typeof MailBulkThreadMutationRequest.Type;
 
-export const GmailBulkThreadMutationResult = Schema.Struct({
-  failed: Schema.Array(GmailThreadRequest),
-  succeeded: Schema.Array(GmailThreadRequest),
+export const MailBulkThreadMutationResult = Schema.Struct({
+  failed: Schema.Array(MailThreadRequest),
+  succeeded: Schema.Array(MailThreadRequest),
 });
-export type GmailBulkThreadMutationResult =
-  typeof GmailBulkThreadMutationResult.Type;
+export type MailBulkThreadMutationResult =
+  typeof MailBulkThreadMutationResult.Type;
 
-export const GmailOutgoingAttachmentCapability = Schema.Struct({
+export const MailOutgoingAttachmentCapability = Schema.Struct({
   capability: Schema.NonEmptyString,
 });
-export type GmailOutgoingAttachmentCapability =
-  typeof GmailOutgoingAttachmentCapability.Type;
+export type MailOutgoingAttachmentCapability =
+  typeof MailOutgoingAttachmentCapability.Type;
 
-export const MAX_GMAIL_ATTACHMENT_BYTES = 25_000_000;
-export const MAX_GMAIL_ATTACHMENT_COUNT = 100;
+export const MAX_OUTGOING_ATTACHMENT_BYTES = 25_000_000;
+export const MAX_OUTGOING_ATTACHMENT_COUNT = 100;
 
-const GmailOutgoingAttachmentCapabilities = Schema.Array(
-  GmailOutgoingAttachmentCapability
-).check(Schema.isMaxLength(MAX_GMAIL_ATTACHMENT_COUNT));
+const MailOutgoingAttachmentCapabilities = Schema.Array(
+  MailOutgoingAttachmentCapability
+).check(Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT));
 
-export const GmailThreadMessageAction = Schema.Literals([
+export const MailThreadMessageAction = Schema.Literals([
   "forward",
   "reply",
   "reply-all",
 ]);
-export type GmailThreadMessageAction = typeof GmailThreadMessageAction.Type;
+export type MailThreadMessageAction = typeof MailThreadMessageAction.Type;
 
-export const GmailThreadMessageSendRequest = Schema.Struct({
+export const MailThreadMessageSendRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
-  action: GmailThreadMessageAction,
-  attachments: GmailOutgoingAttachmentCapabilities,
+  action: MailThreadMessageAction,
+  attachments: MailOutgoingAttachmentCapabilities,
   bcc: Schema.Array(Schema.NonEmptyString),
   body: Schema.Struct({
     html: Schema.String,
@@ -368,65 +363,65 @@ export const GmailThreadMessageSendRequest = Schema.Struct({
   threadId: Schema.NonEmptyString,
   to: Schema.Array(Schema.NonEmptyString),
 });
-export type GmailThreadMessageSendRequest =
-  typeof GmailThreadMessageSendRequest.Type;
+export type MailThreadMessageSendRequest =
+  typeof MailThreadMessageSendRequest.Type;
 
-export const GmailOutgoingSubject = Schema.String.check(
-  Schema.isMaxLength(MAX_GMAIL_SUBJECT_LENGTH)
+export const MailOutgoingSubject = Schema.String.check(
+  Schema.isMaxLength(MAX_SUBJECT_LENGTH)
 );
 
-export const GmailOutgoingInlineContentId = Schema.String.check(
+export const MailOutgoingInlineContentId = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$/u)
 );
 
-export const GmailOutgoingAttachmentPrepareRequest = Schema.Struct({
+export const MailOutgoingAttachmentPrepareRequest = Schema.Struct({
   attachments: Schema.Array(
     Schema.Struct({
-      contentId: Schema.optional(GmailOutgoingInlineContentId),
+      contentId: Schema.optional(MailOutgoingInlineContentId),
       referenceId: Schema.NonEmptyString,
     })
-  ).check(Schema.isMaxLength(MAX_GMAIL_ATTACHMENT_COUNT)),
+  ).check(Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT)),
 });
-export type GmailOutgoingAttachmentPrepareRequest =
-  typeof GmailOutgoingAttachmentPrepareRequest.Type;
+export type MailOutgoingAttachmentPrepareRequest =
+  typeof MailOutgoingAttachmentPrepareRequest.Type;
 
-export const GmailOutgoingAttachmentSelectionRequest = Schema.Struct({
+export const MailOutgoingAttachmentSelectionRequest = Schema.Struct({
   files: Schema.Array(
     Schema.Struct({
       mediaType: Schema.String,
       path: Schema.NonEmptyString,
     })
-  ).check(Schema.isMaxLength(MAX_GMAIL_ATTACHMENT_COUNT)),
+  ).check(Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT)),
 });
-export type GmailOutgoingAttachmentSelectionRequest =
-  typeof GmailOutgoingAttachmentSelectionRequest.Type;
+export type MailOutgoingAttachmentSelectionRequest =
+  typeof MailOutgoingAttachmentSelectionRequest.Type;
 
-export const GmailOutgoingInlineImagePreviewRequest = Schema.Struct({
+export const MailOutgoingInlineImagePreviewRequest = Schema.Struct({
   referenceId: Schema.NonEmptyString,
 });
-export type GmailOutgoingInlineImagePreviewRequest =
-  typeof GmailOutgoingInlineImagePreviewRequest.Type;
+export type MailOutgoingInlineImagePreviewRequest =
+  typeof MailOutgoingInlineImagePreviewRequest.Type;
 
-export const GmailOutgoingInlineImagePreview = Schema.Struct({
+export const MailOutgoingInlineImagePreview = Schema.Struct({
   bytes: Schema.Uint8Array,
   mediaType: Schema.NonEmptyString,
 });
-export type GmailOutgoingInlineImagePreview =
-  typeof GmailOutgoingInlineImagePreview.Type;
+export type MailOutgoingInlineImagePreview =
+  typeof MailOutgoingInlineImagePreview.Type;
 
-export const GmailMessageSendRequest = Schema.Struct({
+export const MailMessageSendRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
-  attachments: GmailOutgoingAttachmentCapabilities,
+  attachments: MailOutgoingAttachmentCapabilities,
   bcc: Schema.Array(Schema.NonEmptyString),
   body: Schema.Struct({
     html: Schema.String,
     text: Schema.String,
   }),
   cc: Schema.Array(Schema.NonEmptyString),
-  subject: GmailOutgoingSubject,
+  subject: MailOutgoingSubject,
   to: Schema.Array(Schema.NonEmptyString),
 });
-export type GmailMessageSendRequest = typeof GmailMessageSendRequest.Type;
+export type MailMessageSendRequest = typeof MailMessageSendRequest.Type;
 
 export const MailDraftKind = Schema.Literals([
   "forward",
@@ -437,7 +432,7 @@ export const MailDraftKind = Schema.Literals([
 export type MailDraftKind = typeof MailDraftKind.Type;
 
 export const MailDraftAttachment = Schema.Struct({
-  contentId: Schema.optional(GmailOutgoingInlineContentId),
+  contentId: Schema.optional(MailOutgoingInlineContentId),
   filename: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
   mediaType: Schema.NonEmptyString,
@@ -455,7 +450,7 @@ export type MailDraftSignature = typeof MailDraftSignature.Type;
 export const MailDraftInput = Schema.Struct({
   accountId: Schema.optional(Schema.NonEmptyString),
   attachments: Schema.Array(MailDraftAttachment).check(
-    Schema.isMaxLength(MAX_GMAIL_ATTACHMENT_COUNT)
+    Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT)
   ),
   bcc: Schema.Array(Schema.NonEmptyString),
   body: Schema.Struct({ html: Schema.String, text: Schema.String }),
@@ -501,68 +496,68 @@ export const MailDraftChanged = Schema.Union([
 export type MailDraftChanged = typeof MailDraftChanged.Type;
 
 /** A sender whose remote images the account has agreed to load. */
-export const GmailTrustedImageSender = Schema.Struct({
+export const MailTrustedImageSender = Schema.Struct({
   accountId: Schema.String,
   senderEmail: Schema.String,
 });
-export type GmailTrustedImageSender = typeof GmailTrustedImageSender.Type;
+export type MailTrustedImageSender = typeof MailTrustedImageSender.Type;
 
-export const GmailTrustedImageSenderRequest = Schema.Struct({
+export const MailTrustedImageSenderRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   senderEmail: Schema.NonEmptyString,
 });
-export type GmailTrustedImageSenderRequest =
-  typeof GmailTrustedImageSenderRequest.Type;
+export type MailTrustedImageSenderRequest =
+  typeof MailTrustedImageSenderRequest.Type;
 
-export const GmailThreadCursor = Schema.Struct({
+export const MailThreadCursor = Schema.Struct({
   accountId: Schema.NonEmptyString,
   latestAt: Schema.Int,
   threadId: Schema.NonEmptyString,
 });
-export type GmailThreadCursor = typeof GmailThreadCursor.Type;
+export type MailThreadCursor = typeof MailThreadCursor.Type;
 
-export const GmailMailbox = Schema.Literals(["inbox", "sent", "spam", "trash"]);
-export type GmailMailbox = typeof GmailMailbox.Type;
+export const Mailbox = Schema.Literals(["inbox", "sent", "spam", "trash"]);
+export type Mailbox = typeof Mailbox.Type;
 
-export const GmailCachedThreadPageRequest = Schema.Struct({
+export const MailCachedThreadPageRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
-  cursor: Schema.optional(GmailThreadCursor),
+  cursor: Schema.optional(MailThreadCursor),
   labelNames: Schema.optional(Schema.Array(Schema.NonEmptyString)),
-  mailbox: Schema.optional(GmailMailbox),
+  mailbox: Schema.optional(Mailbox),
   unreadOnly: Schema.optional(Schema.Boolean),
 });
-export type GmailCachedThreadPageRequest =
-  typeof GmailCachedThreadPageRequest.Type;
+export type MailCachedThreadPageRequest =
+  typeof MailCachedThreadPageRequest.Type;
 
-export const GmailSpamStatusRequest = Schema.Struct({
+export const MailSpamStatusRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
 });
-export type GmailSpamStatusRequest = typeof GmailSpamStatusRequest.Type;
+export type MailSpamStatusRequest = typeof MailSpamStatusRequest.Type;
 
-export const GmailReindexRequest = Schema.Struct({
+export const MailReindexRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
-export type GmailReindexRequest = typeof GmailReindexRequest.Type;
+export type MailReindexRequest = typeof MailReindexRequest.Type;
 
-export const GmailSpamStatus = Schema.Struct({ hasUnreadSpam: Schema.Boolean });
-export type GmailSpamStatus = typeof GmailSpamStatus.Type;
+export const MailSpamStatus = Schema.Struct({ hasUnreadSpam: Schema.Boolean });
+export type MailSpamStatus = typeof MailSpamStatus.Type;
 
-export const GmailCachedThreadPage = Schema.Struct({
-  nextCursor: Schema.optional(GmailThreadCursor),
-  threads: Schema.Array(GmailThreadSummary),
+export const MailCachedThreadPage = Schema.Struct({
+  nextCursor: Schema.optional(MailThreadCursor),
+  threads: Schema.Array(MailThreadSummary),
 });
-export type GmailCachedThreadPage = typeof GmailCachedThreadPage.Type;
+export type MailCachedThreadPage = typeof MailCachedThreadPage.Type;
 
-export const GmailSyncStatus = Schema.Struct({
+export const MailSyncStatus = Schema.Struct({
   accountIds: Schema.Array(Schema.String),
 });
-export type GmailSyncStatus = typeof GmailSyncStatus.Type;
+export type MailSyncStatus = typeof MailSyncStatus.Type;
 
 /**
  * The operators inline search turns into pills, spelled the way Gmail
  * spells them so a query typed out of habit lands where it is expected.
  */
-export const GmailSearchFilterField = Schema.Literals([
+export const MailSearchFilterField = Schema.Literals([
   "from",
   "has",
   "is",
@@ -570,66 +565,66 @@ export const GmailSearchFilterField = Schema.Literals([
   "subject",
   "to",
 ]);
-export type GmailSearchFilterField = typeof GmailSearchFilterField.Type;
+export type MailSearchFilterField = typeof MailSearchFilterField.Type;
 
-export const GmailSearchFilter = Schema.Struct({
-  field: GmailSearchFilterField,
+export const MailSearchFilter = Schema.Struct({
+  field: MailSearchFilterField,
   value: Schema.NonEmptyString,
 });
-export type GmailSearchFilter = typeof GmailSearchFilter.Type;
+export type MailSearchFilter = typeof MailSearchFilter.Type;
 
-export const GmailSearchRequest = Schema.Struct({
+export const MailSearchRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
-  filters: Schema.optional(Schema.Array(GmailSearchFilter)),
+  filters: Schema.optional(Schema.Array(MailSearchFilter)),
   limit: Schema.optional(Schema.Int),
   text: Schema.optional(Schema.String),
 });
-export type GmailSearchRequest = typeof GmailSearchRequest.Type;
+export type MailSearchRequest = typeof MailSearchRequest.Type;
 
-export const GmailSearchResults = Schema.Struct({
+export const MailSearchResults = Schema.Struct({
   /** More matched than were returned, so the list is a top slice. */
   hasMore: Schema.Boolean,
-  threads: Schema.Array(GmailThreadSummary),
+  threads: Schema.Array(MailThreadSummary),
 });
-export type GmailSearchResults = typeof GmailSearchResults.Type;
+export type MailSearchResults = typeof MailSearchResults.Type;
 
-export const GmailSenderSuggestion = Schema.Struct({
+export const MailSenderSuggestion = Schema.Struct({
   address: Schema.String,
   messageCount: Schema.Int,
   name: Schema.optional(Schema.String),
 });
-export type GmailSenderSuggestion = typeof GmailSenderSuggestion.Type;
+export type MailSenderSuggestion = typeof MailSenderSuggestion.Type;
 
 /** Which side of a message to draw addresses from, or both for composing. */
-export const GmailAddressRole = Schema.Literals([
+export const MailAddressRole = Schema.Literals([
   "correspondent",
   "recipient",
   "sender",
 ]);
-export type GmailAddressRole = typeof GmailAddressRole.Type;
+export type MailAddressRole = typeof MailAddressRole.Type;
 
-export const GmailSenderSuggestionRequest = Schema.Struct({
+export const MailSenderSuggestionRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
   limit: Schema.optional(Schema.Int),
   query: Schema.optional(Schema.String),
-  role: Schema.optional(GmailAddressRole),
+  role: Schema.optional(MailAddressRole),
 });
-export type GmailSenderSuggestionRequest =
-  typeof GmailSenderSuggestionRequest.Type;
+export type MailSenderSuggestionRequest =
+  typeof MailSenderSuggestionRequest.Type;
 
-export const GmailSenderSuggestions = Schema.Struct({
-  senders: Schema.Array(GmailSenderSuggestion),
+export const MailSenderSuggestions = Schema.Struct({
+  senders: Schema.Array(MailSenderSuggestion),
 });
-export type GmailSenderSuggestions = typeof GmailSenderSuggestions.Type;
+export type MailSenderSuggestions = typeof MailSenderSuggestions.Type;
 
-export const GmailIndexStatus = Schema.Literals([
+export const MailIndexStatus = Schema.Literals([
   "complete",
   "failed",
   "idle",
   "paused",
   "running",
 ]);
-export type GmailIndexStatus = typeof GmailIndexStatus.Type;
+export type MailIndexStatus = typeof MailIndexStatus.Type;
 
 /**
  * Progress for the full-account mail index. This rides its own channel rather
@@ -637,7 +632,7 @@ export type GmailIndexStatus = typeof GmailIndexStatus.Type;
  * renderer — at one update per indexed page that would rebuild the list
  * continuously for the length of the backfill.
  */
-export const GmailIndexProgress = Schema.Struct({
+export const MailIndexProgress = Schema.Struct({
   accountId: Schema.NonEmptyString,
   error: Schema.optional(Schema.String),
   estimatedMessages: Schema.optional(Schema.Int),
@@ -646,67 +641,65 @@ export const GmailIndexProgress = Schema.Struct({
   indexedThreads: Schema.Int,
   /** Oldest message indexed so far — "indexed back to March 2019". */
   oldestIndexedAt: Schema.optional(Schema.Int),
-  status: GmailIndexStatus,
+  status: MailIndexStatus,
 });
-export type GmailIndexProgress = typeof GmailIndexProgress.Type;
+export type MailIndexProgress = typeof MailIndexProgress.Type;
 
-export const GmailIndexProgressList = Schema.Struct({
-  accounts: Schema.Array(GmailIndexProgress),
+export const MailIndexProgressList = Schema.Struct({
+  accounts: Schema.Array(MailIndexProgress),
 });
-export type GmailIndexProgressList = typeof GmailIndexProgressList.Type;
+export type MailIndexProgressList = typeof MailIndexProgressList.Type;
 
-export const GmailLabelCatalogReply = IpcReply(GmailLabelCatalog);
-export type GmailLabelCatalogReply = typeof GmailLabelCatalogReply.Type;
+export const MailLabelCatalogReply = IpcReply(MailLabelCatalog);
+export type MailLabelCatalogReply = typeof MailLabelCatalogReply.Type;
 
-export const GmailLabelCreateReply = IpcReply(GmailLabelSummary);
-export type GmailLabelCreateReply = typeof GmailLabelCreateReply.Type;
+export const MailLabelCreateReply = IpcReply(MailLabelSummary);
+export type MailLabelCreateReply = typeof MailLabelCreateReply.Type;
 
-export const GmailLabelDeleteReply = IpcReply(Schema.Void);
-export type GmailLabelDeleteReply = typeof GmailLabelDeleteReply.Type;
+export const MailLabelDeleteReply = IpcReply(Schema.Void);
+export type MailLabelDeleteReply = typeof MailLabelDeleteReply.Type;
 
-export const GmailLabelUpdateReply = IpcReply(GmailLabelSummary);
-export type GmailLabelUpdateReply = typeof GmailLabelUpdateReply.Type;
+export const MailLabelUpdateReply = IpcReply(MailLabelSummary);
+export type MailLabelUpdateReply = typeof MailLabelUpdateReply.Type;
 
-export const GmailCachedThreadPageReply = IpcReply(GmailCachedThreadPage);
-export type GmailCachedThreadPageReply = typeof GmailCachedThreadPageReply.Type;
+export const MailCachedThreadPageReply = IpcReply(MailCachedThreadPage);
+export type MailCachedThreadPageReply = typeof MailCachedThreadPageReply.Type;
 
-export const GmailThreadReply = IpcReply(GmailThread);
-export type GmailThreadReply = typeof GmailThreadReply.Type;
-export const GmailAttachmentActionReply = IpcReply(Schema.Void);
-export type GmailAttachmentActionReply = typeof GmailAttachmentActionReply.Type;
-export const GmailAttachmentSaveReply = IpcReply(GmailAttachmentSaveOutcome);
-export type GmailAttachmentSaveReply = typeof GmailAttachmentSaveReply.Type;
-export const GmailAttachmentPreviewReply = IpcReply(GmailAttachmentPreview);
-export type GmailAttachmentPreviewReply =
-  typeof GmailAttachmentPreviewReply.Type;
+export const MailThreadReply = IpcReply(MailThread);
+export type MailThreadReply = typeof MailThreadReply.Type;
+export const MailAttachmentActionReply = IpcReply(Schema.Void);
+export type MailAttachmentActionReply = typeof MailAttachmentActionReply.Type;
+export const MailAttachmentSaveReply = IpcReply(MailAttachmentSaveOutcome);
+export type MailAttachmentSaveReply = typeof MailAttachmentSaveReply.Type;
+export const MailAttachmentPreviewReply = IpcReply(MailAttachmentPreview);
+export type MailAttachmentPreviewReply = typeof MailAttachmentPreviewReply.Type;
 
-export const GmailSearchResultsReply = IpcReply(GmailSearchResults);
-export type GmailSearchResultsReply = typeof GmailSearchResultsReply.Type;
+export const MailSearchResultsReply = IpcReply(MailSearchResults);
+export type MailSearchResultsReply = typeof MailSearchResultsReply.Type;
 
-export const GmailSenderSuggestionsReply = IpcReply(GmailSenderSuggestions);
-export type GmailSenderSuggestionsReply =
-  typeof GmailSenderSuggestionsReply.Type;
+export const MailSenderSuggestionsReply = IpcReply(MailSenderSuggestions);
+export type MailSenderSuggestionsReply = typeof MailSenderSuggestionsReply.Type;
 
-export const GmailTrustedImageSendersReply = IpcReply(
-  Schema.Array(GmailTrustedImageSender)
+export const MailTrustedImageSendersReply = IpcReply(
+  Schema.Array(MailTrustedImageSender)
 );
-export type GmailTrustedImageSendersReply =
-  typeof GmailTrustedImageSendersReply.Type;
+export type MailTrustedImageSendersReply =
+  typeof MailTrustedImageSendersReply.Type;
 
-export const GmailThreadMutationReply = IpcReply(Schema.Void);
-export type GmailThreadMutationReply = typeof GmailThreadMutationReply.Type;
+export const MailThreadMutationReply = IpcReply(Schema.Void);
+export type MailThreadMutationReply = typeof MailThreadMutationReply.Type;
 
-export const GmailBulkThreadMutationReply = IpcReply(
-  GmailBulkThreadMutationResult
+export const MailBulkThreadMutationReply = IpcReply(
+  MailBulkThreadMutationResult
 );
-export type GmailBulkThreadMutationReply =
-  typeof GmailBulkThreadMutationReply.Type;
+export type MailBulkThreadMutationReply =
+  typeof MailBulkThreadMutationReply.Type;
 
-export const GmailSpamStatusReply = IpcReply(GmailSpamStatus);
-export type GmailSpamStatusReply = typeof GmailSpamStatusReply.Type;
+export const MailSpamStatusReply = IpcReply(MailSpamStatus);
+export type MailSpamStatusReply = typeof MailSpamStatusReply.Type;
 
-export const GmailReindexReply = IpcReply(Schema.Void);
-export type GmailReindexReply = typeof GmailReindexReply.Type;
+export const MailReindexReply = IpcReply(Schema.Void);
+export type MailReindexReply = typeof MailReindexReply.Type;
 
 /** A sent message; the server may have refused some recipients. */
 export const MailSendOutcome = Schema.Struct({
@@ -714,29 +707,28 @@ export const MailSendOutcome = Schema.Struct({
 });
 export type MailSendOutcome = typeof MailSendOutcome.Type;
 
-export const GmailThreadMessageSendReply = IpcReply(MailSendOutcome);
-export type GmailThreadMessageSendReply =
-  typeof GmailThreadMessageSendReply.Type;
+export const MailThreadMessageSendReply = IpcReply(MailSendOutcome);
+export type MailThreadMessageSendReply = typeof MailThreadMessageSendReply.Type;
 
-export const GmailMessageSendReply = IpcReply(MailSendOutcome);
-export type GmailMessageSendReply = typeof GmailMessageSendReply.Type;
+export const MailMessageSendReply = IpcReply(MailSendOutcome);
+export type MailMessageSendReply = typeof MailMessageSendReply.Type;
 
-export const GmailOutgoingAttachmentPrepareReply = IpcReply(
-  Schema.Array(GmailOutgoingAttachmentCapability)
+export const MailOutgoingAttachmentPrepareReply = IpcReply(
+  Schema.Array(MailOutgoingAttachmentCapability)
 );
-export type GmailOutgoingAttachmentPrepareReply =
-  typeof GmailOutgoingAttachmentPrepareReply.Type;
+export type MailOutgoingAttachmentPrepareReply =
+  typeof MailOutgoingAttachmentPrepareReply.Type;
 
-export const GmailOutgoingAttachmentSelectionReply = IpcReply(
+export const MailOutgoingAttachmentSelectionReply = IpcReply(
   Schema.Array(MailDraftAttachment)
 );
-export type GmailOutgoingAttachmentSelectionReply =
-  typeof GmailOutgoingAttachmentSelectionReply.Type;
-export const GmailOutgoingInlineImagePreviewReply = IpcReply(
-  GmailOutgoingInlineImagePreview
+export type MailOutgoingAttachmentSelectionReply =
+  typeof MailOutgoingAttachmentSelectionReply.Type;
+export const MailOutgoingInlineImagePreviewReply = IpcReply(
+  MailOutgoingInlineImagePreview
 );
-export type GmailOutgoingInlineImagePreviewReply =
-  typeof GmailOutgoingInlineImagePreviewReply.Type;
+export type MailOutgoingInlineImagePreviewReply =
+  typeof MailOutgoingInlineImagePreviewReply.Type;
 export const MailDraftReply = IpcReply(MailDraft);
 export type MailDraftReply = typeof MailDraftReply.Type;
 export const MailDraftListReply = IpcReply(Schema.Array(MailDraft));

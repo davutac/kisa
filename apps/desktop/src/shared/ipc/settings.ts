@@ -14,7 +14,7 @@ export const AccountSettings = Schema.Struct({
   emailSignature: EmailSignatureBody,
   /** Whether newly synced unread Inbox messages may produce an OS alert. */
   notificationsEnabled: Schema.Boolean,
-  /** Gmail's own labels (INBOX, UNREAD, CATEGORY_*, …) shown next to threads. */
+  /** System labels (INBOX, UNREAD, STARRED, …) shown next to threads. */
   showSystemLabels: Schema.Boolean,
 });
 export type AccountSettings = typeof AccountSettings.Type;

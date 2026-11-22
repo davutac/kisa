@@ -3,7 +3,6 @@ import { and, count, eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import { setNativeUnreadBadgeCount } from "../app/native-unread-badge";
-import { isUserOwnedOAuthClient } from "../auth/google-account-credentials";
 import { withDatabaseClient } from "../database-query";
 
 // oxlint-disable-next-line unicorn/throw-new-error
@@ -17,13 +16,11 @@ class UnreadBadgeError extends Schema.TaggedError<UnreadBadgeError>()(
 
 export const refreshUnreadBadge = Effect.fn("refreshUnreadBadge")(
   function* refreshUnreadBadge() {
-    const accountCounts = yield* withDatabaseClient((database) =>
+    // Joined to the accounts table so a disconnected account's leftovers
+    // never count.
+    const [unread] = yield* withDatabaseClient((database) =>
       database
-        .select({
-          authKind: mailAccounts.authKind,
-          credentials: mailAccounts.credentials,
-          value: count(),
-        })
+        .select({ value: count() })
         .from(mailThreads)
         .innerJoin(
           mailAccounts,
@@ -37,7 +34,6 @@ export const refreshUnreadBadge = Effect.fn("refreshUnreadBadge")(
             eq(mailThreads.isInTrash, false)
           )
         )
-        .groupBy(mailAccounts.accountId)
         .all()
     ).pipe(
       Effect.mapError(
@@ -49,19 +45,7 @@ export const refreshUnreadBadge = Effect.fn("refreshUnreadBadge")(
       )
     );
 
-    // SQLite counts at mailbox scale; main only checks one grant per account.
-    const userOwnedCounts = yield* Effect.filter(
-      accountCounts,
-      ({ authKind, credentials }) =>
-        authKind === "google-oauth"
-          ? Effect.promise(() => isUserOwnedOAuthClient(credentials))
-          : Effect.succeed(true),
-      { concurrency: 4 }
-    );
-    const unreadCount = userOwnedCounts.reduce(
-      (total, { value }) => total + value,
-      0
-    );
+    const unreadCount = unread?.value ?? 0;
 
     yield* Effect.try({
       catch: (cause) =>

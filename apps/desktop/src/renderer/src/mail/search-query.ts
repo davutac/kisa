@@ -1,6 +1,6 @@
-import type { GmailMailbox, GmailSearchFilterField } from "@/shared/ipc/mail";
+import type { Mailbox, MailSearchFilterField } from "@/shared/ipc/mail";
 
-export type SearchFilterField = GmailSearchFilterField;
+export type SearchFilterField = MailSearchFilterField;
 
 export interface SearchFilter {
   field: SearchFilterField;
@@ -98,8 +98,9 @@ export const formatSearchFilter = (filter: SearchFilter): string =>
   `${filter.field}:${formatFilterValue(filter.value)}`;
 
 /**
- * Serialises back to Gmail's own query syntax, so the same string can be handed
- * to Gmail search when the inline field hands off to the mailbox list.
+ * Serialises back to the Gmail-style query syntax, so the same string can be
+ * handed to the mailbox search when the inline field hands off to the mailbox
+ * list.
  */
 export const formatSearchQuery = (query: SearchQuery): string =>
   [...query.filters.map(formatSearchFilter), query.text.trim()]
@@ -139,7 +140,7 @@ export const applyExternalMailSearchScope = (
     unreadOnly,
   }: {
     readonly labelNames: readonly string[];
-    readonly mailbox: GmailMailbox;
+    readonly mailbox: Mailbox;
     readonly unreadOnly: boolean;
   }
 ): SearchQuery => {

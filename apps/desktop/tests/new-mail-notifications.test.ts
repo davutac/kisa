@@ -11,7 +11,7 @@ import {
   toNewMailNotificationCopy,
 } from "../src/main/mail/new-mail-notifications";
 import type { NewMailNotificationDependencies } from "../src/main/mail/new-mail-notifications";
-import type { GmailThreadRequest } from "../src/shared/ipc/mail";
+import type { MailThreadRequest } from "../src/shared/ipc/mail";
 
 interface TestMessageRow {
   readonly fromAddress: string;
@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => ({
     restore: vi.fn<() => void>(),
     show: vi.fn<() => void>(),
   },
-  markThreadRead: vi.fn<(request: GmailThreadRequest) => void>(),
+  markThreadRead: vi.fn<(request: MailThreadRequest) => void>(),
   messages: [] as TestMessageRow[],
   notificationListeners: [] as Map<string, (...arguments_: never[]) => void>[],
   notificationsEnabled: true,
@@ -55,7 +55,7 @@ const mocks = vi.hoisted(() => ({
       }) => Promise<TestWindow>
     >(),
   threads: [] as { readonly snippet: string; readonly threadId: string }[],
-  trashThread: vi.fn<(request: GmailThreadRequest) => void>(),
+  trashThread: vi.fn<(request: MailThreadRequest) => void>(),
 }));
 
 vi.mock(import("electron"), async (importOriginal) => {
@@ -385,10 +385,7 @@ describe(showNewMailNotifications, () => {
         subject: "Subject",
         threadId: "thread-new",
       };
-      dismissInactiveThreadNotifications([
-        { accountId: thread.accountId, kind: "reload" },
-        { kind: "upsert", thread },
-      ]);
+      dismissInactiveThreadNotifications([{ kind: "upsert", thread }]);
       expect(mocks.closedNotificationIds).toStrictEqual([]);
 
       dismissInactiveThreadNotifications([

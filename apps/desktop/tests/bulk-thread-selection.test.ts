@@ -2,11 +2,11 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { getBulkLabelGroups } from "../src/renderer/src/mail/bulk-thread-selection";
 import type {
-  GmailLabelSummary,
-  GmailThreadSummary,
+  MailLabelSummary,
+  MailThreadSummary,
 } from "../src/shared/ipc/mail";
 
-const label = (id: string, name: string): GmailLabelSummary => ({
+const label = (id: string, name: string): MailLabelSummary => ({
   id,
   name,
   type: "user",
@@ -16,7 +16,7 @@ const thread = (
   accountId: string,
   threadId: string,
   labels: readonly string[] = []
-): GmailThreadSummary => ({
+): MailThreadSummary => ({
   accountId,
   attachments: [],
   from: "sender@example.com",
@@ -36,7 +36,7 @@ describe(getBulkLabelGroups, () => {
       thread("first@example.com", "one", ["Receipts"]),
       thread("second@example.com", "two"),
     ];
-    const catalogs = new Map<string, readonly GmailLabelSummary[]>([
+    const catalogs = new Map<string, readonly MailLabelSummary[]>([
       [
         "first@example.com",
         [label("Label_first", "Receipts"), label("Label_private", "Private")],

@@ -16,12 +16,12 @@ import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import { toMailIndexRatio } from "@/shared/mail-index-progress";
 import { useSelectedAccountId } from "@/state/mailbox";
 
 interface TitlebarAccountButtonProps {
-  account: GoogleAccount;
+  account: Account;
   command?: HotkeyCommandId;
   index: number;
 }
@@ -67,15 +67,7 @@ const TitlebarAccountButton = ({
           >
             <span className="relative size-7 shrink-0" ref={targetRef}>
               <span className="relative grid size-7 place-items-center overflow-hidden rounded-md">
-                {account.avatarUrl === undefined ? (
-                  <UserRoundIcon aria-hidden="true" className="size-3.5" />
-                ) : (
-                  <img
-                    alt=""
-                    className="size-full object-cover"
-                    src={account.avatarUrl}
-                  />
-                )}
+                <UserRoundIcon aria-hidden="true" className="size-3.5" />
                 {isSyncing ? (
                   <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/45">
                     <Spinner className="size-4 text-white" />

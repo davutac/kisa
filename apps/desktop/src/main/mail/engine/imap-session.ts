@@ -43,8 +43,6 @@ const MAX_LITERAL_BYTES = 64 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 96 * 1024 * 1024;
 const CONNECTION_TIMEOUT_MS = 30_000;
 const SOCKET_TIMEOUT_MS = 2 * 60_000;
-/** Close an OAuth session this long before its token expires. */
-const SESSION_EXPIRY_LEAD_MS = 2 * 60_000;
 
 const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
   "CONNECT_TIMEOUT",
@@ -342,16 +340,10 @@ export const toMailbox = (
 };
 
 const toClientOptions = (request: ImapConnectRequest): ImapFlowOptions => ({
-  auth:
-    request.auth.kind === "oauth"
-      ? {
-          accessToken: Redacted.value(request.auth.accessToken),
-          user: request.auth.user,
-        }
-      : {
-          pass: Redacted.value(request.auth.password),
-          user: request.auth.user,
-        },
+  auth: {
+    pass: Redacted.value(request.auth.password),
+    user: request.auth.user,
+  },
   clientInfo: { name: "Kisa" },
   connectionTimeout: CONNECTION_TIMEOUT_MS,
   disableAutoIdle: true,
@@ -363,9 +355,6 @@ const toClientOptions = (request: ImapConnectRequest): ImapFlowOptions => ({
   maxResponseSize: MAX_RESPONSE_BYTES,
   port: request.server.port,
   secure: request.server.security === "tls",
-  sessionExpires:
-    request.auth.kind === "oauth" ? request.auth.expiresAt : undefined,
-  sessionExpiryLead: SESSION_EXPIRY_LEAD_MS,
   socketTimeout: SOCKET_TIMEOUT_MS,
   tls: { minVersion: "TLSv1.2" },
 });

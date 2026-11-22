@@ -38,10 +38,10 @@ vi.mock("@/mail/mailbox-reload", () => ({
   requestMailboxReload: state.requestMailboxReload,
 }));
 
-vi.mock("@/state/google-accounts", () => ({
-  useGoogleAccounts: () => [
-    { email: "first@example.com", scopes: [] },
-    { email: "second@example.com", scopes: [] },
+vi.mock("@/state/accounts", () => ({
+  useAccounts: () => [
+    { email: "first@example.com" },
+    { email: "second@example.com" },
   ],
 }));
 

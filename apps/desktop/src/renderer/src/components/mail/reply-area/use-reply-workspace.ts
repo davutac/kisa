@@ -18,7 +18,7 @@ import { describeSendOutcome } from "@/mail/send-outcome";
 import { getAiApi, getMailApi } from "@/platform/desktop";
 import { appendEmailSignatureHtml } from "@/shared/email-signature";
 import type { AiModelSelection } from "@/shared/ipc/ai";
-import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 import { useReplyCleanHistory } from "./use-reply-clean-history";
 
@@ -41,7 +41,7 @@ export const useReplyWorkspace = ({
   accountId: string;
   action: MailMessageAction;
   draft: MailDraftInput;
-  message: GmailThreadMessage;
+  message: ThreadMessage;
   onCancel: () => void;
   onSent: () => void;
   replaceComposerContent: (content: string) => boolean;

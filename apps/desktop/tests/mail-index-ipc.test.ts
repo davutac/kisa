@@ -5,10 +5,10 @@ import { Effect, Exit } from "effect";
 import { beforeEach, vi } from "vitest";
 
 import { MAIL_REINDEX_CHANNEL } from "../src/shared/ipc/channels";
-import type { GmailIndexProgress } from "../src/shared/ipc/mail";
+import type { MailIndexProgress } from "../src/shared/ipc/mail";
 
 const state = vi.hoisted(() => ({
-  getMailEngineIndexProgress: vi.fn<() => GmailIndexProgress[]>(() => []),
+  getMailEngineIndexProgress: vi.fn<() => MailIndexProgress[]>(() => []),
   requestMailSync: vi.fn<(accountId?: string) => void>(),
 }));
 

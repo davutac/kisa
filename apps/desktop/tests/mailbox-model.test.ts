@@ -6,14 +6,14 @@ import {
   getMailboxScopeKey,
   mergeAndSortThreads,
 } from "../src/renderer/src/mail/mailbox-model";
-import type { GmailThreadSummary } from "../src/shared/ipc/mail";
+import type { MailThreadSummary } from "../src/shared/ipc/mail";
 
 const makeThread = (
   accountId: string,
   threadId: string,
   latestAt: number,
-  overrides: Partial<GmailThreadSummary> = {}
-): GmailThreadSummary => ({
+  overrides: Partial<MailThreadSummary> = {}
+): MailThreadSummary => ({
   accountId,
   attachments: [],
   from: "Sender <sender@example.com>",

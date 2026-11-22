@@ -33,11 +33,11 @@ import type {
   ScheduledMailEditSession,
   ScheduledMailSummary,
 } from "@/shared/ipc/scheduled-mail";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import { useAccounts } from "@/state/accounts";
 
 export const useScheduledMailWorkspace = () => {
   const confirm = useConfirm();
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const { accountIds, selectedAccountId } = useMailboxAccountScope();
   const {
     api,

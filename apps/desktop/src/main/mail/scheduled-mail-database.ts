@@ -22,7 +22,7 @@ import {
   hasEmailSignature,
   removeEmailSignature,
 } from "../../shared/email-signature";
-import { GmailOutgoingSubject } from "../../shared/ipc/mail";
+import { MailOutgoingSubject } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database-query";
 import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
 import { parseMailbox } from "./mail-address";
@@ -63,7 +63,7 @@ interface ScheduledMailDueCursor {
   readonly scheduledAt: number;
 }
 
-const isGmailOutgoingSubject = Schema.is(GmailOutgoingSubject);
+const isOutgoingSubject = Schema.is(MailOutgoingSubject);
 
 export const joinedScheduledMessageSelection = {
   draft: getColumns(mailDrafts),
@@ -151,7 +151,7 @@ const isStoredMessageValidForDelivery = (
       (recipient) => parseMailbox(recipient) === undefined
     ) ||
     draft.subject.length === 0 ||
-    !isGmailOutgoingSubject(draft.subject) ||
+    !isOutgoingSubject(draft.subject) ||
     draft.subject !== draft.subject.trim()
   ) {
     return false;

@@ -19,17 +19,17 @@ import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand } from "@/hotkeys";
 import { getThreadEmailAddresses, parseMailboxAddress } from "@/mail/address";
 import { shouldShowReplyAll } from "@/mail/reply-recipients";
-import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 interface MailThreadConversationProps {
   accountId: string;
-  messages: readonly GmailThreadMessage[];
+  messages: readonly ThreadMessage[];
   threadId: string;
 }
 
 interface NonEmptyMailThreadConversationProps extends MailThreadConversationProps {
   initialMessageId: string;
-  latestMessage: GmailThreadMessage;
+  latestMessage: ThreadMessage;
 }
 
 const MailThreadConversationContent = ({

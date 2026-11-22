@@ -43,7 +43,7 @@ import {
 import type { SearchFilter } from "@/mail/search-query";
 import { useAddressSuggestions } from "@/mail/use-mail-search";
 import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
-import type { GmailMailbox } from "@/shared/ipc/mail";
+import type { Mailbox } from "@/shared/ipc/mail";
 import { useMailSearchStore } from "@/state/mail-search";
 import { useMailbox } from "@/state/mailbox";
 
@@ -55,7 +55,7 @@ const focusOnNextFrame = (ref: RefObject<HTMLElement | null>): void => {
   });
 };
 
-const getSearchPlaceholder = (mailbox: GmailMailbox): string => {
+const getSearchPlaceholder = (mailbox: Mailbox): string => {
   if (mailbox === "spam") {
     return "Search Spam";
   }

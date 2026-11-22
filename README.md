@@ -1,8 +1,8 @@
 # Kisa
 
-**A fast, local-first mail client for Gmail and iCloud, built for the desktop.**
+**A fast, local-first mail client for Gmail, iCloud, and other IMAP accounts, built for the desktop.**
 
-Kisa caches and indexes mail locally for fast search, handles multiple accounts (Gmail through Google sign-in, iCloud and other IMAP hosts through an app password), and isolates untrusted content behind a narrow Electron security boundary.
+Kisa caches and indexes mail locally for fast search, handles multiple accounts, each connected over IMAP and SMTP with an app password, and isolates untrusted content behind a narrow Electron security boundary.
 
 > Kisa is under active development.
 
@@ -18,6 +18,16 @@ Download the latest release:
 
 See the [latest release](https://github.com/davutac/kisa/releases/latest) for release notes and checksums.
 
+## Add an account
+
+Every account connects in Kisa's **Add account** window with an app password: a separate password your provider issues for one app, not the password you sign in to its website with. Kisa checks it against the mail servers before saving it, encrypted, on your device. Kisa runs no server of its own.
+
+- **Gmail** (`gmail.com`, `googlemail.com`): turn on 2-Step Verification for your Google Account, then create an app password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords). Google shows it in groups of four; paste it with or without the spaces. Google doesn't offer app passwords to accounts that use only security keys for 2-Step Verification, to work, school or other organization accounts, or to accounts with Advanced Protection ([Google's help](https://support.google.com/accounts/answer/185833)), so those accounts can't connect to Kisa for now.
+- **iCloud** (`icloud.com`, `me.com`, `mac.com`): create an app-specific password as [Apple describes](https://support.apple.com/en-us/102654).
+- **Any other address**: create an app password with your provider, then enter its IMAP and SMTP servers. Kisa offers TLS and STARTTLS only.
+
+The optional Name is the sender name your outgoing mail carries. Disconnecting an account deletes its password and everything Kisa cached for it on this device; revoke the app password in your provider's settings if you no longer want it to work.
+
 ## Why Kisa
 
 I started Kisa when Notion announced that [Notion Mail will shut down on September 22, 2026](https://www.notion.com/help/notion-mail-inbox-is-going-away-what-to-do-next). Rather than return to Gmail in a browser, I began building the fast, keyboard-first client I wanted.
@@ -25,7 +35,7 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 - **Mailbox-scale performance.** Local caching, full-text search, virtualized lists, and resumable indexing keep large mailboxes responsive.
 - **Recoverable spam.** A dedicated Spam mailbox surfaces newly classified mail without adding notifications or Inbox noise, and **Not spam** returns false positives to Inbox.
 - **Keyboard-first workflow.** Switch accounts, search, compose, and navigate without the mouse.
-- **Privacy by default.** OAuth credentials stay in the main process, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
+- **Privacy by default.** App passwords are sealed in the main process and never reach the mail window, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
 - **Built for multiple accounts.** Caches, indexes, sync state, and mutations stay account-scoped, with an All Accounts view across them.
 
 ## Tech stack
@@ -37,7 +47,7 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 | Application runtime | [Effect](https://github.com/Effect-TS/effect) |
 | Routing and state | [TanStack Router](https://github.com/TanStack/router), [Zustand](https://github.com/pmndrs/zustand) |
 | Local data | [better-sqlite3-multiple-ciphers](https://github.com/m4heshd/better-sqlite3-multiple-ciphers), [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm), FTS5 |
-| Mail transport | IMAP with [ImapFlow](https://github.com/postalsys/imapflow), SMTP with [Nodemailer](https://github.com/nodemailer/nodemailer), Google OAuth 2.0 with PKCE |
+| Mail transport | IMAP with [ImapFlow](https://github.com/postalsys/imapflow), SMTP with [Nodemailer](https://github.com/nodemailer/nodemailer) |
 | Tooling | [pnpm](https://github.com/pnpm/pnpm), [Turborepo](https://github.com/vercel/turborepo), [Vite](https://github.com/vitejs/vite), [Vitest](https://github.com/vitest-dev/vitest), [Ultracite](https://github.com/haydenbleasel/ultracite) |
 
 ## Architecture
@@ -88,7 +98,7 @@ pnpm --dir apps/desktop dev
 
 Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, separate from the installed app's `mail.sqlite` database and key. Databases from before the mail engine (`app.sqlite`, `app.dev.sqlite`) are left as they are and never opened.
 
-Google authorization uses the user's own Desktop OAuth client, the system browser, PKCE, and a temporary loopback callback. Kisa does not ship shared Google credentials. Follow [Connect Kisa to Google](docs/google-oauth-setup.md) to create a personal Google Cloud project and import its credentials JSON. iCloud and other IMAP accounts need no project: choose "Add iCloud or other account" and enter an app-specific password, which Kisa checks against the server before saving it encrypted.
+Running from source needs no provider setup: accounts connect with an app password as described in [Add an account](#add-an-account).
 
 ## Verification
 

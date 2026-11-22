@@ -796,7 +796,6 @@ const ensureSystemLabels = async (
 
 const toMailAccount = (row: typeof mailAccounts.$inferSelect): MailAccount => ({
   accountId: AccountId.make(row.accountId),
-  authKind: row.authKind,
   dialect: row.dialect,
   email: row.email,
   imap: {

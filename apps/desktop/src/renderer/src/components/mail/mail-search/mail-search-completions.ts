@@ -7,10 +7,7 @@ import type {
   SearchFilter,
   SearchFilterField,
 } from "@/mail/search-query";
-import type {
-  GmailAddressRole,
-  GmailSenderSuggestion,
-} from "@/shared/ipc/mail";
+import type { MailAddressRole, MailSenderSuggestion } from "@/shared/ipc/mail";
 
 export type MailSearchCompletionIcon = "address" | "attachment" | "operator";
 
@@ -34,7 +31,7 @@ interface CompletionInputs {
   draftFilter?: SearchFilter;
   onSelectField: (field: SearchFilterField) => void;
   onSelectFilter: (filter: SearchFilter) => void;
-  senders: readonly GmailSenderSuggestion[];
+  senders: readonly MailSenderSuggestion[];
   typedWord: string;
 }
 
@@ -56,7 +53,7 @@ const ADDRESS_EMPTY = {
 
 export const getMailSearchAddressRole = (
   field: SearchFilterField | undefined
-): GmailAddressRole | undefined => {
+): MailAddressRole | undefined => {
   if (field === "from") {
     return "sender";
   }
@@ -65,7 +62,7 @@ export const getMailSearchAddressRole = (
 
 const toAddressItems = (
   field: "from" | "to",
-  senders: readonly GmailSenderSuggestion[],
+  senders: readonly MailSenderSuggestion[],
   typedValue: string,
   onSelectFilter: (filter: SearchFilter) => void
 ): MailSearchCompletions => ({

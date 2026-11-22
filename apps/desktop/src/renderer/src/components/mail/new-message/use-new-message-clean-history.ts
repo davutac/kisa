@@ -9,7 +9,7 @@ import {
   appendEmailSignatureHtml,
   removeEmailSignature,
 } from "@/shared/email-signature";
-import { truncateGmailSubject } from "@/shared/gmail-subject";
+import { truncateSubject } from "@/shared/mail-subject";
 
 import { useNewMessageStore, useNewMessageStoreApi } from "./new-message-store";
 
@@ -116,7 +116,7 @@ export const useNewMessageCleanHistory = ({
     setSubject(nextSubject);
     if (
       selectedVersion !== null &&
-      truncateGmailSubject(nextSubject) !== selectedVersion.subject
+      truncateSubject(nextSubject) !== selectedVersion.subject
     ) {
       setSelectedVersionId(null);
     }

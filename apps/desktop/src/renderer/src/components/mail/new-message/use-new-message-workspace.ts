@@ -30,7 +30,7 @@ import {
   EMPTY_EMAIL_SIGNATURE_BODY,
 } from "@/shared/email-signature";
 import type { EmailSignatureBody } from "@/shared/email-signature";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 import type { ScheduledMailEditSession } from "@/shared/ipc/scheduled-mail";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
@@ -55,7 +55,7 @@ export const useNewMessageWorkspace = ({
   onScheduledEditChange,
   scheduledEdit,
 }: {
-  accounts: readonly GoogleAccount[];
+  accounts: readonly Account[];
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onScheduledEditChange?: (session: ScheduledMailEditSession) => void;

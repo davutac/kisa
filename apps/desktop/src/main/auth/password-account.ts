@@ -1,16 +1,17 @@
 import { mailAccounts } from "@repo/database/schemas";
+import type { DialectKind } from "@repo/mail/dialects";
 import type { MailTransportError } from "@repo/mail/errors";
 import { AccountId } from "@repo/mail/ids";
 import { ImapConnector } from "@repo/mail/session";
 import type { ImapAuth } from "@repo/mail/session";
 import type { MailSendError } from "@repo/mail/smtp";
 import { eq } from "drizzle-orm";
-import { Effect, Schema } from "effect";
+import { Effect, Redacted, Schema } from "effect";
 
 import { PasswordAccountSetupRequest } from "../../shared/ipc/account-setup";
 import {
   findMailAccountPreset,
-  isGoogleMailAddress,
+  isGoogleMailHost,
 } from "../../shared/mail-account-presets";
 import type { MailServerSettings } from "../../shared/mail-account-presets";
 import { MailDatabase } from "../mail/engine/mail-database";
@@ -26,7 +27,11 @@ import { encryptPasswordCredentials } from "./password-credentials";
  */
 export const PASSWORD_ACCOUNT_MESSAGES = {
   alreadyConnected: "This account is already connected.",
-  gmail: "Connect Gmail with Google sign-in instead.",
+  gmailPasswordRefused:
+    "Gmail refused the password. Use an app password, not your Google Account password.",
+  gmailUnexpected: "Gmail did not respond as expected. Try again later.",
+  gmailUnreachable:
+    "Could not reach Gmail. Check your connection and try again.",
   icloudPasswordRefused:
     "iCloud refused the password. Use an app-specific password, not your Apple Account password.",
   icloudUnexpected: "iCloud Mail did not respond as expected. Try again later.",
@@ -73,10 +78,12 @@ export const decodePasswordAccountRequest = (
 
 export interface AccountPlan {
   readonly accountId: AccountId;
+  /** The sender name on outgoing mail, if the user gave one. */
+  readonly displayName: string | undefined;
   /** Lowercased: the renderer keys accounts by this, as by `accountId`. */
   readonly email: string;
   readonly imap: MailServerSettings;
-  readonly provider: "icloud" | "imap";
+  readonly provider: "gmail" | "icloud" | "imap";
   readonly smtp: MailServerSettings;
   /** The address as typed, which servers may compare exactly. */
   readonly username: string;
@@ -85,10 +92,6 @@ export interface AccountPlan {
 const planAccount = Effect.fn("planPasswordAccount")(function* planAccount(
   request: PasswordAccountSetupRequest
 ) {
-  if (isGoogleMailAddress(request.email)) {
-    return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.gmail);
-  }
-
   const email = request.email.toLowerCase();
   const preset = findMailAccountPreset(email);
   const servers = preset ?? request.servers;
@@ -97,8 +100,14 @@ const planAccount = Effect.fn("planPasswordAccount")(function* planAccount(
     return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.serversRequired);
   }
 
+  const displayName = request.name?.trim();
+
   return {
     accountId: AccountId.make(email),
+    displayName:
+      displayName === undefined || displayName.length === 0
+        ? undefined
+        : displayName,
     email,
     imap: servers.imap,
     provider: preset?.provider ?? "imap",
@@ -107,43 +116,53 @@ const planAccount = Effect.fn("planPasswordAccount")(function* planAccount(
   } satisfies AccountPlan;
 });
 
+/** A preset provider's own wording, which names the provider. */
+const PROVIDER_MESSAGES = {
+  gmail: {
+    passwordRefused: PASSWORD_ACCOUNT_MESSAGES.gmailPasswordRefused,
+    unexpected: PASSWORD_ACCOUNT_MESSAGES.gmailUnexpected,
+    unreachable: PASSWORD_ACCOUNT_MESSAGES.gmailUnreachable,
+  },
+  icloud: {
+    passwordRefused: PASSWORD_ACCOUNT_MESSAGES.icloudPasswordRefused,
+    unexpected: PASSWORD_ACCOUNT_MESSAGES.icloudUnexpected,
+    unreachable: PASSWORD_ACCOUNT_MESSAGES.icloudUnreachable,
+  },
+} as const;
+
 /** Says what went wrong in words the user can act on, never the server's. */
 const toSetupError = (
   plan: AccountPlan,
   side: "incoming" | "outgoing",
   error: MailSendError | MailTransportError
 ): PasswordAccountError => {
-  const isIcloud = plan.provider === "icloud";
+  const provider =
+    plan.provider === "imap" ? undefined : PROVIDER_MESSAGES[plan.provider];
+  const isIncoming = side === "incoming";
 
   switch (error._tag) {
     case "MailAuthError": {
       return failWith(
-        isIcloud
-          ? PASSWORD_ACCOUNT_MESSAGES.icloudPasswordRefused
-          : PASSWORD_ACCOUNT_MESSAGES.passwordRefused
+        provider?.passwordRefused ?? PASSWORD_ACCOUNT_MESSAGES.passwordRefused
       );
     }
     case "MailConnectionError": {
-      if (isIcloud) {
-        return failWith(PASSWORD_ACCOUNT_MESSAGES.icloudUnreachable);
-      }
       return failWith(
-        side === "incoming"
-          ? PASSWORD_ACCOUNT_MESSAGES.incomingUnreachable
-          : PASSWORD_ACCOUNT_MESSAGES.outgoingUnreachable
+        provider?.unreachable ??
+          (isIncoming
+            ? PASSWORD_ACCOUNT_MESSAGES.incomingUnreachable
+            : PASSWORD_ACCOUNT_MESSAGES.outgoingUnreachable)
       );
     }
     case "MailThrottledError": {
       return failWith(PASSWORD_ACCOUNT_MESSAGES.throttled);
     }
     default: {
-      if (isIcloud) {
-        return failWith(PASSWORD_ACCOUNT_MESSAGES.icloudUnexpected);
-      }
       return failWith(
-        side === "incoming"
-          ? PASSWORD_ACCOUNT_MESSAGES.incomingUnexpected
-          : PASSWORD_ACCOUNT_MESSAGES.outgoingUnexpected
+        provider?.unexpected ??
+          (isIncoming
+            ? PASSWORD_ACCOUNT_MESSAGES.incomingUnexpected
+            : PASSWORD_ACCOUNT_MESSAGES.outgoingUnexpected)
       );
     }
   }
@@ -162,11 +181,18 @@ const isConnected = Effect.fn("isAccountConnected")(function* isConnected(
   return row !== undefined;
 });
 
-/** Signs in over IMAP and lists the mailboxes, as the first sync would. */
+/** Gmail's IMAP extensions, which only Google's servers advertise. */
+const GMAIL_CAPABILITY = "X-GM-EXT-1";
+
+/**
+ * Signs in over IMAP and lists the mailboxes, as the first sync would. The
+ * server decides the dialect: Gmail's labels and thread ids are read only
+ * where it advertises them, which also covers Google Workspace domains.
+ */
 const verifyIncoming = Effect.fn("verifyIncomingSignIn")(
   function* verifyIncoming(plan: AccountPlan, auth: ImapAuth) {
     const connector = yield* ImapConnector;
-    yield* Effect.scoped(
+    return yield* Effect.scoped(
       Effect.gen(function* listMailboxes() {
         const session = yield* connector.connect({
           accountId: plan.accountId,
@@ -174,6 +200,9 @@ const verifyIncoming = Effect.fn("verifyIncomingSignIn")(
           server: plan.imap,
         });
         yield* session.listMailboxes;
+        return session.capabilities.has(GMAIL_CAPABILITY)
+          ? ("gmail" satisfies DialectKind)
+          : ("generic" satisfies DialectKind);
       })
     ).pipe(Effect.mapError((error) => toSetupError(plan, "incoming", error)));
   }
@@ -193,8 +222,23 @@ const verifyOutgoing = Effect.fn("verifyOutgoingSignIn")(
 export interface VerifiedPasswordAccount {
   /** The `safeStorage`-sealed password; the only form that is stored. */
   readonly credentials: Buffer;
+  readonly dialect: DialectKind;
   readonly plan: AccountPlan;
 }
+
+/**
+ * Google shows an app password in groups of four letters. The spaces are only
+ * for reading, so they are dropped before Google's servers see it.
+ */
+const toSignInPassword = (
+  plan: AccountPlan,
+  password: Redacted.Redacted<string>
+): Redacted.Redacted<string> =>
+  isGoogleMailHost(plan.imap.host)
+    ? Redacted.make(Redacted.value(password).replaceAll(/\s/gu, ""), {
+        label: "app password",
+      })
+    : password;
 
 /**
  * Checks an app password account before anything is saved: the address is
@@ -215,19 +259,21 @@ export const verifyPasswordAccount = Effect.fn("verifyPasswordAccount")(
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.alreadyConnected);
     }
 
-    const auth: ImapAuth = {
-      kind: "password",
-      password: request.password,
-      user: plan.username,
-    };
-    yield* verifyIncoming(plan, auth);
+    const password = toSignInPassword(plan, request.password);
+    const auth: ImapAuth = { password, user: plan.username };
+    const dialect = yield* verifyIncoming(plan, auth);
     yield* verifyOutgoing(plan, auth);
 
-    const credentials = yield* encryptPasswordCredentials(
-      request.password
-    ).pipe(Effect.mapError(({ message }) => failWith(message)));
+    const credentials = yield* encryptPasswordCredentials(password).pipe(
+      Effect.mapError(({ message }) => failWith(message))
+    );
 
-    return { credentials, plan } satisfies VerifiedPasswordAccount;
+    return {
+      credentials,
+      dialect,
+      // A Workspace domain set up by hand is still Gmail.
+      plan: dialect === "gmail" ? { ...plan, provider: "gmail" } : plan,
+    } satisfies VerifiedPasswordAccount;
   }
 );
 
@@ -237,6 +283,7 @@ export const verifyPasswordAccount = Effect.fn("verifyPasswordAccount")(
  */
 export const savePasswordAccount = ({
   credentials,
+  dialect,
   plan,
 }: VerifiedPasswordAccount) =>
   Effect.uninterruptible(
@@ -261,10 +308,10 @@ export const savePasswordAccount = ({
               .insert(mailAccounts)
               .values({
                 accountId: plan.accountId,
-                authKind: "password",
                 createdAt: now,
                 credentials,
-                dialect: "generic",
+                dialect,
+                displayName: plan.displayName,
                 email: plan.email,
                 imapHost: plan.imap.host,
                 imapPort: plan.imap.port,

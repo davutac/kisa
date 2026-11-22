@@ -1,6 +1,12 @@
 import type { UpdateStatus } from "../update-status";
 import type { AccountSetupOpenReply } from "./account-setup";
 import type {
+  AccountDisconnectRequest,
+  AccountReorderReply,
+  AccountReorderRequest,
+  AccountsReply,
+} from "./accounts";
+import type {
   AiCleanupDraftReply,
   AiCleanupDraftRequest,
   AiProviderStatusListReply,
@@ -21,33 +27,23 @@ import type {
   ThreadWindowOpenRequest,
 } from "./app";
 import type {
-  GoogleAccount,
-  GoogleAccountDisconnectRequest,
-  GoogleAccountReorderReply,
-  GoogleAccountReorderRequest,
-  GoogleAccountsReply,
-  GoogleAuthStartReply,
-  GoogleOAuthClientSetupReply,
-  GoogleOAuthClientStatusReply,
-} from "./auth";
-import type {
-  GmailAttachmentActionReply,
-  GmailAttachmentRequest,
-  GmailAttachmentSaveReply,
-  GmailBulkThreadMutationReply,
-  GmailBulkThreadMutationRequest,
-  GmailCachedThreadPageReply,
-  GmailCachedThreadPageRequest,
-  GmailLabelCatalogReply,
-  GmailLabelCatalogChanged,
-  GmailLabelCatalogRequest,
-  GmailLabelCreateReply,
-  GmailLabelCreateRequest,
-  GmailLabelDeleteReply,
-  GmailLabelDeleteRequest,
-  GmailLabelUpdateReply,
-  GmailLabelUpdateRequest,
-  GmailIndexProgressList,
+  MailAttachmentActionReply,
+  MailAttachmentRequest,
+  MailAttachmentSaveReply,
+  MailBulkThreadMutationReply,
+  MailBulkThreadMutationRequest,
+  MailCachedThreadPageReply,
+  MailCachedThreadPageRequest,
+  MailLabelCatalogReply,
+  MailLabelCatalogChanged,
+  MailLabelCatalogRequest,
+  MailLabelCreateReply,
+  MailLabelCreateRequest,
+  MailLabelDeleteReply,
+  MailLabelDeleteRequest,
+  MailLabelUpdateReply,
+  MailLabelUpdateRequest,
+  MailIndexProgressList,
   MailDraftChanged,
   MailDraftDiscardReply,
   MailDraftDiscardRequest,
@@ -56,33 +52,32 @@ import type {
   MailDraftListRequest,
   MailDraftLoadReply,
   MailDraftReply,
-  GmailMessageSendReply,
-  GmailMessageSendRequest,
-  GmailOutgoingAttachmentPrepareReply,
-  GmailOutgoingAttachmentPrepareRequest,
-  GmailOutgoingAttachmentSelectionReply,
-  GmailOutgoingInlineImagePreviewReply,
-  GmailOutgoingInlineImagePreviewRequest,
-  GmailReindexReply,
-  GmailReindexRequest,
-  GmailSearchRequest,
-  GmailSearchResultsReply,
-  GmailSenderSuggestionRequest,
-  GmailSenderSuggestionsReply,
-  GmailSpamStatusReply,
-  GmailSpamStatusRequest,
-  GmailSyncStatus,
-  GmailThreadMutationReply,
-  GmailThreadMessageSendReply,
-  GmailThreadMessageSendRequest,
-  GmailThreadLabelRequest,
-  GmailThreadListUpdated,
-  GmailThreadReply,
-  GmailThreadReadStateRequest,
-  GmailThreadRequest,
-  GmailThreadUpdated,
-  GmailTrustedImageSenderRequest,
-  GmailTrustedImageSendersReply,
+  MailMessageSendReply,
+  MailMessageSendRequest,
+  MailOutgoingAttachmentPrepareReply,
+  MailOutgoingAttachmentPrepareRequest,
+  MailOutgoingAttachmentSelectionReply,
+  MailOutgoingInlineImagePreviewReply,
+  MailOutgoingInlineImagePreviewRequest,
+  MailReindexReply,
+  MailReindexRequest,
+  MailSearchRequest,
+  MailSearchResultsReply,
+  MailSenderSuggestionRequest,
+  MailSenderSuggestionsReply,
+  MailSpamStatusReply,
+  MailSpamStatusRequest,
+  MailSyncStatus,
+  MailThreadMutationReply,
+  MailThreadMessageSendReply,
+  MailThreadMessageSendRequest,
+  MailThreadLabelRequest,
+  MailThreadListUpdated,
+  MailThreadReply,
+  MailThreadReadStateRequest,
+  MailThreadRequest,
+  MailTrustedImageSenderRequest,
+  MailTrustedImageSendersReply,
 } from "./mail";
 import type {
   ScheduledMailActionReply,
@@ -138,33 +133,33 @@ export interface DesktopBridge {
   ) => Promise<AiCleanupDraftReply>;
   authorizeOutgoingAttachments: (
     files: readonly File[]
-  ) => Promise<GmailOutgoingAttachmentSelectionReply>;
+  ) => Promise<MailOutgoingAttachmentSelectionReply>;
   beginScheduledMailEdit: (
     request: ScheduledMailKey
   ) => Promise<ScheduledMailEditSessionReply>;
   beginDatabaseImport: () => Promise<DatabaseImportSessionReply>;
   bulkMutateThreads: (
-    request: GmailBulkThreadMutationRequest
-  ) => Promise<GmailBulkThreadMutationReply>;
+    request: MailBulkThreadMutationRequest
+  ) => Promise<MailBulkThreadMutationReply>;
   cancelDatabaseImport: (
     request: DatabaseImportSession
   ) => Promise<DatabaseImportCancelReply>;
   checkForUpdates: () => Promise<UpdateStatus>;
-  createGmailLabel: (
-    request: GmailLabelCreateRequest
-  ) => Promise<GmailLabelCreateReply>;
+  createLabel: (
+    request: MailLabelCreateRequest
+  ) => Promise<MailLabelCreateReply>;
   deleteComposerTemplate: (
     request: ComposerTemplateDeleteRequest
   ) => Promise<ComposerTemplateDeleteReply>;
   deleteThreadForever: (
-    request: GmailThreadRequest
-  ) => Promise<GmailThreadMutationReply>;
-  deleteGmailLabel: (
-    request: GmailLabelDeleteRequest
-  ) => Promise<GmailLabelDeleteReply>;
-  updateGmailLabel: (
-    request: GmailLabelUpdateRequest
-  ) => Promise<GmailLabelUpdateReply>;
+    request: MailThreadRequest
+  ) => Promise<MailThreadMutationReply>;
+  deleteLabel: (
+    request: MailLabelDeleteRequest
+  ) => Promise<MailLabelDeleteReply>;
+  updateLabel: (
+    request: MailLabelUpdateRequest
+  ) => Promise<MailLabelUpdateReply>;
   discardMailDraft: (
     request: MailDraftDiscardRequest
   ) => Promise<MailDraftDiscardReply>;
@@ -174,9 +169,9 @@ export interface DesktopBridge {
   discardScheduledMail: (
     request: ScheduledMailKey
   ) => Promise<ScheduledMailActionReply>;
-  disconnectGoogleAccount: (
-    request: GoogleAccountDisconnectRequest
-  ) => Promise<GoogleAccountsReply>;
+  disconnectAccount: (
+    request: AccountDisconnectRequest
+  ) => Promise<AccountsReply>;
   downloadUpdate: () => Promise<UpdateStatus>;
   dropDatabaseImportFile: (request: {
     readonly file: File;
@@ -184,17 +179,16 @@ export interface DesktopBridge {
     readonly sessionId: string;
   }) => Promise<DatabaseImportFileSelectionReply>;
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
-  getMailIndexProgress: () => Promise<GmailIndexProgressList>;
-  getGoogleOAuthClientStatus: () => Promise<GoogleOAuthClientStatusReply>;
+  getMailIndexProgress: () => Promise<MailIndexProgressList>;
   getScheduledMailAttentionCount: (
     request: ScheduledMailScope
   ) => Promise<ScheduledMailAttentionCountReply>;
   getLoginItemSettings: () => Promise<LoginItemSettingsReply>;
   getAiSettings: () => Promise<AiSettingsReply>;
-  getMailSyncStatus: () => Promise<GmailSyncStatus>;
+  getMailSyncStatus: () => Promise<MailSyncStatus>;
   getSpamStatus: (
-    request: GmailSpamStatusRequest
-  ) => Promise<GmailSpamStatusReply>;
+    request: MailSpamStatusRequest
+  ) => Promise<MailSpamStatusReply>;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
   installUpdate: () => Promise<void>;
@@ -206,35 +200,35 @@ export interface DesktopBridge {
   listAiProviders: () => Promise<AiProviderStatusListReply>;
   listComposerTemplates: () => Promise<ComposerTemplateListReply>;
   listCachedThreadPage: (
-    request: GmailCachedThreadPageRequest
-  ) => Promise<GmailCachedThreadPageReply>;
-  listGmailLabels: (
-    request: GmailLabelCatalogRequest
-  ) => Promise<GmailLabelCatalogReply>;
-  listGmailSenders: (
-    request: GmailSenderSuggestionRequest
-  ) => Promise<GmailSenderSuggestionsReply>;
-  listGoogleAccounts: () => Promise<GoogleAccountsReply>;
+    request: MailCachedThreadPageRequest
+  ) => Promise<MailCachedThreadPageReply>;
+  listLabels: (
+    request: MailLabelCatalogRequest
+  ) => Promise<MailLabelCatalogReply>;
+  listSenders: (
+    request: MailSenderSuggestionRequest
+  ) => Promise<MailSenderSuggestionsReply>;
+  listAccounts: () => Promise<AccountsReply>;
   listStashedDrafts: (
     request: MailDraftListRequest
   ) => Promise<MailDraftListReply>;
   listScheduledMailPage: (
     request: ScheduledMailPageRequest
   ) => Promise<ScheduledMailPageReply>;
-  listTrustedImageSenders: () => Promise<GmailTrustedImageSendersReply>;
+  listTrustedImageSenders: () => Promise<MailTrustedImageSendersReply>;
   loadOutgoingInlineImagePreview: (
-    request: GmailOutgoingInlineImagePreviewRequest
-  ) => Promise<GmailOutgoingInlineImagePreviewReply>;
-  loadThread: (request: GmailThreadRequest) => Promise<GmailThreadReply>;
-  loadThreadDraft: (request: GmailThreadRequest) => Promise<MailDraftLoadReply>;
+    request: MailOutgoingInlineImagePreviewRequest
+  ) => Promise<MailOutgoingInlineImagePreviewReply>;
+  loadThread: (request: MailThreadRequest) => Promise<MailThreadReply>;
+  loadThreadDraft: (request: MailThreadRequest) => Promise<MailDraftLoadReply>;
   markThreadNotSpam: (
-    request: GmailThreadRequest
-  ) => Promise<GmailThreadMutationReply>;
-  /** Opens the Add account window for app password accounts, or focuses it. */
+    request: MailThreadRequest
+  ) => Promise<MailThreadMutationReply>;
+  /** Opens the Add account window, or focuses it. */
   openAccountSetup: () => Promise<AccountSetupOpenReply>;
   openAttachmentPreview: (
-    request: GmailAttachmentRequest
-  ) => Promise<GmailAttachmentActionReply>;
+    request: MailAttachmentRequest
+  ) => Promise<MailAttachmentActionReply>;
   onAccountSettingsChanged: (
     listener: (reply: AccountSettingsReply) => void
   ) => () => void;
@@ -245,26 +239,21 @@ export interface DesktopBridge {
     listener: (progress: DatabaseImportProgress) => void
   ) => () => void;
   onAppClosing: (listener: () => void) => () => void;
-  onGoogleAccountsChanged: (
-    listener: (reply: GoogleAccountsReply) => void
-  ) => () => void;
+  onAccountsChanged: (listener: (reply: AccountsReply) => void) => () => void;
   onMailDraftChanged: (
     listener: (change: MailDraftChanged) => void
   ) => () => void;
   onMailIndexProgressChanged: (
-    listener: (progress: GmailIndexProgressList) => void
+    listener: (progress: MailIndexProgressList) => void
   ) => () => void;
   onMailLabelCatalogChanged: (
-    listener: (change: GmailLabelCatalogChanged) => void
+    listener: (change: MailLabelCatalogChanged) => void
   ) => () => void;
   onMailSyncStatusChanged: (
-    listener: (status: GmailSyncStatus) => void
-  ) => () => void;
-  onMailThreadUpdated: (
-    listener: (payload: GmailThreadUpdated) => void
+    listener: (status: MailSyncStatus) => void
   ) => () => void;
   onMailThreadListUpdated: (
-    listener: (payload: GmailThreadListUpdated) => void
+    listener: (payload: MailThreadListUpdated) => void
   ) => () => void;
   onScheduledMailChanged: (
     listener: (change: ScheduledMailChanged) => void
@@ -273,26 +262,26 @@ export interface DesktopBridge {
     listener: (outcome: ScheduledMailOutcome) => void
   ) => () => void;
   onTrustedImageSendersChanged: (
-    listener: (reply: GmailTrustedImageSendersReply) => void
+    listener: (reply: MailTrustedImageSendersReply) => void
   ) => () => void;
   onUpdateStatus: (listener: (status: UpdateStatus) => void) => () => void;
   openThreadWindow: (
     request: ThreadWindowOpenRequest
   ) => Promise<ThreadWindowOpenReply>;
   prepareOutgoingAttachments: (
-    request: GmailOutgoingAttachmentPrepareRequest
-  ) => Promise<GmailOutgoingAttachmentPrepareReply>;
-  reindexMail: (request: GmailReindexRequest) => Promise<GmailReindexReply>;
-  reorderGoogleAccounts: (
-    request: GoogleAccountReorderRequest
-  ) => Promise<GoogleAccountReorderReply>;
+    request: MailOutgoingAttachmentPrepareRequest
+  ) => Promise<MailOutgoingAttachmentPrepareReply>;
+  reindexMail: (request: MailReindexRequest) => Promise<MailReindexReply>;
+  reorderAccounts: (
+    request: AccountReorderRequest
+  ) => Promise<AccountReorderReply>;
   generateEmailReply: (
     request: AiReplyRequest
   ) => Promise<AiReplyGenerationReply>;
-  searchMail: (request: GmailSearchRequest) => Promise<GmailSearchResultsReply>;
+  searchMail: (request: MailSearchRequest) => Promise<MailSearchResultsReply>;
   saveAttachment: (
-    request: GmailAttachmentRequest
-  ) => Promise<GmailAttachmentSaveReply>;
+    request: MailAttachmentRequest
+  ) => Promise<MailAttachmentSaveReply>;
   saveMailDraft: (request: MailDraftInput) => Promise<MailDraftReply>;
   scheduleMail: (
     request: ScheduledMailScheduleRequest
@@ -304,32 +293,28 @@ export interface DesktopBridge {
     request: DatabaseImportFileSelectionRequest
   ) => Promise<DatabaseImportFileSelectionReply>;
   sendMessage: (
-    request: GmailMessageSendRequest
-  ) => Promise<GmailMessageSendReply>;
+    request: MailMessageSendRequest
+  ) => Promise<MailMessageSendReply>;
   sendScheduledMailNow: (
     request: ScheduledMailSendNowRequest
   ) => Promise<ScheduledMailActionReply>;
   sendThreadMessage: (
-    request: GmailThreadMessageSendRequest
-  ) => Promise<GmailThreadMessageSendReply>;
+    request: MailThreadMessageSendRequest
+  ) => Promise<MailThreadMessageSendReply>;
   setThreadLabel: (
-    request: GmailThreadLabelRequest
-  ) => Promise<GmailThreadMutationReply>;
+    request: MailThreadLabelRequest
+  ) => Promise<MailThreadMutationReply>;
   setThreadReadState: (
-    request: GmailThreadReadStateRequest
-  ) => Promise<GmailThreadMutationReply>;
+    request: MailThreadReadStateRequest
+  ) => Promise<MailThreadMutationReply>;
   startApp: () => Promise<AppStartupReply>;
-  setupGoogleOAuthClient: () => Promise<GoogleOAuthClientSetupReply>;
-  syncGmailLabels: (
-    request: GmailLabelCatalogRequest
-  ) => Promise<GmailLabelCatalogReply>;
-  startGoogleAuth: () => Promise<GoogleAuthStartReply>;
-  trashThread: (
-    request: GmailThreadRequest
-  ) => Promise<GmailThreadMutationReply>;
+  syncLabels: (
+    request: MailLabelCatalogRequest
+  ) => Promise<MailLabelCatalogReply>;
+  trashThread: (request: MailThreadRequest) => Promise<MailThreadMutationReply>;
   trustImageSender: (
-    request: GmailTrustedImageSenderRequest
-  ) => Promise<GmailTrustedImageSendersReply>;
+    request: MailTrustedImageSenderRequest
+  ) => Promise<MailTrustedImageSendersReply>;
   updateAccountSettings: (
     request: AccountSettingsUpdateRequest
   ) => Promise<AccountSettingsReply>;
@@ -346,7 +331,3 @@ export interface DesktopBridge {
     request: AiSettingsUpdateRequest
   ) => Promise<AiSettingsReply>;
 }
-
-export type GoogleAccountsChangedListener = (
-  accounts: readonly GoogleAccount[]
-) => void;

@@ -19,14 +19,14 @@ import {
   MAIL_UPDATE_LABEL_CHANNEL,
 } from "../src/shared/ipc/channels";
 import {
-  GmailLabelCreateReply,
-  GmailLabelCreateRequest,
-  GmailLabelDeleteReply,
-  GmailLabelDeleteRequest,
-  GmailLabelUpdateReply,
-  GmailLabelUpdateRequest,
-  GmailThreadLabelRequest,
-  GmailThreadMutationReply,
+  MailLabelCreateReply,
+  MailLabelCreateRequest,
+  MailLabelDeleteReply,
+  MailLabelDeleteRequest,
+  MailLabelUpdateReply,
+  MailLabelUpdateRequest,
+  MailThreadLabelRequest,
+  MailThreadMutationReply,
 } from "../src/shared/ipc/mail";
 
 const createIpcMain = () => {
@@ -134,8 +134,8 @@ describe(DesktopIpc.DesktopIpc, () => {
             requests.push(request);
             return { data: undefined, ok: true as const };
           }),
-        payload: GmailThreadLabelRequest,
-        result: GmailThreadMutationReply,
+        payload: MailThreadLabelRequest,
+        result: MailThreadMutationReply,
       });
       const request = {
         accountId: "person@example.com",
@@ -201,14 +201,14 @@ describe(DesktopIpc.DesktopIpc, () => {
             },
             ok: true as const,
           }),
-        payload: GmailLabelCreateRequest,
-        result: GmailLabelCreateReply,
+        payload: MailLabelCreateRequest,
+        result: MailLabelCreateReply,
       });
       const remove = DesktopIpc.makeIpcMethod({
         channel: MAIL_DELETE_LABEL_CHANNEL,
         handler: () => Effect.succeed({ data: undefined, ok: true as const }),
-        payload: GmailLabelDeleteRequest,
-        result: GmailLabelDeleteReply,
+        payload: MailLabelDeleteRequest,
+        result: MailLabelDeleteReply,
       });
       const update = DesktopIpc.makeIpcMethod({
         channel: MAIL_UPDATE_LABEL_CHANNEL,
@@ -222,8 +222,8 @@ describe(DesktopIpc.DesktopIpc, () => {
             },
             ok: true as const,
           }),
-        payload: GmailLabelUpdateRequest,
-        result: GmailLabelUpdateReply,
+        payload: MailLabelUpdateRequest,
+        result: MailLabelUpdateReply,
       });
 
       expect(

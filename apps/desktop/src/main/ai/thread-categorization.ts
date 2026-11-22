@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 
 import type { AiThreadCategorizationRequest } from "../../shared/ipc/ai";
-import type { GmailLabelSummary } from "../../shared/ipc/mail";
+import type { MailLabelSummary } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor";
 import {
@@ -55,7 +55,7 @@ const loadCurrentThreadLabelIds = Effect.fn("loadCurrentThreadLabelIds")(
 );
 
 const toCategorizationLabels = (
-  labels: readonly GmailLabelSummary[]
+  labels: readonly MailLabelSummary[]
 ): readonly AiCategorizationLabel[] =>
   labels
     .filter((label) => label.type === "user")

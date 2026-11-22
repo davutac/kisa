@@ -5,12 +5,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import type {
-  GmailSearchFilter,
-  GmailSearchRequest,
-  GmailSearchResults,
-  GmailSenderSuggestion,
-  GmailSenderSuggestionRequest,
-  GmailSenderSuggestions,
+  MailSearchFilter,
+  MailSearchRequest,
+  MailSearchResults,
+  MailSenderSuggestion,
+  MailSenderSuggestionRequest,
+  MailSenderSuggestions,
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import {
@@ -80,7 +80,7 @@ const toAccountList = (accountIds: readonly string[]): SQL =>
  * sender only replied to.
  */
 const toMessageConditions = (
-  filters: readonly GmailSearchFilter[]
+  filters: readonly MailSearchFilter[]
 ): readonly SQL[] =>
   filters.flatMap((filter) => {
     const pattern = toContainsPattern(filter.value);
@@ -104,7 +104,7 @@ const toMessageConditions = (
 
 /** Filters the cached thread row already answers, so no message scan is needed. */
 const toThreadConditions = (
-  filters: readonly GmailSearchFilter[]
+  filters: readonly MailSearchFilter[]
 ): readonly SQL[] =>
   filters.flatMap((filter) => {
     if (filter.field === "is") {
@@ -246,15 +246,15 @@ const toMatchedThreadsCte = (
 };
 
 /**
- * Searches the local mail index rather than Gmail: results are instant, work
- * offline, cost no quota, and cover everything the backfill has walked — which
+ * Searches the local mail index rather than the server: results are instant,
+ * work offline, and cover everything the background index has walked, which
  * is the whole account, not just the inbox.
  *
  * Takes the client rather than reaching for it, so the statement can be run
  * against a real migrated database in tests.
  */
 const toThreadSearchQuery = (
-  request: GmailSearchRequest
+  request: MailSearchRequest
 ): { readonly limit: number; readonly statement: SQL } | undefined => {
   const limit = clampLimit(
     request.limit,
@@ -357,8 +357,8 @@ const loadMatchedThreads = async (
 
 export const runIndexedThreadSearchRemote = async (
   database: RemoteDatabaseClient,
-  request: GmailSearchRequest
-): Promise<GmailSearchResults> => {
+  request: MailSearchRequest
+): Promise<MailSearchResults> => {
   const query = toThreadSearchQuery(request);
 
   if (query === undefined) {
@@ -408,7 +408,7 @@ const toSenderStatement = (accounts: SQL, pattern: SQL, limit: number): SQL =>
   `;
 
 const toSenderSuggestionQuery = (
-  request: GmailSenderSuggestionRequest
+  request: MailSenderSuggestionRequest
 ): SQL | undefined => {
   const limit = clampLimit(
     request.limit,
@@ -446,21 +446,21 @@ const toSenderSuggestionQuery = (
 
 const toSenderSuggestions = (
   rows: readonly SenderRow[]
-): GmailSenderSuggestions => ({
+): MailSenderSuggestions => ({
   senders: rows.map(
     (row) =>
       ({
         address: row.address,
         messageCount: row.message_count,
         name: row.name === null || row.name.length === 0 ? undefined : row.name,
-      }) satisfies GmailSenderSuggestion
+      }) satisfies MailSenderSuggestion
   ),
 });
 
 const runSenderSuggestionsRemote = async (
   database: RemoteDatabaseClient,
-  request: GmailSenderSuggestionRequest
-): Promise<GmailSenderSuggestions> => {
+  request: MailSenderSuggestionRequest
+): Promise<MailSenderSuggestions> => {
   const query = toSenderSuggestionQuery(request);
 
   if (query === undefined) {
@@ -474,7 +474,7 @@ const runSenderSuggestionsRemote = async (
 };
 
 export const searchIndexedThreads = Effect.fn("searchIndexedThreads")(
-  function* searchIndexedThreads(request: GmailSearchRequest) {
+  function* searchIndexedThreads(request: MailSearchRequest) {
     return yield* withDatabase("Could not search your email", (database) =>
       runIndexedThreadSearchRemote(database, request)
     );
@@ -482,7 +482,7 @@ export const searchIndexedThreads = Effect.fn("searchIndexedThreads")(
 );
 
 export const listIndexedSenders = Effect.fn("listIndexedSenders")(
-  function* listIndexedSenders(request: GmailSenderSuggestionRequest) {
+  function* listIndexedSenders(request: MailSenderSuggestionRequest) {
     if (request.role === "correspondent") {
       const limit = clampLimit(
         request.limit,

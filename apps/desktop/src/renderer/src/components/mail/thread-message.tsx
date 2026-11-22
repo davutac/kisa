@@ -7,7 +7,7 @@ import MailRemoteImageNotice from "@/components/mail/remote-image-notice";
 import { useThreadConversationStore } from "@/components/mail/thread-conversation-store";
 import { parseMailboxAddress } from "@/mail/address";
 import { containsRemoteImages } from "@/mail/remote-images";
-import type { GmailThreadMessage } from "@/shared/ipc/mail";
+import type { ThreadMessage } from "@/shared/ipc/mail";
 import { canApplySenderTrust } from "@/shared/sender-trust";
 import {
   trustImageSender,
@@ -17,7 +17,7 @@ import {
 interface MailThreadMessageProps {
   accountId: string;
   fallbackRecipient: string;
-  message: GmailThreadMessage;
+  message: ThreadMessage;
   onHeaderRef?: (messageId: string, header: HTMLButtonElement | null) => void;
 }
 

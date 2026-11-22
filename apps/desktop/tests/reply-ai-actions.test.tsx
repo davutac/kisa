@@ -9,10 +9,7 @@ import type {
   TooltipTrigger as TooltipTriggerComponent,
 } from "../src/renderer/src/components/ui/tooltip";
 import { createThreadMailDraft } from "../src/renderer/src/mail/mail-draft";
-import type {
-  GmailThreadMessage,
-  MailDraftInput,
-} from "../src/shared/ipc/mail";
+import type { ThreadMessage, MailDraftInput } from "../src/shared/ipc/mail";
 
 type TooltipProps = Parameters<typeof TooltipComponent>[0];
 type TooltipContentProps = Parameters<typeof TooltipContentComponent>[0];
@@ -161,7 +158,7 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
   },
 }));
 
-const message: GmailThreadMessage = {
+const message: ThreadMessage = {
   attachments: [],
   body: {},
   from: "Sender <sender@example.com>",

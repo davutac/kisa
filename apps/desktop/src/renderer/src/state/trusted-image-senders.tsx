@@ -4,12 +4,12 @@ import { toast } from "sonner";
 
 import { getMailApi } from "@/platform/desktop";
 import type {
-  GmailTrustedImageSender,
-  GmailTrustedImageSendersReply,
+  MailTrustedImageSender,
+  MailTrustedImageSendersReply,
 } from "@/shared/ipc/mail";
 
 const TrustedImageSendersContext = createContext<
-  readonly GmailTrustedImageSender[]
+  readonly MailTrustedImageSender[]
 >([]);
 
 const matches = (left: string, right: string): boolean =>
@@ -20,9 +20,7 @@ export const TrustedImageSendersProvider = ({
 }: {
   children: ReactNode;
 }) => {
-  const [senders, setSenders] = useState<readonly GmailTrustedImageSender[]>(
-    []
-  );
+  const [senders, setSenders] = useState<readonly MailTrustedImageSender[]>([]);
 
   useEffect(() => {
     const api = getMailApi();
@@ -32,7 +30,7 @@ export const TrustedImageSendersProvider = ({
     }
 
     let isMounted = true;
-    const apply = (reply: GmailTrustedImageSendersReply): void => {
+    const apply = (reply: MailTrustedImageSendersReply): void => {
       if (!(isMounted && reply.ok)) {
         return;
       }

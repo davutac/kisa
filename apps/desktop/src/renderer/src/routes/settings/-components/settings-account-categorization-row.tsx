@@ -12,11 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import { useAccountSettings } from "@/state/account-settings";
 
 interface SettingsAccountCategorizationRowProps {
-  account: GoogleAccount;
+  account: Account;
   settingsApi: SettingsApi;
 }
 

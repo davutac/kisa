@@ -9,43 +9,40 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { gmailLabelTextColor } from "@/mail/label";
-import { GMAIL_LABEL_COLOR_VALUES } from "@/shared/ipc/mail";
-import type { GmailLabelInputColor } from "@/shared/ipc/mail";
+import { labelTextColor } from "@/mail/label";
+import { LABEL_COLOR_VALUES } from "@/shared/ipc/mail";
+import type { MailLabelInputColor } from "@/shared/ipc/mail";
 
-type GmailLabelColorValue = GmailLabelInputColor["background"];
+type LabelColorValue = MailLabelInputColor["background"];
 
 interface LabelColorFieldProps {
   readonly disabled: boolean;
   readonly label: string;
   readonly onClear?: () => void;
-  readonly onSelectBackground: (color: GmailLabelColorValue) => void;
-  readonly onSelectText: (color: GmailLabelColorValue) => void;
+  readonly onSelectBackground: (color: LabelColorValue) => void;
+  readonly onSelectText: (color: LabelColorValue) => void;
   readonly selectedBackground?: string;
   readonly selectedText?: string;
 }
 
-interface GmailLabelColorPickerProps {
+interface LabelColorPickerProps {
   readonly disabled: boolean;
   readonly label: string;
-  readonly onSelect: (color: GmailLabelColorValue) => void;
+  readonly onSelect: (color: LabelColorValue) => void;
   readonly selected?: string;
 }
 
-const GMAIL_LABEL_COLOR_VALUE_SET: ReadonlySet<string> = new Set(
-  GMAIL_LABEL_COLOR_VALUES
-);
+const LABEL_COLOR_VALUE_SET: ReadonlySet<string> = new Set(LABEL_COLOR_VALUES);
 
-export const isGmailLabelColorValue = (
-  value: string
-): value is GmailLabelColorValue => GMAIL_LABEL_COLOR_VALUE_SET.has(value);
+export const isLabelColorValue = (value: string): value is LabelColorValue =>
+  LABEL_COLOR_VALUE_SET.has(value);
 
-const GmailLabelColorPicker = ({
+const LabelColorPicker = ({
   disabled,
   label,
   onSelect,
   selected,
-}: GmailLabelColorPickerProps) => {
+}: LabelColorPickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const groupName = useId();
 
@@ -79,7 +76,7 @@ const GmailLabelColorPicker = ({
               Choose {label.toLowerCase()} color
             </legend>
             <div className="grid grid-cols-12 gap-1">
-              {GMAIL_LABEL_COLOR_VALUES.map((color) => {
+              {LABEL_COLOR_VALUES.map((color) => {
                 const isSelected = selected === color;
 
                 return (
@@ -103,7 +100,7 @@ const GmailLabelColorPicker = ({
                       className="border-foreground/15 peer-focus-visible:ring-ring/50 peer-checked:ring-ring peer-checked:ring-offset-popover flex size-5 items-center justify-center rounded-full border peer-checked:ring-2 peer-checked:ring-offset-1 peer-focus-visible:ring-2"
                       style={{
                         backgroundColor: color,
-                        color: gmailLabelTextColor(color),
+                        color: labelTextColor(color),
                       }}
                     >
                       {isSelected ? <CheckIcon className="size-2.5" /> : null}
@@ -163,13 +160,13 @@ const LabelColorField = ({
             None
           </Button>
         )}
-        <GmailLabelColorPicker
+        <LabelColorPicker
           disabled={disabled}
           label="Background"
           onSelect={onSelectBackground}
           selected={selectedBackground}
         />
-        <GmailLabelColorPicker
+        <LabelColorPicker
           disabled={disabled}
           label="Text"
           onSelect={onSelectText}

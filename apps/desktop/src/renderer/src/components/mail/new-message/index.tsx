@@ -3,7 +3,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { useInstanceValue } from "@/hooks/use-instance-value";
 import { getInitialComposerAccountId } from "@/mail/composer-account";
 import { getDraftResumeFocusTarget } from "@/mail/mail-draft";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type { ScheduledMailEditSession } from "@/shared/ipc/scheduled-mail";
 import { useAccountSettings } from "@/state/account-settings";
 
@@ -16,7 +16,7 @@ import {
 import { useNewMessageWorkspace } from "./use-new-message-workspace";
 
 interface NewMessageDialogProps {
-  accounts: readonly GoogleAccount[];
+  accounts: readonly Account[];
   initialAccountId: string | null;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;

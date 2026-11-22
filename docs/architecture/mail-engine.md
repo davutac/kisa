@@ -19,12 +19,12 @@ POP, Exchange EWS, JMAP, an offline change queue, calendar and contacts.
 
 | Provider | Incoming | Outgoing | Sign-in | Dialect |
 | --- | --- | --- | --- | --- |
-| Gmail | `imap.gmail.com:993` TLS | `smtp.gmail.com:465` TLS | Google OAuth (XOAUTH2), or an app password | Gmail |
+| Gmail | `imap.gmail.com:993` TLS | `smtp.gmail.com:465` TLS | App password (needs 2-Step Verification) | Gmail |
 | iCloud | `imap.mail.me.com:993` TLS | `smtp.mail.me.com:587` STARTTLS | App-specific password | Generic |
-| Other IMAP | From autoconfig | From autoconfig | App password or password | Generic |
+| Other IMAP | Entered by hand | Entered by hand | App password or password | Gmail if the server offers `X-GM-EXT-1`, otherwise generic |
 | Outlook.com, Microsoft 365 | `outlook.office365.com:993` | `smtp.office365.com:587` | Microsoft OAuth (XOAUTH2) | Generic |
 
-Gmail connects with Google OAuth; iCloud and other IMAP hosts connect with an app password (see [Accounts](#accounts)). Outlook has neither a provider value nor Microsoft sign-in yet.
+Every account connects with an app password in the Add account window (see [Accounts](#accounts)). Gmail and iCloud addresses take their servers from a preset; any other address enters them by hand. Outlook is planned and has neither a provider value nor Microsoft sign-in yet.
 
 **Verified against real servers (2026-11-22).** Gmail, on a test account: sending with an attachment and a Bcc, finding the sent message by its Message-ID, a reply joining the same conversation, star, read state, a label created, applied, renamed, removed and deleted, archive and unarchive, trash and restore. After every change a fresh sync found the server agreeing with the cache. iCloud, read-only, about 1,500 messages: the generic dialect synced every folder in 18 seconds with no message lacking a `Message-ID`, and a second pass found nothing changed. iCloud offers `CONDSTORE`, `QRESYNC`, `IDLE` and `UIDPLUS` but neither `MOVE` (imapflow moves by `COPY`, `\Deleted` and `UID EXPUNGE` instead) nor `SPECIAL-USE`: its Sent, Trash, Junk, Archive and Drafts folders are recognised by imapflow's table of well-known names. Name-based roles are trusted only from servers without `SPECIAL-USE`, so a Gmail label called "Archive" stays a label.
 
@@ -34,6 +34,8 @@ A **dialect** is the only provider-specific code in the engine. It decides how a
 
 - **Gmail** uses `X-GM-MSGID`, `X-GM-THRID` and `X-GM-LABELS`. It syncs only All Mail, Spam and Trash, because every other Gmail folder is a label view of All Mail.
 - **Generic** syncs every selectable folder, derives identities from message headers, and threads locally.
+
+The dialect follows the server, not the address. An account gets the Gmail dialect when its IMAP server advertises the `X-GM-EXT-1` capability at sign-in, so a Google Workspace address entered by hand with `imap.gmail.com` gets it too; every other server gets the generic dialect.
 
 ## Identity
 
@@ -94,7 +96,7 @@ Gmail's category labels (Promotions, Social and so on) are not exposed over IMAP
 
 The engine writes a new database file. Tables are prefixed `mail_`.
 
-- **`mail_accounts`:** address, provider (`gmail`, `icloud` or `imap`), dialect, display name, cached avatar, sign-in kind (`google-oauth` or `password`), sign-in name, encrypted credentials, incoming and outgoing server settings, and sort order. Planned: a stored sync status with its last error. Today which accounts are syncing is kept in memory and sent to the renderer as an event.
+- **`mail_accounts`:** address, provider (`gmail`, `icloud` or `imap`), dialect, display name (the sender name outgoing mail carries), sign-in name, the sealed app password, incoming and outgoing server settings, and sort order. Planned: a stored sync status with its last error. Today which accounts are syncing is kept in memory and sent to the renderer as an event.
 - **`mail_mailboxes`:** account, path, delimiter, role, whether it can be selected, whether the dialect syncs it, `UIDVALIDITY` and `HIGHESTMODSEQ` (both stored as text), `UIDNEXT`, message count, and the skeleton floor: every UID at or above it has cached metadata, and `null` means the walk has not started.
 - **`mail_message_locations`:** account, mailbox path, UID, `UIDVALIDITY`, message id, mod-sequence, flags, and the labels this copy gives its message. The primary key is `(account, mailbox, uid)`, with an index on `(account, message id)`.
 - **`mail_messages`:** account, message id, thread id, `Message-ID`, `In-Reply-To`, first reference, received and sent dates, size, sender, `Reply-To`, recipients, subject, label ids, read, starred and draft state, attachment list, snippet, body state, plain text, gzipped HTML, remote-image flag, sender authentication, the version of the body format, and the few raw headers that sender branding, replies and unsubscribe need. The MIME structure itself is not stored.
@@ -108,7 +110,7 @@ A thread row is recomputed from its messages in the same transaction that change
 
 ### Connections
 
-Each account has at most two IMAP connections: one for foreground work (opening a thread, a change the user made, attachments) and one for background work (sync, skeleton, bodies). Calls on one connection run one at a time. The connections are pooled per account in main, not held by the work supervisor. Disconnecting first suspends the account's work supervisor, which cancels the background loop and foreground work and waits for them, then closes both connections. Attachment downloads are the exception: they do not run under the supervisor, so closing the connection is what ends them. A connection unused for two minutes is closed. A refused sign-in, a lost connection, throttling or an interruption drops the connection, and the next use opens a new one. An OAuth connection closes itself in the two minutes before its access token expires, at a moment when it is not busy, or 30 seconds before at the latest (imapflow's `sessionExpires`); the next use reconnects with a fresh token. imapflow logging is off.
+Each account has at most two IMAP connections: one for foreground work (opening a thread, a change the user made, attachments) and one for background work (sync, skeleton, bodies). Calls on one connection run one at a time. The connections are pooled per account in main, not held by the work supervisor. Disconnecting first suspends the account's work supervisor, which cancels the background loop and foreground work and waits for them, then closes both connections. Attachment downloads are the exception: they do not run under the supervisor, so closing the connection is what ends them. A connection unused for two minutes is closed. A refused sign-in, a lost connection, throttling or an interruption drops the connection, and the next use opens a new one. imapflow logging is off.
 
 ### Tiers
 
@@ -165,7 +167,7 @@ A change is applied to the server first, then to the cache, so the cache never s
 
 ## Sending
 
-SMTP with XOAUTH2 or a password, through nodemailer's `SMTPConnection`: one connection per message, logging off, and `[127.0.0.1]` as the EHLO name so the computer's name stays private.
+SMTP with the account's app password, through nodemailer's `SMTPConnection`: one connection per message, logging off, and `[127.0.0.1]` as the EHLO name so the computer's name stays private.
 
 **The message.** Kisa composes it itself. Header text is stripped of line breaks and encoded (RFC 2047 words of at most 64 characters, RFC 2231 file names). Base64 is folded at 76 characters. Media types and content ids from a forwarded message are checked before they reach a header. `In-Reply-To` and `References` come only from parsed message ids in the cache: the root, the parent's `In-Reply-To`, and the parent. Gmail's skeleton does not fetch `References`, so a Gmail reply carries the parent and grandparent only; that shortened chain is valid and still threads. A forward fetches the original's attachments from the server and keeps the thread headers.
 
@@ -202,17 +204,20 @@ Search reads only the local cache: FTS over subject, sender address and body tex
 
 ## Security
 
-- Credentials live only in main, encrypted with `safeStorage`. The Google OAuth flow keeps its current shape: system browser, PKCE, a validated state, and a loopback listener on `127.0.0.1`.
+- Credentials live only in main: each account's app password, sealed with `safeStorage` and opened only to sign in a new IMAP or SMTP connection. How the password is entered is described under [Accounts](#accounts).
 - Everything a server sends is hostile input. imapflow refuses a literal over 64 MB and a response over 96 MB. Bodies fetch only named header fields, a header block is read up to 1,000 fields, and structure and text are capped as described under [Bodies](#bodies). Those text limits trust the sizes `BODYSTRUCTURE` declares; the bytes actually received are bounded only by imapflow's literal and response caps.
 - **Sender authentication is trusted per provider.** Gmail accounts trust only the topmost `Authentication-Results` header, and only when it comes from `mx.google.com`; Gmail adds its header above all others, so a lower one may be the sender's. Other providers report every sender as unauthenticated until their receiving server's header has been verified. Otherwise a sender could forge Google's header in mail sent to an iCloud address.
-- No credential, token, address or message content is written to a log.
-- Entering an app password is an open question. The renderer must not hold credentials (see AGENTS.md), so the entry surface needs its own design before it is built.
+- No credential, address or message content is written to a log.
 
 ## Accounts
 
-An account signs in with Google OAuth (Gmail) or with an app password (iCloud and other IMAP hosts). Both are rows in `mail_accounts`, keyed by the lowercased address; the sealed credential blob is the only place a password exists after it is saved.
+Every account, Gmail included, signs in to IMAP and SMTP with an app password. Accounts are rows in `mail_accounts`, keyed by the lowercased address; the sealed credential blob is the only place a password exists after it is saved.
 
-**Where a password is typed.** A dedicated Add account window, opened from the login screen or the account menu ("Add iCloud or other account"). It is its own `BrowserWindow` with its own HTML entry and preload, sandboxed with context isolation, no Node integration, a `default-src 'none'` policy, no navigation, and no mail content; its only outside link, Apple's guide to app-specific passwords, opens in the system browser. Its preload exposes exactly two calls: submit the sign-in, and close. The mail window can only ask main to open or focus it.
+**Which accounts can connect.** Gmail app passwords require 2-Step Verification. Google does not offer them to accounts whose 2-Step Verification uses only security keys, to work, school or other organization accounts, or to accounts in Advanced Protection ([Google's help](https://support.google.com/accounts/answer/185833)), so those accounts cannot connect to Kisa for now. iCloud accounts use an app-specific password from their Apple Account.
+
+**Where a password is typed.** A dedicated Add account window, opened from the login screen or the account menu ("Add account"). Over the main window it is a modal dialog, a sheet on macOS, and Escape or Cancel closes it; without one it opens as a window of its own. Either way it is its own `BrowserWindow` with its own HTML entry and preload, sandboxed with context isolation, no Node integration, a `default-src 'none'` policy, no navigation, and no mail content. Its only outside links are the presets' app-password pages (Google's app passwords page and Apple's guide to app-specific passwords), which open in the system browser; it cannot open any other URL. Its preload exposes exactly two calls: submit the sign-in, and close. The mail window can only ask main to open or focus it.
+
+**Name.** The window has an optional Name field: the sender name outgoing mail carries, stored as the account's display name. Blank sends with the bare address. Accounts have no avatar; the interface shows initials.
 
 **The one exception to credentials never crossing IPC.** The user has to type the password somewhere the renderer draws, so it crosses IPC once, from the setup window to main, write-only:
 
@@ -222,15 +227,21 @@ An account signs in with Google OAuth (Gmail) or with an app password (iCloud an
 - Every failure the window sees is fixed text chosen by main. A server's reply is never shown or logged.
 - Nothing is returned on success; main closes the window and publishes the updated account list.
 
-**Server settings.** Presets by the address's domain, with no network lookup: `icloud.com`, `me.com` and `mac.com` use `imap.mail.me.com:993` over TLS and `smtp.mail.me.com:587` with STARTTLS, and the full address as the sign-in name. Any other domain shows host, port and security fields for IMAP and SMTP; only TLS and STARTTLS are offered. Gmail and Googlemail addresses are refused with a pointer to Google sign-in, because Gmail's folders are label views that only the Gmail dialect handles. Every password account uses the generic dialect.
+**Server settings.** Presets by the address's domain, with no network lookup, and the full address as the sign-in name: `gmail.com` and `googlemail.com` use `imap.gmail.com:993` and `smtp.gmail.com:465`, both over TLS; `icloud.com`, `me.com` and `mac.com` use `imap.mail.me.com:993` over TLS and `smtp.mail.me.com:587` with STARTTLS. Any other domain shows host, port and security fields for IMAP and SMTP; only TLS and STARTTLS are offered. Google shows an app password in groups of four characters, so spaces are removed from the password before signing in to Google's servers.
 
-**Verify before saving.** Main refuses an address that is already connected, then signs in over IMAP with the engine's imapflow adapter and lists the mailboxes, then signs in over SMTP and quits without sending. A refused sign-in says so, and for iCloud says to use an app-specific password rather than the Apple Account password; an unreachable server, a busy server and an unexpected reply each have their own message. Only then is the password sealed with `safeStorage` under the same rules as Google credentials (Linux `basic_text` refused), the row inserted in a transaction that checks the address again, and the engine started through the account-connected event. Closing the window abandons a verification in progress and nothing is saved, though an IMAP sign-in already under way finishes and logs out first. Once verification has passed, saving and starting the account always run to the end.
+**Dialect.** Chosen from the IMAP server's capabilities at sign-in, not from the address: `X-GM-EXT-1` gives the Gmail dialect, anything else the generic one (see [Providers](#providers)). A Google Workspace address entered by hand with `imap.gmail.com` therefore gets the Gmail dialect.
 
-**Sign-in at connection time.** For a password account, `resolveImapAuth` decrypts the blob for each new IMAP or SMTP connection and hands the connection a `Redacted` password; an unreadable blob is a refused sign-in that asks the user to add the account again. Disconnect removes a password account exactly as it removes a Google one, but never contacts Google: only `google-oauth` rows are revoked. Google sign-in over an address already connected with a password is refused, so one row never mixes the two. Changing a saved password today means removing the account and adding it again.
+**Verify before saving.** Main refuses an address that is already connected, then signs in over IMAP with the engine's imapflow adapter and lists the mailboxes, then signs in over SMTP and quits without sending. A refused sign-in says so, and for iCloud says to use an app-specific password rather than the Apple Account password; an unreachable server, a busy server and an unexpected reply each have their own message. Only then is the password sealed with `safeStorage` (Linux `basic_text` refused), the row inserted in a transaction that checks the address again, and the engine started through the account-connected event. Closing the window abandons a verification in progress and nothing is saved, though an IMAP sign-in already under way finishes and logs out first. Once verification has passed, saving and starting the account always run to the end.
+
+**Sign-in at connection time.** Main decrypts the blob for each new IMAP or SMTP connection and hands the connection a `Redacted` password; an unreadable blob is a refused sign-in that asks the user to add the account again. Changing a saved password today means removing the account and adding it again.
+
+**Disconnect.** Main cancels the account's work and waits for it, closes its connections, then deletes the account's sealed password, cached mail, index rows, progress, settings and sender trust. Nothing is revoked at the provider; a user who wants the app password to stop working revokes it in their provider's account settings.
 
 ## Interface contract
 
-The renderer and IPC schemas stay as they are. The IPC layer maps the engine's tables to the existing `Gmail*` DTOs, keeping the system label strings the renderer tests for. Renaming those DTOs is cosmetic and comes last.
+The mail renderer and its IPC schemas stay as they are. The IPC layer maps the engine's tables to the existing `Gmail*` DTOs, keeping the system label strings the renderer tests for. Renaming those DTOs is cosmetic and comes last.
+
+Account methods are provider-neutral: `listAccounts`, `onAccountsChanged`, `reorderAccounts` and `disconnectAccount`, declared in `shared/ipc/accounts.ts` on `desktop:accounts:*` channels. Adding an account belongs to the Add account window's own bridge, described under [Accounts](#accounts).
 
 ## Slices
 
@@ -239,5 +250,5 @@ The renderer and IPC schemas stay as they are. The IPC layer maps the engine's t
 3. **Changes:** read state, star, labels and folders, archive, spam, trash, delete forever, label create, rename and delete. Done; verified on Gmail except spam and delete forever, and not yet on iCloud.
 4. **Sending:** SMTP, replies, forwards, scheduled mail. Done; new mail and replies verified on Gmail.
 5. **New mail:** notifications and automatic categorization from arrivals. Done.
-6. **Accounts:** app-password sign-in for iCloud and other IMAP hosts, in a dedicated setup window. Done and tested with fakes; not yet run in the app or against a real server.
-7. **Removal:** the Gmail REST backend, its quota governor, `packages/gmail` and the `gmail_*` tables are gone. The schema is one baseline migration in a new database file, `mail.sqlite` (`mail.dev.sqlite` in development).
+6. **Accounts:** app-password sign-in for every account, Gmail included, in a dedicated setup window, with the dialect chosen from the server's capabilities. Done and tested with fakes; not yet run in the app or against a real server.
+7. **Removal:** the Gmail REST backend, its quota governor, `packages/gmail` and the `gmail_*` tables are gone. The schema is a baseline migration in a new database file, `mail.sqlite` (`mail.dev.sqlite` in development), plus a later migration that drops the account sign-in kind and avatar columns.

@@ -3,7 +3,7 @@ import type { MessageId } from "@repo/mail/ids";
 import { and, eq, inArray } from "drizzle-orm";
 import { Effect } from "effect";
 
-import type { GmailThreadRequest } from "../../../shared/ipc/mail";
+import type { MailThreadRequest } from "../../../shared/ipc/mail";
 import { isAutomaticCategorizationEnabled } from "../../settings/account-settings";
 import { showNewMailNotifications } from "../new-mail-notifications";
 import type { NewMailNotificationMessage } from "../new-mail-notifications";
@@ -13,8 +13,8 @@ import { MailDatabase } from "./mail-database";
 
 /** What a notification's buttons do. */
 export interface ArrivalActions {
-  readonly markRead: (request: GmailThreadRequest) => void;
-  readonly trash: (request: GmailThreadRequest) => void;
+  readonly markRead: (request: MailThreadRequest) => void;
+  readonly trash: (request: MailThreadRequest) => void;
 }
 
 /**

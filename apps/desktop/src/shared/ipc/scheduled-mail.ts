@@ -1,8 +1,8 @@
 import * as Schema from "effect/Schema";
 
 import {
-  MAX_GMAIL_ATTACHMENT_COUNT,
-  GmailOutgoingSubject,
+  MAX_OUTGOING_ATTACHMENT_COUNT,
+  MailOutgoingSubject,
   MailDraft,
   MailDraftInput,
 } from "./mail";
@@ -61,7 +61,7 @@ export type ScheduledMailAttachmentSummary =
 export const ScheduledMailSummary = Schema.Struct({
   ...ScheduledMailKey.fields,
   attachments: Schema.Array(ScheduledMailAttachmentSummary).check(
-    Schema.isMaxLength(MAX_GMAIL_ATTACHMENT_COUNT)
+    Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT)
   ),
   attentionReason: Schema.optional(ScheduledMailAttentionReason),
   deliveryState: ScheduledMailDeliveryState,
@@ -72,7 +72,7 @@ export const ScheduledMailSummary = Schema.Struct({
   recipients: Schema.Array(Schema.String),
   revision: PositiveInt,
   scheduledAt: Schema.Int,
-  subject: GmailOutgoingSubject,
+  subject: MailOutgoingSubject,
 });
 export type ScheduledMailSummary = typeof ScheduledMailSummary.Type;
 

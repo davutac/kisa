@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,13 +16,34 @@ const migrationsFolder = fileURLToPath(
 );
 const temporaryDirectories: string[] = [];
 
-const openMigratedDatabase = () => {
+const BASELINE = "20261121231100_baseline";
+
+const makeTemporaryDirectory = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
   temporaryDirectories.push(directory);
+  return directory;
+};
+
+const openMigratedDatabase = () => {
   const connection = openDatabaseConnection(
-    path.join(directory, "mail.sqlite")
+    path.join(makeTemporaryDirectory(), "mail.sqlite")
   );
   applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+  return connection;
+};
+
+/** A database as the first IMAP build left it: the baseline and nothing else. */
+const openBaselineDatabase = () => {
+  const baselineFolder = makeTemporaryDirectory();
+  cpSync(
+    path.join(migrationsFolder, BASELINE),
+    path.join(baselineFolder, BASELINE),
+    { recursive: true }
+  );
+  const connection = openDatabaseConnection(
+    path.join(makeTemporaryDirectory(), "mail.sqlite")
+  );
+  applyDatabaseMigrations(createDatabaseClient(connection), baselineFolder);
   return connection;
 };
 
@@ -116,5 +137,47 @@ describe("database baseline", () => {
     expect(matches(connection, "quarterly")).toStrictEqual([]);
     expect(matches(connection, "annual")).toStrictEqual([{ messageId: "m1" }]);
     expect(matches(connection, "friday")).toStrictEqual([]);
+  });
+
+  it("drops the sign-in kind and avatars but keeps the account and its templates", () => {
+    const connection = openBaselineDatabase();
+    connection
+      .prepare(
+        `INSERT INTO mail_accounts (account_id, auth_kind, avatar_url,
+          created_at, credentials, dialect, display_name, email, imap_host,
+          imap_port, imap_security, provider, smtp_host, smtp_port,
+          smtp_security, sort_order, updated_at, username)
+         VALUES ('a@example.com', 'password', 'https://example.com/a.png', 1,
+          x'00', 'generic', 'A', 'a@example.com', 'imap.example.com', 993,
+          'tls', 'imap', 'smtp.example.com', 465, 'tls', 1, 1, 'a@example.com')`
+      )
+      .run();
+    connection
+      .prepare(
+        `INSERT INTO composer_templates (account_email, bcc, body_html,
+          body_text, cc, created_at, id, name, subject, "to", updated_at)
+         VALUES ('a@example.com', '[]', '', '', '[]', 1, 't1', 'Hello', '',
+          '[]', 1)`
+      )
+      .run();
+
+    applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+
+    const columns = connection
+      .prepare("SELECT name FROM pragma_table_info('mail_accounts')")
+      .all()
+      .map((column) => (column as { name: string }).name);
+    expect(columns).not.toContain("auth_kind");
+    expect(columns.filter((name) => name.startsWith("avatar_"))).toStrictEqual(
+      []
+    );
+    expect(
+      connection
+        .prepare("SELECT account_id, display_name FROM mail_accounts")
+        .all()
+    ).toStrictEqual([{ account_id: "a@example.com", display_name: "A" }]);
+    expect(
+      connection.prepare("SELECT account_email FROM composer_templates").all()
+    ).toStrictEqual([{ account_email: "a@example.com" }]);
   });
 });

@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { retainMailboxThreadsSnapshotsForAccounts } from "@/mail/mailbox-cache";
 import { requestMailboxReload } from "@/mail/mailbox-reload";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import { useAccounts } from "@/state/accounts";
 import { useIsMailSearchActive } from "@/state/mail-search";
 import { useMailboxStore } from "@/state/mailbox";
 
@@ -20,7 +20,7 @@ export interface MailboxNavigation {
 export const useMailboxNavigation = (): MailboxNavigation => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const mailbox = useMailboxStore((state) => state.mailbox);
   const openThreadId = useMailboxStore((state) => state.openThreadId);
   const selectedAccountId = useMailboxStore((state) => state.selectedAccountId);

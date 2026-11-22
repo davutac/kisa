@@ -2,10 +2,10 @@ import { useEffect, useEffectEvent, useState } from "react";
 
 import { getMailApi } from "@/platform/desktop";
 import type {
-  GmailAddressRole,
-  GmailSenderSuggestion,
-  GmailThreadListChange,
-  GmailThreadSummary,
+  MailAddressRole,
+  MailSenderSuggestion,
+  MailThreadListChange,
+  MailThreadSummary,
 } from "@/shared/ipc/mail";
 
 import { getThreadListChangeAccountId } from "./mailbox-model";
@@ -14,7 +14,7 @@ import type { SearchQuery } from "./search-query";
 
 /**
  * The index is local, so this only has to outrun the keyboard rather than the
- * network — a fraction of the 300 ms the Gmail-backed mailbox search uses.
+ * network.
  */
 const SEARCH_DEBOUNCE_MS = 100;
 /** The rows are virtualised, so the mailbox can hold a deep result set. */
@@ -29,14 +29,14 @@ const SENDER_SUGGESTION_LIMIT = 50;
 export interface MailSearchState {
   hasMore: boolean;
   isLoading: boolean;
-  threads: readonly GmailThreadSummary[];
+  threads: readonly MailThreadSummary[];
 }
 
 interface LoadedResults {
   hasMore: boolean;
   /** The request these results answer; loading is `key !==` the live one. */
   key: string;
-  threads: readonly GmailThreadSummary[];
+  threads: readonly MailThreadSummary[];
 }
 
 const NO_RESULTS: LoadedResults = { hasMore: false, key: "", threads: [] };
@@ -68,7 +68,7 @@ export const useMailSearch = (
   const requestKey = JSON.stringify([accountIds, queryKey]);
 
   const includesSelectedAccount = useEffectEvent(
-    (changes: readonly GmailThreadListChange[]): boolean =>
+    (changes: readonly MailThreadListChange[]): boolean =>
       changes.some((change) =>
         accountIds.includes(getThreadListChangeAccountId(change))
       )
@@ -140,7 +140,7 @@ export const useMailSearch = (
 
 interface LoadedSenders {
   key: string;
-  senders: readonly GmailSenderSuggestion[];
+  senders: readonly MailSenderSuggestion[];
 }
 
 const NO_SENDERS: LoadedSenders = { key: "", senders: [] };
@@ -151,9 +151,9 @@ const NO_SENDERS: LoadedSenders = { key: "", senders: [] };
  */
 export const useAddressSuggestions = (
   accountIds: readonly string[],
-  role: GmailAddressRole | undefined,
+  role: MailAddressRole | undefined,
   search: string | undefined
-): readonly GmailSenderSuggestion[] => {
+): readonly MailSenderSuggestion[] => {
   const mailApi = getMailApi();
   const [loaded, setLoaded] = useState<LoadedSenders>(NO_SENDERS);
   const requestKey = JSON.stringify([accountIds, role ?? "", search ?? ""]);

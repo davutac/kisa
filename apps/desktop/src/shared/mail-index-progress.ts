@@ -3,7 +3,7 @@ interface MailIndexProgressValue {
   readonly indexedMessages: number;
 }
 
-/** Gmail's message total is an estimate, so work is clamped to completion. */
+/** The message total is an estimate, so work is clamped to completion. */
 export const toMailIndexRatio = (
   progress: MailIndexProgressValue | undefined
 ): number | undefined => {

@@ -4,15 +4,20 @@ import {
   findAccountSetupProblem,
   getAccountSetupMode,
   INITIAL_ACCOUNT_SETUP_FORM,
+  toAccountName,
   toAccountServers,
   withServerSecurity,
 } from "../src/renderer/src/account-setup/account-setup-form";
 import type { AccountSetupForm } from "../src/renderer/src/account-setup/account-setup-form";
-import { findMailAccountPreset } from "../src/shared/mail-account-presets";
+import {
+  findMailAccountPreset,
+  MAX_DISPLAY_NAME_LENGTH,
+} from "../src/shared/mail-account-presets";
 
 const manualForm: AccountSetupForm = {
   email: "me@example.org",
   imap: { host: "imap.example.org", port: "993", security: "tls" },
+  name: "",
   smtp: { host: "smtp.example.org", port: "587", security: "starttls" },
 };
 
@@ -24,6 +29,7 @@ describe("the Add account form", () => {
 
       expect(mode.kind).toBe("preset");
       expect(mode.kind === "preset" ? mode.preset : undefined).toStrictEqual({
+        appPasswordUrl: "https://support.apple.com/en-us/102654",
         imap: { host: "imap.mail.me.com", port: 993, security: "tls" },
         provider: "icloud",
         smtp: { host: "smtp.mail.me.com", port: 587, security: "starttls" },
@@ -41,21 +47,33 @@ describe("the Add account form", () => {
     expect(findMailAccountPreset("name@icloud.com.example")).toBeUndefined();
   });
 
-  it("sends Gmail addresses to Google sign-in", () => {
-    expect(getAccountSetupMode("me@gmail.com").kind).toBe("gmail");
-    expect(getAccountSetupMode("me@GoogleMail.com").kind).toBe("gmail");
-    expect(
-      findAccountSetupProblem(
-        { ...INITIAL_ACCOUNT_SETUP_FORM, email: "me@gmail.com" },
-        true
-      )
-    ).toStrictEqual({
-      field: "email",
-      message: "Connect Gmail with Google sign-in instead.",
-    });
-  });
+  it.each(["me@gmail.com", "Me@GoogleMail.com"])(
+    "uses Google's Gmail servers for %s",
+    (email) => {
+      const mode = getAccountSetupMode(email);
+
+      expect(mode.kind).toBe("preset");
+      expect(mode.kind === "preset" ? mode.preset : undefined).toStrictEqual({
+        appPasswordUrl: "https://myaccount.google.com/apppasswords",
+        imap: { host: "imap.gmail.com", port: 993, security: "tls" },
+        provider: "gmail",
+        smtp: { host: "smtp.gmail.com", port: 465, security: "tls" },
+        title: "Gmail",
+      });
+      expect(
+        findAccountSetupProblem({ ...INITIAL_ACCOUNT_SETUP_FORM, email }, true)
+      ).toBeUndefined();
+      expect(toAccountServers({ ...manualForm, email })).toBeUndefined();
+    }
+  );
 
   it("reports the first thing to fix, in reading order", () => {
+    expect(
+      findAccountSetupProblem(
+        { ...INITIAL_ACCOUNT_SETUP_FORM, name: "Me\tToo" },
+        false
+      )?.field
+    ).toBe("name");
     expect(
       findAccountSetupProblem(INITIAL_ACCOUNT_SETUP_FORM, false)?.field
     ).toBe("email");
@@ -142,5 +160,33 @@ describe("the Add account form", () => {
         "starttls"
       ).port
     ).toBe("1993");
+  });
+
+  it("sends a trimmed name only when one is given", () => {
+    expect(toAccountName({ ...manualForm, name: "  Ada Lovelace " })).toBe(
+      "Ada Lovelace"
+    );
+    expect(toAccountName({ ...manualForm, name: " \t " })).toBeUndefined();
+    expect(toAccountName(manualForm)).toBeUndefined();
+  });
+
+  it("refuses a name the sender header cannot carry", () => {
+    const longest = "a".repeat(MAX_DISPLAY_NAME_LENGTH);
+
+    expect(
+      findAccountSetupProblem({ ...manualForm, name: ` ${longest} ` }, true)
+    ).toBeUndefined();
+    expect(
+      findAccountSetupProblem({ ...manualForm, name: `${longest}a` }, true)
+    ).toStrictEqual({
+      field: "name",
+      message: `Keep the name to ${MAX_DISPLAY_NAME_LENGTH} characters or fewer.`,
+    });
+    expect(
+      findAccountSetupProblem({ ...manualForm, name: "Ada\tLovelace" }, true)
+    ).toStrictEqual({
+      field: "name",
+      message: "Remove tabs and line breaks from the name.",
+    });
   });
 });

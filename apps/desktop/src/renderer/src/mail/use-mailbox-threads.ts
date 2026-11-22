@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getMailApi } from "@/platform/desktop";
 import type {
-  GmailMailbox,
-  GmailThreadCursor,
-  GmailThreadSummary,
+  Mailbox,
+  MailThreadCursor,
+  MailThreadSummary,
 } from "@/shared/ipc/mail";
 
 import type { MailboxThreadsSnapshot } from "./mailbox-cache";
@@ -28,13 +28,13 @@ interface MailboxThreadsState {
   isInitialLoading: boolean;
   isLoadingNextPage: boolean;
   loadNextPage: () => Promise<boolean>;
-  threads: readonly GmailThreadSummary[];
+  threads: readonly MailThreadSummary[];
 }
 
 interface MailboxThreadsOptions {
   accountIds: readonly string[];
   labelNames?: readonly string[];
-  mailbox?: GmailMailbox;
+  mailbox?: Mailbox;
   reloadRevision?: number;
   unreadOnly?: boolean;
 }
@@ -43,7 +43,7 @@ type MailboxThreadsResult = MailboxThreadsSnapshot;
 
 /**
  * Mailbox lists come only from the local cache. Searching lives in the titlebar,
- * over the local index — this hook never queries Gmail, so each mailbox is one
+ * over the local index — this hook never queries the server, so each mailbox is one
  * keyset walk through rows that are already on disk.
  */
 export const useMailboxThreads = ({
@@ -71,12 +71,12 @@ export const useMailboxThreads = ({
   const [result, setResult] =
     useState<MailboxThreadsResult>(createStartingResult);
   const [scopeKeyInState, setScopeKeyInState] = useState(scopeKey);
-  const cacheCursorRef = useRef<GmailThreadCursor | null>(result.cacheCursor);
+  const cacheCursorRef = useRef<MailThreadCursor | null>(result.cacheCursor);
   const generationRef = useRef(0);
   const isLoadingNextPageRef = useRef(false);
   const reloadRevisionRef = useRef(reloadRevision);
   const resultRef = useRef(result);
-  const threadsRef = useRef<readonly GmailThreadSummary[]>(result.threads);
+  const threadsRef = useRef<readonly MailThreadSummary[]>(result.threads);
 
   if (scopeKeyInState !== scopeKey) {
     setScopeKeyInState(scopeKey);
@@ -162,20 +162,10 @@ export const useMailboxThreads = ({
         return;
       }
 
-      const preciseChanges = relevantChanges.filter(
-        (change) => change.kind !== "reload"
-      );
-
-      if (preciseChanges.length > 0) {
-        setResult((current) => ({
-          ...current,
-          threads: applyThreadListChanges(current.threads, preciseChanges),
-        }));
-      }
-
-      if (relevantChanges.some((change) => change.kind === "reload")) {
-        void loadCachedFirstPage(false);
-      }
+      setResult((current) => ({
+        ...current,
+        threads: applyThreadListChanges(current.threads, relevantChanges),
+      }));
     });
 
     void loadCachedFirstPage(cachedResult !== undefined);

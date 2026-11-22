@@ -21,29 +21,23 @@ describe(resolveInitialAuthGateState, () => {
   });
 
   it("returns the initial authenticated account state", async () => {
-    const account = {
-      avatarUrl: "https://example.com/avatar.png",
-      displayName: "Person",
-      email: "person@example.com",
-      scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
-    };
+    const account = { displayName: "Person", email: "person@example.com" };
 
     await expect(
       resolveInitialAuthGateState({
-        auth: {
-          listGoogleAccounts: () =>
-            Promise.resolve({ data: [account], ok: true }),
+        accounts: {
+          listAccounts: () => Promise.resolve({ data: [account], ok: true }),
         },
         isWeb: false,
       })
     ).resolves.toStrictEqual({ accounts: [account], status: "authenticated" });
   });
 
-  it("returns unauthenticated when no Google accounts exist", async () => {
+  it("returns unauthenticated when no accounts exist", async () => {
     await expect(
       resolveInitialAuthGateState({
-        auth: {
-          listGoogleAccounts: () => Promise.resolve({ data: [], ok: true }),
+        accounts: {
+          listAccounts: () => Promise.resolve({ data: [], ok: true }),
         },
         isWeb: false,
       })
@@ -54,8 +48,8 @@ describe(resolveInitialAuthGateState, () => {
     hydrateAppSettingsState(DEFAULT_APP_SETTINGS);
 
     await resolveInitialAuthGateState({
-      auth: {
-        listGoogleAccounts: () => Promise.resolve({ data: [], ok: true }),
+      accounts: {
+        listAccounts: () => Promise.resolve({ data: [], ok: true }),
       },
       isWeb: false,
       startup: {

@@ -4,13 +4,13 @@ import {
   hasEmailSignature,
   removeEmailSignature,
 } from "../../shared/email-signature";
-import { GmailOutgoingSubject } from "../../shared/ipc/mail";
+import { MailOutgoingSubject } from "../../shared/ipc/mail";
 import type { MailDraftInput } from "../../shared/ipc/mail";
 import type { ScheduledMailKey } from "../../shared/ipc/scheduled-mail";
 import { parseMailbox } from "./mail-address";
 import { scheduledMailError } from "./scheduled-mail-error";
 
-const isGmailOutgoingSubject = Schema.is(GmailOutgoingSubject);
+const isOutgoingSubject = Schema.is(MailOutgoingSubject);
 
 export const isValidScheduledDraft = (
   key: ScheduledMailKey,
@@ -56,7 +56,7 @@ export const normalizeValidScheduledDeliveryDraft = Effect.fn(
   if (subject.length === 0) {
     return yield* scheduledMailError("Add a subject before scheduling");
   }
-  if (!isGmailOutgoingSubject(subject)) {
+  if (!isOutgoingSubject(subject)) {
     return yield* scheduledMailError("The subject is too long");
   }
 

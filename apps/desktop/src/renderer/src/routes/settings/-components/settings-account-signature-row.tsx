@@ -9,13 +9,13 @@ import {
 } from "@/components/ui/settings";
 import type { SettingsApi } from "@/platform/desktop";
 import type { EmailSignatureBody } from "@/shared/email-signature";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import { useAccountSettings } from "@/state/account-settings";
 
 import EmailSignatureDialog from "./email-signature-dialog";
 
 interface SettingsAccountSignatureRowProps {
-  account: GoogleAccount;
+  account: Account;
   settingsApi: SettingsApi;
 }
 

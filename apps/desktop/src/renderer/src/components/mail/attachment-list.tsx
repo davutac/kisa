@@ -5,11 +5,11 @@ import MailAttachmentPill from "@/components/mail/attachment-pill";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getMailApi } from "@/platform/desktop";
 import { getAttachmentPreviewKind } from "@/shared/attachments";
-import type { GmailAttachmentSummary } from "@/shared/ipc/mail";
+import type { MailAttachmentSummary } from "@/shared/ipc/mail";
 
 interface MailAttachmentListProps {
   accountId: string;
-  attachments: readonly GmailAttachmentSummary[];
+  attachments: readonly MailAttachmentSummary[];
 }
 
 type AttachmentAction = "download" | "preview";
@@ -22,7 +22,7 @@ const MailAttachmentList = ({
   const [activeAttachment, setActiveAttachment] = useState<string>();
 
   const open = async (
-    attachment: GmailAttachmentSummary,
+    attachment: MailAttachmentSummary,
     action: AttachmentAction
   ): Promise<void> => {
     if (mailApi === undefined || attachment.attachmentId === undefined) {

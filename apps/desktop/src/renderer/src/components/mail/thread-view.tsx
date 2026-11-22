@@ -20,7 +20,7 @@ import type {
   ThreadActions,
   ThreadActionTarget,
 } from "@/mail/use-thread-actions";
-import type { GmailThread } from "@/shared/ipc/mail";
+import type { MailThread } from "@/shared/ipc/mail";
 
 const ThreadPending = () => (
   <Empty aria-live="polite" className="h-full min-h-0 border-0">
@@ -80,7 +80,7 @@ interface MailThreadContentProps {
   onToggleRead: ThreadActions["toggleRead"];
   onTrash: ThreadActions["trash"];
   showCloseButton?: boolean;
-  thread: GmailThread;
+  thread: MailThread;
 }
 
 const MailThreadContent = ({

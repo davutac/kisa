@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin } from "@tiptap/pm/state";
 
-import { MAX_GMAIL_SUBJECT_LENGTH } from "@/shared/gmail-subject";
+import { MAX_SUBJECT_LENGTH } from "@/shared/mail-subject";
 
 import { variableDocumentToTemplateText } from "./template-variable";
 
@@ -11,7 +11,7 @@ const getSourceLength = (document: ProseMirrorNode): number =>
 
 export const templateSubjectIsWithinLimit = (
   document: ProseMirrorNode
-): boolean => getSourceLength(document) <= MAX_GMAIL_SUBJECT_LENGTH;
+): boolean => getSourceLength(document) <= MAX_SUBJECT_LENGTH;
 
 export const TemplateSubjectLimit = Extension.create({
   addProseMirrorPlugins() {
@@ -35,7 +35,7 @@ export const truncateTemplateSubjectPaste = (
   const selectedLength = getSourceLength(document.cut(from, to));
   const availableLength = Math.max(
     0,
-    MAX_GMAIL_SUBJECT_LENGTH - getSourceLength(document) + selectedLength
+    MAX_SUBJECT_LENGTH - getSourceLength(document) + selectedLength
   );
   return value.slice(0, availableLength);
 };

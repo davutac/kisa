@@ -1,9 +1,9 @@
 import type {
-  GmailCachedThreadPageRequest,
-  GmailMailbox,
-  GmailThreadListChange,
-  GmailThreadCursor,
-  GmailThreadSummary,
+  MailCachedThreadPageRequest,
+  Mailbox,
+  MailThreadListChange,
+  MailThreadCursor,
+  MailThreadSummary,
 } from "@/shared/ipc/mail";
 
 import {
@@ -18,7 +18,7 @@ import {
 } from "./mailbox-labels";
 
 export const getThreadListChangeAccountId = (
-  change: GmailThreadListChange
+  change: MailThreadListChange
 ): string =>
   change.kind === "upsert" ? change.thread.accountId : change.accountId;
 
@@ -31,9 +31,9 @@ const compareAscending = (left: string, right: string): number => {
 };
 
 export const mergeAndSortThreads = (
-  ...groups: readonly (readonly GmailThreadSummary[])[]
-): readonly GmailThreadSummary[] => {
-  const threadsById = new Map<string, GmailThreadSummary>();
+  ...groups: readonly (readonly MailThreadSummary[])[]
+): readonly MailThreadSummary[] => {
+  const threadsById = new Map<string, MailThreadSummary>();
 
   for (const group of groups) {
     for (const thread of group) {
@@ -58,7 +58,7 @@ export const mergeAndSortThreads = (
 
 const threadMatchesMailbox = (
   labels: readonly string[],
-  mailbox: GmailMailbox
+  mailbox: Mailbox
 ): boolean => {
   if (mailbox === "spam") {
     return hasSpamLabel(labels);
@@ -79,12 +79,12 @@ const threadMatchesMailbox = (
 };
 
 export const filterThreadsByScope = (
-  threads: readonly GmailThreadSummary[],
+  threads: readonly MailThreadSummary[],
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: GmailMailbox = "inbox",
+  mailbox: Mailbox = "inbox",
   labelNames: readonly string[] = []
-): readonly GmailThreadSummary[] =>
+): readonly MailThreadSummary[] =>
   threads.filter(
     ({ accountId, isUnread, labels }) =>
       accountIds.includes(accountId) &&
@@ -94,18 +94,14 @@ export const filterThreadsByScope = (
   );
 
 export const applyThreadListChanges = (
-  threads: readonly GmailThreadSummary[],
-  changes: readonly GmailThreadListChange[]
-): readonly GmailThreadSummary[] => {
+  threads: readonly MailThreadSummary[],
+  changes: readonly MailThreadListChange[]
+): readonly MailThreadSummary[] => {
   let updatedThreads = threads;
 
   for (const change of changes) {
     if (change.kind === "upsert") {
       updatedThreads = mergeAndSortThreads(updatedThreads, [change.thread]);
-      continue;
-    }
-
-    if (change.kind === "reload") {
       continue;
     }
 
@@ -120,8 +116,8 @@ export const applyThreadListChanges = (
 };
 
 export const toThreadCursor = (
-  thread: GmailThreadSummary
-): GmailThreadCursor => ({
+  thread: MailThreadSummary
+): MailThreadCursor => ({
   accountId: thread.accountId,
   latestAt: thread.latestAt,
   threadId: thread.threadId,
@@ -130,10 +126,10 @@ export const toThreadCursor = (
 export const createCachedThreadPageRequest = (
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: GmailMailbox = "inbox",
+  mailbox: Mailbox = "inbox",
   labelNames: readonly string[] = [],
-  cursor?: GmailThreadCursor
-): GmailCachedThreadPageRequest => {
+  cursor?: MailThreadCursor
+): MailCachedThreadPageRequest => {
   const normalizedLabelNames = normalizeMailboxLabelSelection(labelNames);
 
   return {
@@ -149,7 +145,7 @@ export const createCachedThreadPageRequest = (
 export const getMailboxScopeKey = (
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: GmailMailbox = "inbox",
+  mailbox: Mailbox = "inbox",
   labelNames: readonly string[] = []
 ): string => {
   const normalizedLabelNames = normalizeMailboxLabelSelection(labelNames);

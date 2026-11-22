@@ -4,12 +4,12 @@ import {
   toLiveMailSearchQuery,
 } from "@/mail/search-query";
 import { useMailSearch } from "@/mail/use-mail-search";
-import type { GmailMailbox } from "@/shared/ipc/mail";
+import type { Mailbox } from "@/shared/ipc/mail";
 import { useMailSearchStore } from "@/state/mail-search";
 
 export const useInlineMailSearch = (
   accountIds: readonly string[],
-  mailbox: GmailMailbox,
+  mailbox: Mailbox,
   unreadOnly: boolean,
   labelNames: readonly string[]
 ) => {

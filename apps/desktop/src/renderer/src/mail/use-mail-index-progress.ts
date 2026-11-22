@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import { advanceEtas } from "@/mail/mail-index-eta";
 import type { AccountSamples } from "@/mail/mail-index-eta";
 import { getMailApi } from "@/platform/desktop";
-import type { GmailIndexProgress } from "@/shared/ipc/mail";
+import type { MailIndexProgress } from "@/shared/ipc/mail";
 
 export interface MailIndexState {
-  readonly accounts: readonly GmailIndexProgress[];
+  readonly accounts: readonly MailIndexProgress[];
   /** Remaining time per account, in milliseconds. Absent until measurable. */
   readonly etas: ReadonlyMap<string, number>;
 }
@@ -42,7 +42,7 @@ export const useMailIndexState = (): MailIndexState => {
     // Owned by this subscription, so unmounting discards the measurement along
     // with the listener that feeds it.
     const samples = new Map<string, AccountSamples>();
-    const apply = (accounts: readonly GmailIndexProgress[]): void => {
+    const apply = (accounts: readonly MailIndexProgress[]): void => {
       setState({ accounts, etas: advanceEtas(samples, accounts, Date.now()) });
     };
     const unsubscribe = mailApi.onIndexProgressChanged((progress) => {
@@ -70,12 +70,12 @@ export const useMailIndexState = (): MailIndexState => {
   return state;
 };
 
-export const useMailIndexProgress = (): readonly GmailIndexProgress[] =>
+export const useMailIndexProgress = (): readonly MailIndexProgress[] =>
   useMailIndexState().accounts;
 
 export const useAccountIndexProgress = (
   accountId: string
-): GmailIndexProgress | undefined =>
+): MailIndexProgress | undefined =>
   useMailIndexProgress().find((entry) => entry.accountId === accountId);
 
 /** True while any of the given accounts is still being indexed. */

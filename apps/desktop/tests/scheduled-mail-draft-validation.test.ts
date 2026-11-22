@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { normalizeValidScheduledDeliveryDraft } from "../src/main/mail/scheduled-mail-draft-validation";
-import { MAX_GMAIL_SUBJECT_LENGTH } from "../src/shared/gmail-subject";
+import { MAX_SUBJECT_LENGTH } from "../src/shared/mail-subject";
 
 const key = {
   accountId: "one@example.com",
@@ -23,7 +23,7 @@ const makeDraft = (subject: string) => ({
 
 describe(normalizeValidScheduledDeliveryDraft, () => {
   it("accepts the immediate-send subject limit and rejects one character more", async () => {
-    const maximumSubject = "x".repeat(MAX_GMAIL_SUBJECT_LENGTH);
+    const maximumSubject = "x".repeat(MAX_SUBJECT_LENGTH);
 
     const accepted = await Effect.runPromise(
       normalizeValidScheduledDeliveryDraft(key, makeDraft(maximumSubject))

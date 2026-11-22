@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
 import { hasSentLabel } from "@/mail/label";
 import { formatMailDate } from "@/mail/mail-date";
-import type { GmailThreadSummary } from "@/shared/ipc/mail";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
 
@@ -40,34 +40,34 @@ interface MailThreadItemProps extends Omit<
   isSelected?: boolean;
   /** The listed mailbox's own system label, which every row would repeat. */
   mailboxLabel?: string;
-  onDeleteForever?: (thread: GmailThreadSummary) => void;
+  onDeleteForever?: (thread: MailThreadSummary) => void;
   onOpen: (
-    thread: GmailThreadSummary,
+    thread: MailThreadSummary,
     event: MouseEvent<HTMLButtonElement>
   ) => void;
   onRowPointerDown: (
-    thread: GmailThreadSummary,
+    thread: MailThreadSummary,
     event: PointerEvent<HTMLButtonElement>
   ) => void;
   onSelectionPointerDown: (
-    thread: GmailThreadSummary,
+    thread: MailThreadSummary,
     event: PointerEvent
   ) => void;
-  onSelectionPointerEnter: (thread: GmailThreadSummary) => void;
-  onNotSpam?: (thread: GmailThreadSummary) => void;
-  onToggleRead?: (thread: GmailThreadSummary) => void;
-  onToggleSelection: (thread: GmailThreadSummary) => void;
-  onTrash?: (thread: GmailThreadSummary) => void;
+  onSelectionPointerEnter: (thread: MailThreadSummary) => void;
+  onNotSpam?: (thread: MailThreadSummary) => void;
+  onToggleRead?: (thread: MailThreadSummary) => void;
+  onToggleSelection: (thread: MailThreadSummary) => void;
+  onTrash?: (thread: MailThreadSummary) => void;
   position: number;
   setSize: number;
   showAccount?: boolean;
-  thread: GmailThreadSummary;
+  thread: MailThreadSummary;
   /** Virtual row offset, passed as a number so memoized rows compare equal. */
   top: number;
 }
 
 const getThreadRowLabel = (
-  thread: GmailThreadSummary,
+  thread: MailThreadSummary,
   calendar: Calendar
 ): string =>
   [
@@ -82,8 +82,8 @@ const getThreadRowLabel = (
     .join(", ");
 
 const bindThreadAction = (
-  action: ((thread: GmailThreadSummary) => void) | undefined,
-  thread: GmailThreadSummary
+  action: ((thread: MailThreadSummary) => void) | undefined,
+  thread: MailThreadSummary
 ): (() => void) | undefined =>
   action === undefined ? undefined : () => action(thread);
 
@@ -163,7 +163,7 @@ const ThreadSenderHeader = ({
   onSelectionPointerDown: (event: PointerEvent) => void;
   onToggleSelection: () => void;
   showAccount: boolean;
-  thread: GmailThreadSummary;
+  thread: MailThreadSummary;
 }) => {
   const senderMailbox = parseMailboxAddress(thread.from);
   const hasSenderName = senderMailbox.name !== undefined;

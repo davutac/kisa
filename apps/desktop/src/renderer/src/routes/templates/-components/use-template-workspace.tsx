@@ -11,8 +11,8 @@ import type {
   ComposerTemplateInput,
 } from "@/shared/ipc/templates";
 import { validateTemplateText } from "@/shared/template-variables";
+import { useAccounts } from "@/state/accounts";
 import { useComposerTemplates } from "@/state/composer-templates";
-import { useGoogleAccounts } from "@/state/google-accounts";
 
 import {
   createEmptyTemplate,
@@ -26,7 +26,7 @@ import type { TemplateSelectionDirection } from "./template-selection";
 import { useTemplateConfirmations } from "./use-template-confirmations";
 
 export const useTemplateWorkspace = () => {
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const { isLoading, templates } = useComposerTemplates();
   const templateApi = useMemo(() => getTemplateApi(), []);
   const accountIds = useMemo(

@@ -11,8 +11,8 @@ import { loadThreadBodies } from "@repo/mail/sync";
 import { and, eq } from "drizzle-orm";
 import { Effect } from "effect";
 
-import type { GmailThreadMessageAction } from "../../../shared/ipc/mail";
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "../../../shared/ipc/mail";
+import type { MailThreadMessageAction } from "../../../shared/ipc/mail";
+import { MAX_OUTGOING_ATTACHMENT_BYTES } from "../../../shared/ipc/mail";
 import { parseMailbox } from "../mail-address";
 import { resolveImapAuth } from "./account-credentials";
 import { MailDatabase } from "./mail-database";
@@ -203,7 +203,7 @@ export const sendNewMessage = Effect.fn("MailSend.sendNewMessage")(
 
 export interface ThreadMessageRequest extends OutgoingRecipients {
   readonly accountId: string;
-  readonly action: GmailThreadMessageAction;
+  readonly action: MailThreadMessageAction;
   readonly attachments: readonly OutgoingAttachment[];
   readonly body: OutgoingBody;
   readonly messageId: string;
@@ -364,7 +364,7 @@ export const sendThreadMessage = Effect.fn("MailSend.sendThreadMessage")(
       0
     );
 
-    if (totalBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+    if (totalBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
       return yield* new MailProtocolError({
         accountId: account.accountId,
         message: "The attachments are too large to send",

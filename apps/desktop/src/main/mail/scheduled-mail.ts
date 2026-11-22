@@ -274,9 +274,7 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
             .limit(1)
             .all();
           if (account === undefined) {
-            throw scheduledMailError(
-              "The Google account is no longer connected"
-            );
+            throw scheduledMailError("The account is no longer connected");
           }
           const existingSchedule =
             await transaction.query.scheduledMessages.findFirst({
@@ -389,7 +387,7 @@ const assertPossibleDuplicateAcknowledged = (
     !allowPossibleDuplicate
   ) {
     throw scheduledMailError(
-      "Gmail may already have sent this email. Confirm the possible duplicate before sending it again."
+      "The mail server may already have sent this email. Confirm the possible duplicate before sending it again."
     );
   }
 };
@@ -498,7 +496,7 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                 });
                 if (account === undefined) {
                   throw scheduledMailError(
-                    "The Google account is no longer connected"
+                    "The account is no longer connected"
                   );
                 }
               }
@@ -780,9 +778,7 @@ export const sendScheduledMailNow = Effect.fn("sendScheduledMailNow")(
               where: { accountId: request.accountId },
             });
             if (account === undefined) {
-              throw scheduledMailError(
-                "The Google account is no longer connected"
-              );
+              throw scheduledMailError("The account is no longer connected");
             }
             assertPossibleDuplicateAcknowledged(
               row.schedule,

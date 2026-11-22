@@ -7,7 +7,7 @@ import { createThreadMailDraft } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 import { getMailApi } from "@/platform/desktop";
-import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 import { useAccountSettings } from "@/state/account-settings";
 
 export const getThreadDraftAction = (
@@ -31,8 +31,8 @@ export const useThreadDraft = ({
   threadId,
 }: {
   accountId: string;
-  messages: readonly GmailThreadMessage[];
-  selectedMessage: GmailThreadMessage;
+  messages: readonly ThreadMessage[];
+  selectedMessage: ThreadMessage;
   threadId: string;
 }) => {
   const { emailSignature } = useAccountSettings(accountId);

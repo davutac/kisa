@@ -22,7 +22,6 @@ export interface SmtpServer {
 
 export interface MailAccount {
   readonly accountId: AccountId;
-  readonly authKind: "google-oauth" | "password";
   readonly dialect: DialectKind;
   readonly email: string;
   readonly imap: ImapServer;

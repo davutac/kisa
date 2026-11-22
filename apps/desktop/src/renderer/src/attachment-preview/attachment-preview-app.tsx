@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
-import type { GmailAttachmentPreview } from "@/shared/ipc/mail";
+import type { MailAttachmentPreview } from "@/shared/ipc/mail";
 import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import ImagePreview from "./image-preview";
@@ -14,7 +14,7 @@ import { PreviewError, PreviewPending } from "./preview-status";
 type PreviewState =
   | { readonly status: "error"; readonly message: string }
   | { readonly status: "loading" }
-  | { readonly data: GmailAttachmentPreview; readonly status: "ready" };
+  | { readonly data: MailAttachmentPreview; readonly status: "ready" };
 
 const formatBytes = (bytes: number): string => {
   if (bytes < 1000) {
