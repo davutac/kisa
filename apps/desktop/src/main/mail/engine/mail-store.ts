@@ -26,7 +26,7 @@ import type {
   MessageMetadata,
   ThreadChanges,
 } from "@repo/mail/store";
-import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { Effect, Layer, Option, Schema } from "effect";
@@ -362,6 +362,7 @@ const saveProgress = async (
 ): Promise<void> => {
   // Drizzle leaves out columns whose value is undefined.
   const set = {
+    flagCursor: progress.flagCursor,
     highestModseq: toBigIntText(progress.highestModseq),
     messageCount: progress.messageCount,
     skeletonFloor: progress.skeletonFloor,
@@ -694,7 +695,8 @@ const sameSet = (
  * Applies new flags and labels to cached copies and returns the messages
  * that actually changed. A server reports every copy whose mod-sequence
  * moved, including changes Kisa made itself, so unchanged copies only get
- * their mod-sequence recorded.
+ * their mod-sequence recorded. A copy reported exactly as cached, as most
+ * are when flags are read again without CONDSTORE, is not written at all.
  */
 const applyChanges = async (
   transaction: MailTransaction,
@@ -714,6 +716,7 @@ const applyChanges = async (
         flags: mailMessageLocations.flags,
         labelIds: mailMessageLocations.labelIds,
         messageId: mailMessageLocations.messageId,
+        modseq: mailMessageLocations.modseq,
         uid: mailMessageLocations.uid,
       })
       .from(mailMessageLocations)
@@ -737,11 +740,14 @@ const applyChanges = async (
       }
 
       const labelIds = sortLabels(change.labelIds);
+      const modseq = toBigIntText(change.modseq) ?? null;
       const isChanged =
         !sameSet(current.flags, change.flags) ||
         !sameLabels(current.labelIds, labelIds);
       if (isChanged) {
         touched.push(current.messageId);
+      } else if (modseq === current.modseq) {
+        continue;
       }
 
       // oxlint-disable-next-line eslint/no-await-in-loop
@@ -749,13 +755,8 @@ const applyChanges = async (
         .update(mailMessageLocations)
         .set(
           isChanged
-            ? {
-                flags: change.flags,
-                labelIds,
-                modseq: toBigIntText(change.modseq) ?? null,
-                updatedAt: now,
-              }
-            : { modseq: toBigIntText(change.modseq) ?? null }
+            ? { flags: change.flags, labelIds, modseq, updatedAt: now }
+            : { modseq }
         )
         .where(
           and(
@@ -816,6 +817,7 @@ const toMailboxRecord = (
   row: typeof mailMailboxes.$inferSelect
 ): MailboxRecord => ({
   delimiter: row.delimiter,
+  flagCursor: row.flagCursor ?? undefined,
   highestModseq: fromBigIntText(row.highestModseq),
   messageCount: row.messageCount ?? undefined,
   path: row.path,
@@ -1362,6 +1364,7 @@ export const MailEngineStoreLive = Layer.effect(
             await transaction
               .update(mailMailboxes)
               .set({
+                flagCursor: null,
                 highestModseq: null,
                 messageCount: null,
                 skeletonFloor: null,
@@ -1440,6 +1443,17 @@ export const MailEngineStoreLive = Layer.effect(
             [],
             now
           );
+          // The old UIDs mean nothing now; the flag slices start over.
+          await transaction
+            .update(mailMailboxes)
+            .set({ flagCursor: null })
+            .where(
+              and(
+                eq(mailMailboxes.accountId, accountId),
+                eq(mailMailboxes.path, path)
+              )
+            )
+            .run();
           await saveProgress(transaction, accountId, path, progress, now);
           return changes;
         }),
@@ -1571,6 +1585,30 @@ export const MailEngineStoreLive = Layer.effect(
             threadId: ThreadId.make(row.threadId),
             uid: row.uid,
           }));
+        }),
+
+      uidWindowStart: (accountId, path, below, count) =>
+        database.use("Could not load cached mail", async (client) => {
+          // Walks the primary key down from `below`, so the cost is `count`
+          // rows however large the mailbox is.
+          const window = client
+            .select({ uid: mailMessageLocations.uid })
+            .from(mailMessageLocations)
+            .where(
+              and(
+                eq(mailMessageLocations.accountId, accountId),
+                eq(mailMessageLocations.mailboxPath, path),
+                lt(mailMessageLocations.uid, below)
+              )
+            )
+            .orderBy(desc(mailMessageLocations.uid))
+            .limit(count)
+            .as("window");
+          const [row] = await client
+            .select({ start: sql<number | null>`min(${window.uid})` })
+            .from(window)
+            .all();
+          return row?.start ?? undefined;
         }),
     });
   })

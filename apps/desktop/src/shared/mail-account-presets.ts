@@ -53,10 +53,66 @@ const PRESETS_BY_DOMAIN: ReadonlyMap<string, MailAccountPreset> = new Map([
   ["me.com", ICLOUD_PRESET],
 ]);
 
-/** Every page a preset links to, the only ones the setup window may open. */
+/** Every page a preset links to. */
 export const APP_PASSWORD_URLS: ReadonlySet<string> = new Set(
   [GMAIL_PRESET, ICLOUD_PRESET].map(({ appPasswordUrl }) => appPasswordUrl)
 );
+
+/**
+ * Microsoft's own address families (Outlook.com, Hotmail, Live, MSN), told by
+ * the first label of the domain so `outlook.de` and `hotmail.co.uk` count.
+ * Since September 2024 they take no passwords from mail apps over IMAP or
+ * SMTP, only Microsoft sign-in.
+ */
+const MICROSOFT_CONSUMER_NAMES: ReadonlySet<string> = new Set([
+  "hotmail",
+  "live",
+  "msn",
+  "outlook",
+  "passport",
+  "windowslive",
+]);
+
+export const isMicrosoftConsumerAddress = (address: string): boolean => {
+  const domain = toAddressDomain(address);
+  const [name = ""] = domain?.split(".") ?? [];
+  return (
+    domain !== undefined &&
+    domain.includes(".") &&
+    MICROSOFT_CONSUMER_NAMES.has(name)
+  );
+};
+
+/**
+ * Microsoft's servers. Outlook.com and Microsoft 365 share one IMAP host and
+ * differ in where they take outgoing mail.
+ */
+export const microsoftServersFor = (address: string): MailAccountServers => ({
+  imap: { host: "outlook.office365.com", port: 993, security: "tls" },
+  smtp: {
+    host: isMicrosoftConsumerAddress(address)
+      ? "smtp-mail.outlook.com"
+      : "smtp.office365.com",
+    port: 587,
+    security: "starttls",
+  },
+});
+
+/** Whether a server is Microsoft's, which signs in through Microsoft only. */
+export const isMicrosoftMailHost = (host: string): boolean => {
+  const name = host.trim().toLowerCase();
+  return name === "outlook.office365.com" || name.endsWith(".outlook.com");
+};
+
+/** Where Microsoft explains turning IMAP on for an Outlook.com mailbox. */
+export const OUTLOOK_IMAP_HELP_URL =
+  "https://support.microsoft.com/en-us/office/pop-imap-and-smtp-settings-for-outlook-com-d088b986-291d-42b8-9564-9c414e2aa040";
+
+/** Every page the setup window links to, the only ones it may open. */
+export const ACCOUNT_SETUP_HELP_URLS: ReadonlySet<string> = new Set([
+  ...APP_PASSWORD_URLS,
+  OUTLOOK_IMAP_HELP_URL,
+]);
 
 /** Whether a server is Gmail's, which also serves Google Workspace domains. */
 export const isGoogleMailHost = (host: string): boolean =>

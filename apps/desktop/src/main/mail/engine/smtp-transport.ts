@@ -23,6 +23,7 @@ import type {
   AuthenticationType,
   Options as SmtpOptions,
 } from "nodemailer/lib/smtp-connection";
+import XOAuth2 from "nodemailer/lib/xoauth2";
 
 /**
  * The message as a stream that records when the connection starts reading
@@ -54,7 +55,11 @@ interface SmtpFailure {
   readonly responseCode?: number | undefined;
 }
 
-const AUTH_CODES: ReadonlySet<string> = new Set(["EAUTH", "ENOAUTH"]);
+const AUTH_CODES: ReadonlySet<string> = new Set([
+  "EAUTH",
+  "ENOAUTH",
+  "EOAUTH2",
+]);
 const LOCAL_REFUSALS: ReadonlySet<string> = new Set(["EENVELOPE", "EMESSAGE"]);
 
 /**
@@ -119,10 +124,18 @@ const decodeFailure = Schema.decodeUnknownOption(SmtpFailureFields);
 const toFailure = <Failure>(error: Failure): SmtpFailure =>
   Option.getOrElse(decodeFailure(error), () => ({}));
 
-const toLogin = (auth: ImapAuth): AuthenticationType => ({
-  pass: Redacted.value(auth.password),
-  user: auth.user,
-});
+const toLogin = (auth: ImapAuth): AuthenticationType =>
+  auth.kind === "oauth"
+    ? {
+        // The token is used as it is: renewing one is the account's concern,
+        // and happens before a connection is opened.
+        oauth2: new XOAuth2({
+          accessToken: Redacted.value(auth.accessToken),
+          user: auth.user,
+        }),
+        user: auth.user,
+      }
+    : { pass: Redacted.value(auth.password), user: auth.user };
 
 /** Connection settings for an account's outgoing server. */
 export const smtpOptions = (server: SmtpServer): SmtpOptions => ({

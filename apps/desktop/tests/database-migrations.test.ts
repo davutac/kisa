@@ -17,6 +17,7 @@ const migrationsFolder = fileURLToPath(
 const temporaryDirectories: string[] = [];
 
 const BASELINE = "20261121231100_baseline";
+const DROP_OAUTH_COLUMNS = "20261122102513_drop_oauth_columns";
 
 const makeTemporaryDirectory = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
@@ -32,20 +33,25 @@ const openMigratedDatabase = () => {
   return connection;
 };
 
-/** A database as the first IMAP build left it: the baseline and nothing else. */
-const openBaselineDatabase = () => {
-  const baselineFolder = makeTemporaryDirectory();
-  cpSync(
-    path.join(migrationsFolder, BASELINE),
-    path.join(baselineFolder, BASELINE),
-    { recursive: true }
-  );
+/** A database an earlier build left, migrated only as far as `migrations`. */
+const openDatabaseWith = (...migrations: readonly string[]) => {
+  const earlierFolder = makeTemporaryDirectory();
+  for (const migration of migrations) {
+    cpSync(
+      path.join(migrationsFolder, migration),
+      path.join(earlierFolder, migration),
+      { recursive: true }
+    );
+  }
   const connection = openDatabaseConnection(
     path.join(makeTemporaryDirectory(), "mail.sqlite")
   );
-  applyDatabaseMigrations(createDatabaseClient(connection), baselineFolder);
+  applyDatabaseMigrations(createDatabaseClient(connection), earlierFolder);
   return connection;
 };
+
+/** A database as the first IMAP build left it: the baseline and nothing else. */
+const openBaselineDatabase = () => openDatabaseWith(BASELINE);
 
 const insertMessage = (
   connection: ReturnType<typeof openDatabaseConnection>,
@@ -179,5 +185,29 @@ describe("database baseline", () => {
     expect(
       connection.prepare("SELECT account_email FROM composer_templates").all()
     ).toStrictEqual([{ account_email: "a@example.com" }]);
+  });
+
+  it("adds an empty flag cursor to mailboxes, keeping their sync progress", () => {
+    const connection = openDatabaseWith(BASELINE, DROP_OAUTH_COLUMNS);
+    connection
+      .prepare(
+        `INSERT INTO mail_mailboxes (account_id, delimiter, path, role,
+          selectable, skeleton_floor, synced, uid_next, uid_validity,
+          updated_at)
+         VALUES ('a@example.com', '/', 'INBOX', 'inbox', 1, 1, 1, 42, '7', 1)`
+      )
+      .run();
+
+    applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+
+    expect(
+      connection
+        .prepare(
+          "SELECT path, flag_cursor, skeleton_floor, uid_next FROM mail_mailboxes"
+        )
+        .all()
+    ).toStrictEqual([
+      { flag_cursor: null, path: "INBOX", skeleton_floor: 1, uid_next: 42 },
+    ]);
   });
 });

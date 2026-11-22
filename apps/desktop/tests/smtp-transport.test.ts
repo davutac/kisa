@@ -14,6 +14,7 @@ const accountId = AccountId.make("person@example.com");
 let server: FakeSmtpServer | undefined;
 
 const passwordAuth: ImapAuth = {
+  kind: "password",
   password: Redacted.make("app-password"),
   user: "person@example.com",
 };
@@ -77,6 +78,23 @@ describe("SMTP sending", () => {
     expect(method).toBe("PLAIN");
     expect(Buffer.from(token, "base64").toString("utf-8")).toBe(
       "\u0000person@example.com\u0000app-password"
+    );
+  });
+
+  it("signs in with XOAUTH2 and the account's access token", async () => {
+    const exit = await send({}, ["a@example.com"], {
+      accessToken: Redacted.make("access-token"),
+      expiresAt: Date.now() + 3_600_000,
+      kind: "oauth",
+      user: "person@example.com",
+    });
+    const [authentication = ""] = server?.authentications ?? [];
+    const [method, token = ""] = authentication.split(" ").slice(1);
+
+    expect(exit).toStrictEqual(Exit.succeed({ refused: [] }));
+    expect(method).toBe("XOAUTH2");
+    expect(Buffer.from(token, "base64").toString("utf-8")).toBe(
+      "user=person@example.com\u0001auth=Bearer access-token\u0001\u0001"
     );
   });
 

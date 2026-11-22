@@ -173,7 +173,12 @@ describe("labels with the generic dialect", () => {
       label_ids: JSON.stringify(["u:Bills"]),
     });
     expect(changes.changed).toStrictEqual([]);
-    expect(server.calls).not.toContain("fetch Bills");
+    // Only flags may be read again; no message is fetched anew.
+    expect(
+      server.fetches.filter(
+        (fetch) => fetch.path === "Bills" && fetch.fields.envelope === true
+      )
+    ).toStrictEqual([]);
   });
 
   it("moves a folder's mail to Archive before deleting it", async () => {

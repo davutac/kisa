@@ -42,6 +42,12 @@ import type {
 const MAX_LITERAL_BYTES = 64 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 96 * 1024 * 1024;
 const CONNECTION_TIMEOUT_MS = 30_000;
+/**
+ * How long before an access token expires its connection starts looking for
+ * a free moment to close. Exchange Online answers the first command after
+ * the expiry with `BYE`, failing whatever that command was.
+ */
+const SESSION_EXPIRY_LEAD_MS = 2 * 60_000;
 const SOCKET_TIMEOUT_MS = 2 * 60_000;
 
 const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
@@ -339,11 +345,65 @@ export const toMailbox = (
   };
 };
 
+/** RFC 6154's attributes, each naming a folder's role outright. */
+const ROLE_ATTRIBUTES: ReadonlySet<string> = new Set([
+  "\\all",
+  "\\archive",
+  "\\drafts",
+  "\\flagged",
+  "\\junk",
+  "\\sent",
+  "\\trash",
+]);
+
+type ListedMailbox = Parameters<typeof toMailbox>[0];
+
+/**
+ * Every listed folder's role. Without the SPECIAL-USE capability imapflow
+ * ignores role attributes and reads names only, yet a server may send the
+ * attributes anyway (Exchange is reported to). An attribute names the role
+ * outright, so it beats a name, and a role an attribute gave one folder is
+ * not given to another by its name.
+ */
+export const toMailboxes = (
+  entries: readonly ListedMailbox[],
+  hasSpecialUse: boolean
+): readonly ImapMailbox[] => {
+  if (hasSpecialUse) {
+    return entries.map((entry) => toMailbox(entry, true));
+  }
+  const attributes = entries.map((entry) =>
+    [...entry.flags].find((flag) => ROLE_ATTRIBUTES.has(flag.toLowerCase()))
+  );
+  const claimed = new Set(
+    attributes.flatMap((flag) =>
+      flag === undefined ? [] : [flag.toLowerCase()]
+    )
+  );
+  return entries.map((entry, index) => {
+    const named =
+      entry.specialUse !== undefined &&
+      claimed.has(entry.specialUse.toLowerCase())
+        ? undefined
+        : entry.specialUse;
+    return toMailbox(
+      { ...entry, specialUse: attributes[index] ?? named },
+      false
+    );
+  });
+};
+
 const toClientOptions = (request: ImapConnectRequest): ImapFlowOptions => ({
-  auth: {
-    pass: Redacted.value(request.auth.password),
-    user: request.auth.user,
-  },
+  auth:
+    request.auth.kind === "oauth"
+      ? {
+          accessToken: Redacted.value(request.auth.accessToken),
+          user: request.auth.user,
+        }
+      : {
+          pass: Redacted.value(request.auth.password),
+          user: request.auth.user,
+        },
   clientInfo: { name: "Kisa" },
   connectionTimeout: CONNECTION_TIMEOUT_MS,
   disableAutoIdle: true,
@@ -355,6 +415,9 @@ const toClientOptions = (request: ImapConnectRequest): ImapFlowOptions => ({
   maxResponseSize: MAX_RESPONSE_BYTES,
   port: request.server.port,
   secure: request.server.security === "tls",
+  sessionExpires:
+    request.auth.kind === "oauth" ? request.auth.expiresAt : undefined,
+  sessionExpiryLead: SESSION_EXPIRY_LEAD_MS,
   socketTimeout: SOCKET_TIMEOUT_MS,
   tls: { minVersion: "TLSv1.2" },
 });
@@ -516,8 +579,7 @@ const makeSession = (accountId: AccountId, client: ImapFlow): ImapSession => {
     listMailboxes: run(undefined, async () => {
       // A full listing: `listOnly` returns before imapflow assigns roles.
       const entries = await client.list();
-      const hasSpecialUse = capabilities.has("SPECIAL-USE");
-      return entries.map((entry) => toMailbox(entry, hasSpecialUse));
+      return toMailboxes(entries, capabilities.has("SPECIAL-USE"));
     }),
     move: (path, uids, destination) =>
       onMessages(path, uids, async (range) => {

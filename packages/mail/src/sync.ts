@@ -30,6 +30,27 @@ export const SKELETON_BATCH_SIZE = 500;
 export const BODY_BATCH_SIZE = 25;
 
 /**
+ * Without CONDSTORE nothing says which flags changed elsewhere, so a
+ * background pass reads them again: the newest cached copies every time, and
+ * a slice of the older ones that moves down to the skeleton floor and then
+ * starts over. `UID FETCH a:b (UID FLAGS)` reads no message content and
+ * answers about 50 bytes a message (Thunderbird reads whole folders this way
+ * on such servers), so a pass reads at most 2,500 copies, about 125 KB, per
+ * mailbox, and a mailbox of `n` cached copies is read through in
+ * `ceil((n - 500) / 2000)` passes.
+ */
+export const FLAG_HEAD_SIZE = 500;
+export const FLAG_SLICE_SIZE = 2000;
+
+/**
+ * `\Recent` belongs to the connection that saw a message first, not to the
+ * message: a server reports it to one session and not the next, so keeping
+ * it would make every pass look like a change.
+ */
+const messageFlags = (flags: readonly string[]): readonly string[] =>
+  flags.filter((flag) => flag.toLowerCase() !== "\\recent");
+
+/**
  * Header fields kept with a body: sender branding reads the receiving
  * server's authentication results, and replies and unsubscribe read the rest.
  * Asking for named fields also bounds what a sender can make Kisa download.
@@ -210,11 +231,30 @@ const toLocation = (
   mailbox: ImapMailbox,
   { identity, message }: IdentifiedMessage
 ): MessageLocation => ({
-  flags: message.flags,
+  flags: messageFlags(message.flags),
   labelIds: dialect.locationLabels(message, mailbox),
   messageId: identity.messageId,
   modseq: message.modseq,
   uid: message.uid,
+});
+
+/** Fresh flags and labels of copies already cached. */
+const toLocationChanges = (
+  dialect: Dialect,
+  mailbox: ImapMailbox,
+  messages: readonly FetchedMessage[]
+): readonly LocationChange[] =>
+  messages.map((message) => ({
+    flags: messageFlags(message.flags),
+    labelIds: dialect.locationLabels(message, mailbox),
+    modseq: message.modseq,
+    uid: message.uid,
+  }));
+
+/** Flags, and Gmail's labels, which a server changes without new UIDs. */
+const changeFields = (dialect: Dialect) => ({
+  flags: true,
+  gmail: dialect.kind === "gmail",
 });
 
 /** Fetches skeleton metadata for UIDs and commits it with `progress`. */
@@ -282,15 +322,101 @@ export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
 // ---------------------------------------------------------- incremental
 
 /**
+ * Reads the flags of cached copies again on a server without mod-sequences:
+ * the newest `FLAG_HEAD_SIZE`, then the next `FLAG_SLICE_SIZE` below the
+ * stored cursor, wrapping to the newest once the oldest cached copy was
+ * read. Only UIDs the cache has are asked for. The cursor is saved in the
+ * transaction that saves the slice, so a pass cut short repeats the slice
+ * rather than skipping it, and only copies whose flags differ are written.
+ */
+const rereadFlags = Effect.fn("MailSync.rereadFlags")(function* rereadFlags(
+  scope: SyncScope,
+  mailbox: ImapMailbox,
+  cached: {
+    readonly flagCursor?: number | undefined;
+    readonly skeletonFloor?: number | undefined;
+    readonly uidNext: number;
+  }
+) {
+  const store = yield* MailEngineStore;
+  const { accountId } = scope;
+  const { path } = mailbox;
+  const floor = cached.skeletonFloor ?? cached.uidNext;
+  const headStart =
+    floor < cached.uidNext
+      ? yield* store.uidWindowStart(
+          accountId,
+          path,
+          cached.uidNext,
+          FLAG_HEAD_SIZE
+        )
+      : undefined;
+
+  if (headStart === undefined) {
+    return NO_THREAD_CHANGES;
+  }
+
+  let sliceEnd = Math.min(cached.flagCursor ?? headStart, headStart);
+  let sliceStart = yield* store.uidWindowStart(
+    accountId,
+    path,
+    sliceEnd,
+    FLAG_SLICE_SIZE
+  );
+  if (sliceStart === undefined && sliceEnd < headStart) {
+    // The last slice reached the oldest cached copy: start over.
+    sliceEnd = headStart;
+    sliceStart = yield* store.uidWindowStart(
+      accountId,
+      path,
+      headStart,
+      FLAG_SLICE_SIZE
+    );
+  }
+
+  const fields = changeFields(scope.dialect);
+  const head = yield* scope.session.fetch(
+    path,
+    { from: Math.max(headStart, floor), kind: "range", to: cached.uidNext - 1 },
+    fields
+  );
+  const slice =
+    sliceStart === undefined
+      ? []
+      : yield* scope.session.fetch(
+          path,
+          {
+            from: Math.max(sliceStart, floor),
+            kind: "range",
+            to: sliceEnd - 1,
+          },
+          fields
+        );
+
+  return yield* store.applyLocationChanges(
+    accountId,
+    path,
+    toLocationChanges(scope.dialect, mailbox, [...head, ...slice]),
+    { flagCursor: sliceStart ?? headStart }
+  );
+});
+
+/**
  * Brings one mailbox's cached copies up to date: new mail at or above the
- * stored UIDNEXT, flag and label changes since the stored mod-sequence, and
- * copies that are gone. Mail below the skeleton floor is left to the walk.
+ * stored UIDNEXT, flag and label changes, and copies that are gone. Mail
+ * below the skeleton floor is left to the walk.
+ *
+ * With CONDSTORE, changes since the stored mod-sequence are fetched. Without
+ * it, `rereadFlags` reads a bounded part of the cache again; only the
+ * background pass asks for that, since a refresh after the user's own change
+ * already knows the flags it set.
  */
 export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
   function* syncMailbox(
     scope: SyncScope,
     mailbox: ImapMailbox,
-    cached: MailboxRecord | undefined
+    cached: MailboxRecord | undefined,
+    options: { readonly rereadFlags?: boolean } = {}
   ) {
     const store = yield* MailEngineStore;
     const status = yield* scope.session.status(mailbox.path);
@@ -330,8 +456,17 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
     }
 
     const floor = cached.skeletonFloor ?? cached.uidNext;
-    if (
-      status.highestModseq !== undefined &&
+    if (status.highestModseq === undefined) {
+      if (options.rereadFlags === true) {
+        results.push(
+          yield* rereadFlags(scope, mailbox, {
+            flagCursor: cached.flagCursor,
+            skeletonFloor: cached.skeletonFloor,
+            uidNext: cached.uidNext,
+          })
+        );
+      }
+    } else if (
       cached.highestModseq !== undefined &&
       status.highestModseq > cached.highestModseq &&
       floor < cached.uidNext
@@ -339,20 +474,14 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
       const changed = yield* scope.session.fetch(
         mailbox.path,
         { from: floor, kind: "range", to: cached.uidNext - 1 },
-        { flags: true, gmail: scope.dialect.kind === "gmail" },
+        changeFields(scope.dialect),
         { changedSince: cached.highestModseq }
       );
-      const locationChanges: LocationChange[] = changed.map((message) => ({
-        flags: message.flags,
-        labelIds: scope.dialect.locationLabels(message, mailbox),
-        modseq: message.modseq,
-        uid: message.uid,
-      }));
       results.push(
         yield* store.applyLocationChanges(
           scope.accountId,
           mailbox.path,
-          locationChanges,
+          toLocationChanges(scope.dialect, mailbox, changed),
           {}
         )
       );
@@ -409,7 +538,9 @@ export const syncAccount = Effect.fn("MailSync.syncAccount")(
             const cached = (yield* store.getMailboxes(scope.accountId)).find(
               (record) => record.path === mailbox.path
             );
-            return yield* syncMailbox(scope, mailbox, cached);
+            return yield* syncMailbox(scope, mailbox, cached, {
+              rereadFlags: true,
+            });
           })
         )
       );

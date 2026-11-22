@@ -75,7 +75,12 @@ export const run = <A, E>(
 
 export const accountId = AccountId.make("test@example.com");
 
-export const insertAccount = (dialect: "generic" | "gmail"): void => {
+export const insertAccount = (
+  dialect: "generic" | "gmail",
+  provider: "gmail" | "icloud" | "imap" | "outlook" = dialect === "gmail"
+    ? "gmail"
+    : "icloud"
+): void => {
   connection
     .prepare(
       `INSERT INTO mail_accounts (account_id, created_at, credentials, dialect,
@@ -84,13 +89,7 @@ export const insertAccount = (dialect: "generic" | "gmail"): void => {
        VALUES (?, 0, X'00', ?, ?, 'imap.example.com', 993, 'tls', ?,
         'smtp.example.com', 465, 'tls', 0, 0, ?)`
     )
-    .run(
-      accountId,
-      dialect,
-      accountId,
-      dialect === "gmail" ? "gmail" : "icloud",
-      accountId
-    );
+    .run(accountId, dialect, accountId, provider, accountId);
 };
 
 export const scopeFor = (
@@ -224,6 +223,32 @@ export const ICLOUD_MAILBOXES = [
   { path: "Deleted Messages", specialUse: "\\Trash" },
   { path: "Archive", specialUse: "\\Archive" },
   { path: "Receipts" },
+];
+
+/**
+ * Outlook.com's capabilities as its server lists them before sign-in: no
+ * CONDSTORE and no SPECIAL-USE.
+ */
+export const OUTLOOK_CAPABILITIES = [
+  "CHILDREN",
+  "ID",
+  "IDLE",
+  "LITERAL+",
+  "MOVE",
+  "NAMESPACE",
+  "SASL-IR",
+  "UIDPLUS",
+  "UNSELECT",
+];
+
+/** Outlook's folders; their roles come from imapflow's table of names. */
+export const OUTLOOK_MAILBOXES = [
+  { path: "INBOX" },
+  { path: "Sent Items", specialUse: "\\Sent" },
+  { path: "Deleted Items", specialUse: "\\Trash" },
+  { path: "Junk Email", specialUse: "\\Junk" },
+  { path: "Drafts", specialUse: "\\Drafts" },
+  { path: "Archive", specialUse: "\\Archive" },
 ];
 
 export const genericMessage = (

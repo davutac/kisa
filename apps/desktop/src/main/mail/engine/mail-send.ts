@@ -9,7 +9,7 @@ import { MailEngineStore } from "@repo/mail/store";
 import type { MailAccount } from "@repo/mail/store";
 import { loadThreadBodies } from "@repo/mail/sync";
 import { and, eq } from "drizzle-orm";
-import { Effect } from "effect";
+import { Context, Effect } from "effect";
 
 import type { MailThreadMessageAction } from "../../../shared/ipc/mail";
 import { MAX_OUTGOING_ATTACHMENT_BYTES } from "../../../shared/ipc/mail";
@@ -18,6 +18,7 @@ import { resolveImapAuth } from "./account-credentials";
 import { MailDatabase } from "./mail-database";
 import {
   MailEngineError,
+  forkAccountWork,
   publishChanges,
   requestMailSync,
   requireAccount,
@@ -101,40 +102,128 @@ const senderOf = Effect.fn("MailSend.senderOf")(function* senderOf(
 });
 
 /**
- * Keeps a copy in Sent, as Gmail does by itself. It is looked for first, so a
- * provider that files sent mail on its own, or a retry, does not leave two.
+ * Who keeps the copy of a sent message in Sent, by provider. The one place
+ * to change after trying a provider for real.
+ *
+ * - `server`: the provider files what its SMTP server accepted (Gmail).
+ * - `kisa`: Kisa appends a copy at once unless one is already there.
+ * - `serverLater`: Outlook files the copy itself a moment after accepting the
+ *   message, under a Message-ID of its own, so Kisa cannot find it by the one
+ *   it sent and must not add one: tried on Outlook.com, that left two. Sent
+ *   is refreshed at each of `SentCopyRefreshes`, so the copy shows without
+ *   waiting for the next sync.
  */
-const fileSentCopy = Effect.fn("MailSend.fileSentCopy")(function* fileSentCopy(
-  account: MailAccount,
-  composed: ComposedMessage
-) {
-  if (account.provider === "gmail") {
-    return;
-  }
-  const store = yield* MailEngineStore;
-  const sent = (yield* store.getMailboxes(account.accountId)).find(
-    (mailbox) => mailbox.role === "sent" && mailbox.selectable
-  );
-  if (sent === undefined) {
-    return;
-  }
+const SENT_COPY_FILER = {
+  gmail: "server",
+  icloud: "kisa",
+  imap: "kisa",
+  outlook: "serverLater",
+} as const satisfies Record<
+  MailAccount["provider"],
+  "kisa" | "server" | "serverLater"
+>;
 
-  yield* withForeground(account, (scope) =>
+/**
+ * When to refresh Sent for a `serverLater` provider, in milliseconds after
+ * the send. MailCraft rereads Exchange's Sent Items after 3 and 15 seconds.
+ */
+export const SentCopyRefreshes = Context.Reference<readonly number[]>(
+  "kisa/main/mail/engine/SentCopyRefreshes",
+  {
+    defaultValue: () => [3000, 15_000],
+  }
+);
+
+const SENT_COPY_NOT_FILED = "Message sent, but its Sent copy was not filed";
+
+const sentMailboxOf = Effect.fn("MailSend.sentMailboxOf")(
+  function* sentMailboxOf(account: MailAccount) {
+    const store = yield* MailEngineStore;
+    return (yield* store.getMailboxes(account.accountId)).find(
+      (mailbox) => mailbox.role === "sent" && mailbox.selectable
+    );
+  }
+);
+
+/** Caches Sent and tells the windows what changed. */
+const refreshSent = (account: MailAccount, sentPath: string) =>
+  withForeground(account, (scope) =>
     withCacheLock(
       account.accountId,
-      Effect.gen(function* appendSentCopy() {
-        const existing = yield* scope.session.search(sent.path, {
+      Effect.gen(function* refreshSentMailbox() {
+        const changes = yield* refreshMailboxes(scope, [sentPath]);
+        yield* publishChanges(account.accountId, changes);
+      })
+    )
+  );
+
+/**
+ * Appends a copy of the message to Sent unless one with its Message-ID is
+ * already there, so a retry never leaves two, then caches Sent. One turn of
+ * the cache lock covers the look and the append.
+ */
+const appendSentCopy = (
+  account: MailAccount,
+  composed: ComposedMessage,
+  sentPath: string
+) =>
+  withForeground(account, (scope) =>
+    withCacheLock(
+      account.accountId,
+      Effect.gen(function* appendToSent() {
+        const existing = yield* scope.session.search(sentPath, {
           kind: "header",
           name: "Message-ID",
           value: `<${composed.messageId}>`,
         });
         if (existing.length === 0) {
-          yield* scope.session.append(sent.path, composed.sentCopy, ["\\Seen"]);
+          yield* scope.session.append(sentPath, composed.sentCopy, ["\\Seen"]);
         }
-        const changes = yield* refreshMailboxes(scope, [sent.path]);
+        const changes = yield* refreshMailboxes(scope, [sentPath]);
         yield* publishChanges(account.accountId, changes);
       })
     )
+  );
+
+/** Refreshes Sent at each of `SentCopyRefreshes`, unlocked in between. */
+const showServerSentCopy = Effect.fn("MailSend.showServerSentCopy")(
+  function* showServerSentCopy(account: MailAccount, sentPath: string) {
+    const refreshes = yield* SentCopyRefreshes;
+    let waited = 0;
+    for (const at of refreshes) {
+      yield* Effect.sleep(Math.max(0, at - waited));
+      waited = at;
+      yield* refreshSent(account, sentPath).pipe(Effect.ignore);
+    }
+  }
+);
+
+/**
+ * Makes sure Sent keeps a copy of a sent message, as `SENT_COPY_FILER`
+ * decides. A late server's copy is waited for apart from the send, so the
+ * user's reply does not wait for it.
+ */
+const fileSentCopy = Effect.fn("MailSend.fileSentCopy")(function* fileSentCopy(
+  account: MailAccount,
+  composed: ComposedMessage
+) {
+  const filer = SENT_COPY_FILER[account.provider];
+  if (filer === "server") {
+    return;
+  }
+  const sent = yield* sentMailboxOf(account);
+  if (sent === undefined) {
+    return yield* Effect.logWarning(
+      "Message sent, but the account has no Sent folder to keep a copy in"
+    );
+  }
+  if (filer === "kisa") {
+    yield* appendSentCopy(account, composed, sent.path);
+    return;
+  }
+  yield* forkAccountWork(
+    account.accountId,
+    showServerSentCopy(account, sent.path)
   );
 });
 
@@ -158,9 +247,7 @@ const deliver = Effect.fn("MailSend.deliver")(function* deliver(
   });
 
   yield* fileSentCopy(account, composed).pipe(
-    Effect.catchCause(() =>
-      Effect.logWarning("Message sent, but its Sent copy was not filed")
-    )
+    Effect.catchCause(() => Effect.logWarning(SENT_COPY_NOT_FILED))
   );
   yield* Effect.sync(() => requestMailSync(account.accountId));
   return result;

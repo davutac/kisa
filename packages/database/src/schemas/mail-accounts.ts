@@ -2,7 +2,8 @@ import { blob, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * One connected mailbox account of any provider. `credentials` is the
- * `safeStorage`-sealed app password; it never leaves main.
+ * `safeStorage`-sealed sign-in: an app password, or for a Microsoft account
+ * its OAuth refresh token. It never leaves main.
  */
 export const mailAccounts = sqliteTable("mail_accounts", {
   /** The normalized address, the account's identity everywhere else. */
@@ -17,7 +18,9 @@ export const mailAccounts = sqliteTable("mail_accounts", {
   imapHost: text("imap_host").notNull(),
   imapPort: integer("imap_port").notNull(),
   imapSecurity: text("imap_security", { enum: ["starttls", "tls"] }).notNull(),
-  provider: text("provider", { enum: ["gmail", "icloud", "imap"] }).notNull(),
+  provider: text("provider", {
+    enum: ["gmail", "icloud", "imap", "outlook"],
+  }).notNull(),
   smtpHost: text("smtp_host").notNull(),
   smtpPort: integer("smtp_port").notNull(),
   smtpSecurity: text("smtp_security", { enum: ["starttls", "tls"] }).notNull(),

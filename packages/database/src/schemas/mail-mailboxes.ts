@@ -14,6 +14,12 @@ export const mailMailboxes = sqliteTable(
   {
     accountId: text("account_id").notNull(),
     delimiter: text("delimiter").notNull(),
+    /**
+     * Without CONDSTORE, flags are refreshed a slice of cached copies at a
+     * time, newest first: the next slice starts below this UID. `null` means
+     * the next slice starts below the newest copies, which every pass reads.
+     */
+    flagCursor: integer("flag_cursor"),
     /** HIGHESTMODSEQ when the cache last caught up, absent without CONDSTORE. */
     highestModseq: text("highest_modseq"),
     /** The message count the cache last saw, for spotting deletions. */

@@ -25,13 +25,15 @@ export interface MailAccount {
   readonly dialect: DialectKind;
   readonly email: string;
   readonly imap: ImapServer;
-  readonly provider: "gmail" | "icloud" | "imap";
+  readonly provider: "gmail" | "icloud" | "imap" | "outlook";
   readonly smtp: SmtpServer;
   readonly username: string;
 }
 
 export interface MailboxRecord {
   readonly delimiter: string;
+  /** Where the next slice of re-read flags starts, without CONDSTORE. */
+  readonly flagCursor?: number | undefined;
   readonly highestModseq?: bigint | undefined;
   readonly messageCount?: number | undefined;
   readonly path: string;
@@ -46,6 +48,7 @@ export interface MailboxRecord {
 
 /** What the server last said about a mailbox, saved with the work it covers. */
 export interface MailboxProgress {
+  readonly flagCursor?: number | undefined;
   readonly highestModseq?: bigint | undefined;
   readonly messageCount?: number | undefined;
   readonly skeletonFloor?: number | undefined;
@@ -261,6 +264,17 @@ export interface MailEngineStoreService {
     accountId: AccountId,
     threadId: ThreadId
   ) => Effect.Effect<readonly BodyCandidate[], MailStoreError>;
+  /**
+   * The lowest of the `count` highest cached UIDs below `below` in a mailbox,
+   * so about `count` cached copies can be read as one UID range however
+   * sparse the UIDs are. `undefined` when no cached copy is below `below`.
+   */
+  readonly uidWindowStart: (
+    accountId: AccountId,
+    path: string,
+    below: number,
+    count: number
+  ) => Effect.Effect<number | undefined, MailStoreError>;
 }
 
 export class MailEngineStore extends Context.Service<

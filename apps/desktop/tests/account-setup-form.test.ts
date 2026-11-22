@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   findAccountSetupProblem,
+  findSignInSwitch,
   getAccountSetupMode,
   INITIAL_ACCOUNT_SETUP_FORM,
   toAccountName,
   toAccountServers,
+  toMicrosoftSignIn,
   withServerSecurity,
+  withSignInMethod,
 } from "../src/renderer/src/account-setup/account-setup-form";
 import type { AccountSetupForm } from "../src/renderer/src/account-setup/account-setup-form";
 import {
@@ -18,14 +21,18 @@ const manualForm: AccountSetupForm = {
   email: "me@example.org",
   imap: { host: "imap.example.org", port: "993", security: "tls" },
   name: "",
+  prefersMicrosoft: false,
   smtp: { host: "smtp.example.org", port: "587", security: "starttls" },
 };
+
+const modeOf = (email: string) =>
+  getAccountSetupMode({ ...INITIAL_ACCOUNT_SETUP_FORM, email });
 
 describe("the Add account form", () => {
   it.each(["name@icloud.com", "Name@ME.com", " name@mac.com "])(
     "uses Apple's iCloud servers for %s",
     (email) => {
-      const mode = getAccountSetupMode(email);
+      const mode = modeOf(email);
 
       expect(mode.kind).toBe("preset");
       expect(mode.kind === "preset" ? mode.preset : undefined).toStrictEqual({
@@ -41,7 +48,7 @@ describe("the Add account form", () => {
   it("asks for servers for any other domain, and nothing before the address is complete", () => {
     expect(
       ["me@example.org", "me@icloud.com.example", "me@", "me@icloud", ""].map(
-        (email) => getAccountSetupMode(email).kind
+        (email) => modeOf(email).kind
       )
     ).toStrictEqual(["manual", "manual", "address", "address", "address"]);
     expect(findMailAccountPreset("name@icloud.com.example")).toBeUndefined();
@@ -50,7 +57,7 @@ describe("the Add account form", () => {
   it.each(["me@gmail.com", "Me@GoogleMail.com"])(
     "uses Google's Gmail servers for %s",
     (email) => {
-      const mode = getAccountSetupMode(email);
+      const mode = modeOf(email);
 
       expect(mode.kind).toBe("preset");
       expect(mode.kind === "preset" ? mode.preset : undefined).toStrictEqual({
@@ -187,6 +194,132 @@ describe("the Add account form", () => {
     ).toStrictEqual({
       field: "name",
       message: "Remove tabs and line breaks from the name.",
+    });
+  });
+});
+
+describe("Microsoft sign-in in the Add account form", () => {
+  const microsoftServerForm: AccountSetupForm = {
+    ...manualForm,
+    imap: { ...manualForm.imap, host: "outlook.office365.com" },
+  };
+  const chosenForm = withSignInMethod(manualForm, "microsoft");
+
+  it.each(["me@outlook.com", "Me@Hotmail.co.uk ", "me@live.de"])(
+    "signs %s in through Microsoft, with no way to a password",
+    (email) => {
+      const mode = modeOf(email);
+
+      expect(mode).toStrictEqual({ kind: "microsoft", via: "address" });
+      expect(findSignInSwitch(mode, true)).toBeUndefined();
+    }
+  );
+
+  it("waits for a complete address before deciding it is Outlook's", () => {
+    expect(modeOf("me@outlook.").kind).toBe("address");
+  });
+
+  it("signs in through Microsoft when the incoming server is Microsoft's", () => {
+    expect(getAccountSetupMode(microsoftServerForm)).toStrictEqual({
+      kind: "microsoft",
+      via: "server",
+    });
+    expect(
+      getAccountSetupMode({
+        ...manualForm,
+        imap: { ...manualForm.imap, host: " IMAP-Mail.Outlook.com " },
+      }).kind
+    ).toBe("microsoft");
+  });
+
+  it("offers Microsoft for a typed address only when this build can sign in there", () => {
+    expect(findSignInSwitch({ kind: "manual" }, true)).toBe("microsoft");
+    expect(findSignInSwitch({ kind: "manual" }, false)).toBeUndefined();
+    expect(findSignInSwitch({ kind: "address" }, true)).toBeUndefined();
+    expect(findSignInSwitch(modeOf("me@gmail.com"), true)).toBeUndefined();
+  });
+
+  it("signs a typed address in through Microsoft once chosen, and can go back", () => {
+    const mode = getAccountSetupMode(chosenForm);
+
+    expect(mode).toStrictEqual({ kind: "microsoft", via: "choice" });
+    expect(findSignInSwitch(mode, true)).toBe("password");
+    expect(
+      getAccountSetupMode(withSignInMethod(chosenForm, "password"))
+    ).toStrictEqual({ kind: "manual" });
+  });
+
+  it("keeps a chosen Microsoft sign-in while the address is edited", () => {
+    expect(
+      getAccountSetupMode({ ...chosenForm, email: "me@example." }).kind
+    ).toBe("microsoft");
+  });
+
+  it("goes back to a password from a Microsoft server by clearing that server", () => {
+    // Even without Microsoft in this build, or the form is stuck.
+    expect(
+      findSignInSwitch(getAccountSetupMode(microsoftServerForm), false)
+    ).toBe("password");
+
+    const back = withSignInMethod(microsoftServerForm, "password");
+
+    expect(back.imap).toStrictEqual({ ...manualForm.imap, host: "" });
+    expect(getAccountSetupMode(back)).toStrictEqual({ kind: "manual" });
+  });
+
+  it("leaves Gmail and iCloud to their presets, whatever was chosen or typed", () => {
+    for (const email of ["me@gmail.com", "me@icloud.com"]) {
+      const mode = getAccountSetupMode({
+        ...microsoftServerForm,
+        email,
+        prefersMicrosoft: true,
+      });
+
+      expect(mode.kind).toBe("preset");
+    }
+  });
+
+  it("needs only a valid address and name, and no password", () => {
+    expect(findAccountSetupProblem(chosenForm, false)).toBeUndefined();
+    expect(
+      findAccountSetupProblem(
+        { ...INITIAL_ACCOUNT_SETUP_FORM, email: "me@outlook.com" },
+        false
+      )
+    ).toBeUndefined();
+    expect(
+      findAccountSetupProblem({ ...chosenForm, email: "me@example" }, false)
+    ).toStrictEqual({ field: "email", message: "Enter your email address." });
+    expect(
+      findAccountSetupProblem({ ...chosenForm, name: "Ada\nLovelace" }, false)
+        ?.field
+    ).toBe("name");
+    expect(
+      findAccountSetupProblem(
+        { ...chosenForm, imap: { ...chosenForm.imap, port: "0" } },
+        false
+      )
+    ).toBeUndefined();
+  });
+
+  it("sends no servers", () => {
+    expect(toAccountServers(chosenForm)).toBeUndefined();
+    expect(toAccountServers(microsoftServerForm)).toBeUndefined();
+    expect(
+      toAccountServers({ ...manualForm, email: "me@outlook.com" })
+    ).toBeUndefined();
+  });
+
+  it("asks for the trimmed address, and a trimmed name only when one is given", () => {
+    expect(
+      toMicrosoftSignIn({
+        ...chosenForm,
+        email: " me@example.org ",
+        name: " Ada Lovelace ",
+      })
+    ).toStrictEqual({ email: "me@example.org", name: "Ada Lovelace" });
+    expect(toMicrosoftSignIn({ ...chosenForm, name: " \t " })).toStrictEqual({
+      email: "me@example.org",
     });
   });
 });

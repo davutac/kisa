@@ -5,6 +5,7 @@ import { Effect, Schema } from "effect";
 import { cancelThreadCategorization } from "../ai/thread-categorization";
 import { withDatabaseClient } from "../database";
 import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor";
+import { forgetAccountSignIn } from "../mail/engine/account-credentials";
 import { forgetMailEngineAccount } from "../mail/engine/mail-engine";
 import { forgetAccountDrafts } from "../mail/mail-drafts";
 import { forgetAccountScheduledMail } from "../mail/scheduled-mail";
@@ -42,7 +43,8 @@ const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
 
 /**
  * Removes an account and everything Kisa keeps for it. Nothing is revoked
- * remotely: the user revokes the app password in their provider's settings.
+ * remotely: the user revokes the app password, or Kisa's access to a
+ * Microsoft account, in their provider's settings.
  */
 export const disconnectAccount = Effect.fn("disconnectAccount")(
   function* disconnectAccount(email: string) {
@@ -54,6 +56,7 @@ export const disconnectAccount = Effect.fn("disconnectAccount")(
       () =>
         Effect.gen(function* disconnectSuspendedAccount() {
           yield* deleteAccountRecord(email);
+          forgetAccountSignIn(email.toLowerCase());
           yield* forgetMailEngineAccount(email).pipe(
             Effect.mapError(toDisconnectError)
           );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, RefObject } from "react";
+import { flushSync } from "react-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,14 @@ import {
 } from "@/components/ui/native-select";
 import { Spinner } from "@/components/ui/spinner";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
-import { MAX_DISPLAY_NAME_LENGTH } from "@/shared/mail-account-presets";
+import type {
+  MicrosoftAccountSetupReply,
+  PasswordAccountSetupReply,
+} from "@/shared/ipc/account-setup";
+import {
+  MAX_DISPLAY_NAME_LENGTH,
+  OUTLOOK_IMAP_HELP_URL,
+} from "@/shared/mail-account-presets";
 import type {
   MailAccountPreset,
   MailServerSecurity,
@@ -28,11 +36,14 @@ import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import {
   findAccountSetupProblem,
+  findSignInSwitch,
   getAccountSetupMode,
   INITIAL_ACCOUNT_SETUP_FORM,
   toAccountName,
   toAccountServers,
+  toMicrosoftSignIn,
   withServerSecurity,
+  withSignInMethod,
 } from "./account-setup-form";
 import type {
   AccountSetupField,
@@ -40,6 +51,7 @@ import type {
   AccountSetupMode,
   ServerFields,
   ServerSide,
+  SignInMethod,
 } from "./account-setup-form";
 
 const FIELD_IDS = {
@@ -57,10 +69,38 @@ const DESCRIPTIONS = {
   address: "Sign in with an app password from your mail provider.",
   manual:
     "Enter your mail provider's server settings. Kisa checks them before saving.",
+  microsoft: "Kisa signs in to Outlook through Microsoft, in your browser.",
 } as const satisfies Record<
   Exclude<AccountSetupMode["kind"], "preset">,
   string
 >;
+
+const titleFor = (mode: AccountSetupMode): string => {
+  if (mode.kind === "preset") {
+    return `Add ${mode.preset.title} account`;
+  }
+  if (mode.kind === "microsoft") {
+    return mode.via === "address"
+      ? "Add Outlook account"
+      : "Add Microsoft account";
+  }
+  return "Add account";
+};
+
+const SUBMIT_LABELS = {
+  microsoft: "Sign in with Microsoft",
+  password: "Sign in",
+} as const satisfies Record<SignInMethod, string>;
+
+const PENDING_LABELS = {
+  microsoft: "Waiting for Microsoft…",
+  password: "Signing in…",
+} as const satisfies Record<SignInMethod, string>;
+
+const SIGN_IN_SWITCH_LABELS = {
+  microsoft: "Sign in with Microsoft instead",
+  password: "Use a password instead",
+} as const satisfies Record<SignInMethod, string>;
 
 interface PresetCopy {
   readonly description: string;
@@ -176,6 +216,127 @@ const ServerFieldset = ({
   );
 };
 
+interface PasswordFieldProps {
+  readonly inputRef: RefObject<HTMLInputElement | null>;
+  readonly invalidField: AccountSetupField | undefined;
+  readonly isLocked: boolean;
+  readonly onChange: (hasPassword: boolean) => void;
+  readonly preset: MailAccountPreset | undefined;
+}
+
+/** Uncontrolled: the password is read from the element only when sending. */
+const PasswordField = ({
+  inputRef,
+  invalidField,
+  isLocked,
+  onChange,
+  preset,
+}: PasswordFieldProps) => {
+  const isInvalid = invalidField === "password" ? true : undefined;
+
+  return (
+    <Field data-invalid={isInvalid}>
+      <FieldLabel htmlFor={FIELD_IDS.password}>
+        {preset === undefined
+          ? "App password"
+          : PRESET_COPY[preset.provider].passwordLabel}
+      </FieldLabel>
+      <Input
+        aria-describedby={isInvalid ? PROBLEM_ID : undefined}
+        aria-invalid={isInvalid}
+        autoComplete="off"
+        id={FIELD_IDS.password}
+        onChange={(event) => {
+          onChange(event.currentTarget.value.length > 0);
+        }}
+        ref={inputRef}
+        spellCheck={false}
+        readOnly={isLocked}
+        type="password"
+      />
+      {preset === undefined ? (
+        <FieldDescription>
+          Use an app password if your provider offers one.
+        </FieldDescription>
+      ) : (
+        <FieldDescription>
+          {PRESET_COPY[preset.provider].hint}{" "}
+          <a href={preset.appPasswordUrl} rel="noreferrer" target="_blank">
+            {PRESET_COPY[preset.provider].linkText}
+          </a>
+        </FieldDescription>
+      )}
+    </Field>
+  );
+};
+
+interface AddressNotesProps {
+  readonly isLocked: boolean;
+  readonly mode: AccountSetupMode;
+  readonly onSwitch: (method: SignInMethod) => void;
+  readonly signInSwitch: SignInMethod | undefined;
+}
+
+/**
+ * What goes under the address: Outlook.com's IMAP hint, and the switch
+ * between a password and Microsoft. The switch is one button in one place
+ * for both directions, so it keeps focus when it switches.
+ */
+const AddressNotes = ({
+  isLocked,
+  mode,
+  onSwitch,
+  signInSwitch,
+}: AddressNotesProps) => (
+  <>
+    {mode.kind === "microsoft" && mode.via === "address" ? (
+      <FieldDescription>
+        Kisa needs IMAP, which Outlook.com has off by default.{" "}
+        <a href={OUTLOOK_IMAP_HELP_URL} rel="noreferrer" target="_blank">
+          Turn on IMAP
+        </a>
+      </FieldDescription>
+    ) : null}
+    {signInSwitch === undefined ? null : (
+      <FieldDescription>
+        <button
+          className="hover:text-primary underline underline-offset-4 disabled:opacity-50"
+          disabled={isLocked}
+          onClick={() => {
+            onSwitch(signInSwitch);
+          }}
+          type="button"
+        >
+          {SIGN_IN_SWITCH_LABELS[signInSwitch]}
+        </button>
+      </FieldDescription>
+    )}
+  </>
+);
+
+interface SubmitButtonProps {
+  readonly isDisabled: boolean;
+  readonly method: SignInMethod;
+  readonly pending: SignInMethod | undefined;
+}
+
+const SubmitButton = ({ isDisabled, method, pending }: SubmitButtonProps) => (
+  <Button
+    aria-disabled={pending !== undefined}
+    disabled={isDisabled}
+    type="submit"
+  >
+    {pending === undefined ? (
+      SUBMIT_LABELS[method]
+    ) : (
+      <>
+        <Spinner data-icon="inline-start" />
+        {PENDING_LABELS[pending]}
+      </>
+    )}
+  </Button>
+);
+
 const focusField = (field: AccountSetupField): void => {
   document.querySelector<HTMLElement>(`#${FIELD_IDS[field]}`)?.focus();
 };
@@ -188,9 +349,17 @@ const IS_SHEET =
   new URLSearchParams(window.location.search).get("presentation") === "sheet";
 
 /**
+ * Whether this build can sign in to Microsoft, which needs a registered
+ * client. Main says so in the page URL; anything else means it cannot.
+ */
+const CAN_SIGN_IN_WITH_MICROSOFT =
+  new URLSearchParams(window.location.search).get("microsoft") === "available";
+
+/**
  * The Add account window. It sends the sign-in to main once per attempt and
  * gets back only success or a fixed message; main closes the window once
- * the account is saved.
+ * the account is saved. A Microsoft sign-in happens in the browser, so this
+ * window only starts it, waits, and can stop it.
  */
 const AccountSetupApp = () => {
   const bridge = window.accountSetup;
@@ -199,9 +368,10 @@ const AccountSetupApp = () => {
   );
   const [hasPassword, setHasPassword] = useState(false);
   const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingSignIn, setPendingSignIn] = useState<SignInMethod>();
   const [error, setError] = useState<string>();
-  // Uncontrolled: the password is read from the element only when sending.
+  // Whether the user stopped the sign-in that is waiting on the browser.
+  const wasCancelledRef = useRef(false);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   // Escape cancels, as Cancel does. This page is a dialog of its own and has
@@ -219,14 +389,58 @@ const AccountSetupApp = () => {
     };
   }, [bridge]);
 
-  const mode = getAccountSetupMode(form.email);
+  const mode = getAccountSetupMode(form);
+  const isMicrosoft = mode.kind === "microsoft";
+  const isMicrosoftUnavailable = isMicrosoft && !CAN_SIGN_IN_WITH_MICROSOFT;
+  const isSubmitting = pendingSignIn !== undefined;
+  const signInSwitch = findSignInSwitch(mode, CAN_SIGN_IN_WITH_MICROSOFT);
   const problem = findAccountSetupProblem(form, hasPassword);
   const visibleProblem = hasTriedSubmit ? problem : undefined;
   const invalidField = visibleProblem?.field;
 
   const updateForm = (next: AccountSetupForm): void => {
     setError(undefined);
+    // Microsoft mode unmounts the password input; it comes back empty.
+    if (getAccountSetupMode(next).kind === "microsoft") {
+      setHasPassword(false);
+    }
     setForm(next);
+  };
+
+  // A Microsoft server typed into the host field, or the switch itself, can
+  // remove the focused control. Focus then lands on the address, from which
+  // Enter signs in, rather than nowhere.
+  const updateFormKeepingFocus = (next: AccountSetupForm): void => {
+    flushSync(() => {
+      updateForm(next);
+    });
+    if (document.activeElement === document.body) {
+      focusField("email");
+    }
+  };
+
+  const signIn = async (
+    method: SignInMethod,
+    send: () => Promise<MicrosoftAccountSetupReply | PasswordAccountSetupReply>
+  ): Promise<void> => {
+    setPendingSignIn(method);
+    wasCancelledRef.current = false;
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await send();
+          // A sign-in the user stopped themselves is not an error to report.
+          if (!(reply.ok || wasCancelledRef.current)) {
+            setError(reply.error);
+          }
+        } catch {
+          setError("Could not add the account.");
+        }
+      },
+      () => {
+        setPendingSignIn(undefined);
+      }
+    );
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -242,27 +456,21 @@ const AccountSetupApp = () => {
       return;
     }
 
-    setIsSubmitting(true);
-    await runWithCleanup(
-      async () => {
-        try {
-          const name = toAccountName(form);
-          const reply = await bridge.submit({
-            email: form.email.trim(),
-            name,
-            password: passwordRef.current?.value ?? "",
-            servers: toAccountServers(form),
-          });
-          if (!reply.ok) {
-            setError(reply.error);
-          }
-        } catch {
-          setError("Could not add the account.");
-        }
-      },
-      () => {
-        setIsSubmitting(false);
+    if (isMicrosoft) {
+      if (!isMicrosoftUnavailable) {
+        await signIn("microsoft", () =>
+          bridge.signInWithMicrosoft(toMicrosoftSignIn(form))
+        );
       }
+      return;
+    }
+    await signIn("password", () =>
+      bridge.submit({
+        email: form.email.trim(),
+        name: toAccountName(form),
+        password: passwordRef.current?.value ?? "",
+        servers: toAccountServers(form),
+      })
     );
   };
 
@@ -297,9 +505,7 @@ const AccountSetupApp = () => {
         >
           <header className="mb-5">
             <h1 className="font-heading text-base font-medium">
-              {mode.kind === "preset"
-                ? `Add ${mode.preset.title} account`
-                : "Add account"}
+              {titleFor(mode)}
             </h1>
             <p className="text-muted-foreground mt-1 text-xs/relaxed">
               {mode.kind === "preset"
@@ -350,47 +556,28 @@ const AccountSetupApp = () => {
                   type="email"
                   value={form.email}
                 />
+                <AddressNotes
+                  isLocked={isSubmitting}
+                  mode={mode}
+                  onSwitch={(method) => {
+                    updateFormKeepingFocus(withSignInMethod(form, method));
+                  }}
+                  signInSwitch={signInSwitch}
+                />
               </Field>
 
-              <Field
-                data-invalid={invalidField === "password" ? true : undefined}
-              >
-                <FieldLabel htmlFor={FIELD_IDS.password}>
-                  {mode.kind === "preset"
-                    ? PRESET_COPY[mode.preset.provider].passwordLabel
-                    : "App password"}
-                </FieldLabel>
-                <Input
-                  aria-describedby={describe("password")}
-                  aria-invalid={invalidField === "password" ? true : undefined}
-                  autoComplete="off"
-                  id={FIELD_IDS.password}
-                  onChange={(event) => {
+              {isMicrosoft ? null : (
+                <PasswordField
+                  inputRef={passwordRef}
+                  invalidField={invalidField}
+                  isLocked={isSubmitting}
+                  onChange={(next) => {
                     setError(undefined);
-                    setHasPassword(event.currentTarget.value.length > 0);
+                    setHasPassword(next);
                   }}
-                  ref={passwordRef}
-                  spellCheck={false}
-                  readOnly={isSubmitting}
-                  type="password"
+                  preset={mode.kind === "preset" ? mode.preset : undefined}
                 />
-                {mode.kind === "preset" ? (
-                  <FieldDescription>
-                    {PRESET_COPY[mode.preset.provider].hint}{" "}
-                    <a
-                      href={mode.preset.appPasswordUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      {PRESET_COPY[mode.preset.provider].linkText}
-                    </a>
-                  </FieldDescription>
-                ) : (
-                  <FieldDescription>
-                    Use an app password if your provider offers one.
-                  </FieldDescription>
-                )}
-              </Field>
+              )}
 
               {mode.kind === "manual" ? (
                 <>
@@ -398,7 +585,9 @@ const AccountSetupApp = () => {
                     fields={form.imap}
                     invalidField={invalidField}
                     isLocked={isSubmitting}
-                    onChange={(imap) => updateForm({ ...form, imap })}
+                    onChange={(imap) =>
+                      updateFormKeepingFocus({ ...form, imap })
+                    }
                     side="imap"
                   />
                   <ServerFieldset
@@ -415,6 +604,14 @@ const AccountSetupApp = () => {
             </FieldGroup>
           </fieldset>
 
+          {isMicrosoftUnavailable ? (
+            <Alert className="mt-4">
+              <AlertDescription>
+                This build of Kisa can’t sign in to Microsoft accounts.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {error === undefined ? null : (
             <Alert className="mt-4" variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -425,27 +622,25 @@ const AccountSetupApp = () => {
         <footer className="border-border flex justify-end gap-2 border-t px-6 py-3">
           <Button
             onClick={() => {
-              void bridge?.close();
+              // While Microsoft waits on the browser, Cancel stops only the
+              // sign-in, and its reply comes back to this window.
+              if (pendingSignIn === "microsoft") {
+                wasCancelledRef.current = true;
+                void bridge?.cancelMicrosoftSignIn();
+              } else {
+                void bridge?.close();
+              }
             }}
             type="button"
             variant="secondary"
           >
             Cancel
           </Button>
-          <Button
-            aria-disabled={isSubmitting}
-            disabled={bridge === undefined}
-            type="submit"
-          >
-            {isSubmitting ? (
-              <>
-                <Spinner data-icon="inline-start" />
-                Signing in…
-              </>
-            ) : (
-              "Sign in"
-            )}
-          </Button>
+          <SubmitButton
+            isDisabled={bridge === undefined || isMicrosoftUnavailable}
+            method={isMicrosoft ? "microsoft" : "password"}
+            pending={pendingSignIn}
+          />
         </footer>
       </form>
     </main>

@@ -395,7 +395,9 @@ describe("adding an app password account", () => {
       smtp: { host: "smtp.gmail.com", port: 465, security: "tls" },
     });
     expect(
-      imapRequests.map(({ auth }) => Redacted.value(auth.password))
+      imapRequests.map(({ auth }) =>
+        auth.kind === "password" ? Redacted.value(auth.password) : auth.kind
+      )
     ).toStrictEqual(["abcdefghijklmnop"]);
     const [row] = accountRows();
     expect(row).toMatchObject({
@@ -423,7 +425,9 @@ describe("adding an app password account", () => {
     expect(Exit.isSuccess(exit)).toBeTruthy();
     // Only Google's own host gets its spaces dropped; this one has none.
     expect(
-      imapRequests.map(({ auth }) => Redacted.value(auth.password))
+      imapRequests.map(({ auth }) =>
+        auth.kind === "password" ? Redacted.value(auth.password) : auth.kind
+      )
     ).toStrictEqual([PASSWORD]);
     expect(accountRows()[0]).toMatchObject({
       dialect: "gmail",
@@ -467,6 +471,31 @@ describe("adding an app password account", () => {
     expect(imapRequests).toStrictEqual([]);
     expect(accountRows()).toStrictEqual([]);
   });
+
+  it.each([
+    ["an Outlook.com address", { email: "me@outlook.com", password: PASSWORD }],
+    [
+      "a hand-entered Microsoft server",
+      {
+        email: "me@contoso.example",
+        password: PASSWORD,
+        servers: {
+          ...manualServers,
+          imap: { ...manualServers.imap, host: "Outlook.Office365.com" },
+        },
+      },
+    ],
+  ])(
+    "sends %s to Microsoft sign-in without contacting a server",
+    async (_name, input) => {
+      const exit = await addAccount(input);
+
+      // Microsoft's servers refuse every password, so none is offered to them.
+      expect(failureMessage(exit)).toBe(PASSWORD_ACCOUNT_MESSAGES.microsoft);
+      expect(imapRequests).toStrictEqual([]);
+      expect(accountRows()).toStrictEqual([]);
+    }
+  );
 
   it("ignores typed servers for an address with a preset", async () => {
     await addAccount({

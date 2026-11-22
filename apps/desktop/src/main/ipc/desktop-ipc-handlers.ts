@@ -2,7 +2,9 @@ import * as Effect from "effect/Effect";
 
 import { DesktopIpc } from "./desktop-ipc";
 import {
+  cancelMicrosoftAccountSignIn,
   closeAccountSetupWindow,
+  signInMicrosoftAccount,
   submitPasswordAccount,
 } from "./methods/account-setup";
 import {
@@ -108,6 +110,8 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(disconnectAccount);
   yield* ipc.handle(openAccountSetup);
   yield* ipc.handle(submitPasswordAccount);
+  yield* ipc.handle(signInMicrosoftAccount);
+  yield* ipc.handle(cancelMicrosoftAccountSignIn);
   yield* ipc.handle(closeAccountSetupWindow);
   yield* ipc.handle(listTemplates);
   yield* ipc.handle(saveTemplate);

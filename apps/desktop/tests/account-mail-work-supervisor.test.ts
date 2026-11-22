@@ -148,4 +148,22 @@ describe("account mail work supervisor", () => {
 
     expect(signal.aborted).toBeTruthy();
   });
+
+  it("names the accounts with work running, and no others", async () => {
+    const supervisor = makeAccountMailWorkSupervisor();
+    const release = Promise.withResolvers<null>();
+    const running = supervisor.run("busy@example.com", async () => {
+      await release.promise;
+    });
+    await supervisor.run("done@example.com", async () => {});
+
+    const whileRunning = supervisor.activeAccountIds();
+    release.resolve(null);
+    await running;
+
+    expect({
+      after: supervisor.activeAccountIds(),
+      whileRunning,
+    }).toStrictEqual({ after: [], whileRunning: ["busy@example.com"] });
+  });
 });

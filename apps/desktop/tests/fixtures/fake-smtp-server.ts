@@ -76,7 +76,7 @@ export const startFakeSmtpServer = async (
       const command = line.slice(0, 4).toUpperCase();
       if (command === "EHLO") {
         reply("250-localhost");
-        reply("250 AUTH PLAIN LOGIN");
+        reply("250 AUTH PLAIN LOGIN XOAUTH2");
       } else if (command === "AUTH") {
         authentications.push(line);
         reply(

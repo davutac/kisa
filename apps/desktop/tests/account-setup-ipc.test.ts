@@ -10,6 +10,10 @@ import type { IpcMainInvokeEvent } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  saveMicrosoftAccount,
+  verifyMicrosoftAccount,
+} from "../src/main/auth/microsoft-account";
+import type {
   savePasswordAccount,
   verifyPasswordAccount,
 } from "../src/main/auth/password-account";
@@ -18,10 +22,12 @@ import type { AccountSetupBridge } from "../src/shared/ipc/account-setup";
 import type { AccountsReply } from "../src/shared/ipc/accounts";
 import {
   ACCOUNT_SETUP_CLOSE_CHANNEL,
+  ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL,
+  ACCOUNT_SETUP_MICROSOFT_CHANNEL,
   ACCOUNT_SETUP_SUBMIT_CHANNEL,
   ACCOUNTS_OPEN_SETUP_CHANNEL,
 } from "../src/shared/ipc/channels";
-import { APP_PASSWORD_URLS } from "../src/shared/mail-account-presets";
+import { ACCOUNT_SETUP_HELP_URLS } from "../src/shared/mail-account-presets";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -109,12 +115,17 @@ const mocks = vi.hoisted(() => ({
   nextWindowId: 40,
   notifyAccountsChanged: vi.fn<(reply: AccountsReply) => void>(),
   openExternalUrl: vi.fn<(url: string) => boolean>(() => true),
+  appFocus: vi.fn<() => void>(),
+  microsoftAvailable: true,
   save: vi.fn<typeof savePasswordAccount>(),
+  saveMicrosoft: vi.fn<typeof saveMicrosoftAccount>(),
   verify: vi.fn<typeof verifyPasswordAccount>(),
+  verifyMicrosoft: vi.fn<typeof verifyMicrosoftAccount>(),
   windows: [] as FakeWindow[],
 }));
 
 vi.mock("electron", () => ({
+  app: { focus: mocks.appFocus },
   contextBridge: {
     exposeInMainWorld: vi.fn<typeof Electron.contextBridge.exposeInMainWorld>(
       (key, api) => {
@@ -180,8 +191,29 @@ vi.mock(
   })
 );
 
-const { closeAccountSetupWindow, submitPasswordAccount } =
-  await import("../src/main/ipc/methods/account-setup");
+vi.mock(
+  import("../src/main/auth/microsoft-account"),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    saveMicrosoftAccount: mocks.saveMicrosoft,
+    verifyMicrosoftAccount: mocks.verifyMicrosoft,
+  })
+);
+
+// The real module reaches for Electron's network stack and shell.
+vi.mock(import("../src/main/auth/microsoft-client"), () => ({
+  getMicrosoftOAuthEnvironment: () => {},
+  isMicrosoftSignInAvailable: () => mocks.microsoftAvailable,
+}));
+
+const {
+  cancelMicrosoftAccountSignIn,
+  closeAccountSetupWindow,
+  signInMicrosoftAccount,
+  submitPasswordAccount,
+} = await import("../src/main/ipc/methods/account-setup");
+const { MICROSOFT_ACCOUNT_MESSAGES } =
+  await import("../src/main/auth/microsoft-account");
 const { openAccountSetup } = await import("../src/main/ipc/methods/accounts");
 const { PASSWORD_ACCOUNT_MESSAGES } =
   await import("../src/main/auth/password-account");
@@ -224,6 +256,8 @@ const installMethods = async () => {
       Effect.gen(function* registerMethods() {
         yield* ipc.handle(openAccountSetup);
         yield* ipc.handle(submitPasswordAccount);
+        yield* ipc.handle(signInMicrosoftAccount);
+        yield* ipc.handle(cancelMicrosoftAccountSignIn);
         yield* ipc.handle(closeAccountSetupWindow);
       })
     )
@@ -234,6 +268,7 @@ const installMethods = async () => {
 /** What a renderer could send: a request, or anything else. */
 type SubmitPayload =
   | string
+  | { readonly email: string; readonly name?: string }
   | { readonly email: string; readonly password: string };
 
 const invoke = async (
@@ -262,6 +297,13 @@ describe("the Add account window", () => {
     mocks.save.mockReset();
     mocks.verify.mockReturnValue(Effect.succeed(verified));
     mocks.save.mockReturnValue(Effect.succeed(verified.plan.accountId));
+    mocks.verifyMicrosoft.mockReset();
+    mocks.saveMicrosoft.mockReset();
+    mocks.saveMicrosoft.mockReturnValue(
+      Effect.succeed(AccountId.make("person@outlook.com"))
+    );
+    mocks.appFocus.mockClear();
+    mocks.microsoftAvailable = true;
     mocks.notifyAccountsChanged.mockClear();
     mocks.openExternalUrl.mockClear();
     mocks.mainWindow = {
@@ -294,9 +336,22 @@ describe("the Add account window", () => {
     expect(window.options.modalTo).toBe(mocks.mainWindow);
     expect(window.loadFile).toHaveBeenCalledWith(expect.any(String), {
       query: {
+        microsoft: "available",
         presentation: process.platform === "darwin" ? "sheet" : "window",
       },
     });
+  });
+
+  it("tells the page when this build cannot sign in to Microsoft", async () => {
+    mocks.microsoftAvailable = false;
+    const window = await openWindow();
+
+    expect(window.loadFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        query: expect.objectContaining({ microsoft: "unavailable" }),
+      })
+    );
   });
 
   it("opens as a window of its own when there is no main window", async () => {
@@ -305,7 +360,7 @@ describe("the Add account window", () => {
 
     expect(window.options.modalTo).toBeUndefined();
     expect(window.loadFile).toHaveBeenCalledWith(expect.any(String), {
-      query: { presentation: "window" },
+      query: { microsoft: "available", presentation: "window" },
     });
   });
 
@@ -318,11 +373,11 @@ describe("the Add account window", () => {
     expect(window.focus).toHaveBeenCalledOnce();
   });
 
-  it("opens only the providers' app password pages, in the system browser, and never navigates", async () => {
+  it("opens only the providers' help pages, in the system browser, and never navigates", async () => {
     const window = await openWindow();
     const preventDefault = vi.fn<() => void>();
 
-    for (const url of APP_PASSWORD_URLS) {
+    for (const url of ACCOUNT_SETUP_HELP_URLS) {
       expect(window.webContents.openHandler?.({ url })).toStrictEqual({
         action: "deny",
       });
@@ -336,7 +391,7 @@ describe("the Add account window", () => {
     }
 
     expect(mocks.openExternalUrl.mock.calls).toStrictEqual(
-      [...APP_PASSWORD_URLS].map((url) => [url])
+      [...ACCOUNT_SETUP_HELP_URLS].map((url) => [url])
     );
     expect(preventDefault).toHaveBeenCalledOnce();
   });
@@ -497,6 +552,236 @@ describe("the Add account window", () => {
     expect(mocks.notifyAccountsChanged).not.toHaveBeenCalled();
   });
 
+  describe("Microsoft sign-in", () => {
+    const request = { email: "person@outlook.com", name: "Person" };
+    const verifiedMicrosoft = {
+      credentials: Buffer.from("sealed"),
+      dialect: "generic" as const,
+      plan: {
+        accountId: AccountId.make("person@outlook.com"),
+        displayName: "Person",
+        email: "person@outlook.com",
+        imap: {
+          host: "outlook.office365.com",
+          port: 993,
+          security: "tls" as const,
+        },
+        smtp: {
+          host: "smtp-mail.outlook.com",
+          port: 587,
+          security: "starttls" as const,
+        },
+        username: "person@outlook.com",
+      },
+      tokens: {
+        accessToken: Redacted.make("access-token"),
+        expiresAt: 0,
+        refreshToken: Redacted.make("refresh-token"),
+        signedInAs: "person@outlook.com",
+      },
+    };
+    /** A sign-in that waits in the browser until the test lets it finish. */
+    const waitingInBrowser = () => {
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      let interrupted = false;
+      mocks.verifyMicrosoft.mockReturnValue(
+        Effect.promise(() => promise).pipe(
+          Effect.as(verifiedMicrosoft),
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              interrupted = true;
+            })
+          )
+        )
+      );
+      return {
+        finish: () => resolve(undefined),
+        wasInterrupted: () => interrupted,
+      };
+    };
+
+    it("adds the account, announces it and closes, bringing Kisa forward", async () => {
+      mocks.verifyMicrosoft.mockReturnValue(Effect.succeed(verifiedMicrosoft));
+      const listeners = await installMethods();
+      const window = await openWindow();
+
+      const reply = await invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        window.webContents.id,
+        request
+      );
+
+      expect({ closed: window.isDestroyed(), reply }).toStrictEqual({
+        closed: true,
+        reply: { data: undefined, ok: true },
+      });
+      expect(mocks.verifyMicrosoft).toHaveBeenCalledWith(request);
+      expect(mocks.saveMicrosoft).toHaveBeenCalledWith(verifiedMicrosoft);
+      expect(mocks.notifyAccountsChanged).toHaveBeenCalledOnce();
+      expect(mocks.appFocus).toHaveBeenCalledWith({ steal: true });
+    });
+
+    it("refuses a request that does not come from the setup window", async () => {
+      const listeners = await installMethods();
+      await openWindow();
+
+      const reply = await invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        1,
+        request
+      );
+
+      expect(reply).toStrictEqual({
+        error: "Account setup is no longer open",
+        ok: false,
+      });
+      expect(mocks.verifyMicrosoft).not.toHaveBeenCalled();
+    });
+
+    it("answers a malformed request with one fixed message", async () => {
+      const listeners = await installMethods();
+      const window = await openWindow();
+
+      const reply = await invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        window.webContents.id,
+        "not a request"
+      );
+
+      expect(reply).toStrictEqual({
+        error: MICROSOFT_ACCOUNT_MESSAGES.invalidRequest,
+        ok: false,
+      });
+      expect(mocks.verifyMicrosoft).not.toHaveBeenCalled();
+      expect(window.isDestroyed()).toBeFalsy();
+    });
+
+    it("passes on a failure's fixed message and keeps the window open", async () => {
+      mocks.verifyMicrosoft.mockReturnValue(
+        Effect.fail({
+          _tag: "MicrosoftAccountError",
+          message: MICROSOFT_ACCOUNT_MESSAGES.mailboxRefused,
+        } as never)
+      );
+      const listeners = await installMethods();
+      const window = await openWindow();
+
+      const reply = await invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        window.webContents.id,
+        request
+      );
+
+      expect(reply).toMatchObject({ ok: false });
+      expect(mocks.saveMicrosoft).not.toHaveBeenCalled();
+      expect(window.isDestroyed()).toBeFalsy();
+    });
+
+    it("stops waiting for the browser when the window cancels, and can start again", async () => {
+      const browser = waitingInBrowser();
+      const listeners = await installMethods();
+      const window = await openWindow();
+      const pending = invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        window.webContents.id,
+        request
+      );
+
+      // A cancel from anywhere else changes nothing.
+      await invoke(listeners, ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL, 1);
+      const interruptedByStranger = browser.wasInterrupted();
+      await invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL,
+        window.webContents.id
+      );
+
+      await expect(pending).resolves.toStrictEqual({
+        error: MICROSOFT_ACCOUNT_MESSAGES.cancelled,
+        ok: false,
+      });
+      // Interrupting the sign-in is what closes its listener.
+      expect({
+        closed: window.isDestroyed(),
+        interrupted: browser.wasInterrupted(),
+        interruptedByStranger,
+      }).toStrictEqual({
+        closed: false,
+        interrupted: true,
+        interruptedByStranger: false,
+      });
+      expect(mocks.saveMicrosoft).not.toHaveBeenCalled();
+
+      mocks.verifyMicrosoft.mockReturnValue(Effect.succeed(verifiedMicrosoft));
+      await expect(
+        invoke(
+          listeners,
+          ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+          window.webContents.id,
+          request
+        )
+      ).resolves.toStrictEqual({ data: undefined, ok: true });
+    });
+
+    it("stops waiting for the browser when the window closes", async () => {
+      const browser = waitingInBrowser();
+      const listeners = await installMethods();
+      const window = await openWindow();
+      const pending = invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        window.webContents.id,
+        request
+      );
+
+      window.close();
+
+      await expect(pending).resolves.toStrictEqual({
+        error: "Account setup was closed",
+        ok: false,
+      });
+      expect(browser.wasInterrupted()).toBeTruthy();
+      expect(mocks.saveMicrosoft).not.toHaveBeenCalled();
+    });
+
+    it("runs one sign-in at a time, password or Microsoft", async () => {
+      waitingInBrowser();
+      const listeners = await installMethods();
+      const window = await openWindow();
+      const pending = invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        window.webContents.id,
+        request
+      );
+
+      const second = await invoke(
+        listeners,
+        ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+        window.webContents.id,
+        request
+      );
+      const password = await invoke(
+        listeners,
+        ACCOUNT_SETUP_SUBMIT_CHANNEL,
+        window.webContents.id,
+        validRequest
+      );
+
+      expect([second, password]).toStrictEqual([
+        { error: "Already signing in", ok: false },
+        { error: "Already signing in", ok: false },
+      ]);
+      window.close();
+      await pending;
+    });
+  });
+
   it("closes only when the setup window asks", async () => {
     const listeners = await installMethods();
     const window = await openWindow();
@@ -514,23 +799,39 @@ describe("the account setup preloads", () => {
     mocks.invoke.mockClear();
   });
 
-  it("expose only submit and close, on the channels main listens on", async () => {
+  it("expose only the sign-ins, cancel and close, on the channels main listens on", async () => {
     await import("../src/preload/account-setup");
     const bridge = mocks.exposed.get("accountSetup");
+    const microsoftRequest = { email: "person@outlook.com" };
 
     expect(Object.keys(bridge ?? {}).toSorted()).toStrictEqual([
+      "cancelMicrosoftSignIn",
       "close",
+      "signInWithMicrosoft",
       "submit",
     ]);
     await bridge?.submit(validRequest);
+    await bridge?.signInWithMicrosoft(microsoftRequest);
+    await bridge?.cancelMicrosoftSignIn();
     await bridge?.close();
 
     expect(mocks.invoke.mock.calls).toStrictEqual([
       [ACCOUNT_SETUP_SUBMIT_CHANNEL, validRequest],
+      [ACCOUNT_SETUP_MICROSOFT_CHANNEL, microsoftRequest],
+      [ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL],
       [ACCOUNT_SETUP_CLOSE_CHANNEL],
     ]);
-    expect(submitPasswordAccount.channel).toBe(ACCOUNT_SETUP_SUBMIT_CHANNEL);
-    expect(closeAccountSetupWindow.channel).toBe(ACCOUNT_SETUP_CLOSE_CHANNEL);
+    expect([
+      submitPasswordAccount.channel,
+      signInMicrosoftAccount.channel,
+      cancelMicrosoftAccountSignIn.channel,
+      closeAccountSetupWindow.channel,
+    ]).toStrictEqual([
+      ACCOUNT_SETUP_SUBMIT_CHANNEL,
+      ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+      ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL,
+      ACCOUNT_SETUP_CLOSE_CHANNEL,
+    ]);
   });
 
   it("let the mail window open the setup window and nothing more", async () => {

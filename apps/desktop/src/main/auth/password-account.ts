@@ -12,6 +12,8 @@ import { PasswordAccountSetupRequest } from "../../shared/ipc/account-setup";
 import {
   findMailAccountPreset,
   isGoogleMailHost,
+  isMicrosoftConsumerAddress,
+  isMicrosoftMailHost,
 } from "../../shared/mail-account-presets";
 import type { MailServerSettings } from "../../shared/mail-account-presets";
 import { MailDatabase } from "../mail/engine/mail-database";
@@ -42,6 +44,8 @@ export const PASSWORD_ACCOUNT_MESSAGES = {
   incomingUnreachable:
     "Could not reach the incoming mail server. Check its settings and your connection.",
   invalidRequest: "Check the email address, password and server settings.",
+  microsoft:
+    "Outlook and Microsoft 365 accounts sign in with Microsoft, not a password.",
   outgoingUnexpected:
     "The outgoing mail server did not respond as expected. Check its settings.",
   outgoingUnreachable:
@@ -97,7 +101,16 @@ const planAccount = Effect.fn("planPasswordAccount")(function* planAccount(
   const servers = preset ?? request.servers;
 
   if (servers === undefined) {
-    return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.serversRequired);
+    return yield* failWith(
+      // Microsoft's servers refuse every password, so asking for server
+      // settings would only lead to a sign-in that cannot work.
+      isMicrosoftConsumerAddress(email)
+        ? PASSWORD_ACCOUNT_MESSAGES.microsoft
+        : PASSWORD_ACCOUNT_MESSAGES.serversRequired
+    );
+  }
+  if (isMicrosoftMailHost(servers.imap.host)) {
+    return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.microsoft);
   }
 
   const displayName = request.name?.trim();
@@ -260,7 +273,7 @@ export const verifyPasswordAccount = Effect.fn("verifyPasswordAccount")(
     }
 
     const password = toSignInPassword(plan, request.password);
-    const auth: ImapAuth = { password, user: plan.username };
+    const auth: ImapAuth = { kind: "password", password, user: plan.username };
     const dialect = yield* verifyIncoming(plan, auth);
     yield* verifyOutgoing(plan, auth);
 

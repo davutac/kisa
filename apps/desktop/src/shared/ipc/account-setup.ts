@@ -67,12 +67,37 @@ export type PasswordAccountSetupInput =
 export const PasswordAccountSetupReply = IpcReply(Schema.Void);
 export type PasswordAccountSetupReply = typeof PasswordAccountSetupReply.Type;
 
+/**
+ * What the Add account window sends to start Microsoft sign-in. It carries
+ * no credential: the sign-in happens in the system browser, and the tokens
+ * it yields never leave main.
+ */
+export const MicrosoftAccountSetupRequest = Schema.Struct({
+  email: MailAddress,
+  /** Optional; blank means mail goes out with the bare address. */
+  name: Schema.optional(DisplayName),
+});
+export type MicrosoftAccountSetupRequest =
+  typeof MicrosoftAccountSetupRequest.Type;
+
+export const MicrosoftAccountSetupReply = IpcReply(Schema.Void);
+export type MicrosoftAccountSetupReply = typeof MicrosoftAccountSetupReply.Type;
+
 export const AccountSetupOpenReply = IpcReply(Schema.Void);
 export type AccountSetupOpenReply = typeof AccountSetupOpenReply.Type;
 
 /** The only capabilities the Add account window's preload exposes. */
 export interface AccountSetupBridge {
+  /** Stops a Microsoft sign-in that is waiting for the browser. */
+  cancelMicrosoftSignIn: () => Promise<void>;
   close: () => Promise<void>;
+  /**
+   * Opens Microsoft's sign-in page in the system browser and settles once the
+   * account is added, the sign-in fails, or it is cancelled.
+   */
+  signInWithMicrosoft: (
+    request: MicrosoftAccountSetupRequest
+  ) => Promise<MicrosoftAccountSetupReply>;
   submit: (
     request: PasswordAccountSetupInput
   ) => Promise<PasswordAccountSetupReply>;

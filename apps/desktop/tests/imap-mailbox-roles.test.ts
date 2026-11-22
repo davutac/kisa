@@ -1,15 +1,16 @@
 import type { ListResponse } from "imapflow";
 import { describe, expect, it } from "vitest";
 
-import { toMailbox } from "../src/main/mail/engine/imap-session";
+import { toMailbox, toMailboxes } from "../src/main/mail/engine/imap-session";
 
 const entry = (
   path: string,
   specialUse?: string,
-  specialUseSource?: ListResponse["specialUseSource"]
+  specialUseSource?: ListResponse["specialUseSource"],
+  flags: readonly string[] = []
 ) => ({
   delimiter: "/",
-  flags: new Set<string>(),
+  flags: new Set<string>(flags),
   path,
   specialUse,
   specialUseSource,
@@ -33,5 +34,29 @@ describe("mailbox roles", () => {
         entry("Archive", "\\Archive", "name"),
       ].map((mailbox) => toMailbox(mailbox, true).role)
     ).toStrictEqual(["trash", "none"]);
+  });
+
+  it("prefers a role attribute sent without SPECIAL-USE over a folder's name", () => {
+    // imapflow ignores the attribute without the capability and gives the
+    // role to the folder whose name matches first.
+    const listed = toMailboxes(
+      [
+        entry("Sent", "\\Sent", "name"),
+        entry("Sent Items", undefined, undefined, [
+          "\\HasNoChildren",
+          "\\Sent",
+        ]),
+        entry("Junk-E-Mail", "\\Junk", "name"),
+      ],
+      false
+    );
+
+    expect(listed.map((mailbox) => [mailbox.path, mailbox.role])).toStrictEqual(
+      [
+        ["Sent", "none"],
+        ["Sent Items", "sent"],
+        ["Junk-E-Mail", "junk"],
+      ]
+    );
   });
 });

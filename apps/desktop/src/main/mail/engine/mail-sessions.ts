@@ -1,10 +1,10 @@
 import type { MailTransportError } from "@repo/mail/errors";
-import type { ImapSession } from "@repo/mail/session";
+import type { ImapAuth, ImapSession } from "@repo/mail/session";
 import { ImapConnector } from "@repo/mail/session";
 import type { MailAccount } from "@repo/mail/store";
 import { Cause, Effect, Exit, Predicate, Scope, Semaphore } from "effect";
 
-import { resolveImapAuth } from "./account-credentials";
+import { forgetAccountSignIn, resolveImapAuth } from "./account-credentials";
 
 /**
  * Each account keeps at most one connection per lane, so background sync
@@ -55,11 +55,12 @@ const detach = (pool: LanePool): OpenSession | undefined => {
   return current;
 };
 
-const openSession = Effect.fn("MailSessions.open")(function* openSession(
-  account: MailAccount
+/** One sign-in attempt. A refused sign-in is forgotten, not offered again. */
+const connect = Effect.fn("MailSessions.connect")(function* connect(
+  account: MailAccount,
+  auth: ImapAuth
 ) {
   const connector = yield* ImapConnector;
-  const auth = yield* resolveImapAuth(account);
   const scope = yield* Scope.make();
   const session = yield* Scope.provide(scope)(
     connector.connect({
@@ -67,9 +68,41 @@ const openSession = Effect.fn("MailSessions.open")(function* openSession(
       auth,
       server: account.imap,
     })
-  ).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
+  ).pipe(
+    Effect.tapError((error) =>
+      Effect.sync(() => {
+        if (error._tag === "MailAuthError") {
+          forgetAccountSignIn(account.accountId);
+        }
+      })
+    ),
+    Effect.onError(() => Scope.close(scope, Exit.void))
+  );
 
   return { scope, session } satisfies OpenSession;
+});
+
+/**
+ * Opens a connection with the account's sign-in. An access token can stop
+ * working before its time, so one a server refuses is renewed and tried once
+ * more: only a refused renewal, or a refused fresh token, is the account
+ * itself being turned away, which ends its background work until the user
+ * signs in again. A refused password is that at once.
+ */
+const openSession = Effect.fn("MailSessions.open")(function* openSession(
+  account: MailAccount
+) {
+  const auth = yield* resolveImapAuth(account);
+
+  return yield* connect(account, auth).pipe(
+    Effect.catch((error) =>
+      error._tag === "MailAuthError" && auth.kind === "oauth"
+        ? resolveImapAuth(account).pipe(
+            Effect.flatMap((renewed) => connect(account, renewed))
+          )
+        : Effect.fail(error)
+    )
+  );
 });
 
 const SESSION_ENDING_ERRORS = [

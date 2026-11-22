@@ -2,12 +2,13 @@ import path from "node:path";
 
 import { is } from "@electron-toolkit/utils";
 import { Effect, Layer } from "effect";
+import { app } from "electron";
 import type { BrowserWindow } from "electron";
 
 import { APP_NAME } from "@/constants";
 import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
-import { APP_PASSWORD_URLS } from "../../shared/mail-account-presets";
+import { ACCOUNT_SETUP_HELP_URLS } from "../../shared/mail-account-presets";
 import { openExternalUrl } from "../electron/shell";
 import { toIpcReply } from "../ipc/reply";
 import { ImapFlowConnectorLive } from "../mail/engine/imap-session";
@@ -17,6 +18,14 @@ import { createBrowserWindow } from "../window/browser-window";
 import { getMainWindow } from "../window/create-window";
 import { installNativeContextMenu } from "../window/native-context-menu";
 import { listAccounts, notifyAccountsChanged } from "./accounts";
+import {
+  decodeMicrosoftAccountRequest,
+  MICROSOFT_ACCOUNT_MESSAGES,
+  MicrosoftAccountError,
+  saveMicrosoftAccount,
+  verifyMicrosoftAccount,
+} from "./microsoft-account";
+import { isMicrosoftSignInAvailable } from "./microsoft-client";
 import {
   decodePasswordAccountRequest,
   PasswordAccountError,
@@ -33,6 +42,8 @@ const PasswordAccountLive = Layer.mergeAll(
 );
 
 interface SetupSession {
+  /** Stops a Microsoft sign-in that is waiting for the browser, if one is. */
+  cancelMicrosoftSignIn: (() => void) | undefined;
   /** Settles when the window closes, to stop a verification in progress. */
   readonly closed: Promise<undefined>;
   submitting: boolean;
@@ -55,6 +66,10 @@ const focusWindow = (window: BrowserWindow): void => {
  */
 type SetupPresentation = "sheet" | "window";
 
+/** Whether this build carries a Microsoft client, so the page can offer it. */
+const microsoftAvailability = (): "available" | "unavailable" =>
+  isMicrosoftSignInAvailable() ? "available" : "unavailable";
+
 const loadSetupRenderer = (
   window: BrowserWindow,
   presentation: SetupPresentation
@@ -65,12 +80,13 @@ const loadSetupRenderer = (
     const url = new URL(rendererUrl);
     url.pathname = `${url.pathname.replace(/\/$/u, "")}/account-setup.html`;
     url.searchParams.set("presentation", presentation);
+    url.searchParams.set("microsoft", microsoftAvailability());
     return window.loadURL(url.toString());
   }
 
   return window.loadFile(
     path.join(import.meta.dirname, "../renderer/account-setup.html"),
-    { query: { presentation } }
+    { query: { microsoft: microsoftAvailability(), presentation } }
   );
 };
 
@@ -115,13 +131,18 @@ export const openAccountSetupWindow = Effect.fn("openAccountSetupWindow")(
 
     const { promise: closed, resolve: markClosed } =
       Promise.withResolvers<undefined>();
-    const current: SetupSession = { closed, submitting: false, window };
+    const current: SetupSession = {
+      cancelMicrosoftSignIn: undefined,
+      closed,
+      submitting: false,
+      window,
+    };
     session = current;
 
     installNativeContextMenu(window);
     window.webContents.setWindowOpenHandler(({ url }) => {
-      // The providers' app password pages are the only links it may open.
-      if (APP_PASSWORD_URLS.has(url)) {
+      // The providers' help pages are the only links it may open.
+      if (ACCOUNT_SETUP_HELP_URLS.has(url)) {
         openExternalUrl(url);
       }
       return { action: "deny" };
@@ -235,6 +256,89 @@ export const submitAccountSetup = Effect.fn("submitAccountSetup")(
     }
   }
 );
+
+/** Fails with `message` once `reason` settles: what ends a sign-in early. */
+const stopped = (
+  reason: Promise<undefined>,
+  message: string
+): Effect.Effect<never, MicrosoftAccountError> =>
+  Effect.promise(() => reason).pipe(
+    Effect.andThen(Effect.fail(new MicrosoftAccountError({ message })))
+  );
+
+/**
+ * Adds a Microsoft account from the setup window: the browser sign-in, the
+ * mailbox check, then the save. One runs at a time. Closing the window or
+ * cancelling stops it while it waits for the browser or the servers, which
+ * also closes the sign-in's listener; once the servers accepted the sign-in,
+ * saving the account and announcing it runs to the end. No credential
+ * crosses IPC here: the request carries an address, and the reply a fixed
+ * message.
+ */
+export const startMicrosoftAccountSetup = Effect.fn(
+  "startMicrosoftAccountSetup"
+)(function* startMicrosoftAccountSetup(
+  senderId: number | undefined,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Passed unread to the boundary decoder, which owns its contract.
+  input: unknown
+) {
+  const current = sessionFor(senderId);
+
+  if (current === undefined) {
+    return yield* new MicrosoftAccountError({
+      message: "Account setup is no longer open",
+    });
+  }
+  if (current.submitting) {
+    return yield* new MicrosoftAccountError({ message: "Already signing in" });
+  }
+
+  const { promise: cancelled, resolve: cancel } =
+    Promise.withResolvers<undefined>();
+  current.submitting = true;
+  current.cancelMicrosoftSignIn = () => cancel(undefined);
+
+  yield* Effect.gen(function* signIn() {
+    const verified = yield* decodeMicrosoftAccountRequest(input).pipe(
+      Effect.flatMap(verifyMicrosoftAccount),
+      Effect.provide(PasswordAccountLive),
+      Effect.raceFirst(stopped(current.closed, "Account setup was closed")),
+      Effect.raceFirst(stopped(cancelled, MICROSOFT_ACCOUNT_MESSAGES.cancelled))
+    );
+
+    yield* Effect.uninterruptible(
+      saveMicrosoftAccount(verified).pipe(
+        Effect.provide(PasswordAccountLive),
+        Effect.andThen(publishAccounts)
+      )
+    );
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        current.submitting = false;
+        current.cancelMicrosoftSignIn = undefined;
+        // The user was last in the browser: Kisa comes forward to show what
+        // became of the sign-in.
+        app.focus({ steal: true });
+      })
+    )
+  );
+
+  const mainWindow = getMainWindow();
+  if (mainWindow !== undefined) {
+    focusWindow(mainWindow);
+  }
+  if (!current.window.isDestroyed()) {
+    current.window.close();
+  }
+});
+
+/** Stops a Microsoft sign-in in progress, when the request came from the window. */
+export const cancelMicrosoftAccountSetup = (
+  senderId: number | undefined
+): void => {
+  sessionFor(senderId)?.cancelMicrosoftSignIn?.();
+};
 
 /** Closes the setup window, when the request came from it. */
 export const closeAccountSetup = (senderId: number | undefined): void => {

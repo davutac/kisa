@@ -54,6 +54,7 @@ vi.mock("../src/main/mail/engine/account-credentials", async () => {
   return {
     resolveImapAuth: () =>
       MockEffect.succeed({
+        kind: "password",
         password: Redacted.make("app-password"),
         user: "test@example.com",
       }),

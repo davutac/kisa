@@ -1,4 +1,4 @@
-import { MailboxMissingError } from "@repo/mail/errors";
+import { MailConnectionError, MailboxMissingError } from "@repo/mail/errors";
 import { AccountId, toMailboxRole } from "@repo/mail/ids";
 import type { BodyStructureNode } from "@repo/mail/mime-structure";
 import type {
@@ -8,6 +8,7 @@ import type {
   ImapSession,
   MailboxSearch,
   MessageEnvelope,
+  UidSelection,
 } from "@repo/mail/session";
 import { Effect } from "effect";
 
@@ -58,7 +59,8 @@ export const envelope = (
 
 const toFetched = (
   message: StoredMessage,
-  fields: FetchFields
+  fields: FetchFields,
+  hasModseq: boolean
 ): FetchedMessage => {
   const headers =
     fields.headers === undefined
@@ -94,7 +96,8 @@ const toFetched = (
     headers,
     internalDate:
       fields.internalDate === true ? message.internalDate : undefined,
-    modseq: message.modseq,
+    // A server without CONDSTORE keeps no mod-sequences.
+    modseq: hasModseq ? message.modseq : undefined,
     sections,
     size: fields.size === true ? (message.size ?? 1000) : undefined,
     structure: fields.structure === true ? message.structure : undefined,
@@ -171,6 +174,15 @@ export class FakeImapServer {
     [];
   readonly calls: string[] = [];
   readonly capabilities: ReadonlySet<string>;
+  /** Every FETCH, with what it asked for. */
+  readonly fetches: {
+    readonly changedSince?: bigint | undefined;
+    readonly fields: FetchFields;
+    readonly path: string;
+    readonly selection: UidSelection;
+  }[] = [];
+  /** Makes a FETCH fail as a dropped connection would, when it returns true. */
+  dropFetch: ((path: string, selection: UidSelection) => boolean) | undefined;
   /**
    * Gmail files a message moved into INBOX in All Mail with the `\Inbox`
    * label. Set to the All Mail path to behave that way.
@@ -383,26 +395,42 @@ export class FakeImapServer {
           }
         }),
       fetch: (path, selection, fields, options) =>
-        withMailbox(path, (mailbox) => {
-          this.calls.push(`fetch ${path}`);
-          const uids =
-            selection.kind === "uids" ? new Set(selection.uids) : undefined;
-          return [...mailbox.messages.values()]
-            .filter((message) =>
-              uids === undefined
-                ? selection.kind === "range" &&
-                  message.uid >= selection.from &&
-                  (selection.to === undefined || message.uid <= selection.to)
-                : uids.has(message.uid)
+        this.dropFetch?.(path, selection) === true
+          ? Effect.fail(
+              new MailConnectionError({
+                accountId,
+                message: "The connection to the mail server failed",
+              })
             )
-            .filter(
-              (message) =>
-                options?.changedSince === undefined ||
-                message.modseq > options.changedSince
-            )
-            .toSorted((left, right) => left.uid - right.uid)
-            .map((message) => toFetched(message, fields));
-        }),
+          : withMailbox(path, (mailbox) => {
+              this.calls.push(`fetch ${path}`);
+              this.fetches.push({
+                changedSince: options?.changedSince,
+                fields,
+                path,
+                selection,
+              });
+              const uids =
+                selection.kind === "uids" ? new Set(selection.uids) : undefined;
+              return [...mailbox.messages.values()]
+                .filter((message) =>
+                  uids === undefined
+                    ? selection.kind === "range" &&
+                      message.uid >= selection.from &&
+                      (selection.to === undefined ||
+                        message.uid <= selection.to)
+                    : uids.has(message.uid)
+                )
+                .filter(
+                  (message) =>
+                    options?.changedSince === undefined ||
+                    message.modseq > options.changedSince
+                )
+                .toSorted((left, right) => left.uid - right.uid)
+                .map((message) =>
+                  toFetched(message, fields, this.capabilities.has("CONDSTORE"))
+                );
+            }),
       fetchSection: (path, uid, section) =>
         withMailbox(path, (mailbox) => {
           const value = mailbox.messages.get(uid)?.sections?.[section];

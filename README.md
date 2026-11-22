@@ -20,13 +20,14 @@ See the [latest release](https://github.com/davutac/kisa/releases/latest) for re
 
 ## Add an account
 
-Every account connects in Kisa's **Add account** window with an app password: a separate password your provider issues for one app, not the password you sign in to its website with. Kisa checks it against the mail servers before saving it, encrypted, on your device. Kisa runs no server of its own.
+Every account connects in Kisa's **Add account** window. Most sign in with an app password: a separate password your provider issues for one app, not the password you sign in to its website with. Outlook signs in with Microsoft in your browser instead. Kisa checks the sign-in against the mail servers before saving it, encrypted, on your device. Kisa runs no server of its own.
 
 - **Gmail** (`gmail.com`, `googlemail.com`): turn on 2-Step Verification for your Google Account, then create an app password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords). Google shows it in groups of four; paste it with or without the spaces. Google doesn't offer app passwords to accounts that use only security keys for 2-Step Verification, to work, school or other organization accounts, or to accounts with Advanced Protection ([Google's help](https://support.google.com/accounts/answer/185833)), so those accounts can't connect to Kisa for now.
 - **iCloud** (`icloud.com`, `me.com`, `mac.com`): create an app-specific password as [Apple describes](https://support.apple.com/en-us/102654).
+- **Outlook** (`outlook.com`, `hotmail.com`, `live.com`, `msn.com` and their country domains): choose **Sign in with Microsoft** and finish in your browser. Outlook.com has IMAP off by default: turn it on under **Settings › Mail › Forwarding and IMAP** first. A Microsoft 365 work or school address on its own domain uses **Sign in with Microsoft instead**; your organization may need to allow Kisa, or have sending from mail apps turned off.
 - **Any other address**: create an app password with your provider, then enter its IMAP and SMTP servers. Kisa offers TLS and STARTTLS only.
 
-The optional Name is the sender name your outgoing mail carries. Disconnecting an account deletes its password and everything Kisa cached for it on this device; revoke the app password in your provider's settings if you no longer want it to work.
+The optional Name is the sender name your outgoing mail carries. Disconnecting an account deletes its sign-in and everything Kisa cached for it on this device; revoke the app password, or Kisa's access to your Microsoft account, in your provider's settings if you no longer want it to work.
 
 ## Why Kisa
 
@@ -35,7 +36,7 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 - **Mailbox-scale performance.** Local caching, full-text search, virtualized lists, and resumable indexing keep large mailboxes responsive.
 - **Recoverable spam.** A dedicated Spam mailbox surfaces newly classified mail without adding notifications or Inbox noise, and **Not spam** returns false positives to Inbox.
 - **Keyboard-first workflow.** Switch accounts, search, compose, and navigate without the mouse.
-- **Privacy by default.** App passwords are sealed in the main process and never reach the mail window, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
+- **Privacy by default.** App passwords and Microsoft sign-ins are sealed in the main process and never reach the mail window, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
 - **Built for multiple accounts.** Caches, indexes, sync state, and mutations stay account-scoped, with an All Accounts view across them.
 
 ## Tech stack
@@ -95,6 +96,8 @@ To run only the desktop:
 ```bash
 pnpm --dir apps/desktop dev
 ```
+
+Outlook accounts need Kisa's Microsoft Entra client ID at build time: copy `apps/desktop/.env.example` to `apps/desktop/.env.local` and fill in `MAIN_VITE_MICROSOFT_CLIENT_ID`, or set it in the shell. Without it, everything else works and Microsoft sign-in is not offered. Release builds take it from the `MICROSOFT_CLIENT_ID` secret of the GitHub `Prod` environment.
 
 Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, separate from the installed app's `mail.sqlite` database and key. Databases from before the mail engine (`app.sqlite`, `app.dev.sqlite`) are left as they are and never opened.
 

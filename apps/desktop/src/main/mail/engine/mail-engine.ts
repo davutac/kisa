@@ -158,6 +158,24 @@ export const inAccountEngine = <A, E>(
       )
   );
 
+/**
+ * Starts account work that the caller does not wait for, with the caller's
+ * services. It runs under the account's work supervisor, so disconnecting the
+ * account cancels it and waits for it, and it does not start while the
+ * account is being disconnected. It handles its own failures.
+ */
+export const forkAccountWork = <R>(
+  accountId: string,
+  effect: Effect.Effect<void, never, R>
+): Effect.Effect<void, never, R> =>
+  Effect.flatMap(Effect.context<R>(), (context) =>
+    Effect.sync(() => {
+      void accountMailWorkSupervisor.run(accountId, async (signal) => {
+        await Effect.runPromiseExitWith(context)(effect, { signal });
+      });
+    })
+  );
+
 /** Between polls while nothing else wakes the account. */
 const POLL_INTERVAL_MS = 2 * 60_000;
 /** How long one background cycle works before syncing new mail again. */
@@ -603,8 +621,14 @@ export const stopMailEngine = async (): Promise<void> => {
   isEngineRunning = false;
   stopListeningForAccounts?.();
   stopListeningForAccounts = undefined;
+  // Work forked for an account, such as a Sent copy still being waited for,
+  // can outlive the account's background loop, so both are stopped.
+  const accountIds = new Set([
+    ...workers.keys(),
+    ...accountMailWorkSupervisor.activeAccountIds(),
+  ]);
   await Promise.allSettled(
-    [...workers.keys()].map((accountId) =>
+    [...accountIds].map((accountId) =>
       Effect.runPromise(accountMailWorkSupervisor.suspend(accountId)).finally(
         () => {
           accountMailWorkSupervisor.resume(accountId);

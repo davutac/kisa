@@ -1,8 +1,11 @@
+import type { MicrosoftAccountSetupRequest } from "@/shared/ipc/account-setup";
 import {
   findMailAccountPreset,
   isMailAddress,
   isMailHost,
   isMailPort,
+  isMicrosoftConsumerAddress,
+  isMicrosoftMailHost,
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/shared/mail-account-presets";
 import type {
@@ -26,6 +29,11 @@ export interface AccountSetupForm {
   readonly imap: ServerFields;
   /** The sender name outgoing mail carries; optional. */
   readonly name: string;
+  /**
+   * The user asked to sign in with Microsoft for an address Kisa cannot tell
+   * is Microsoft's, such as a Microsoft 365 work address on its own domain.
+   */
+  readonly prefersMicrosoft: boolean;
   readonly smtp: ServerFields;
 }
 
@@ -40,6 +48,7 @@ export const INITIAL_ACCOUNT_SETUP_FORM: AccountSetupForm = {
   email: "",
   imap: { host: "", port: DEFAULT_PORTS.imap.tls, security: "tls" },
   name: "",
+  prefersMicrosoft: false,
   smtp: { host: "", port: DEFAULT_PORTS.smtp.starttls, security: "starttls" },
 };
 
@@ -47,19 +56,84 @@ export type AccountSetupMode =
   /** Not a complete address yet; nothing beyond the address is decided. */
   | { readonly kind: "address" }
   | { readonly kind: "manual" }
+  /**
+   * Sign in through Microsoft in the browser, with no password or servers.
+   * `via` says what decided it: an Outlook.com-family address, the user's
+   * choice, or a typed Microsoft server, which takes no passwords at all.
+   */
+  | {
+      readonly kind: "microsoft";
+      readonly via: "address" | "choice" | "server";
+    }
   | { readonly kind: "preset"; readonly preset: MailAccountPreset };
 
-/** What the form asks for, decided by the address's domain alone. */
-export const getAccountSetupMode = (email: string): AccountSetupMode => {
-  const address = email.trim();
+/**
+ * What the form asks for. The address decides first: a preset or one of
+ * Microsoft's own domains cannot be overridden. For any other address the
+ * user's choice or a Microsoft server decides, even while the address is
+ * being edited, so the form does not flicker back to a password.
+ */
+export const getAccountSetupMode = (
+  form: AccountSetupForm
+): AccountSetupMode => {
+  const address = form.email.trim();
+  const isAddress = isMailAddress(address);
 
-  if (!isMailAddress(address)) {
-    return { kind: "address" };
+  if (isAddress && isMicrosoftConsumerAddress(address)) {
+    return { kind: "microsoft", via: "address" };
   }
 
-  const preset = findMailAccountPreset(address);
-  return preset === undefined ? { kind: "manual" } : { kind: "preset", preset };
+  const preset = isAddress ? findMailAccountPreset(address) : undefined;
+  if (preset !== undefined) {
+    return { kind: "preset", preset };
+  }
+  if (form.prefersMicrosoft) {
+    return { kind: "microsoft", via: "choice" };
+  }
+  if (isMicrosoftMailHost(form.imap.host)) {
+    return { kind: "microsoft", via: "server" };
+  }
+  return isAddress ? { kind: "manual" } : { kind: "address" };
 };
+
+export type SignInMethod = "microsoft" | "password";
+
+/**
+ * The sign-in the form can switch to from this mode, if any. A typed address
+ * may switch to Microsoft when this build can sign in there; a mode the user
+ * or a server chose can always switch back. An Outlook.com-family address
+ * cannot, since Microsoft refuses passwords for it.
+ */
+export const findSignInSwitch = (
+  mode: AccountSetupMode,
+  canSignInWithMicrosoft: boolean
+): SignInMethod | undefined => {
+  if (mode.kind === "manual") {
+    return canSignInWithMicrosoft ? "microsoft" : undefined;
+  }
+  if (mode.kind === "microsoft" && mode.via !== "address") {
+    return "password";
+  }
+  return undefined;
+};
+
+/**
+ * Switches how the form signs in. Back to a password also clears a Microsoft
+ * server, which would otherwise keep the form on Microsoft.
+ */
+export const withSignInMethod = (
+  form: AccountSetupForm,
+  method: SignInMethod
+): AccountSetupForm =>
+  method === "microsoft"
+    ? { ...form, prefersMicrosoft: true }
+    : {
+        ...form,
+        imap: isMicrosoftMailHost(form.imap.host)
+          ? { ...form.imap, host: "" }
+          : form.imap,
+        prefersMicrosoft: false,
+      };
 
 /**
  * Switching security moves a port that still holds the old default to the
@@ -149,11 +223,15 @@ export const findAccountSetupProblem = (
   if (nameProblem !== undefined) {
     return nameProblem;
   }
-
-  const mode = getAccountSetupMode(form.email);
-
-  if (mode.kind === "address") {
+  if (!isMailAddress(form.email.trim())) {
     return { field: "email", message: "Enter your email address." };
+  }
+
+  const mode = getAccountSetupMode(form);
+
+  // Microsoft takes the password in the browser; this window asks for none.
+  if (mode.kind === "microsoft") {
+    return undefined;
   }
   if (!hasPassword) {
     return { field: "password", message: "Enter the app password." };
@@ -171,13 +249,13 @@ const toServer = ({ host, port, security }: ServerFields) => ({
 });
 
 /**
- * The server settings to send: none for a preset, whose settings main
- * applies itself, and the trimmed manual fields otherwise.
+ * The server settings to send: the trimmed manual fields, and none for a
+ * preset or Microsoft, whose settings main applies itself.
  */
 export const toAccountServers = (
   form: AccountSetupForm
 ): MailAccountServers | undefined =>
-  getAccountSetupMode(form.email).kind === "manual"
+  getAccountSetupMode(form).kind === "manual"
     ? { imap: toServer(form.imap), smtp: toServer(form.smtp) }
     : undefined;
 
@@ -185,4 +263,13 @@ export const toAccountServers = (
 export const toAccountName = (form: AccountSetupForm): string | undefined => {
   const name = form.name.trim();
   return name.length === 0 ? undefined : name;
+};
+
+/** The Microsoft sign-in request: the trimmed address, and the name if given. */
+export const toMicrosoftSignIn = (
+  form: AccountSetupForm
+): MicrosoftAccountSetupRequest => {
+  const email = form.email.trim();
+  const name = toAccountName(form);
+  return name === undefined ? { email } : { email, name };
 };

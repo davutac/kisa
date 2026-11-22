@@ -169,11 +169,26 @@ export interface ImapSession {
   ) => Effect.Effect<MailboxState, MailTransportError>;
 }
 
-/** An account's sign-in: its app password, redacted wherever it travels. */
-export interface ImapAuth {
-  readonly password: Redacted.Redacted<string>;
-  readonly user: string;
-}
+/**
+ * An account's sign-in, redacted wherever it travels: its app password, or an
+ * OAuth access token for a provider that takes no passwords (SASL XOAUTH2).
+ */
+export type ImapAuth =
+  | {
+      readonly kind: "password";
+      readonly password: Redacted.Redacted<string>;
+      readonly user: string;
+    }
+  | {
+      readonly accessToken: Redacted.Redacted<string>;
+      /**
+       * When the token stops working, in milliseconds since the epoch. The
+       * server ends the session then, so the connection closes shortly before.
+       */
+      readonly expiresAt: number;
+      readonly kind: "oauth";
+      readonly user: string;
+    };
 
 export type TransportSecurity = "starttls" | "tls";
 

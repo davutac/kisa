@@ -1,0 +1,1 @@
+ALTER TABLE `mail_mailboxes` ADD `flag_cursor` integer;
