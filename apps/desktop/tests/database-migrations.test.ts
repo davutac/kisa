@@ -18,6 +18,7 @@ const temporaryDirectories: string[] = [];
 
 const BASELINE = "20261121231100_baseline";
 const DROP_OAUTH_COLUMNS = "20261122102513_drop_oauth_columns";
+const FLAG_CURSOR = "20261122123610_flag_cursor";
 
 const makeTemporaryDirectory = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
@@ -81,6 +82,115 @@ const matches = (
        WHERE mail_messages_fts MATCH ? ORDER BY m.message_id`
     )
     .all(term);
+
+/**
+ * A database the previous build left, with a non-Gmail account and a
+ * Gmail one, each holding a downloaded body, and the non-Gmail one also
+ * a failed body and one never downloaded.
+ */
+const openDatabaseWithBodies = () => {
+  const connection = openDatabaseWith(
+    BASELINE,
+    DROP_OAUTH_COLUMNS,
+    FLAG_CURSOR
+  );
+  const insertAccount = connection.prepare(
+    `INSERT INTO mail_accounts (account_id, created_at, credentials,
+      dialect, email, imap_host, imap_port, imap_security, provider,
+      smtp_host, smtp_port, smtp_security, sort_order, updated_at,
+      username)
+     VALUES (?, 0, X'00', ?, ?, 'imap.example.com', 993, 'tls', ?,
+      'smtp.example.com', 465, 'tls', 0, 0, ?)`
+  );
+  insertAccount.run(
+    "g@example.com",
+    "generic",
+    "g@example.com",
+    "icloud",
+    "g@example.com"
+  );
+  insertAccount.run(
+    "m@gmail.com",
+    "gmail",
+    "m@gmail.com",
+    "gmail",
+    "m@gmail.com"
+  );
+  const insertBody = connection.prepare(
+    `INSERT INTO mail_messages (account_id, attachments, bcc_addresses,
+      body_html, body_state, body_text, cc_addresses, from_address,
+      has_attachments, has_blocked_remote_images, headers, is_draft,
+      is_starred, is_unread, label_ids, message_id, received_at,
+      schema_version, sender_authenticated, size, snippet, subject,
+      thread_id, to_addresses, updated_at)
+     VALUES (?, '[{"filename":"a.pdf","mediaType":"application/pdf","section":"2","size":1}]',
+      '[]', X'00', ?, ?, '[]', 'sender@example.com', 1, 1,
+      '[{"name":"List-Unsubscribe","value":"<x>"}]', 0, 0, 1,
+      '["INBOX"]', ?, 1, 3, 1, 1, ?, ?, 't', '[]', 1)`
+  );
+  insertBody.run(
+    "g@example.com",
+    "ready",
+    "wrongbody",
+    "g-ready",
+    "wrongbody",
+    "Genericsubject"
+  );
+  insertBody.run(
+    "g@example.com",
+    "failed",
+    null,
+    "g-failed",
+    "",
+    "Failedsubject"
+  );
+  insertBody.run(
+    "m@gmail.com",
+    "ready",
+    "gmailbody",
+    "m-ready",
+    "gmailbody",
+    "Gmailsubject"
+  );
+  connection
+    .prepare(
+      `INSERT INTO mail_messages (account_id, bcc_addresses, body_state,
+        cc_addresses, from_address, is_draft, is_starred, is_unread,
+        label_ids, message_id, received_at, size, subject, thread_id,
+        to_addresses, updated_at)
+       VALUES ('g@example.com', '[]', 'none', '[]', 'sender@example.com',
+        0, 0, 1, '["INBOX"]', 'g-none', 1, 1, 'Pending', 't', '[]', 1)`
+    )
+    .run();
+  const insertThread = connection.prepare(
+    `INSERT INTO mail_threads (account_id, attachments, from_address,
+      has_attachments, is_in_inbox, is_in_sent, is_in_spam, is_in_trash,
+      is_unread, label_ids, latest_at, latest_message_id, message_count,
+      snippet, subject, thread_id, updated_at)
+     VALUES (?, '[{"filename":"a.pdf"}]', 'sender@example.com', 1, 1, 0, 0,
+      0, 1, '["INBOX"]', 1, ?, 1, ?, 'Subject', 't', 1)`
+  );
+  insertThread.run("g@example.com", "g-ready", "wrongbody");
+  insertThread.run("m@gmail.com", "m-ready", "gmailbody");
+
+  applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+  return connection;
+};
+
+const bodyOf = (
+  connection: ReturnType<typeof openDatabaseConnection>,
+  messageId: string
+) =>
+  connection
+    .prepare(
+      `SELECT attachments, body_html AS bodyHtml, body_state AS bodyState,
+              body_text AS bodyText, has_attachments AS hasAttachments,
+              has_blocked_remote_images AS hasBlockedRemoteImages,
+              headers, schema_version AS schemaVersion,
+              sender_authenticated AS senderAuthenticated, snippet
+       FROM mail_messages WHERE message_id = ?`
+    )
+    .get(messageId);
 
 describe("database baseline", () => {
   afterEach(() => {
@@ -209,5 +319,75 @@ describe("database baseline", () => {
     ).toStrictEqual([
       { flag_cursor: null, path: "INBOX", skeleton_floor: 1, uid_next: 42 },
     ]);
+  });
+
+  describe("resetting bodies on non-Gmail accounts", () => {
+    const CLEARED = {
+      attachments: null,
+      bodyHtml: null,
+      bodyState: "none",
+      bodyText: null,
+      hasAttachments: 0,
+      hasBlockedRemoteImages: 0,
+      headers: null,
+      schemaVersion: 0,
+      senderAuthenticated: 0,
+      snippet: "",
+    };
+
+    it("clears every downloaded or failed body on a non-Gmail account, and nothing on Gmail", () => {
+      const connection = openDatabaseWithBodies();
+
+      expect(bodyOf(connection, "g-ready")).toStrictEqual(CLEARED);
+      expect(bodyOf(connection, "g-failed")).toStrictEqual(CLEARED);
+      expect(bodyOf(connection, "g-none")).toMatchObject({
+        bodyState: "none",
+        snippet: "",
+      });
+      expect(bodyOf(connection, "m-ready")).toMatchObject({
+        bodyState: "ready",
+        bodyText: "gmailbody",
+        senderAuthenticated: 1,
+      });
+    });
+
+    it("stops finding the cleared text, while subjects and Gmail bodies are still found", () => {
+      const connection = openDatabaseWithBodies();
+
+      expect(matches(connection, "wrongbody")).toStrictEqual([]);
+      expect(matches(connection, "Genericsubject")).toStrictEqual([
+        { messageId: "g-ready" },
+      ]);
+      expect(matches(connection, "gmailbody")).toStrictEqual([
+        { messageId: "m-ready" },
+      ]);
+    });
+
+    it("clears the list's snippet and attachments for the non-Gmail account only", () => {
+      const connection = openDatabaseWithBodies();
+
+      expect(
+        connection
+          .prepare(
+            `SELECT account_id AS accountId, attachments,
+                    has_attachments AS hasAttachments, snippet
+             FROM mail_threads ORDER BY account_id`
+          )
+          .all()
+      ).toStrictEqual([
+        {
+          accountId: "g@example.com",
+          attachments: "[]",
+          hasAttachments: 0,
+          snippet: "",
+        },
+        {
+          accountId: "m@gmail.com",
+          attachments: '[{"filename":"a.pdf"}]',
+          hasAttachments: 1,
+          snippet: "gmailbody",
+        },
+      ]);
+    });
   });
 });
