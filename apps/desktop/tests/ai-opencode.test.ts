@@ -1,3 +1,4 @@
+import type { ProviderRequestError } from "@opencode/client";
 import type * as ClientService from "@opencode/client/service";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -5,6 +6,7 @@ import * as Schema from "effect/Schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  describeProviderRequestError,
   generateWithOpenCode,
   getOpenCodeStatus,
 } from "../src/main/ai/providers/opencode";
@@ -202,6 +204,29 @@ describe("OpenCode V2", () => {
       );
       await expect(generate()).rejects.toThrow(
         "OpenCode could not generate email text"
+      );
+    });
+
+    it("names the provider's typed refusal without its upstream text", async () => {
+      fetchMock.mockResolvedValue(
+        Response.json(
+          {
+            _tag: "ProviderRequestError",
+            message: "private upstream response",
+            providerID: "opencode",
+            reason: "rate_limit",
+            retryAfterMs: 9_353_000,
+            status: 429,
+          },
+          { status: 502 }
+        )
+      );
+      const failure = await Effect.runPromise(
+        Effect.scoped(generateWithOpenCode(input)).pipe(Effect.flip)
+      );
+
+      expect(failure.message).toBe(
+        "OpenCode (opencode) usage limit reached. Try again in about 3 hours"
       );
     });
 
@@ -461,5 +486,50 @@ describe("OpenCode V2", () => {
       expect(status.error).toBe("OpenCode returned an invalid model catalog");
       expect(status.models).toStrictEqual([]);
     });
+  });
+});
+
+const refusal = (
+  reason: ProviderRequestError["reason"],
+  retryAfterMs?: number
+) =>
+  ({
+    _tag: "ProviderRequestError",
+    message: "upstream",
+    providerID: "openai",
+    reason,
+    retryAfterMs,
+  }) satisfies ProviderRequestError;
+
+describe(describeProviderRequestError, () => {
+  it.each([
+    [
+      refusal("authentication"),
+      "OpenCode (openai) sign-in expired or was refused. Sign in again in OpenCode",
+    ],
+    [
+      refusal("rate_limit"),
+      "OpenCode (openai) usage limit reached. Try again later",
+    ],
+    [
+      refusal("rate_limit", 30_000),
+      "OpenCode (openai) usage limit reached. Try again in about a minute",
+    ],
+    [
+      refusal("rate_limit", 20 * 60_000),
+      "OpenCode (openai) usage limit reached. Try again in about 20 minutes",
+    ],
+    [refusal("content_filter"), "OpenCode (openai) refused this text"],
+    [
+      refusal("invalid_request"),
+      "OpenCode (openai) rejected the request. Check the model in AI settings",
+    ],
+    [
+      refusal("overloaded"),
+      "OpenCode (openai) is overloaded. Try again shortly",
+    ],
+    [refusal("provider"), "OpenCode (openai) could not generate email text"],
+  ])("describes %o", (failure, message) => {
+    expect(describeProviderRequestError(failure)).toBe(message);
   });
 });
