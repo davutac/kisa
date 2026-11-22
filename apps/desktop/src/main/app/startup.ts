@@ -1,12 +1,12 @@
 import { Effect, Exit, Option } from "effect";
-import { app } from "electron";
+import { app, dialog } from "electron";
 
 import type {
   AppStartupErrorPayload,
   AppStartupReply,
 } from "../../shared/ipc/app";
 import { startThreadCategorization } from "../ai/thread-categorization";
-import { startDatabase } from "../database";
+import { startDatabase, takeImportActivation } from "../database";
 import type { DatabaseError } from "../database";
 import { configureDraftAttachmentStore } from "../mail/draft-attachment-store";
 import { startMailEngine, syncOnFocus } from "../mail/engine/mail-engine";
@@ -18,6 +18,8 @@ import {
 } from "../mail/scheduled-mail";
 import { refreshUnreadBadge } from "../mail/unread-badge";
 import { getCurrentAppSettings } from "../settings/app-settings";
+import { getMainWindow } from "../window/create-window";
+import { announceImportActivation } from "./import-activation-notice";
 
 let startupPromise: Promise<AppStartupExit> | null = null;
 const CORRESPONDENT_WARM_DELAY_MS = 1000;
@@ -27,6 +29,20 @@ type AppStartupExit = Exit.Exit<void, AppStartupError>;
 
 const runStartupOnce = async (): Promise<AppStartupExit> => {
   const exit = await Effect.runPromiseExit(startDatabase());
+  // Whether or not the database then opened: the import was the reason for
+  // this restart, and it did not happen.
+  announceImportActivation(takeImportActivation(), {
+    getWindow: getMainWindow,
+    show: (window, notice) => {
+      void dialog.showMessageBox(window, {
+        buttons: ["OK"],
+        detail: notice.detail,
+        message: notice.message,
+        noLink: true,
+        type: "warning",
+      });
+    },
+  });
 
   if (Exit.isFailure(exit)) {
     startupPromise = null;

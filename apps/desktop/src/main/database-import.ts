@@ -9,6 +9,7 @@ import {
   readdir,
   rename,
   rm,
+  rmdir,
   stat,
   writeFile,
 } from "node:fs/promises";
@@ -30,14 +31,43 @@ import { sealDatabaseKey } from "./database-key";
 import { getDatabaseKeyPath } from "./database-path";
 import { decodeDatabaseRecoveryKeyFile } from "./database-recovery-key";
 
+/**
+ * How far activation has got, recorded in the manifest so a start that finds
+ * it knows what the files on disk are:
+ * - `pending`: nothing is swapped. The current database and key are whole.
+ * - `swapping`: the backup is complete and the swap has begun, so the active
+ *   database and key may no longer be a pair. The backup is never made again.
+ * - `restoring`: the swap failed and the backup is being moved back.
+ *
+ * A manifest written before steps were recorded has none. Nothing is known
+ * about how far it got, so it is never dropped or restored on that account.
+ */
+const DatabaseImportStep = Schema.Literals([
+  "pending",
+  "restoring",
+  "swapping",
+]);
+
 const DatabaseImportManifest = Schema.Struct({
   backupDirectory: Schema.String,
   databaseFile: Schema.String,
   format: Schema.Literal("kisa-database-import"),
   keyFile: Schema.String,
+  step: Schema.optional(DatabaseImportStep),
   version: Schema.Literal(1),
 });
 type DatabaseImportManifest = typeof DatabaseImportManifest.Type;
+
+/**
+ * What activation did at this start. `dropped` and `restored` both mean the
+ * app runs on the database it had before: the first without anything having
+ * been swapped, the second after the backup was moved back.
+ */
+export type DatabaseImportActivation =
+  | "activated"
+  | "dropped"
+  | "none"
+  | "restored";
 
 interface DatabaseImportOptions {
   readonly activeDatabasePath: string;
@@ -129,13 +159,17 @@ const readManifest = async (
     throw importError();
   }
 
+  // The staged files and the backup folder are named from one import id.
+  // Activation deletes that folder on a drop and moves files out of it on a
+  // restore, so a manifest naming another import's backup is refused.
   const databasePrefix = `${path.basename(databasePath)}.import-`;
+  const importId = manifest.databaseFile.slice(databasePrefix.length);
   if (
     path.basename(manifest.databaseFile) !== manifest.databaseFile ||
     !manifest.databaseFile.startsWith(databasePrefix) ||
+    importId.length === 0 ||
     manifest.keyFile !== `${manifest.databaseFile}.key` ||
-    path.basename(manifest.backupDirectory) !== manifest.backupDirectory ||
-    !manifest.backupDirectory.startsWith("before-import-")
+    manifest.backupDirectory !== `before-import-${importId}`
   ) {
     throw importError();
   }
@@ -229,6 +263,11 @@ const discardPendingImport = async (databasePath: string): Promise<void> => {
     manifest = await readManifest(databasePath);
   } catch {
     manifest = undefined;
+  }
+
+  // Only startup may end an activation that has begun to swap.
+  if (manifest?.step === "swapping" || manifest?.step === "restoring") {
+    throw importError();
   }
 
   await rm(getImportManifestPath(databasePath), { force: true });
@@ -357,7 +396,9 @@ const writeManifest = async (
       mode: 0o600,
     });
     await syncFile(temporaryPath);
-    await rm(manifestPath, { force: true });
+    // Renamed over the old manifest, never removed first: with no manifest
+    // at all, the next start would sweep the staged copy away, beside a
+    // database that may be half swapped.
     await rename(temporaryPath, manifestPath);
   } finally {
     await rm(temporaryPath, { force: true });
@@ -652,6 +693,7 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
             databaseFile: path.basename(stagedDatabasePath),
             format: "kisa-database-import",
             keyFile: path.basename(stagedKeyPath),
+            step: "pending",
             version: 1,
           });
           isPending = true;
@@ -711,21 +753,221 @@ const replaceFileFromStage = async (
   await rename(nextPath, activePath);
 };
 
+interface ActivationPaths {
+  readonly backupDirectory: string;
+  readonly databasePath: string;
+  readonly stagedDatabasePath: string;
+  readonly stagedKeyPath: string;
+}
+
+const hasStagedFiles = async (paths: ActivationPaths): Promise<boolean> => {
+  const [hasDatabase, hasKey] = await Promise.all([
+    pathExists(paths.stagedDatabasePath),
+    pathExists(paths.stagedKeyPath),
+  ]);
+  return hasDatabase && hasKey;
+};
+
+/** The step the manifest on disk records now. */
+const readRecordedStep = async (
+  databasePath: string
+): Promise<DatabaseImportManifest["step"]> => {
+  const manifest = await readManifest(databasePath);
+  return manifest?.step;
+};
+
 /**
- * Activates a waiting import at startup, before the database opens.
+ * A copy left by a replace that was cut short. It can be as large as the
+ * database, and the step is written next: on a full disk that write needs
+ * the room.
+ */
+const removeUnfinishedReplacements = async (
+  databasePath: string
+): Promise<void> => {
+  await rm(`${databasePath}.next-import`, { force: true });
+  await rm(`${getDatabaseKeyPath(databasePath)}.next-import`, { force: true });
+};
+
+const swapInStagedFiles = async (paths: ActivationPaths): Promise<void> => {
+  await rm(`${paths.databasePath}-wal`, { force: true });
+  await rm(`${paths.databasePath}-shm`, { force: true });
+  await replaceFileFromStage(paths.stagedDatabasePath, paths.databasePath);
+  await replaceFileFromStage(
+    paths.stagedKeyPath,
+    getDatabaseKeyPath(paths.databasePath)
+  );
+};
+
+const finishActivation = async (paths: ActivationPaths): Promise<void> => {
+  await rm(getImportManifestPath(paths.databasePath), { force: true });
+  await removeDatabaseFiles(paths.stagedDatabasePath);
+  await rm(paths.stagedKeyPath, { force: true });
+};
+
+/**
+ * Ends an import that swapped nothing: the current database and key are as
+ * they were. Its backup, if one was begun, only copies files that are still
+ * in place, so it goes too; on a full disk that room is what was missing.
+ */
+const dropUnswappedImport = async (paths: ActivationPaths): Promise<void> => {
+  await rm(getImportManifestPath(paths.databasePath), { force: true });
+  try {
+    await rm(paths.backupDirectory, { force: true, recursive: true });
+  } catch {
+    // The backup is redundant here; leaving it costs disk space only.
+  }
+  await sweepStagedImports(paths.databasePath);
+};
+
+/**
+ * Moves the backup back over the active files. Moved, not copied: a full
+ * disk is the likely reason to be here, and a copy needs the room that is
+ * missing. A backup file that is gone has already been moved back by an
+ * earlier run, which is why this is only entered once `restoring` is
+ * recorded. An active `-wal` is never removed: on a second run it is the
+ * restored one, and it can hold changes the database file does not.
+ */
+const restoreFromBackup = async (paths: ActivationPaths): Promise<void> => {
+  const activeFiles = [
+    paths.databasePath,
+    getDatabaseKeyPath(paths.databasePath),
+    `${paths.databasePath}-wal`,
+    `${paths.databasePath}-shm`,
+  ];
+  for (const activeFile of activeFiles) {
+    const backupFile = path.join(
+      paths.backupDirectory,
+      path.basename(activeFile)
+    );
+    // oxlint-disable-next-line eslint/no-await-in-loop -- The database is put back before its key, one file at a time.
+    if (await pathExists(backupFile)) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- As above.
+      await rename(backupFile, activeFile);
+    }
+  }
+
+  await rm(getImportManifestPath(paths.databasePath), { force: true });
+  try {
+    await rmdir(paths.backupDirectory);
+  } catch {
+    // Not empty, or already gone: either way nothing more to do.
+  }
+  await sweepStagedImports(paths.databasePath);
+};
+
+/**
+ * Activation for a manifest that records its step. A failure before the swap
+ * drops the import; a failure during it restores the backup. A crash is
+ * neither: a start that finds `swapping` with the staged files still there
+ * carries the swap on.
+ */
+const activateRecordedImport = async (
+  manifest: DatabaseImportManifest,
+  paths: ActivationPaths
+): Promise<DatabaseImportActivation> => {
+  let { step } = manifest;
+
+  if (step === "pending") {
+    if (!(await hasStagedFiles(paths))) {
+      await dropUnswappedImport(paths);
+      return "dropped";
+    }
+    try {
+      await backUpActiveDatabase(paths.databasePath, paths.backupDirectory);
+      await removeUnfinishedReplacements(paths.databasePath);
+      await writeManifest(paths.databasePath, {
+        ...manifest,
+        step: "swapping",
+      });
+    } catch {
+      // What is on disk decides, not where this code was when it threw.
+      if ((await readRecordedStep(paths.databasePath)) === "pending") {
+        await dropUnswappedImport(paths);
+        return "dropped";
+      }
+    }
+    step = await readRecordedStep(paths.databasePath);
+  }
+
+  if (step === "swapping") {
+    let isSwapped = false;
+    if (await hasStagedFiles(paths)) {
+      try {
+        await swapInStagedFiles(paths);
+        isSwapped = true;
+      } catch {
+        isSwapped = false;
+      }
+    }
+    if (isSwapped) {
+      await finishActivation(paths);
+      return "activated";
+    }
+
+    // The swap cannot be completed. Going back needs the whole backup; a
+    // missing file here would be mistaken for one already moved back.
+    const [hasBackupDatabase, hasBackupKey, recorded] = await Promise.all([
+      pathExists(
+        path.join(paths.backupDirectory, path.basename(paths.databasePath))
+      ),
+      pathExists(
+        path.join(
+          paths.backupDirectory,
+          path.basename(getDatabaseKeyPath(paths.databasePath))
+        )
+      ),
+      readRecordedStep(paths.databasePath),
+    ]);
+    if (!(hasBackupDatabase && hasBackupKey && recorded === "swapping")) {
+      throw importError();
+    }
+    await removeUnfinishedReplacements(paths.databasePath);
+    await writeManifest(paths.databasePath, { ...manifest, step: "restoring" });
+    step = "restoring";
+  }
+
+  if (step !== "restoring") {
+    throw importError();
+  }
+  await restoreFromBackup(paths);
+  return "restored";
+};
+
+/**
+ * Activation for a manifest from before steps were recorded. How far it got
+ * is unknown, so it keeps the rules it was written under: the swap is run
+ * (again), and the only import ever dropped is one whose staged files are
+ * gone while its backup directory, made before anything is swapped, does
+ * not exist.
+ */
+const activateUnrecordedImport = async (
+  paths: ActivationPaths
+): Promise<DatabaseImportActivation> => {
+  if (!(await hasStagedFiles(paths))) {
+    if (await pathExists(paths.backupDirectory)) {
+      throw importError();
+    }
+    await rm(getImportManifestPath(paths.databasePath), { force: true });
+    await sweepStagedImports(paths.databasePath);
+    return "dropped";
+  }
+
+  await backUpActiveDatabase(paths.databasePath, paths.backupDirectory);
+  await swapInStagedFiles(paths);
+  await finishActivation(paths);
+  return "activated";
+};
+
+/**
+ * Activates a waiting import at startup, before the database opens, and says
+ * what it did. It shows nothing itself: it also runs when no window exists.
  *
- * An import that cannot be activated because nothing is there to activate is
- * dropped, so the app starts with the current database rather than failing
- * every start: a manifest that cannot be read, or staged files that are gone
- * while the swap provably never began. The backup directory is made before
- * anything is swapped, so only its absence proves that. With it present the
- * current database and key may no longer be a pair; this fails and deletes
- * nothing.
+ * A manifest whose contents do not decode names nothing that can be
+ * activated, so it is dropped and the app starts with the current database.
  */
 export const activatePendingDatabaseImport = async (
   databasePath: string
-): Promise<void> => {
-  const manifestPath = getImportManifestPath(databasePath);
+): Promise<DatabaseImportActivation> => {
   let manifest: DatabaseImportManifest | undefined;
   try {
     manifest = await readManifest(databasePath);
@@ -735,41 +977,24 @@ export const activatePendingDatabaseImport = async (
     if (!(error instanceof DatabaseImportError)) {
       throw error;
     }
-    await rm(manifestPath, { force: true });
-    manifest = undefined;
+    await rm(getImportManifestPath(databasePath), { force: true });
+    await sweepStagedImports(databasePath);
+    return "dropped";
   }
   if (manifest === undefined) {
     await sweepStagedImports(databasePath);
-    return;
+    return "none";
   }
 
   const directory = path.dirname(databasePath);
-  const stagedDatabasePath = path.join(directory, manifest.databaseFile);
-  const stagedKeyPath = path.join(directory, manifest.keyFile);
-  const backupDirectory = path.join(
-    directory,
-    "backups",
-    manifest.backupDirectory
-  );
-  const [hasStagedDatabase, hasStagedKey] = await Promise.all([
-    pathExists(stagedDatabasePath),
-    pathExists(stagedKeyPath),
-  ]);
-  if (!(hasStagedDatabase && hasStagedKey)) {
-    if (await pathExists(backupDirectory)) {
-      throw importError();
-    }
-    await rm(manifestPath, { force: true });
-    await sweepStagedImports(databasePath);
-    return;
-  }
+  const paths: ActivationPaths = {
+    backupDirectory: path.join(directory, "backups", manifest.backupDirectory),
+    databasePath,
+    stagedDatabasePath: path.join(directory, manifest.databaseFile),
+    stagedKeyPath: path.join(directory, manifest.keyFile),
+  };
 
-  await backUpActiveDatabase(databasePath, backupDirectory);
-  await rm(`${databasePath}-wal`, { force: true });
-  await rm(`${databasePath}-shm`, { force: true });
-  await replaceFileFromStage(stagedDatabasePath, databasePath);
-  await replaceFileFromStage(stagedKeyPath, getDatabaseKeyPath(databasePath));
-  await rm(manifestPath, { force: true });
-  await removeDatabaseFiles(stagedDatabasePath);
-  await rm(stagedKeyPath, { force: true });
+  return manifest.step === undefined
+    ? await activateUnrecordedImport(paths)
+    : await activateRecordedImport(manifest, paths);
 };

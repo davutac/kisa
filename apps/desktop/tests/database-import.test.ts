@@ -76,6 +76,13 @@ const failureOf = async (
   }
 };
 
+interface StoredManifest {
+  readonly backupDirectory: string;
+  readonly databaseFile: string;
+  readonly keyFile: string;
+  readonly step?: "pending" | "restoring" | "swapping";
+}
+
 describe("database import", () => {
   let activeDatabasePath = "";
   let sourceDatabasePath = "";
@@ -413,7 +420,7 @@ describe("database import", () => {
     await expect(importStatus()).resolves.toMatchObject({ state: "none" });
     await expect(
       activatePendingDatabaseImport(activeDatabasePath)
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("none");
     await expect(readFile(activeDatabasePath, "utf-8")).resolves.toBe(
       "current database"
     );
@@ -430,7 +437,7 @@ describe("database import", () => {
     await expect(importStatus()).resolves.toMatchObject({ state: "none" });
     await expect(
       activatePendingDatabaseImport(activeDatabasePath)
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("none");
     await expect(readFile(activeDatabasePath, "utf-8")).resolves.toBe(
       "current database"
     );
@@ -484,12 +491,61 @@ describe("database import", () => {
   const activeDatabase = (): Promise<string> =>
     readFile(activeDatabasePath, "utf-8");
 
+  const readStoredManifest = async (): Promise<StoredManifest> =>
+    JSON.parse(await readFile(manifestPath(), "utf-8"));
+
+  /** Rewrites the waiting manifest's step; `undefined` removes it. */
+  const recordStep = async (step: StoredManifest["step"]): Promise<void> => {
+    const { step: _recorded, ...manifest } = await readStoredManifest();
+    await writeFile(
+      manifestPath(),
+      JSON.stringify(step === undefined ? manifest : { ...manifest, step })
+    );
+  };
+
+  const recordedStep = async (): Promise<StoredManifest["step"]> => {
+    const manifest = await readStoredManifest();
+    return manifest.step;
+  };
+
+  const backupPath = async (name: string): Promise<string> => {
+    const manifest = await readPendingManifest();
+    return path.join(
+      temporaryDirectory,
+      "backups",
+      manifest.backupDirectory,
+      name
+    );
+  };
+
+  /** The backup as activation leaves it once it is complete. */
+  const writeCompleteBackup = async (): Promise<void> => {
+    await mkdir(path.dirname(await backupPath("app.sqlite")), {
+      recursive: true,
+    });
+    await writeFile(await backupPath("app.sqlite"), "current database");
+    await writeFile(await backupPath("app.sqlite.key"), "current sealed key");
+    await writeFile(await backupPath("app.sqlite-wal"), "current wal");
+  };
+
+  const activeFiles = async () => ({
+    database: await readFile(activeDatabasePath, "utf-8"),
+    key: await readFile(`${activeDatabasePath}.key`, "utf-8"),
+    wal: await readFile(`${activeDatabasePath}-wal`, "utf-8"),
+  });
+
+  const CURRENT_FILES = {
+    database: "current database",
+    key: "current sealed key",
+    wal: "current wal",
+  };
+
   it("starts with the current database when the manifest cannot be read", async () => {
     await writeFile(manifestPath(), "not json");
 
     await expect(
       activatePendingDatabaseImport(activeDatabasePath)
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("dropped");
 
     await expect(activeDatabase()).resolves.toBe("current database");
     await expect(exists(manifestPath())).resolves.toBeFalsy();
@@ -502,7 +558,7 @@ describe("database import", () => {
 
     await expect(
       activatePendingDatabaseImport(activeDatabasePath)
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("dropped");
 
     await expect(activeDatabase()).resolves.toBe("current database");
     await expect(exists(manifestPath())).resolves.toBeFalsy();
@@ -510,10 +566,12 @@ describe("database import", () => {
     await expect(readdir(temporaryDirectory)).resolves.not.toContain("backups");
   });
 
+  // A manifest from before steps were recorded: how far it got is unknown.
   // The backup directory is made before anything is swapped, so finding it
   // means the swap may have begun and the current pair may not be whole.
-  it("keeps failing, and deletes nothing, when the staged copy is gone after the swap began", async () => {
+  it("keeps failing, and deletes nothing, when an unrecorded import's staged copy is gone after its swap began", async () => {
     await runImport(await prepareImport());
+    await recordStep(undefined);
     const manifest = await readPendingManifest();
     await mkdir(
       path.join(temporaryDirectory, "backups", manifest.backupDirectory),
@@ -531,34 +589,163 @@ describe("database import", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("keeps the original in the backup when a failed swap is run again", async () => {
+  it("records that nothing is swapped when an import is staged", async () => {
+    await runImport(await prepareImport());
+
+    await expect(recordedStep()).resolves.toBe("pending");
+  });
+
+  it("drops an import whose backup cannot be made, leaving the current database untouched", async () => {
+    await runImport(await prepareImport());
+    // A file where the backups folder belongs: the backup cannot begin.
+    await writeFile(path.join(temporaryDirectory, "backups"), "in the way");
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).resolves.toBe("dropped");
+
+    await expect(activeFiles()).resolves.toStrictEqual(CURRENT_FILES);
+    await expect(exists(manifestPath())).resolves.toBeFalsy();
+    await expect(stagedFiles()).resolves.toStrictEqual([]);
+  });
+
+  it("puts the previous database, key and journal back when the swap fails part-way", async () => {
     await runImport(await prepareImport());
     const manifest = await readPendingManifest();
     const stagedKey = path.join(temporaryDirectory, manifest.keyFile);
-    const backupDatabase = path.join(
-      temporaryDirectory,
-      "backups",
-      manifest.backupDirectory,
-      "app.sqlite"
-    );
     // The database swaps, then the key cannot be copied.
     await rm(stagedKey);
     await mkdir(stagedKey);
+
     await expect(
       activatePendingDatabaseImport(activeDatabasePath)
-    ).rejects.toThrow(/./u);
-    await expect(activeDatabase()).resolves.toBe("imported database");
+    ).resolves.toBe("restored");
 
-    await rm(stagedKey, { recursive: true });
-    await writeFile(stagedKey, "imported sealed key");
-    await activatePendingDatabaseImport(activeDatabasePath);
+    await expect(activeFiles()).resolves.toStrictEqual(CURRENT_FILES);
+    await expect(exists(manifestPath())).resolves.toBeFalsy();
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).resolves.toBe("none");
+  });
+
+  // A crash is not a failure: the staged files are still there, so the swap
+  // is carried on. The backup already holds the original and the active file
+  // is now the imported one, so the backup must not be made again.
+  it("carries on a swap cut short by a crash, without making the backup again", async () => {
+    await runImport(await prepareImport());
+    await writeCompleteBackup();
+    await writeFile(activeDatabasePath, "imported database");
+    await recordStep("swapping");
+    const backupDatabase = await backupPath("app.sqlite");
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).resolves.toBe("activated");
 
     await expect(readFile(backupDatabase, "utf-8")).resolves.toBe(
       "current database"
     );
+    await expect(activeDatabase()).resolves.toBe("imported database");
     await expect(readFile(`${activeDatabasePath}.key`, "utf-8")).resolves.toBe(
-      "imported sealed key"
+      `sealed:${Buffer.alloc(32, 7).toString("base64")}`
     );
+  });
+
+  it("finishes a restore that was cut short, without activating the import", async () => {
+    await runImport(await prepareImport());
+    await writeCompleteBackup();
+    // The database was already moved back; the key and journal were not.
+    await rm(await backupPath("app.sqlite"));
+    await writeFile(`${activeDatabasePath}.key`, "imported sealed key");
+    await rm(`${activeDatabasePath}-wal`);
+    await recordStep("restoring");
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).resolves.toBe("restored");
+
+    await expect(activeFiles()).resolves.toStrictEqual(CURRENT_FILES);
+    await expect(exists(manifestPath())).resolves.toBeFalsy();
+  });
+
+  it("fails, and deletes nothing, when a begun swap can neither finish nor be undone", async () => {
+    await runImport(await prepareImport());
+    const manifest = await readPendingManifest();
+    await rm(path.join(temporaryDirectory, manifest.databaseFile));
+    await recordStep("swapping");
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).rejects.toThrow(/./u);
+
+    await expect(recordedStep()).resolves.toBe("swapping");
+    await expect(activeFiles()).resolves.toStrictEqual(CURRENT_FILES);
+    await expect(
+      exists(path.join(temporaryDirectory, manifest.keyFile))
+    ).resolves.toBeTruthy();
+  });
+
+  const OTHER_BACKUP = "before-import-22222222-2222-2222-2222-222222222222";
+
+  /** An earlier import's backup: the only copy of what it replaced. */
+  const writeOtherBackup = async (): Promise<string> => {
+    const directory = path.join(temporaryDirectory, "backups", OTHER_BACKUP);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, "app.sqlite"), "earlier original");
+    return path.join(directory, "app.sqlite");
+  };
+
+  // The folder a drop deletes, and a restore moves files out of, is named by
+  // the manifest. It must be the one this import made.
+  it("never touches a backup folder the import did not make, whatever its manifest names", async () => {
+    await runImport(await prepareImport());
+    const otherBackup = await writeOtherBackup();
+    const manifest = await readStoredManifest();
+    await writeFile(
+      manifestPath(),
+      JSON.stringify({ ...manifest, backupDirectory: OTHER_BACKUP })
+    );
+    await rm(path.join(temporaryDirectory, manifest.databaseFile));
+
+    await activatePendingDatabaseImport(activeDatabasePath);
+
+    await expect(readFile(otherBackup, "utf-8")).resolves.toBe(
+      "earlier original"
+    );
+    await expect(activeFiles()).resolves.toStrictEqual(CURRENT_FILES);
+  });
+
+  it("removes its own half-made backup on a drop and leaves a neighbouring backup alone", async () => {
+    await runImport(await prepareImport());
+    const otherBackup = await writeOtherBackup();
+    const manifest = await readStoredManifest();
+    const ownBackup = path.dirname(await backupPath("app.sqlite"));
+    await mkdir(ownBackup, { recursive: true });
+    await writeFile(path.join(ownBackup, "app.sqlite.partial"), "curr");
+    await rm(path.join(temporaryDirectory, manifest.databaseFile));
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).resolves.toBe("dropped");
+
+    await expect(
+      exists(path.join(ownBackup, "app.sqlite.partial"))
+    ).resolves.toBeFalsy();
+    await expect(readFile(otherBackup, "utf-8")).resolves.toBe(
+      "earlier original"
+    );
+  });
+
+  it("refuses to discard an import whose swap has begun", async () => {
+    await runImport(await prepareImport());
+    await recordStep("swapping");
+
+    await expect(
+      Effect.runPromise(discardPendingDatabaseImport(activeDatabasePath))
+    ).rejects.toMatchObject({ message: "Could not discard the import" });
+
+    await expect(recordedStep()).resolves.toBe("swapping");
+    await expect(stagedFiles()).resolves.toHaveLength(2);
   });
 
   // A copy cut short by a crash must not stand in for the backup: the next
