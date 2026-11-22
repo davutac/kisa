@@ -3,62 +3,51 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useMailSearchStore } from "../src/renderer/src/state/mail-search";
 
 const initialState = useMailSearchStore.getState();
+const receipts = {
+  filters: [{ field: "from", value: "sender@example.com" }],
+  text: "receipt",
+} as const;
 
 describe("mail search store", () => {
   beforeEach(() => {
     useMailSearchStore.setState(initialState, true);
   });
 
-  it("starts a fresh all-mail search session", () => {
-    useMailSearchStore.getState().activate();
+  it("fills the mailbox list with a query's results", () => {
+    useMailSearchStore.getState().showResults(receipts);
 
     expect(useMailSearchStore.getState()).toMatchObject({
       isActive: true,
-      isDirty: false,
-      query: {
-        filters: [],
-        text: "",
-      },
+      query: receipts,
+      revision: initialState.revision + 1,
     });
   });
 
-  it("preserves the active session when activated again", () => {
+  it("starts a new result set each time results are shown", () => {
     const store = useMailSearchStore.getState();
-    store.activate();
-    useMailSearchStore.getState().updateQuery({
-      filters: [{ field: "from", value: "sender@example.com" }],
-      text: "receipt",
-    });
-    useMailSearchStore.getState().activate();
+    store.showResults(receipts);
+    store.showResults({ filters: [], text: "invoice" });
 
     expect(useMailSearchStore.getState()).toMatchObject({
-      isDirty: true,
-      query: {
-        filters: [{ field: "from", value: "sender@example.com" }],
-        text: "receipt",
-      },
+      query: { filters: [], text: "invoice" },
+      revision: initialState.revision + 2,
     });
   });
 
-  it("exits without retaining dirty state", () => {
+  it("exits to the mailbox and forgets the query", () => {
     const store = useMailSearchStore.getState();
-    store.activate();
-    useMailSearchStore.getState().updateQuery({ filters: [], text: "mail" });
-    useMailSearchStore.getState().exit();
+    store.showResults(receipts);
+    store.exit();
 
     expect(useMailSearchStore.getState()).toMatchObject({
       isActive: false,
-      isDirty: false,
-    });
-  });
-
-  it("ignores query updates outside an active session", () => {
-    useMailSearchStore.getState().updateQuery({ filters: [], text: "receipt" });
-
-    expect(useMailSearchStore.getState()).toMatchObject({
-      isActive: false,
-      isDirty: false,
       query: initialState.query,
     });
+  });
+
+  it("ignores exit when no results are shown", () => {
+    useMailSearchStore.getState().exit();
+
+    expect(useMailSearchStore.getState()).toBe(initialState);
   });
 });

@@ -189,6 +189,22 @@
   -webkit-app-region: drag;
 }
 
+/*
+ * The main window splits its titlebar between the sidebar and the content
+ * column: the sidebar header clears the leading window controls (the macOS
+ * traffic lights) and the content titlebar clears the trailing overlay
+ * controls. A collapsed sidebar hands both insets to the content titlebar.
+ * Beside the sidebar the content titlebar has no leading padding, so a
+ * view's toolbar in it lines up with the view's own content.
+ */
+.app-titlebar[data-titlebar-inset="leading"] {
+  padding-right: 0.5rem;
+}
+
+.app-titlebar[data-titlebar-inset="trailing"] {
+  padding-left: 0;
+}
+
 .app-titlebar-interactive {
   app-region: no-drag;
   -webkit-app-region: no-drag;

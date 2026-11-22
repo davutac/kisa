@@ -24,6 +24,7 @@ export const getAppCommandHotkeys = (
   const command = HOTKEY_COMMANDS[commandId];
 
   const baseOptions = {
+    ignoreDefaultPrevented: "ignoreDefaultPrevented" in command,
     ignoreInputs: command.input === "ignore",
     requireReset: command.repeat === "once",
   };

@@ -76,7 +76,7 @@ const ThreadSelectionBar = ({
     <m.div
       animate={{ opacity: 1, y: 0 }}
       aria-label="Selected conversation actions"
-      className="bg-popover/90 ring-foreground/10 fixed bottom-4 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1.5 rounded-full p-1.5 shadow-lg ring-1 backdrop-blur-xl"
+      className="bg-popover/90 ring-foreground/10 absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1.5 rounded-full p-1.5 shadow-lg ring-1 backdrop-blur-xl"
       exit={shouldReduceMotion ? undefined : { opacity: 0, y: 20 }}
       initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
       role="toolbar"

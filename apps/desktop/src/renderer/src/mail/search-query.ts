@@ -1,4 +1,6 @@
-import type { Mailbox, MailSearchFilterField } from "@/shared/ipc/mail";
+import type { MailboxPlace, MailSearchFilterField } from "@/shared/ipc/mail";
+
+import { isLabelPlace, toLabelSearchValue } from "./mailbox-place";
 
 export type SearchFilterField = MailSearchFilterField;
 
@@ -98,9 +100,8 @@ export const formatSearchFilter = (filter: SearchFilter): string =>
   `${filter.field}:${formatFilterValue(filter.value)}`;
 
 /**
- * Serialises back to the Gmail-style query syntax, so the same string can be
- * handed to the mailbox search when the inline field hands off to the mailbox
- * list.
+ * Serialises back to the Gmail-style query syntax, so the sidebar can name
+ * the search whose results fill the mailbox list.
  */
 export const formatSearchQuery = (query: SearchQuery): string =>
   [...query.filters.map(formatSearchFilter), query.text.trim()]
@@ -132,24 +133,29 @@ export const addSearchFilters = (
   return next;
 };
 
+/**
+ * Adds the mailbox view's scope to a search: the Inbox searches all non-Spam
+ * mail, another mailbox or a label only itself, and the Unread filter only
+ * unread mail.
+ */
 export const applyExternalMailSearchScope = (
   query: SearchQuery,
   {
-    labelNames,
     mailbox,
     unreadOnly,
   }: {
-    readonly labelNames: readonly string[];
-    readonly mailbox: Mailbox;
+    readonly mailbox: MailboxPlace;
     readonly unreadOnly: boolean;
   }
 ): SearchQuery => {
-  const scopeFilters: SearchFilter[] = labelNames.map((value) => ({
-    field: "label",
-    value,
-  }));
+  const scopeFilters: SearchFilter[] = [];
 
-  if (mailbox !== "inbox") {
+  if (isLabelPlace(mailbox)) {
+    scopeFilters.push({
+      field: "label",
+      value: toLabelSearchValue(mailbox.label),
+    });
+  } else if (mailbox !== "inbox") {
     scopeFilters.push({ field: "label", value: mailbox });
   }
   if (unreadOnly) {

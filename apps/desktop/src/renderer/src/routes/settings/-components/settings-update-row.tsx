@@ -1,6 +1,4 @@
 import { DownloadIcon, LoaderCircleIcon, RefreshCwIcon } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,12 +8,8 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
-import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { UpdateApi } from "@/platform/desktop";
-import {
-  getManualUpdateFeedback,
-  getSettingsUpdateView,
-} from "@/updates/update-view";
+import { getSettingsUpdateView } from "@/updates/update-view";
 import { useUpdateActions } from "@/updates/use-update-actions";
 import { useUpdateStatus } from "@/updates/use-update-status";
 
@@ -23,44 +17,12 @@ interface SettingsUpdateRowProps {
   updateApi: UpdateApi;
 }
 
-const showManualUpdateFeedback = (
-  feedback: ReturnType<typeof getManualUpdateFeedback>
-): void => {
-  if (feedback === null) {
-    return;
-  }
-
-  toast[feedback.type](feedback.title, {
-    description: feedback.description,
-  });
-};
-
 const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
   const status = useUpdateStatus(updateApi);
-  const [isManualCheckPending, setIsManualCheckPending] = useState(false);
-  const { downloadUpdate, installUpdate } = useUpdateActions(updateApi);
+  const { checkForUpdates, downloadUpdate, installUpdate, isCheckPending } =
+    useUpdateActions(updateApi);
 
-  const handleCheckForUpdates = async (): Promise<void> => {
-    setIsManualCheckPending(true);
-
-    await runWithCleanup(
-      async () => {
-        try {
-          const nextStatus = await updateApi.check();
-          showManualUpdateFeedback(getManualUpdateFeedback(nextStatus));
-        } catch {
-          toast.error("Could not check for updates", {
-            description: "Please try again later.",
-          });
-        }
-      },
-      () => {
-        setIsManualCheckPending(false);
-      }
-    );
-  };
-
-  const view = getSettingsUpdateView(status, isManualCheckPending);
+  const view = getSettingsUpdateView(status, isCheckPending);
 
   return (
     <SettingsRow>
@@ -77,7 +39,7 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
             aria-labelledby="updates-title"
             disabled={view.isDisabled}
             onClick={() => {
-              void handleCheckForUpdates();
+              void checkForUpdates();
             }}
             type="button"
             variant="secondary"

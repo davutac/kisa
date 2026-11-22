@@ -275,9 +275,9 @@ export const useTemplateWorkspace = () => {
               updateDraft((current) => ({ ...current, subject })),
             variablePreviewContext: getVariablePreviewContext(draft, accounts),
           },
+    createTemplate,
     sidebar: {
       isLoading,
-      onCreate: createTemplate,
       onQueryChange: setQuery,
       onSelect: chooseTemplate,
       query,

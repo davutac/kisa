@@ -8,6 +8,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
@@ -44,6 +45,7 @@ import {
   upsertStash,
   useDraftPersistence,
 } from "./new-message-draft-persistence";
+import { getNewMessageLeave } from "./new-message-leave";
 import { useNewMessageStore, useNewMessageStoreApi } from "./new-message-store";
 import { useNewMessageCleanHistory } from "./use-new-message-clean-history";
 import { useScheduledComposer } from "./use-scheduled-composer";
@@ -88,6 +90,10 @@ export const useNewMessageWorkspace = ({
   const draftOperationQueueRef = useRef(Promise.resolve());
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [hasPendingReschedule, setHasPendingReschedule] = useState(false);
+  // Leaving stashes over IPC before the composer closes; this keeps Send and
+  // a second leave out until that save settles.
+  const [isLeaving, setIsLeaving] = useState(false);
+  const confirm = useConfirm();
   const mailApi = useMemo(() => getMailApi(), []);
   const outgoingAttachments = useOutgoingAttachments(
     mailApi,
@@ -173,6 +179,7 @@ export const useNewMessageWorkspace = ({
   const isBusy = [
     cleanup.isCleaning,
     isAuthorizing,
+    isLeaving,
     isScheduling,
     isSending,
   ].some(Boolean);
@@ -343,6 +350,62 @@ export const useNewMessageWorkspace = ({
     });
   };
 
+  /**
+   * Keeps anything written in Stash before the composer goes away, without
+   * closing it. Resolves false while the composer is busy or when the save
+   * failed, so the composer stays open with the draft and nothing is lost.
+   */
+  const keepDraftForLeaving = async (): Promise<boolean> => {
+    const draft = currentDraftRef.current;
+    const action = getNewMessageLeave(draft, isBusy);
+    if (action !== "stash") {
+      return action === "close";
+    }
+    let succeeded = false;
+    setIsLeaving(true);
+    // Queued behind any earlier stash, so the saves land in order.
+    enqueueDraftOperation(async () => {
+      succeeded = await persistDraft(draft);
+    });
+    await draftOperationQueueRef.current;
+    setIsLeaving(false);
+    if (succeeded) {
+      toast.success("Draft stashed");
+    }
+    return succeeded;
+  };
+
+  /** Closes the composer as Escape does, keeping anything written in Stash. */
+  const leave = async (): Promise<void> => {
+    if (await keepDraftForLeaving()) {
+      onOpenChange(false);
+    }
+  };
+
+  /** Closes without keeping the draft, after confirming if it has content. */
+  const discard = async (): Promise<void> => {
+    const draft = currentDraftRef.current;
+    if (isBusy) {
+      return;
+    }
+    if (
+      !isNewMailDraftEmpty(draft) &&
+      !(await confirm({
+        cancelLabel: "Keep editing",
+        confirmLabel: "Discard",
+        confirmVariant: "destructive",
+        description: "This email will not be kept in Stash.",
+        title: "Discard this email?",
+      }))
+    ) {
+      return;
+    }
+    enqueueDraftOperation(async () => {
+      await popDraft(draft);
+    });
+    onOpenChange(false);
+  };
+
   const switchDraft = (next: MailDraft): void => {
     if (next.id === draftId || isBusy) {
       return;
@@ -453,9 +516,13 @@ export const useNewMessageWorkspace = ({
     canStash,
     cleanDraft: cleanup.cleanDraft,
     cleanupModelLabel: cleanup.modelLabel,
+    discard,
     dismissCleanVersion: cleanup.dismissVersion,
     focus,
+    isBusy,
     isCleaning: cleanup.isCleaning,
+    keepDraftForLeaving,
+    leave,
     outgoingAttachments,
     requestClose: scheduled.requestClose,
     scheduled: {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, RefObject } from "react";
 import { flushSync } from "react-dom";
 
+import { WindowTitlebar } from "@/components/shell/window-titlebar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -488,7 +489,7 @@ const AccountSetupApp = () => {
     >
       {IS_SHEET ? null : (
         // The drag strip behind the window controls; the heading names it.
-        <div className="app-titlebar" />
+        <WindowTitlebar as="div" />
       )}
 
       <form

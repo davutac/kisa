@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, m, useReducedMotionConfig } from "motion/react";
 import { useRef, useState } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { SendWithScheduleMenu } from "@/components/mail/schedule-send-menu";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
   getComposerDeliveryLabel,
   submitNewMessageDelivery,
 } from "./new-message-delivery";
+import type { NewMessageLayout } from "./new-message-layout";
 
 export interface ScheduledComposerControls {
   readonly canSchedule: boolean;
@@ -101,6 +103,46 @@ export const SelectedDeliveryTime = ({
   );
 };
 
+/** The chosen send time beside Send in the titlebar, where a strip has no room. */
+const SelectedDeliveryTimeChip = ({
+  label = "Selected send time",
+  onRemove,
+  scheduledAt,
+}: SelectedDeliveryTimeProps) => {
+  if (scheduledAt === undefined) {
+    return null;
+  }
+  const formatted = formatScheduledAt(scheduledAt);
+
+  return (
+    <div
+      aria-label={label}
+      className="bg-muted/50 text-muted-foreground flex h-7 items-center gap-1.5 rounded-md pr-0.5 pl-2 text-xs"
+    >
+      <CalendarClockIcon className="size-3.5" />
+      <time
+        className="text-foreground font-medium"
+        dateTime={new Date(scheduledAt).toISOString()}
+        title={`${formatted} (${LOCAL_TIME_ZONE})`}
+      >
+        {formatted}
+      </time>
+      {onRemove === undefined ? null : (
+        <Button
+          aria-label="Clear selected send time"
+          onClick={onRemove}
+          size="icon-xs"
+          title="Clear selected send time"
+          type="button"
+          variant="ghost"
+        >
+          <XIcon />
+        </Button>
+      )}
+    </div>
+  );
+};
+
 const ScheduledEditButtons = ({
   canSend,
   disabled,
@@ -111,13 +153,13 @@ const ScheduledEditButtons = ({
   readonly canSend: boolean;
   readonly disabled: boolean;
 }) => {
-  const discardDisplay = getHotkeyDisplay("composer.discardScheduled");
+  const discardDisplay = getHotkeyDisplay("composer.discard");
   const saveDisplay = getHotkeyDisplay("composer.stash");
 
   return (
     <>
       <Button
-        aria-keyshortcuts={getHotkeyAriaLabel("composer.discardScheduled")}
+        aria-keyshortcuts={getHotkeyAriaLabel("composer.discard")}
         aria-label="Permanently discard scheduled email"
         className={quietDestructiveClassName}
         disabled={disabled}
@@ -150,15 +192,55 @@ const ScheduledEditButtons = ({
   );
 };
 
+/**
+ * A full-width strip of actions in the dialog. On the page the actions sit
+ * in the content titlebar: compact buttons in one row, with the chosen send
+ * time as a chip beside Send rather than a strip above it.
+ */
+const FOOTER_LAYOUT = {
+  dialog: {
+    actionsClassName: "bg-background flex shrink-0 items-stretch gap-px",
+    DeliveryTime: SelectedDeliveryTime,
+    primaryClassName: primaryFooterActionClassName,
+    primarySize: "footer",
+    stashClassName: undefined,
+    stashSize: "footer-icon",
+    stashVariant: "secondary",
+  },
+  page: {
+    actionsClassName: "flex shrink-0 items-center gap-1",
+    DeliveryTime: SelectedDeliveryTimeChip,
+    primaryClassName: cn(primaryFooterActionClassName, "rounded-r-none px-2.5"),
+    primarySize: "default",
+    stashClassName: "text-muted-foreground hover:text-foreground",
+    stashSize: "icon",
+    stashVariant: "ghost",
+  },
+} as const satisfies Record<
+  NewMessageLayout,
+  {
+    readonly actionsClassName: string;
+    readonly DeliveryTime: (props: SelectedDeliveryTimeProps) => ReactNode;
+    readonly primaryClassName: string;
+    readonly primarySize: ComponentProps<typeof Button>["size"];
+    readonly stashClassName: string | undefined;
+    readonly stashSize: ComponentProps<typeof Button>["size"];
+    readonly stashVariant: ComponentProps<typeof Button>["variant"];
+  }
+>;
+
 interface NewMessageFooterProps {
   readonly canSend: boolean;
   readonly canStash: boolean;
   readonly isScheduling: boolean;
   readonly isSending: boolean;
+  readonly layout: NewMessageLayout;
   readonly onSend: () => Promise<void>;
   readonly onStash: () => void;
   readonly scheduled: ScheduledComposerControls;
   readonly sendShortcutLabel: string;
+  /** The stash picker, placed between Stash and Send on the page. */
+  readonly stashPicker?: ReactNode;
 }
 
 const NewMessageFooter = ({
@@ -166,11 +248,14 @@ const NewMessageFooter = ({
   canStash,
   isScheduling,
   isSending,
+  layout,
   onSend,
   onStash,
   scheduled,
   sendShortcutLabel,
+  stashPicker,
 }: NewMessageFooterProps) => {
+  const footerLayout = FOOTER_LAYOUT[layout];
   const [selectedScheduledAt, setSelectedScheduledAt] = useState<
     number | undefined
   >();
@@ -231,7 +316,7 @@ const NewMessageFooter = ({
     { enabled: canSchedule && !isBusy }
   );
   useAppCommand(
-    "composer.discardScheduled",
+    "composer.discard",
     () => {
       void handleDiscardSchedule();
     },
@@ -239,19 +324,26 @@ const NewMessageFooter = ({
   );
 
   const primaryIcon = isScheduleSelected ? <CalendarClockIcon /> : <SendIcon />;
+  const deliveryTime = (
+    <footerLayout.DeliveryTime
+      label={deliveryTimeLabel}
+      onRemove={isEdit ? undefined : handleRemoveSchedule}
+      scheduledAt={displayedScheduledAt}
+    />
+  );
 
   const primaryAction = (
     <Button
       aria-keyshortcuts={getHotkeyAriaLabel(
         isScheduleSelected ? "composer.schedule" : "composer.send"
       )}
-      className={primaryFooterActionClassName}
+      className={footerLayout.primaryClassName}
       disabled={isBusy || (isScheduleSelected ? !canSchedule : !canSend)}
       onClick={() => {
         void handlePrimaryAction();
       }}
       ref={primaryActionRef}
-      size="footer"
+      size={footerLayout.primarySize}
       title={
         isScheduleSelected
           ? `${isEdit ? "Reschedule" : "Schedule"} for ${formatScheduledAt(selectedScheduledAt)} (${scheduleDisplay.bindings[0]})`
@@ -271,12 +363,8 @@ const NewMessageFooter = ({
 
   return (
     <>
-      <SelectedDeliveryTime
-        label={deliveryTimeLabel}
-        onRemove={isEdit ? undefined : handleRemoveSchedule}
-        scheduledAt={displayedScheduledAt}
-      />
-      <div className="bg-background flex shrink-0 items-stretch gap-px">
+      {layout === "dialog" ? deliveryTime : null}
+      <div className={footerLayout.actionsClassName}>
         {isEdit ? (
           <ScheduledEditButtons
             canSend={canSend}
@@ -289,18 +377,22 @@ const NewMessageFooter = ({
           <Button
             aria-label="Stash draft"
             aria-keyshortcuts={getHotkeyAriaLabel("composer.stash")}
+            className={footerLayout.stashClassName}
             disabled={!canStash}
             onClick={onStash}
             onMouseDown={(event) => event.preventDefault()}
-            size="footer-icon"
+            size={footerLayout.stashSize}
             title="Stash draft"
             type="button"
-            variant="secondary"
+            variant={footerLayout.stashVariant}
           >
             <ArchiveIcon />
           </Button>
         )}
+        {isEdit ? null : stashPicker}
+        {layout === "page" ? deliveryTime : null}
         <SendWithScheduleMenu
+          compact={layout === "page"}
           disabled={isBusy || !canSchedule}
           onChoose={handleSelectSchedule}
           onOpenChange={setIsScheduleMenuOpen}

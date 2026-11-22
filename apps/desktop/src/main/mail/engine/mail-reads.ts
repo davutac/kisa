@@ -3,7 +3,7 @@ import { gunzipSync } from "node:zlib";
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { mailLabels, mailMessages, mailThreads } from "@repo/database/schemas";
 import type { StoredMailAttachment } from "@repo/database/schemas";
-import { SystemLabel, userLabelPath } from "@repo/mail/ids";
+import { SystemLabel, userLabelId, userLabelPath } from "@repo/mail/ids";
 import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 
 import type {
@@ -11,10 +11,11 @@ import type {
   MailCachedThreadPage,
   MailCachedThreadPageRequest,
   MailLabelCatalog,
-  Mailbox,
+  MailboxPlace,
   ThreadMessage,
   MailThreadSummary,
 } from "../../../shared/ipc/mail";
+import { isMailboxLabelPlace } from "../../../shared/ipc/mail";
 import { toDisplayedAttachment } from "../attachment-filename";
 
 export const THREAD_PAGE_SIZE = 50;
@@ -82,7 +83,24 @@ export const toThreadSummary = (row: ThreadRow): MailThreadSummary => ({
   threadId: row.threadId,
 });
 
-const mailboxCondition = (mailbox: Mailbox) => {
+/**
+ * The threads a mailbox place lists. A label lists every conversation
+ * carrying it outside Spam and Trash, as Gmail's label view does, so mail
+ * archived under a label is still there. SQLite folds both sides of the id,
+ * so the match ignores ASCII case, as the label catalog does, and a label
+ * with other capitals still matches itself.
+ */
+const mailboxCondition = (mailbox: MailboxPlace) => {
+  if (isMailboxLabelPlace(mailbox)) {
+    return and(
+      eq(mailThreads.isInSpam, false),
+      eq(mailThreads.isInTrash, false),
+      sql`EXISTS (
+        SELECT 1 FROM json_each(${mailThreads.labelIds}) AS thread_label
+        WHERE lower(thread_label.value) = lower(${userLabelId(mailbox.label)})
+      )`
+    );
+  }
   if (mailbox === "spam") {
     return eq(mailThreads.isInSpam, true);
   }
@@ -116,14 +134,6 @@ export const readThreadPage = async (
     return { threads: [] };
   }
 
-  const labelIds = [
-    ...new Set(
-      (request.labelNames ?? [])
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0)
-        .map((name) => `u:${name}`.toLowerCase())
-    ),
-  ];
   const { cursor } = request;
   const rows = await database
     .select()
@@ -148,13 +158,7 @@ export const readThreadPage = async (
                 eq(mailThreads.accountId, cursor.accountId),
                 gt(mailThreads.threadId, cursor.threadId)
               )
-            ),
-        ...labelIds.map(
-          (labelId) => sql`EXISTS (
-            SELECT 1 FROM json_each(${mailThreads.labelIds}) AS thread_label
-            WHERE lower(thread_label.value) = ${labelId}
-          )`
-        )
+            )
       )
     )
     .orderBy(

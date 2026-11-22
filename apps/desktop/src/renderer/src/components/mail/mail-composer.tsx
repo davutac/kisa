@@ -29,6 +29,8 @@ interface MailComposerAttachmentOptions {
   readonly command: "composer.attach" | "threadComposer.attach";
   readonly controller: OutgoingAttachmentComposerController;
   readonly focusRef?: Ref<HTMLButtonElement>;
+  /** Restyles the attached-file tray under the editor. */
+  readonly listClassName?: string;
 }
 
 interface MailComposerHistoryOptions {
@@ -258,6 +260,7 @@ const MailComposer = ({
       />
       {attachments === undefined ? null : (
         <OutgoingAttachmentList
+          className={attachments.listClassName}
           attachments={attachments.controller.attachments.filter(
             ({ contentId }) => contentId === undefined
           )}

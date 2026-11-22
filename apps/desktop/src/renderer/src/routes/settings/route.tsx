@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { ModeToggle } from "@/components/shell/mode-toggle";
+import { PageTitlebar } from "@/components/shell/page-titlebar";
 import Versions from "@/components/shell/versions";
 import {
   Settings,
@@ -56,9 +57,10 @@ function SettingsRoute() {
 
   return (
     <section
-      aria-labelledby="general-settings-title"
+      aria-labelledby="settings-title"
       className="min-h-full w-full min-w-0 flex-1 p-6 sm:p-10"
     >
+      <PageTitlebar title="Settings" titleId="settings-title" />
       <Settings>
         <SettingsSection aria-labelledby="general-settings-title">
           <SettingsSectionHeader>

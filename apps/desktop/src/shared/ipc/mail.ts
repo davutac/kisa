@@ -519,11 +519,26 @@ export type MailThreadCursor = typeof MailThreadCursor.Type;
 export const Mailbox = Schema.Literals(["inbox", "sent", "spam", "trash"]);
 export type Mailbox = typeof Mailbox.Type;
 
+/**
+ * A user label as a place: every conversation carrying it outside Spam and
+ * Trash. `label` is the label's name, its full `/`-separated path, matched
+ * without regard to case so one place spans accounts.
+ */
+export const MailboxLabelPlace = Schema.Struct({
+  label: Schema.NonEmptyString,
+});
+export type MailboxLabelPlace = typeof MailboxLabelPlace.Type;
+
+export const isMailboxLabelPlace = Schema.is(MailboxLabelPlace);
+
+/** What a mailbox list shows: a system mailbox or one user label. */
+export const MailboxPlace = Schema.Union([Mailbox, MailboxLabelPlace]);
+export type MailboxPlace = typeof MailboxPlace.Type;
+
 export const MailCachedThreadPageRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
   cursor: Schema.optional(MailThreadCursor),
-  labelNames: Schema.optional(Schema.Array(Schema.NonEmptyString)),
-  mailbox: Schema.optional(Mailbox),
+  mailbox: Schema.optional(MailboxPlace),
   unreadOnly: Schema.optional(Schema.Boolean),
 });
 export type MailCachedThreadPageRequest =

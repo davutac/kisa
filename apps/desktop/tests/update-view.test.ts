@@ -3,45 +3,60 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   getManualUpdateFeedback,
   getSettingsUpdateView,
-  getTitlebarUpdateView,
+  getSidebarUpdateView,
 } from "../src/renderer/src/updates/update-view";
 
 describe("update view helpers", () => {
-  it("hides titlebar updates for non-actionable states", () => {
-    expect(getTitlebarUpdateView({ state: "idle" })).toStrictEqual({
-      kind: "hidden",
+  it("hides the sidebar button only where updates are unsupported", () => {
+    expect(getSidebarUpdateView({ state: "unsupported" }, false)).toStrictEqual(
+      { kind: "hidden" }
+    );
+  });
+
+  it("offers a sidebar check while idle and spins it while checking", () => {
+    expect(getSidebarUpdateView({ state: "idle" }, false)).toStrictEqual({
+      isChecking: false,
+      kind: "check",
+      label: "Check for updates",
     });
-    expect(getTitlebarUpdateView({ state: "checking" })).toStrictEqual({
-      kind: "hidden",
+    expect(getSidebarUpdateView({ state: "checking" }, false)).toStrictEqual({
+      isChecking: true,
+      kind: "check",
+      label: "Checking for updates…",
     });
-    expect(getTitlebarUpdateView({ state: "unsupported" })).toStrictEqual({
-      kind: "hidden",
+    expect(getSidebarUpdateView({ state: "idle" }, true)).toStrictEqual({
+      isChecking: true,
+      kind: "check",
+      label: "Checking for updates…",
     });
   });
 
-  it("normalizes progress for the titlebar", () => {
+  it("normalizes download progress for the sidebar", () => {
     expect(
-      getTitlebarUpdateView({
-        percent: -1,
-        state: "downloading",
-        version: "1.2.3",
-      })
-    ).toStrictEqual({ kind: "progress", percent: 0 });
+      getSidebarUpdateView(
+        { percent: -1, state: "downloading", version: "1.2.3" },
+        false
+      )
+    ).toStrictEqual({
+      kind: "progress",
+      label: "Downloading update (0%)",
+      percent: 0,
+    });
   });
 
-  it("shows separate titlebar actions for downloading and installing", () => {
+  it("shows separate sidebar actions for downloading and installing", () => {
     expect(
-      getTitlebarUpdateView({ state: "available", version: "1.2.3" })
+      getSidebarUpdateView({ state: "available", version: "1.2.3" }, false)
     ).toStrictEqual({
       kind: "download",
-      label: "Update",
+      label: "Download update 1.2.3",
       version: "1.2.3",
     });
     expect(
-      getTitlebarUpdateView({ state: "ready", version: "1.2.3" })
+      getSidebarUpdateView({ state: "ready", version: "1.2.3" }, false)
     ).toStrictEqual({
       kind: "install",
-      label: "Install",
+      label: "Restart to install update 1.2.3",
       version: "1.2.3",
     });
   });

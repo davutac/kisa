@@ -21,7 +21,7 @@ The hotkey module owns commands that apply to an application screen or interacti
 - Selecting the composer account, attaching files, stashing a draft, and sending a message
 - Creating, searching, and explicitly saving templates
 
-Focused widgets retain their native keyboard behavior. Recipient completion, the inline search field, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused.
+Focused widgets retain their native keyboard behavior. Recipient completion, the search bar, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused.
 
 Application renderer code should not import `@tanstack/react-hotkeys` outside `@/hotkeys` and the root provider setup.
 
@@ -34,6 +34,7 @@ Application renderer code should not import `@tanstack/react-hotkeys` outside `@
 - Its interaction scope
 - Whether it works inside text inputs
 - Whether holding the key may repeat the command
+- Optionally, whether to skip a key a focused widget already handled with `preventDefault()`; the new-email composer's `Escape` uses it so closing the editor's slash menu does not also close the composer
 
 Callers register a command with its callback:
 
@@ -49,21 +50,21 @@ Reversible state toggles use `ignore-key-repeat`: each distinct keydown is accep
 
 Dynamic lists use the renderless `AppCommand` component, which delegates to the same hook without calling hooks inside a loop.
 
-Account commands are static for the first nine accounts. The app uses `1` through `9` for account navigation and the composer uses `Mod+1` through `Mod+9` for its From account. Additional accounts remain available through the account switcher and composer picker without a numbered shortcut.
+Account commands are static and follow sidebar order. `Mod+1` opens All accounts and `Mod+2` through `Mod+9` open the first eight accounts. The composer picks its From account with the same `Mod+2` through `Mod+9`, so an account keeps one number everywhere; `Mod+1` does nothing there, because mail is never sent from All accounts. Both work inside text fields. Additional accounts remain available through the sidebar's account rows and the composer picker without a numbered shortcut.
 
-In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, and keeps the dialog open. On a blank form, it opens the stash picker when saved stashes are available. The command can be pressed again without releasing `Mod`, while operating-system key repeat from holding `S` is ignored. The same command definition drives the Stash button hint and ARIA metadata.
+In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, and keeps the composer open. On a blank form, it opens the stash picker when saved stashes are available. The command can be pressed again without releasing `Mod`, while operating-system key repeat from holding `S` is ignored. The same command definition drives the Stash button hint and ARIA metadata.
 
-`U` toggles the unread-only mailbox filter. `Shift+S` toggles Sent, `S` toggles Spam, and `T` toggles Trash. Pressing an active mailbox toggle returns to the combined Inbox and Sent list.
+`U` toggles the unread-only mailbox filter, the same as the toggle beside sidebar search; the shell registers it, so from a workspace it also returns to the mailbox. `Shift+S` toggles Sent, `S` toggles Spam, and `T` toggles Trash. These shortcuts act on the current account scope. In the sidebar, All accounts opens the combined Inbox and has no rows of its own, so in that scope these shortcuts are the way to its Sent, Spam, and Trash; each account opens its Inbox and discloses its own Sent, Spam, and Trash rows. The hints and `aria-keyshortcuts` for these shortcuts sit only on the current scope's rows, the rows the shortcuts open, when those rows are shown. Rows and shortcuts share one resolver: choosing the mailbox or label and scope already on screen returns to that scope's Inbox, while choosing it from another scope or from a workspace such as Settings opens it. Labels have no shortcuts of their own; they are sidebar places like any other, and Go back and Go forward step through them. `Mod+1` through `Mod+9` open the matching scope's Inbox, the same as choosing its account row.
+
+`Mod+\` shows or hides the main window's sidebar. It works inside text fields and the rich-text editor, which leave `Mod+B` to bold. The shell, not the sidebar, registers every navigation command the sidebar advertises, so the shortcuts keep working while the sidebar is hidden. `Mod+K` opens the search command bar from anywhere, without revealing a hidden sidebar; showing all results reveals it, and hiding the sidebar ends the results in the list. `Mod+[` and `Mod+]` go back and forward through the sidebar places visited, the same as the arrows beside the app name. They are ignored in text fields and the rich-text editor, and they are inactive while the composer or the search bar is open.
 
 `Mod+Z` runs the latest application Undo while its eight-second toast is available. The command ignores text inputs and rich-text editors, where native editing history continues to own the same shortcut.
 
 `J`, `K`, and the arrow keys move mailbox focus. `X` adds or removes the focused conversation from the bulk selection. A revealed row checkbox provides the same action with the mouse. Pressing and dragging anywhere across a conversation row paints that row's checked or unchecked state across every row crossed; reversing the drag restores the rows crossed on the way back. A 15-pixel movement tolerance keeps ordinary clicks opening the conversation. `Escape` clears both bulk selection and mailbox focus.
 
-`Mod+Shift+S` toggles the Scheduled workspace while its title-bar button is available. The workspace mirrors mailbox row navigation without bulk selection: `Tab`, `ArrowDown`, or `J` moves to the next scheduled email; `Shift+Tab`, `ArrowUp`, or `K` moves to the previous one; and `Enter` opens the focused item. `Mod+S` cancels the focused schedule and moves its draft to Stash, matching the composer's stash/save shortcut. `Mod+D` opens the permanent-discard confirmation, matching the mailbox destructive-action shortcut. These actions target keyboard focus, not a hover-only row. A fresh move starts from the first or last visible row. Ordinary moves center smoothly, while rapid repeated moves switch to instant scrolling to stay responsive. `Escape` clears the active row, collapses its quick actions, and returns focus to the Scheduled heading. Scheduled does not register `X` or render selection checkboxes.
+`Mod+Shift+S` toggles the Scheduled workspace while its sidebar row is shown. The workspace mirrors mailbox row navigation without bulk selection: `Tab`, `ArrowDown`, or `J` moves to the next scheduled email; `Shift+Tab`, `ArrowUp`, or `K` moves to the previous one; and `Enter` opens the focused item. `Mod+S` cancels the focused schedule and moves its draft to Stash, matching the composer's stash/save shortcut. `Mod+D` opens the permanent-discard confirmation, matching the mailbox destructive-action shortcut. These actions target keyboard focus, not a hover-only row. A fresh move starts from the first or last visible row. Ordinary moves center smoothly, while rapid repeated moves switch to instant scrolling to stay responsive. `Escape` clears the active row, collapses its quick actions, and returns focus to the Scheduled heading. Scheduled does not register `X` or render selection checkboxes.
 
-While the inline mail search field owns focus, `Tab` or `Shift+Tab` dismisses its completion menu and hands keyboard control to the next or previous visible search result. The ordinary mailbox bindings then continue result navigation, and `Enter` opens the selected conversation.
-
-The mailbox label bar is a horizontal multi-toggle group. Mailbox-scoped `ArrowLeft` and `ArrowRight` commands move between label toggles, including when no label owns DOM focus yet. A fresh move starts from the first or last visible label, matching mailbox thread navigation; subsequent moves stop at the list edges and keep the focused toggle centered when possible. The commands ignore text inputs, while native `Space` toggles a focused label. `Escape` clears that label focus together with ordinary mailbox selection without changing the active label filters. `Mod+Shift+L` clears every active label filter, matching the X button and its shortcut tooltip. The same binding remains registered in the search scope while the inline search field owns focus. When labels overflow, trailing left and right arrow buttons page the strip without changing focus or filters, and each disables at its edge. A primary mouse button dragged horizontally more than six pixels scrolls the strip instead of toggling the label under the pointer; touch and trackpad input keep native scrolling. These pointer controls have no shortcuts because label focus movement already scrolls the strip.
+While the search command bar is open, its `search` layer silences every application command. The arrow keys move through its suggestions and `Enter` chooses one. Show all results comes first, so `Enter` after typing fills the mailbox list, while a filter being typed puts its completions first so `Enter` adds the pill. Once results fill the mailbox list, the ordinary mailbox bindings move through them, and `Enter` opens the selected conversation.
 
 When conversations are checked, Apple Mail-style `Mod+Shift+U` applies to the full selection: it marks the selection unread only when every selected conversation is currently read; otherwise it marks the selection read. `Mod+D` moves the selection to trash, or opens the permanent-delete confirmation in Spam and Trash. Without a bulk selection these commands continue to target the focused conversation. Mixed selections spanning ordinary and permanently deletable search results do not expose a destructive bulk action. These commands are not registered for hover-only quick actions.
 
@@ -77,13 +78,15 @@ Within a conversation, `J` or `ArrowDown` selects and opens the next newer messa
 
 `R` replies to the selected message, `Shift+R` replies to everyone on it, and `F` forwards it. Reply all is available only when the selected message has at least two distinct non-self reply targets across its sender, To, and Cc fields; otherwise its footer button is omitted and `Shift+R` is inactive. Bcc recipients never count toward reply all. A draft captures that message as its immutable target. When a saved draft is resumed, its target becomes the selected message again. The footer buttons derive their shortcut labels and ARIA metadata from these commands.
 
+`Mod+N` opens the new-email page, `/compose`, with its title and its Stash, stash picker, Send, and Schedule actions in the content titlebar. `Escape` closes it and returns to the view it was opened over: a non-empty draft goes to the stash first, as it does when any other navigation leaves the page. `Mod+D` discards it instead, confirming first when it has content, matching the destructive shortcut in the mailbox and Scheduled. Escape in a menu or picker portaled out of the composer closes only that popup. While the composer is open, its layer keeps app shortcuts off, so `Mod+2` through `Mod+9` choose the From account rather than opening an account.
+
 `Mod+Shift+A` opens the attachment picker while composing a new email, reply, reply-all, or forward.
 
 In the new-email composer, `Mod+Shift+Enter` opens Schedule send. Once a delivery time is selected, the same command schedules or reschedules the email. `Mod+Enter` remains Send now. While editing an existing scheduled email, `Mod+D` opens its permanent-discard confirmation and `Mod+S` saves changed content without closing the editor.
 
 `Mod+Shift+C` cleans up the current new-email draft using the provider and model shown in the Clean button tooltip. The command remains available while focus is in the subject or message editor and is disabled for an empty draft or while another compose action is running.
 
-`Mod+,`, `Mod+Shift+S`, and `Mod+Shift+T` toggle Settings, Scheduled, and Templates. Pressing the active workspace's shortcut again restores the previous titlebar view. The Scheduled command is registered only while scheduled mail exists or the workspace is already open. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
+`Mod+,`, `Mod+Shift+S`, and `Mod+Shift+T` toggle Settings, Scheduled, and Templates. Pressing the active workspace's shortcut, or choosing its sidebar row again, restores the previous view. The Scheduled command is registered only while scheduled mail exists or the workspace is already open. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
 
 ## Interaction layers
 
@@ -108,7 +111,7 @@ The provider stores each declaration under a unique token. The highest-priority,
 | `search`          | `always`, `search`                 |
 | `blocking`        | `always`                           |
 
-The composer and focused inline search field suppress every underlying application command. Blurring the search field or removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
+The composer and the open search bar suppress every underlying application command. Closing the search bar or removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
 
 The inline thread composer uses the intermediate `thread-composer` layer. It suppresses thread navigation and message actions while keeping app commands available. A new-message composer or focused inline search field supersedes it.
 
@@ -133,6 +136,8 @@ const LAYER_PRIORITY = {
 Equal-priority layers use activation order.
 
 ## Display and accessibility
+
+Holding `Mod` by itself (`⌘` on macOS, `Ctrl` on Windows and Linux) for 400 milliseconds reveals the shortcut of every sidebar row whose bindings all start from `Mod`, in place of the row's trailing chevron, unread dot, or count; releasing `Mod` hides them. Plain-key shortcuts such as `S` stay in tooltips, because a hint read under a held `Mod` is pressed with it, and `Mod+S` is a different command. Pressing another key first cancels the reveal, so ordinary chords such as `Mod+C` never flash it. Once shown, the hints stay while `Mod` is held, so `Mod+2` then `Mod+3` can hop between accounts under one hold. They show only while the `app` scope is active, because the composer and other higher layers give the same keys other meanings. `useHotkeyHintsRevealed` reads TanStack's held-key tracker through a primitive snapshot, so typing elsewhere re-renders nothing; the sidebar marks itself with `data-hotkey-hints`, and its rows swap their trailing content for the hint in CSS. Icon-only buttons, such as New email, the Unread filter, Settings, and Templates, keep their shortcuts in tooltips.
 
 `HotkeyHint` formats bindings with platform-native labels such as `⌘` on macOS and `Ctrl` on Windows and Linux. `getHotkeyAriaLabel` resolves the registry's `Mod` notation to the ARIA modifier names `Meta` or `Control`.
 
@@ -165,7 +170,7 @@ Focused tests cover:
 
 - Layer priority, restoration, and Strict Mode registration cycles
 - Registry conflicts and platform formatting
-- Account command coverage through the nine-account limit
+- Account command coverage: All accounts and eight accounts, with each account's number shared by the sidebar and the composer
 - Tiptap's `Mod+Enter` guard
 - Thread message selection, expansion, navigation edges, and restoration
 

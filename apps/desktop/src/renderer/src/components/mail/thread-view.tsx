@@ -1,10 +1,14 @@
 import { MailOpenIcon } from "lucide-react";
 import { useCallback } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
 import { getDeleteForeverConfirmation } from "@/components/mail/delete-forever-confirmation";
 import MailThreadConversation from "@/components/mail/thread-conversation";
-import MailThreadHeader from "@/components/mail/thread-header";
+import MailThreadHeader, {
+  MailThreadActions,
+  MailThreadCommands,
+} from "@/components/mail/thread-header";
 import ThreadLabels from "@/components/mail/thread-labels";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +59,19 @@ const ThreadError = ({
   </Empty>
 );
 
+/**
+ * Fills the main window's content titlebar for an open conversation: its
+ * subject once loaded, and its actions. Without it, as in a pop-out window,
+ * the conversation keeps both in its own header card.
+ */
+export interface MailThreadTitlebarProps {
+  readonly actions?: ReactNode;
+  /** Absent while the conversation loads or failed to. */
+  readonly subject?: string;
+}
+
+export type MailThreadTitlebar = ComponentType<MailThreadTitlebarProps>;
+
 interface MailThreadViewProps {
   accountId: string;
   closeLabel?: string;
@@ -69,6 +86,7 @@ interface MailThreadViewProps {
   onTrash: ThreadActions["trash"];
   showCloseButton?: boolean;
   threadId: string;
+  titlebar?: MailThreadTitlebar;
 }
 
 interface MailThreadContentProps {
@@ -81,6 +99,7 @@ interface MailThreadContentProps {
   onTrash: ThreadActions["trash"];
   showCloseButton?: boolean;
   thread: MailThread;
+  titlebar?: MailThreadTitlebar;
 }
 
 const MailThreadContent = ({
@@ -93,6 +112,7 @@ const MailThreadContent = ({
   onTrash,
   showCloseButton,
   thread,
+  titlebar: Titlebar,
 }: MailThreadContentProps) => {
   const confirm = useConfirm();
   const { accountId, threadId } = thread;
@@ -136,31 +156,65 @@ const MailThreadContent = ({
     void onPopOut({ accountId, threadId });
   }, [accountId, onPopOut, threadId]);
   const latestMessage = thread.messages.at(-1);
+  const onDeleteThreadForever = canDeleteForever
+    ? handleDeleteForever
+    : undefined;
+  const onTrashThread = canDeleteForever ? undefined : handleTrash;
+  const onPopOutThread = onPopOut === undefined ? undefined : handlePopOut;
+  const actions = {
+    isSpam,
+    isUnread,
+    latestAt: latestMessage?.sentAt,
+    onDeleteForever: onDeleteThreadForever,
+    onNotSpam: handleNotSpam,
+    onPopOut: onPopOutThread,
+    onToggleRead: handleToggleRead,
+    onTrash: onTrashThread,
+  };
+  const labels = (
+    <ThreadLabels
+      accountId={accountId}
+      className={Titlebar === undefined ? undefined : "rounded-t-lg"}
+      labels={thread.labels}
+      onSetLabel={onSetLabel}
+      threadId={threadId}
+    />
+  );
 
   return (
-    // The header owns the top gutter and the top radius: both belong to the
-    // sticky box so its backdrop keeps covering them once messages scroll up
-    // behind it.
     <section className="relative flex w-full min-w-0 flex-col gap-px px-4 pb-4 *:last:rounded-b-lg">
-      <MailThreadHeader
-        isSpam={isSpam}
-        isUnread={isUnread}
-        latestAt={latestMessage?.sentAt}
+      <MailThreadCommands
         onClose={onClose}
-        onDeleteForever={canDeleteForever ? handleDeleteForever : undefined}
-        onNotSpam={handleNotSpam}
-        onPopOut={onPopOut === undefined ? undefined : handlePopOut}
+        onDeleteForever={onDeleteThreadForever}
+        onPopOut={onPopOutThread}
         onToggleRead={handleToggleRead}
-        onTrash={canDeleteForever ? undefined : handleTrash}
-        showCloseButton={showCloseButton}
-        subject={thread.subject}
+        onTrash={onTrashThread}
       />
-      <ThreadLabels
-        accountId={accountId}
-        labels={thread.labels}
-        onSetLabel={onSetLabel}
-        threadId={threadId}
-      />
+      {Titlebar === undefined ? (
+        <>
+          <MailThreadHeader
+            {...actions}
+            onClose={onClose}
+            showCloseButton={showCloseButton}
+            subject={thread.subject}
+          />
+          {labels}
+        </>
+      ) : (
+        <>
+          <Titlebar
+            actions={<MailThreadActions {...actions} />}
+            subject={thread.subject}
+          />
+          {/* With the subject and actions in the titlebar, the labels lead
+              the conversation and stick to the top as it scrolls. The
+              opaque gutter and 1px strip below keep messages from showing
+              through the card's corners and the flex gap behind it. */}
+          <div className="bg-background after:bg-background sticky top-0 z-10 pt-1 after:absolute after:inset-x-0 after:top-full after:h-px">
+            {labels}
+          </div>
+        </>
+      )}
       <MailThreadConversation
         accountId={thread.accountId}
         messages={thread.messages}
@@ -182,20 +236,29 @@ const MailThreadView = ({
   onTrash,
   showCloseButton,
   threadId,
+  titlebar: Titlebar,
 }: MailThreadViewProps) => {
   const state = useMailThread(accountId, threadId);
 
   if (state.status === "loading") {
-    return <ThreadPending />;
+    return (
+      <>
+        {Titlebar === undefined ? null : <Titlebar />}
+        <ThreadPending />
+      </>
+    );
   }
 
   if (state.status === "error") {
     return (
-      <ThreadError
-        closeLabel={closeLabel}
-        message={state.message}
-        onClose={onClose}
-      />
+      <>
+        {Titlebar === undefined ? null : <Titlebar />}
+        <ThreadError
+          closeLabel={closeLabel}
+          message={state.message}
+          onClose={onClose}
+        />
+      </>
     );
   }
 
@@ -210,6 +273,7 @@ const MailThreadView = ({
       onTrash={onTrash}
       showCloseButton={showCloseButton}
       thread={state.thread}
+      titlebar={Titlebar}
     />
   );
 };

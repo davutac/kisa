@@ -4,6 +4,7 @@ import {
   SearchIcon,
   SendIcon,
   ShieldAlertIcon,
+  TagIcon,
   Trash2Icon,
 } from "lucide-react";
 import { AnimatePresence } from "motion/react";
@@ -28,6 +29,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { useRemeasureOnScrollSettle } from "@/hooks/use-remeasure-on-scroll-settle";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
 import { getMailboxSystemLabel } from "@/mail/label";
+import { isLabelPlace } from "@/mail/mailbox-place";
+import type { MailboxPlace } from "@/mail/mailbox-place";
 import {
   getBulkThreadDestructiveAction,
   getThreadDestructiveAction,
@@ -39,11 +42,10 @@ import {
   getThreadSelectionScrollBehavior,
   getVisibleThreadSelectionIndex,
 } from "@/mail/thread-selection";
-import { blurFocusedMailboxLabel } from "@/mail/use-mailbox-label-navigation";
 import { useOpenThread } from "@/mail/use-open-thread";
 import type { ThreadActions } from "@/mail/use-thread-actions";
 import { useThreadDragSelection } from "@/mail/use-thread-drag-selection";
-import type { Mailbox, MailThreadSummary } from "@/shared/ipc/mail";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
 import {
   useCheckedThreadIds,
   useMailboxStore,
@@ -61,7 +63,7 @@ export interface MailThreadListProps {
   isLoadingNextPage?: boolean;
   loadingTitle?: string;
   loadNextPage?: () => Promise<boolean>;
-  mailbox?: Mailbox;
+  mailbox?: MailboxPlace;
   scrollResetKey: number | string;
   searchResults?: boolean;
   showAccount?: boolean;
@@ -88,18 +90,25 @@ interface ThreadListPresentation {
   readonly emptyIcon: React.ReactNode;
   readonly label: string;
   /**
-   * The mailbox's own system label, left off its rows. Search spans every
-   * mailbox, so its rows keep the label that says where each one lives.
+   * The mailbox's own label, left off its rows. Search spans every mailbox,
+   * so its rows keep the label that says where each one lives.
    */
   readonly mailboxLabel?: string;
 }
 
 const getThreadListPresentation = (
   searchResults: boolean,
-  mailbox: Mailbox
+  mailbox: MailboxPlace
 ): ThreadListPresentation => {
   if (searchResults) {
     return { emptyIcon: <SearchIcon />, label: "Search results" };
+  }
+  if (isLabelPlace(mailbox)) {
+    return {
+      emptyIcon: <TagIcon />,
+      label: mailbox.label,
+      mailboxLabel: mailbox.label,
+    };
   }
   const mailboxLabel = getMailboxSystemLabel(mailbox);
   if (mailbox === "spam") {
@@ -336,30 +345,7 @@ const MailThreadList = ({
     });
   };
 
-  const handoffSearchSelection = (
-    direction: ThreadSelectionDirection
-  ): void => {
-    moveSelection(direction);
-    if (document.activeElement instanceof HTMLInputElement) {
-      document.activeElement.blur();
-    }
-  };
-
   useHotkeyLayer("mailbox", true);
-  useAppCommand(
-    "search.nextThread",
-    () => {
-      handoffSearchSelection(1);
-    },
-    { enabled: threads.length > 0 }
-  );
-  useAppCommand(
-    "search.previousThread",
-    () => {
-      handoffSearchSelection(-1);
-    },
-    { enabled: threads.length > 0 }
-  );
   useAppCommand(
     "mailbox.nextThread",
     () => {
@@ -377,7 +363,6 @@ const MailThreadList = ({
   useAppCommand("mailbox.clearSelection", () => {
     clearCheckedThreads();
     selectThread(null);
-    blurFocusedMailboxLabel();
   });
   useAppCommand(
     "mailbox.toggleThreadSelection",

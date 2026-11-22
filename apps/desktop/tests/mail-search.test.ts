@@ -199,6 +199,35 @@ describe("mail search", () => {
     ]);
   });
 
+  it("searches a label by its id, so a folder named Spam is not the Spam mailbox", async () => {
+    connection
+      .prepare(
+        `INSERT INTO mail_threads (
+          account_id, attachments, from_address, has_attachments, is_in_inbox,
+          is_in_sent, is_in_spam, is_in_trash, is_unread, label_ids, latest_at,
+          latest_message_id, message_count, snippet, subject, thread_id,
+          updated_at
+        ) VALUES ('one@example.com', '[]', 'folder@example.com', 0, 0, 0, 0,
+          0, 0, '["u:Spam"]', 4, 'latest', 1, '', 'Filed', 'folder-thread', 4)`
+      )
+      .run();
+
+    try {
+      const folder = await runIndexedThreadSearchRemote(remoteDatabase, {
+        accountIds: ["one@example.com"],
+        filters: [{ field: "label", value: "u:Spam" }],
+      });
+
+      expect(folder.threads.map(({ threadId }) => threadId)).toStrictEqual([
+        "folder-thread",
+      ]);
+    } finally {
+      connection
+        .prepare("DELETE FROM mail_threads WHERE thread_id = 'folder-thread'")
+        .run();
+    }
+  });
+
   it("returns snippets as stored, without HTML escaping", async () => {
     const important = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],

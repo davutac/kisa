@@ -120,6 +120,7 @@ const renderForm = ({
         canStash={false}
         cleanupModelLabel="Codex · gpt-5.6-luna"
         focus={focus}
+        layout="dialog"
         onAccountSelect={() => null}
         onClean={() => Promise.resolve()}
         onComposerChange={() => null}

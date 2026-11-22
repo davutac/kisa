@@ -5,6 +5,7 @@ import {
   getHotkeyAriaLabel,
   getHotkeyDisplay,
   HOTKEY_COMMANDS,
+  isModHotkeyCommand,
   OPEN_ACCOUNT_COMMAND_IDS,
   shouldRunHotkeyCommand,
   validateHotkeyCommands,
@@ -26,15 +27,44 @@ describe("hotkey command registry", () => {
     ).toBeTruthy();
   });
 
-  it("assigns the number row to navigation commands", () => {
-    expect(HOTKEY_COMMANDS["app.openAllAccounts"].bindings).toStrictEqual([
-      "A",
+  it("numbers the sidebar's scopes from All accounts down the Mod number row", () => {
+    const scopeCommands = [
+      "app.openAllAccounts",
+      ...OPEN_ACCOUNT_COMMAND_IDS,
+    ] as const;
+
+    expect(
+      scopeCommands.map((commandId) => HOTKEY_COMMANDS[commandId].bindings)
+    ).toStrictEqual([
+      ["Mod+1"],
+      ["Mod+2"],
+      ["Mod+3"],
+      ["Mod+4"],
+      ["Mod+5"],
+      ["Mod+6"],
+      ["Mod+7"],
+      ["Mod+8"],
+      ["Mod+9"],
     ]);
     expect(
-      OPEN_ACCOUNT_COMMAND_IDS.map(
-        (commandId) => HOTKEY_COMMANDS[commandId].bindings[0]
+      scopeCommands.every(
+        (commandId) =>
+          HOTKEY_COMMANDS[commandId].input === "allow" &&
+          HOTKEY_COMMANDS[commandId].scope === "app"
       )
-    ).toStrictEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+    ).toBeTruthy();
+    expect(getHotkeyAriaLabel("app.openAllAccounts", "mac")).toBe("Meta+1");
+    expect(getHotkeyAriaLabel("app.openAccount1", "windows")).toBe("Control+2");
+  });
+
+  it("reveals only Mod shortcuts under a held Mod", () => {
+    expect(isModHotkeyCommand("app.openAllAccounts")).toBeTruthy();
+    expect(isModHotkeyCommand("app.openScheduled")).toBeTruthy();
+    expect(isModHotkeyCommand("app.toggleSpam")).toBeFalsy();
+    expect(isModHotkeyCommand("app.toggleSent")).toBeFalsy();
+  });
+
+  it("assigns Mod chords to the workspaces", () => {
     expect(HOTKEY_COMMANDS["app.openSettings"].bindings).toStrictEqual([
       "Mod+,",
     ]);
@@ -43,22 +73,23 @@ describe("hotkey command registry", () => {
     ]);
   });
 
-  it("assigns the same number row to composer From accounts", () => {
+  it("gives each composer From account its sidebar number", () => {
     expect(
       COMPOSER_ACCOUNT_COMMAND_IDS.map(
-        (commandId) => HOTKEY_COMMANDS[commandId].bindings[0]
+        (commandId) => HOTKEY_COMMANDS[commandId].bindings
       )
-    ).toStrictEqual([
-      "Mod+1",
-      "Mod+2",
-      "Mod+3",
-      "Mod+4",
-      "Mod+5",
-      "Mod+6",
-      "Mod+7",
-      "Mod+8",
-      "Mod+9",
-    ]);
+    ).toStrictEqual(
+      OPEN_ACCOUNT_COMMAND_IDS.map(
+        (commandId) => HOTKEY_COMMANDS[commandId].bindings
+      )
+    );
+    expect(
+      Object.values(HOTKEY_COMMANDS).filter(
+        (command) =>
+          command.scope === "composer" &&
+          command.bindings.some((binding) => binding === "Mod+1")
+      )
+    ).toStrictEqual([]);
   });
 
   it("assigns the composer stash shortcut", () => {
@@ -155,7 +186,7 @@ describe("hotkey command registry", () => {
       repeat: "once",
       scope: "composer",
     });
-    expect(HOTKEY_COMMANDS["composer.discardScheduled"]).toMatchObject({
+    expect(HOTKEY_COMMANDS["composer.discard"]).toMatchObject({
       bindings: ["Mod+D"],
       input: "allow",
       repeat: "once",
@@ -221,33 +252,6 @@ describe("hotkey command registry", () => {
       next: HOTKEY_COMMANDS["mailbox.nextThread"].bindings,
       open: HOTKEY_COMMANDS["mailbox.openThread"].bindings,
       previous: HOTKEY_COMMANDS["mailbox.previousThread"].bindings,
-    });
-  });
-
-  it("assigns mailbox label navigation", () => {
-    expect(HOTKEY_COMMANDS["mailbox.clearLabelFilters"]).toMatchObject({
-      bindings: ["Mod+Shift+L"],
-      input: "ignore",
-      repeat: "once",
-      scope: "mailbox",
-    });
-    expect(HOTKEY_COMMANDS["search.clearLabelFilters"]).toMatchObject({
-      bindings: ["Mod+Shift+L"],
-      input: "allow",
-      repeat: "once",
-      scope: "search",
-    });
-    expect(HOTKEY_COMMANDS["mailbox.nextLabel"]).toMatchObject({
-      bindings: ["ArrowRight"],
-      input: "ignore",
-      repeat: "allow",
-      scope: "mailbox",
-    });
-    expect(HOTKEY_COMMANDS["mailbox.previousLabel"]).toMatchObject({
-      bindings: ["ArrowLeft"],
-      input: "ignore",
-      repeat: "allow",
-      scope: "mailbox",
     });
   });
 
@@ -364,19 +368,6 @@ describe("hotkey command registry", () => {
     });
   });
 
-  it("hands search Tab navigation to the thread list", () => {
-    expect(HOTKEY_COMMANDS["search.nextThread"]).toMatchObject({
-      bindings: ["Tab"],
-      input: "allow",
-      scope: "search",
-    });
-    expect(HOTKEY_COMMANDS["search.previousThread"]).toMatchObject({
-      bindings: ["Shift+Tab"],
-      input: "allow",
-      scope: "search",
-    });
-  });
-
   it("formats display keys for each platform", () => {
     expect(getHotkeyDisplay("app.searchMail", "mac").bindings).toStrictEqual([
       "⌘ K",
@@ -390,6 +381,16 @@ describe("hotkey command registry", () => {
     expect(getHotkeyDisplay("mailbox.nextThread", "mac").bindings).toHaveLength(
       3
     );
+  });
+
+  it("shows the backslash of the sidebar shortcut on each platform", () => {
+    expect(getHotkeyDisplay("app.toggleSidebar", "mac").bindings).toStrictEqual(
+      ["⌘ \\"]
+    );
+    expect(
+      getHotkeyDisplay("app.toggleSidebar", "windows").bindings
+    ).toStrictEqual(["Ctrl+\\"]);
+    expect(getHotkeyAriaLabel("app.toggleSidebar", "linux")).toBe("Control+\\");
   });
 
   it("resolves Mod to valid ARIA modifier names", () => {

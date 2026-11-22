@@ -103,6 +103,8 @@ Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, s
 
 Running from source needs no provider setup: accounts connect with an app password as described in [Add an account](#add-an-account).
 
+Auto-update is off when running from source. To see the sidebar's update button go through its states anyway, start with `KISA_SIMULATE_UPDATE=1 pnpm --dir apps/desktop dev`: a pretend update to 99.0.0 appears a few seconds after launch and can be downloaded and "installed" without contacting the update server or changing the app.
+
 ## Verification
 
 Run all checks with:

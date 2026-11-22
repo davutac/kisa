@@ -22,7 +22,6 @@ describe("mailbox store", () => {
       checkedThreadIds,
       mailbox,
       selectedAccountId,
-      selectedLabelNames,
       selectedThreadId,
       showUnread,
     } = useMailboxStore.getState();
@@ -32,7 +31,6 @@ describe("mailbox store", () => {
       mailbox,
       openThreadId: useMailboxStore.getState().openThreadId,
       selectedAccountId,
-      selectedLabelNames,
       selectedThreadId,
       showUnread,
     }).toStrictEqual({
@@ -40,7 +38,6 @@ describe("mailbox store", () => {
       mailbox: "inbox",
       openThreadId: null,
       selectedAccountId: null,
-      selectedLabelNames: [],
       selectedThreadId: null,
       showUnread: false,
     });
@@ -125,44 +122,44 @@ describe("mailbox store", () => {
 
   it("changes only the account scope when selecting an account", () => {
     const store = useMailboxStore.getState();
-    store.setMailbox("spam");
+    store.setMailbox({ label: "Work" });
     store.setShowUnread(true);
-    store.setSelectedLabels(["Work"]);
 
     store.selectAccount("other@example.com");
 
     expect(useMailboxStore.getState()).toMatchObject({
-      mailbox: "spam",
+      mailbox: { label: "Work" },
       selectedAccountId: "other@example.com",
-      selectedLabelNames: ["work"],
       showUnread: true,
     });
   });
 
-  it("normalizes label selection and clears thread state", () => {
+  it("opens a label as a place and clears thread state", () => {
     const store = useMailboxStore.getState();
+    store.setShowUnread(true);
     store.openThread("person@example.com:thread-42");
     store.checkThread("person@example.com:thread-42", true);
 
-    store.setSelectedLabels([" Work ", "travel", "WORK"]);
+    store.selectMailbox("one@example.com", { label: "Work" });
 
     expect(useMailboxStore.getState()).toMatchObject({
+      mailbox: { label: "Work" },
       openThreadId: null,
-      selectedLabelNames: ["travel", "work"],
+      selectedAccountId: "one@example.com",
       selectedThreadId: null,
+      showUnread: true,
     });
     expect(useMailboxStore.getState().checkedThreadIds.size).toBe(0);
   });
 
-  it("retains selected labels available in the new account scope", () => {
+  it("keeps the label place already shown when it is chosen again", () => {
     const store = useMailboxStore.getState();
-    store.setSelectedLabels(["travel", "work"]);
+    store.setMailbox({ label: "Work" });
+    const shown = useMailboxStore.getState().mailbox;
 
-    store.retainSelectedLabels(new Set(["work"]));
+    store.selectMailbox(null, { label: "work" });
 
-    expect(useMailboxStore.getState().selectedLabelNames).toStrictEqual([
-      "work",
-    ]);
+    expect(useMailboxStore.getState().mailbox).toBe(shown);
   });
 
   it("drops the selection when the unread filter changes", () => {

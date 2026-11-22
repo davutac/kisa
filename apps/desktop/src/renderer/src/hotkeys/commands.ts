@@ -12,17 +12,16 @@ export type HotkeyRepeat = "allow" | "ignore-key-repeat" | "once";
 
 interface HotkeyCommandDefinition {
   readonly bindings: readonly string[];
+  /**
+   * Skips a key that a focused widget already handled with
+   * `preventDefault()`, such as Escape closing the editor's slash menu.
+   */
+  readonly ignoreDefaultPrevented?: true;
   readonly input: "allow" | "ignore";
   readonly label: string;
   readonly repeat: HotkeyRepeat;
   readonly scope: HotkeyScope;
 }
-
-const CLEAR_LABEL_FILTERS_COMMAND = {
-  bindings: ["Mod+Shift+L"],
-  label: "Clear label filters",
-  repeat: "once",
-} as const;
 
 export const HOTKEY_COMMANDS = {
   "app.composeMessage": {
@@ -32,72 +31,79 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "app",
   },
-  "app.openAccount1": {
-    bindings: ["1"],
+  "app.navigateBack": {
+    bindings: ["Mod+["],
     input: "ignore",
+    label: "Go back",
+    repeat: "ignore-key-repeat",
+    scope: "app",
+  },
+  "app.navigateForward": {
+    bindings: ["Mod+]"],
+    input: "ignore",
+    label: "Go forward",
+    repeat: "ignore-key-repeat",
+    scope: "app",
+  },
+  "app.openAccount1": {
+    bindings: ["Mod+2"],
+    input: "allow",
     label: "Open account 1",
     repeat: "once",
     scope: "app",
   },
   "app.openAccount2": {
-    bindings: ["2"],
-    input: "ignore",
+    bindings: ["Mod+3"],
+    input: "allow",
     label: "Open account 2",
     repeat: "once",
     scope: "app",
   },
   "app.openAccount3": {
-    bindings: ["3"],
-    input: "ignore",
+    bindings: ["Mod+4"],
+    input: "allow",
     label: "Open account 3",
     repeat: "once",
     scope: "app",
   },
   "app.openAccount4": {
-    bindings: ["4"],
-    input: "ignore",
+    bindings: ["Mod+5"],
+    input: "allow",
     label: "Open account 4",
     repeat: "once",
     scope: "app",
   },
   "app.openAccount5": {
-    bindings: ["5"],
-    input: "ignore",
+    bindings: ["Mod+6"],
+    input: "allow",
     label: "Open account 5",
     repeat: "once",
     scope: "app",
   },
   "app.openAccount6": {
-    bindings: ["6"],
-    input: "ignore",
+    bindings: ["Mod+7"],
+    input: "allow",
     label: "Open account 6",
     repeat: "once",
     scope: "app",
   },
   "app.openAccount7": {
-    bindings: ["7"],
-    input: "ignore",
+    bindings: ["Mod+8"],
+    input: "allow",
     label: "Open account 7",
     repeat: "once",
     scope: "app",
   },
   "app.openAccount8": {
-    bindings: ["8"],
-    input: "ignore",
+    bindings: ["Mod+9"],
+    input: "allow",
     label: "Open account 8",
     repeat: "once",
     scope: "app",
   },
-  "app.openAccount9": {
-    bindings: ["9"],
-    input: "ignore",
-    label: "Open account 9",
-    repeat: "once",
-    scope: "app",
-  },
   "app.openAllAccounts": {
-    bindings: ["A"],
-    input: "ignore",
+    bindings: ["Mod+1"],
+    input: "allow",
     label: "All accounts",
     repeat: "once",
     scope: "app",
@@ -134,6 +140,13 @@ export const HOTKEY_COMMANDS = {
     bindings: ["Shift+S"],
     input: "ignore",
     label: "Sent",
+    repeat: "ignore-key-repeat",
+    scope: "app",
+  },
+  "app.toggleSidebar": {
+    bindings: ["Mod+\\"],
+    input: "allow",
+    label: "Toggle sidebar",
     repeat: "ignore-key-repeat",
     scope: "app",
   },
@@ -179,10 +192,18 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "composer",
   },
-  "composer.discardScheduled": {
+  "composer.close": {
+    bindings: ["Escape"],
+    ignoreDefaultPrevented: true,
+    input: "allow",
+    label: "Close",
+    repeat: "once",
+    scope: "composer",
+  },
+  "composer.discard": {
     bindings: ["Mod+D"],
     input: "allow",
-    label: "Discard scheduled email",
+    label: "Discard",
     repeat: "once",
     scope: "composer",
   },
@@ -208,72 +229,60 @@ export const HOTKEY_COMMANDS = {
     scope: "composer",
   },
   "composer.useAccount1": {
-    bindings: ["Mod+1"],
+    bindings: ["Mod+2"],
     input: "allow",
     label: "Send from account 1",
     repeat: "once",
     scope: "composer",
   },
   "composer.useAccount2": {
-    bindings: ["Mod+2"],
+    bindings: ["Mod+3"],
     input: "allow",
     label: "Send from account 2",
     repeat: "once",
     scope: "composer",
   },
   "composer.useAccount3": {
-    bindings: ["Mod+3"],
+    bindings: ["Mod+4"],
     input: "allow",
     label: "Send from account 3",
     repeat: "once",
     scope: "composer",
   },
   "composer.useAccount4": {
-    bindings: ["Mod+4"],
+    bindings: ["Mod+5"],
     input: "allow",
     label: "Send from account 4",
     repeat: "once",
     scope: "composer",
   },
   "composer.useAccount5": {
-    bindings: ["Mod+5"],
+    bindings: ["Mod+6"],
     input: "allow",
     label: "Send from account 5",
     repeat: "once",
     scope: "composer",
   },
   "composer.useAccount6": {
-    bindings: ["Mod+6"],
+    bindings: ["Mod+7"],
     input: "allow",
     label: "Send from account 6",
     repeat: "once",
     scope: "composer",
   },
   "composer.useAccount7": {
-    bindings: ["Mod+7"],
+    bindings: ["Mod+8"],
     input: "allow",
     label: "Send from account 7",
     repeat: "once",
     scope: "composer",
   },
   "composer.useAccount8": {
-    bindings: ["Mod+8"],
+    bindings: ["Mod+9"],
     input: "allow",
     label: "Send from account 8",
     repeat: "once",
     scope: "composer",
-  },
-  "composer.useAccount9": {
-    bindings: ["Mod+9"],
-    input: "allow",
-    label: "Send from account 9",
-    repeat: "once",
-    scope: "composer",
-  },
-  "mailbox.clearLabelFilters": {
-    ...CLEAR_LABEL_FILTERS_COMMAND,
-    input: "ignore",
-    scope: "mailbox",
   },
   "mailbox.clearSelection": {
     bindings: ["Escape"],
@@ -289,13 +298,6 @@ export const HOTKEY_COMMANDS = {
     repeat: "once",
     scope: "mailbox",
   },
-  "mailbox.nextLabel": {
-    bindings: ["ArrowRight"],
-    input: "ignore",
-    label: "Next mailbox label",
-    repeat: "allow",
-    scope: "mailbox",
-  },
   "mailbox.nextThread": {
     bindings: ["Tab", "ArrowDown", "J"],
     input: "ignore",
@@ -308,13 +310,6 @@ export const HOTKEY_COMMANDS = {
     input: "ignore",
     label: "Open conversation",
     repeat: "once",
-    scope: "mailbox",
-  },
-  "mailbox.previousLabel": {
-    bindings: ["ArrowLeft"],
-    input: "ignore",
-    label: "Previous mailbox label",
-    repeat: "allow",
     scope: "mailbox",
   },
   "mailbox.previousThread": {
@@ -386,25 +381,6 @@ export const HOTKEY_COMMANDS = {
     label: "Previous scheduled email",
     repeat: "allow",
     scope: "scheduled",
-  },
-  "search.clearLabelFilters": {
-    ...CLEAR_LABEL_FILTERS_COMMAND,
-    input: "allow",
-    scope: "search",
-  },
-  "search.nextThread": {
-    bindings: ["Tab"],
-    input: "allow",
-    label: "Focus next search result",
-    repeat: "allow",
-    scope: "search",
-  },
-  "search.previousThread": {
-    bindings: ["Shift+Tab"],
-    input: "allow",
-    label: "Focus previous search result",
-    repeat: "allow",
-    scope: "search",
   },
   "templates.focusSearch": {
     bindings: ["Mod+F"],
@@ -555,6 +531,10 @@ export const shouldRunHotkeyCommand = (
 
 export type HotkeyCommandId = keyof typeof HOTKEY_COMMANDS;
 
+/**
+ * Sidebar order: All accounts takes `Mod+1`, so the first eight accounts
+ * take `Mod+2` through `Mod+9`.
+ */
 export const OPEN_ACCOUNT_COMMAND_IDS = [
   "app.openAccount1",
   "app.openAccount2",
@@ -564,9 +544,13 @@ export const OPEN_ACCOUNT_COMMAND_IDS = [
   "app.openAccount6",
   "app.openAccount7",
   "app.openAccount8",
-  "app.openAccount9",
 ] as const satisfies readonly HotkeyCommandId[];
 
+/**
+ * The same numbers as the sidebar, so an account keeps one shortcut
+ * everywhere; `Mod+1` stays unbound here because mail is never sent from All
+ * accounts.
+ */
 export const COMPOSER_ACCOUNT_COMMAND_IDS = [
   "composer.useAccount1",
   "composer.useAccount2",
@@ -576,8 +560,17 @@ export const COMPOSER_ACCOUNT_COMMAND_IDS = [
   "composer.useAccount6",
   "composer.useAccount7",
   "composer.useAccount8",
-  "composer.useAccount9",
 ] as const satisfies readonly HotkeyCommandId[];
+
+/**
+ * Whether every binding starts from `Mod`, so a hint revealed by holding
+ * `Mod` stays true when followed. A plain `S` shown under a held `Mod` would
+ * be pressed as `Mod+S`, a different command.
+ */
+export const isModHotkeyCommand = (commandId: HotkeyCommandId): boolean =>
+  HOTKEY_COMMANDS[commandId].bindings.every((binding) =>
+    binding.split("+").includes("Mod")
+  );
 
 export interface HotkeyCommandDisplay {
   readonly bindings: readonly string[];

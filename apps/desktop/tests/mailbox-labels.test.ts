@@ -2,10 +2,11 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   createMailboxLabelItems,
-  normalizeMailboxLabelSelection,
-  retainAvailableMailboxLabels,
-  threadMatchesMailboxLabels,
+  isMailboxLabelMissing,
+  threadHasMailboxLabel,
+  toMailboxLabelRows,
 } from "../src/renderer/src/mail/mailbox-labels";
+import type { MailboxLabelItem } from "../src/renderer/src/mail/mailbox-labels";
 
 describe(createMailboxLabelItems, () => {
   it("shows user labels and merges equal names across accounts", () => {
@@ -82,31 +83,93 @@ describe(createMailboxLabelItems, () => {
   });
 });
 
-describe("mailbox label selection", () => {
-  it("normalizes, deduplicates, and sorts selected names", () => {
+const labelItem = (name: string): MailboxLabelItem => ({
+  accountIds: ["one@example.com"],
+  key: name.toLowerCase(),
+  name,
+});
+
+describe(toMailboxLabelRows, () => {
+  it("nests labels under their parents, depth first", () => {
     expect(
-      normalizeMailboxLabelSelection([" Work ", "travel", "WORK"])
-    ).toStrictEqual(["travel", "work"]);
+      toMailboxLabelRows(
+        ["Work/Clients", "Travel", "Work", "Work/Clients/Acme"].map(labelItem)
+      ).map(({ depth, name }) => [depth, name])
+    ).toStrictEqual([
+      [0, "Travel"],
+      [0, "Work"],
+      [1, "Clients"],
+      [2, "Acme"],
+    ]);
   });
 
-  it("retains only labels available in a new account scope", () => {
+  it("keeps the path a missing parent would have held", () => {
     expect(
-      retainAvailableMailboxLabels(
-        ["travel", "work"],
-        [{ accountIds: ["one@example.com"], key: "work", name: "Work" }]
-      )
-    ).toStrictEqual(["work"]);
+      toMailboxLabelRows(
+        ["Work", "Work/Clients/Acme", "Home/Bills"].map(labelItem)
+      ).map(({ depth, name }) => [depth, name])
+    ).toStrictEqual([
+      [0, "Home/Bills"],
+      [0, "Work"],
+      [1, "Clients/Acme"],
+    ]);
   });
+});
 
-  it("requires every selected label on a thread", () => {
+describe(threadHasMailboxLabel, () => {
+  it("matches a user label without regard to case", () => {
+    expect(threadHasMailboxLabel(["INBOX", "work"], "Work")).toBeTruthy();
     expect(
-      threadMatchesMailboxLabels(
-        ["INBOX", "Work", "Travel"],
-        ["travel", "work"]
-      )
-    ).toBeTruthy();
-    expect(
-      threadMatchesMailboxLabels(["INBOX", "Work"], ["travel", "work"])
+      threadHasMailboxLabel(["INBOX", "Work/Clients"], "Work")
     ).toBeFalsy();
   });
+
+  it("never matches a system label to a folder named like it", () => {
+    expect(threadHasMailboxLabel(["SPAM"], "Spam")).toBeFalsy();
+    expect(threadHasMailboxLabel(["Spam"], "Spam")).toBeTruthy();
+  });
+});
+
+describe(isMailboxLabelMissing, () => {
+  const work = { id: "u:Work", name: "Work", type: "user" };
+  const catalogs = new Map([
+    ["one@example.com", [work]],
+    ["two@example.com", []],
+  ]);
+
+  it("finds a label gone only once every catalog in the scope has loaded", () => {
+    const ready = new Map([
+      ["one@example.com", "ready" as const],
+      ["two@example.com", "ready" as const],
+    ]);
+
+    expect(
+      isMailboxLabelMissing("work", ["one@example.com"], catalogs, ready)
+    ).toBeFalsy();
+    expect(
+      isMailboxLabelMissing("Work", ["two@example.com"], catalogs, ready)
+    ).toBeTruthy();
+    expect(
+      isMailboxLabelMissing(
+        "Work",
+        ["one@example.com", "two@example.com"],
+        catalogs,
+        ready
+      )
+    ).toBeFalsy();
+  });
+
+  it.each(["loading", "unavailable"] as const)(
+    "keeps the label while a catalog is %s",
+    (status) => {
+      expect(
+        isMailboxLabelMissing(
+          "Work",
+          ["two@example.com"],
+          catalogs,
+          new Map([["two@example.com", status]])
+        )
+      ).toBeFalsy();
+    }
+  );
 });

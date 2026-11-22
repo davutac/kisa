@@ -1,6 +1,7 @@
 import { DownloadIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { WindowTitlebar } from "@/components/shell/window-titlebar";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
@@ -103,7 +104,7 @@ const AttachmentPreviewApp = () => {
       className="grid h-svh overflow-hidden"
       style={{ gridTemplateRows: `${TITLEBAR_HEIGHT}px minmax(0, 1fr)` }}
     >
-      <header className="app-titlebar bg-background flex items-center justify-between gap-2">
+      <WindowTitlebar className="bg-background flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-xs font-medium">
@@ -133,7 +134,7 @@ const AttachmentPreviewApp = () => {
           {saving ? <Spinner /> : <DownloadIcon data-icon="inline-start" />}
           Download
         </Button>
-      </header>
+      </WindowTitlebar>
       <section className="min-h-0 overflow-auto">{content}</section>
     </main>
   );

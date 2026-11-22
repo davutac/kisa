@@ -48,7 +48,8 @@ const EMPTY_STATE: MailSearchState = {
 };
 
 /**
- * Runs the inline mailbox query against the local mail index.
+ * Runs a mail query against the local mail index: the search bar's top
+ * matches, or every result once the mailbox list shows them.
  *
  * An empty query is a query too: it answers with the newest mail, which is what
  * the result list shows for a broadened empty query. Results from the previous
@@ -58,14 +59,15 @@ const EMPTY_STATE: MailSearchState = {
 export const useMailSearch = (
   accountIds: readonly string[],
   query: SearchQuery,
-  isEnabled: boolean
+  isEnabled: boolean,
+  limit = SEARCH_RESULT_LIMIT
 ): MailSearchState => {
   const mailApi = getMailApi();
   const isReady = isEnabled && isMailSearchQueryReady(query);
   const [results, setResults] = useState<LoadedResults>(NO_RESULTS);
   const [revision, setRevision] = useState(0);
   const queryKey = formatSearchQuery(query);
-  const requestKey = JSON.stringify([accountIds, queryKey]);
+  const requestKey = JSON.stringify([accountIds, queryKey, limit]);
 
   const includesSelectedAccount = useEffectEvent(
     (changes: readonly MailThreadListChange[]): boolean =>
@@ -77,12 +79,12 @@ export const useMailSearch = (
     mailApi?.search({
       accountIds,
       filters: query.filters,
-      limit: SEARCH_RESULT_LIMIT,
+      limit,
       text: query.text,
     })
   );
 
-  // Mail that arrives while inline search is active is mail the result list should
+  // Mail that arrives while a search is running is mail its results should
   // find. The index is written before this fires, so a refetch sees it.
   useEffect(() => {
     if (mailApi === undefined || !isReady) {

@@ -7,6 +7,7 @@ import ThreadLabelPicker from "@/components/mail/thread-label-picker";
 import type { ThreadLabelChange } from "@/components/mail/thread-label-picker";
 import { Badge } from "@/components/ui/badge";
 import { useAppCommand } from "@/hotkeys";
+import { cn } from "@/lib/utils";
 import { listUserLabels, withLabelState } from "@/mail/label";
 import type { ThreadActions } from "@/mail/use-thread-actions";
 import { getMailApi } from "@/platform/desktop";
@@ -14,6 +15,8 @@ import { useLabelCatalog, useUpsertLabel } from "@/state/labels";
 
 interface ThreadLabelsProps {
   accountId: string;
+  /** Shapes the row to its place in the conversation's stack of cards. */
+  className?: string;
   labels: readonly string[];
   onSetLabel: ThreadActions["setLabel"];
   threadId: string;
@@ -27,6 +30,7 @@ interface OptimisticLabelState {
 
 const ThreadLabels = ({
   accountId,
+  className,
   labels,
   onSetLabel,
   threadId,
@@ -96,7 +100,10 @@ const ThreadLabels = ({
 
   return (
     <div
-      className="no-scrollbar bg-card flex min-w-0 scroll-mt-20 items-center gap-1 overflow-x-auto overscroll-x-contain p-4"
+      className={cn(
+        "no-scrollbar bg-card flex min-w-0 scroll-mt-20 items-center gap-1 overflow-x-auto overscroll-x-contain p-4",
+        className
+      )}
       ref={rowRef}
     >
       <MailLabelBadges

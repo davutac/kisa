@@ -17,6 +17,8 @@ interface EmailRecipientFieldsProps {
   autoFocus?: boolean;
   className?: string;
   disabled?: boolean;
+  /** Restyles each recipient row. */
+  fieldClassName?: string;
   inputRefs?: Partial<Record<RecipientField, Ref<HTMLInputElement>>>;
   onChange: (recipients: EmailRecipients) => void;
   resetKey?: string;
@@ -34,6 +36,7 @@ const EmailRecipientFields = ({
   autoFocus = false,
   className,
   disabled = false,
+  fieldClassName,
   inputRefs,
   onChange,
   resetKey,
@@ -65,6 +68,7 @@ const EmailRecipientFields = ({
     <EmailAddressInput
       accountId={accountId}
       autoFocus={autoFocus && field === "to"}
+      className={fieldClassName}
       actions={
         field === "to" ? (
           <>

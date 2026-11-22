@@ -9,6 +9,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { cn } from "@/lib/utils";
 import {
   findEmailAddressCompletion,
   mergeUniqueEmailAddresses,
@@ -20,6 +21,8 @@ interface EmailAddressInputProps {
   actions?: ReactNode;
   accountId: string;
   autoFocus?: boolean;
+  /** Restyles the row, e.g. to sit on the page instead of a card. */
+  className?: string;
   disabled?: boolean;
   id: string;
   inputRef?: Ref<HTMLInputElement>;
@@ -36,6 +39,7 @@ const EmailAddressInput = ({
   actions,
   accountId,
   autoFocus = false,
+  className,
   disabled = false,
   id,
   inputRef,
@@ -117,7 +121,12 @@ const EmailAddressInput = ({
   };
 
   return (
-    <InputGroup className="bg-card dark:bg-card h-auto min-h-9 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0">
+    <InputGroup
+      className={cn(
+        "bg-card dark:bg-card h-auto min-h-9 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0",
+        className
+      )}
+    >
       <InputGroupAddon className="w-10 justify-start p-0">
         <label htmlFor={id}>{label}</label>
       </InputGroupAddon>

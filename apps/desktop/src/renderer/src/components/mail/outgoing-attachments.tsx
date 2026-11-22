@@ -4,6 +4,7 @@ import type { Ref, RefObject } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
+import { cn } from "@/lib/utils";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
 
 import type { OutgoingAttachmentController } from "./use-outgoing-attachments";
@@ -81,17 +82,23 @@ export const OutgoingAttachmentButton = ({
 
 interface OutgoingAttachmentListProps {
   attachments: readonly MailDraftAttachment[];
+  /** Restyles the tray, e.g. to sit on the page instead of a card. */
+  className?: string;
   onRemove: (attachmentId: string) => void;
 }
 
 export const OutgoingAttachmentList = ({
   attachments,
+  className,
   onRemove,
 }: OutgoingAttachmentListProps) =>
   attachments.length === 0 ? null : (
     <section
       aria-label="Attachments"
-      className="bg-card flex max-h-24 shrink-0 flex-wrap gap-2 overflow-y-auto px-4 py-2"
+      className={cn(
+        "bg-card flex max-h-24 shrink-0 flex-wrap gap-2 overflow-y-auto px-4 py-2",
+        className
+      )}
     >
       {attachments.map((attachment) => (
         <Badge

@@ -17,12 +17,18 @@ export const useHasUnreadSpam = (accountIds: readonly string[]): boolean => {
       return;
     }
 
+    // The scope key, not the caller's array, drives the effect: callers may
+    // build a new array on every render, and re-running on each one would
+    // request the status again and render again without end.
+    const scopeAccountIds = scopeKey === "" ? [] : scopeKey.split("\u0000");
     let isActive = true;
     let requestRevision = 0;
     const load = async (): Promise<void> => {
       const revision = requestRevision + 1;
       requestRevision = revision;
-      const reply = await mailApi.getSpamStatus({ accountIds });
+      const reply = await mailApi.getSpamStatus({
+        accountIds: scopeAccountIds,
+      });
 
       if (isActive && requestRevision === revision && reply.ok) {
         setStatus({ hasUnreadSpam: reply.data.hasUnreadSpam, scopeKey });
@@ -36,7 +42,7 @@ export const useHasUnreadSpam = (accountIds: readonly string[]): boolean => {
               ? change.thread.accountId
               : change.accountId;
 
-          return accountIds.includes(accountId);
+          return scopeAccountIds.includes(accountId);
         })
       ) {
         void load();
@@ -49,7 +55,7 @@ export const useHasUnreadSpam = (accountIds: readonly string[]): boolean => {
       isActive = false;
       unsubscribe();
     };
-  }, [accountIds, scopeKey]);
+  }, [scopeKey]);
 
   return status.scopeKey === scopeKey && status.hasUnreadSpam;
 };

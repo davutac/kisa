@@ -1,6 +1,6 @@
 import type {
   MailCachedThreadPageRequest,
-  Mailbox,
+  MailboxPlace,
   MailThreadListChange,
   MailThreadCursor,
   MailThreadSummary,
@@ -12,10 +12,8 @@ import {
   hasSpamLabel,
   hasTrashLabel,
 } from "./label";
-import {
-  normalizeMailboxLabelSelection,
-  threadMatchesMailboxLabels,
-} from "./mailbox-labels";
+import { threadHasMailboxLabel } from "./mailbox-labels";
+import { getMailboxPlaceKey, isLabelPlace } from "./mailbox-place";
 
 export const getThreadListChangeAccountId = (
   change: MailThreadListChange
@@ -56,42 +54,48 @@ export const mergeAndSortThreads = (
   });
 };
 
-const threadMatchesMailbox = (
-  labels: readonly string[],
-  mailbox: Mailbox
-): boolean => {
+// The same rule as the cache's thread page query, applied to live updates.
+// Built once per list, so a label place is recognised once, not per thread.
+const toMailboxMatcher = (
+  mailbox: MailboxPlace
+): ((labels: readonly string[]) => boolean) => {
+  if (isLabelPlace(mailbox)) {
+    return (labels) =>
+      threadHasMailboxLabel(labels, mailbox.label) &&
+      !hasSpamLabel(labels) &&
+      !hasTrashLabel(labels);
+  }
   if (mailbox === "spam") {
-    return hasSpamLabel(labels);
+    return hasSpamLabel;
   }
   if (mailbox === "trash") {
-    return hasTrashLabel(labels);
+    return hasTrashLabel;
   }
   if (mailbox === "sent") {
-    return (
-      hasSentLabel(labels) && !hasSpamLabel(labels) && !hasTrashLabel(labels)
-    );
+    return (labels) =>
+      hasSentLabel(labels) && !hasSpamLabel(labels) && !hasTrashLabel(labels);
   }
-  return (
+  return (labels) =>
     (hasInboxLabel(labels) || hasSentLabel(labels)) &&
     !hasSpamLabel(labels) &&
-    !hasTrashLabel(labels)
-  );
+    !hasTrashLabel(labels);
 };
 
 export const filterThreadsByScope = (
   threads: readonly MailThreadSummary[],
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: Mailbox = "inbox",
-  labelNames: readonly string[] = []
-): readonly MailThreadSummary[] =>
-  threads.filter(
+  mailbox: MailboxPlace = "inbox"
+): readonly MailThreadSummary[] => {
+  const matchesMailbox = toMailboxMatcher(mailbox);
+
+  return threads.filter(
     ({ accountId, isUnread, labels }) =>
       accountIds.includes(accountId) &&
-      threadMatchesMailbox(labels, mailbox) &&
-      (!unreadOnly || isUnread) &&
-      threadMatchesMailboxLabels(labels, labelNames)
+      matchesMailbox(labels) &&
+      (!unreadOnly || isUnread)
   );
+};
 
 export const applyThreadListChanges = (
   threads: readonly MailThreadSummary[],
@@ -126,29 +130,18 @@ export const toThreadCursor = (
 export const createCachedThreadPageRequest = (
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: Mailbox = "inbox",
-  labelNames: readonly string[] = [],
+  mailbox: MailboxPlace = "inbox",
   cursor?: MailThreadCursor
-): MailCachedThreadPageRequest => {
-  const normalizedLabelNames = normalizeMailboxLabelSelection(labelNames);
-
-  return {
-    accountIds,
-    cursor,
-    labelNames:
-      normalizedLabelNames.length === 0 ? undefined : normalizedLabelNames,
-    mailbox,
-    unreadOnly: unreadOnly || undefined,
-  };
-};
+): MailCachedThreadPageRequest => ({
+  accountIds,
+  cursor,
+  mailbox,
+  unreadOnly: unreadOnly || undefined,
+});
 
 export const getMailboxScopeKey = (
   accountIds: readonly string[],
   unreadOnly: boolean,
-  mailbox: Mailbox = "inbox",
-  labelNames: readonly string[] = []
-): string => {
-  const normalizedLabelNames = normalizeMailboxLabelSelection(labelNames);
-
-  return `${mailbox}\u0001${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}\u0001${normalizedLabelNames.join("\u0000")}`;
-};
+  mailbox: MailboxPlace = "inbox"
+): string =>
+  `${getMailboxPlaceKey(mailbox)}\u0001${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}`;

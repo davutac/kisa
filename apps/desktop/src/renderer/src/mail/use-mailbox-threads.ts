@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getMailApi } from "@/platform/desktop";
 import type {
-  Mailbox,
+  MailboxPlace,
   MailThreadCursor,
   MailThreadSummary,
 } from "@/shared/ipc/mail";
@@ -33,8 +33,7 @@ interface MailboxThreadsState {
 
 interface MailboxThreadsOptions {
   accountIds: readonly string[];
-  labelNames?: readonly string[];
-  mailbox?: Mailbox;
+  mailbox?: MailboxPlace;
   reloadRevision?: number;
   unreadOnly?: boolean;
 }
@@ -48,18 +47,12 @@ type MailboxThreadsResult = MailboxThreadsSnapshot;
  */
 export const useMailboxThreads = ({
   accountIds,
-  labelNames = [],
   mailbox = "inbox",
   reloadRevision = 0,
   unreadOnly = false,
 }: MailboxThreadsOptions): MailboxThreadsState => {
   const mailApi = getMailApi();
-  const scopeKey = getMailboxScopeKey(
-    accountIds,
-    unreadOnly,
-    mailbox,
-    labelNames
-  );
+  const scopeKey = getMailboxScopeKey(accountIds, unreadOnly, mailbox);
   const createStartingResult = (): MailboxThreadsResult =>
     getMailboxThreadsSnapshot(scopeKey) ?? {
       cacheCursor: null,
@@ -111,12 +104,7 @@ export const useMailboxThreads = ({
     let isActive = true;
     const loadCachedFirstPage = async (merge: boolean): Promise<void> => {
       const reply = await mailApi.listCachedThreadPage(
-        createCachedThreadPageRequest(
-          accountIds,
-          unreadOnly,
-          mailbox,
-          labelNames
-        )
+        createCachedThreadPageRequest(accountIds, unreadOnly, mailbox)
       );
 
       if (!(isActive && generationRef.current === generation)) {
@@ -174,23 +162,14 @@ export const useMailboxThreads = ({
       isActive = false;
       unsubscribeThreadList();
     };
-  }, [
-    accountIds,
-    labelNames,
-    mailApi,
-    mailbox,
-    reloadRevision,
-    scopeKey,
-    unreadOnly,
-  ]);
+  }, [accountIds, mailApi, mailbox, reloadRevision, scopeKey, unreadOnly]);
 
   const isCurrentScope = result.scopeKey === scopeKey;
   const scopedThreads = filterThreadsByScope(
     result.threads,
     accountIds,
     unreadOnly,
-    mailbox,
-    labelNames
+    mailbox
   );
   const currentResult = {
     ...result,
@@ -240,7 +219,6 @@ export const useMailboxThreads = ({
         accountIds,
         unreadOnly,
         mailbox,
-        labelNames,
         tailThread === undefined ? cacheCursor : toThreadCursor(tailThread)
       )
     );
@@ -268,7 +246,7 @@ export const useMailboxThreads = ({
         : current
     );
     return reply.ok;
-  }, [accountIds, labelNames, mailApi, mailbox, scopeKey, unreadOnly]);
+  }, [accountIds, mailApi, mailbox, scopeKey, unreadOnly]);
 
   return {
     hasNextPage: currentResult.cacheCursor !== null,

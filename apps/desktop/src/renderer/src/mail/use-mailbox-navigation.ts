@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { retainMailboxThreadsSnapshotsForAccounts } from "@/mail/mailbox-cache";
+import type { MailboxPlace } from "@/mail/mailbox-place";
 import { requestMailboxReload } from "@/mail/mailbox-reload";
 import { useAccounts } from "@/state/accounts";
 import { useIsMailSearchActive } from "@/state/mail-search";
@@ -11,11 +12,13 @@ export interface MailboxNavigation {
   openAccount: (accountEmail: string) => void;
   /** Shows the combined inbox, reloading it when already shown. */
   openAllAccounts: () => void;
+  /** Shows one mailbox or label for an account, or every account with `null`. */
+  openMailbox: (accountId: string | null, mailbox: MailboxPlace) => void;
 }
 
 /**
- * The titlebar account switcher, shared by its buttons and their number
- * hotkeys so both routes through it behave identically.
+ * Account-scope navigation, shared by the sidebar's rows and their hotkeys
+ * so both routes through it behave identically.
  */
 export const useMailboxNavigation = (): MailboxNavigation => {
   const navigate = useNavigate();
@@ -26,6 +29,7 @@ export const useMailboxNavigation = (): MailboxNavigation => {
   const selectedAccountId = useMailboxStore((state) => state.selectedAccountId);
   const selectAccount = useMailboxStore((state) => state.selectAccount);
   const selectInbox = useMailboxStore((state) => state.selectInbox);
+  const selectMailbox = useMailboxStore((state) => state.selectMailbox);
   const showUnread = useMailboxStore((state) => state.showUnread);
   const isMailSearchActive = useIsMailSearchActive();
   const isMailboxRoute = pathname === "/";
@@ -34,6 +38,11 @@ export const useMailboxNavigation = (): MailboxNavigation => {
     if (!isMailboxRoute) {
       void navigate({ to: "/" });
     }
+  };
+  const retainScope = (accountId: string | null): void => {
+    retainMailboxThreadsSnapshotsForAccounts(
+      accountId === null ? accounts.map(({ email }) => email) : [accountId]
+    );
   };
   const isShowingInbox = (accountId: string | null): boolean =>
     isMailboxRoute &&
@@ -57,7 +66,7 @@ export const useMailboxNavigation = (): MailboxNavigation => {
         return;
       }
 
-      retainMailboxThreadsSnapshotsForAccounts([accountEmail]);
+      retainScope(accountEmail);
       selectAccountScope(accountEmail);
       showMailbox();
     },
@@ -67,10 +76,16 @@ export const useMailboxNavigation = (): MailboxNavigation => {
         return;
       }
 
-      retainMailboxThreadsSnapshotsForAccounts(
-        accounts.map(({ email }) => email)
-      );
+      retainScope(null);
       selectAccountScope(null);
+      showMailbox();
+    },
+    openMailbox: (accountId, nextMailbox) => {
+      if (accountId !== selectedAccountId) {
+        retainScope(accountId);
+      }
+
+      selectMailbox(accountId, nextMailbox);
       showMailbox();
     },
   };

@@ -106,48 +106,51 @@ describe(filterThreadsByScope, () => {
     ).toStrictEqual([spam]);
   });
 
-  it("requires every selected mailbox label", () => {
-    const both = makeThread("one@example.com", "both", 300, {
-      labels: ["INBOX", "Work", "Travel"],
+  it("shows a label's conversations outside Spam and Trash", () => {
+    const archived = makeThread("one@example.com", "archived", 400, {
+      labels: ["Work"],
     });
-    const one = makeThread("one@example.com", "one", 200, {
-      labels: ["INBOX", "Work"],
+    const inbox = makeThread("one@example.com", "inbox", 300, {
+      labels: ["INBOX", "work"],
+    });
+    const trashed = makeThread("one@example.com", "trashed", 200, {
+      labels: ["TRASH", "Work"],
+    });
+    const other = makeThread("one@example.com", "other", 100, {
+      labels: ["INBOX", "Work/Clients"],
+    });
+    const otherAccount = makeThread("two@example.com", "archived", 50, {
+      labels: ["Work"],
     });
 
     expect(
-      filterThreadsByScope([both, one], ["one@example.com"], false, "inbox", [
-        "travel",
-        "work",
-      ])
-    ).toStrictEqual([both]);
+      filterThreadsByScope(
+        [archived, inbox, trashed, other, otherAccount],
+        ["one@example.com"],
+        false,
+        { label: "Work" }
+      )
+    ).toStrictEqual([archived, inbox]);
   });
 });
 
-describe("mailbox label request scope", () => {
-  it("normalizes labels in requests and cache keys", () => {
+describe("mailbox place request scope", () => {
+  it("sends a label place and keys it apart from a mailbox", () => {
     expect(
-      createCachedThreadPageRequest(["one@example.com"], false, "inbox", [
-        " Work ",
-        "travel",
-        "WORK",
-      ])
+      createCachedThreadPageRequest(["one@example.com"], false, {
+        label: "Work",
+      })
     ).toStrictEqual({
       accountIds: ["one@example.com"],
       cursor: undefined,
-      labelNames: ["travel", "work"],
-      mailbox: "inbox",
+      mailbox: { label: "Work" },
       unreadOnly: undefined,
     });
     expect(
-      getMailboxScopeKey(["one@example.com"], false, "inbox", [
-        "work",
-        "travel",
-      ])
-    ).toBe(
-      getMailboxScopeKey(["one@example.com"], false, "inbox", [
-        "Travel",
-        "WORK",
-      ])
-    );
+      getMailboxScopeKey(["one@example.com"], false, { label: "work" })
+    ).toBe(getMailboxScopeKey(["one@example.com"], false, { label: "WORK" }));
+    expect(
+      getMailboxScopeKey(["one@example.com"], false, { label: "Sent" })
+    ).not.toBe(getMailboxScopeKey(["one@example.com"], false, "sent"));
   });
 });

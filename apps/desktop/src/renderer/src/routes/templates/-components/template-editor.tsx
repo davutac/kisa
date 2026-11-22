@@ -1,5 +1,4 @@
-import { LoaderCircleIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
-import type { ReactNode } from "react";
+import { Trash2Icon } from "lucide-react";
 
 import AccountPicker from "@/components/accounts/account-picker";
 import FieldErrorIndicator from "@/components/forms/field-error-indicator";
@@ -13,24 +12,32 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import {
-  primaryFooterActionClassName,
-  primaryFooterStatusClassName,
-  quietDestructiveClassName,
-} from "@/lib/action-hierarchy";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { quietDestructiveClassName } from "@/lib/action-hierarchy";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/shared/ipc/accounts";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
 import type { TemplateVariableContext } from "@/shared/template-variables";
 import TemplateSubjectEditor from "@/templates/template-subject-editor";
 
+/**
+ * Save lives in the page titlebar, a portal outside this form, so it names
+ * the form by id. That keeps Enter in the name field submitting the form.
+ */
+export const TEMPLATE_EDITOR_FORM_ID = "template-editor";
+
+const FIELD_GROUP_FOCUS_RESET =
+  "shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0";
+
 interface TemplateEditorProps {
   readonly accounts: readonly Account[];
   readonly draft: ComposerTemplateInput;
   readonly editorVersion: number;
   readonly isCreating: boolean;
-  readonly isDirty: boolean;
   readonly isSaving: boolean;
   readonly nameError?: string;
   readonly onAccountChange: (accountId: string | null) => void;
@@ -43,41 +50,16 @@ interface TemplateEditorProps {
   readonly variablePreviewContext: Omit<TemplateVariableContext, "now">;
 }
 
-interface SaveAction {
-  readonly icon: ReactNode;
-  readonly label: string;
-  readonly status: string;
-}
-
-const getSaveAction = ({
-  isCreating,
-  isDirty,
-  isSaving,
-}: {
-  isCreating: boolean;
-  isDirty: boolean;
-  isSaving: boolean;
-}): SaveAction => {
-  if (isSaving) {
-    return {
-      icon: <LoaderCircleIcon className="animate-spin" />,
-      label: isCreating ? "Adding…" : "Saving…",
-      status: isCreating ? "Adding template" : "Saving changes",
-    };
-  }
-  return {
-    icon: isCreating ? <PlusIcon /> : <SaveIcon />,
-    label: isCreating ? "Add" : "Save",
-    status: isDirty ? "Unsaved changes" : "Saved",
-  };
-};
-
+/**
+ * A template laid out like an open conversation: a stack of cards inset from
+ * the page, with the name as the header's title and Delete beside it where a
+ * thread keeps Trash, then From, the recipients, Subject, and the body.
+ */
 const TemplateEditor = ({
   accounts,
   draft,
   editorVersion,
   isCreating,
-  isDirty,
   isSaving,
   nameError,
   onAccountChange,
@@ -89,40 +71,65 @@ const TemplateEditor = ({
   onSubjectChange,
   variablePreviewContext,
 }: TemplateEditorProps) => {
-  const saveAction = getSaveAction({ isCreating, isDirty, isSaving });
-  const saveDisplay = getHotkeyDisplay("templates.save");
   const contentKey = `${draft.id}:${editorVersion}`;
 
   return (
     <form
-      className="bg-background flex min-w-0 flex-1 flex-col gap-px overflow-hidden rounded-xl"
+      className="flex min-w-0 flex-1 flex-col gap-px overflow-hidden px-2 pt-1 pb-2"
+      id={TEMPLATE_EDITOR_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         void onSave();
       }}
     >
-      <InputGroup className="bg-card dark:bg-card h-9 shrink-0 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0">
-        <InputGroupAddon className="w-10 justify-start p-0">
-          <label htmlFor="template-name">Name</label>
-        </InputGroupAddon>
-        <InputGroupInput
-          aria-describedby={
-            nameError === undefined ? undefined : "template-name-error"
-          }
-          aria-invalid={nameError === undefined ? undefined : true}
-          aria-label="Name"
-          autoFocus={isCreating}
-          className="aria-invalid:text-destructive h-8 px-0 text-sm aria-invalid:border-0 md:text-sm"
-          id="template-name"
-          onChange={(event) => onNameChange(event.currentTarget.value)}
-          value={draft.name}
-        />
-        {nameError === undefined ? null : (
-          <InputGroupAddon align="inline-end" className="p-0">
-            <FieldErrorIndicator id="template-name-error" message={nameError} />
-          </InputGroupAddon>
-        )}
-      </InputGroup>
+      <div className="bg-card flex min-w-0 shrink-0 items-center gap-2 rounded-t-lg py-3 pr-3 pl-4">
+        <InputGroup
+          className={cn(
+            "h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent dark:bg-transparent",
+            FIELD_GROUP_FOCUS_RESET
+          )}
+        >
+          <InputGroupInput
+            aria-describedby={
+              nameError === undefined ? undefined : "template-name-error"
+            }
+            aria-invalid={nameError === undefined ? undefined : true}
+            aria-label="Name"
+            autoFocus={isCreating}
+            className="aria-invalid:text-destructive placeholder:text-muted-foreground h-8 px-0 text-lg font-semibold aria-invalid:border-0 md:text-lg"
+            id="template-name"
+            onChange={(event) => onNameChange(event.currentTarget.value)}
+            placeholder="Template name"
+            value={draft.name}
+          />
+          {nameError === undefined ? null : (
+            <InputGroupAddon align="inline-end" className="p-0">
+              <FieldErrorIndicator
+                id="template-name-error"
+                message={nameError}
+              />
+            </InputGroupAddon>
+          )}
+        </InputGroup>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                aria-label="Delete template"
+                className={quietDestructiveClassName}
+                disabled={isCreating || isSaving}
+                onClick={onDelete}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <Trash2Icon />
+              </Button>
+            }
+          />
+          <TooltipContent side="bottom">Delete template</TooltipContent>
+        </Tooltip>
+      </div>
       <AccountPicker
         accounts={accounts}
         nullOption={{
@@ -139,7 +146,13 @@ const TemplateEditor = ({
         resetKey={contentKey}
         value={{ bcc: draft.bcc, cc: draft.cc, to: draft.to }}
       />
-      <InputGroup className="email-composer bg-card dark:bg-card h-9 shrink-0 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0">
+      {/* `email-composer` scopes the variable-chip styles to this row. */}
+      <InputGroup
+        className={cn(
+          "email-composer bg-card dark:bg-card h-9 shrink-0 rounded-none border-0 px-4",
+          FIELD_GROUP_FOCUS_RESET
+        )}
+      >
         <InputGroupAddon
           className="mr-2 w-10 justify-start p-0"
           onClick={(event) =>
@@ -159,7 +172,7 @@ const TemplateEditor = ({
       </InputGroup>
       <EmailComposer
         ariaLabel="Template body"
-        className="min-h-48 flex-1 border-0"
+        className="min-h-48 flex-1 rounded-b-lg border-0"
         contentKey={contentKey}
         defaultValue={draft.body.html}
         enableTemplateVariables
@@ -167,40 +180,6 @@ const TemplateEditor = ({
         placeholder="Write the template body"
         templateVariablePreviewContext={variablePreviewContext}
       />
-      <div className="bg-background flex shrink-0 items-stretch gap-px">
-        <Button
-          aria-label="Delete template"
-          className={quietDestructiveClassName}
-          disabled={isCreating || isSaving}
-          onClick={onDelete}
-          size="footer-icon"
-          title="Delete template"
-          type="button"
-          variant="secondary"
-        >
-          <Trash2Icon />
-        </Button>
-        <Button
-          aria-keyshortcuts={getHotkeyAriaLabel("templates.save")}
-          className={cn("relative", primaryFooterActionClassName)}
-          disabled={!isDirty || isSaving}
-          size="footer"
-          title={`${saveDisplay.label} (${saveDisplay.bindings[0]})`}
-          type="submit"
-          variant="default"
-        >
-          {saveAction.icon}
-          {saveAction.label}
-          <span
-            className={cn(
-              "absolute right-4 text-xs font-normal",
-              primaryFooterStatusClassName
-            )}
-          >
-            {saveAction.status}
-          </span>
-        </Button>
-      </div>
     </form>
   );
 };

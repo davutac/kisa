@@ -12,6 +12,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { cn } from "@/lib/utils";
 import type { Account } from "@/shared/ipc/accounts";
 import type {
   ComposerTemplate,
@@ -21,7 +22,22 @@ import { MAX_SUBJECT_LENGTH } from "@/shared/mail-subject";
 
 import NewMessageFooter from "./new-message-footer";
 import type { ScheduledComposerControls } from "./new-message-footer";
+import type { NewMessageLayout } from "./new-message-layout";
 import { useNewMessageStore } from "./new-message-store";
+
+/**
+ * On the page, From and the recipients are quiet rows on the page itself,
+ * divided by hairlines, so the subject and message read as the document.
+ */
+const PAGE_ROW_CLASS =
+  "min-h-10 border-b border-border bg-transparent dark:bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-border has-[[data-slot][aria-invalid=true]]:border-border";
+
+const SUBJECT_GROUP_CLASS = {
+  dialog:
+    "bg-card dark:bg-card h-9 shrink-0 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0",
+  // The subject is the page's headline, set above the message it titles.
+  page: "h-auto shrink-0 rounded-none border-0 bg-transparent px-4 pt-7 pb-1 shadow-none dark:bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0",
+} as const satisfies Record<NewMessageLayout, string>;
 
 interface NewMessageFormProps {
   accounts: readonly Account[];
@@ -31,6 +47,7 @@ interface NewMessageFormProps {
   canStash: boolean;
   cleanupModelLabel: string;
   focus: ReturnType<typeof useComposerFocus>;
+  layout: NewMessageLayout;
   onClean: () => Promise<void>;
   onAccountSelect: (accountId: string) => void;
   onComposerChange: (composer: EmailComposerValue) => void;
@@ -54,6 +71,7 @@ const NewMessageForm = ({
   canStash,
   cleanupModelLabel,
   focus,
+  layout,
   onClean,
   onAccountSelect,
   onComposerChange,
@@ -88,9 +106,13 @@ const NewMessageForm = ({
   const fromAccounts = isEdit
     ? accounts.filter(({ email }) => email === selectedAccountId)
     : accounts;
+  const isPage = layout === "page";
   return (
     <form
-      className="bg-background flex min-h-0 flex-1 flex-col gap-px overflow-hidden"
+      className={cn(
+        "flex min-h-0 flex-1 flex-col overflow-hidden",
+        !isPage && "bg-background gap-px"
+      )}
       onFocusCapture={handleFocusCapture}
       onSubmit={(event) => {
         event.preventDefault();
@@ -99,6 +121,7 @@ const NewMessageForm = ({
     >
       <AccountPicker
         accounts={fromAccounts}
+        className={isPage ? PAGE_ROW_CLASS : undefined}
         enableHotkeys={!isEdit}
         focusRefForAccount={(email) => focus.refFor(`account:${email}`)}
         locked={isEdit}
@@ -108,6 +131,7 @@ const NewMessageForm = ({
       <EmailRecipientFields
         accountId={selectedAccountId}
         className="shrink-0"
+        fieldClassName={isPage ? PAGE_ROW_CLASS : undefined}
         inputRefs={{
           bcc: focus.refFor("bcc"),
           cc: focus.refFor("cc"),
@@ -117,16 +141,26 @@ const NewMessageForm = ({
         resetKey={`${draftId}:${recipientResetVersion}`}
         value={recipients}
       />
-      <InputGroup className="bg-card dark:bg-card h-9 shrink-0 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0">
-        <InputGroupAddon className="w-10 justify-start p-0">
-          <label htmlFor="new-message-subject">Subject</label>
-        </InputGroupAddon>
+      <InputGroup className={SUBJECT_GROUP_CLASS[layout]}>
+        {/* On the page the headline needs no visible label; a hidden addon
+            would still indent the input, so it is named directly. */}
+        {isPage ? null : (
+          <InputGroupAddon className="w-10 justify-start p-0">
+            <label htmlFor="new-message-subject">Subject</label>
+          </InputGroupAddon>
+        )}
         <InputGroupInput
-          className="h-8 px-0 text-sm md:text-sm"
+          aria-label={isPage ? "Subject" : undefined}
+          className={
+            isPage
+              ? "placeholder:text-muted-foreground h-auto px-0 py-0 text-xl leading-snug font-semibold tracking-tight md:text-xl"
+              : "h-8 px-0 text-sm md:text-sm"
+          }
           id="new-message-subject"
           disabled={isBusy}
           maxLength={MAX_SUBJECT_LENGTH}
           onChange={(event) => onSubjectChange(event.currentTarget.value)}
+          placeholder={isPage ? "Subject" : undefined}
           ref={focus.refFor("subject")}
           value={subject}
         />
@@ -151,8 +185,12 @@ const NewMessageForm = ({
           command: "composer.attach",
           controller: outgoingAttachments,
           focusRef: focus.refFor("attachment"),
+          listClassName: isPage ? "bg-transparent" : undefined,
         }}
-        className="min-h-40 flex-1 border-0"
+        className={cn(
+          "min-h-40 flex-1 border-0",
+          isPage && "[&_[role=toolbar]]:border-border bg-transparent"
+        )}
         consumeModEnter
         contentKey={draftId}
         defaultValue={composer.html}
@@ -173,17 +211,21 @@ const NewMessageForm = ({
           versions: cleanHistory,
         }}
       />
-      <NewMessageFooter
-        canSend={canSend}
-        canStash={canStash}
-        isScheduling={isScheduling}
-        isSending={isSending}
-        key={draftId}
-        onSend={onSend}
-        onStash={onStash}
-        scheduled={scheduled}
-        sendShortcutLabel={sendShortcutLabel}
-      />
+      {/* On the page the footer's actions live in the content titlebar. */}
+      {isPage ? null : (
+        <NewMessageFooter
+          canSend={canSend}
+          canStash={canStash}
+          isScheduling={isScheduling}
+          isSending={isSending}
+          key={draftId}
+          layout={layout}
+          onSend={onSend}
+          onStash={onStash}
+          scheduled={scheduled}
+          sendShortcutLabel={sendShortcutLabel}
+        />
+      )}
     </form>
   );
 };

@@ -7,10 +7,21 @@ describe("app command hotkeys", () => {
     const [definition] = getAppCommandHotkeys("thread.close", vi.fn());
 
     expect(definition?.options).toStrictEqual({
+      ignoreDefaultPrevented: false,
       ignoreInputs: true,
       requireReset: true,
     });
     expect(Object.hasOwn(definition?.options ?? {}, "target")).toBeFalsy();
+  });
+
+  it("lets a widget that handled the key keep it from closing the composer", () => {
+    const [definition] = getAppCommandHotkeys("composer.close", vi.fn());
+
+    expect(definition?.options).toStrictEqual({
+      ignoreDefaultPrevented: true,
+      ignoreInputs: false,
+      requireReset: true,
+    });
   });
 
   it("forwards a supplied element target", () => {
@@ -22,6 +33,7 @@ describe("app command hotkeys", () => {
     );
 
     expect(definition?.options).toStrictEqual({
+      ignoreDefaultPrevented: false,
       ignoreInputs: false,
       requireReset: true,
       target,

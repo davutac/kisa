@@ -1,9 +1,25 @@
 import type { ReactNode } from "react";
 
 import MailLabelBadge from "@/components/mail/mail-label-badge";
-import { formatLabel, sortLabelNames, filterVisibleLabels } from "@/mail/label";
+import {
+  formatLabel,
+  isSystemLabel,
+  sortLabelNames,
+  filterVisibleLabels,
+} from "@/mail/label";
+import { normalizeMailboxLabelName } from "@/mail/mailbox-labels";
 import { useAccountSettings } from "@/state/account-settings";
 import { useLabelColors } from "@/state/labels";
+
+// A label place spans accounts whose label names differ only in case, so user
+// labels compare without it; a system id never matches a user label.
+const isOmittedLabel = (label: string, omitLabel: string | undefined) =>
+  omitLabel !== undefined &&
+  (label === omitLabel ||
+    (!isSystemLabel(label) &&
+      !isSystemLabel(omitLabel) &&
+      normalizeMailboxLabelName(label) ===
+        normalizeMailboxLabelName(omitLabel)));
 
 interface MailLabelBadgesProps {
   accountId: string;
@@ -29,7 +45,7 @@ const MailLabelBadges = ({
   const colorsByName = useLabelColors(accountId, labels);
   const visibleLabels = sortLabelNames(
     filterVisibleLabels(labels, showSystemLabels).filter(
-      (label) => label !== omitLabel
+      (label) => !isOmittedLabel(label, omitLabel)
     )
   );
 

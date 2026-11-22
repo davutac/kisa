@@ -68,41 +68,115 @@ const MailThreadHeaderAction = ({
   </Tooltip>
 );
 
-interface MailThreadHeaderProps {
+interface MailThreadActionsProps {
+  /** Sizes the date to its surroundings: the titlebar or the header card. */
+  dateClassName?: string;
   isSpam: boolean;
   isUnread: boolean;
   latestAt?: number;
-  onClose: () => void;
   onDeleteForever?: () => void;
   onNotSpam: () => void;
   onPopOut?: () => void;
   onToggleRead: () => void;
   onTrash?: () => void;
-  showCloseButton?: boolean;
-  subject: string;
 }
 
-const MailThreadHeader = ({
+/**
+ * The conversation's date and actions. The main window puts them in its
+ * content titlebar; a pop-out window, which has no titlebar to fill, keeps
+ * them in the header card. Their shortcuts are `MailThreadCommands`', so they
+ * work wherever the buttons are shown.
+ */
+export const MailThreadActions = ({
+  dateClassName,
   isSpam,
   isUnread,
   latestAt,
-  onClose,
   onDeleteForever,
   onNotSpam,
   onPopOut,
   onToggleRead,
   onTrash,
-  showCloseButton = true,
-  subject,
-}: MailThreadHeaderProps) => {
+}: MailThreadActionsProps) => {
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
-  const closeDisplay = getHotkeyDisplay("thread.close");
   const popOutDisplay = getHotkeyDisplay("thread.popout");
   const trashDisplay = getHotkeyDisplay("thread.trashThread");
-  const isDeleteForever = onDeleteForever !== undefined;
-  const destructiveLabel = isDeleteForever
-    ? "Delete forever"
-    : trashDisplay.label;
+  const destructiveLabel =
+    onDeleteForever === undefined ? trashDisplay.label : "Delete forever";
+  const destructiveAction = onDeleteForever ?? onTrash;
+
+  return (
+    <>
+      {latestAt === undefined ? null : (
+        // Compact, so the subject keeps the room; each message header
+        // carries the detailed time.
+        <MailDate
+          className={cn("text-muted-foreground mr-1", dateClassName)}
+          timestamp={latestAt}
+          tooltipSide="bottom"
+        />
+      )}
+      <div className="flex shrink-0 items-center gap-1">
+        {isSpam ? (
+          <MailThreadHeaderAction label="Not spam" onClick={onNotSpam}>
+            <InboxIcon />
+          </MailThreadHeaderAction>
+        ) : null}
+        <MailThreadHeaderAction
+          command="thread.toggleThreadRead"
+          label={toggleReadLabel}
+          onClick={onToggleRead}
+        >
+          {isUnread ? <MailOpenIcon /> : <MailIcon />}
+        </MailThreadHeaderAction>
+        {destructiveAction === undefined ? null : (
+          <MailThreadHeaderAction
+            className={quietDestructiveClassName}
+            command="thread.trashThread"
+            label={destructiveLabel}
+            onClick={destructiveAction}
+          >
+            <Trash2Icon />
+          </MailThreadHeaderAction>
+        )}
+        {onPopOut === undefined ? null : (
+          <>
+            {/* A window action, kept apart from the mail actions so a
+                slip cannot trash the conversation. */}
+            <span aria-hidden="true" className="bg-border mx-1 h-4 w-px" />
+            <MailThreadHeaderAction
+              command="thread.popout"
+              label={popOutDisplay.label}
+              onClick={onPopOut}
+            >
+              <SquareArrowOutUpRightIcon />
+            </MailThreadHeaderAction>
+          </>
+        )}
+      </div>
+    </>
+  );
+};
+
+interface MailThreadCommandsProps {
+  onClose: () => void;
+  onDeleteForever?: () => void;
+  onPopOut?: () => void;
+  onToggleRead: () => void;
+  onTrash?: () => void;
+}
+
+/**
+ * The open conversation's shortcuts, registered by the conversation itself
+ * rather than by its buttons, so they hold however the buttons are placed.
+ */
+export const MailThreadCommands = ({
+  onClose,
+  onDeleteForever,
+  onPopOut,
+  onToggleRead,
+  onTrash,
+}: MailThreadCommandsProps) => {
   const destructiveAction = onDeleteForever ?? onTrash;
 
   useAppCommand("thread.close", onClose);
@@ -111,19 +185,34 @@ const MailThreadHeader = ({
     enabled: destructiveAction !== undefined,
   });
 
+  return onPopOut === undefined ? null : (
+    <AppCommand callback={onPopOut} command="thread.popout" />
+  );
+};
+
+interface MailThreadHeaderProps extends MailThreadActionsProps {
+  onClose: () => void;
+  showCloseButton?: boolean;
+  subject: string;
+}
+
+/**
+ * The header card a pop-out window shows above the conversation: its subject
+ * and actions, sticking to the top as the messages scroll.
+ */
+const MailThreadHeader = ({
+  onClose,
+  showCloseButton = true,
+  subject,
+  ...actions
+}: MailThreadHeaderProps) => {
+  const closeDisplay = getHotkeyDisplay("thread.close");
+
   return (
-    // Sticking at top-0 with an opaque pt-4 gutter reads as a top-4 offset
-    // while keeping messages from showing through the gutter, the card's
-    // rounded corners and the 1px flex gap as they scroll up behind it.
-    <header
-      className={cn(
-        "bg-background after:bg-background sticky top-0 z-10 pt-4 after:absolute after:inset-x-0 after:top-full after:h-px",
-        !onPopOut && "pt-0"
-      )}
-    >
-      {onPopOut === undefined ? null : (
-        <AppCommand callback={onPopOut} command="thread.popout" />
-      )}
+    // Sticking at top-0 with an opaque gutter keeps messages from showing
+    // through the card's rounded corners and the 1px flex gap as they scroll
+    // up behind it.
+    <header className="bg-background after:bg-background sticky top-0 z-10 after:absolute after:inset-x-0 after:top-full after:h-px">
       <div className="bg-card flex min-w-0 items-center gap-2 rounded-t-lg p-4">
         {showCloseButton ? (
           <MailThreadHeaderAction
@@ -139,53 +228,7 @@ const MailThreadHeader = ({
         <h1 className="min-w-0 flex-1 truncate text-lg font-semibold select-text">
           {subject}
         </h1>
-        {latestAt === undefined ? null : (
-          // Compact, so the subject keeps the room in a narrow pop-out window;
-          // each message header carries the detailed time.
-          <MailDate
-            className="text-muted-foreground mr-1 text-sm"
-            timestamp={latestAt}
-            tooltipSide="bottom"
-          />
-        )}
-        <div className="flex shrink-0 items-center gap-1">
-          {isSpam ? (
-            <MailThreadHeaderAction label="Not spam" onClick={onNotSpam}>
-              <InboxIcon />
-            </MailThreadHeaderAction>
-          ) : null}
-          <MailThreadHeaderAction
-            command="thread.toggleThreadRead"
-            label={toggleReadLabel}
-            onClick={onToggleRead}
-          >
-            {isUnread ? <MailOpenIcon /> : <MailIcon />}
-          </MailThreadHeaderAction>
-          {destructiveAction === undefined ? null : (
-            <MailThreadHeaderAction
-              className={quietDestructiveClassName}
-              command="thread.trashThread"
-              label={destructiveLabel}
-              onClick={destructiveAction}
-            >
-              <Trash2Icon />
-            </MailThreadHeaderAction>
-          )}
-          {onPopOut === undefined ? null : (
-            <>
-              {/* A window action, kept apart from the mail actions so a
-                  slip cannot trash the conversation. */}
-              <span aria-hidden="true" className="bg-border mx-1 h-4 w-px" />
-              <MailThreadHeaderAction
-                command="thread.popout"
-                label={popOutDisplay.label}
-                onClick={onPopOut}
-              >
-                <SquareArrowOutUpRightIcon />
-              </MailThreadHeaderAction>
-            </>
-          )}
-        </div>
+        <MailThreadActions dateClassName="text-sm" {...actions} />
       </div>
     </header>
   );

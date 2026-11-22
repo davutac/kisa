@@ -53,23 +53,30 @@ describe(isMailSearchQueryReady, () => {
 });
 
 describe(applyExternalMailSearchScope, () => {
-  it("keeps Inbox search broad while applying labels and unread state", () => {
+  it("keeps Inbox search broad while applying unread state", () => {
     expect(
       applyExternalMailSearchScope(
         { filters: [{ field: "from", value: "sender@example.com" }], text: "" },
-        {
-          labelNames: ["travel", "work"],
-          mailbox: "inbox",
-          unreadOnly: true,
-        }
+        { mailbox: "inbox", unreadOnly: true }
       )
     ).toStrictEqual({
       filters: [
         { field: "from", value: "sender@example.com" },
-        { field: "label", value: "travel" },
-        { field: "label", value: "work" },
         { field: "is", value: "unread" },
       ],
+      text: "",
+    });
+  });
+
+  it("searches a label place by the label's id", () => {
+    // By id, so a folder called Spam is searched as that folder, not as Spam.
+    expect(
+      applyExternalMailSearchScope(EMPTY_SEARCH_QUERY, {
+        mailbox: { label: "Spam" },
+        unreadOnly: false,
+      })
+    ).toStrictEqual({
+      filters: [{ field: "label", value: "u:Spam" }],
       text: "",
     });
   });
@@ -77,7 +84,6 @@ describe(applyExternalMailSearchScope, () => {
   it("adds Spam without exposing a visible search pill", () => {
     expect(
       applyExternalMailSearchScope(EMPTY_SEARCH_QUERY, {
-        labelNames: [],
         mailbox: "spam",
         unreadOnly: false,
       })
@@ -90,7 +96,6 @@ describe(applyExternalMailSearchScope, () => {
   it("adds Sent without exposing a visible search pill", () => {
     expect(
       applyExternalMailSearchScope(EMPTY_SEARCH_QUERY, {
-        labelNames: [],
         mailbox: "sent",
         unreadOnly: false,
       })
@@ -103,7 +108,6 @@ describe(applyExternalMailSearchScope, () => {
   it("adds Trash without exposing a visible search pill", () => {
     expect(
       applyExternalMailSearchScope(EMPTY_SEARCH_QUERY, {
-        labelNames: [],
         mailbox: "trash",
         unreadOnly: false,
       })

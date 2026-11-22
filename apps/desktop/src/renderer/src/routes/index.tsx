@@ -2,11 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
-import MailboxLabelBar from "@/components/mail/mailbox-label-bar";
+import MailboxBreadcrumb from "@/components/mail/mailbox-breadcrumb";
 import MailThreadList from "@/components/mail/thread-list";
 import type { MailThreadListProps } from "@/components/mail/thread-list";
 import MailThreadView from "@/components/mail/thread-view";
+import type { MailThreadTitlebarProps } from "@/components/mail/thread-view";
 import { useHotkeyLayer } from "@/hotkeys";
+import { getMailboxPlaceKey, isLabelPlace } from "@/mail/mailbox-place";
+import type { MailboxPlace } from "@/mail/mailbox-place";
 import { useMailboxReloadRevision } from "@/mail/mailbox-reload";
 import { parseThreadSelectionKey } from "@/mail/thread-selection";
 import { useInlineMailSearch } from "@/mail/use-inline-mail-search";
@@ -15,12 +18,11 @@ import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
 import { useMailboxThreads } from "@/mail/use-mailbox-threads";
 import { useThreadActions } from "@/mail/use-thread-actions";
 import { getWindowApi } from "@/platform/desktop";
-import type { MailIndexProgress, Mailbox } from "@/shared/ipc/mail";
+import type { MailIndexProgress } from "@/shared/ipc/mail";
 import {
   useMailbox,
   useMailboxStore,
   useOpenThreadId,
-  useSelectedLabelNames,
   useShowUnread,
 } from "@/state/mailbox";
 
@@ -32,15 +34,19 @@ interface MailboxEmptyState {
 }
 
 function getEmptyState(
-  mailbox: Mailbox,
-  unreadOnly: boolean,
-  hasLabelFilter: boolean
+  mailbox: MailboxPlace,
+  unreadOnly: boolean
 ): MailboxEmptyState {
-  if (hasLabelFilter) {
-    return {
-      message: "Try turning off one of the selected labels.",
-      title: "No conversations have every selected label",
-    };
+  if (isLabelPlace(mailbox)) {
+    return unreadOnly
+      ? {
+          message: `Everything labeled ${mailbox.label} has been read.`,
+          title: "Nothing unread here",
+        }
+      : {
+          message: `Conversations labeled ${mailbox.label} will appear here.`,
+          title: "No conversations with this label",
+        };
   }
 
   if (mailbox === "spam") {
@@ -77,7 +83,10 @@ function getEmptyState(
   };
 }
 
-function getThreadCloseLabel(mailbox: Mailbox): string | undefined {
+function getThreadCloseLabel(mailbox: MailboxPlace): string | undefined {
+  if (isLabelPlace(mailbox)) {
+    return `Back to ${mailbox.label}`;
+  }
   if (mailbox === "spam") {
     return "Back to spam";
   }
@@ -121,6 +130,28 @@ function getIndexingMessage(
 
 type ThreadListView = Omit<MailThreadListProps, "actions">;
 
+/**
+ * The titlebar while a conversation is open over the mailbox: the mailbox's
+ * breadcrumb, whose mailbox crumb leads back to the list, then the subject,
+ * with the conversation's actions on the trailing side.
+ */
+function OpenThreadTitlebar({ actions, subject }: MailThreadTitlebarProps) {
+  const mailbox = useMailbox();
+  const closeThread = useMailboxStore((state) => state.closeThread);
+
+  return (
+    <MailboxBreadcrumb
+      actions={actions}
+      mailbox={mailbox}
+      thread={{
+        backLabel: getThreadCloseLabel(mailbox) ?? "Back to inbox",
+        onBack: closeThread,
+        subject,
+      }}
+    />
+  );
+}
+
 function getSearchThreadListView(
   search: ReturnType<typeof useInlineMailSearch>
 ): ThreadListView {
@@ -162,7 +193,7 @@ function getMailboxThreadListView({
   readonly isInitialLoading: boolean;
   readonly isLoadingNextPage: boolean;
   readonly loadNextPage: () => Promise<boolean>;
-  readonly mailbox: Mailbox;
+  readonly mailbox: MailboxPlace;
   readonly reloadRevision: number | string;
   /** Only when rows from several accounts can mix; one account needs no badge. */
   readonly showAccount: boolean;
@@ -188,7 +219,6 @@ function HomeRoute() {
   const { accountIds } = useMailboxAccountScope();
   const mailbox = useMailbox();
   const showUnread = useShowUnread();
-  const selectedLabelNames = useSelectedLabelNames();
   const reloadRevision = useMailboxReloadRevision();
   const openThreadId = useOpenThreadId();
   const closeThread = useMailboxStore((state) => state.closeThread);
@@ -200,17 +230,11 @@ function HomeRoute() {
   const openThread = parseThreadSelectionKey(openThreadId ?? "");
   const mailboxThreads = useMailboxThreads({
     accountIds,
-    labelNames: selectedLabelNames,
     mailbox,
     reloadRevision,
     unreadOnly: showUnread,
   });
-  const search = useInlineMailSearch(
-    accountIds,
-    mailbox,
-    showUnread,
-    selectedLabelNames
-  );
+  const search = useInlineMailSearch(accountIds, mailbox, showUnread);
   const {
     hasNextPage,
     isInitialLoading,
@@ -221,11 +245,7 @@ function HomeRoute() {
   const threadActions = useThreadActions();
   const { deleteForever, notSpam, setLabel, toggleRead, trash } = threadActions;
   const indexProgress = useMailIndexProgress();
-  const emptyState = getEmptyState(
-    mailbox,
-    showUnread,
-    selectedLabelNames.length > 0
-  );
+  const emptyState = getEmptyState(mailbox, showUnread);
   const indexingMessage =
     mailbox === "spam"
       ? undefined
@@ -240,7 +260,11 @@ function HomeRoute() {
         isLoadingNextPage,
         loadNextPage,
         mailbox,
-        reloadRevision: JSON.stringify([reloadRevision, selectedLabelNames]),
+        // Each place starts at the top of its list.
+        reloadRevision: JSON.stringify([
+          reloadRevision,
+          getMailboxPlaceKey(mailbox),
+        ]),
         showAccount: accountIds.length > 1,
         threads,
       });
@@ -286,10 +310,12 @@ function HomeRoute() {
   ]);
 
   // The mailbox stays mounted underneath so its scroll position and virtualiser
-  // survive reading a thread without any restoration bookkeeping.
+  // survive reading a thread without any restoration bookkeeping. Its
+  // breadcrumb names the place, which the sidebar may be hidden from showing;
+  // an open thread extends it with its subject and actions.
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <MailboxLabelBar />
+      {openThread === null ? <MailboxBreadcrumb mailbox={mailbox} /> : null}
       <MailThreadList actions={threadActions} {...listView} />
       {openThread === null ? null : (
         <div className="bg-background absolute inset-0 z-10 overflow-x-hidden overflow-y-auto">
@@ -305,6 +331,7 @@ function HomeRoute() {
             onToggleRead={toggleRead}
             onTrash={trash}
             threadId={openThread.threadId}
+            titlebar={OpenThreadTitlebar}
           />
         </div>
       )}

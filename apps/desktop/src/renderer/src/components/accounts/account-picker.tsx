@@ -17,10 +17,13 @@ import {
 } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import type { Account } from "@/shared/ipc/accounts";
 
 interface AccountPickerBaseProps {
   readonly accounts: readonly Account[];
+  /** Restyles the row, e.g. to sit on the page instead of a card. */
+  readonly className?: string;
   readonly enableHotkeys?: boolean;
   readonly focusRefForAccount?: (accountId: string) => Ref<HTMLButtonElement>;
   readonly label?: string;
@@ -137,6 +140,7 @@ const AccountOptionButton = ({
 const AccountPicker = (props: AccountPickerProps) => {
   const {
     accounts,
+    className,
     enableHotkeys = false,
     focusRefForAccount,
     label = "From",
@@ -146,7 +150,12 @@ const AccountPicker = (props: AccountPickerProps) => {
   } = props;
 
   return (
-    <div className="bg-card flex min-h-9 shrink-0 items-center px-4 py-1">
+    <div
+      className={cn(
+        "bg-card flex min-h-9 shrink-0 items-center px-4 py-1",
+        className
+      )}
+    >
       <span className="text-muted-foreground w-10 shrink-0 text-xs/relaxed">
         {label}
       </span>
