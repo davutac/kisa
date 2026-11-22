@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { AppCommand, OPEN_ACCOUNT_COMMAND_IDS, useAppCommand } from "@/hotkeys";
+import { cn } from "@/lib/utils";
 import { useAccounts } from "@/state/accounts";
 import { useMailSearchStore } from "@/state/mail-search";
 
@@ -127,7 +128,14 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
           sidebarToggleRef={sidebarOpenButtonRef}
           slotRef={setTitlebarSlot}
         />
-        <main className="scroll-fade-y flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+        {/* The compose page scrolls its own body; a fade here would dim its
+            From row at the top edge, so it reads as disabled. */}
+        <main
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto",
+            !isComposing && "scroll-fade-y"
+          )}
+        >
           <ShellWorkspaceContext.Provider value={toggleWorkspace}>
             <TitlebarSlotContext.Provider value={titlebarSlot}>
               {children}

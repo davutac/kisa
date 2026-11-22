@@ -1,4 +1,4 @@
-import { ArchiveIcon } from "lucide-react";
+import { ArchiveIcon, Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
@@ -31,27 +31,33 @@ interface NewMessageStashPickerProps {
   disabled: boolean;
   drafts: readonly MailDraft[];
   getReturnFocus: () => HTMLElement | null;
+  onDiscard: (draft: MailDraft) => void;
   onSelect: (draft: MailDraft) => void;
   triggerRef: RefObject<HTMLButtonElement | null>;
 }
 
-const StashItem = ({
+export const StashItem = ({
   accountsCount,
   draft,
+  onDiscard,
   onSelect,
 }: {
   accountsCount: number;
   draft: MailDraft;
+  onDiscard: () => void;
   onSelect: () => void;
 }) => {
   const bodyPreview = getDraftBodyPreview(draft.body.text);
+  const subject = draft.subject.trim() || "No subject";
 
   return (
     <CommandItem
-      className="h-auto min-w-0 py-1.5"
+      // A stash row has no checked state, so its hidden check mark would
+      // only push the discard button off the row's edge.
+      className="h-auto min-w-0 py-1.5 pr-1.5 [&>svg]:hidden"
       onSelect={onSelect}
       value={[
-        draft.subject.trim() || "No subject",
+        subject,
         bodyPreview,
         draft.to[0] ?? "No recipient",
         draft.accountId ?? "No account",
@@ -59,9 +65,7 @@ const StashItem = ({
       ].join(" ")}
     >
       <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-        <span className="w-full truncate font-medium">
-          {draft.subject.trim() || "No subject"}
-        </span>
+        <span className="w-full truncate font-medium">{subject}</span>
         {bodyPreview.length === 0 ? null : (
           <span className="text-foreground/80 w-full truncate text-xs font-normal">
             {bodyPreview}
@@ -75,6 +79,27 @@ const StashItem = ({
           {` · ${formatDraftTime(draft.updatedAt)}`}
         </span>
       </span>
+      {/* The row itself pops the stash, so the button keeps its click and the
+          keys that press it from reaching the row and the list's Enter. */}
+      <Button
+        aria-label={`Discard stash: ${subject}`}
+        className="text-muted-foreground hover:text-destructive focus-visible:text-destructive self-center opacity-0 group-hover/command-item:opacity-100 group-data-selected/command-item:opacity-100 focus-visible:opacity-100"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDiscard();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.stopPropagation();
+          }
+        }}
+        size="icon-sm"
+        title="Discard stash"
+        type="button"
+        variant="ghost"
+      >
+        <Trash2Icon />
+      </Button>
     </CommandItem>
   );
 };
@@ -84,6 +109,7 @@ const NewMessageStashPicker = ({
   disabled,
   drafts,
   getReturnFocus,
+  onDiscard,
   onSelect,
   triggerRef,
 }: NewMessageStashPickerProps) => {
@@ -124,6 +150,10 @@ const NewMessageStashPicker = ({
                   accountsCount={accountsCount}
                   draft={draft}
                   key={draft.id}
+                  onDiscard={() => {
+                    setIsOpen(false);
+                    onDiscard(draft);
+                  }}
                   onSelect={() => {
                     setIsOpen(false);
                     onSelect(draft);

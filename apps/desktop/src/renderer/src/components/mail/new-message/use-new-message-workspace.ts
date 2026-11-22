@@ -406,6 +406,34 @@ export const useNewMessageWorkspace = ({
     onOpenChange(false);
   };
 
+  /**
+   * Deletes a stash the composer is not holding, and any attachment copies
+   * Kisa owns for it, after confirming. The picker drops it at once and takes it back if the delete
+   * fails.
+   */
+  const discardStash = async (stash: MailDraft): Promise<void> => {
+    if (
+      isBusy ||
+      !(await confirm({
+        cancelLabel: "Keep stash",
+        confirmLabel: "Discard",
+        confirmVariant: "destructive",
+        description: "This stashed email will be deleted.",
+        title: "Discard this stash?",
+      }))
+    ) {
+      return;
+    }
+    updateStashes((current) => current.filter(({ id }) => id !== stash.id));
+    enqueueDraftOperation(async () => {
+      if (await popDraft(stash)) {
+        toast.success("Stash discarded");
+        return;
+      }
+      updateStashes((current) => upsertStash(current, stash));
+    });
+  };
+
   const switchDraft = (next: MailDraft): void => {
     if (next.id === draftId || isBusy) {
       return;
@@ -517,6 +545,7 @@ export const useNewMessageWorkspace = ({
     cleanDraft: cleanup.cleanDraft,
     cleanupModelLabel: cleanup.modelLabel,
     discard,
+    discardStash,
     dismissCleanVersion: cleanup.dismissVersion,
     focus,
     isBusy,

@@ -18,6 +18,7 @@ interface NewMessageHeaderProps {
   drafts: readonly MailDraft[];
   isCleaning: boolean;
   getReturnFocus: () => HTMLElement | null;
+  onDiscardDraft: (draft: MailDraft) => void;
   onSelectDraft: (draft: MailDraft) => void;
   stashPickerTriggerRef: RefObject<HTMLButtonElement | null>;
   scheduledEdit?: ScheduledMailEditSession;
@@ -28,6 +29,7 @@ const NewMessageHeader = ({
   drafts,
   isCleaning,
   getReturnFocus,
+  onDiscardDraft,
   onSelectDraft,
   stashPickerTriggerRef,
   scheduledEdit,
@@ -77,6 +79,7 @@ const NewMessageHeader = ({
               disabled={isCleaning || isSending || isScheduling}
               drafts={drafts}
               getReturnFocus={getReturnFocus}
+              onDiscard={onDiscardDraft}
               onSelect={onSelectDraft}
               triggerRef={stashPickerTriggerRef}
             />

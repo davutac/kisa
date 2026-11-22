@@ -11,6 +11,7 @@ import { useAppCommand } from "@/hotkeys";
 import { getInitialComposerAccountId } from "@/mail/composer-account";
 import { getDraftResumeFocusTarget } from "@/mail/mail-draft";
 import type { Account } from "@/shared/ipc/accounts";
+import type { MailDraft } from "@/shared/ipc/mail";
 import type { ScheduledMailEditSession } from "@/shared/ipc/scheduled-mail";
 import { useAccountSettings } from "@/state/account-settings";
 
@@ -128,6 +129,9 @@ const NewMessageDialogContent = ({
     scheduledEdit,
   });
   const handleFiles = workspace.outgoingAttachments.addAttachments;
+  const handleDiscardDraft = (draft: MailDraft): void => {
+    void workspace.discardStash(draft);
+  };
   const handleSelectDraft = workspace.switchDraft;
 
   return (
@@ -154,6 +158,7 @@ const NewMessageDialogContent = ({
           drafts={workspace.availableStashes}
           getReturnFocus={workspace.focus.getReturnElement}
           isCleaning={workspace.isCleaning}
+          onDiscardDraft={handleDiscardDraft}
           onSelectDraft={handleSelectDraft}
           stashPickerTriggerRef={workspace.stashPickerTriggerRef}
           scheduledEdit={scheduledEdit}
