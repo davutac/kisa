@@ -14,6 +14,7 @@ import { beginQuit } from "./app/quit-state";
 import { createShutdown } from "./app/shutdown";
 import { shouldQuitAfterAllWindowsClose } from "./app/window-lifecycle";
 import { closeDatabase } from "./database";
+import { stopDatabaseImport } from "./database-import";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailEngine } from "./mail/engine/mail-engine";
@@ -119,8 +120,10 @@ const shutdown = createShutdown({
   stageDeadlineMs: SHUTDOWN_STAGE_DEADLINE_MS,
   // The mail engine stops after scheduled mail, because its stop is what
   // waits for an interrupted send's recovery write; the database closes last.
+  // An import still copying is stopped here; one already staged just waits
+  // for the next start.
   stages: [
-    [stopThreadCategorization],
+    [stopThreadCategorization, stopDatabaseImport],
     [stopScheduledMail],
     [stopMailEngine],
     [

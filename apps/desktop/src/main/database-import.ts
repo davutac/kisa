@@ -6,6 +6,7 @@ import {
   mkdir,
   open,
   readFile,
+  readdir,
   rename,
   rm,
   stat,
@@ -59,9 +60,17 @@ interface DatabaseImportSelectionSession {
  * for a restart is not kept here: the manifest file is that fact, so it is
  * read from disk whenever it is asked for and cannot go stale.
  */
+interface DatabaseImportRun {
+  /** Resolves once the import has ended and cleaned up after itself. */
+  readonly ended: Promise<null>;
+  readonly state: "importing";
+  /** Quit stops the import through this. */
+  readonly stop: AbortController;
+}
+
 type DatabaseImportState =
   | DatabaseImportSelectionSession
-  | { readonly state: "importing" }
+  | DatabaseImportRun
   | undefined;
 
 let databaseImportState: DatabaseImportState;
@@ -96,9 +105,6 @@ const getImportManifestPath = (databasePath: string): string =>
 
 const isMissingFileError = <ErrorInput>(error: ErrorInput): boolean =>
   error instanceof Error && "code" in error && error.code === "ENOENT";
-
-const isExistingFileError = <ErrorInput>(error: ErrorInput): boolean =>
-  error instanceof Error && "code" in error && error.code === "EEXIST";
 
 const readManifest = async (
   databasePath: string
@@ -148,28 +154,60 @@ const syncFile = async (filePath: string): Promise<void> => {
 
 const copyFileIfPresent = async (
   source: string,
-  destination: string,
-  exclusive = false
+  destination: string
 ): Promise<void> => {
   try {
-    await copyFile(
-      source,
-      destination,
-      exclusive ? constants.COPYFILE_EXCL : 0
-    );
+    await copyFile(source, destination);
     await chmod(destination, 0o600);
   } catch (error) {
-    if (
-      isMissingFileError(error) ||
-      (exclusive && isExistingFileError(error))
-    ) {
+    if (isMissingFileError(error)) {
       return;
-    }
-    if (exclusive) {
-      await rm(destination, { force: true });
     }
     throw error;
   }
+};
+
+const pathExists = async (filePath: string): Promise<boolean> => {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return false;
+    }
+    throw error;
+  }
+};
+
+/**
+ * Copies one file into the backup. A backup file that exists is complete and
+ * is never written again: once the swap has run, the active file is the
+ * imported one, and overwriting would destroy the only copy of the original.
+ * So the copy is made under another name and takes the real one only when it
+ * is whole; a copy cut short by a crash is left under that other name and
+ * simply made again.
+ */
+const backUpFile = async (
+  source: string,
+  destination: string
+): Promise<void> => {
+  if (await pathExists(destination)) {
+    return;
+  }
+
+  const partial = `${destination}.partial`;
+  try {
+    await copyFile(source, partial);
+  } catch (error) {
+    await rm(partial, { force: true });
+    if (isMissingFileError(error)) {
+      return;
+    }
+    throw error;
+  }
+  await chmod(partial, 0o600);
+  await syncFile(partial);
+  await rename(partial, destination);
 };
 
 const removeDatabaseFiles = async (databasePath: string): Promise<void> => {
@@ -203,15 +241,41 @@ const discardPendingImport = async (databasePath: string): Promise<void> => {
   await rm(path.join(directory, manifest.keyFile), { force: true });
 };
 
-const hasPendingImport = async (databasePath: string): Promise<boolean> => {
+const hasPendingImport = (databasePath: string): Promise<boolean> =>
+  pathExists(getImportManifestPath(databasePath));
+
+const STAGED_FILE_SUFFIX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-wal|-shm|\.key)?$/u;
+
+/**
+ * Removes staged copies left by an import that never finished: a crash or a
+ * quit before its manifest was written. Only called when this database has
+ * no manifest, so nothing it removes is waiting to be activated. It matches
+ * this database's own staged names exactly, because other databases live in
+ * the same folder, and it never fails the start it runs in.
+ */
+const sweepStagedImports = async (databasePath: string): Promise<void> => {
+  // A running import's copy has no manifest yet either.
+  if (databaseImportState?.state === "importing") {
+    return;
+  }
+
   try {
-    await stat(getImportManifestPath(databasePath));
-    return true;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return false;
-    }
-    throw error;
+    const directory = path.dirname(databasePath);
+    const prefix = `${path.basename(databasePath)}.import-`;
+    const entries = await readdir(directory, { withFileTypes: true });
+    await Promise.all(
+      entries
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            entry.name.startsWith(prefix) &&
+            STAGED_FILE_SUFFIX.test(entry.name.slice(prefix.length))
+        )
+        .map((entry) => rm(path.join(directory, entry.name), { force: true }))
+    );
+  } catch {
+    // Leftovers cost disk space only; the next start tries again.
   }
 };
 
@@ -421,23 +485,73 @@ export const selectDatabaseImportFile = Effect.fn("selectDatabaseImportFile")(
   }
 );
 
-const offerRestart = async (isDevelopment: boolean): Promise<void> => {
-  const result = await dialog.showMessageBox({
-    buttons: [isDevelopment ? "Quit Now" : "Restart Now", "Later"],
-    cancelId: 1,
-    defaultId: 0,
-    detail: isDevelopment
-      ? "Run the development command again after Kisa quits. The imported database will be activated during startup."
-      : "Kisa will activate the validated database during startup.",
-    message: "The database import is ready.",
-    noLink: true,
-    title: "Restart Kisa to finish",
-    type: "info",
-  });
+/** Rejects once the import is stopped, so a wait can end with it. */
+const stopped = (signal: AbortSignal): Promise<never> => {
+  const waiting = Promise.withResolvers<never>();
+  const reject = (): void => {
+    waiting.reject(importError());
+  };
+  if (signal.aborted) {
+    reject();
+  } else {
+    signal.addEventListener("abort", reject, { once: true });
+  }
+  return waiting.promise;
+};
+
+/**
+ * Waits for one step of the import, or stops waiting when the app quits. A
+ * copy cannot itself be interrupted; what it leaves is removed when the
+ * import ends, or by the sweep at the next start.
+ */
+const untilStopped = <A>(step: Promise<A>, signal: AbortSignal): Promise<A> =>
+  Promise.race([step, stopped(signal)]);
+
+const offerRestart = async (
+  isDevelopment: boolean,
+  signal: AbortSignal
+): Promise<void> => {
+  let result: Electron.MessageBoxReturnValue;
+  try {
+    result = await untilStopped(
+      dialog.showMessageBox({
+        buttons: [isDevelopment ? "Quit Now" : "Restart Now", "Later"],
+        cancelId: 1,
+        defaultId: 0,
+        detail: isDevelopment
+          ? "Run the development command again after Kisa quits. The imported database will be activated during startup."
+          : "Kisa will activate the validated database during startup.",
+        message: "The database import is ready.",
+        noLink: true,
+        signal,
+        title: "Restart Kisa to finish",
+        type: "info",
+      }),
+      signal
+    );
+  } catch {
+    // Quit began with the prompt open. The import is staged and waits for
+    // the next start; an answer now must not relaunch an app being quit.
+    return;
+  }
 
   if (result.response === 0) {
     restartOrQuit(isDevelopment);
   }
+};
+
+/**
+ * Stops a running import and waits for it to clean up. Quit calls this: an
+ * import's handler runs outside the IPC runtime, so disposing that runtime
+ * does not interrupt it.
+ */
+export const stopDatabaseImport = async (): Promise<void> => {
+  const running = databaseImportState;
+  if (running?.state !== "importing") {
+    return;
+  }
+  running.stop.abort();
+  await running.ended;
 };
 
 export const importExistingDatabase = Effect.fn("importExistingDatabase")(
@@ -455,7 +569,10 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
     }
 
     const { databasePath: sourceDatabase, recoveryKeyPath } = session;
-    databaseImportState = { state: "importing" };
+    const stop = new AbortController();
+    const ended = Promise.withResolvers<null>();
+    databaseImportState = { ended: ended.promise, state: "importing", stop };
+    const { signal } = stop;
 
     // The copy did not open with its key, or its schema is not one Kisa reads.
     let validationFailed = false;
@@ -481,36 +598,54 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
         try {
           options.onProgress("copying");
           await mkdir(directory, { recursive: true });
-          await copyFile(
-            sourceDatabase,
-            stagedDatabasePath,
-            constants.COPYFILE_EXCL
+          await untilStopped(
+            copyFile(
+              sourceDatabase,
+              stagedDatabasePath,
+              constants.COPYFILE_EXCL
+            ),
+            signal
           );
           await chmod(stagedDatabasePath, 0o600);
-          await copyFileIfPresent(
-            `${sourceDatabase}-wal`,
-            `${stagedDatabasePath}-wal`
+          await untilStopped(
+            copyFileIfPresent(
+              `${sourceDatabase}-wal`,
+              `${stagedDatabasePath}-wal`
+            ),
+            signal
           );
-          await copyFileIfPresent(
-            `${sourceDatabase}-shm`,
-            `${stagedDatabasePath}-shm`
+          await untilStopped(
+            copyFileIfPresent(
+              `${sourceDatabase}-shm`,
+              `${stagedDatabasePath}-shm`
+            ),
+            signal
           );
 
           options.onProgress("validating");
           // A database from before the mail engine fails here: its migration
           // history predates the baseline, so it never replaces the live one.
           try {
-            await options.validate(stagedDatabasePath, key);
+            await untilStopped(
+              options.validate(stagedDatabasePath, key),
+              signal
+            );
           } catch (error) {
-            validationFailed = true;
+            // A stop is not a verdict on the database.
+            validationFailed = !signal.aborted;
             throw error;
           }
           await rm(`${stagedDatabasePath}-wal`, { force: true });
           await rm(`${stagedDatabasePath}-shm`, { force: true });
 
           options.onProgress("preparing");
-          await sealDatabaseKey(stagedKeyPath, key, options.keyEncryptor);
+          await untilStopped(
+            sealDatabaseKey(stagedKeyPath, key, options.keyEncryptor),
+            signal
+          );
 
+          // From here the import is carried through: replacing the manifest
+          // is short, and half of it would lose the import already waiting.
           await discardPendingImport(options.activeDatabasePath);
           await writeManifest(options.activeDatabasePath, {
             backupDirectory: `before-import-${importId}`,
@@ -521,7 +656,7 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
           });
           isPending = true;
           options.onProgress("ready");
-          await offerRestart(options.isDevelopment);
+          await offerRestart(options.isDevelopment, signal);
           return "restart-pending";
         } finally {
           key.fill(0);
@@ -535,6 +670,7 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
       Effect.ensuring(
         Effect.sync(() => {
           databaseImportState = undefined;
+          ended.resolve(null);
         })
       )
     );
@@ -557,11 +693,7 @@ const backUpActiveDatabase = async (
 
   await Promise.all(
     files.map((source) =>
-      copyFileIfPresent(
-        source,
-        path.join(backupDirectory, path.basename(source)),
-        true
-      )
+      backUpFile(source, path.join(backupDirectory, path.basename(source)))
     )
   );
 };
@@ -579,28 +711,65 @@ const replaceFileFromStage = async (
   await rename(nextPath, activePath);
 };
 
+/**
+ * Activates a waiting import at startup, before the database opens.
+ *
+ * An import that cannot be activated because nothing is there to activate is
+ * dropped, so the app starts with the current database rather than failing
+ * every start: a manifest that cannot be read, or staged files that are gone
+ * while the swap provably never began. The backup directory is made before
+ * anything is swapped, so only its absence proves that. With it present the
+ * current database and key may no longer be a pair; this fails and deletes
+ * nothing.
+ */
 export const activatePendingDatabaseImport = async (
   databasePath: string
 ): Promise<void> => {
-  const manifest = await readManifest(databasePath);
+  const manifestPath = getImportManifestPath(databasePath);
+  let manifest: DatabaseImportManifest | undefined;
+  try {
+    manifest = await readManifest(databasePath);
+  } catch (error) {
+    // Only contents that do not decode. A manifest that cannot be read from
+    // disk at all may be a good one, so that still fails the start.
+    if (!(error instanceof DatabaseImportError)) {
+      throw error;
+    }
+    await rm(manifestPath, { force: true });
+    manifest = undefined;
+  }
   if (manifest === undefined) {
+    await sweepStagedImports(databasePath);
     return;
   }
 
   const directory = path.dirname(databasePath);
   const stagedDatabasePath = path.join(directory, manifest.databaseFile);
   const stagedKeyPath = path.join(directory, manifest.keyFile);
-  await Promise.all([stat(stagedDatabasePath), stat(stagedKeyPath)]);
-
-  await backUpActiveDatabase(
-    databasePath,
-    path.join(directory, "backups", manifest.backupDirectory)
+  const backupDirectory = path.join(
+    directory,
+    "backups",
+    manifest.backupDirectory
   );
+  const [hasStagedDatabase, hasStagedKey] = await Promise.all([
+    pathExists(stagedDatabasePath),
+    pathExists(stagedKeyPath),
+  ]);
+  if (!(hasStagedDatabase && hasStagedKey)) {
+    if (await pathExists(backupDirectory)) {
+      throw importError();
+    }
+    await rm(manifestPath, { force: true });
+    await sweepStagedImports(databasePath);
+    return;
+  }
+
+  await backUpActiveDatabase(databasePath, backupDirectory);
   await rm(`${databasePath}-wal`, { force: true });
   await rm(`${databasePath}-shm`, { force: true });
   await replaceFileFromStage(stagedDatabasePath, databasePath);
   await replaceFileFromStage(stagedKeyPath, getDatabaseKeyPath(databasePath));
-  await rm(getImportManifestPath(databasePath), { force: true });
+  await rm(manifestPath, { force: true });
   await removeDatabaseFiles(stagedDatabasePath);
   await rm(stagedKeyPath, { force: true });
 };

@@ -26,6 +26,7 @@ import {
   importExistingDatabase,
   restartForPendingDatabaseImport,
   selectDatabaseImportFile,
+  stopDatabaseImport,
 } from "../src/main/database-import";
 import { encodeDatabaseRecoveryKeyFile } from "../src/main/database-recovery-key";
 
@@ -53,6 +54,27 @@ vi.mock("electron", () => ({
     showOpenDialog: state.openDialog,
   },
 }));
+
+const exists = async (filePath: string): Promise<boolean> => {
+  try {
+    await readFile(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** How a promise ended: its failure's message, or nothing if it resolved. */
+const failureOf = async (
+  promise: Promise<unknown>
+): Promise<string | undefined> => {
+  try {
+    await promise;
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
 
 describe("database import", () => {
   let activeDatabasePath = "";
@@ -448,5 +470,186 @@ describe("database import", () => {
       message: "Could not restart to finish the import",
     });
     expect(state.quit).not.toHaveBeenCalled();
+  });
+
+  const manifestPath = (): string =>
+    `${activeDatabasePath}.pending-import.json`;
+
+  const readPendingManifest = async (): Promise<{
+    readonly backupDirectory: string;
+    readonly databaseFile: string;
+    readonly keyFile: string;
+  }> => JSON.parse(await readFile(manifestPath(), "utf-8"));
+
+  const activeDatabase = (): Promise<string> =>
+    readFile(activeDatabasePath, "utf-8");
+
+  it("starts with the current database when the manifest cannot be read", async () => {
+    await writeFile(manifestPath(), "not json");
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).resolves.toBeUndefined();
+
+    await expect(activeDatabase()).resolves.toBe("current database");
+    await expect(exists(manifestPath())).resolves.toBeFalsy();
+  });
+
+  it("starts with the current database when the staged copy is gone and nothing was swapped", async () => {
+    await runImport(await prepareImport());
+    const manifest = await readPendingManifest();
+    await rm(path.join(temporaryDirectory, manifest.databaseFile));
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).resolves.toBeUndefined();
+
+    await expect(activeDatabase()).resolves.toBe("current database");
+    await expect(exists(manifestPath())).resolves.toBeFalsy();
+    await expect(stagedFiles()).resolves.toStrictEqual([]);
+    await expect(readdir(temporaryDirectory)).resolves.not.toContain("backups");
+  });
+
+  // The backup directory is made before anything is swapped, so finding it
+  // means the swap may have begun and the current pair may not be whole.
+  it("keeps failing, and deletes nothing, when the staged copy is gone after the swap began", async () => {
+    await runImport(await prepareImport());
+    const manifest = await readPendingManifest();
+    await mkdir(
+      path.join(temporaryDirectory, "backups", manifest.backupDirectory),
+      { recursive: true }
+    );
+    await rm(path.join(temporaryDirectory, manifest.databaseFile));
+
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).rejects.toThrow(/./u);
+
+    await expect(exists(manifestPath())).resolves.toBeTruthy();
+    await expect(
+      exists(path.join(temporaryDirectory, manifest.keyFile))
+    ).resolves.toBeTruthy();
+  });
+
+  it("keeps the original in the backup when a failed swap is run again", async () => {
+    await runImport(await prepareImport());
+    const manifest = await readPendingManifest();
+    const stagedKey = path.join(temporaryDirectory, manifest.keyFile);
+    const backupDatabase = path.join(
+      temporaryDirectory,
+      "backups",
+      manifest.backupDirectory,
+      "app.sqlite"
+    );
+    // The database swaps, then the key cannot be copied.
+    await rm(stagedKey);
+    await mkdir(stagedKey);
+    await expect(
+      activatePendingDatabaseImport(activeDatabasePath)
+    ).rejects.toThrow(/./u);
+    await expect(activeDatabase()).resolves.toBe("imported database");
+
+    await rm(stagedKey, { recursive: true });
+    await writeFile(stagedKey, "imported sealed key");
+    await activatePendingDatabaseImport(activeDatabasePath);
+
+    await expect(readFile(backupDatabase, "utf-8")).resolves.toBe(
+      "current database"
+    );
+    await expect(readFile(`${activeDatabasePath}.key`, "utf-8")).resolves.toBe(
+      "imported sealed key"
+    );
+  });
+
+  // A copy cut short by a crash must not stand in for the backup: the next
+  // step removes the current database.
+  it("never takes a copy that was cut short for the backup", async () => {
+    await runImport(await prepareImport());
+    const manifest = await readPendingManifest();
+    const backupDirectory = path.join(
+      temporaryDirectory,
+      "backups",
+      manifest.backupDirectory
+    );
+    await mkdir(backupDirectory, { recursive: true });
+    await writeFile(path.join(backupDirectory, "app.sqlite.partial"), "curr");
+
+    await activatePendingDatabaseImport(activeDatabasePath);
+
+    await expect(
+      readFile(path.join(backupDirectory, "app.sqlite"), "utf-8")
+    ).resolves.toBe("current database");
+    await expect(readdir(backupDirectory)).resolves.toStrictEqual([
+      "app.sqlite",
+      "app.sqlite-wal",
+      "app.sqlite.key",
+    ]);
+  });
+
+  it("removes staged copies that no manifest names, and nothing else", async () => {
+    const orphan = `app.sqlite.import-${"1".repeat(8)}-1111-1111-1111-${"1".repeat(12)}`;
+    const kept = [
+      "app.dev.sqlite.import-11111111-1111-1111-1111-111111111111",
+      "app.sqlite.import-notes.txt",
+      "app.sqlite.imported",
+      `${orphan}.bak`,
+    ];
+    await Promise.all(
+      [orphan, `${orphan}-wal`, `${orphan}-shm`, `${orphan}.key`, ...kept].map(
+        (name) => writeFile(path.join(temporaryDirectory, name), "x")
+      )
+    );
+
+    await activatePendingDatabaseImport(activeDatabasePath);
+
+    const names = await readdir(temporaryDirectory);
+    expect(names.filter((name) => name.startsWith(orphan))).toStrictEqual([
+      `${orphan}.bak`,
+    ]);
+    expect(names).toStrictEqual(expect.arrayContaining(kept));
+    await expect(activeDatabase()).resolves.toBe("current database");
+  });
+
+  it("leaves a running import's copy alone, then stops it on quit and removes the copy", async () => {
+    const sessionId = await prepareImport();
+    const validating = Promise.withResolvers<null>();
+    const running = runImport(sessionId, {
+      validate: () => {
+        validating.resolve(null);
+        // Never finishes: only the stop ends it.
+        return Promise.withResolvers<undefined>().promise;
+      },
+    });
+    const settled = failureOf(running);
+    await validating.promise;
+
+    await activatePendingDatabaseImport(activeDatabasePath);
+    const whileRunning = await stagedFiles();
+    await stopDatabaseImport();
+
+    expect(whileRunning).toHaveLength(1);
+    await expect(settled).resolves.toBe("Could not import the database");
+    await expect(stagedFiles()).resolves.toStrictEqual([]);
+    await expect(exists(manifestPath())).resolves.toBeFalsy();
+  });
+
+  it("ignores an answer to the restart prompt that comes after quit began", async () => {
+    const sessionId = await prepareImport();
+    const answered = Promise.withResolvers<Electron.MessageBoxReturnValue>();
+    state.messageBox.mockReset();
+    state.messageBox.mockReturnValueOnce(answered.promise);
+    const running = runImport(sessionId);
+    await vi.waitFor(() => {
+      expect(state.messageBox).toHaveBeenCalledOnce();
+    });
+
+    await stopDatabaseImport();
+    await expect(running).resolves.toBe("restart-pending");
+    answered.resolve({ checkboxChecked: false, response: 0 });
+    await Promise.resolve();
+
+    expect(state.relaunch).not.toHaveBeenCalled();
+    expect(state.quit).not.toHaveBeenCalled();
+    await expect(exists(manifestPath())).resolves.toBeTruthy();
   });
 });
