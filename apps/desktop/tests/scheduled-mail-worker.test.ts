@@ -326,7 +326,7 @@ describe(ScheduledMailWorker, () => {
     await harness.worker.stop();
   });
 
-  it("honors Retry-After and stops at the 24-hour rate-limit boundary", async () => {
+  it("honors Retry-After and stops after the attempt at the 24-hour rate-limit boundary", async () => {
     const store = new FakeStore();
     const rateLimited = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
       Promise.resolve({
@@ -347,12 +347,65 @@ describe(ScheduledMailWorker, () => {
     harness.clock.advance(SCHEDULED_MAIL_RATE_LIMIT_WINDOW_MS);
     await harness.worker.wake();
 
-    expect(rateLimited).toHaveBeenCalledOnce();
+    // The window ends after an attempt that still fails, not before it.
+    expect(rateLimited).toHaveBeenCalledTimes(2);
     expect(store).toMatchObject({
-      attemptCount: 1,
+      attemptCount: 2,
       attentionReason: "rate-limit-exhausted",
       status: "attention",
     });
+    await harness.worker.stop();
+  });
+
+  // One failed connection, then a day asleep: the email is still tried.
+  it("sends an email whose retry window ran out while nothing could be tried", async () => {
+    const store = new FakeStore();
+    store.rateLimitStartedAt = 1000;
+    const harness = makeHarness(store);
+    harness.clock.advance(SCHEDULED_MAIL_RATE_LIMIT_WINDOW_MS + 60_000);
+
+    await harness.worker.start();
+
+    expect(harness.deliver).toHaveBeenCalledOnce();
+    expect(store.status).toBe("sent");
+    expect(harness.notifications).toStrictEqual([
+      { ...store.key, kind: "sent" },
+    ]);
+    await harness.worker.stop();
+  });
+
+  // The server may have the message, so sent mail is looked at first, after
+  // the server has had time to file it.
+  it("looks in sent mail before reporting an unknown send outcome", async () => {
+    const store = new FakeStore();
+    const deliver = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
+      Promise.resolve({ error: { kind: "outcome-unknown" }, ok: false })
+    );
+    const reconcile = vi.fn<ScheduledMailWorkerDependencies["reconcile"]>(() =>
+      Promise.resolve({ kind: "found" })
+    );
+    const harness = makeHarness(store, { deliver, reconcile });
+
+    await harness.worker.start();
+    const beforeLookup = {
+      lookups: reconcile.mock.calls.length,
+      notifications: [...harness.notifications],
+      status: store.status,
+    };
+
+    harness.clock.advance(SCHEDULED_MAIL_POLL_INTERVAL_MS);
+    await harness.worker.wake();
+
+    expect(beforeLookup).toStrictEqual({
+      lookups: 0,
+      notifications: [],
+      status: "sending",
+    });
+    expect(deliver).toHaveBeenCalledOnce();
+    expect(store.status).toBe("sent");
+    expect(harness.notifications).toStrictEqual([
+      { ...store.key, kind: "sent" },
+    ]);
     await harness.worker.stop();
   });
 
@@ -605,7 +658,7 @@ describe(ScheduledMailWorker, () => {
     expect(store.status).toBe("scheduled");
   });
 
-  it("records an aborted in-flight dispatch as unknown and never restarts", async () => {
+  it("leaves an interrupted dispatch for the sent-mail lookup and never restarts it", async () => {
     const store = new FakeStore();
     const started = Promise.withResolvers<null>();
     const outcome =
@@ -637,10 +690,12 @@ describe(ScheduledMailWorker, () => {
     await harness.worker.wake();
 
     expect(deliver).toHaveBeenCalledOnce();
+    // The next start looks in sent mail, as it does after a crash.
     expect(store).toMatchObject({
       attemptCount: 1,
-      attentionReason: "outcome-unknown",
-      status: "attention",
+      attentionReason: undefined,
+      status: "sending",
     });
+    expect(harness.notifications).toStrictEqual([]);
   });
 });

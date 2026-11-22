@@ -76,7 +76,10 @@ const toDeliveryFailure = (
     case "MailEngineError": {
       return { kind: "account-action-required" };
     }
-    case "MailConnectionError": {
+    // A store failure happens only before the message is handed to the
+    // mail server: reading the account and its sender. Nothing was sent.
+    case "MailConnectionError":
+    case "MailStoreError": {
       return { kind: "rate-limited" };
     }
     case "MailThrottledError": {
@@ -146,6 +149,14 @@ export const createScheduledMailDelivery = ({
           : { kind: "missing" as const };
       }
       const failure = failureOf(exit);
+      // A refused sign-in or an account that is gone will not let the look
+      // be made by waiting. The outcome stays unknown, and the user is asked.
+      if (
+        failure?._tag === "MailAuthError" ||
+        failure?._tag === "MailEngineError"
+      ) {
+        return { kind: "missing" as const };
+      }
       return failure?._tag === "MailThrottledError" &&
         failure.retryAfterMs !== undefined
         ? { kind: "defer" as const, retryAfterMs: failure.retryAfterMs }

@@ -22,9 +22,8 @@ interface ScheduledMailTransition {
  * whatever their status, and a `sent` email is deleted once its outcome has
  * been shown.
  *
- * The entry points do not agree on an email the worker has claimed
- * (`preparing`): the editor refuses to touch it, while the list row may still
- * cancel, discard or send it, which revokes the claim before anything is sent.
+ * No user action applies to an email the worker has claimed (`preparing`):
+ * the list already shows it as being sent.
  */
 export const SCHEDULED_MAIL_TRANSITIONS = {
   // The worker.
@@ -47,18 +46,9 @@ export const SCHEDULED_MAIL_TRANSITIONS = {
   "edit-send-now": { from: ["scheduled", "attention"], to: "scheduled" },
 
   // The user, from the list row.
-  "row-cancel": {
-    from: ["scheduled", "preparing", "attention"],
-    to: "deleted",
-  },
-  "row-discard": {
-    from: ["scheduled", "preparing", "attention"],
-    to: "deleted",
-  },
-  "row-send-now": {
-    from: ["scheduled", "preparing", "attention"],
-    to: "scheduled",
-  },
+  "row-cancel": { from: ["scheduled", "attention"], to: "deleted" },
+  "row-discard": { from: ["scheduled", "attention"], to: "deleted" },
+  "row-send-now": { from: ["scheduled", "attention"], to: "scheduled" },
 } as const satisfies Record<string, ScheduledMailTransition>;
 
 export type ScheduledMailTransitionName =

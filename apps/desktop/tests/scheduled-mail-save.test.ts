@@ -13,6 +13,12 @@ import type {
   RemoteDatabaseClient,
 } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
+import {
+  MailAuthError,
+  MailSendUnknownError,
+  MailStoreError,
+} from "@repo/mail/errors";
+import { AccountId } from "@repo/mail/ids";
 import { Effect } from "effect";
 import {
   afterAll,
@@ -139,8 +145,10 @@ const { configureDraftAttachmentStore } =
   await import("../src/main/mail/draft-attachment-store");
 const { outgoingAttachmentAuthorizations } =
   await import("../src/main/mail/outgoing-attachment-authorizations");
-const { sendNewMessage: sendNewMessageMock } =
-  await import("../src/main/mail/engine/mail-send");
+const {
+  findSentMessage: findSentMessageMock,
+  sendNewMessage: sendNewMessageMock,
+} = await import("../src/main/mail/engine/mail-send");
 
 const accountId = "person@example.com";
 const draftId = "scheduled-save-draft";
@@ -364,6 +372,94 @@ describe("scheduled mail in-place save", () => {
     ).rejects.toMatchObject({
       message: "An attachment is no longer authorized; attach it again",
     });
+  });
+
+  // A local failure before the message reached any server: nothing was sent,
+  // so it is retried rather than reported as possibly sent.
+  it("retries a send that failed before reaching the mail server", async () => {
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.fail(
+        new MailStoreError({
+          cause: "disk",
+          message: "Could not load the account",
+        })
+      )
+    );
+    connection
+      .prepare(
+        `UPDATE scheduled_messages
+         SET next_attempt_at = 1, scheduled_at = 1
+         WHERE draft_id = ?`
+      )
+      .run(draftId);
+
+    await startScheduledMail();
+    try {
+      expect(sendNewMessageMock).toHaveBeenCalledOnce();
+      expect(
+        connection
+          .prepare(
+            `SELECT attention_reason AS attentionReason, status
+             FROM scheduled_messages WHERE draft_id = ?`
+          )
+          .get(draftId)
+      ).toStrictEqual({ attentionReason: null, status: "scheduled" });
+    } finally {
+      await stopScheduledMail();
+    }
+  });
+
+  // An unknown outcome waits for a look in sent mail. One that can never be
+  // made must not leave the email "sending", where every action is refused.
+  it("reports an unknown outcome when sent mail cannot be searched for a lasting reason", async () => {
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.fail(
+        new MailSendUnknownError({
+          accountId: AccountId.make(accountId),
+          message: "Connection lost after the message was handed over",
+        })
+      )
+    );
+    vi.mocked(findSentMessageMock).mockReturnValue(
+      Effect.fail(
+        new MailAuthError({
+          accountId: AccountId.make(accountId),
+          message: "Sign-in refused",
+        })
+      )
+    );
+    connection
+      .prepare(
+        `UPDATE scheduled_messages
+         SET next_attempt_at = 1, scheduled_at = 1
+         WHERE draft_id = ?`
+      )
+      .run(draftId);
+    const deliveryStatus = () =>
+      connection
+        .prepare(
+          `SELECT attention_reason AS attentionReason, status
+           FROM scheduled_messages WHERE draft_id = ?`
+        )
+        .get(draftId);
+
+    await startScheduledMail();
+    const afterSend = deliveryStatus();
+    // The next start looks in sent mail at once.
+    await stopScheduledMail();
+    await startScheduledMail();
+    try {
+      expect(afterSend).toStrictEqual({
+        attentionReason: null,
+        status: "sending",
+      });
+      expect(deliveryStatus()).toStrictEqual({
+        attentionReason: "outcome-unknown",
+        status: "attention",
+      });
+    } finally {
+      await stopScheduledMail();
+    }
   });
 
   it("delivers a due message while its editor snapshot is open", async () => {
@@ -839,32 +935,40 @@ describe("scheduled mail delivery status", () => {
     ).rejects.toMatchObject(GONE);
   });
 
-  it("keeps the editor off a claimed email but lets the list row cancel it, which revokes the claim", async () => {
+  // The list already shows a claimed email as being sent, so every action
+  // refuses it, from the editor and from the row alike.
+  it("refuses every user action on an email the worker has claimed", async () => {
     setDeliveryStatus("preparing");
 
     await expect(
       Effect.runPromise(beginScheduledMailEdit(key, 71))
     ).rejects.toMatchObject(BEING_SENT);
-    await Effect.runPromise(cancelScheduledMailToStash(key));
-
-    expect(deliveryRow()).toBeUndefined();
-    expect(
-      connection.prepare("SELECT id FROM mail_drafts WHERE id = ?").get(draftId)
-    ).toStrictEqual({ id: draftId });
+    await expect(
+      Effect.runPromise(cancelScheduledMailToStash(key))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(discardScheduledMail(key))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(
+        sendScheduledMailNow({ ...key, allowPossibleDuplicate: false })
+      )
+    ).rejects.toMatchObject(BEING_SENT);
     await expect(
       workerStore.markSending(key, ATTEMPT_ID, Date.now())
-    ).resolves.toBeFalsy();
+    ).resolves.toBeTruthy();
   });
 
-  it("starts delivery over when the list row sends a claimed email now", async () => {
+  it("starts delivery over when the list row sends an email that needs attention now", async () => {
     connection
       .prepare(
         `UPDATE scheduled_messages
-         SET attempt_count = 3, last_attempt_at = 5, rate_limit_started_at = 4
+         SET attempt_count = 3, last_attempt_at = 5, next_attempt_at = NULL,
+             rate_limit_started_at = 4, status = 'attention',
+             attention_reason = 'rate-limit-exhausted'
          WHERE draft_id = ?`
       )
       .run(draftId);
-    setDeliveryStatus("preparing");
 
     await Effect.runPromise(
       sendScheduledMailNow({ ...key, allowPossibleDuplicate: false })
@@ -878,9 +982,6 @@ describe("scheduled mail delivery status", () => {
       rateLimitStartedAt: null,
       status: "scheduled",
     });
-    await expect(
-      workerStore.markSending(key, ATTEMPT_ID, Date.now())
-    ).resolves.toBeFalsy();
   });
 
   it("walks an attempt from claim through a rate-limit retry to sent", async () => {

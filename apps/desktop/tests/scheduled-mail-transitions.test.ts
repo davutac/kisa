@@ -35,18 +35,12 @@ describe(getScheduledMailActionRefusal, () => {
     }
   );
 
-  // The two entry points disagree on an email the worker has claimed but not
-  // begun to send. The table records that as it stands.
-  it("lets the list row act on a claimed email, which the editor refuses", () => {
-    expect(
-      ROW_ACTIONS.map((action) =>
-        getScheduledMailActionRefusal(action, "preparing")
-      )
-    ).toStrictEqual([undefined, undefined, undefined]);
-    expect(
-      EDITOR_ACTIONS.map((action) =>
-        getScheduledMailActionRefusal(action, "preparing")
-      )
-    ).toStrictEqual(EDITOR_ACTIONS.map(() => "being-sent"));
-  });
+  it.each([...EDITOR_ACTIONS, ...ROW_ACTIONS])(
+    "%s refuses an email the worker has claimed",
+    (action) => {
+      expect(getScheduledMailActionRefusal(action, "preparing")).toBe(
+        "being-sent"
+      );
+    }
+  );
 });
