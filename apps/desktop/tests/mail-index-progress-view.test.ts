@@ -12,7 +12,7 @@ describe("mail index progress view", () => {
       "Downloading and indexing your mail…"
     );
     expect(toMailIndexDescription({ status: "paused" })).toBe(
-      "Mail sync is paused until this account is reconnected."
+      "Kisa cannot sign in to this account. Select Sync now to try again. A Microsoft account signs in again through Add account; any other account has to be disconnected and added again."
     );
     expect(toMailIndexDescription({ status: "failed" })).toBe(
       "Kisa cannot reach this account's mail server and keeps trying. Select Sync now to try again now."

@@ -11,7 +11,7 @@ export const toMailIndexDescription = (
   }
 
   if (entry?.status === "paused") {
-    return "Mail sync is paused until this account is reconnected.";
+    return "Kisa cannot sign in to this account. Select Sync now to try again. A Microsoft account signs in again through Add account; any other account has to be disconnected and added again.";
   }
 
   if (entry?.status === "failed") {

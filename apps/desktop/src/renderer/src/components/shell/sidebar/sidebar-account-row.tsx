@@ -1,5 +1,5 @@
 import { useSortable } from "@dnd-kit/react/sortable";
-import { GripVerticalIcon, UserRoundIcon } from "lucide-react";
+import { CircleAlertIcon, GripVerticalIcon, UserRoundIcon } from "lucide-react";
 import { useId } from "react";
 
 import { Spinner } from "@/components/ui/spinner";
@@ -41,6 +41,33 @@ interface SidebarAccountRowProps {
   readonly view: MailboxView;
 }
 
+export type AccountRowStatus =
+  | "idle"
+  | "indexing"
+  | "needs-sign-in"
+  | "syncing";
+
+/**
+ * What the account row shows. Syncing wins, because each try to sign in
+ * again is a sync; between tries, an account whose sign-in was refused says
+ * so in place of its progress.
+ */
+export const getAccountRowStatus = ({
+  indexStatus,
+  isSyncing,
+}: {
+  readonly indexStatus: string | undefined;
+  readonly isSyncing: boolean;
+}): AccountRowStatus => {
+  if (isSyncing) {
+    return "syncing";
+  }
+  if (indexStatus === "paused") {
+    return "needs-sign-in";
+  }
+  return indexStatus === "running" ? "indexing" : "idle";
+};
+
 /**
  * The account's glyph, the same size as every other sidebar row icon. While
  * the account syncs a spinner takes its place, and while it indexes a ring
@@ -48,17 +75,18 @@ interface SidebarAccountRowProps {
  */
 const AccountStatusIcon = ({
   indexedRatio,
-  isIndexing,
-  isSyncing,
+  status,
 }: {
   readonly indexedRatio: number | undefined;
-  readonly isIndexing: boolean;
-  readonly isSyncing: boolean;
+  readonly status: AccountRowStatus;
 }) => {
-  if (isSyncing) {
+  if (status === "syncing") {
     return <Spinner />;
   }
-  if (!isIndexing) {
+  if (status === "needs-sign-in") {
+    return <CircleAlertIcon className="text-destructive" />;
+  }
+  if (status !== "indexing") {
     return <UserRoundIcon />;
   }
   return (
@@ -110,7 +138,12 @@ const SidebarAccountRow = ({
   const isHeldByFavorite = useIsHeldByFavorite(view);
   const isSyncing = useIsAccountSyncing(account.email);
   const indexProgress = useAccountIndexProgress(account.email);
-  const isIndexing = indexProgress?.status === "running";
+  const status = getAccountRowStatus({
+    indexStatus: indexProgress?.status,
+    isSyncing,
+  });
+  const isIndexing = status === "indexing";
+  const needsSignIn = status === "needs-sign-in";
   const indexedRatio = toMailIndexRatio(indexProgress);
 
   // The list item is the sortable DOM node, because sorting moves that node,
@@ -124,7 +157,7 @@ const SidebarAccountRow = ({
         ariaBusy={isSyncing || isIndexing}
         ariaControls={isExpanded ? mailboxesId : undefined}
         ariaExpanded={isExpanded}
-        ariaLabel={`${account.email}${hasUnreadMail ? ", unread email" : ""}`}
+        ariaLabel={`${account.email}${needsSignIn ? ", cannot sign in" : ""}${hasUnreadMail ? ", unread email" : ""}`}
         command={command}
         icon={
           <span
@@ -133,11 +166,7 @@ const SidebarAccountRow = ({
             ref={iconRef}
           >
             <span className="contents group-hover/account-handle:hidden">
-              <AccountStatusIcon
-                indexedRatio={indexedRatio}
-                isIndexing={isIndexing}
-                isSyncing={isSyncing}
-              />
+              <AccountStatusIcon indexedRatio={indexedRatio} status={status} />
             </span>
             <GripVerticalIcon className="hidden group-hover/account-handle:block" />
           </span>
@@ -163,6 +192,9 @@ const SidebarAccountRow = ({
             {account.displayName === undefined ? null : (
               <span className="opacity-70">{account.displayName}</span>
             )}
+            {needsSignIn ? (
+              <span className="opacity-70">Cannot sign in. See Settings.</span>
+            ) : null}
             {isIndexing ? (
               <span className="opacity-70">
                 {indexedRatio === undefined
