@@ -7,7 +7,6 @@ import type {
   MailThreadSummary,
 } from "@/shared/ipc/mail";
 
-import type { MailboxThreadsSnapshot } from "./mailbox-cache";
 import {
   getMailboxThreadsSnapshot,
   setMailboxThreadsSnapshot,
@@ -22,12 +21,19 @@ import {
   mergeAndSortThreads,
   toThreadCursor,
 } from "./mailbox-model";
+import { requestMailboxReload } from "./mailbox-reload";
+import { failMailboxLoad, retryMailboxLoad } from "./mailbox-threads-load";
+import type { MailboxThreadsLoad } from "./mailbox-threads-load";
 
 interface MailboxThreadsState {
+  /** Why the last load failed, until it is retried or the mailbox changes. */
+  error?: string;
   hasNextPage: boolean;
   isInitialLoading: boolean;
   isLoadingNextPage: boolean;
   loadNextPage: () => Promise<boolean>;
+  /** Repeats the load that failed. */
+  retry: () => void;
   threads: readonly MailThreadSummary[];
 }
 
@@ -38,7 +44,22 @@ interface MailboxThreadsOptions {
   unreadOnly?: boolean;
 }
 
-type MailboxThreadsResult = MailboxThreadsSnapshot;
+type MailboxThreadsResult = MailboxThreadsLoad;
+
+type CachedThreadPageReply = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof getMailApi>>["listCachedThreadPage"]>
+>;
+
+/** A rejected bridge call is a failed load, not a load that never ends. */
+const settleThreadPage = async (
+  request: Promise<CachedThreadPageReply>
+): Promise<CachedThreadPageReply> => {
+  try {
+    return await request;
+  } catch {
+    return { error: "Could not load mail", ok: false };
+  }
+};
 
 /**
  * Mailbox lists come only from the local cache. Searching lives in the titlebar,
@@ -103,8 +124,11 @@ export const useMailboxThreads = ({
 
     let isActive = true;
     const loadCachedFirstPage = async (merge: boolean): Promise<void> => {
-      const reply = await mailApi.listCachedThreadPage(
-        createCachedThreadPageRequest(accountIds, unreadOnly, mailbox)
+      setResult((current) => retryMailboxLoad(current, scopeKey));
+      const reply = await settleThreadPage(
+        mailApi.listCachedThreadPage(
+          createCachedThreadPageRequest(accountIds, unreadOnly, mailbox)
+        )
       );
 
       if (!(isActive && generationRef.current === generation)) {
@@ -112,11 +136,12 @@ export const useMailboxThreads = ({
       }
 
       if (!reply.ok) {
-        setResult((current) => ({
-          ...current,
-          isInitialLoading: false,
-          isLoadingNextPage: false,
-        }));
+        setResult((current) =>
+          failMailboxLoad(current, scopeKey, {
+            message: reply.error,
+            source: "first-page",
+          })
+        );
         return;
       }
 
@@ -189,7 +214,8 @@ export const useMailboxThreads = ({
   useEffect(() => {
     resultRef.current = result;
 
-    if (result.scopeKey === scopeKey) {
+    // A failed load is never cached: reopening this mailbox loads it afresh.
+    if (result.scopeKey === scopeKey && result.error === undefined) {
       setMailboxThreadsSnapshot(scopeKey, result);
     }
   }, [result, scopeKey]);
@@ -209,17 +235,19 @@ export const useMailboxThreads = ({
     isLoadingNextPageRef.current = true;
     setResult((current) =>
       current.scopeKey === scopeKey
-        ? { ...current, isLoadingNextPage: true }
+        ? { ...current, error: undefined, isLoadingNextPage: true }
         : current
     );
 
     const tailThread = threadsRef.current.at(-1);
-    const reply = await mailApi.listCachedThreadPage(
-      createCachedThreadPageRequest(
-        accountIds,
-        unreadOnly,
-        mailbox,
-        tailThread === undefined ? cacheCursor : toThreadCursor(tailThread)
+    const reply = await settleThreadPage(
+      mailApi.listCachedThreadPage(
+        createCachedThreadPageRequest(
+          accountIds,
+          unreadOnly,
+          mailbox,
+          tailThread === undefined ? cacheCursor : toThreadCursor(tailThread)
+        )
       )
     );
 
@@ -233,26 +261,40 @@ export const useMailboxThreads = ({
 
     cacheCursorRef.current = nextCacheCursor;
     isLoadingNextPageRef.current = false;
-    setResult((current) =>
-      current.scopeKey === scopeKey
+    setResult((current) => {
+      if (!reply.ok) {
+        return failMailboxLoad(current, scopeKey, {
+          message: reply.error,
+          source: "next-page",
+        });
+      }
+      return current.scopeKey === scopeKey
         ? {
             ...current,
             cacheCursor: nextCacheCursor,
             isLoadingNextPage: false,
-            threads: reply.ok
-              ? mergeAndSortThreads(current.threads, reply.data.threads)
-              : current.threads,
+            threads: mergeAndSortThreads(current.threads, reply.data.threads),
           }
-        : current
-    );
+        : current;
+    });
     return reply.ok;
   }, [accountIds, mailApi, mailbox, scopeKey, unreadOnly]);
 
+  const retry = useCallback((): void => {
+    if (resultRef.current.error?.source === "next-page") {
+      void loadNextPage();
+      return;
+    }
+    requestMailboxReload();
+  }, [loadNextPage]);
+
   return {
+    error: isCurrentScope ? result.error?.message : undefined,
     hasNextPage: currentResult.cacheCursor !== null,
     isInitialLoading: currentResult.isInitialLoading,
     isLoadingNextPage: currentResult.isLoadingNextPage,
     loadNextPage,
+    retry,
     threads: currentResult.threads,
   };
 };

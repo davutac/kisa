@@ -181,8 +181,10 @@ function getMailboxThreadListView({
   indexingMessage,
   isInitialLoading,
   isLoadingNextPage,
+  loadError,
   loadNextPage,
   mailbox,
+  onRetryLoad,
   reloadRevision,
   showAccount,
   threads,
@@ -192,8 +194,10 @@ function getMailboxThreadListView({
   readonly indexingMessage?: string;
   readonly isInitialLoading: boolean;
   readonly isLoadingNextPage: boolean;
+  readonly loadError: string | undefined;
   readonly loadNextPage: () => Promise<boolean>;
   readonly mailbox: MailboxPlace;
+  readonly onRetryLoad: () => void;
   readonly reloadRevision: number | string;
   /** Only when rows from several accounts can mix; one account needs no badge. */
   readonly showAccount: boolean;
@@ -205,8 +209,10 @@ function getMailboxThreadListView({
     hasNextPage,
     isInitialLoading,
     isLoadingNextPage,
+    loadError,
     loadNextPage,
     mailbox,
+    onRetryLoad,
     scrollResetKey: reloadRevision,
     searchResults: false,
     showAccount,
@@ -236,10 +242,12 @@ function HomeRoute() {
   });
   const search = useInlineMailSearch(accountIds, mailbox, showUnread);
   const {
+    error: loadError,
     hasNextPage,
     isInitialLoading,
     isLoadingNextPage,
     loadNextPage,
+    retry: onRetryLoad,
     threads,
   } = mailboxThreads;
   const threadActions = useThreadActions();
@@ -258,8 +266,10 @@ function HomeRoute() {
         indexingMessage,
         isInitialLoading,
         isLoadingNextPage,
+        loadError,
         loadNextPage,
         mailbox,
+        onRetryLoad,
         // Each place starts at the top of its list.
         reloadRevision: JSON.stringify([
           reloadRevision,

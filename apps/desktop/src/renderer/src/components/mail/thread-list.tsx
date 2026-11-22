@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  CircleAlertIcon,
   InboxIcon,
   SearchIcon,
   SendIcon,
@@ -18,8 +19,10 @@ import {
 } from "@/components/mail/delete-forever-confirmation";
 import MailThreadItem from "@/components/mail/thread-item";
 import ThreadSelectionBar from "@/components/mail/thread-selection-bar";
+import { Button } from "@/components/ui/button";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -31,6 +34,11 @@ import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
 import { getMailboxSystemLabel } from "@/mail/label";
 import { isLabelPlace } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";
+import {
+  getThreadListPlaceholder,
+  shouldLoadNextPage,
+} from "@/mail/mailbox-threads-load";
+import type { ThreadListPlaceholder } from "@/mail/mailbox-threads-load";
 import {
   getBulkThreadDestructiveAction,
   getThreadDestructiveAction,
@@ -61,9 +69,12 @@ export interface MailThreadListProps {
   trailingMessage?: string;
   isInitialLoading: boolean;
   isLoadingNextPage?: boolean;
+  /** Why the last load of this list failed, while it has not been retried. */
+  loadError?: string;
   loadingTitle?: string;
   loadNextPage?: () => Promise<boolean>;
   mailbox?: MailboxPlace;
+  onRetryLoad?: () => void;
   scrollResetKey: number | string;
   searchResults?: boolean;
   showAccount?: boolean;
@@ -123,6 +134,111 @@ const getThreadListPresentation = (
   return { emptyIcon: <InboxIcon />, label: "Inbox", mailboxLabel };
 };
 
+interface ThreadListPlaceholderView {
+  readonly description?: string;
+  readonly icon: React.ReactNode;
+  readonly title: string;
+}
+
+interface ThreadListPlaceholderCopy {
+  readonly emptyIcon: React.ReactNode;
+  readonly emptyMessage: string;
+  readonly emptyTitle: string;
+  readonly loadError: string | undefined;
+  readonly loadingTitle: string;
+}
+
+const getThreadListPlaceholderView = (
+  placeholder: ThreadListPlaceholder,
+  copy: ThreadListPlaceholderCopy
+): ThreadListPlaceholderView => {
+  if (placeholder === "loading") {
+    return { icon: <Spinner />, title: copy.loadingTitle };
+  }
+  if (placeholder === "failed") {
+    return {
+      description: copy.loadError,
+      icon: <CircleAlertIcon />,
+      title: "Could not load this mailbox",
+    };
+  }
+  return {
+    description: copy.emptyMessage,
+    icon: copy.emptyIcon,
+    title: copy.emptyTitle,
+  };
+};
+
+const RetryLoadButton = ({ onRetry }: { readonly onRetry?: () => void }) =>
+  onRetry === undefined ? null : (
+    <Button onClick={onRetry} size="xs" type="button" variant="secondary">
+      Try again
+    </Button>
+  );
+
+/** What the list shows in place of rows: loading, empty, or a failed load. */
+const ThreadListPlaceholderPane = ({
+  copy,
+  isInitialLoading,
+  onRetryLoad,
+  threadCount,
+}: {
+  readonly copy: ThreadListPlaceholderCopy;
+  readonly isInitialLoading: boolean;
+  readonly onRetryLoad: (() => void) | undefined;
+  readonly threadCount: number;
+}) => {
+  const placeholder = getThreadListPlaceholder({
+    hasLoadError: copy.loadError !== undefined,
+    isInitialLoading,
+    threadCount,
+  });
+  if (placeholder === undefined) {
+    return null;
+  }
+  const view = getThreadListPlaceholderView(placeholder, copy);
+
+  return (
+    <Empty aria-live="polite" className="absolute inset-4 w-auto border-0">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">{view.icon}</EmptyMedia>
+        <EmptyTitle>{view.title}</EmptyTitle>
+        {view.description === undefined ? null : (
+          <EmptyDescription>{view.description}</EmptyDescription>
+        )}
+      </EmptyHeader>
+      {placeholder === "failed" ? (
+        <EmptyContent>
+          <RetryLoadButton onRetry={onRetryLoad} />
+        </EmptyContent>
+      ) : null}
+    </Empty>
+  );
+};
+
+/** The row after the last conversation: a failed load, paging, or a note. */
+const ThreadListTrailingNote = ({
+  hasNextPage,
+  loadError,
+  onRetryLoad,
+  trailingMessage,
+}: {
+  readonly hasNextPage: boolean;
+  readonly loadError: string | undefined;
+  readonly onRetryLoad: (() => void) | undefined;
+  readonly trailingMessage: string | undefined;
+}) =>
+  loadError === undefined ? (
+    <p aria-live="polite" className="text-muted-foreground text-center text-sm">
+      {hasNextPage ? "Fetching the next chapter…" : trailingMessage}
+    </p>
+  ) : (
+    <div className="flex items-center justify-center gap-2">
+      <output className="text-destructive text-sm">{loadError}</output>
+      <RetryLoadButton onRetry={onRetryLoad} />
+    </div>
+  );
+
 const MailThreadList = ({
   actions,
   emptyMessage,
@@ -131,9 +247,11 @@ const MailThreadList = ({
   trailingMessage,
   isInitialLoading,
   isLoadingNextPage = false,
+  loadError,
   loadingTitle = "Checking the post…",
   loadNextPage,
   mailbox = "inbox",
+  onRetryLoad,
   scrollResetKey,
   searchResults = false,
   showAccount = false,
@@ -168,7 +286,11 @@ const MailThreadList = ({
   });
   // The trailing row can be a paging trigger or a passive note. Auto-load still
   // keys off `hasNextPage`, so a note cannot start a paging loop.
-  const hasTrailingRow = hasNextPage || trailingMessage !== undefined;
+  // A failure with rows on screen is reported after them; without rows the
+  // placeholder reports it.
+  const trailingError = threads.length > 0 ? loadError : undefined;
+  const hasTrailingRow =
+    hasNextPage || trailingMessage !== undefined || trailingError !== undefined;
   const presentation = getThreadListPresentation(searchResults, mailbox);
   // The floating selection bar (bottom-4 plus its 44px height) would cover
   // the last row, so the list reserves room below it while it is shown.
@@ -437,20 +559,22 @@ const MailThreadList = ({
   }, [scrollResetKey]);
 
   useEffect(() => {
-    const lastRow = virtualRows.at(-1);
-
     if (
-      lastRow !== undefined &&
-      lastRow.index >= threads.length - 1 &&
-      hasNextPage &&
-      !isLoadingNextPage &&
-      loadNextPage !== undefined
+      loadNextPage !== undefined &&
+      shouldLoadNextPage({
+        hasLoadError: loadError !== undefined,
+        hasNextPage,
+        isLoadingNextPage,
+        lastVisibleIndex: virtualRows.at(-1)?.index,
+        threadCount: threads.length,
+      })
     ) {
       void loadNextPage();
     }
   }, [
     hasNextPage,
     isLoadingNextPage,
+    loadError,
     loadNextPage,
     threads.length,
     virtualRows,
@@ -465,24 +589,18 @@ const MailThreadList = ({
         style={{ paddingBottom: bottomClearance }}
         tabIndex={-1}
       >
-        {threads.length === 0 ? (
-          <Empty
-            aria-live="polite"
-            className="absolute inset-4 w-auto border-0"
-          >
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                {isInitialLoading ? <Spinner /> : presentation.emptyIcon}
-              </EmptyMedia>
-              <EmptyTitle>
-                {isInitialLoading ? loadingTitle : emptyTitle}
-              </EmptyTitle>
-              {isInitialLoading ? null : (
-                <EmptyDescription>{emptyMessage}</EmptyDescription>
-              )}
-            </EmptyHeader>
-          </Empty>
-        ) : null}
+        <ThreadListPlaceholderPane
+          copy={{
+            emptyIcon: presentation.emptyIcon,
+            emptyMessage,
+            emptyTitle,
+            loadError,
+            loadingTitle,
+          }}
+          isInitialLoading={isInitialLoading}
+          onRetryLoad={onRetryLoad}
+          threadCount={threads.length}
+        />
         <ol
           className="relative"
           ref={listElementRef}
@@ -500,14 +618,12 @@ const MailThreadList = ({
                   ref={rowVirtualizer.measureElement}
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  <p
-                    aria-live="polite"
-                    className="text-muted-foreground text-center text-sm"
-                  >
-                    {hasNextPage
-                      ? "Fetching the next chapter…"
-                      : trailingMessage}
-                  </p>
+                  <ThreadListTrailingNote
+                    hasNextPage={hasNextPage}
+                    loadError={trailingError}
+                    onRetryLoad={onRetryLoad}
+                    trailingMessage={trailingMessage}
+                  />
                 </li>
               ) : (
                 <MailThreadItem
