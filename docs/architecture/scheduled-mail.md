@@ -50,7 +50,7 @@ Opening a scheduled item loads an editable snapshot that remains usable until th
 
 The scheduled draft's From account stays fixed while editing, including when an account-scoped composer template is applied.
 
-An item that becomes due while its editor is open continues through normal delivery. Once the worker claims it, edit and cancel lose the race and return an already-sending result. Confirmed delivery removes the item and the renderer closes its matching editor automatically.
+An item that becomes due while its editor is open continues through normal delivery. Once the worker claims it, the editor's actions lose the race and return an already-sending result. Cancel schedule and Discard from the list still apply to a claimed item until the send itself begins, and revoke the claim; once it is sending they lose the race too. Every change the worker or the user makes to a stored item's delivery status, with the statuses it may start from, is listed in one table in `scheduled-mail-transitions.ts`, which the statements that write the status take their conditions and values from. Confirmed delivery removes the item and the renderer closes its matching editor automatically.
 
 Main alone decides whether sending again risks a duplicate, because an open editor's snapshot can be older than the attempt that left the outcome unknown. Reschedule and Send now therefore never claim the user's acknowledgement up front. When the stored item is outcome-unknown and the request carries no acknowledgement, main changes nothing and answers `possible-duplicate`; the editor then asks the user and, only if they agree, sends the same action again with the acknowledgement set.
 

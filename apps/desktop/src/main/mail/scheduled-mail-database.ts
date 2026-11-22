@@ -29,6 +29,11 @@ import { parseMailbox } from "./mail-address";
 import { recoverMissingInlineContentIds } from "./outgoing-attachment-files";
 import { claimFirstAvailableScheduledMail } from "./scheduled-mail-claim-pages";
 import { ScheduledMailError, scheduledMailError } from "./scheduled-mail-error";
+import {
+  entered,
+  getScheduledMailSourceStatuses,
+} from "./scheduled-mail-transitions";
+import type { ScheduledMailTransitionName } from "./scheduled-mail-transitions";
 import type {
   ClaimedScheduledMail,
   RecoverableScheduledMail,
@@ -83,6 +88,10 @@ export const runScheduledMailDatabase = <A>(
   run: (database: RemoteDatabaseClient) => Promise<A>,
   message = "Could not update scheduled email"
 ): Promise<A> => Effect.runPromise(withScheduledMailDatabase(run, message));
+
+/** The statuses a transition may start from, as its `WHERE` condition. */
+const statusAllows = (name: ScheduledMailTransitionName) =>
+  inArray(scheduledMessages.status, [...getScheduledMailSourceStatuses(name)]);
 
 export const accountOwnsScheduledDraft = (key: ScheduledMailKey) =>
   sql<boolean>`exists (
@@ -257,16 +266,14 @@ export const makeDatabaseScheduledMailWorkerStore = (
               const updated = await transaction
                 .update(scheduledMessages)
                 .set({
-                  attemptId,
-                  nextAttemptAt: null,
+                  ...entered.preparing(attemptId),
                   revision: row.schedule.revision + 1,
-                  status: "preparing",
                   updatedAt: now,
                 })
                 .where(
                   and(
                     eq(scheduledMessages.draftId, key.draftId),
-                    eq(scheduledMessages.status, "scheduled"),
+                    statusAllows("claim"),
                     eq(scheduledMessages.revision, row.schedule.revision),
                     accountOwnsScheduledDraft(key)
                   )
@@ -396,15 +403,15 @@ export const makeDatabaseScheduledMailWorkerStore = (
         .update(scheduledMessages)
         .set({
           attemptCount: sql`${scheduledMessages.attemptCount} + 1`,
+          ...entered.sending(),
           lastAttemptAt: now,
           revision: sql`${scheduledMessages.revision} + 1`,
-          status: "sending",
           updatedAt: now,
         })
         .where(
           and(
             eq(scheduledMessages.draftId, item.draftId),
-            eq(scheduledMessages.status, "preparing"),
+            statusAllows("mark-sending"),
             eq(scheduledMessages.attemptId, attemptId),
             accountOwnsScheduledDraft(item)
           )
@@ -428,16 +435,14 @@ export const makeDatabaseScheduledMailWorkerStore = (
       const rows = await database
         .update(scheduledMessages)
         .set({
-          attemptId: null,
-          nextAttemptAt,
+          ...entered.scheduled(nextAttemptAt),
           revision: sql`${scheduledMessages.revision} + 1`,
-          status: "scheduled",
           updatedAt: now,
         })
         .where(
           and(
             eq(scheduledMessages.draftId, item.draftId),
-            eq(scheduledMessages.status, "preparing"),
+            statusAllows("release-preparation"),
             eq(scheduledMessages.attemptId, attemptId),
             accountOwnsScheduledDraft(item)
           )
@@ -457,22 +462,16 @@ export const makeDatabaseScheduledMailWorkerStore = (
     return runScheduledMailDatabase(async (database) => {
       const attemptPredicate =
         attemptId === undefined
-          ? eq(scheduledMessages.status, "sending")
+          ? statusAllows("reconcile-attention")
           : and(
-              inArray(scheduledMessages.status, ["preparing", "sending"]),
+              statusAllows("mark-attention"),
               eq(scheduledMessages.attemptId, attemptId)
             );
       const rows = await database
         .update(scheduledMessages)
         .set({
-          attemptId: null,
-          attentionReason: reason,
-          nextAttemptAt: null,
-          notificationClaimId: null,
-          notificationClaimedAt: null,
-          notifiedAt: null,
+          ...entered.attention(reason),
           revision: sql`${scheduledMessages.revision} + 1`,
-          status: "attention",
           updatedAt: now,
         })
         .where(
@@ -499,22 +498,16 @@ export const makeDatabaseScheduledMailWorkerStore = (
     return runScheduledMailDatabase(async (database) => {
       const attemptPredicate =
         attemptId === undefined
-          ? eq(scheduledMessages.status, "sending")
+          ? statusAllows("mark-sent")
           : and(
-              eq(scheduledMessages.status, "sending"),
+              statusAllows("mark-sent"),
               eq(scheduledMessages.attemptId, attemptId)
             );
       const rows = await database
         .update(scheduledMessages)
         .set({
-          attemptId: null,
-          attentionReason: null,
-          nextAttemptAt: null,
-          notificationClaimId: null,
-          notificationClaimedAt: null,
-          notifiedAt: null,
+          ...entered.sent(),
           revision: sql`${scheduledMessages.revision} + 1`,
-          status: "sent",
           updatedAt: now,
         })
         .where(
@@ -538,13 +531,11 @@ export const makeDatabaseScheduledMailWorkerStore = (
       await database
         .update(scheduledMessages)
         .set({
-          attemptId: null,
-          nextAttemptAt: sql`${scheduledMessages.scheduledAt}`,
+          ...entered.scheduled(sql`${scheduledMessages.scheduledAt}`),
           revision: sql`${scheduledMessages.revision} + 1`,
-          status: "scheduled",
           updatedAt: now,
         })
-        .where(eq(scheduledMessages.status, "preparing"))
+        .where(statusAllows("reset-preparing"))
         .run();
     });
   },
@@ -559,17 +550,15 @@ export const makeDatabaseScheduledMailWorkerStore = (
       const rows = await database
         .update(scheduledMessages)
         .set({
-          attemptId: null,
-          nextAttemptAt,
+          ...entered.scheduled(nextAttemptAt),
           rateLimitStartedAt,
           revision: sql`${scheduledMessages.revision} + 1`,
-          status: "scheduled",
           updatedAt: now,
         })
         .where(
           and(
             eq(scheduledMessages.draftId, item.draftId),
-            eq(scheduledMessages.status, "sending"),
+            statusAllows("retry-after-rate-limit"),
             eq(scheduledMessages.attemptId, item.attemptId),
             accountOwnsScheduledDraft(item)
           )
