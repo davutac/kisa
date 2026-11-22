@@ -19,6 +19,7 @@ import {
   getMailboxScopeKey,
   getThreadListChangeAccountId,
   mergeAndSortThreads,
+  replaceFirstPage,
   toThreadCursor,
 } from "./mailbox-model";
 import { requestMailboxReload } from "./mailbox-reload";
@@ -88,6 +89,9 @@ export const useMailboxThreads = ({
   const cacheCursorRef = useRef<MailThreadCursor | null>(result.cacheCursor);
   const generationRef = useRef(0);
   const isLoadingNextPageRef = useRef(false);
+  // Counts list events for this mailbox, so a first page read while one
+  // arrived is not taken as the truth about rows the event just changed.
+  const listEventCountRef = useRef(0);
   const reloadRevisionRef = useRef(reloadRevision);
   const resultRef = useRef(result);
   const threadsRef = useRef<readonly MailThreadSummary[]>(result.threads);
@@ -123,7 +127,11 @@ export const useMailboxThreads = ({
     }
 
     let isActive = true;
-    const loadCachedFirstPage = async (merge: boolean): Promise<void> => {
+    const loadCachedFirstPage = async (
+      merge: boolean,
+      isRepeat = false
+    ): Promise<void> => {
+      const listEventsBefore = listEventCountRef.current;
       setResult((current) => retryMailboxLoad(current, scopeKey));
       const reply = await settleThreadPage(
         mailApi.listCachedThreadPage(
@@ -150,18 +158,39 @@ export const useMailboxThreads = ({
         merge && threadsRef.current.length > reply.data.threads.length
           ? cacheCursorRef.current
           : firstPageCursor;
+      // A list event that arrived during the read may name a row this page
+      // predates; dropping rows on its word could drop new mail. Such a page
+      // is only merged, and read once more.
+      const isPageCurrent = listEventCountRef.current === listEventsBefore;
 
       cacheCursorRef.current = cacheCursor;
-      setResult((current) => ({
-        cacheCursor,
-        isInitialLoading: false,
-        isLoadingNextPage: false,
-        scopeKey,
-        threads:
-          merge && current.scopeKey === scopeKey
-            ? mergeAndSortThreads(current.threads, reply.data.threads)
-            : reply.data.threads,
-      }));
+      setResult((current) => {
+        if (!(merge && current.scopeKey === scopeKey)) {
+          return {
+            cacheCursor,
+            isInitialLoading: false,
+            isLoadingNextPage: false,
+            scopeKey,
+            threads: reply.data.threads,
+          };
+        }
+        return {
+          cacheCursor,
+          isInitialLoading: false,
+          isLoadingNextPage: false,
+          scopeKey,
+          threads: isPageCurrent
+            ? replaceFirstPage(
+                current.threads,
+                reply.data.threads,
+                firstPageCursor !== null
+              )
+            : mergeAndSortThreads(current.threads, reply.data.threads),
+        };
+      });
+      if (merge && !isPageCurrent && !isRepeat) {
+        void loadCachedFirstPage(true, true);
+      }
     };
 
     const unsubscribeThreadList = mailApi.onThreadListUpdated(({ changes }) => {
@@ -175,6 +204,7 @@ export const useMailboxThreads = ({
         return;
       }
 
+      listEventCountRef.current += 1;
       setResult((current) => ({
         ...current,
         threads: applyThreadListChanges(current.threads, relevantChanges),

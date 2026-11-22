@@ -71,6 +71,8 @@ export interface MailThreadListProps {
   isLoadingNextPage?: boolean;
   /** Why the last load of this list failed, while it has not been retried. */
   loadError?: string;
+  /** The heading for a failed load with nothing to show. */
+  loadErrorTitle?: string;
   loadingTitle?: string;
   loadNextPage?: () => Promise<boolean>;
   mailbox?: MailboxPlace;
@@ -145,6 +147,7 @@ interface ThreadListPlaceholderCopy {
   readonly emptyMessage: string;
   readonly emptyTitle: string;
   readonly loadError: string | undefined;
+  readonly loadErrorTitle: string;
   readonly loadingTitle: string;
 }
 
@@ -159,7 +162,7 @@ const getThreadListPlaceholderView = (
     return {
       description: copy.loadError,
       icon: <CircleAlertIcon />,
-      title: "Could not load this mailbox",
+      title: copy.loadErrorTitle,
     };
   }
   return {
@@ -248,6 +251,7 @@ const MailThreadList = ({
   isInitialLoading,
   isLoadingNextPage = false,
   loadError,
+  loadErrorTitle = "Could not load this mailbox",
   loadingTitle = "Checking the post…",
   loadNextPage,
   mailbox = "inbox",
@@ -595,6 +599,7 @@ const MailThreadList = ({
             emptyMessage,
             emptyTitle,
             loadError,
+            loadErrorTitle,
             loadingTitle,
           }}
           isInitialLoading={isInitialLoading}

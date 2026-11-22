@@ -28,6 +28,24 @@ const compareAscending = (left: string, right: string): number => {
   return left < right ? -1 : 1;
 };
 
+/** The list's order: newest first, the same as the cache's page query. */
+const compareThreads = (
+  left: MailThreadSummary,
+  right: MailThreadSummary
+): number => {
+  const latestAtOrder = right.latestAt - left.latestAt;
+
+  if (latestAtOrder !== 0) {
+    return latestAtOrder;
+  }
+
+  const accountOrder = compareAscending(left.accountId, right.accountId);
+
+  return accountOrder === 0
+    ? compareAscending(left.threadId, right.threadId)
+    : accountOrder;
+};
+
 export const mergeAndSortThreads = (
   ...groups: readonly (readonly MailThreadSummary[])[]
 ): readonly MailThreadSummary[] => {
@@ -39,19 +57,7 @@ export const mergeAndSortThreads = (
     }
   }
 
-  return [...threadsById.values()].toSorted((left, right) => {
-    const latestAtOrder = right.latestAt - left.latestAt;
-
-    if (latestAtOrder !== 0) {
-      return latestAtOrder;
-    }
-
-    const accountOrder = compareAscending(left.accountId, right.accountId);
-
-    return accountOrder === 0
-      ? compareAscending(left.threadId, right.threadId)
-      : accountOrder;
-  });
+  return [...threadsById.values()].toSorted(compareThreads);
 };
 
 // The same rule as the cache's thread page query, applied to live updates.
@@ -145,3 +151,23 @@ export const getMailboxScopeKey = (
   mailbox: MailboxPlace = "inbox"
 ): string =>
   `${getMailboxPlaceKey(mailbox)}\u0001${unreadOnly ? "unread" : "all"}\u0001${accountIds.join("\u0000")}`;
+
+/**
+ * A freshly read first page, laid over the rows already listed. Within the
+ * page's range the page is the truth, so a row it lacks has left the mailbox
+ * even if no event said so. Rows beyond its last one, from later pages, are
+ * kept until a page covers them; when the page is the whole mailbox there is
+ * nothing beyond it.
+ */
+export const replaceFirstPage = (
+  current: readonly MailThreadSummary[],
+  page: readonly MailThreadSummary[],
+  hasMore: boolean
+): readonly MailThreadSummary[] => {
+  const last = page.at(-1);
+  const beyond =
+    hasMore && last !== undefined
+      ? current.filter((thread) => compareThreads(thread, last) > 0)
+      : [];
+  return mergeAndSortThreads(beyond, page);
+};

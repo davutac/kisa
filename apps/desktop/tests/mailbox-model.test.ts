@@ -5,6 +5,7 @@ import {
   filterThreadsByScope,
   getMailboxScopeKey,
   mergeAndSortThreads,
+  replaceFirstPage,
 } from "../src/renderer/src/mail/mailbox-model";
 import type { MailThreadSummary } from "../src/shared/ipc/mail";
 
@@ -40,6 +41,55 @@ describe(mergeAndSortThreads, () => {
       replacement,
       middle,
     ]);
+  });
+});
+
+describe(replaceFirstPage, () => {
+  const newest = makeThread("one@example.com", "newest", 500);
+  const gone = makeThread("one@example.com", "gone", 400);
+  const kept = makeThread("one@example.com", "kept", 300);
+  const beyond = makeThread("one@example.com", "beyond", 100);
+
+  // A conversation that left the mailbox while no event said so is listed
+  // until something drops it. A fresh first page covers its range.
+  it("drops listed rows inside the fresh first page that the page no longer has", () => {
+    expect(
+      replaceFirstPage([newest, gone, kept, beyond], [newest, kept], true)
+    ).toStrictEqual([newest, kept, beyond]);
+  });
+
+  it("drops every row the page lacks when the page is the whole mailbox", () => {
+    expect(
+      replaceFirstPage([newest, gone, kept, beyond], [newest, kept], false)
+    ).toStrictEqual([newest, kept]);
+    expect(replaceFirstPage([newest, gone], [], false)).toStrictEqual([]);
+  });
+
+  // Server dates have one-second resolution, so ties are common. The list
+  // breaks them as the page query does: account, then thread id.
+  it("keeps a row tied with the page's last row that sorts after it", () => {
+    const last = makeThread("one@example.com", "m", 300);
+    const tiedBefore = makeThread("one@example.com", "a", 300);
+    const tiedAfter = makeThread("one@example.com", "z", 300);
+    const tiedOtherAccount = makeThread("two@example.com", "a", 300);
+
+    expect(
+      replaceFirstPage(
+        [tiedBefore, last, tiedAfter, tiedOtherAccount],
+        [last],
+        true
+      )
+    ).toStrictEqual([last, tiedAfter, tiedOtherAccount]);
+  });
+
+  it("takes the page's newer copy of a row", () => {
+    const updated = makeThread("one@example.com", "kept", 300, {
+      subject: "Updated",
+    });
+
+    expect(
+      replaceFirstPage([newest, kept], [newest, updated], true)
+    ).toStrictEqual([newest, updated]);
   });
 });
 

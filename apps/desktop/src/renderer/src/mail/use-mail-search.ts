@@ -1,8 +1,9 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useState } from "react";
 
 import { getMailApi } from "@/platform/desktop";
 import type {
   MailAddressRole,
+  MailSearchResultsReply,
   MailSenderSuggestion,
   MailThreadListChange,
   MailThreadSummary,
@@ -27,12 +28,17 @@ const SEARCH_RESULT_LIMIT = 200;
 const SENDER_SUGGESTION_LIMIT = 50;
 
 export interface MailSearchState {
+  /** Why the search failed; a failed search is not one with no matches. */
+  error?: string;
   hasMore: boolean;
   isLoading: boolean;
+  /** Runs the same search again. */
+  retry: () => void;
   threads: readonly MailThreadSummary[];
 }
 
 interface LoadedResults {
+  error?: string;
   hasMore: boolean;
   /** The request these results answer; loading is `key !==` the live one. */
   key: string;
@@ -41,10 +47,30 @@ interface LoadedResults {
 
 const NO_RESULTS: LoadedResults = { hasMore: false, key: "", threads: [] };
 
+/** A search that has not run has nothing to try again. */
+const NOTHING_TO_RETRY = (): void => undefined;
+
 const EMPTY_STATE: MailSearchState = {
   hasMore: false,
   isLoading: false,
+  retry: NOTHING_TO_RETRY,
   threads: [],
+};
+
+/**
+ * What one search request answered. `undefined` is a request that never
+ * answered at all, such as a rejected bridge call.
+ */
+export const toLoadedSearchResults = (
+  key: string,
+  reply: MailSearchResultsReply | undefined
+): LoadedResults => {
+  if (reply === undefined) {
+    return { ...NO_RESULTS, error: "Could not search your mail", key };
+  }
+  return reply.ok
+    ? { hasMore: reply.data.hasMore, key, threads: reply.data.threads }
+    : { ...NO_RESULTS, error: reply.error, key };
 };
 
 /**
@@ -106,21 +132,16 @@ export const useMailSearch = (
     let isActive = true;
     const timeout = window.setTimeout(() => {
       void (async () => {
-        const reply = await searchMail();
-
-        if (!isActive || reply === undefined) {
-          return;
+        let reply: MailSearchResultsReply | undefined;
+        try {
+          reply = await searchMail();
+        } catch {
+          reply = undefined;
         }
 
-        setResults(
-          reply.ok
-            ? {
-                hasMore: reply.data.hasMore,
-                key: requestKey,
-                threads: reply.data.threads,
-              }
-            : { ...NO_RESULTS, key: requestKey }
-        );
+        if (isActive) {
+          setResults(toLoadedSearchResults(requestKey, reply));
+        }
       })();
     }, SEARCH_DEBOUNCE_MS);
 
@@ -131,10 +152,17 @@ export const useMailSearch = (
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `revision` reruns the search when new mail for these accounts is indexed.
   }, [isReady, mailApi, requestKey, revision]);
 
+  const retry = useCallback((): void => {
+    setResults(NO_RESULTS);
+    setRevision((current) => current + 1);
+  }, []);
+
   return isReady
     ? {
+        error: results.key === requestKey ? results.error : undefined,
         hasMore: results.hasMore,
         isLoading: results.key !== requestKey,
+        retry,
         threads: results.threads,
       }
     : EMPTY_STATE;
