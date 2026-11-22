@@ -15,7 +15,7 @@ describe("mail index progress view", () => {
       "Mail sync is paused until this account is reconnected."
     );
     expect(toMailIndexDescription({ status: "failed" })).toBe(
-      "Mail sync stopped. Select Sync now to try again."
+      "Kisa cannot reach this account's mail server and keeps trying. Select Sync now to try again now."
     );
     expect(toMailIndexDescription({ status: "complete" })).toBe(
       "Kisa keeps this account's mail downloaded, searchable, and up to date on its own."

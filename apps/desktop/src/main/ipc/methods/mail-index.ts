@@ -29,10 +29,11 @@ export const reindexMail = makeIpcMethod({
   channel: MAIL_REINDEX_CHANNEL,
   handler: (request) =>
     // The engine keeps the whole account in step on its own; a reindex
-    // request wakes it so it catches up now.
+    // request wakes it so it catches up now. It is the user asking, which
+    // also retries a sign-in the server refused.
     toIpcReply(
       Effect.sync(() => {
-        requestMailSync(request.accountId);
+        requestMailSync(request.accountId, "user");
       }),
       "Could not check for new mail"
     ),

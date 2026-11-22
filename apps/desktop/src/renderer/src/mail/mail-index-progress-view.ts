@@ -15,7 +15,7 @@ export const toMailIndexDescription = (
   }
 
   if (entry?.status === "failed") {
-    return "Mail sync stopped. Select Sync now to try again.";
+    return "Kisa cannot reach this account's mail server and keeps trying. Select Sync now to try again now.";
   }
 
   return "Kisa keeps this account's mail downloaded, searchable, and up to date on its own.";

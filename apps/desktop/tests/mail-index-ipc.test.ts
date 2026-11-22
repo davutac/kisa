@@ -42,7 +42,11 @@ describe("mail reindex IPC", () => {
       });
 
       expect(reindexMail.channel).toBe(MAIL_REINDEX_CHANNEL);
-      expect(state.requestMailSync).toHaveBeenCalledWith("person@example.com");
+      // Sync now is the user asking, which also retries a refused sign-in.
+      expect(state.requestMailSync).toHaveBeenCalledWith(
+        "person@example.com",
+        "user"
+      );
       expect(reply).toStrictEqual({ data: undefined, ok: true });
     })
   );

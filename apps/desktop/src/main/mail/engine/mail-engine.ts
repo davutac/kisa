@@ -1,5 +1,3 @@
-import { setTimeout as wait } from "node:timers/promises";
-
 import { mailMailboxes, mailMessages } from "@repo/database/schemas";
 import { fetchAttachment } from "@repo/mail/attachments";
 import { dialects } from "@repo/mail/dialects";
@@ -24,13 +22,11 @@ import {
 import type { SyncScope } from "@repo/mail/sync";
 import { and, eq, sql } from "drizzle-orm";
 import {
-  Cause,
   Effect,
   Exit,
   Layer,
   ManagedRuntime,
   Option,
-  Result,
   Schema,
   Semaphore,
 } from "effect";
@@ -68,6 +64,8 @@ import { dismissInactiveThreadNotifications } from "../new-mail-notifications";
 import { getSenderBrand } from "../sender-brand";
 import { loadTrustedImageSenderCheck } from "../trusted-image-senders";
 import { refreshUnreadBadge } from "../unread-badge";
+import { createAccountWorker, toCycleOutcome } from "./account-worker";
+import type { AccountWorker, SyncRequestSource } from "./account-worker";
 import { ImapFlowConnectorLive } from "./imap-session";
 import { announceArrivals } from "./mail-arrivals";
 import type { ArrivalActions } from "./mail-arrivals";
@@ -270,22 +268,27 @@ export const publishChanges = Effect.fn("MailEngine.publishChanges")(
   }
 );
 
-const syncingAccountIds = new Set<string>();
+/**
+ * One background loop per connected account. A worker's phase is the only
+ * record of what its loop is doing: the syncing list and the index status
+ * the windows receive are both derived from it.
+ */
+const workers = new Map<string, AccountWorker>();
 
-const setSyncing = (accountId: string, isSyncing: boolean): void => {
-  if (isSyncing) {
-    syncingAccountIds.add(accountId);
-  } else {
-    syncingAccountIds.delete(accountId);
-  }
-  sendRendererEvent(MAIL_SYNC_STATUS_CHANNEL, MailSyncStatus, {
-    accountIds: [...syncingAccountIds],
-  });
-};
-
+/** The accounts whose loop is in its catch-up pass right now. */
 export const getMailEngineSyncStatus = (): MailSyncStatus => ({
-  accountIds: [...syncingAccountIds],
+  accountIds: [...workers]
+    .filter(([, worker]) => worker.phase().kind === "syncing")
+    .map(([accountId]) => accountId),
 });
+
+const sendSyncStatus = (): void => {
+  sendRendererEvent(
+    MAIL_SYNC_STATUS_CHANNEL,
+    MailSyncStatus,
+    getMailEngineSyncStatus()
+  );
+};
 
 const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
   function* readIndexProgress(accountId: string) {
@@ -361,7 +364,16 @@ const publishProgress = Effect.fn("MailEngine.publishProgress")(
     }
     progressPublishedAt.set(accountId, now);
     const progress = yield* readIndexProgress(accountId);
-    latestProgress.set(accountId, progress);
+    // Read at write time: the account may have been disconnected, or its
+    // loop may have moved on, while the counts were being read.
+    const worker = workers.get(accountId);
+    if (worker === undefined) {
+      return;
+    }
+    latestProgress.set(accountId, {
+      ...progress,
+      status: worker.indexStatus() ?? progress.status,
+    });
     yield* Effect.sync(sendIndexProgress);
   }
 );
@@ -394,21 +406,27 @@ const notificationActions: ArrivalActions = {
  * work is left, so the loop knows whether to continue at once or wait.
  */
 const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
-  function* backgroundCycle(accountId: string) {
+  function* backgroundCycle(
+    accountId: string,
+    cycle: { readonly syncPassEnded: (caughtUp: boolean) => void }
+  ) {
     const account = yield* requireAccount(accountId);
 
     return yield* withAccountSession(account, "background", (session) =>
       Effect.gen(function* runCycle() {
         const scope = scopeOf(account, session);
 
-        yield* Effect.sync(() => setSyncing(accountId, true));
         const synced = yield* syncAccount({
           ...scope,
           // Taken per mailbox, so a change the user makes waits for one
           // mailbox at most rather than the whole pass.
           exclusive: (effect) => withCacheLock(accountId, effect),
         }).pipe(
-          Effect.ensuring(Effect.sync(() => setSyncing(accountId, false)))
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              cycle.syncPassEnded(Exit.isSuccess(exit));
+            })
+          )
         );
         yield* publishChanges(accountId, synced);
         yield* announceArrivals(
@@ -455,101 +473,66 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
   }
 );
 
-interface AccountWorker {
-  wake?: (() => void) | undefined;
-}
-
-const workers = new Map<string, AccountWorker>();
 let isEngineRunning = false;
 
-/** Waits for `milliseconds`, or less if the account is woken or stopped. */
-const sleep = async (
-  milliseconds: number,
-  signal: AbortSignal,
-  worker: AccountWorker
-): Promise<void> => {
-  const wake = new AbortController();
-  worker.wake = () => {
-    wake.abort();
-  };
-
-  try {
-    await wait(milliseconds, undefined, {
-      signal: AbortSignal.any([signal, wake.signal]),
-    });
-  } catch {
-    // Woken early, or the account stopped: either way the wait is over.
-  } finally {
-    worker.wake = undefined;
-  }
-};
-
-const failureOf = <E>(exit: Exit.Exit<unknown, E>): E | undefined => {
-  if (Exit.isSuccess(exit)) {
-    return;
-  }
-  const found = Cause.findError(exit.cause);
-  return Result.isSuccess(found) ? found.success : undefined;
-};
-
 /**
- * Keeps one account in step for as long as it is connected. Runs under the
- * account's work supervisor, so disconnecting aborts it and waits for it.
- * A refused sign-in stops the loop until the account is connected again.
+ * Starts an account's loop under its work supervisor, so disconnecting
+ * aborts it and waits for it. A refused sign-in parks the loop until the
+ * account is connected again or the user asks to sync; only a missing
+ * account ends it.
  */
 const startAccountWorker = (accountId: string): void => {
   if (!isEngineRunning || workers.has(accountId)) {
     return;
   }
 
-  const worker: AccountWorker = {};
+  let isSyncing = false;
+  let indexStatus: ReturnType<AccountWorker["indexStatus"]>;
+  const worker = createAccountWorker({
+    now: Date.now,
+    onPhaseChange: (phase) => {
+      if (workers.get(accountId) !== worker) {
+        return;
+      }
+      if (isSyncing !== (phase.kind === "syncing")) {
+        isSyncing = phase.kind === "syncing";
+        sendSyncStatus();
+      }
+      // The worker changes its phase whenever its trouble begins or ends.
+      const nextIndexStatus = worker.indexStatus();
+      if (indexStatus !== nextIndexStatus) {
+        indexStatus = nextIndexStatus;
+        // A cycle publishes progress only after a sync pass that worked, so
+        // an account refused from the start would otherwise have no entry.
+        void runEngineExit(publishProgress(accountId, true));
+      }
+    },
+    pollIntervalMs: POLL_INTERVAL_MS,
+    retryDelaysMs: RETRY_DELAYS_MS,
+    runCycle: async (cycle, signal) =>
+      toCycleOutcome(
+        await engineRuntime.runPromiseExit(backgroundCycle(accountId, cycle), {
+          signal,
+        })
+      ),
+    schedule: (run, delayMs) => {
+      const timeout = setTimeout(run, delayMs);
+      return {
+        cancel: () => {
+          clearTimeout(timeout);
+        },
+      };
+    },
+  });
   workers.set(accountId, worker);
 
   const runWorker = async (): Promise<void> => {
     try {
-      await accountMailWorkSupervisor.run(accountId, async (signal) => {
-        let failures = 0;
-
-        while (!signal.aborted) {
-          // oxlint-disable-next-line eslint/no-await-in-loop
-          const exit = await engineRuntime.runPromiseExit(
-            backgroundCycle(accountId),
-            { signal }
-          );
-
-          if (signal.aborted) {
-            return;
-          }
-
-          const failure = failureOf(exit);
-          if (
-            failure?._tag === "MailAuthError" ||
-            failure?._tag === "MailEngineError"
-          ) {
-            return;
-          }
-
-          let delay = POLL_INTERVAL_MS;
-          if (Exit.isSuccess(exit)) {
-            failures = 0;
-            delay = exit.value.moreWork ? 0 : POLL_INTERVAL_MS;
-          } else {
-            failures += 1;
-            delay =
-              failure?._tag === "MailThrottledError" &&
-              failure.retryAfterMs !== undefined
-                ? failure.retryAfterMs
-                : (RETRY_DELAYS_MS[
-                    Math.min(failures, RETRY_DELAYS_MS.length) - 1
-                  ] ?? POLL_INTERVAL_MS);
-          }
-
-          // oxlint-disable-next-line eslint/no-await-in-loop
-          await sleep(delay, signal, worker);
-        }
-      });
+      await accountMailWorkSupervisor.run(accountId, (signal) =>
+        worker.run(signal)
+      );
     } catch {
-      // A failed cycle was already retried; the loop only ends on purpose.
+      // The loop handles its own failures; it only ends on purpose.
     } finally {
       if (workers.get(accountId) === worker) {
         workers.delete(accountId);
@@ -561,14 +544,18 @@ const startAccountWorker = (accountId: string): void => {
 };
 
 /**
- * Wakes an account's loop now: when a window gains focus, after a send or a
- * failed change, or on a manual refresh.
+ * Asks an account's loop, or every loop, to sync: when a window gains focus,
+ * after a send or a failed change, on Sync now, or once an account is
+ * connected again. The loop decides what the request does in its phase.
  */
-export const requestMailSync = (accountId?: string): void => {
+export const requestMailSync = (
+  accountId?: string,
+  source: SyncRequestSource = "automatic"
+): void => {
   const targets =
     accountId === undefined ? [...workers.values()] : [workers.get(accountId)];
   for (const worker of targets) {
-    worker?.wake?.();
+    worker?.requestSync(source);
   }
 };
 
@@ -597,7 +584,7 @@ export const startMailEngine = async (): Promise<void> => {
   isEngineRunning = true;
   stopListeningForAccounts = onAccountConnected((accountId) => {
     if (workers.has(accountId)) {
-      requestMailSync(accountId);
+      requestMailSync(accountId, "account-connected");
     } else {
       startAccountWorker(accountId);
     }
@@ -649,13 +636,14 @@ export const stopMailEngine = async (): Promise<void> => {
  */
 export const forgetMailEngineAccount = Effect.fn("MailEngine.forgetAccount")(
   function* forgetMailEngineAccount(accountId: string) {
+    const wasSyncing = workers.get(accountId)?.phase().kind === "syncing";
     workers.delete(accountId);
     cacheLocks.delete(accountId);
     latestProgress.delete(accountId);
     progressPublishedAt.delete(accountId);
     sendIndexProgress();
-    if (syncingAccountIds.has(accountId)) {
-      setSyncing(accountId, false);
+    if (wasSyncing) {
+      sendSyncStatus();
     }
     yield* Effect.promise(() => runEngine(closeAccountSessions(accountId)));
     yield* Effect.tryPromise({
