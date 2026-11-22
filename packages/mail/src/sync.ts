@@ -721,6 +721,15 @@ export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
         for (const member of members) {
           const sections = sectionsByUid.get(member.uid);
           if (parts.length > 0 && sections === undefined) {
+            // Described, but its text never came back. Marked failed so the
+            // background queue moves past it rather than asking again at its
+            // head forever; opening the conversation tries it again. Had it
+            // been deleted meanwhile, the next sync removes it either way.
+            bodies.push({
+              failed: true,
+              headers: member.headers,
+              messageId: member.messageId,
+            });
             continue;
           }
 

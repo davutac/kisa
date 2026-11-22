@@ -415,6 +415,35 @@ describe("mail engine with the generic dialect", () => {
     ).toStrictEqual({ body_state: "ready", body_text: "copied body" });
   });
 
+  // Opening the conversation tries it again; the background queue moves on,
+  // so older bodies behind it still download.
+  it("marks a body failed when the server will not return its text", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+    server.deliver("INBOX", genericMessage("older", plainText("older body")));
+    server.deliver("INBOX", {
+      ...genericMessage("stuck", plainText("never sent")),
+      internalDate: 1_700_000_100_000,
+      withholdsSections: true,
+    });
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+
+    await run(bodyStep(scope));
+
+    expect(
+      connection
+        .prepare(
+          "SELECT subject, body_state FROM mail_messages ORDER BY subject"
+        )
+        .all()
+    ).toStrictEqual([
+      { body_state: "ready", subject: "older" },
+      { body_state: "failed", subject: "stuck" },
+    ]);
+    await expect(run(bodyStep(scope))).resolves.toBeUndefined();
+  });
+
   it("reports nothing to do when no pending body could be downloaded", async () => {
     insertAccount("generic");
     const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);

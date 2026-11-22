@@ -24,6 +24,8 @@ export interface FakeMessageInput {
   readonly internalDate: number;
   /** Raw (transfer-encoded) section contents. */
   readonly sections?: Readonly<Record<string, string>>;
+  /** Describes the message but leaves it out of every fetch of its text. */
+  readonly withholdsSections?: boolean;
   readonly size?: number;
   readonly structure?: BodyStructureNode;
 }
@@ -425,6 +427,11 @@ export class FakeImapServer {
                   (message) =>
                     options?.changedSince === undefined ||
                     message.modseq > options.changedSince
+                )
+                .filter(
+                  (message) =>
+                    fields.sections === undefined ||
+                    message.withholdsSections !== true
                 )
                 .toSorted((left, right) => left.uid - right.uid)
                 .map((message) =>

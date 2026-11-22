@@ -290,6 +290,32 @@ const sendSyncStatus = (): void => {
   );
 };
 
+/**
+ * An account's index progress from its counts. A body the background gave up
+ * on (`failed`) counts as done: only opening its conversation tries it again,
+ * so counting it as pending would leave the index running forever.
+ */
+export const toMailIndexProgress = (
+  accountId: string,
+  counts: {
+    readonly estimatedMessages: number;
+    readonly oldestIndexedAt: number | undefined;
+    readonly pendingBodies: number;
+    readonly totalMessages: number;
+    readonly unfinishedMailboxes: number;
+  }
+): MailIndexProgress => ({
+  accountId,
+  estimatedMessages: Math.max(counts.estimatedMessages, counts.totalMessages),
+  indexedMessages: counts.totalMessages - counts.pendingBodies,
+  indexedThreads: 0,
+  oldestIndexedAt: counts.oldestIndexedAt,
+  status:
+    counts.unfinishedMailboxes === 0 && counts.pendingBodies === 0
+      ? "complete"
+      : "running",
+});
+
 const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
   function* readIndexProgress(accountId: string) {
     const database = yield* MailDatabase;
@@ -298,8 +324,8 @@ const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
       async (db) => {
         const [messages] = await db
           .select({
-            bodies: sql<number>`coalesce(sum(${mailMessages.bodyState} = 'ready'), 0)`,
             oldest: sql<number | null>`min(${mailMessages.receivedAt})`,
+            pending: sql<number>`coalesce(sum(${mailMessages.bodyState} = 'none'), 0)`,
             total: sql<number>`count(*)`,
           })
           .from(mailMessages)
@@ -318,19 +344,13 @@ const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
             )
           )
           .all();
-        const total = messages?.total ?? 0;
-        const bodies = messages?.bodies ?? 0;
-        const isComplete =
-          (mailboxes?.unfinished ?? 1) === 0 && bodies >= total;
-
-        return {
-          accountId,
-          estimatedMessages: Math.max(mailboxes?.estimated ?? 0, total),
-          indexedMessages: bodies,
-          indexedThreads: 0,
+        return toMailIndexProgress(accountId, {
+          estimatedMessages: mailboxes?.estimated ?? 0,
           oldestIndexedAt: messages?.oldest ?? undefined,
-          status: isComplete ? ("complete" as const) : ("running" as const),
-        } satisfies MailIndexProgress;
+          pendingBodies: messages?.pending ?? 0,
+          totalMessages: messages?.total ?? 0,
+          unfinishedMailboxes: mailboxes?.unfinished ?? 1,
+        });
       }
     );
   }
