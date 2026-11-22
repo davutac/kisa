@@ -5,15 +5,20 @@ import {
   AccountDisconnectRequest,
   AccountReorderReply,
   AccountReorderRequest,
+  AccountSignInRequest,
   AccountsReply,
 } from "../../../shared/ipc/accounts";
 import {
   ACCOUNTS_DISCONNECT_CHANNEL,
   ACCOUNTS_LIST_CHANNEL,
   ACCOUNTS_OPEN_SETUP_CHANNEL,
+  ACCOUNTS_OPEN_SIGN_IN_CHANNEL,
   ACCOUNTS_REORDER_CHANNEL,
 } from "../../../shared/ipc/channels";
-import { openAccountSetupWindow } from "../../auth/account-setup-window";
+import {
+  openAccountSetupWindow,
+  openAccountSignInWindow,
+} from "../../auth/account-setup-window";
 import {
   listAccounts as loadAccounts,
   reorderAccounts as saveAccountOrder,
@@ -56,5 +61,16 @@ export const openAccountSetup = makeIpcMethod({
   handler: () =>
     toIpcReply(openAccountSetupWindow(), "Could not open account setup"),
   payload: Schema.Void,
+  result: AccountSetupOpenReply,
+});
+
+export const openAccountSignIn = makeIpcMethod({
+  channel: ACCOUNTS_OPEN_SIGN_IN_CHANNEL,
+  handler: (request) =>
+    toIpcReply(
+      openAccountSignInWindow(request.email),
+      "Could not open sign-in"
+    ),
+  payload: AccountSignInRequest,
   result: AccountSetupOpenReply,
 });

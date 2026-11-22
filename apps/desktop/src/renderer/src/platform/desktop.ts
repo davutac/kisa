@@ -40,6 +40,7 @@ export interface AccountsApi {
   listAccounts: DesktopBridge["listAccounts"];
   onAccountsChanged: DesktopBridge["onAccountsChanged"];
   openAccountSetup: DesktopBridge["openAccountSetup"];
+  openAccountSignIn: DesktopBridge["openAccountSignIn"];
   reorderAccounts: DesktopBridge["reorderAccounts"];
 }
 
@@ -178,6 +179,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       listAccounts: bridge.listAccounts,
       onAccountsChanged: bridge.onAccountsChanged,
       openAccountSetup: bridge.openAccountSetup,
+      openAccountSignIn: bridge.openAccountSignIn,
       reorderAccounts: bridge.reorderAccounts,
     },
     ai: {

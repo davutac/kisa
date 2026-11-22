@@ -5,7 +5,7 @@ import { AccountId } from "@repo/mail/ids";
 import { ImapConnector } from "@repo/mail/session";
 import type { ImapAuth } from "@repo/mail/session";
 import type { MailSendError } from "@repo/mail/smtp";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { Effect, Redacted, Schema } from "effect";
 
 import { PasswordAccountSetupRequest } from "../../shared/ipc/account-setup";
@@ -44,6 +44,7 @@ export const PASSWORD_ACCOUNT_MESSAGES = {
   incomingUnreachable:
     "Could not reach the incoming mail server. Check its settings and your connection.",
   invalidRequest: "Check the email address, password and server settings.",
+  notConnected: "This account is no longer connected.",
   microsoft:
     "Outlook and Microsoft 365 accounts sign in with Microsoft, not a password.",
   outgoingUnexpected:
@@ -52,8 +53,11 @@ export const PASSWORD_ACCOUNT_MESSAGES = {
     "Could not reach the outgoing mail server. Check its settings and your connection.",
   passwordRefused: "The mail server refused the email address or password.",
   saveFailed: "Could not save the account.",
+  serverChanged:
+    "The mail server no longer answers as it did when this account was added. Disconnect the account and add it again.",
   serversRequired: "Enter the incoming and outgoing server settings.",
   throttled: "The mail server is busy. Try again in a few minutes.",
+  usesMicrosoft: "This account signs in with Microsoft.",
 } as const;
 
 // oxlint-disable-next-line unicorn/throw-new-error
@@ -351,5 +355,148 @@ export const savePasswordAccount = ({
 
       notifyAccountConnected(plan.accountId);
       return plan.accountId;
+    })
+  );
+
+/** How a connected account signs in, for signing it in again. */
+export type AccountSignInMethod = "microsoft" | "password";
+
+/**
+ * The connected account behind an address, if any: its address as stored
+ * and how it signs in. The address is matched as accounts are keyed.
+ */
+export const findAccountSignIn = Effect.fn("findAccountSignIn")(
+  function* findAccountSignIn(email: string) {
+    const database = yield* MailDatabase;
+    const row = yield* database.use("Could not load accounts", (db) =>
+      db.query.mailAccounts.findFirst({
+        columns: { accountId: true, email: true, provider: true },
+        where: { accountId: email.toLowerCase() },
+      })
+    );
+    if (row === undefined) {
+      return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.notConnected);
+    }
+    const method: AccountSignInMethod =
+      row.provider === "outlook" ? "microsoft" : "password";
+    return {
+      accountId: AccountId.make(row.accountId),
+      email: row.email,
+      method,
+    };
+  }
+);
+
+/** A new app password for a connected account, ready to replace the old one. */
+export interface VerifiedPasswordSignIn {
+  readonly accountId: AccountId;
+  /** The `safeStorage`-sealed password; the only form that is stored. */
+  readonly credentials: Buffer;
+}
+
+/**
+ * Checks a new app password for an account that is already connected. The
+ * sign-in uses the account's stored servers, user name and provider, never
+ * any the request carries: only the password changes, so the cached mail
+ * stays the mail of the same mailbox. A server that now answers as another
+ * kind (Gmail or not) is refused, since the cache was built for the old one.
+ * Safe to interrupt at any point: nothing is saved here.
+ */
+export const verifyPasswordSignInAgain = Effect.fn("verifyPasswordSignInAgain")(
+  function* verifyPasswordSignInAgain(
+    accountId: AccountId,
+    password: Redacted.Redacted<string>
+  ) {
+    yield* requireSecureCredentialStorage.pipe(
+      Effect.mapError(({ message }) => failWith(message))
+    );
+    const database = yield* MailDatabase;
+    const stored = yield* database
+      .use("Could not load the account", (db) =>
+        db.query.mailAccounts.findFirst({ where: { accountId } })
+      )
+      .pipe(
+        Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
+      );
+    if (stored === undefined) {
+      return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.notConnected);
+    }
+    if (stored.provider === "outlook") {
+      return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.usesMicrosoft);
+    }
+
+    const plan = {
+      accountId,
+      displayName: stored.displayName ?? undefined,
+      email: stored.email,
+      imap: {
+        host: stored.imapHost,
+        port: stored.imapPort,
+        security: stored.imapSecurity,
+      },
+      provider: stored.provider,
+      smtp: {
+        host: stored.smtpHost,
+        port: stored.smtpPort,
+        security: stored.smtpSecurity,
+      },
+      username: stored.username,
+    } satisfies AccountPlan;
+    const signInPassword = toSignInPassword(plan, password);
+    const auth: ImapAuth = {
+      kind: "password",
+      password: signInPassword,
+      user: plan.username,
+    };
+    const dialect = yield* verifyIncoming(plan, auth);
+    yield* verifyOutgoing(plan, auth);
+    if (dialect !== stored.dialect) {
+      return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.serverChanged);
+    }
+
+    const credentials = yield* encryptPasswordCredentials(signInPassword).pipe(
+      Effect.mapError(({ message }) => failWith(message))
+    );
+    return { accountId, credentials } satisfies VerifiedPasswordSignIn;
+  }
+);
+
+/**
+ * Replaces a connected account's app password and starts its mail again. It
+ * only ever updates: an account disconnected meanwhile stays disconnected,
+ * and nothing is announced for it. Uninterruptible, so a saved sign-in
+ * always restarts the account.
+ */
+export const savePasswordSignInAgain = ({
+  accountId,
+  credentials,
+}: VerifiedPasswordSignIn) =>
+  Effect.uninterruptible(
+    Effect.gen(function* saveSignInAgain() {
+      const database = yield* MailDatabase;
+      const updated = yield* database
+        .use("Could not save the sign-in", (db) =>
+          db
+            .update(mailAccounts)
+            .set({ credentials, updatedAt: Date.now() })
+            .where(
+              and(
+                eq(mailAccounts.accountId, accountId),
+                ne(mailAccounts.provider, "outlook")
+              )
+            )
+            .returning({ accountId: mailAccounts.accountId })
+            .all()
+        )
+        .pipe(
+          Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
+        );
+
+      if (updated.length === 0) {
+        return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.notConnected);
+      }
+
+      notifyAccountConnected(accountId);
+      return accountId;
     })
   );

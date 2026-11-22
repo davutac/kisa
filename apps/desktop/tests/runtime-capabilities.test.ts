@@ -192,6 +192,8 @@ describe(getRuntimeCapabilities, () => {
     onUpdateStatus: () => () => {},
     openAccountSetup: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    openAccountSignIn: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     openAttachmentPreview: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     openThreadWindow: () =>
@@ -282,6 +284,7 @@ describe(getRuntimeCapabilities, () => {
         listAccounts: desktopBridge.listAccounts,
         onAccountsChanged: desktopBridge.onAccountsChanged,
         openAccountSetup: desktopBridge.openAccountSetup,
+        openAccountSignIn: desktopBridge.openAccountSignIn,
         reorderAccounts: desktopBridge.reorderAccounts,
       },
       ai: {

@@ -1,4 +1,4 @@
-import { LoaderCircleIcon, RefreshCwIcon } from "lucide-react";
+import { KeyRoundIcon, LoaderCircleIcon, RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -14,15 +14,17 @@ import {
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { toMailIndexDescription } from "@/mail/mail-index-progress-view";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
-import type { MailApi } from "@/platform/desktop";
+import type { AccountsApi, MailApi } from "@/platform/desktop";
 
 interface SettingsAccountReindexRowProps {
   accountId: string;
+  accountsApi: AccountsApi;
   mailApi: MailApi;
 }
 
 const SettingsAccountReindexRow = ({
   accountId,
+  accountsApi,
   mailApi,
 }: SettingsAccountReindexRowProps) => {
   const confirm = useConfirm();
@@ -30,6 +32,20 @@ const SettingsAccountReindexRow = ({
   const [isStarting, setIsStarting] = useState(false);
   const isIndexing = progress?.status === "running";
   const isBusy = isStarting || isIndexing;
+  // The account's sign-in was refused. Main opens the window that fits it:
+  // a new app password, or Microsoft in the browser.
+  const needsSignIn = progress?.status === "paused";
+
+  const signInAgain = async (): Promise<void> => {
+    try {
+      const reply = await accountsApi.openAccountSignIn({ email: accountId });
+      if (!reply.ok) {
+        toast.error(reply.error);
+      }
+    } catch {
+      toast.error("Could not open sign-in");
+    }
+  };
 
   const requestReindex = async (): Promise<void> => {
     if (isBusy) {
@@ -85,6 +101,17 @@ const SettingsAccountReindexRow = ({
         </SettingsRowDescription>
       </SettingsRowContent>
       <SettingsRowActions>
+        {needsSignIn ? (
+          <Button
+            onClick={() => {
+              void signInAgain();
+            }}
+            type="button"
+          >
+            <KeyRoundIcon />
+            Sign in again
+          </Button>
+        ) : null}
         <Button
           disabled={isBusy}
           onClick={() => {

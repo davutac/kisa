@@ -17,6 +17,12 @@ export const AccountDisconnectRequest = Schema.Struct({
 });
 export type AccountDisconnectRequest = typeof AccountDisconnectRequest.Type;
 
+/** Which connected account to sign in again; how is main's to decide. */
+export const AccountSignInRequest = Schema.Struct({
+  email: Schema.NonEmptyString,
+});
+export type AccountSignInRequest = typeof AccountSignInRequest.Type;
+
 export const AccountReorderRequest = Schema.Struct({
   emails: Schema.Array(Schema.NonEmptyString),
 });

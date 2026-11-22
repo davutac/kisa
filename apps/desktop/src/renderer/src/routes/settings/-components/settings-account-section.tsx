@@ -86,6 +86,7 @@ const SettingsAccountSection = ({
         {mailApi === undefined ? null : (
           <SettingsAccountReindexRow
             accountId={account.email}
+            accountsApi={accountsApi}
             mailApi={mailApi}
           />
         )}

@@ -18,6 +18,7 @@ export const ACCOUNTS_CHANGED_CHANNEL = "desktop:accounts:changed";
 export const ACCOUNTS_DISCONNECT_CHANNEL = "desktop:accounts:disconnect";
 export const ACCOUNTS_LIST_CHANNEL = "desktop:accounts:list";
 export const ACCOUNTS_OPEN_SETUP_CHANNEL = "desktop:accounts:open-setup";
+export const ACCOUNTS_OPEN_SIGN_IN_CHANNEL = "desktop:accounts:open-sign-in";
 export const ACCOUNTS_REORDER_CHANNEL = "desktop:accounts:reorder";
 
 // Only the Add account window's preload uses these, and it inlines them.

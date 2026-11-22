@@ -36,13 +36,14 @@ import type {
 import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import {
-  findAccountSetupProblem,
-  findSignInSwitch,
+  createSignInAgainForm,
+  findSetupProblem,
+  findSetupSignInSwitch,
   getAccountSetupMode,
   INITIAL_ACCOUNT_SETUP_FORM,
-  toAccountName,
-  toAccountServers,
-  toMicrosoftSignIn,
+  readSignInAgain,
+  toMicrosoftSubmission,
+  toPasswordSubmission,
   withServerSecurity,
   withSignInMethod,
 } from "./account-setup-form";
@@ -77,6 +78,9 @@ const DESCRIPTIONS = {
 >;
 
 const titleFor = (mode: AccountSetupMode): string => {
+  if (SIGN_IN_AGAIN !== undefined) {
+    return "Sign in again";
+  }
   if (mode.kind === "preset") {
     return `Add ${mode.preset.title} account`;
   }
@@ -220,6 +224,8 @@ const ServerFieldset = ({
 interface PasswordFieldProps {
   readonly inputRef: RefObject<HTMLInputElement | null>;
   readonly invalidField: AccountSetupField | undefined;
+  /** Takes focus when the page opens, as the first field to fill. */
+  readonly isFirst?: boolean;
   readonly isLocked: boolean;
   readonly onChange: (hasPassword: boolean) => void;
   readonly preset: MailAccountPreset | undefined;
@@ -229,6 +235,7 @@ interface PasswordFieldProps {
 const PasswordField = ({
   inputRef,
   invalidField,
+  isFirst = false,
   isLocked,
   onChange,
   preset,
@@ -246,6 +253,9 @@ const PasswordField = ({
         aria-describedby={isInvalid ? PROBLEM_ID : undefined}
         aria-invalid={isInvalid}
         autoComplete="off"
+        // Signing in again, the password is the one thing to type.
+        // oxlint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus={isFirst}
         id={FIELD_IDS.password}
         onChange={(event) => {
           onChange(event.currentTarget.value.length > 0);
@@ -288,32 +298,34 @@ const AddressNotes = ({
   mode,
   onSwitch,
   signInSwitch,
-}: AddressNotesProps) => (
-  <>
-    {mode.kind === "microsoft" && mode.via === "address" ? (
-      <FieldDescription>
-        Kisa needs IMAP, which Outlook.com has off by default.{" "}
-        <a href={OUTLOOK_IMAP_HELP_URL} rel="noreferrer" target="_blank">
-          Turn on IMAP
-        </a>
-      </FieldDescription>
-    ) : null}
-    {signInSwitch === undefined ? null : (
-      <FieldDescription>
-        <button
-          className="hover:text-primary underline underline-offset-4 disabled:opacity-50"
-          disabled={isLocked}
-          onClick={() => {
-            onSwitch(signInSwitch);
-          }}
-          type="button"
-        >
-          {SIGN_IN_SWITCH_LABELS[signInSwitch]}
-        </button>
-      </FieldDescription>
-    )}
-  </>
-);
+}: AddressNotesProps) =>
+  // Signing in again, the address is fixed and so is how it signs in.
+  SIGN_IN_AGAIN === undefined ? (
+    <>
+      {mode.kind === "microsoft" && mode.via === "address" ? (
+        <FieldDescription>
+          Kisa needs IMAP, which Outlook.com has off by default.{" "}
+          <a href={OUTLOOK_IMAP_HELP_URL} rel="noreferrer" target="_blank">
+            Turn on IMAP
+          </a>
+        </FieldDescription>
+      ) : null}
+      {signInSwitch === undefined ? null : (
+        <FieldDescription>
+          <button
+            className="hover:text-primary underline underline-offset-4 disabled:opacity-50"
+            disabled={isLocked}
+            onClick={() => {
+              onSwitch(signInSwitch);
+            }}
+            type="button"
+          >
+            {SIGN_IN_SWITCH_LABELS[signInSwitch]}
+          </button>
+        </FieldDescription>
+      )}
+    </>
+  ) : null;
 
 interface SubmitButtonProps {
   readonly isDisabled: boolean;
@@ -338,6 +350,44 @@ const SubmitButton = ({ isDisabled, method, pending }: SubmitButtonProps) => (
   </Button>
 );
 
+interface NameFieldProps {
+  readonly describedBy: string | undefined;
+  readonly isInvalid: boolean;
+  readonly isLocked: boolean;
+  readonly onChange: (name: string) => void;
+  readonly value: string;
+}
+
+/** The sender name. Signing in again keeps the account's, so it is not asked. */
+const NameField = ({
+  describedBy,
+  isInvalid,
+  isLocked,
+  onChange,
+  value,
+}: NameFieldProps) =>
+  SIGN_IN_AGAIN === undefined ? (
+    <Field data-invalid={isInvalid ? true : undefined}>
+      <FieldLabel htmlFor={FIELD_IDS.name}>Name</FieldLabel>
+      <Input
+        aria-describedby={describedBy}
+        aria-invalid={isInvalid ? true : undefined}
+        autoComplete="name"
+        // The window exists for this form, and the name comes first.
+        // oxlint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus
+        id={FIELD_IDS.name}
+        maxLength={MAX_DISPLAY_NAME_LENGTH}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        readOnly={isLocked}
+        value={value}
+      />
+      <FieldDescription>
+        Optional. The name people see on mail you send.
+      </FieldDescription>
+    </Field>
+  ) : null;
+
 const focusField = (field: AccountSetupField): void => {
   document.querySelector<HTMLElement>(`#${FIELD_IDS[field]}`)?.focus();
 };
@@ -357,6 +407,31 @@ const CAN_SIGN_IN_WITH_MICROSOFT =
   new URLSearchParams(window.location.search).get("microsoft") === "available";
 
 /**
+ * Set when main opened the page to sign a connected account in again. The
+ * page then asks only for what that sign-in needs: the account keeps its
+ * name and servers, and main checks the address against the one it chose.
+ */
+const SIGN_IN_AGAIN = readSignInAgain(window.location.search);
+
+const SIGN_IN_AGAIN_DESCRIPTIONS = {
+  microsoft: (email: string) =>
+    `Sign in to ${email} with Microsoft, in your browser. Kisa keeps the account's mail.`,
+  password: (email: string) =>
+    `Enter a new app password for ${email}. Kisa keeps the account's mail and settings.`,
+} as const satisfies Record<SignInMethod, (email: string) => string>;
+
+const describeMode = (mode: AccountSetupMode): string => {
+  if (SIGN_IN_AGAIN !== undefined) {
+    return SIGN_IN_AGAIN_DESCRIPTIONS[SIGN_IN_AGAIN.method](
+      SIGN_IN_AGAIN.email
+    );
+  }
+  return mode.kind === "preset"
+    ? PRESET_COPY[mode.preset.provider].description
+    : DESCRIPTIONS[mode.kind];
+};
+
+/**
  * The Add account window. It sends the sign-in to main once per attempt and
  * gets back only success or a fixed message; main closes the window once
  * the account is saved. A Microsoft sign-in happens in the browser, so this
@@ -364,8 +439,10 @@ const CAN_SIGN_IN_WITH_MICROSOFT =
  */
 const AccountSetupApp = () => {
   const bridge = window.accountSetup;
-  const [form, setForm] = useState<AccountSetupForm>(
-    INITIAL_ACCOUNT_SETUP_FORM
+  const [form, setForm] = useState<AccountSetupForm>(() =>
+    SIGN_IN_AGAIN === undefined
+      ? INITIAL_ACCOUNT_SETUP_FORM
+      : createSignInAgainForm(SIGN_IN_AGAIN)
   );
   const [hasPassword, setHasPassword] = useState(false);
   const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
@@ -394,8 +471,12 @@ const AccountSetupApp = () => {
   const isMicrosoft = mode.kind === "microsoft";
   const isMicrosoftUnavailable = isMicrosoft && !CAN_SIGN_IN_WITH_MICROSOFT;
   const isSubmitting = pendingSignIn !== undefined;
-  const signInSwitch = findSignInSwitch(mode, CAN_SIGN_IN_WITH_MICROSOFT);
-  const problem = findAccountSetupProblem(form, hasPassword);
+  const signInSwitch = findSetupSignInSwitch(
+    mode,
+    CAN_SIGN_IN_WITH_MICROSOFT,
+    SIGN_IN_AGAIN
+  );
+  const problem = findSetupProblem(form, hasPassword, SIGN_IN_AGAIN);
   const visibleProblem = hasTriedSubmit ? problem : undefined;
   const invalidField = visibleProblem?.field;
 
@@ -460,18 +541,14 @@ const AccountSetupApp = () => {
     if (isMicrosoft) {
       if (!isMicrosoftUnavailable) {
         await signIn("microsoft", () =>
-          bridge.signInWithMicrosoft(toMicrosoftSignIn(form))
+          bridge.signInWithMicrosoft(toMicrosoftSubmission(form, SIGN_IN_AGAIN))
         );
       }
       return;
     }
+    const password = passwordRef.current?.value ?? "";
     await signIn("password", () =>
-      bridge.submit({
-        email: form.email.trim(),
-        name: toAccountName(form),
-        password: passwordRef.current?.value ?? "",
-        servers: toAccountServers(form),
-      })
+      bridge.submit(toPasswordSubmission(form, password, SIGN_IN_AGAIN))
     );
   };
 
@@ -509,9 +586,7 @@ const AccountSetupApp = () => {
               {titleFor(mode)}
             </h1>
             <p className="text-muted-foreground mt-1 text-xs/relaxed">
-              {mode.kind === "preset"
-                ? PRESET_COPY[mode.preset.provider].description
-                : DESCRIPTIONS[mode.kind]}
+              {describeMode(mode)}
             </p>
           </header>
 
@@ -519,27 +594,13 @@ const AccountSetupApp = () => {
               the control the user submitted from keeps its focus. */}
           <fieldset className="min-w-0">
             <FieldGroup>
-              <Field data-invalid={invalidField === "name" ? true : undefined}>
-                <FieldLabel htmlFor={FIELD_IDS.name}>Name</FieldLabel>
-                <Input
-                  aria-describedby={describe("name")}
-                  aria-invalid={invalidField === "name" ? true : undefined}
-                  autoComplete="name"
-                  // The window exists for this form, and the name comes first.
-                  // oxlint-disable-next-line jsx-a11y/no-autofocus
-                  autoFocus
-                  id={FIELD_IDS.name}
-                  maxLength={MAX_DISPLAY_NAME_LENGTH}
-                  onChange={(event) =>
-                    updateForm({ ...form, name: event.currentTarget.value })
-                  }
-                  readOnly={isSubmitting}
-                  value={form.name}
-                />
-                <FieldDescription>
-                  Optional. The name people see on mail you send.
-                </FieldDescription>
-              </Field>
+              <NameField
+                describedBy={describe("name")}
+                isInvalid={invalidField === "name"}
+                isLocked={isSubmitting}
+                onChange={(name) => updateForm({ ...form, name })}
+                value={form.name}
+              />
 
               <Field data-invalid={invalidField === "email" ? true : undefined}>
                 <FieldLabel htmlFor={FIELD_IDS.email}>Email address</FieldLabel>
@@ -547,13 +608,18 @@ const AccountSetupApp = () => {
                   aria-describedby={describe("email")}
                   aria-invalid={invalidField === "email" ? true : undefined}
                   autoComplete="email"
+                  // Signing in with Microsoft again, nothing is typed here:
+                  // Enter from the address starts the sign-in.
+                  // oxlint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus={SIGN_IN_AGAIN?.method === "microsoft"}
                   id={FIELD_IDS.email}
                   onChange={(event) =>
                     updateForm({ ...form, email: event.currentTarget.value })
                   }
                   placeholder="name@example.com"
                   spellCheck={false}
-                  readOnly={isSubmitting}
+                  // Signing in again, the address is the account's.
+                  readOnly={isSubmitting || SIGN_IN_AGAIN !== undefined}
                   type="email"
                   value={form.email}
                 />
@@ -571,6 +637,7 @@ const AccountSetupApp = () => {
                 <PasswordField
                   inputRef={passwordRef}
                   invalidField={invalidField}
+                  isFirst={SIGN_IN_AGAIN !== undefined}
                   isLocked={isSubmitting}
                   onChange={(next) => {
                     setError(undefined);
@@ -580,7 +647,7 @@ const AccountSetupApp = () => {
                 />
               )}
 
-              {mode.kind === "manual" ? (
+              {mode.kind === "manual" && SIGN_IN_AGAIN === undefined ? (
                 <>
                   <ServerFieldset
                     fields={form.imap}

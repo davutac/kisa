@@ -57,7 +57,7 @@ export const resolveImapAuth = Effect.fn("resolveImapAuth")(
           new MailAuthError({
             accountId: account.accountId,
             message:
-              "Could not read the saved sign-in. Remove the account and add it again.",
+              "Could not read the saved sign-in. Sign in to the account again.",
           })
       )
     );

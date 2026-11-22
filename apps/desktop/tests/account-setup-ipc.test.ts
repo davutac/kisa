@@ -14,8 +14,11 @@ import type {
   verifyMicrosoftAccount,
 } from "../src/main/auth/microsoft-account";
 import type {
+  findAccountSignIn,
   savePasswordAccount,
+  savePasswordSignInAgain,
   verifyPasswordAccount,
+  verifyPasswordSignInAgain,
 } from "../src/main/auth/password-account";
 import * as DesktopIpc from "../src/main/ipc/desktop-ipc";
 import type { AccountSetupBridge } from "../src/shared/ipc/account-setup";
@@ -26,6 +29,7 @@ import {
   ACCOUNT_SETUP_MICROSOFT_CHANNEL,
   ACCOUNT_SETUP_SUBMIT_CHANNEL,
   ACCOUNTS_OPEN_SETUP_CHANNEL,
+  ACCOUNTS_OPEN_SIGN_IN_CHANNEL,
 } from "../src/shared/ipc/channels";
 import { ACCOUNT_SETUP_HELP_URLS } from "../src/shared/mail-account-presets";
 
@@ -102,6 +106,9 @@ class FakeWindow {
 
 const mocks = vi.hoisted(() => ({
   exposed: new Map<string, AccountSetupBridge>(),
+  findSignIn: vi.fn<typeof findAccountSignIn>(),
+  saveAgain: vi.fn<typeof savePasswordSignInAgain>(),
+  verifyAgain: vi.fn<typeof verifyPasswordSignInAgain>(),
   invoke: vi.fn<typeof Electron.ipcRenderer.invoke>(() => Promise.resolve()),
   mainWindow: undefined as
     | {
@@ -186,8 +193,11 @@ vi.mock(
   import("../src/main/auth/password-account"),
   async (importOriginal) => ({
     ...(await importOriginal()),
+    findAccountSignIn: mocks.findSignIn,
     savePasswordAccount: mocks.save,
+    savePasswordSignInAgain: mocks.saveAgain,
     verifyPasswordAccount: mocks.verify,
+    verifyPasswordSignInAgain: mocks.verifyAgain,
   })
 );
 
@@ -214,7 +224,8 @@ const {
 } = await import("../src/main/ipc/methods/account-setup");
 const { MICROSOFT_ACCOUNT_MESSAGES } =
   await import("../src/main/auth/microsoft-account");
-const { openAccountSetup } = await import("../src/main/ipc/methods/accounts");
+const { openAccountSetup, openAccountSignIn } =
+  await import("../src/main/ipc/methods/accounts");
 const { PASSWORD_ACCOUNT_MESSAGES } =
   await import("../src/main/auth/password-account");
 
@@ -255,6 +266,7 @@ const installMethods = async () => {
     Scope.provide(scope)(
       Effect.gen(function* registerMethods() {
         yield* ipc.handle(openAccountSetup);
+        yield* ipc.handle(openAccountSignIn);
         yield* ipc.handle(submitPasswordAccount);
         yield* ipc.handle(signInMicrosoftAccount);
         yield* ipc.handle(cancelMicrosoftAccountSignIn);
@@ -287,6 +299,24 @@ const openWindow = async () => {
   const window = mocks.windows.at(-1);
   if (window === undefined) {
     throw new Error("no setup window");
+  }
+  return window;
+};
+
+/** Opens the window to sign a connected account in again. */
+const openSignInWindow = async (
+  method: "microsoft" | "password" = "password",
+  email = "name@icloud.com"
+) => {
+  mocks.findSignIn.mockReturnValue(
+    Effect.succeed({ accountId: AccountId.make(email), email, method })
+  );
+  const reply = await Effect.runPromise(
+    openAccountSignIn.handler({ email: email.toUpperCase() })
+  );
+  const window = mocks.windows.at(-1);
+  if (window === undefined) {
+    throw new Error(`no sign-in window: ${JSON.stringify(reply)}`);
   }
   return window;
 };
@@ -794,6 +824,175 @@ describe("the Add account window", () => {
   });
 });
 
+describe("the window that signs an account in again", () => {
+  beforeEach(() => {
+    mocks.findSignIn.mockReset();
+    mocks.verify.mockReset();
+    mocks.save.mockReset();
+    mocks.verifyAgain.mockReset();
+    mocks.saveAgain.mockReset();
+    mocks.verifyMicrosoft.mockReset();
+    mocks.verifyAgain.mockReturnValue(
+      Effect.succeed({
+        accountId: AccountId.make("name@icloud.com"),
+        credentials: Buffer.from("sealed"),
+      })
+    );
+    mocks.saveAgain.mockReturnValue(
+      Effect.succeed(AccountId.make("name@icloud.com"))
+    );
+    mocks.notifyAccountsChanged.mockClear();
+    mocks.microsoftAvailable = true;
+    mocks.mainWindow = undefined;
+  });
+
+  afterEach(() => {
+    for (const window of mocks.windows) {
+      window.destroy();
+    }
+    mocks.windows.length = 0;
+  });
+
+  it("tells the page which account it signs in and how, as main read them", async () => {
+    const window = await openSignInWindow();
+
+    expect(openAccountSignIn.channel).toBe(ACCOUNTS_OPEN_SIGN_IN_CHANNEL);
+    expect(mocks.findSignIn).toHaveBeenCalledWith("NAME@ICLOUD.COM");
+    expect(window.loadFile).toHaveBeenCalledWith(expect.any(String), {
+      query: {
+        account: "name@icloud.com",
+        method: "password",
+        microsoft: "available",
+        presentation: "window",
+      },
+    });
+  });
+
+  // Only the password is taken from the page: the account and its servers
+  // are the ones main opened the window for.
+  it("signs the account in again with only the password it sends", async () => {
+    const listeners = await installMethods();
+    const window = await openSignInWindow();
+
+    const reply = await invoke(
+      listeners,
+      ACCOUNT_SETUP_SUBMIT_CHANNEL,
+      window.webContents.id,
+      {
+        ...validRequest,
+        servers: {
+          imap: { host: "imap.elsewhere.example", port: 993, security: "tls" },
+          smtp: { host: "smtp.elsewhere.example", port: 465, security: "tls" },
+        },
+      } as never
+    );
+    const [accountId, password] = mocks.verifyAgain.mock.calls[0] ?? [];
+
+    expect(reply).toStrictEqual({ data: undefined, ok: true });
+    expect({
+      accountId,
+      password: Redacted.isRedacted(password),
+    }).toStrictEqual({ accountId: "name@icloud.com", password: true });
+    expect(mocks.verify).not.toHaveBeenCalled();
+    expect(mocks.saveAgain).toHaveBeenCalledOnce();
+    expect(window.isDestroyed()).toBeTruthy();
+  });
+
+  it("refuses a submission for another account", async () => {
+    const listeners = await installMethods();
+    const window = await openSignInWindow();
+
+    const reply = await invoke(
+      listeners,
+      ACCOUNT_SETUP_SUBMIT_CHANNEL,
+      window.webContents.id,
+      { email: "someone@icloud.com", password: PASSWORD }
+    );
+
+    expect(reply).toStrictEqual({
+      error: "This window signs in to another account.",
+      ok: false,
+    });
+    expect(mocks.verifyAgain).not.toHaveBeenCalled();
+    expect(mocks.saveAgain).not.toHaveBeenCalled();
+  });
+
+  it("takes no password for an account that signs in with Microsoft, and no Microsoft sign-in for one with a password", async () => {
+    const listeners = await installMethods();
+    const microsoftWindow = await openSignInWindow(
+      "microsoft",
+      "person@outlook.com"
+    );
+    const passwordReply = await invoke(
+      listeners,
+      ACCOUNT_SETUP_SUBMIT_CHANNEL,
+      microsoftWindow.webContents.id,
+      { email: "person@outlook.com", password: PASSWORD }
+    );
+    const passwordWindow = await openSignInWindow();
+    const microsoftReply = await invoke(
+      listeners,
+      ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+      passwordWindow.webContents.id,
+      { email: "name@icloud.com" }
+    );
+
+    expect(passwordReply).toStrictEqual({
+      error: PASSWORD_ACCOUNT_MESSAGES.usesMicrosoft,
+      ok: false,
+    });
+    expect(microsoftReply).toStrictEqual({
+      error: "This account signs in with a password.",
+      ok: false,
+    });
+    expect(mocks.verifyAgain).not.toHaveBeenCalled();
+    expect(mocks.verifyMicrosoft).not.toHaveBeenCalled();
+  });
+
+  it("signs a Microsoft account in again only for the account it was opened for", async () => {
+    const listeners = await installMethods();
+    const { MicrosoftAccountError } =
+      await import("../src/main/auth/microsoft-account");
+    mocks.verifyMicrosoft.mockReturnValue(
+      Effect.fail(new MicrosoftAccountError({ message: "stopped here" }))
+    );
+    const window = await openSignInWindow("microsoft", "person@outlook.com");
+
+    const elsewhere = await invoke(
+      listeners,
+      ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+      window.webContents.id,
+      { email: "someone@outlook.com" }
+    );
+    const verifiedBefore = mocks.verifyMicrosoft.mock.calls.length;
+    await invoke(
+      listeners,
+      ACCOUNT_SETUP_MICROSOFT_CHANNEL,
+      window.webContents.id,
+      { email: "Person@Outlook.com" }
+    );
+
+    expect(elsewhere).toStrictEqual({
+      error: "This window signs in to another account.",
+      ok: false,
+    });
+    expect(verifiedBefore).toBe(0);
+    expect(mocks.verifyMicrosoft).toHaveBeenCalledWith({
+      email: "Person@Outlook.com",
+    });
+  });
+
+  it("takes the place of an Add account window that is not signing in", async () => {
+    const addWindow = await openWindow();
+
+    const signInWindow = await openSignInWindow();
+
+    expect(addWindow.isDestroyed()).toBeTruthy();
+    expect(signInWindow).not.toBe(addWindow);
+    expect(signInWindow.isDestroyed()).toBeFalsy();
+  });
+});
+
 describe("the account setup preloads", () => {
   beforeEach(() => {
     mocks.invoke.mockClear();
@@ -838,9 +1037,11 @@ describe("the account setup preloads", () => {
     const { accountsApi } = await import("../src/preload/accounts-api");
 
     await accountsApi.openAccountSetup();
+    await accountsApi.openAccountSignIn({ email: "name@icloud.com" });
 
     expect(mocks.invoke.mock.calls).toStrictEqual([
       [ACCOUNTS_OPEN_SETUP_CHANNEL],
+      [ACCOUNTS_OPEN_SIGN_IN_CHANNEL, { email: "name@icloud.com" }],
     ]);
     expect(Object.keys(accountsApi)).not.toContain("submitPasswordAccount");
   });

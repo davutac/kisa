@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createSignInAgainForm,
   findAccountSetupProblem,
+  findSetupProblem,
+  findSetupSignInSwitch,
   findSignInSwitch,
   getAccountSetupMode,
   INITIAL_ACCOUNT_SETUP_FORM,
+  readSignInAgain,
   toAccountName,
   toAccountServers,
   toMicrosoftSignIn,
+  toMicrosoftSubmission,
+  toPasswordSubmission,
   withServerSecurity,
   withSignInMethod,
 } from "../src/renderer/src/account-setup/account-setup-form";
@@ -320,6 +326,74 @@ describe("Microsoft sign-in in the Add account form", () => {
     ).toStrictEqual({ email: "me@example.org", name: "Ada Lovelace" });
     expect(toMicrosoftSignIn({ ...chosenForm, name: " \t " })).toStrictEqual({
       email: "me@example.org",
+    });
+  });
+});
+
+describe("signing an account in again", () => {
+  const passwordTarget = {
+    email: "me@example.org",
+    method: "password",
+  } as const;
+  const microsoftTarget = {
+    email: "me@contoso.com",
+    method: "microsoft",
+  } as const;
+
+  it("reads the account main named, and treats anything else as Add account", () => {
+    expect(
+      readSignInAgain(
+        "?presentation=window&account=me%40example.org&method=password"
+      )
+    ).toStrictEqual(passwordTarget);
+    expect(readSignInAgain("?presentation=window")).toBeUndefined();
+    expect(
+      readSignInAgain("?account=me%40example.org&method=imap")
+    ).toBeUndefined();
+    expect(
+      readSignInAgain("?account=not-an-address&method=password")
+    ).toBeUndefined();
+  });
+
+  // The account keeps its name and servers, so a generic account must not
+  // be held up by server fields this page never shows.
+  it("asks only for the password, even for an account with its own servers", () => {
+    const form = createSignInAgainForm(passwordTarget);
+
+    expect(getAccountSetupMode(form)).toStrictEqual({ kind: "manual" });
+    expect(findSetupProblem(form, false, passwordTarget)).toStrictEqual({
+      field: "password",
+      message: "Enter the new app password.",
+    });
+    expect(findSetupProblem(form, true, passwordTarget)).toBeUndefined();
+    expect(
+      findSetupSignInSwitch(getAccountSetupMode(form), true, passwordTarget)
+    ).toBeUndefined();
+  });
+
+  it("sends the account's address and the password, and nothing else", () => {
+    const form = {
+      ...createSignInAgainForm(passwordTarget),
+      email: "someone@example.org",
+      name: "Someone",
+    };
+
+    expect(toPasswordSubmission(form, "pw", passwordTarget)).toStrictEqual({
+      email: "me@example.org",
+      password: "pw",
+    });
+  });
+
+  it("signs a Microsoft account on its own domain in with Microsoft", () => {
+    const form = createSignInAgainForm(microsoftTarget);
+
+    expect(getAccountSetupMode(form)).toStrictEqual({
+      kind: "microsoft",
+      via: "choice",
+    });
+    expect(findSetupProblem(form, false, microsoftTarget)).toBeUndefined();
+    expect(toMicrosoftSubmission(form, microsoftTarget)).toStrictEqual({
+      email: "me@contoso.com",
     });
   });
 });

@@ -11,6 +11,7 @@ import {
   disconnectAccount,
   listAccounts,
   openAccountSetup,
+  openAccountSignIn,
   reorderAccounts,
 } from "./methods/accounts";
 import {
@@ -112,6 +113,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(reorderAccounts);
   yield* ipc.handle(disconnectAccount);
   yield* ipc.handle(openAccountSetup);
+  yield* ipc.handle(openAccountSignIn);
   yield* ipc.handle(submitPasswordAccount);
   yield* ipc.handle(signInMicrosoftAccount);
   yield* ipc.handle(cancelMicrosoftAccountSignIn);

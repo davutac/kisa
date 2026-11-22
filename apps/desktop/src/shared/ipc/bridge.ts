@@ -4,6 +4,7 @@ import type {
   AccountDisconnectRequest,
   AccountReorderReply,
   AccountReorderRequest,
+  AccountSignInRequest,
   AccountsReply,
 } from "./accounts";
 import type {
@@ -232,6 +233,10 @@ export interface DesktopBridge {
   ) => Promise<MailThreadMutationReply>;
   /** Opens the Add account window, or focuses it. */
   openAccountSetup: () => Promise<AccountSetupOpenReply>;
+  /** Opens the setup window to sign a connected account in again. */
+  openAccountSignIn: (
+    request: AccountSignInRequest
+  ) => Promise<AccountSetupOpenReply>;
   openAttachmentPreview: (
     request: MailAttachmentRequest
   ) => Promise<MailAttachmentActionReply>;

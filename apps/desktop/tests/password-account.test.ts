@@ -1,3 +1,4 @@
+import { AccountId } from "@repo/mail/ids";
 // The add-account flow against the in-memory database, fake IMAP sessions and
 // a loopback SMTP server. Only Electron's safeStorage is replaced, with a
 // reversible transform that is not the identity, so a stored row can prove
@@ -12,9 +13,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onAccountConnected } from "../src/main/auth/account-events";
 import {
   decodePasswordAccountRequest,
+  findAccountSignIn,
   PASSWORD_ACCOUNT_MESSAGES,
   savePasswordAccount,
+  savePasswordSignInAgain,
   verifyPasswordAccount,
+  verifyPasswordSignInAgain,
 } from "../src/main/auth/password-account";
 import { decryptPasswordCredentials } from "../src/main/auth/password-credentials";
 import { toTransportError } from "../src/main/mail/engine/imap-session";
@@ -188,6 +192,44 @@ const manualServers = {
   imap: { host: "127.0.0.1", port: 993, security: "tls" },
   smtp: { host: "127.0.0.1", port: 587, security: "starttls" },
 } as const;
+
+const NEW_PASSWORD = "wxyz-wxyz-wxyz-wxyz";
+
+/** Signs a connected account in again, as its setup window runs it. */
+const signInAgain = async (
+  accountId: string,
+  password: string,
+  options: {
+    readonly imap?: ImapBehaviour;
+    readonly smtp?: FakeSmtpBehaviour;
+  } = {}
+) => {
+  await smtp?.close();
+  smtp = await startFakeSmtpServer(options.smtp);
+  return Effect.runPromiseExit(
+    verifyPasswordSignInAgain(
+      AccountId.make(accountId),
+      Redacted.make(password)
+    ).pipe(
+      Effect.flatMap(savePasswordSignInAgain),
+      Effect.provide(layers(options.imap ?? "accept", smtp))
+    )
+  );
+};
+
+const storedPassword = async (accountId: string): Promise<string> => {
+  const row = accountRows().find(
+    (candidate) => candidate.account_id === accountId
+  );
+  const stored = await Effect.runPromise(
+    decryptPasswordCredentials(row?.credentials ?? Buffer.alloc(0))
+  );
+  return Redacted.value(stored);
+};
+
+/** Everything stored about an account except its sign-in. */
+const withoutSignIn = (rows: readonly AccountRow[]) =>
+  rows.map(({ credentials: _credentials, ...row }) => row);
 
 describe("adding an app password account", () => {
   beforeEach(() => {
@@ -616,5 +658,187 @@ describe("the add-account request", () => {
     expect(
       `${String(request.password)} ${JSON.stringify(request)}`
     ).not.toContain(PASSWORD);
+  });
+});
+
+const findSignIn = (email: string) =>
+  Effect.runPromiseExit(
+    findAccountSignIn(email).pipe(Effect.provide(TestDatabase))
+  );
+
+describe("signing an app password account in again", () => {
+  beforeEach(() => {
+    resetDatabase();
+    imapRequests = [];
+    smtpRequests = [];
+    connected = [];
+    stopListening = onAccountConnected((accountId) => {
+      connected.push(accountId);
+    });
+  });
+
+  afterEach(async () => {
+    stopListening?.();
+    await smtp?.close();
+    smtp = undefined;
+  });
+
+  it("replaces the password and keeps everything else, cached mail included", async () => {
+    await addAccount({ email: "Name@iCloud.com", password: PASSWORD });
+    connection
+      .prepare(
+        `INSERT INTO mail_messages (account_id, bcc_addresses, cc_addresses,
+          from_address, is_draft, is_starred, is_unread, label_ids, message_id,
+          received_at, size, subject, thread_id, to_addresses, updated_at)
+         VALUES ('name@icloud.com', '[]', '[]', 'a@example.com', 0, 0, 1,
+          '["INBOX"]', 'cached', 1, 1, 'Cached', 't', '[]', 1)`
+      )
+      .run();
+    const before = withoutSignIn(accountRows());
+
+    const exit = await signInAgain("name@icloud.com", NEW_PASSWORD);
+
+    expect(exit).toStrictEqual(Exit.succeed("name@icloud.com"));
+    await expect(storedPassword("name@icloud.com")).resolves.toBe(NEW_PASSWORD);
+    expect(withoutSignIn(accountRows())).toStrictEqual(before);
+    expect(
+      connection.prepare("SELECT message_id FROM mail_messages").all()
+    ).toStrictEqual([{ message_id: "cached" }]);
+    expect(connected).toStrictEqual(["name@icloud.com", "name@icloud.com"]);
+  });
+
+  // Main decides from this which account a window signs in, and how.
+  it("finds how a connected account signs in, by its address in any case", async () => {
+    await addAccount({ email: "Name@iCloud.com", password: PASSWORD });
+    connection
+      .prepare(
+        `INSERT INTO mail_accounts (account_id, created_at, credentials,
+          dialect, email, imap_host, imap_port, imap_security, provider,
+          smtp_host, smtp_port, smtp_security, sort_order, updated_at,
+          username)
+         VALUES ('me@outlook.com', 0, X'00', 'generic', 'me@outlook.com',
+          'outlook.office365.com', 993, 'tls', 'outlook',
+          'smtp-mail.outlook.com', 587, 'starttls', 0, 0, 'me@outlook.com')`
+      )
+      .run();
+    await expect(findSignIn("NAME@ICLOUD.COM")).resolves.toStrictEqual(
+      Exit.succeed({
+        accountId: "name@icloud.com",
+        email: "name@icloud.com",
+        method: "password",
+      })
+    );
+    await expect(findSignIn("me@outlook.com")).resolves.toStrictEqual(
+      Exit.succeed({
+        accountId: "me@outlook.com",
+        email: "me@outlook.com",
+        method: "microsoft",
+      })
+    );
+    expect(failureMessage(await findSignIn("nobody@icloud.com"))).toBe(
+      PASSWORD_ACCOUNT_MESSAGES.notConnected
+    );
+  });
+
+  it("signs in with the stored servers and user name", async () => {
+    await addAccount({
+      email: "Me@Example.org",
+      password: PASSWORD,
+      servers: manualServers,
+    });
+    imapRequests = [];
+    smtpRequests = [];
+
+    await signInAgain("me@example.org", NEW_PASSWORD);
+
+    expect(
+      imapRequests.map(({ auth, server }) => ({
+        server,
+        user: auth.kind === "password" ? auth.user : undefined,
+      }))
+    ).toStrictEqual([{ server: manualServers.imap, user: "Me@Example.org" }]);
+    expect(smtpRequests.map(({ server }) => server)).toStrictEqual([
+      manualServers.smtp,
+    ]);
+  });
+
+  it("refuses an address that is not connected, before contacting a server", async () => {
+    const exit = await signInAgain("name@icloud.com", NEW_PASSWORD);
+
+    expect(failureMessage(exit)).toBe(PASSWORD_ACCOUNT_MESSAGES.notConnected);
+    expect({ connected, imapRequests, rows: accountRows() }).toStrictEqual({
+      connected: [],
+      imapRequests: [],
+      rows: [],
+    });
+  });
+
+  it("refuses an account that signs in with Microsoft", async () => {
+    connection
+      .prepare(
+        `INSERT INTO mail_accounts (account_id, created_at, credentials,
+          dialect, email, imap_host, imap_port, imap_security, provider,
+          smtp_host, smtp_port, smtp_security, sort_order, updated_at,
+          username)
+         VALUES ('me@outlook.com', 0, X'00', 'generic', 'me@outlook.com',
+          'outlook.office365.com', 993, 'tls', 'outlook',
+          'smtp-mail.outlook.com', 587, 'starttls', 0, 0, 'me@outlook.com')`
+      )
+      .run();
+
+    const exit = await signInAgain("me@outlook.com", NEW_PASSWORD);
+
+    expect(failureMessage(exit)).toBe(PASSWORD_ACCOUNT_MESSAGES.usesMicrosoft);
+    expect(imapRequests).toStrictEqual([]);
+  });
+
+  // The cache was built for the old kind of server, so it cannot carry over.
+  it("refuses a server that now answers as Gmail, and keeps the old sign-in", async () => {
+    await addAccount({
+      email: "me@example.org",
+      password: PASSWORD,
+      servers: manualServers,
+    });
+
+    const exit = await signInAgain("me@example.org", NEW_PASSWORD, {
+      imap: "gmail",
+    });
+
+    expect(failureMessage(exit)).toBe(PASSWORD_ACCOUNT_MESSAGES.serverChanged);
+    await expect(storedPassword("me@example.org")).resolves.toBe(PASSWORD);
+  });
+
+  it("keeps the old sign-in when the server refuses the new password", async () => {
+    await addAccount({ email: "name@icloud.com", password: PASSWORD });
+    const before = accountRows();
+
+    const exit = await signInAgain("name@icloud.com", NEW_PASSWORD, {
+      imap: "refuse",
+    });
+
+    expect(Exit.isFailure(exit)).toBeTruthy();
+    expect(accountRows()).toStrictEqual(before);
+    expect(connected).toStrictEqual(["name@icloud.com"]);
+  });
+
+  it("saves nothing for an account disconnected while it was being verified", async () => {
+    await addAccount({ email: "name@icloud.com", password: PASSWORD });
+    await smtp?.close();
+    smtp = await startFakeSmtpServer();
+    const verified = await Effect.runPromise(
+      verifyPasswordSignInAgain(
+        AccountId.make("name@icloud.com"),
+        Redacted.make(NEW_PASSWORD)
+      ).pipe(Effect.provide(layers("accept", smtp)))
+    );
+    connection.prepare("DELETE FROM mail_accounts").run();
+
+    const exit = await Effect.runPromiseExit(
+      savePasswordSignInAgain(verified).pipe(Effect.provide(TestDatabase))
+    );
+
+    expect(failureMessage(exit)).toBe(PASSWORD_ACCOUNT_MESSAGES.notConnected);
+    expect(accountRows()).toStrictEqual([]);
+    expect(connected).toStrictEqual(["name@icloud.com"]);
   });
 });

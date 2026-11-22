@@ -1,4 +1,7 @@
-import type { MicrosoftAccountSetupRequest } from "@/shared/ipc/account-setup";
+import type {
+  MicrosoftAccountSetupRequest,
+  PasswordAccountSetupInput,
+} from "@/shared/ipc/account-setup";
 import {
   findMailAccountPreset,
   isMailAddress,
@@ -273,3 +276,100 @@ export const toMicrosoftSignIn = (
   const name = toAccountName(form);
   return name === undefined ? { email } : { email, name };
 };
+
+/** The connected account a page signs in again, as main named it. */
+export interface SignInAgainTarget {
+  readonly email: string;
+  readonly method: SignInMethod;
+}
+
+/**
+ * Whether main opened the page to sign a connected account in again, and
+ * for which. Main decides both and checks every submission against them;
+ * anything malformed is an ordinary Add account page.
+ */
+export const readSignInAgain = (
+  search: string
+): SignInAgainTarget | undefined => {
+  const params = new URLSearchParams(search);
+  const email = params.get("account");
+  const method = params.get("method");
+  if (
+    email === null ||
+    !isMailAddress(email) ||
+    (method !== "microsoft" && method !== "password")
+  ) {
+    return undefined;
+  }
+  return { email, method };
+};
+
+/**
+ * The form for signing in again: the address is the account's, and an
+ * account on its own domain that signs in with Microsoft says so, since its
+ * address alone would ask for a password.
+ */
+export const createSignInAgainForm = (
+  target: SignInAgainTarget
+): AccountSetupForm => ({
+  ...INITIAL_ACCOUNT_SETUP_FORM,
+  email: target.email,
+  prefersMicrosoft: target.method === "microsoft",
+});
+
+/**
+ * What signing in again still needs. Only the password: the account keeps
+ * its name and servers, which this page neither shows nor sends.
+ */
+export const findSignInAgainProblem = (
+  target: SignInAgainTarget,
+  hasPassword: boolean
+): AccountSetupProblem | undefined =>
+  target.method === "password" && !hasPassword
+    ? { field: "password", message: "Enter the new app password." }
+    : undefined;
+
+/** What the form still needs before it can be sent, for either kind of page. */
+export const findSetupProblem = (
+  form: AccountSetupForm,
+  hasPassword: boolean,
+  target: SignInAgainTarget | undefined
+): AccountSetupProblem | undefined =>
+  target === undefined
+    ? findAccountSetupProblem(form, hasPassword)
+    : findSignInAgainProblem(target, hasPassword);
+
+/** Signing in again offers no other way to sign in than the account's own. */
+export const findSetupSignInSwitch = (
+  mode: AccountSetupMode,
+  canSignInWithMicrosoft: boolean,
+  target: SignInAgainTarget | undefined
+): SignInMethod | undefined =>
+  target === undefined
+    ? findSignInSwitch(mode, canSignInWithMicrosoft)
+    : undefined;
+
+/**
+ * The password sign-in to send. Signing in again it carries the account's
+ * address and the password only: main signs in with the stored servers.
+ */
+export const toPasswordSubmission = (
+  form: AccountSetupForm,
+  password: string,
+  target: SignInAgainTarget | undefined
+): PasswordAccountSetupInput =>
+  target === undefined
+    ? {
+        email: form.email.trim(),
+        name: toAccountName(form),
+        password,
+        servers: toAccountServers(form),
+      }
+    : { email: target.email, password };
+
+/** The Microsoft sign-in to start; signing in again, the address only. */
+export const toMicrosoftSubmission = (
+  form: AccountSetupForm,
+  target: SignInAgainTarget | undefined
+): MicrosoftAccountSetupRequest =>
+  target === undefined ? toMicrosoftSignIn(form) : { email: target.email };
