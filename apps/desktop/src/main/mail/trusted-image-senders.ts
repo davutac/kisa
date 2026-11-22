@@ -1,4 +1,4 @@
-import { gmailTrustedImageSenders } from "@repo/database/schemas";
+import { mailTrustedImageSenders } from "@repo/database/schemas";
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
@@ -36,7 +36,7 @@ export const notifyTrustedImageSendersChanged = (
 export const listTrustedImageSenders = Effect.fn("listTrustedImageSenders")(
   function* listTrustedImageSenders() {
     const rows = yield* withDatabaseClient((database) =>
-      database.query.gmailTrustedImageSenders.findMany()
+      database.query.mailTrustedImageSenders.findMany()
     ).pipe(
       Effect.mapError(
         () =>
@@ -64,7 +64,7 @@ export const loadTrustedImageSenderCheck = Effect.fn(
   "loadTrustedImageSenderCheck"
 )(function* loadTrustedImageSenderCheck(accountId: string) {
   const rows = yield* withDatabaseClient((database) =>
-    database.query.gmailTrustedImageSenders.findMany({
+    database.query.mailTrustedImageSenders.findMany({
       where: { accountEmail: normalizeAddress(accountId) },
     })
   ).pipe(
@@ -85,7 +85,7 @@ export const trustImageSender = Effect.fn("trustImageSender")(
   function* trustImageSender(request: GmailTrustedImageSenderRequest) {
     yield* withDatabaseClient((database) =>
       database
-        .insert(gmailTrustedImageSenders)
+        .insert(mailTrustedImageSenders)
         .values({
           accountEmail: normalizeAddress(request.accountId),
           createdAt: Date.now(),
@@ -114,9 +114,9 @@ export const forgetTrustedImageSenders = Effect.fn("forgetTrustedImageSenders")(
   function* forgetTrustedImageSenders(accountId: string) {
     yield* withDatabaseClient((database) =>
       database
-        .delete(gmailTrustedImageSenders)
+        .delete(mailTrustedImageSenders)
         .where(
-          eq(gmailTrustedImageSenders.accountEmail, normalizeAddress(accountId))
+          eq(mailTrustedImageSenders.accountEmail, normalizeAddress(accountId))
         )
         .run()
     ).pipe(

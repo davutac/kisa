@@ -1,8 +1,7 @@
+// oxlint-disable max-classes-per-file unicorn/throw-new-error -- Effect tagged errors are declared as generated classes.
 import * as Schema from "effect/Schema";
 
 import { AiProvider } from "../../shared/ipc/ai";
-
-// oxlint-disable max-classes-per-file unicorn/throw-new-error
 
 export class AiSettingsError extends Schema.TaggedError<AiSettingsError>()(
   "AiSettingsError",

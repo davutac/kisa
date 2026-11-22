@@ -14,6 +14,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { listUserGmailLabels } from "@/mail/label";
 import type { MailApi } from "@/platform/desktop";
 import type { GmailLabelSummary } from "@/shared/ipc/mail";
@@ -47,23 +48,28 @@ const SettingsAccountLabelsRow = ({
   const handleSync = async (): Promise<void> => {
     setIsSyncing(true);
 
-    try {
-      const reply = await mailApi.syncLabels({ accountId });
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await mailApi.syncLabels({ accountId });
 
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+
+          updateLabelCatalog(accountId, reply.data);
+          toast.success("Labels synced");
+        } catch {
+          toast.error("Could not sync the labels", {
+            description: "Please try again.",
+          });
+        }
+      },
+      () => {
+        setIsSyncing(false);
       }
-
-      updateLabelCatalog(accountId, reply.data);
-      toast.success("Gmail labels synced");
-    } catch {
-      toast.error("Could not sync the labels", {
-        description: "Please try again.",
-      });
-    } finally {
-      setIsSyncing(false);
-    }
+    );
   };
 
   const requestDelete = async (label: GmailLabelSummary): Promise<void> => {
@@ -73,71 +79,77 @@ const SettingsAccountLabelsRow = ({
 
     setDeletingLabelId(label.id);
 
-    try {
-      // Gmail's per-label totals are remote metadata. Refresh immediately
-      // before confirmation so a partial or stale local index cannot misstate
-      // how many conversations will be affected.
-      const syncReply = await mailApi.syncLabels({ accountId });
+    await runWithCleanup(
+      async () => {
+        try {
+          // Gmail's per-label totals are remote metadata. Refresh immediately
+          // before confirmation so a partial or stale local index cannot misstate
+          // how many conversations will be affected.
+          const syncReply = await mailApi.syncLabels({ accountId });
 
-      if (!syncReply.ok) {
-        toast.error(syncReply.error);
-        return;
+          if (!syncReply.ok) {
+            toast.error(syncReply.error);
+            return;
+          }
+
+          updateLabelCatalog(accountId, syncReply.data);
+
+          const refreshedLabel = syncReply.data.labels.find(
+            (candidate) => candidate.id === label.id
+          );
+
+          if (refreshedLabel === undefined) {
+            toast.error(`“${label.name}” no longer exists`);
+            return;
+          }
+
+          const threadCount = refreshedLabel.threadCount ?? 0;
+          const confirmed = await confirm({
+            confirmLabel: "Delete label",
+            confirmVariant: "destructive",
+            description: (
+              <ConfirmMessage subject={refreshedLabel.name}>
+                {threadCount} thread{threadCount === 1 ? " has" : "s have"} this
+                label. Deleting it removes the label from those threads and from
+                the mail server; for an iCloud or IMAP folder, its mail moves to
+                Archive first. This action is not reversible.
+              </ConfirmMessage>
+            ),
+            title: "Delete label?",
+          });
+
+          if (!confirmed) {
+            return;
+          }
+
+          const deleteReply = await mailApi.deleteLabel({
+            accountId,
+            labelId: refreshedLabel.id,
+          });
+
+          if (!deleteReply.ok) {
+            toast.error(deleteReply.error);
+            return;
+          }
+
+          const next = {
+            ...syncReply.data,
+            labels: syncReply.data.labels.filter(
+              (candidate) => candidate.id !== refreshedLabel.id
+            ),
+          };
+          updateLabelCatalog(accountId, next);
+          toast.success(`Deleted “${refreshedLabel.name}”`);
+        } catch {
+          toast.error("Could not delete the label", {
+            description: "Please try again.",
+          });
+        }
+      },
+      () => {
+        setDeletingLabelId(undefined);
       }
-
-      updateLabelCatalog(accountId, syncReply.data);
-
-      const refreshedLabel = syncReply.data.labels.find(
-        (candidate) => candidate.id === label.id
-      );
-
-      if (refreshedLabel === undefined) {
-        toast.error(`“${label.name}” no longer exists`);
-        return;
-      }
-
-      const threadCount = refreshedLabel.threadCount ?? 0;
-      const confirmed = await confirm({
-        confirmLabel: "Delete label",
-        confirmVariant: "destructive",
-        description: (
-          <ConfirmMessage subject={refreshedLabel.name}>
-            {threadCount} thread{threadCount === 1 ? " has" : "s have"} this
-            label. Deleting it removes the label from those threads and from
-            Gmail. This action is not reversible.
-          </ConfirmMessage>
-        ),
-        title: "Delete label?",
-      });
-
-      if (!confirmed) {
-        return;
-      }
-
-      const deleteReply = await mailApi.deleteLabel({
-        accountId,
-        labelId: refreshedLabel.id,
-      });
-
-      if (!deleteReply.ok) {
-        toast.error(deleteReply.error);
-        return;
-      }
-
-      const next = {
-        ...syncReply.data,
-        labels: syncReply.data.labels.filter(
-          (candidate) => candidate.id !== refreshedLabel.id
-        ),
-      };
-      updateLabelCatalog(accountId, next);
-      toast.success(`Deleted “${refreshedLabel.name}”`);
-    } catch {
-      toast.error("Could not delete the label", {
-        description: "Please try again.",
-      });
-    } finally {
-      setDeletingLabelId(undefined);
-    }
+    );
   };
 
   const labels = listUserGmailLabels(catalog?.labels ?? []);

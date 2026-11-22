@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const preloadDirectory = path.resolve("out/preload");
-const entries = ["attachment-preview.cjs", "index.cjs"];
+const entries = ["account-setup.cjs", "attachment-preview.cjs", "index.cjs"];
 const relativeRequirePattern = /require\(["']\./u;
 
 for (const entry of entries) {

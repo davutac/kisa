@@ -9,16 +9,16 @@ import {
 describe("mail index progress view", () => {
   it("reports running, paused, and failed lifecycle states safely", () => {
     expect(toMailIndexDescription({ status: "running" })).toBe(
-      "Indexing your complete Gmail history…"
+      "Downloading and indexing your mail…"
     );
     expect(toMailIndexDescription({ status: "paused" })).toBe(
-      "Mail history indexing is paused until this account is reconnected."
+      "Mail sync is paused until this account is reconnected."
     );
     expect(toMailIndexDescription({ status: "failed" })).toBe(
-      "Mail history indexing stopped. Reindex to try again."
+      "Mail sync stopped. Select Sync now to try again."
     );
     expect(toMailIndexDescription({ status: "complete" })).toBe(
-      "Refresh the local copy of your complete Gmail history."
+      "Kisa keeps this account's mail downloaded, searchable, and up to date on its own."
     );
   });
 

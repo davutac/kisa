@@ -3,9 +3,9 @@ import type {
   ScheduledMessageAttentionReason,
   StoredMailDraftAttachment,
 } from "@repo/database/schemas";
-import type { OutgoingAttachment } from "@repo/gmail/models";
 import { Effect, Fiber } from "effect";
 
+import type { OutgoingAttachment } from "./engine/outgoing-message";
 import { ScheduledMailAttachmentError } from "./scheduled-mail-attachment-error";
 import { getScheduledMailKeyId } from "./scheduled-mail-keyed-serial";
 import type { ScheduledMailWorkerError } from "./scheduled-mail-worker-error";

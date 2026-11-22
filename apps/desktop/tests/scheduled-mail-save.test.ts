@@ -13,7 +13,6 @@ import type {
   RemoteDatabaseClient,
 } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
-import { MessageId, SentMessage, ThreadId } from "@repo/gmail/models";
 import { Effect } from "effect";
 import {
   afterAll,
@@ -26,9 +25,9 @@ import {
 } from "vitest";
 
 import type {
-  deliverNewMessage,
-  findSentNewMessageByRfc822MessageId,
-} from "../src/main/mail/mail-sync";
+  findSentMessage,
+  sendNewMessage,
+} from "../src/main/mail/engine/mail-send";
 import { decodeStoredOutgoingAttachmentsStrict } from "../src/main/mail/outgoing-attachment-files";
 import type {
   closeScheduledMailNotifications,
@@ -37,6 +36,7 @@ import type {
   showScheduledMailNotification,
 } from "../src/main/mail/scheduled-mail-notifications";
 import type { ScheduledMailEditSession } from "../src/shared/ipc/scheduled-mail";
+import { insertGmailAccount } from "./fixtures/mail-accounts";
 
 const connection = openDatabaseConnection(":memory:");
 applyDatabaseMigrations(
@@ -95,34 +95,19 @@ vi.mock(import("../src/main/electron/renderer-events"), () => ({
   sendRendererEventToEachWindow: vi.fn<() => void>(),
 }));
 
-vi.mock(import("../src/main/mail/mail-sync"), async () => {
-  const { Schema } = await import("effect");
-  // oxlint-disable-next-line unicorn/throw-new-error -- Effect Schema tagged errors are declared as generated classes.
-  class TestMailSyncError extends Schema.TaggedError<TestMailSyncError>()(
-    "MailSyncError",
-    {
-      kind: Schema.optional(
-        Schema.Literals([
-          "account-action-required",
-          "delivery-rejected",
-          "message-invalid",
-          "outcome-unknown",
-          "rate-limited",
-        ])
-      ),
-      message: Schema.String,
-      retryAfterMs: Schema.optional(Schema.Int),
-      retryable: Schema.optional(Schema.Boolean),
-      status: Schema.optional(Schema.Int),
-    }
-  ) {}
+vi.mock(import("../src/main/mail/engine/mail-engine"), async () => {
+  const { Effect: EffectModule } = await import("effect");
   return {
-    MailSyncError: TestMailSyncError,
-    deliverNewMessage: vi.fn<typeof deliverNewMessage>(),
-    findSentNewMessageByRfc822MessageId:
-      vi.fn<typeof findSentNewMessageByRfc822MessageId>(),
-  };
+    runEngineExit: (
+      effect: Parameters<typeof EffectModule.runPromiseExit>[0]
+    ) => EffectModule.runPromiseExit(effect),
+  } as never;
 });
+
+vi.mock(import("../src/main/mail/engine/mail-send"), () => ({
+  findSentMessage: vi.fn<typeof findSentMessage>(),
+  sendNewMessage: vi.fn<typeof sendNewMessage>(),
+}));
 
 vi.mock(import("../src/main/mail/scheduled-mail-notifications"), () => ({
   closeScheduledMailNotifications:
@@ -150,20 +135,14 @@ const { configureDraftAttachmentStore } =
   await import("../src/main/mail/draft-attachment-store");
 const { outgoingAttachmentAuthorizations } =
   await import("../src/main/mail/outgoing-attachment-authorizations");
-const { deliverNewMessage: deliverNewMessageMock } =
-  await import("../src/main/mail/mail-sync");
+const { sendNewMessage: sendNewMessageMock } =
+  await import("../src/main/mail/engine/mail-send");
 
 const accountId = "person@example.com";
 const draftId = "scheduled-save-draft";
 const temporaryDirectories: string[] = [];
 
-connection
-  .prepare(
-    `INSERT INTO google_accounts (
-      created_at, credentials, email, scopes, sort_order, updated_at
-    ) VALUES (1, ?, ?, '[]', 1, 1)`
-  )
-  .run(Buffer.from([1]), accountId);
+insertGmailAccount(connection, accountId);
 
 const insertScheduledDraft = (): void => {
   const scheduledAt = Date.now() + 60_000;
@@ -329,13 +308,8 @@ describe("scheduled mail in-place save", () => {
   });
 
   it("delivers a due message while its editor snapshot is open", async () => {
-    vi.mocked(deliverNewMessageMock).mockReturnValue(
-      Effect.succeed(
-        new SentMessage({
-          id: MessageId.make("sent-message"),
-          threadId: ThreadId.make("sent-thread"),
-        })
-      )
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.succeed({ refused: [] })
     );
     connection
       .prepare(
@@ -351,7 +325,7 @@ describe("scheduled mail in-place save", () => {
     await startScheduledMail();
     try {
       expect(opened.item.draftId).toBe(draftId);
-      expect(deliverNewMessageMock).toHaveBeenCalledOnce();
+      expect(sendNewMessageMock).toHaveBeenCalledOnce();
       expect(
         connection
           .prepare(
@@ -412,13 +386,8 @@ describe("scheduled mail in-place save", () => {
     }
 
     await unlink(sourcePath);
-    vi.mocked(deliverNewMessageMock).mockReturnValue(
-      Effect.succeed(
-        new SentMessage({
-          id: MessageId.make("sent-with-attachment"),
-          threadId: ThreadId.make("sent-thread-with-attachment"),
-        })
-      )
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.succeed({ refused: [] })
     );
     connection
       .prepare(
@@ -430,15 +399,17 @@ describe("scheduled mail in-place save", () => {
 
     await startScheduledMail();
     try {
-      expect(deliverNewMessageMock).toHaveBeenCalledWith(
-        expect.objectContaining({ accountId }),
-        [
-          expect.objectContaining({
-            bytes: Buffer.from("scheduled contents"),
-            filename: "notes.txt",
-            mediaType: "text/plain",
-          }),
-        ]
+      expect(sendNewMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId,
+          attachments: [
+            expect.objectContaining({
+              bytes: Buffer.from("scheduled contents"),
+              filename: "notes.txt",
+              mediaType: "text/plain",
+            }),
+          ],
+        })
       );
       await expect(access(ownedAttachment.path)).rejects.toMatchObject({
         code: "ENOENT",

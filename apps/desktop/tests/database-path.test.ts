@@ -11,7 +11,7 @@ describe(getDatabasePath, () => {
         isDevelopment: true,
         userDataPath: "/test/user-data",
       })
-    ).toBe(path.join("/test/user-data", "database", "app.dev.sqlite"));
+    ).toBe(path.join("/test/user-data", "database", "mail.dev.sqlite"));
   });
 
   it("preserves the production database path", () => {
@@ -20,7 +20,7 @@ describe(getDatabasePath, () => {
         isDevelopment: false,
         userDataPath: "/test/user-data",
       })
-    ).toBe(path.join("/test/user-data", "database", "app.sqlite"));
+    ).toBe(path.join("/test/user-data", "database", "mail.sqlite"));
   });
 
   it("keeps the sealed key beside its database", () => {

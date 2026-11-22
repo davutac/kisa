@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { createContext, use, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getTemplateApi } from "@/platform/desktop";
 import type {
   ComposerTemplate,
@@ -82,36 +83,41 @@ export const ComposerTemplatesProvider = ({
     });
 
     const load = async (): Promise<void> => {
-      try {
-        const reply = await templateApi.list();
-        if (!active) {
-          return;
-        }
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
-        }
-        const loadedTemplates = applyChanges(
-          sortTemplates(reply.data),
-          pendingChanges
-        );
-        pendingChanges.length = 0;
-        setTemplates(loadedTemplates);
-      } catch {
-        if (active) {
-          toast.error("Could not load templates");
-        }
-      } finally {
-        if (active) {
-          isLoaded = true;
-          if (pendingChanges.length > 0) {
-            const changes = [...pendingChanges];
+      await runWithCleanup(
+        async () => {
+          try {
+            const reply = await templateApi.list();
+            if (!active) {
+              return;
+            }
+            if (!reply.ok) {
+              toast.error(reply.error);
+              return;
+            }
+            const loadedTemplates = applyChanges(
+              sortTemplates(reply.data),
+              pendingChanges
+            );
             pendingChanges.length = 0;
-            setTemplates((current) => applyChanges(current, changes));
+            setTemplates(loadedTemplates);
+          } catch {
+            if (active) {
+              toast.error("Could not load templates");
+            }
           }
-          setIsLoading(false);
+        },
+        () => {
+          if (active) {
+            isLoaded = true;
+            if (pendingChanges.length > 0) {
+              const changes = [...pendingChanges];
+              pendingChanges.length = 0;
+              setTemplates((current) => applyChanges(current, changes));
+            }
+            setIsLoading(false);
+          }
         }
-      }
+      );
     };
     void load();
 

@@ -244,14 +244,14 @@ describe(showNewMailNotifications, () => {
     expect(mocks.createdNotifications).toStrictEqual([]);
   });
 
-  it("shows Gmail's HTML-escaped snippet as plain text", () => {
+  it("shows the stored snippet as the plain text it is", () => {
     const [notification] = selectNewMailNotificationMessages(
       "user@example.com",
       [makeMessage("new", ["INBOX", "UNREAD"])],
-      [{ snippet: "it&#39;s &lt;here&gt; &amp; now", threadId: "thread-new" }]
+      [{ snippet: "it's <here> & &amp; now", threadId: "thread-new" }]
     );
 
-    expect(notification?.snippet).toBe("it's <here> & now");
+    expect(notification?.snippet).toBe("it's <here> & &amp; now");
   });
 
   it("escapes the decoded body back to text only for Linux markup servers", () => {

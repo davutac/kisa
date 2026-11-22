@@ -276,7 +276,9 @@ describe("database import", () => {
       runImport(sessionId, {
         validate: () => Promise.reject(new Error("wrong key")),
       })
-    ).rejects.toThrow("Could not import the database");
+    ).rejects.toThrow(
+      "Databases from Kisa versions before the IMAP mail engine can't be imported"
+    );
     const [activeDatabase, directoryEntries] = await Promise.all([
       readFile(activeDatabasePath, "utf-8"),
       readdir(temporaryDirectory),

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/settings";
 import { Switch } from "@/components/ui/switch";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 import { useAccountSettings } from "@/state/account-settings";
@@ -30,21 +31,26 @@ const SettingsAccountCategorizationRow = ({
 
   const handleChange = async (checked: boolean): Promise<void> => {
     setIsSaving(true);
-    try {
-      const reply = await settingsApi.updateAccountSettings({
-        accountId: account.email,
-        categorizationEnabled: checked,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await settingsApi.updateAccountSettings({
+            accountId: account.email,
+            categorizationEnabled: checked,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+          }
+        } catch {
+          toast.error("Could not save the setting", {
+            description: "Please try again.",
+          });
+        }
+      },
+      () => {
+        setIsSaving(false);
       }
-    } catch {
-      toast.error("Could not save the setting", {
-        description: "Please try again.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   return (

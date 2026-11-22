@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { GmailAttachmentPreview } from "@/shared/ipc/mail";
 import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
@@ -68,16 +69,21 @@ const AttachmentPreviewApp = () => {
     }
     setSaving(true);
     setSaveError(undefined);
-    try {
-      const reply = await bridge.save();
-      if (!reply.ok) {
-        setSaveError(reply.error);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await bridge.save();
+          if (!reply.ok) {
+            setSaveError(reply.error);
+          }
+        } catch {
+          setSaveError("Could not save attachment.");
+        }
+      },
+      () => {
+        setSaving(false);
       }
-    } catch {
-      setSaveError("Could not save attachment.");
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   const attachment = state.status === "ready" ? state.data : undefined;

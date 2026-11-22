@@ -60,6 +60,9 @@ describe("scheduled mail list presentation", () => {
     expect(getScheduledMailAttentionCopy("outcome-unknown")).toBe(
       "Delivery could not be confirmed; check Sent"
     );
+    expect(getScheduledMailAttentionCopy("rate-limit-exhausted")).toBe(
+      "Not sent after repeated tries; the mail server was unreachable or asked Kisa to wait"
+    );
     expect(getScheduledMailAttentionCopy()).toBe(
       "Review this email before sending"
     );

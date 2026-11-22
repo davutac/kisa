@@ -14,7 +14,6 @@ import {
   getMainWindow,
   openThreadWindow,
 } from "../window/create-window";
-import { decodeGmailSnippet } from "./html-entities";
 
 const GMAIL_INBOX_LABEL = "INBOX";
 const GMAIL_UNREAD_LABEL = "UNREAD";
@@ -439,9 +438,7 @@ export const selectNewMailNotificationMessages = (
     )
     .slice(0, MAX_NOTIFICATIONS_PER_SYNC);
   const snippetsByThread = new Map(
-    threads.map(
-      (thread) => [thread.threadId, decodeGmailSnippet(thread.snippet)] as const
-    )
+    threads.map((thread) => [thread.threadId, thread.snippet] as const)
   );
 
   return eligible.map((message) => {
@@ -481,29 +478,39 @@ const loadNotificationMessages = Effect.fn("loadNotificationMessages")(
         return [];
       }
 
-      const messages = await database.query.gmailMessages.findMany({
-        orderBy: { internalDate: "desc" },
-        where: {
-          accountEmail: accountId,
-          messageId: { in: candidateIds },
+      const messages = await database.query.mailMessages.findMany({
+        columns: {
+          fromAddress: true,
+          fromName: true,
+          labelIds: true,
+          messageId: true,
+          receivedAt: true,
+          subject: true,
+          threadId: true,
         },
+        orderBy: { receivedAt: "desc" },
+        where: { accountId, messageId: { in: candidateIds } },
       });
       const eligible = messages
         .filter(
           (message) =>
-            message.labelIds?.includes(GMAIL_INBOX_LABEL) === true &&
+            message.labelIds.includes(GMAIL_INBOX_LABEL) &&
             message.labelIds.includes(GMAIL_UNREAD_LABEL)
         )
-        .slice(0, MAX_NOTIFICATIONS_PER_SYNC);
+        .slice(0, MAX_NOTIFICATIONS_PER_SYNC)
+        .map(({ receivedAt, ...message }) => ({
+          ...message,
+          internalDate: receivedAt,
+        }));
 
       if (eligible.length === 0) {
         return [];
       }
 
-      const threads = await database.query.gmailThreads.findMany({
+      const threads = await database.query.mailThreads.findMany({
         columns: { snippet: true, threadId: true },
         where: {
-          accountEmail: accountId,
+          accountId,
           threadId: {
             in: [...new Set(eligible.map(({ threadId }) => threadId))],
           },

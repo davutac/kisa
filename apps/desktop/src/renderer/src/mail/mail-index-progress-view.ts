@@ -7,16 +7,16 @@ export const toMailIndexDescription = (
   entry: IndexStatusInput | undefined
 ): string => {
   if (entry?.status === "running") {
-    return "Indexing your complete Gmail history…";
+    return "Downloading and indexing your mail…";
   }
 
   if (entry?.status === "paused") {
-    return "Mail history indexing is paused until this account is reconnected.";
+    return "Mail sync is paused until this account is reconnected.";
   }
 
   if (entry?.status === "failed") {
-    return "Mail history indexing stopped. Reindex to try again.";
+    return "Mail sync stopped. Select Sync now to try again.";
   }
 
-  return "Refresh the local copy of your complete Gmail history.";
+  return "Kisa keeps this account's mail downloaded, searchable, and up to date on its own.";
 };

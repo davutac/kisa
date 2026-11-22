@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useHotkeyLayer } from "@/hotkeys";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { gmailLabelTextColor } from "@/mail/label";
 import type { MailApi } from "@/platform/desktop";
 import type {
@@ -142,37 +143,42 @@ const LabelDialog = ({
 
     setIsSaving(true);
 
-    try {
-      const reply =
-        label === undefined
-          ? await mailApi.createLabel({
-              accountId,
-              color: selectedColor,
-              name: trimmedName,
-            })
-          : await mailApi.updateLabel({
-              accountId,
-              color: colorChanged ? selectedColor : undefined,
-              labelId: label.id,
-              name: trimmedName,
-            });
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply =
+            label === undefined
+              ? await mailApi.createLabel({
+                  accountId,
+                  color: selectedColor,
+                  name: trimmedName,
+                })
+              : await mailApi.updateLabel({
+                  accountId,
+                  color: colorChanged ? selectedColor : undefined,
+                  labelId: label.id,
+                  name: trimmedName,
+                });
 
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+
+          onSaved(reply.data);
+          toast.success(`${copy.success} “${reply.data.name}”`);
+          reset();
+          onOpenChange(false);
+        } catch {
+          toast.error(copy.error, {
+            description: "Please try again.",
+          });
+        }
+      },
+      () => {
+        setIsSaving(false);
       }
-
-      onSaved(reply.data);
-      toast.success(`${copy.success} “${reply.data.name}”`);
-      reset();
-      onOpenChange(false);
-    } catch {
-      toast.error(copy.error, {
-        description: "Please try again.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   return (
@@ -182,7 +188,8 @@ const LabelDialog = ({
           <DialogHeader>
             <DialogTitle>{copy.title}</DialogTitle>
             <DialogDescription>
-              {copy.description} {accountId}. Changes are also saved to Gmail.
+              {copy.description} {accountId}. The label also changes on the mail
+              server.
             </DialogDescription>
           </DialogHeader>
 

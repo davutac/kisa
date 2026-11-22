@@ -1,1 +1,0 @@
-ALTER TABLE `account_settings` ADD `notifications_enabled` integer DEFAULT true NOT NULL;

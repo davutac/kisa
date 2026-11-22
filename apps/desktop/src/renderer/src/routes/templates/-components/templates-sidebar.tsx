@@ -39,6 +39,7 @@ const TemplatesSidebar = ({
 
   useEffect(() => {
     selectedTemplateRef.current?.scrollIntoView({ block: "nearest" });
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- The selected row is scrolled into view whenever the selection or the list changes.
   }, [selectedTemplateId, templates]);
 
   let content;

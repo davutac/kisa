@@ -25,7 +25,7 @@ import {
 import { GmailOutgoingSubject } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database-query";
 import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
-import { parseMailbox } from "./gmail-payload";
+import { parseMailbox } from "./mail-address";
 import { recoverMissingInlineContentIds } from "./outgoing-attachment-files";
 import { claimFirstAvailableScheduledMail } from "./scheduled-mail-claim-pages";
 import { ScheduledMailError, scheduledMailError } from "./scheduled-mail-error";

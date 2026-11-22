@@ -91,6 +91,25 @@ import {
   saveAttachment as saveAttachmentAction,
   saveAttachmentPreview as saveAttachmentPreviewAction,
 } from "../../mail/attachment-actions";
+import { getMailEngineSyncStatus } from "../../mail/engine/mail-engine";
+import {
+  bulkMutateThreads,
+  changeThreadReadState,
+  createAccountLabelFromRequest,
+  deleteAccountLabelFromRequest,
+  deleteThreadForever,
+  listCachedThreadPage,
+  listLabelCatalog,
+  loadSpamStatus,
+  markThreadNotSpam as recoverThreadFromSpam,
+  openThread,
+  refreshLabelCatalog,
+  sendNewMessageFromRequest,
+  sendThreadMessageFromRequest,
+  setThreadLabel,
+  trashThread,
+  updateAccountLabel,
+} from "../../mail/engine/mail-ipc";
 import {
   discardMailDraft,
   listStashedDrafts as listStashedDraftsAction,
@@ -101,25 +120,6 @@ import {
   listIndexedSenders,
   searchIndexedThreads,
 } from "../../mail/mail-search";
-import {
-  bulkMutateThreads,
-  createGmailLabel,
-  deleteGmailLabel,
-  deleteThreadForever,
-  getMailSyncStatus,
-  getSpamStatus as loadSpamStatus,
-  listCachedThreadPage,
-  listGmailLabelCatalog,
-  loadFullThread,
-  markThreadNotSpam as recoverThreadFromSpam,
-  sendNewMessage,
-  sendThreadMessage,
-  setThreadLabel,
-  setThreadReadState,
-  syncGmailLabelCatalog,
-  trashThread,
-  updateGmailLabel,
-} from "../../mail/mail-sync";
 import {
   bindOutgoingAttachmentOwner,
   OutgoingAttachmentAuthorizationError,
@@ -274,7 +274,7 @@ export const saveAttachmentPreview = makeIpcMethod({
 
 export const getSyncStatus = makeIpcMethod({
   channel: MAIL_SYNC_STATUS_CHANNEL,
-  handler: () => Effect.sync(getMailSyncStatus),
+  handler: () => Effect.sync(getMailEngineSyncStatus),
   payload: Schema.Void,
   result: GmailSyncStatus,
 });
@@ -298,7 +298,7 @@ export const listCachedPage = makeIpcMethod({
 export const listLabels = makeIpcMethod({
   channel: MAIL_LIST_LABELS_CHANNEL,
   handler: (request) =>
-    toIpcReply(listGmailLabelCatalog(request), "Could not load Gmail labels"),
+    toIpcReply(listLabelCatalog(request), "Could not load labels"),
   payload: GmailLabelCatalogRequest,
   result: GmailLabelCatalogReply,
 });
@@ -306,7 +306,10 @@ export const listLabels = makeIpcMethod({
 export const createLabel = makeIpcMethod({
   channel: MAIL_CREATE_LABEL_CHANNEL,
   handler: (request) =>
-    toIpcReply(createGmailLabel(request), "Could not create Gmail label"),
+    toIpcReply(
+      createAccountLabelFromRequest(request),
+      "Could not create label"
+    ),
   payload: GmailLabelCreateRequest,
   result: GmailLabelCreateReply,
 });
@@ -314,7 +317,10 @@ export const createLabel = makeIpcMethod({
 export const deleteLabel = makeIpcMethod({
   channel: MAIL_DELETE_LABEL_CHANNEL,
   handler: (request) =>
-    toIpcReply(deleteGmailLabel(request), "Could not delete Gmail label"),
+    toIpcReply(
+      deleteAccountLabelFromRequest(request),
+      "Could not delete label"
+    ),
   payload: GmailLabelDeleteRequest,
   result: GmailLabelDeleteReply,
 });
@@ -322,7 +328,7 @@ export const deleteLabel = makeIpcMethod({
 export const updateLabel = makeIpcMethod({
   channel: MAIL_UPDATE_LABEL_CHANNEL,
   handler: (request) =>
-    toIpcReply(updateGmailLabel(request), "Could not update Gmail label"),
+    toIpcReply(updateAccountLabel(request), "Could not update label"),
   payload: GmailLabelUpdateRequest,
   result: GmailLabelUpdateReply,
 });
@@ -330,7 +336,7 @@ export const updateLabel = makeIpcMethod({
 export const syncLabels = makeIpcMethod({
   channel: MAIL_SYNC_LABELS_CHANNEL,
   handler: (request) =>
-    toIpcReply(syncGmailLabelCatalog(request), "Could not sync Gmail labels"),
+    toIpcReply(refreshLabelCatalog(request), "Could not sync labels"),
   payload: GmailLabelCatalogRequest,
   result: GmailLabelCatalogReply,
 });
@@ -353,8 +359,7 @@ export const listSenders = makeIpcMethod({
 
 export const loadThread = makeIpcMethod({
   channel: MAIL_LOAD_THREAD_CHANNEL,
-  handler: (request) =>
-    toIpcReply(loadFullThread(request), "Could not load email"),
+  handler: (request) => toIpcReply(openThread(request), "Could not load email"),
   payload: GmailThreadRequest,
   result: GmailThreadReply,
 });
@@ -425,7 +430,7 @@ export const discardDraft = makeIpcMethod({
 export const setReadState = makeIpcMethod({
   channel: MAIL_SET_THREAD_READ_CHANNEL,
   handler: (request) =>
-    toIpcReply(setThreadReadState(request), "Could not update email"),
+    toIpcReply(changeThreadReadState(request), "Could not update email"),
   payload: GmailThreadReadStateRequest,
   result: GmailThreadMutationReply,
 });
@@ -455,7 +460,10 @@ export const sendNew = makeIpcMethod({
           ok: false as const,
         })
       : toIpcReply(
-          sendNewMessage(request, bindOutgoingAttachmentOwner(event.sender)),
+          sendNewMessageFromRequest(
+            request,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
           "Could not send message"
         ),
   payload: GmailMessageSendRequest,
@@ -471,7 +479,10 @@ export const sendThread = makeIpcMethod({
           ok: false as const,
         })
       : toIpcReply(
-          sendThreadMessage(request, bindOutgoingAttachmentOwner(event.sender)),
+          sendThreadMessageFromRequest(
+            request,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
           "Could not send message"
         ),
   payload: GmailThreadMessageSendRequest,

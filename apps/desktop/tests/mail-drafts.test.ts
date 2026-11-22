@@ -13,10 +13,6 @@ import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { Effect, Option, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type {
-  sendRendererEvent,
-  sendRendererEventToEachWindow,
-} from "../src/main/electron/renderer-events";
 import {
   discardMailDraft,
   listStashedDrafts,
@@ -25,6 +21,7 @@ import {
 } from "../src/main/mail/mail-drafts";
 import { outgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-attachment-authorizations";
 import { MailDraftChanged } from "../src/shared/ipc/mail";
+import { insertGmailAccount } from "./fixtures/mail-accounts";
 
 const rendererEvents = vi.hoisted(() => ({
   owners: [
@@ -83,33 +80,18 @@ vi.mock(import("../src/main/database-query"), async () => {
   return { withDatabaseClient: useTestDatabase };
 });
 
-vi.mock(import("../src/main/electron/renderer-events"), () => {
-  const sendEvent: typeof sendRendererEvent = (_channel, _schema, payload) => {
+vi.mock(import("../src/main/electron/renderer-events"), () => ({
+  sendRendererEvent: (_channel, _schema, payload) => {
     rendererEvents.payloads.push(payload);
-  };
-  const sendEventToEachWindow: typeof sendRendererEventToEachWindow = (
-    _channel,
-    _schema,
-    makePayload
-  ) => {
+  },
+  sendRendererEventToEachWindow: (_channel, _schema, makePayload) => {
     for (const owner of rendererEvents.owners) {
       rendererEvents.payloads.push(makePayload(owner));
     }
-  };
+  },
+}));
 
-  return {
-    sendRendererEvent: sendEvent,
-    sendRendererEventToEachWindow: sendEventToEachWindow,
-  };
-});
-
-connection
-  .prepare(
-    `INSERT INTO google_accounts (
-      created_at, credentials, email, scopes, sort_order, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)`
-  )
-  .run(1, Buffer.from([1]), "person@example.com", "[]", 1, 1);
+insertGmailAccount(connection, "person@example.com");
 
 const newDraft = {
   attachments: [],

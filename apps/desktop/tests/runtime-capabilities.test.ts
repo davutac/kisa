@@ -188,6 +188,8 @@ describe(getRuntimeCapabilities, () => {
     onScheduledMailOutcome: () => () => {},
     onTrustedImageSendersChanged: () => () => {},
     onUpdateStatus: () => () => {},
+    openAccountSetup: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     openAttachmentPreview: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     openThreadWindow: () =>
@@ -218,11 +220,12 @@ describe(getRuntimeCapabilities, () => {
       }),
     selectDatabaseImportFile: () =>
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
-    sendMessage: () => Promise.resolve({ data: undefined, ok: true as const }),
+    sendMessage: () =>
+      Promise.resolve({ data: { refusedRecipients: [] }, ok: true as const }),
     sendScheduledMailNow: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
-      Promise.resolve({ data: undefined, ok: true as const }),
+      Promise.resolve({ data: { refusedRecipients: [] }, ok: true as const }),
     setAppSettings: (request) =>
       Promise.resolve({
         data: request,
@@ -290,6 +293,7 @@ describe(getRuntimeCapabilities, () => {
         getGoogleOAuthClientStatus: desktopBridge.getGoogleOAuthClientStatus,
         listGoogleAccounts: desktopBridge.listGoogleAccounts,
         onGoogleAccountsChanged: desktopBridge.onGoogleAccountsChanged,
+        openAccountSetup: desktopBridge.openAccountSetup,
         reorderGoogleAccounts: desktopBridge.reorderGoogleAccounts,
         setupGoogleOAuthClient: desktopBridge.setupGoogleOAuthClient,
         startGoogle: desktopBridge.startGoogleAuth,

@@ -3,7 +3,6 @@ import { useId, useState } from "react";
 
 import MailLabelBadge from "@/components/mail/mail-label-badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -128,47 +127,57 @@ const LabelColorField = ({
   onSelectText,
   selectedBackground,
   selectedText,
-}: LabelColorFieldProps) => (
-  <div className="grid gap-1.5">
-    <div className="flex items-center justify-between gap-3">
-      <Label>Color</Label>
-      <MailLabelBadge
-        ariaLabel={`Label preview: ${label}`}
-        className="max-w-48"
-        color={
-          selectedBackground === undefined || selectedText === undefined
-            ? undefined
-            : { background: selectedBackground, text: selectedText }
-        }
-        label={label}
-      />
-    </div>
-    <div className="flex items-center gap-1.5">
-      {onClear === undefined ? null : (
-        <Button
-          aria-pressed={selectedBackground === undefined}
-          disabled={disabled}
-          onClick={onClear}
-          type="button"
-          variant={selectedBackground === undefined ? "secondary" : "outline"}
+}: LabelColorFieldProps) => {
+  const captionId = useId();
+
+  // The caption names the whole control group, so it is not a `<label>`.
+  return (
+    <fieldset aria-labelledby={captionId} className="grid min-w-0 gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span
+          className="flex items-center gap-2 text-xs/relaxed leading-none font-medium select-none"
+          id={captionId}
         >
-          None
-        </Button>
-      )}
-      <GmailLabelColorPicker
-        disabled={disabled}
-        label="Background"
-        onSelect={onSelectBackground}
-        selected={selectedBackground}
-      />
-      <GmailLabelColorPicker
-        disabled={disabled}
-        label="Text"
-        onSelect={onSelectText}
-        selected={selectedText}
-      />
-    </div>
-  </div>
-);
+          Color
+        </span>
+        <MailLabelBadge
+          ariaLabel={`Label preview: ${label}`}
+          className="max-w-48"
+          color={
+            selectedBackground === undefined || selectedText === undefined
+              ? undefined
+              : { background: selectedBackground, text: selectedText }
+          }
+          label={label}
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        {onClear === undefined ? null : (
+          <Button
+            aria-pressed={selectedBackground === undefined}
+            disabled={disabled}
+            onClick={onClear}
+            type="button"
+            variant={selectedBackground === undefined ? "secondary" : "outline"}
+          >
+            None
+          </Button>
+        )}
+        <GmailLabelColorPicker
+          disabled={disabled}
+          label="Background"
+          onSelect={onSelectBackground}
+          selected={selectedBackground}
+        />
+        <GmailLabelColorPicker
+          disabled={disabled}
+          label="Text"
+          onSelect={onSelectText}
+          selected={selectedText}
+        />
+      </div>
+    </fieldset>
+  );
+};
 
 export default LabelColorField;

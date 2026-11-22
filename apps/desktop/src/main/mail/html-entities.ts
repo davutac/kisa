@@ -18,7 +18,7 @@ const isCharacterCodePoint = (code: number): boolean =>
 
 /** Decodes numeric and common named HTML entities; others stay as written. */
 export const decodeHtmlEntities = (value: string): string =>
-  value.replace(ENTITY_PATTERN, (match: string, ...groups: unknown[]) => {
+  value.replaceAll(ENTITY_PATTERN, (match: string, ...groups: unknown[]) => {
     const { decimalDigits, hexDigits, name } = groups.at(-1) as {
       decimalDigits?: string;
       hexDigits?: string;
@@ -36,14 +36,3 @@ export const decodeHtmlEntities = (value: string): string =>
 
     return isCharacterCodePoint(code) ? String.fromCodePoint(code) : match;
   });
-
-/**
- * Gmail's `snippet` is plain text with HTML special characters escaped, for
- * example `it&#39;s` or `&lt;a@example.com&gt;`. The cache stores it exactly
- * as Gmail sent it, so every reader that hands a snippet to a person (thread
- * rows, search results, notifications) decodes it here on the way out. Decoding
- * once at presentation keeps already-cached rows correct without a migration
- * and can never decode a snippet twice.
- */
-export const decodeGmailSnippet = (snippet: string): string =>
-  decodeHtmlEntities(snippet);

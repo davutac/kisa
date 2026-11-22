@@ -3,7 +3,7 @@ import {
   CalendarDaysIcon,
   ChevronDownIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import {
   formatScheduledAt,
@@ -64,13 +65,14 @@ const CustomScheduleDialog = ({
   onChoose,
   onOpenChange,
 }: CustomScheduleDialogProps) => {
-  const initial = useMemo(() => {
+  // The dialog reads the clock once when it opens.
+  const initial = useInstanceValue(() => {
     const now = new Date();
     return {
       scheduledAt: getInitialCustomSchedule(now),
       startOfToday: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
     };
-  }, []);
+  });
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(
     initial.scheduledAt
   );

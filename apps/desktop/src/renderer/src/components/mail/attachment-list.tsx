@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import MailAttachmentPill from "@/components/mail/attachment-pill";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getMailApi } from "@/platform/desktop";
 import { getAttachmentPreviewKind } from "@/shared/attachments";
 import type { GmailAttachmentSummary } from "@/shared/ipc/mail";
@@ -37,24 +38,29 @@ const MailAttachmentList = ({
     };
     setActiveAttachment(key);
 
-    try {
-      const reply =
-        action === "download"
-          ? await mailApi.saveAttachment(request)
-          : await mailApi.openAttachmentPreview(request);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply =
+            action === "download"
+              ? await mailApi.saveAttachment(request)
+              : await mailApi.openAttachmentPreview(request);
 
-      if (!reply.ok) {
-        toast.error(reply.error);
+          if (!reply.ok) {
+            toast.error(reply.error);
+          }
+        } catch {
+          toast.error(
+            action === "download"
+              ? "Could not save attachment"
+              : "Could not open attachment preview"
+          );
+        }
+      },
+      () => {
+        setActiveAttachment(undefined);
       }
-    } catch {
-      toast.error(
-        action === "download"
-          ? "Could not save attachment"
-          : "Could not open attachment preview"
-      );
-    } finally {
-      setActiveAttachment(undefined);
-    }
+    );
   };
 
   return attachments.map((attachment, index) => {

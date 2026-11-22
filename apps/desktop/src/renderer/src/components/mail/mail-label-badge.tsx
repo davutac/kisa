@@ -31,10 +31,11 @@ const MailLabelBadge = ({
   onClick,
   onClickAriaLabel,
   onRemove,
-  removeAriaLabel = `Remove ${label}`,
+  removeAriaLabel,
   size = "default",
 }: MailLabelBadgeProps) => {
   const canRemove = onRemove !== undefined;
+  const removeLabel = removeAriaLabel ?? `Remove ${label}`;
 
   return (
     <Badge
@@ -67,7 +68,7 @@ const MailLabelBadge = ({
       )}
       {canRemove ? (
         <button
-          aria-label={removeAriaLabel}
+          aria-label={removeLabel}
           className={cn(
             "pointer-events-none flex h-3 w-0 shrink-0 items-center justify-center overflow-hidden rounded-full opacity-0 transition-[width,margin,opacity] group-hover/badge:pointer-events-auto group-hover/badge:ml-0.5 group-hover/badge:w-3 group-hover/badge:opacity-100 focus-visible:pointer-events-auto focus-visible:ml-0.5 focus-visible:w-3 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-current focus-visible:outline-none",
             isRemoving && "pointer-events-auto ml-0.5 w-3 opacity-100"
@@ -77,7 +78,7 @@ const MailLabelBadge = ({
             event.stopPropagation();
             onRemove();
           }}
-          title={removeAriaLabel}
+          title={removeLabel}
           type="button"
         >
           {isRemoving ? (

@@ -29,17 +29,17 @@ These are strong defaults, not a substitute for the developer's explicit directi
 ## Glossary
 
 - **user**: the person reading and managing mail in Kisa.
-- **account**: one connected Google account, identified internally by its email.
-- **thread**: a Gmail conversation containing one or more messages.
+- **account**: one connected mail account, identified internally by its email.
+- **thread**: a conversation containing one or more messages: Gmail's own thread, or one built from `References` for other providers.
 - **mailbox**: the visible, account-filtered thread collection in the renderer.
 - **cache**: the local SQLite representation used for fast mailbox reads.
-- **index** or **backfill**: the resumable background process that stores and indexes historical mail for local search.
+- **index**: the resumable background work (the skeleton walk, then bodies) that caches and indexes the whole mailbox for local search.
 - **bridge**: the typed `window.desktopBridge` capability API exposed by preload.
 - **OAuth callback**: the temporary loopback listener that receives Google's authorization response in Electron main.
 
 ## Sharp Edges
 
-1. **Do not damage live mail data.** `pnpm --dir apps/desktop dev` uses Electron's real `app.getPath("userData")`; the database is `<userData>/database/app.sqlite`. Never delete, reset, migrate by hand, or open that database read-write outside Kisa. Tests must use temporary databases. Do not connect or disconnect accounts, send mail, trash mail, or change read state in a real account unless the developer explicitly asks.
+1. **Do not damage live mail data.** `pnpm --dir apps/desktop dev` uses Electron's real `app.getPath("userData")`; the database is `<userData>/database/mail.dev.sqlite` (`mail.sqlite` when packaged); the older `app.sqlite` and `app.dev.sqlite` files from before the mail engine are left untouched. Never delete, reset, migrate by hand, or open that database read-write outside Kisa. Tests must use temporary databases. Do not connect or disconnect accounts, send mail, trash mail, or change read state in a real account unless the developer explicitly asks.
 2. **Do not expose secrets or message content.** Never print, commit, fixture, screenshot, or paste real OAuth codes, access tokens, refresh tokens, encrypted credential blobs, private email bodies, or the contents of local app data. Redact boundary errors and logs.
 3. **Do not kill by pattern.** Never use `pkill -f` or a name/path match that can select unrelated Electron, Vite, Codex, or worker processes. Stop only a PID captured from a process you started, or a verified listener owning the exact port you started.
 4. **Do not mutate external infrastructure casually.** `deploy`, the release helper, tags, pushes, GitHub releases, OAuth configuration, and real Gmail mutations require an explicit request.
@@ -49,8 +49,8 @@ These are strong defaults, not a substitute for the developer's explicit directi
 The common Kisa defect is a change that works in one view or account but leaves another path stale. Before calling a feature complete, decide which of these apply:
 
 - **Interaction paths.** Mouse controls, keyboard commands, focus behavior, accessible labels, tooltips, and settings must describe and invoke the same behavior. Central hotkey definitions live in `renderer/src/hotkeys`; do not add ad-hoc global key listeners for product commands.
-- **Account views.** Check one selected account, All Accounts, account switching, disconnected accounts, and two accounts with colliding Gmail IDs. Persisted and in-memory keys must include account identity where needed.
-- **Mail state.** Consider the local cache, FTS search, foreground Gmail result, history sync, background backfill, unread badge, renderer subscriptions, and optimistic UI. A mutation is incomplete if another mounted view stays stale.
+- **Account views.** Check one selected account, All Accounts, account switching, disconnected accounts, and two accounts with colliding message or thread ids. Persisted and in-memory keys must include account identity where needed.
+- **Mail state.** Consider the local cache, FTS search, the foreground IMAP result, incremental sync, the background skeleton and body work, unread badge, renderer subscriptions, and optimistic UI. A mutation is incomplete if another mounted view stays stale.
 - **Runtime boundaries.** Renderer, preload, main, and the database utility process have different APIs and security properties. A cross-boundary change needs matching contracts, codecs, implementations, and tests.
 - **Lifecycle states.** Startup, no accounts, loading, empty, partial index, offline/error, retry, cancellation, disconnect, quit, restart, and packaged paths should remain coherent.
 - **Reverse states.** If a behavior can be entered, define how it is exited and observed. Mark read needs mark unread; trust sender needs account cleanup; optimistic state needs rollback or authoritative refresh.
@@ -63,7 +63,7 @@ Kisa is a pnpm/Turborepo workspace:
 
 - `apps/desktop` - Electron main, preload, database utility process, and React renderer.
 - `packages/database` - Drizzle/SQLite schemas, clients, runtime, and migrations.
-- `packages/gmail` - reusable Gmail domain models, gateway/store interfaces, MIME utilities, errors, and service logic.
+- `packages/mail` - the mail engine: provider dialects, sync, thread changes, labels, MIME planning, typed failures, and the IMAP, SMTP and store ports.
 - `docs/architecture` - current architectural contracts and feature designs.
 - `docs/research` - dated research and rationale, not necessarily current product behavior.
 - `repos` - vendored read-only reference repositories.
@@ -83,7 +83,7 @@ Workspace packages are only `apps/*` and `packages/*`. Use `pnpm-lock.yaml` as t
 - Develop only Electron: `pnpm --dir apps/desktop dev`.
 - Typecheck: `pnpm typecheck`; a narrower example is `pnpm --dir apps/desktop typecheck`.
 - Focused desktop test: `pnpm --dir apps/desktop exec vitest run tests/<name>.test.ts`.
-- Focused Gmail package test: `pnpm --dir packages/gmail exec vitest run tests/<name>.test.ts`.
+- Focused mail package test: `pnpm --dir packages/mail exec vitest run tests/<name>.test.ts`.
 - Full verification: `pnpm check`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 - Apply Ultracite fixes: `pnpm fix`.
 - Generate a database migration after schema changes: `pnpm --dir packages/database generate`.
@@ -131,14 +131,14 @@ The main process owns privileged capabilities, including the installed-app OAuth
 - Do not move synchronous SQLite access back into Electron main or the renderer. A complete async Drizzle transaction must remain serialized in the utility process so unrelated RPC calls cannot interleave inside it.
 - Electron Builder copies migrations to `resources/database/drizzle`; packaged code resolves them through `process.resourcesPath`.
 
-## Gmail, OAuth, and Mail Content
+## Mail Engine, OAuth, and Mail Content
 
-- `packages/gmail` owns reusable domain models, service rules, ports, MIME contracts, and typed failures. Keep Electron, Google SDK, SQLite, and renderer concerns out of it.
-- `apps/desktop/src/main/mail` owns the Gmail SDK adapter, store adapter, synchronization, indexing, search, MIME presentation, quota, and sender trust. Renderer DTOs stay at the shared IPC boundary.
-- Keep Gmail work account-scoped. Foreground operations take priority over backfill; cursor and data writes that guarantee resume safety belong in the same transaction. Disconnect must cancel account work before deleting all account credentials, cached mail, index rows, progress, settings, and trust.
-- Preserve least-privilege OAuth scopes. Tokens stay in main and are encrypted with Electron `safeStorage`; reject insecure Linux `basic_text` storage. Never put an access token, refresh token, or credential blob in a redirect URL, IPC payload, log, renderer state, or test fixture. Open Google authorization in the system browser, protect it with PKCE and validated OAuth state, and receive the response on a temporary listener bound only to `127.0.0.1` on an operating-system-assigned port.
+- `packages/mail` owns the engine's rules: dialects, sync, changes, labels, MIME planning, ports, and typed failures. Keep Electron, imapflow, nodemailer, SQLite, and renderer concerns out of it. See `docs/architecture/mail-engine.md`.
+- `apps/desktop/src/main/mail` owns the IMAP and SMTP adapters, the SQLite store, the engine runtime and its background loop, sending, search, MIME presentation, notifications, and sender trust. Renderer DTOs stay at the shared IPC boundary.
+- Keep mail work account-scoped. Foreground operations get their own connection and take priority over background work; progress and data writes that guarantee resume safety belong in the same transaction. Disconnect must cancel account work before deleting all account credentials, cached mail, index rows, progress, settings, and trust.
+- Preserve least-privilege OAuth scopes. Tokens and app passwords stay in main and are encrypted with Electron `safeStorage`; reject insecure Linux `basic_text` storage. Never put an access token, refresh token, password, or credential blob in a redirect URL, IPC payload, log, renderer state, or test fixture. The one exception is the app password a user types into the dedicated Add account window: it crosses IPC exactly once, from that window's renderer to main, write-only. Main decodes the request with an Effect Schema at the boundary, wraps the password in `Redacted` at once, and keeps it only in the sealed credential blob; it is never returned, echoed in an error, logged, or held in renderer state beyond its input element. No other window or channel may carry a credential. Open Google authorization in the system browser, protect it with PKCE and validated OAuth state, and receive the response on a temporary listener bound only to `127.0.0.1` on an operating-system-assigned port.
 - Email HTML is not trusted application markup. Preserve iframe isolation and CSP, sender-controlled URL checks, remote-image stripping and opt-in flow, external navigation policy, safe filenames, and the on-demand attachment boundary.
-- Gmail failures such as reauthorization, rate limits, expired history, unknown send outcome, malformed MIME, and store failure remain distinct typed domain errors. Do not collapse them into a misleading generic success or retry loop.
+- Mail failures such as a refused sign-in, throttling, a lost connection, a rejected or unknown send outcome, malformed MIME, and store failure remain distinct typed domain errors. Do not collapse them into a misleading generic success or retry loop.
 
 ## Effect and TypeScript
 

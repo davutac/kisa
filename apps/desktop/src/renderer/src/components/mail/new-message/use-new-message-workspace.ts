@@ -12,6 +12,7 @@ import type { EmailComposerValue } from "@/components/mail/email-composer";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import {
   changeNewMailDraftAccount,
   createNewMailDraft,
@@ -21,6 +22,7 @@ import {
   toMailDraftComposerValue,
   updateMailDraftBody,
 } from "@/mail/mail-draft";
+import { describeSendOutcome } from "@/mail/send-outcome";
 import { getMailApi } from "@/platform/desktop";
 import {
   appendEmailSignatureBody,
@@ -160,6 +162,7 @@ export const useNewMessageWorkspace = ({
 
   useLayoutEffect(() => {
     focus.restorePending();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A swapped-in draft remounts its fields, so pending focus is restored after each draft change.
   }, [draftId, focus]);
 
   const availableStashes = stashes.filter(({ id }) => id !== draftId);
@@ -364,38 +367,44 @@ export const useNewMessageWorkspace = ({
       return;
     }
     setIsSending(true);
-    try {
-      const preparedAttachments = await prepareAttachments(
-        currentDraft.attachments
-      );
-      if (preparedAttachments === undefined) {
-        return;
+    await runWithCleanup(
+      async () => {
+        try {
+          const preparedAttachments = await prepareAttachments(
+            currentDraft.attachments
+          );
+          if (preparedAttachments === undefined) {
+            return;
+          }
+          const reply = await mailApi.sendMessage({
+            accountId: selectedAccountId,
+            attachments: preparedAttachments,
+            bcc: recipients.bcc,
+            body: currentDraft.body,
+            cc: recipients.cc,
+            subject,
+            to: recipients.to,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          enqueueDraftOperation(async () => {
+            await popDraft(currentDraft);
+          });
+          const notice = describeSendOutcome(reply.data);
+          toast[notice.tone](notice.message);
+          onOpenChange(false);
+        } catch (error) {
+          toast.error(
+            error instanceof Error ? error.message : "Could not send message"
+          );
+        }
+      },
+      () => {
+        setIsSending(false);
       }
-      const reply = await mailApi.sendMessage({
-        accountId: selectedAccountId,
-        attachments: preparedAttachments,
-        bcc: recipients.bcc,
-        body: currentDraft.body,
-        cc: recipients.cc,
-        subject,
-        to: recipients.to,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      enqueueDraftOperation(async () => {
-        await popDraft(currentDraft);
-      });
-      toast.success("Message sent");
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not send message"
-      );
-    } finally {
-      setIsSending(false);
-    }
+    );
   };
 
   const updateComposer = (nextComposer: EmailComposerValue): void => {

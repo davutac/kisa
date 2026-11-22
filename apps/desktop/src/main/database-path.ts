@@ -10,7 +10,7 @@ export const getDatabasePath = ({
   path.join(
     userDataPath,
     "database",
-    isDevelopment ? "app.dev.sqlite" : "app.sqlite"
+    isDevelopment ? "mail.dev.sqlite" : "mail.sqlite"
   );
 
 export const getDatabaseKeyPath = (databasePath: string): string =>

@@ -75,6 +75,7 @@ export const useScheduledMailWorkspace = () => {
   const pendingFocusKeyRef = useRef<string | null | false>(false);
   const editOriginKeyRef = useRef<string | null>(null);
   const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
+  // oxlint-disable-next-line react/incompatible-library -- TanStack Virtual returns a mutable instance, so React Compiler leaves this hook uncompiled; only per-render values and the stable `measureElement` leave it.
   const virtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
     count:
       items.length + (nextCursor === undefined || error !== undefined ? 0 : 1),

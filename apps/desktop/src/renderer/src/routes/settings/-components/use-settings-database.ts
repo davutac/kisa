@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
 import type {
   DatabaseImportFileKind,
@@ -37,18 +38,23 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
 
   const exportRecoveryKey = async (): Promise<void> => {
     setPendingAction("export");
-    try {
-      const reply = await settingsApi.exportDatabaseRecoveryKey();
-      if (!reply.ok) {
-        toast.error(reply.error);
-      } else if (reply.data === "saved") {
-        toast.success("Database recovery key exported");
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await settingsApi.exportDatabaseRecoveryKey();
+          if (!reply.ok) {
+            toast.error(reply.error);
+          } else if (reply.data === "saved") {
+            toast.success("Database recovery key exported");
+          }
+        } catch {
+          toast.error("Could not export the database recovery key");
+        }
+      },
+      () => {
+        setPendingAction(undefined);
       }
-    } catch {
-      toast.error("Could not export the database recovery key");
-    } finally {
-      setPendingAction(undefined);
-    }
+    );
   };
 
   const openImport = async (): Promise<void> => {
@@ -119,21 +125,26 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
       return;
     }
     setSelectingKind(kind);
-    try {
-      const reply = await settingsApi.selectDatabaseImportFile({
-        kind,
-        sessionId,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-      } else if (reply.data !== null) {
-        rememberImportFile(kind, sessionId, reply.data.fileName);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await settingsApi.selectDatabaseImportFile({
+            kind,
+            sessionId,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+          } else if (reply.data !== null) {
+            rememberImportFile(kind, sessionId, reply.data.fileName);
+          }
+        } catch {
+          toast.error("Could not select the import file");
+        }
+      },
+      () => {
+        setSelectingKind((current) => (current === kind ? undefined : current));
       }
-    } catch {
-      toast.error("Could not select the import file");
-    } finally {
-      setSelectingKind((current) => (current === kind ? undefined : current));
-    }
+    );
   };
 
   const dropImportFile = async (
@@ -160,22 +171,27 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
       return;
     }
     setSelectingKind(kind);
-    try {
-      const reply = await settingsApi.dropDatabaseImportFile({
-        file,
-        kind,
-        sessionId,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-      } else if (reply.data !== null) {
-        rememberImportFile(kind, sessionId, reply.data.fileName);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await settingsApi.dropDatabaseImportFile({
+            file,
+            kind,
+            sessionId,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+          } else if (reply.data !== null) {
+            rememberImportFile(kind, sessionId, reply.data.fileName);
+          }
+        } catch {
+          toast.error("Could not use the dropped import file");
+        }
+      },
+      () => {
+        setSelectingKind((current) => (current === kind ? undefined : current));
       }
-    } catch {
-      toast.error("Could not use the dropped import file");
-    } finally {
-      setSelectingKind((current) => (current === kind ? undefined : current));
-    }
+    );
   };
 
   const startImport = async (): Promise<void> => {
@@ -185,25 +201,30 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
     }
     setPendingAction("import");
     setImportProgress(undefined);
-    try {
-      const reply = await settingsApi.importDatabase({ sessionId });
-      if (reply.ok) {
-        setImportProgress("ready");
-        toast.success("Database import ready", {
-          description: "Restart Kisa to activate it.",
-        });
-      } else {
-        toast.error(reply.error);
-        setImportProgress(undefined);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await settingsApi.importDatabase({ sessionId });
+          if (reply.ok) {
+            setImportProgress("ready");
+            toast.success("Database import ready", {
+              description: "Restart Kisa to activate it.",
+            });
+          } else {
+            toast.error(reply.error);
+            setImportProgress(undefined);
+          }
+        } catch {
+          toast.error("Could not import the database");
+          setImportProgress(undefined);
+        }
+      },
+      () => {
+        setPendingAction(undefined);
+        setImportSession(undefined);
+        setSelectingKind(undefined);
       }
-    } catch {
-      toast.error("Could not import the database");
-      setImportProgress(undefined);
-    } finally {
-      setPendingAction(undefined);
-      setImportSession(undefined);
-      setSelectingKind(undefined);
-    }
+    );
   };
 
   return {

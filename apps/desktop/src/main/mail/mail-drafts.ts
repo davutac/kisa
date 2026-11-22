@@ -264,8 +264,9 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
       }
 
       if (input.accountId !== undefined) {
-        const account = await transaction.query.googleAccounts.findFirst({
-          where: { email: input.accountId },
+        const account = await transaction.query.mailAccounts.findFirst({
+          columns: { accountId: true },
+          where: { accountId: input.accountId },
         });
         if (account === undefined) {
           throw new Error("Draft account is not connected");

@@ -165,6 +165,7 @@ const MailThreadList = ({
   // the last row, so the list reserves room below it while it is shown.
   const bottomClearance = checkedThreadIds.size > 0 ? 80 : 16;
   const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
+  // oxlint-disable-next-line react/incompatible-library -- TanStack Virtual returns a mutable instance, so React Compiler leaves this component uncompiled; only per-render values and the stable `measureElement` leave it.
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
     count: threads.length + (hasTrailingRow ? 1 : 0),
     estimateSize: () => 88,

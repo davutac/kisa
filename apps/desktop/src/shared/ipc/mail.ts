@@ -708,11 +708,17 @@ export type GmailSpamStatusReply = typeof GmailSpamStatusReply.Type;
 export const GmailReindexReply = IpcReply(Schema.Void);
 export type GmailReindexReply = typeof GmailReindexReply.Type;
 
-export const GmailThreadMessageSendReply = IpcReply(Schema.Void);
+/** A sent message; the server may have refused some recipients. */
+export const MailSendOutcome = Schema.Struct({
+  refusedRecipients: Schema.Array(Schema.String),
+});
+export type MailSendOutcome = typeof MailSendOutcome.Type;
+
+export const GmailThreadMessageSendReply = IpcReply(MailSendOutcome);
 export type GmailThreadMessageSendReply =
   typeof GmailThreadMessageSendReply.Type;
 
-export const GmailMessageSendReply = IpcReply(Schema.Void);
+export const GmailMessageSendReply = IpcReply(MailSendOutcome);
 export type GmailMessageSendReply = typeof GmailMessageSendReply.Type;
 
 export const GmailOutgoingAttachmentPrepareReply = IpcReply(

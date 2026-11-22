@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useThreadConversationStore } from "@/components/mail/thread-conversation-store";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { createThreadMailDraft } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
@@ -68,28 +69,36 @@ export const useThreadDraft = ({
     }
 
     const load = async (): Promise<void> => {
-      try {
-        const reply = await mailApi.loadThreadDraft({ accountId, threadId });
-        if (!active) {
-          return;
-        }
+      await runWithCleanup(
+        async () => {
+          try {
+            const reply = await mailApi.loadThreadDraft({
+              accountId,
+              threadId,
+            });
+            if (!active) {
+              return;
+            }
 
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
-        }
+            if (!reply.ok) {
+              toast.error(reply.error);
+              return;
+            }
 
-        setDraft(reply.data);
-        setIsComposerOpen(reply.data !== null);
-      } catch {
-        if (active) {
-          toast.error("Could not load saved reply");
+            setDraft(reply.data);
+            setIsComposerOpen(reply.data !== null);
+          } catch {
+            if (active) {
+              toast.error("Could not load saved reply");
+            }
+          }
+        },
+        () => {
+          if (active) {
+            setIsLoadingDraft(false);
+          }
         }
-      } finally {
-        if (active) {
-          setIsLoadingDraft(false);
-        }
-      }
+      );
     };
     void load();
 
@@ -209,22 +218,27 @@ export const useThreadDraft = ({
     }
 
     setIsDiscardingDraft(true);
-    try {
-      const reply = await mailApi.discardDraft({
-        accountId,
-        draftId: draft.id,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await mailApi.discardDraft({
+            accountId,
+            draftId: draft.id,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
 
-      clearDraft();
-    } catch {
-      toast.error("Could not discard draft");
-    } finally {
-      setIsDiscardingDraft(false);
-    }
+          clearDraft();
+        } catch {
+          toast.error("Could not discard draft");
+        }
+      },
+      () => {
+        setIsDiscardingDraft(false);
+      }
+    );
   }, [accountId, clearDraft, draft, isDiscardingDraft, mailApi]);
 
   const closeComposer = useCallback((currentDraft: MailDraftInput): void => {

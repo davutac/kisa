@@ -8,15 +8,13 @@ import { MAIL_REINDEX_CHANNEL } from "../src/shared/ipc/channels";
 import type { GmailIndexProgress } from "../src/shared/ipc/mail";
 
 const state = vi.hoisted(() => ({
-  getMailIndexProgress: vi.fn<() => GmailIndexProgress[]>(() => []),
-  reindexMailAccount: vi.fn<(accountId: string) => Effect.Effect<void>>(
-    () => Effect.void
-  ),
+  getMailEngineIndexProgress: vi.fn<() => GmailIndexProgress[]>(() => []),
+  requestMailSync: vi.fn<(accountId?: string) => void>(),
 }));
 
-vi.mock("../src/main/mail/mail-backfill", () => ({
-  getMailIndexProgress: state.getMailIndexProgress,
-  reindexMailAccount: state.reindexMailAccount,
+vi.mock("../src/main/mail/engine/mail-engine", () => ({
+  getMailEngineIndexProgress: state.getMailEngineIndexProgress,
+  requestMailSync: state.requestMailSync,
 }));
 
 const { getIndexProgress, reindexMail } =
@@ -24,8 +22,8 @@ const { getIndexProgress, reindexMail } =
 
 describe("mail reindex IPC", () => {
   beforeEach(() => {
-    state.getMailIndexProgress.mockClear();
-    state.reindexMailAccount.mockClear();
+    state.getMailEngineIndexProgress.mockClear();
+    state.requestMailSync.mockClear();
   });
 
   it.effect("returns the current progress snapshot", () =>
@@ -33,20 +31,18 @@ describe("mail reindex IPC", () => {
       expect(yield* getIndexProgress.handler(undefined)).toStrictEqual({
         accounts: [],
       });
-      expect(state.getMailIndexProgress).toHaveBeenCalledOnce();
+      expect(state.getMailEngineIndexProgress).toHaveBeenCalledOnce();
     })
   );
 
-  it.effect("starts a reindex for the validated account", () =>
+  it.effect("wakes the account's sync for the validated account", () =>
     Effect.gen(function* reindexMailThroughIpc() {
       const reply = yield* reindexMail.handler({
         accountId: "person@example.com",
       });
 
       expect(reindexMail.channel).toBe(MAIL_REINDEX_CHANNEL);
-      expect(state.reindexMailAccount).toHaveBeenCalledWith(
-        "person@example.com"
-      );
+      expect(state.requestMailSync).toHaveBeenCalledWith("person@example.com");
       expect(reply).toStrictEqual({ data: undefined, ok: true });
     })
   );
@@ -57,6 +53,6 @@ describe("mail reindex IPC", () => {
     );
 
     expect(Exit.isFailure(exit)).toBeTruthy();
-    expect(state.reindexMailAccount).not.toHaveBeenCalled();
+    expect(state.requestMailSync).not.toHaveBeenCalled();
   });
 });

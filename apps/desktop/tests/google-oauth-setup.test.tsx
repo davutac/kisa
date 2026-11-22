@@ -11,16 +11,20 @@ const renderLogin = (hasGoogleSetup: boolean) =>
       hasGoogleSetup={hasGoogleSetup}
       isSettingUp={false}
       isStarting={false}
+      onAddOtherAccount={() => null}
       onLogin={() => null}
       onSetup={() => Promise.resolve(false)}
     />
   );
 
-const getLoginButton = (markup: string): string => {
-  const labelIndex = markup.indexOf("Login with Google");
+const getButton = (markup: string, label: string): string => {
+  const labelIndex = markup.indexOf(label);
   const buttonStart = markup.lastIndexOf("<button", labelIndex);
   return markup.slice(buttonStart, labelIndex);
 };
+
+const getLoginButton = (markup: string): string =>
+  getButton(markup, "Login with Google");
 
 describe("Google OAuth setup guide", () => {
   it("shows every required step without exposing credentials to the renderer", () => {
@@ -63,6 +67,13 @@ describe("Google OAuth setup guide", () => {
     expect(beforeSetup).toContain("Set up Google");
     expect(getLoginButton(beforeSetup)).toContain('disabled=""');
     expect(getLoginButton(afterSetup)).not.toContain('disabled=""');
+  });
+
+  it("offers iCloud and other accounts without Google setup", () => {
+    const button = getButton(renderLogin(false), "Add iCloud or other account");
+
+    expect(button).toContain("<button");
+    expect(button).not.toContain('disabled=""');
   });
 
   it("provides credential replacement in authenticated settings", () => {

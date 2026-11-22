@@ -1,4 +1,5 @@
 import type { UpdateStatus } from "../update-status";
+import type { AccountSetupOpenReply } from "./account-setup";
 import type {
   AiCleanupDraftReply,
   AiCleanupDraftRequest,
@@ -229,6 +230,8 @@ export interface DesktopBridge {
   markThreadNotSpam: (
     request: GmailThreadRequest
   ) => Promise<GmailThreadMutationReply>;
+  /** Opens the Add account window for app password accounts, or focuses it. */
+  openAccountSetup: () => Promise<AccountSetupOpenReply>;
   openAttachmentPreview: (
     request: GmailAttachmentRequest
   ) => Promise<GmailAttachmentActionReply>;

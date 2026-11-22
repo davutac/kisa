@@ -23,10 +23,11 @@ const ATTENTION_COPY = {
   "attachment-invalid": "An attachment is no longer available",
   "attachment-missing": "An attachment is missing",
   "attachment-too-large": "The attachments are too large",
-  "delivery-rejected": "Gmail rejected this email",
+  "delivery-rejected": "The mail server rejected this email",
   "message-invalid": "Review the message before sending",
   "outcome-unknown": "Delivery could not be confirmed; check Sent",
-  "rate-limit-exhausted": "Gmail kept delaying this email",
+  "rate-limit-exhausted":
+    "Not sent after repeated tries; the mail server was unreachable or asked Kisa to wait",
 } as const satisfies Record<ScheduledMailAttentionReason, string>;
 
 export const getScheduledMailAttentionCopy = (

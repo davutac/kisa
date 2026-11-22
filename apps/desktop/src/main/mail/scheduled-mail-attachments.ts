@@ -1,11 +1,11 @@
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
-import type { OutgoingAttachment } from "@repo/gmail/models";
 import { Effect, Option, Schema } from "effect";
 
 import {
   MAX_GMAIL_ATTACHMENT_BYTES,
   MAX_GMAIL_ATTACHMENT_COUNT,
 } from "../../shared/ipc/mail";
+import type { OutgoingAttachment } from "./engine/outgoing-message";
 import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-authorization-error";
 import {
   closeOutgoingAttachment,

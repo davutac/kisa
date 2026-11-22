@@ -10,6 +10,7 @@ import {
   AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL,
   AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL,
   AUTH_GOOGLE_START_CHANNEL,
+  AUTH_OPEN_ACCOUNT_SETUP_CHANNEL,
 } from "../shared/ipc/channels";
 import { subscribe } from "./subscribe";
 
@@ -19,6 +20,7 @@ export const authApi: Pick<
   | "getGoogleOAuthClientStatus"
   | "listGoogleAccounts"
   | "onGoogleAccountsChanged"
+  | "openAccountSetup"
   | "reorderGoogleAccounts"
   | "setupGoogleOAuthClient"
   | "startGoogleAuth"
@@ -35,6 +37,7 @@ export const authApi: Pick<
       GoogleAccountsReply,
       listener
     ),
+  openAccountSetup: () => ipcRenderer.invoke(AUTH_OPEN_ACCOUNT_SETUP_CHANNEL),
   reorderGoogleAccounts: (request) =>
     ipcRenderer.invoke(AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL, request),
   setupGoogleOAuthClient: () =>

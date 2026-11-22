@@ -1,5 +1,4 @@
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
-import type { GmailMessage } from "@repo/gmail/models";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -14,7 +13,17 @@ import type {
  */
 const MAX_CORRESPONDENTS_PER_ACCOUNT = 10_000;
 
-type CorrespondentMessage = Pick<GmailMessage, "bcc" | "cc" | "from" | "to">;
+interface CorrespondentMailbox {
+  readonly address: string;
+  readonly name?: string | undefined;
+}
+
+export interface CorrespondentMessage {
+  readonly bcc: readonly CorrespondentMailbox[];
+  readonly cc: readonly CorrespondentMailbox[];
+  readonly from: CorrespondentMailbox;
+  readonly to: readonly CorrespondentMailbox[];
+}
 
 type CorrespondentTuple = [
   accountId: string,
@@ -50,14 +59,14 @@ const loadAccountSnapshots = async (
   const accounts = toAccountList(accountIds);
   const tuples = await database.values<CorrespondentTuple>(sql`
     WITH visible_messages AS (
-      SELECT m.account_email, m.from_address, m.from_name,
+      SELECT m.account_id AS account_email, m.from_address, m.from_name,
              m.to_addresses, m.cc_addresses, m.bcc_addresses
-      FROM gmail_messages m
-      WHERE m.account_email IN (${accounts})
+      FROM mail_messages m
+      WHERE m.account_id IN (${accounts})
         AND NOT EXISTS (
           SELECT 1
-          FROM gmail_threads t
-          WHERE t.account_email = m.account_email
+          FROM mail_threads t
+          WHERE t.account_id = m.account_id
             AND t.thread_id = m.thread_id
             AND t.is_in_spam = 1
         )
@@ -217,7 +226,7 @@ export const rememberCorrespondentMessages = (
     return;
   }
 
-  const rememberMailbox = (mailbox: GmailMessage["from"]): void => {
+  const rememberMailbox = (mailbox: CorrespondentMailbox): void => {
     const key = toCacheKey(mailbox.address);
 
     if (key.length === 0) {

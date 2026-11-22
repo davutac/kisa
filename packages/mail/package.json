@@ -1,0 +1,34 @@
+{
+  "name": "@repo/mail",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./attachments": "./src/attachments.ts",
+    "./dialects": "./src/dialects.ts",
+    "./errors": "./src/errors.ts",
+    "./headers": "./src/headers.ts",
+    "./ids": "./src/ids.ts",
+    "./labels": "./src/labels.ts",
+    "./mime-structure": "./src/mime-structure.ts",
+    "./mutations": "./src/mutations.ts",
+    "./session": "./src/session.ts",
+    "./smtp": "./src/smtp.ts",
+    "./store": "./src/store.ts",
+    "./sync": "./src/sync.ts",
+    "./text-decoding": "./src/text-decoding.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

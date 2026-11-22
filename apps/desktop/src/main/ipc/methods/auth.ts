@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 
+import { AccountSetupOpenReply } from "../../../shared/ipc/account-setup";
 import {
   GoogleAccountDisconnectRequest,
   GoogleAccountReorderReply,
@@ -16,7 +17,9 @@ import {
   AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL,
   AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL,
   AUTH_GOOGLE_START_CHANNEL,
+  AUTH_OPEN_ACCOUNT_SETUP_CHANNEL,
 } from "../../../shared/ipc/channels";
+import { openAccountSetupWindow } from "../../auth/account-setup-window";
 import {
   getGoogleOAuthClientStatus,
   listGoogleAccounts,
@@ -56,8 +59,7 @@ export const setupGoogleOAuth = makeIpcMethod({
 
 export const listAccounts = makeIpcMethod({
   channel: AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL,
-  handler: () =>
-    toIpcReply(listGoogleAccounts(), "Could not load Google accounts"),
+  handler: () => toIpcReply(listGoogleAccounts(), "Could not load accounts"),
   payload: Schema.Void,
   result: GoogleAccountsReply,
 });
@@ -67,7 +69,7 @@ export const disconnectAccount = makeIpcMethod({
   handler: (request) =>
     toIpcReply(
       disconnectGoogleAccount(request.email),
-      "Could not disconnect the Google account"
+      "Could not disconnect the account"
     ),
   payload: GoogleAccountDisconnectRequest,
   result: GoogleAccountsReply,
@@ -78,8 +80,16 @@ export const reorderAccounts = makeIpcMethod({
   handler: (request) =>
     toIpcReply(
       reorderGoogleAccounts(request.emails),
-      "Could not save Google account order"
+      "Could not save account order"
     ),
   payload: GoogleAccountReorderRequest,
   result: GoogleAccountReorderReply,
+});
+
+export const openAccountSetup = makeIpcMethod({
+  channel: AUTH_OPEN_ACCOUNT_SETUP_CHANNEL,
+  handler: () =>
+    toIpcReply(openAccountSetupWindow(), "Could not open account setup"),
+  payload: Schema.Void,
+  result: AccountSetupOpenReply,
 });

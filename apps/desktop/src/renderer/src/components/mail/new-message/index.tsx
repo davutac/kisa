@@ -1,9 +1,6 @@
-// The scoped store intentionally lives for one keyed composer instance.
-// oxlint-disable react/react-compiler
-import { useMemo } from "react";
-
 import NewMessageDialogShell from "@/components/mail/new-message-dialog-shell";
 import { Dialog } from "@/components/ui/dialog";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { getInitialComposerAccountId } from "@/mail/composer-account";
 import { getDraftResumeFocusTarget } from "@/mail/mail-draft";
 import type { GoogleAccount } from "@/shared/ipc/auth";
@@ -121,17 +118,14 @@ const NewMessageDialog = ({
     scheduledEdit?.draft.accountId ?? initialAccountId
   );
   const { emailSignature } = useAccountSettings(initialComposerAccountId);
-  const store = useMemo(
-    () =>
-      createNewMessageStore(
-        initialComposerAccountId,
-        emailSignature,
-        scheduledEdit?.draft
-      ),
-    // The parent keys each newly opened composer. Account changes while that
-    // composer is open must not replace its draft store.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    []
+  // The parent keys each newly opened composer. Account changes while that
+  // composer is open must not replace its draft store.
+  const store = useInstanceValue(() =>
+    createNewMessageStore(
+      initialComposerAccountId,
+      emailSignature,
+      scheduledEdit?.draft
+    )
   );
 
   return (

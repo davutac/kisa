@@ -9,10 +9,9 @@ import { startThreadCategorization } from "../ai/thread-categorization";
 import { startDatabase } from "../database";
 import type { DatabaseError } from "../database";
 import { configureDraftAttachmentStore } from "../mail/draft-attachment-store";
-import { startMailBackfill } from "../mail/mail-backfill";
+import { startMailEngine, syncOnFocus } from "../mail/engine/mail-engine";
 import { reconcileDraftAttachmentStore } from "../mail/mail-drafts";
 import { warmCorrespondentCache } from "../mail/mail-search";
-import { startMailSync } from "../mail/mail-sync";
 import {
   adoptLegacyScheduledMailAttachments,
   startScheduledMail,
@@ -41,11 +40,9 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
       })
     );
     startThreadCategorization();
-    startMailSync();
+    void startMailEngine();
+    app.on("browser-window-focus", syncOnFocus);
     void startScheduledMail();
-    // Picks up any account whose index was still running when the app last
-    // closed, and seeds the renderer's progress state for the rest.
-    void Effect.runPromise(startMailBackfill().pipe(Effect.ignore));
     // Give the first mailbox page priority over this one-time full-index scan.
     const warmTimer = setTimeout(() => {
       void Effect.runPromise(warmCorrespondentCache().pipe(Effect.ignore));

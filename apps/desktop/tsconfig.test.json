@@ -11,7 +11,16 @@
   ],
   "compilerOptions": {
     "composite": true,
-    "plugins": [{ "name": "@effect/language-service" }],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "@effect/vitest",
+          "effect/rpc",
+          "effect/workers"
+        ]
+      }
+    ],
     "types": ["node", "vite/client", "vitest/globals"]
   }
 }

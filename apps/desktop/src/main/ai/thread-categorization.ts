@@ -5,8 +5,12 @@ import type { AiThreadCategorizationRequest } from "../../shared/ipc/ai";
 import type { GmailLabelSummary } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor";
-import { setThreadLabel, syncGmailLabelCatalog } from "../mail/mail-sync";
-import { subscribeNewGmailThreads } from "../mail/new-thread-events";
+import {
+  ensureThreadBodies,
+  inAccountEngine,
+} from "../mail/engine/mail-engine";
+import { listLabelCatalog, setThreadLabel } from "../mail/engine/mail-ipc";
+import { subscribeNewMailThreads } from "../mail/new-thread-events";
 import { isAutomaticCategorizationEnabled } from "../settings/account-settings";
 import { getAiSettings } from "./ai-settings";
 import { logDevelopmentAiError } from "./development-logging";
@@ -34,17 +38,17 @@ const categorizationGenerationSemaphore = Semaphore.makeUnsafe(1);
 const loadCurrentThreadLabelIds = Effect.fn("loadCurrentThreadLabelIds")(
   function* loadCurrentThreadLabelIds(item: ThreadCategorizationItem) {
     return yield* withDatabaseClient((database) =>
-      database.query.gmailMessages.findMany({
+      database.query.mailMessages.findMany({
         columns: { labelIds: true },
         where: {
-          accountEmail: item.accountId,
+          accountId: item.accountId,
           threadId: item.threadId,
         },
       })
     ).pipe(
-      Effect.map((rows) => new Set(rows.flatMap((row) => row.labelIds ?? []))),
+      Effect.map((rows) => new Set(rows.flatMap((row) => row.labelIds))),
       Effect.mapError(() =>
-        categorizationError("Could not load current Gmail labels")
+        categorizationError("Could not load the conversation's labels")
       )
     );
   }
@@ -63,13 +67,16 @@ const toCategorizationLabels = (
 
 const selectThreadLabelIds = Effect.fn("selectThreadLabelIds")(
   function* selectThreadLabelIds(item: ThreadCategorizationItem) {
-    const catalog = yield* syncGmailLabelCatalog({
-      accountId: item.accountId,
-    });
+    const catalog = yield* listLabelCatalog({ accountId: item.accountId });
     const labels = toCategorizationLabels(catalog.labels);
     if (labels.length === 0) {
       return [];
     }
+    // New mail may not have its bodies yet, and the model reads them.
+    yield* inAccountEngine(
+      item.accountId,
+      ensureThreadBodies(item.accountId, item.threadId)
+    ).pipe(Effect.ignore);
 
     const [settings, context, currentLabelIds] = yield* Effect.all(
       [
@@ -184,7 +191,7 @@ const liveQueue = createThreadCategorizationQueue({
 let unsubscribeNewThreads: (() => void) | undefined;
 
 export const startThreadCategorization = (): void => {
-  unsubscribeNewThreads ??= subscribeNewGmailThreads((event) => {
+  unsubscribeNewThreads ??= subscribeNewMailThreads((event) => {
     liveQueue.enqueue(event.accountId, event.threadIds);
   });
 };

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getHotkeyAriaLabel, getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import { quietDestructiveClassName } from "@/lib/action-hierarchy";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { cn } from "@/lib/utils";
 import { getBulkLabelGroups } from "@/mail/bulk-thread-selection";
 import type { ThreadActions } from "@/mail/use-thread-actions";
@@ -66,11 +67,9 @@ const ThreadSelectionBar = ({
 
   const run = async (action: () => Promise<void>) => {
     setIsPending(true);
-    try {
-      await action();
-    } finally {
+    await runWithCleanup(action, () => {
       setIsPending(false);
-    }
+    });
   };
 
   return (

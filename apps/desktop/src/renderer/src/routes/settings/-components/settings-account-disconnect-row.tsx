@@ -11,6 +11,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { AuthApi } from "@/platform/desktop";
 import type { GoogleAccount } from "@/shared/ipc/auth";
 
@@ -29,24 +30,29 @@ const SettingsAccountDisconnectRow = ({
 
   const handleDisconnect = async (): Promise<void> => {
     setIsDisconnecting(true);
-    try {
-      const reply = await authApi.disconnectGoogleAccount({
-        email: account.email,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await authApi.disconnectGoogleAccount({
+            email: account.email,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          toast.success(`Disconnected ${account.email}`, {
+            description: "Its downloaded mail was deleted from this device.",
+          });
+        } catch {
+          toast.error("Could not disconnect the account", {
+            description: "Please try again.",
+          });
+        }
+      },
+      () => {
+        setIsDisconnecting(false);
       }
-      toast.success(`Disconnected ${account.email}`, {
-        description: "Its downloaded mail was deleted from this device.",
-      });
-    } catch {
-      toast.error("Could not disconnect the account", {
-        description: "Please try again.",
-      });
-    } finally {
-      setIsDisconnecting(false);
-    }
+    );
   };
 
   const requestDisconnect = async (): Promise<void> => {
@@ -59,13 +65,14 @@ const SettingsAccountDisconnectRow = ({
       confirmVariant: "destructive",
       description: (
         <ConfirmMessage subject={account.email}>
-          Access will be revoked and everything stored for this account on this
+          Kisa will sign out, and everything stored for this account on this
           device will be deleted: saved sign-in, downloaded mail, labels,
           settings, sync state, scheduled emails, and unresolved delivery
           evidence. Unsent scheduled emails will no longer be delivered. A
-          scheduled email with an unknown outcome may already have reached
-          Gmail, so check Sent before disconnecting. Nothing will be deleted
-          from Gmail, and you can connect the account again at any time.
+          scheduled email with an unknown outcome may already have reached the
+          mail server, so check Sent before disconnecting. Nothing will be
+          deleted from the mail server, and you can connect the account again at
+          any time.
         </ConfirmMessage>
       ),
       title: "Disconnect account?",

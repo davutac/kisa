@@ -1,7 +1,5 @@
-// The scoped store intentionally lives for one keyed conversation instance.
-// oxlint-disable react/react-compiler
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import MailMessageActions from "@/components/mail/message-actions";
 import MailReplyArea from "@/components/mail/reply-area";
@@ -17,6 +15,7 @@ import {
   useThreadDraft,
 } from "@/components/mail/use-thread-draft";
 import { useThreadMessageNavigation } from "@/components/mail/use-thread-message-navigation";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand } from "@/hotkeys";
 import { getThreadEmailAddresses, parseMailboxAddress } from "@/mail/address";
 import { shouldShowReplyAll } from "@/mail/reply-recipients";
@@ -177,12 +176,10 @@ const NonEmptyMailThreadConversation = ({
   initialMessageId,
   ...props
 }: NonEmptyMailThreadConversationProps) => {
-  const store = useMemo(
-    () => createThreadConversationStore(initialMessageId),
-    // The parent key changes with the account and thread. New messages must not
-    // replace this store and reset an existing selection.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    []
+  // The parent key changes with the account and thread. New messages must not
+  // replace this store and reset an existing selection.
+  const store = useInstanceValue(() =>
+    createThreadConversationStore(initialMessageId)
   );
 
   return (

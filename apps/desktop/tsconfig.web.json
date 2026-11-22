@@ -12,7 +12,12 @@
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
-    "plugins": [{ "name": "@effect/language-service" }],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": ["effect/rpc"]
+      }
+    ],
     "paths": {
       "@/*": ["./src/renderer/src/*"],
       "@/renderer/*": ["./src/renderer/src/*"],

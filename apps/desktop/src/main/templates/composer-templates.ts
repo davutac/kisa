@@ -86,8 +86,9 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
     const saved = yield* withDatabaseClient((database) =>
       database.transaction(async (transaction) => {
         if (input.accountId !== null) {
-          const account = await transaction.query.googleAccounts.findFirst({
-            where: { email: input.accountId },
+          const account = await transaction.query.mailAccounts.findFirst({
+            columns: { accountId: true },
+            where: { accountId: input.accountId },
           });
           if (account === undefined) {
             throw new Error("Template account is not connected");

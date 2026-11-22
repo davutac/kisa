@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getScheduledMailApi } from "@/platform/desktop";
 import type { ScheduledMailSummary } from "@/shared/ipc/scheduled-mail";
 
@@ -168,65 +169,72 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
         ? { ...current, isLoadingMore: true }
         : current
     );
-    try {
-      const reply = await api.listPage({
-        accountIds,
-        cursor: visibleNextCursor,
-      });
-      if (requestRevisionRef.current !== revision) {
-        return;
-      }
-      if (!reply.ok) {
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await api.listPage({
+            accountIds,
+            cursor: visibleNextCursor,
+          });
+          if (requestRevisionRef.current !== revision) {
+            return;
+          }
+          if (!reply.ok) {
+            setResult((current) =>
+              current.scopeKey === scopeKey
+                ? { ...current, error: reply.error }
+                : current
+            );
+            return;
+          }
+          const { current } = resultRef;
+          if (current.scopeKey !== scopeKey) {
+            return;
+          }
+          const byKey = new Map(
+            current.items.map(
+              (item) => [getScheduledMailKey(item), item] as const
+            )
+          );
+          for (const item of reply.data.items) {
+            byKey.set(getScheduledMailKey(item), item);
+          }
+          const next: ScheduledMailPageState = {
+            ...current,
+            error: undefined,
+            items: [...byKey.values()],
+            nextCursor: reply.data.nextCursor,
+          };
+          setScheduledMailSnapshot({
+            accountIds,
+            items: next.items,
+            nextCursor: next.nextCursor,
+            scopeKey,
+          });
+          resultRef.current = next;
+          setResult(next);
+        } catch {
+          if (requestRevisionRef.current === revision) {
+            setResult((current) =>
+              current.scopeKey === scopeKey
+                ? {
+                    ...current,
+                    error: "Could not load more scheduled emails",
+                  }
+                : current
+            );
+          }
+        }
+      },
+      () => {
+        loadMoreInFlightRef.current = false;
         setResult((current) =>
           current.scopeKey === scopeKey
-            ? { ...current, error: reply.error }
-            : current
-        );
-        return;
-      }
-      const { current } = resultRef;
-      if (current.scopeKey !== scopeKey) {
-        return;
-      }
-      const byKey = new Map(
-        current.items.map((item) => [getScheduledMailKey(item), item] as const)
-      );
-      for (const item of reply.data.items) {
-        byKey.set(getScheduledMailKey(item), item);
-      }
-      const next: ScheduledMailPageState = {
-        ...current,
-        error: undefined,
-        items: [...byKey.values()],
-        nextCursor: reply.data.nextCursor,
-      };
-      setScheduledMailSnapshot({
-        accountIds,
-        items: next.items,
-        nextCursor: next.nextCursor,
-        scopeKey,
-      });
-      resultRef.current = next;
-      setResult(next);
-    } catch {
-      if (requestRevisionRef.current === revision) {
-        setResult((current) =>
-          current.scopeKey === scopeKey
-            ? {
-                ...current,
-                error: "Could not load more scheduled emails",
-              }
+            ? { ...current, isLoadingMore: false }
             : current
         );
       }
-    } finally {
-      loadMoreInFlightRef.current = false;
-      setResult((current) =>
-        current.scopeKey === scopeKey
-          ? { ...current, isLoadingMore: false }
-          : current
-      );
-    }
+    );
   }, [accountIds, api, scopeKey, visibleNextCursor]);
 
   const removeOptimistically = (item: ScheduledMailSummary): void => {

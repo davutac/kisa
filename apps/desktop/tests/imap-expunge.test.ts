@@ -1,0 +1,96 @@
+import { describe, expect, it } from "vitest";
+
+import { expungeExactly } from "../src/main/mail/engine/imap-session";
+
+/** The UIDs of a UID set such as `1:3,7`. */
+const uidsOf = (range: string) =>
+  range.split(",").flatMap((part) => {
+    const [from = "", to = from] = part.split(":");
+    const numbers: number[] = [];
+    for (let uid = Number(from); uid <= Number(to); uid += 1) {
+      numbers.push(uid);
+    }
+    return numbers;
+  });
+
+/** A selected mailbox: UID → flags, and the commands a client sent. */
+const mailbox = (flags: Record<number, readonly string[]>) => {
+  const state = new Map(
+    Object.entries(flags).map(([uid, list]) => [Number(uid), new Set(list)])
+  );
+  const calls: string[] = [];
+  const client = {
+    messageDelete: (range: string) => {
+      calls.push(`delete ${range}`);
+      for (const uid of uidsOf(range)) {
+        state.get(uid)?.add("\\Deleted");
+      }
+      // A plain EXPUNGE takes everything marked \Deleted.
+      for (const [uid, list] of state) {
+        if (list.has("\\Deleted")) {
+          state.delete(uid);
+        }
+      }
+      return Promise.resolve(true);
+    },
+    messageFlagsAdd: (range: string) => {
+      calls.push(`mark ${range}`);
+      for (const uid of uidsOf(range)) {
+        state.get(uid)?.add("\\Deleted");
+      }
+      return Promise.resolve(true);
+    },
+    messageFlagsRemove: (range: string) => {
+      calls.push(`unmark ${range}`);
+      for (const uid of uidsOf(range)) {
+        state.get(uid)?.delete("\\Deleted");
+      }
+      return Promise.resolve(true);
+    },
+    search: () =>
+      Promise.resolve(
+        [...state]
+          .filter(([, list]) => list.has("\\Deleted"))
+          .map(([uid]) => uid)
+          .filter((uid) => uid !== 2)
+      ),
+  };
+  return { calls, client, state };
+};
+
+describe("removing exactly the chosen messages", () => {
+  it("uses UID EXPUNGE when the server has UIDPLUS", async () => {
+    const { calls, client } = mailbox({ 1: [], 2: [] });
+
+    await expungeExactly(client as never, "2", true);
+
+    expect(calls).toStrictEqual(["delete 2"]);
+  });
+
+  it("keeps another program's deleted-marked mail without UIDPLUS", async () => {
+    const { calls, client, state } = mailbox({
+      1: [],
+      2: [],
+      3: ["\\Deleted"],
+    });
+
+    await expungeExactly(client as never, "2", false);
+
+    expect([...state.keys()]).toStrictEqual([1, 3]);
+    expect(state.get(3)?.has("\\Deleted")).toBeTruthy();
+    expect(calls).toStrictEqual(["unmark 3", "delete 2", "mark 3"]);
+  });
+
+  it("marks the other program's mail again when the expunge fails", async () => {
+    const { client, state } = mailbox({ 2: [], 3: ["\\Deleted"] });
+    const failing = {
+      ...client,
+      messageDelete: () => Promise.reject(new Error("connection lost")),
+    };
+
+    await expect(expungeExactly(failing as never, "2", false)).rejects.toThrow(
+      "connection lost"
+    );
+    expect(state.get(3)?.has("\\Deleted")).toBeTruthy();
+  });
+});

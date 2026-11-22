@@ -1,4 +1,4 @@
-import { gmailThreads, googleAccounts } from "@repo/database/schemas";
+import { mailAccounts, mailThreads } from "@repo/database/schemas";
 import { and, count, eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
@@ -19,16 +19,25 @@ export const refreshUnreadBadge = Effect.fn("refreshUnreadBadge")(
   function* refreshUnreadBadge() {
     const accountCounts = yield* withDatabaseClient((database) =>
       database
-        .select({ credentials: googleAccounts.credentials, value: count() })
-        .from(gmailThreads)
+        .select({
+          authKind: mailAccounts.authKind,
+          credentials: mailAccounts.credentials,
+          value: count(),
+        })
+        .from(mailThreads)
         .innerJoin(
-          googleAccounts,
-          eq(googleAccounts.email, gmailThreads.accountEmail)
+          mailAccounts,
+          eq(mailAccounts.accountId, mailThreads.accountId)
         )
         .where(
-          and(eq(gmailThreads.isInInbox, true), eq(gmailThreads.isUnread, true))
+          and(
+            eq(mailThreads.isInInbox, true),
+            eq(mailThreads.isUnread, true),
+            eq(mailThreads.isInSpam, false),
+            eq(mailThreads.isInTrash, false)
+          )
         )
-        .groupBy(googleAccounts.email)
+        .groupBy(mailAccounts.accountId)
         .all()
     ).pipe(
       Effect.mapError(
@@ -43,8 +52,10 @@ export const refreshUnreadBadge = Effect.fn("refreshUnreadBadge")(
     // SQLite counts at mailbox scale; main only checks one grant per account.
     const userOwnedCounts = yield* Effect.filter(
       accountCounts,
-      ({ credentials }) =>
-        Effect.promise(() => isUserOwnedOAuthClient(credentials)),
+      ({ authKind, credentials }) =>
+        authKind === "google-oauth"
+          ? Effect.promise(() => isUserOwnedOAuthClient(credentials))
+          : Effect.succeed(true),
       { concurrency: 4 }
     );
     const unreadCount = userOwnedCounts.reduce(

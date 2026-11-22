@@ -48,6 +48,32 @@ const adoptionError = (
 const draftDirectoryName = (draftId: string): string =>
   createHash("sha256").update(draftId).digest("hex");
 
+const draftDirectory = (draftId: string, ownedRoot: string): string =>
+  path.join(ownedRoot, draftDirectoryName(draftId));
+const isOwnedPath = (
+  attachment: StoredMailDraftAttachment,
+  ownedRoot: string
+): boolean => {
+  if (attachment.storage !== "app-owned") {
+    return false;
+  }
+  const resolved = path.resolve(attachment.path);
+  const directory = path.dirname(resolved);
+  return (
+    path.dirname(directory) === ownedRoot &&
+    DRAFT_DIRECTORY_PATTERN.test(path.basename(directory)) &&
+    ATTACHMENT_FILE_PATTERN.test(path.basename(resolved))
+  );
+};
+const isOwnedByDraft = (
+  draftId: string,
+  attachment: StoredMailDraftAttachment,
+  ownedRoot: string
+): boolean =>
+  isOwnedPath(attachment, ownedRoot) &&
+  path.dirname(path.resolve(attachment.path)) ===
+    draftDirectory(draftId, ownedRoot);
+
 const toStoredRecord = (
   source: StoredMailDraftAttachment,
   canonicalPath: string,
@@ -185,31 +211,6 @@ export const makeDraftAttachmentStore = (
         }
       },
     });
-  const draftDirectory = (draftId: string, ownedRoot: string): string =>
-    path.join(ownedRoot, draftDirectoryName(draftId));
-  const isOwnedPath = (
-    attachment: StoredMailDraftAttachment,
-    ownedRoot: string
-  ): boolean => {
-    if (attachment.storage !== "app-owned") {
-      return false;
-    }
-    const resolved = path.resolve(attachment.path);
-    const directory = path.dirname(resolved);
-    return (
-      path.dirname(directory) === ownedRoot &&
-      DRAFT_DIRECTORY_PATTERN.test(path.basename(directory)) &&
-      ATTACHMENT_FILE_PATTERN.test(path.basename(resolved))
-    );
-  };
-  const isOwnedByDraft = (
-    draftId: string,
-    attachment: StoredMailDraftAttachment,
-    ownedRoot: string
-  ): boolean =>
-    isOwnedPath(attachment, ownedRoot) &&
-    path.dirname(path.resolve(attachment.path)) ===
-      draftDirectory(draftId, ownedRoot);
 
   const deleteAttachments = Effect.fn("DraftAttachmentStore.delete")(
     function* deleteAttachments(

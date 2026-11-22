@@ -9,6 +9,12 @@ import { toast } from "sonner";
 import TitlebarAccountButton from "@/components/accounts/account-button";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -38,7 +44,7 @@ const TitlebarAccountSwitcher = () => {
     command: OPEN_ACCOUNT_COMMAND_IDS[index],
   }));
 
-  const handleAddAccount = async (): Promise<void> => {
+  const handleAddGoogleAccount = async (): Promise<void> => {
     if (auth === undefined) {
       return;
     }
@@ -46,6 +52,13 @@ const TitlebarAccountSwitcher = () => {
     const reply = await auth.startGoogle();
     setIsAddingAccount(false);
     if (!reply.ok) {
+      toast.error(reply.error);
+    }
+  };
+
+  const handleAddOtherAccount = async (): Promise<void> => {
+    const reply = await auth?.openAccountSetup();
+    if (reply?.ok === false) {
       toast.error(reply.error);
     }
   };
@@ -98,24 +111,37 @@ const TitlebarAccountSwitcher = () => {
         </div>
       </div>
       {auth === undefined ? null : (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-label="Add Google account"
-                className="text-muted-foreground hover:text-foreground"
-                disabled={isAddingAccount}
-                onClick={handleAddAccount}
-                size="icon"
-                type="button"
-                variant="ghost"
-              >
-                <PlusIcon className="size-4 stroke-[1.8]" />
-              </Button>
-            }
-          />
-          <TooltipContent side="bottom">Add Google account</TooltipContent>
-        </Tooltip>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      aria-label="Add account"
+                      className="text-muted-foreground hover:text-foreground"
+                      disabled={isAddingAccount}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <PlusIcon className="size-4 stroke-[1.8]" />
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipContent side="bottom">Add account</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuItem onClick={handleAddGoogleAccount}>
+              Add Google account
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleAddOtherAccount}>
+              Add iCloud or other account
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );

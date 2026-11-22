@@ -37,6 +37,14 @@ const dropDisconnectedAccountSelection = (
   }
 };
 
+const addOtherAccount = async (): Promise<void> => {
+  const reply = await getAuthApi()?.openAccountSetup();
+
+  if (reply?.ok === false) {
+    toast.error(reply.error);
+  }
+};
+
 const AccountGate = ({ children, initialState }: AccountGateProps) => {
   const [accounts, setAccounts] = useState<readonly GoogleAccount[]>(
     initialState.status === "authenticated" ? initialState.accounts : []
@@ -157,6 +165,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
         hasGoogleSetup={hasGoogleSetup}
         isSettingUp={isSettingUp}
         isStarting={isStartingLogin}
+        onAddOtherAccount={addOtherAccount}
         onLogin={startLogin}
         onSetup={setupGoogle}
       />

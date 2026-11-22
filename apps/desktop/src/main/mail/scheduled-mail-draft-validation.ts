@@ -7,7 +7,7 @@ import {
 import { GmailOutgoingSubject } from "../../shared/ipc/mail";
 import type { MailDraftInput } from "../../shared/ipc/mail";
 import type { ScheduledMailKey } from "../../shared/ipc/scheduled-mail";
-import { parseMailbox } from "./gmail-payload";
+import { parseMailbox } from "./mail-address";
 import { scheduledMailError } from "./scheduled-mail-error";
 
 const isGmailOutgoingSubject = Schema.is(GmailOutgoingSubject);

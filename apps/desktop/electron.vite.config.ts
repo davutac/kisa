@@ -12,7 +12,7 @@ export default defineConfig({
   main: {
     build: {
       externalizeDeps: {
-        exclude: ["@repo/database", "@repo/gmail"],
+        exclude: ["@repo/database", "@repo/gmail", "@repo/mail"],
         include: ["better-sqlite3"],
       },
     },
@@ -31,6 +31,7 @@ export default defineConfig({
       externalizeDeps: false,
       rolldownOptions: {
         input: {
+          "account-setup": path.resolve("src/preload/account-setup.ts"),
           "attachment-preview": path.resolve(
             "src/preload/attachment-preview.ts"
           ),
@@ -47,6 +48,7 @@ export default defineConfig({
     build: {
       rolldownOptions: {
         input: {
+          "account-setup": path.resolve("src/renderer/account-setup.html"),
           "attachment-preview": path.resolve(
             "src/renderer/attachment-preview.html"
           ),

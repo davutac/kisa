@@ -126,6 +126,7 @@ export const useMailSearch = (
       isActive = false;
       window.clearTimeout(timeout);
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `revision` reruns the search when new mail for these accounts is indexed.
   }, [isReady, mailApi, requestKey, revision]);
 
   return isReady

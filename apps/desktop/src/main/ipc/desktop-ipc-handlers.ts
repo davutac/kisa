@@ -2,6 +2,10 @@ import * as Effect from "effect/Effect";
 
 import { DesktopIpc } from "./desktop-ipc";
 import {
+  closeAccountSetupWindow,
+  submitPasswordAccount,
+} from "./methods/account-setup";
+import {
   categorizeMailThread,
   cleanupDraft,
   generateReply,
@@ -14,6 +18,7 @@ import {
   disconnectAccount,
   getGoogleOAuthStatus,
   listAccounts,
+  openAccountSetup,
   reorderAccounts,
   setupGoogleOAuth,
   startGoogle,
@@ -107,6 +112,9 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);
   yield* ipc.handle(disconnectAccount);
+  yield* ipc.handle(openAccountSetup);
+  yield* ipc.handle(submitPasswordAccount);
+  yield* ipc.handle(closeAccountSetupWindow);
   yield* ipc.handle(listTemplates);
   yield* ipc.handle(saveTemplate);
   yield* ipc.handle(deleteTemplate);

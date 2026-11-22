@@ -1,7 +1,7 @@
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
-import type { OutgoingAttachment } from "@repo/gmail/models";
 import { describe, expect, it, vi } from "vitest";
 
+import type { OutgoingAttachment } from "../src/main/mail/engine/outgoing-message";
 import { scheduledMailAttachmentError } from "../src/main/mail/scheduled-mail-attachment-error";
 import { loadScheduledAttachments } from "../src/main/mail/scheduled-mail-attachments";
 import {

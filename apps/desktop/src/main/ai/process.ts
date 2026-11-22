@@ -55,7 +55,7 @@ const escapeWindowsShellArg = (argument: string): string => {
     '$<slashes>$<slashes>\\"'
   );
   escaped = escaped.replace(/(?<slashes>\\*)$/u, "$<slashes>$<slashes>");
-  return `"${escaped}"`.replace(WINDOWS_SHELL_META_CHARS, "^$<character>");
+  return `"${escaped}"`.replaceAll(WINDOWS_SHELL_META_CHARS, "^$<character>");
 };
 
 const resolveWindowsCommand = (

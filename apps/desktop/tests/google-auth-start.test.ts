@@ -27,13 +27,14 @@ import {
 } from "vitest";
 
 import { setNativeUnreadBadgeCount } from "../src/main/app/native-unread-badge";
-import type { notifyGoogleAccountConnected } from "../src/main/auth/account-events";
+import type { notifyAccountConnected } from "../src/main/auth/account-events";
 import {
   getGoogleAccessToken,
   getGoogleOAuthClientStatus,
   handleGoogleAuthCallback,
   listGoogleAccounts,
   reorderGoogleAccounts,
+  revokeGoogleAccountAccess,
   setupGoogleOAuthClient,
   startGoogleAuth,
   stopGoogleAuth,
@@ -41,6 +42,7 @@ import {
 import { sendRendererEvent } from "../src/main/electron/renderer-events";
 import { refreshUnreadBadge } from "../src/main/mail/unread-badge";
 import type { getMainWindow } from "../src/main/window/create-window";
+import { insertGmailAccount } from "./fixtures/mail-accounts";
 
 const electronState = vi.hoisted(() => {
   const clientId = "test-client-id.apps.googleusercontent.com";
@@ -148,7 +150,7 @@ vi.mock(import("../src/main/electron/renderer-events"), () => ({
 }));
 
 vi.mock(import("../src/main/auth/account-events"), () => ({
-  notifyGoogleAccountConnected: vi.fn<typeof notifyGoogleAccountConnected>(),
+  notifyAccountConnected: vi.fn<typeof notifyAccountConnected>(),
 }));
 
 vi.mock(import("../src/main/app/native-unread-badge"), () => ({
@@ -203,13 +205,25 @@ const insertAccount = (
   credentials: Buffer = Buffer.from([1]),
   sortOrder = 1
 ): void => {
+  insertGmailAccount(connection, email, { credentials, sortOrder });
+};
+
+/** An app password account, as the Add account window saves one. */
+const insertPasswordAccount = (
+  email: string,
+  credentials: Buffer,
+  sortOrder = 1
+): void => {
   connection
     .prepare(
-      `INSERT INTO google_accounts (
-        created_at, credentials, email, scopes, sort_order, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO mail_accounts (
+        account_id, auth_kind, created_at, credentials, dialect, email,
+        imap_host, imap_port, imap_security, provider, smtp_host, smtp_port,
+        smtp_security, sort_order, updated_at, username
+      ) VALUES (?, 'password', 1, ?, 'generic', ?, 'imap.mail.me.com', 993,
+        'tls', 'icloud', 'smtp.mail.me.com', 587, 'starttls', ?, 1, ?)`
     )
-    .run(1, credentials, email, "[]", sortOrder, 1);
+    .run(email, credentials, email, sortOrder, email);
 };
 
 const createUserOwnedCredentials = (): Buffer =>
@@ -228,10 +242,12 @@ const insertUnreadThread = (
   threadId = "shared-id"
 ): void => {
   connection
-    .prepare(`INSERT INTO gmail_threads (
-    account_email, "from", is_in_inbox, is_unread, labels, latest_at,
-    message_count, snippet, subject, thread_id, updated_at
-  ) VALUES (?, 'sender@example.com', 1, 1, '[]', 1, 1, '', '', ?, 1)`)
+    .prepare(`INSERT INTO mail_threads (
+    account_id, attachments, from_address, has_attachments, is_in_inbox,
+    is_in_sent, is_in_spam, is_in_trash, is_unread, label_ids, latest_at,
+    latest_message_id, message_count, snippet, subject, thread_id, updated_at
+  ) VALUES (?, '[]', 'sender@example.com', 0, 1, 0, 0, 0, 1, '[]', 1, 'm', 1,
+    '', '', ?, 1)`)
     .run(accountId, threadId);
 };
 
@@ -251,7 +267,7 @@ const stubSuccessfulGoogleAuthorization = (
         token_type: "Bearer",
       })
     )
-    .mockResolvedValueOnce(Response.json({ emailAddress: email }))
+    .mockResolvedValueOnce(Response.json({ email, name }))
     .mockResolvedValueOnce(Response.json({ email, name }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -315,8 +331,8 @@ describe("Google authentication startup", () => {
       new URL("fixtures/google-desktop-oauth.json", import.meta.url)
     );
     electronState.openedUrls = [];
-    connection.prepare("DELETE FROM gmail_threads").run();
-    connection.prepare("DELETE FROM google_accounts").run();
+    connection.prepare("DELETE FROM mail_threads").run();
+    connection.prepare("DELETE FROM mail_accounts").run();
   });
 
   afterEach(() => {
@@ -452,7 +468,7 @@ describe("Google authentication startup", () => {
     await handleGoogleAuthCallback({ code: "authorization-code", state });
 
     expect(
-      connection.prepare("SELECT count(*) FROM google_accounts").pluck().get()
+      connection.prepare("SELECT count(*) FROM mail_accounts").pluck().get()
     ).toBe(10);
     await expect(Effect.runPromise(listGoogleAccounts())).resolves.toHaveLength(
       10
@@ -541,7 +557,7 @@ describe("Google authentication startup", () => {
     await handleGoogleAuthCallback({ code: "authorization-code", state });
 
     const savedCredentials = connection
-      .prepare("SELECT credentials FROM google_accounts WHERE email = ?")
+      .prepare("SELECT credentials FROM mail_accounts WHERE account_id = ?")
       .pluck()
       .get("person@example.com");
     if (!Buffer.isBuffer(savedCredentials)) {
@@ -608,7 +624,7 @@ describe("Google authentication startup", () => {
       refreshToken: "refresh-token",
     });
     const savedCredentials = connection
-      .prepare("SELECT credentials FROM google_accounts WHERE email = ?")
+      .prepare("SELECT credentials FROM mail_accounts WHERE account_id = ?")
       .pluck()
       .get(account.email);
     if (!Buffer.isBuffer(savedCredentials)) {
@@ -676,7 +692,7 @@ describe("Google authentication startup", () => {
         Effect.runPromise(getGoogleAccessToken("person@example.com"))
       ).resolves.toBe("new-access-token");
       expect(
-        connection.prepare("SELECT count(*) FROM gmail_threads").pluck().get()
+        connection.prepare("SELECT count(*) FROM mail_threads").pluck().get()
       ).toBe(1);
       expect(vi.mocked(setNativeUnreadBadgeCount).mock.calls).toStrictEqual([
         [0],
@@ -698,10 +714,7 @@ describe("Google authentication startup", () => {
       { error: "Could not read saved credentials", ok: false }
     );
     expect(
-      connection
-        .prepare("SELECT credentials FROM google_accounts")
-        .pluck()
-        .get()
+      connection.prepare("SELECT credentials FROM mail_accounts").pluck().get()
     ).toStrictEqual(original);
   });
 
@@ -735,25 +748,25 @@ describe("Google authentication startup", () => {
     expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(2);
 
     connection
-      .prepare("UPDATE gmail_threads SET is_unread = 0 WHERE account_email = ?")
+      .prepare("UPDATE mail_threads SET is_unread = 0 WHERE account_id = ?")
       .run("first@example.com");
     await Effect.runPromise(refreshUnreadBadge());
     expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(1);
     connection
       .prepare(
-        "UPDATE gmail_threads SET is_unread = 1, is_in_inbox = 0 WHERE account_email = ?"
+        "UPDATE mail_threads SET is_unread = 1, is_in_inbox = 0 WHERE account_id = ?"
       )
       .run("first@example.com");
     await Effect.runPromise(refreshUnreadBadge());
     expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(1);
 
     connection
-      .prepare("UPDATE google_accounts SET credentials = ? WHERE email = ?")
+      .prepare("UPDATE mail_accounts SET credentials = ? WHERE account_id = ?")
       .run(createUserOwnedCredentials(), "legacy@example.com");
     await Effect.runPromise(refreshUnreadBadge());
     expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(2);
 
-    connection.prepare("DELETE FROM google_accounts").run();
+    connection.prepare("DELETE FROM mail_accounts").run();
     await Effect.runPromise(refreshUnreadBadge());
     expect(setNativeUnreadBadgeCount).toHaveBeenLastCalledWith(0);
   });
@@ -801,6 +814,93 @@ describe("Google authentication startup", () => {
     });
   });
 
+  it("lists password accounts among Google accounts without a profile", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    insertAccount("first@example.com", createUserOwnedCredentials(), 1);
+    insertPasswordAccount("name@icloud.com", Buffer.from("sealed"), 2);
+    insertAccount("legacy@example.com", Buffer.from("{}"), 3);
+
+    await expect(
+      Effect.runPromise(listGoogleAccounts())
+    ).resolves.toStrictEqual([
+      {
+        avatarUrl: undefined,
+        displayName: undefined,
+        email: "first@example.com",
+        scopes: [],
+      },
+      {
+        avatarUrl: undefined,
+        displayName: undefined,
+        email: "name@icloud.com",
+        scopes: [],
+      },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reorders password accounts together with Google accounts", async () => {
+    insertAccount("first@example.com", createUserOwnedCredentials(), 1);
+    insertPasswordAccount("name@icloud.com", Buffer.from("sealed"), 2);
+
+    await expect(
+      Effect.runPromise(
+        reorderGoogleAccounts(["name@icloud.com", "first@example.com"])
+      )
+    ).resolves.toBeUndefined();
+
+    expect(
+      connection
+        .prepare("SELECT email FROM mail_accounts ORDER BY sort_order")
+        .all()
+    ).toStrictEqual([
+      { email: "name@icloud.com" },
+      { email: "first@example.com" },
+    ]);
+  });
+
+  it("never sends a password account's credentials to Google's revoke endpoint", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    // Shaped like an OAuth grant, so only the sign-in kind stops the revoke.
+    insertPasswordAccount("name@icloud.com", createUserOwnedCredentials());
+
+    await Effect.runPromise(revokeGoogleAccountAccess("name@icloud.com"));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses Google sign-in over an address connected with a password", async () => {
+    const fetchMock = stubSuccessfulGoogleAuthorization(
+      "name@icloud.com",
+      "Name"
+    );
+    const sealed = Buffer.from("sealed-app-password");
+    insertPasswordAccount("name@icloud.com", sealed);
+    const { state } = await startAuthorization();
+
+    await handleGoogleAuthCallback({ code: "authorization-code", state });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      connection
+        .prepare(
+          "SELECT auth_kind, credentials FROM mail_accounts WHERE account_id = ?"
+        )
+        .get("name@icloud.com")
+    ).toStrictEqual({ auth_kind: "password", credentials: sealed });
+    expect(sendRendererEvent).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.anything(),
+      {
+        error:
+          "This address is already connected with a password. Disconnect it first.",
+        ok: false,
+      }
+    );
+  });
+
   it("reorders reconnected accounts while legacy accounts remain hidden", async () => {
     insertAccount("first@example.com", createUserOwnedCredentials(), 1);
     insertAccount("legacy@example.com", Buffer.from("{}"), 2);
@@ -815,7 +915,7 @@ describe("Google authentication startup", () => {
     expect(
       connection
         .prepare(
-          "SELECT email, sort_order FROM google_accounts ORDER BY sort_order, email"
+          "SELECT email, sort_order FROM mail_accounts ORDER BY sort_order, email"
         )
         .all()
     ).toStrictEqual([

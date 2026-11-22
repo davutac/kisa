@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { areMailDraftInputsEqual } from "@/mail/mail-draft";
 import { getScheduledMailApi } from "@/platform/desktop";
 import { formatScheduledAt } from "@/scheduled/schedule-time";
@@ -67,7 +68,7 @@ export const useScheduledComposer = ({
       confirmLabel: actionLabel,
       confirmVariant: "destructive",
       description:
-        "Gmail may already have sent this email. Check Sent first; continuing can create a duplicate.",
+        "This email may already have been sent. Check Sent first; continuing can create a duplicate.",
       title: "Delivery could not be confirmed",
     });
   };
@@ -193,28 +194,33 @@ export const useScheduledComposer = ({
     }
 
     setIsScheduling(true);
-    try {
-      const reply = await api.schedule({
-        accountId: selectedAccountId,
-        draft,
-        draftId: draft.id,
-        scheduledAt,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return false;
+    return await runWithCleanup(
+      async () => {
+        try {
+          const reply = await api.schedule({
+            accountId: selectedAccountId,
+            draft,
+            draftId: draft.id,
+            scheduledAt,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return false;
+          }
+          toast.success("Email scheduled", {
+            description: formatScheduledAt(scheduledAt),
+          });
+          onOpenChange(false);
+          return true;
+        } catch {
+          toast.error("Could not schedule email");
+          return false;
+        }
+      },
+      () => {
+        setIsScheduling(false);
       }
-      toast.success("Email scheduled", {
-        description: formatScheduledAt(scheduledAt),
-      });
-      onOpenChange(false);
-      return true;
-    } catch {
-      toast.error("Could not schedule email");
-      return false;
-    } finally {
-      setIsScheduling(false);
-    }
+    );
   };
 
   const requestClose = async (): Promise<void> => {

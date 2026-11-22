@@ -8,6 +8,8 @@ export const StoredCredentials = Schema.Struct({
   expiresAt: Schema.optional(Schema.Finite),
   oauthClient: Schema.optional(Schema.Literal("user-owned")),
   refreshToken: Schema.optional(Schema.NonEmptyString),
+  /** What Google granted; kept with the credentials it describes. */
+  scopes: Schema.optional(Schema.Array(Schema.NonEmptyString)),
 });
 
 const decodeStoredCredentials = Schema.decodeUnknownSync(StoredCredentials);

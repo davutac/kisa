@@ -20,7 +20,7 @@ const NUMBER_FORMAT = new Intl.NumberFormat();
 
 const formatIndexedMessages = (entry: GmailIndexProgress): string =>
   entry.estimatedMessages === undefined || entry.estimatedMessages <= 0
-    ? "Checking Gmail mailbox total…"
+    ? "Checking the mailbox total…"
     : `${NUMBER_FORMAT.format(entry.indexedMessages)} / ~${NUMBER_FORMAT.format(
         entry.estimatedMessages
       )} emails indexed`;
@@ -145,7 +145,8 @@ const TitlebarIndexButton = () => {
         </span>
         <span className="opacity-60">
           Updating local mail and search. After the complete scan, mail removed
-          from Gmail is cleared locally. You can keep reading while this runs.
+          from the server is cleared locally. You can keep reading while this
+          runs.
         </span>
       </TooltipContent>
     </Tooltip>

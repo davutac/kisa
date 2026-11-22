@@ -3,6 +3,7 @@ import { Command as CommandPrimitive } from "cmdk";
 import { SearchIcon, XIcon } from "lucide-react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import MailSearchCompletionGroup from "@/components/mail/mail-search/mail-search-completion-group";
 import {
@@ -48,6 +49,12 @@ import { useMailbox } from "@/state/mailbox";
 
 const SEARCH_WIDTH = "clamp(10rem, 32vw, 22rem)";
 
+const focusOnNextFrame = (ref: RefObject<HTMLElement | null>): void => {
+  window.requestAnimationFrame(() => {
+    ref.current?.focus();
+  });
+};
+
 const getSearchPlaceholder = (mailbox: GmailMailbox): string => {
   if (mailbox === "spam") {
     return "Search Spam";
@@ -86,17 +93,10 @@ const TitlebarMailSearch = () => {
       ? (filterDraft?.value ?? "")
       : undefined
   );
-  const focusInput = (): void => {
-    window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  };
   const closeSearch = (): void => {
     setIsInputFocused(false);
     exit();
-    window.requestAnimationFrame(() => {
-      collapsedButtonRef.current?.focus();
-    });
+    focusOnNextFrame(collapsedButtonRef);
   };
   const commitFilter = (filter: SearchFilter): void => {
     const nextQuery = addSearchFilter(
@@ -131,10 +131,14 @@ const TitlebarMailSearch = () => {
 
   useHotkeyLayer("search", isActive && isInputFocused);
 
+  const navigateAndBegin = async (): Promise<void> => {
+    await navigate({ to: "/" });
+    activate();
+  };
   const startSearch = (): void => {
     if (isActive) {
       setAreCompletionsDismissed(false);
-      focusInput();
+      focusOnNextFrame(inputRef);
       return;
     }
 
@@ -143,10 +147,6 @@ const TitlebarMailSearch = () => {
       return;
     }
 
-    const navigateAndBegin = async (): Promise<void> => {
-      await navigate({ to: "/" });
-      activate();
-    };
     void navigateAndBegin();
   };
 
@@ -154,7 +154,7 @@ const TitlebarMailSearch = () => {
 
   useEffect(() => {
     if (isActive) {
-      focusInput();
+      focusOnNextFrame(inputRef);
     }
   }, [isActive]);
 
@@ -193,7 +193,7 @@ const TitlebarMailSearch = () => {
                   key={`${filter.field}:${filter.value}`}
                   onRemove={() => {
                     updateQuery(removeSearchFilterAt(query, index));
-                    focusInput();
+                    focusOnNextFrame(inputRef);
                   }}
                 />
               ))}

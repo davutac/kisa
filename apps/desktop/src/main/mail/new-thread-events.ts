@@ -1,22 +1,21 @@
-import type { ThreadId } from "@repo/gmail/models";
-
-export interface NewGmailThreads {
+export interface NewMailThreads {
   readonly accountId: string;
-  readonly threadIds: readonly ThreadId[];
+  readonly threadIds: readonly string[];
 }
 
-type NewGmailThreadsListener = (event: NewGmailThreads) => void;
+type NewMailThreadsListener = (event: NewMailThreads) => void;
 
-const listeners = new Set<NewGmailThreadsListener>();
+const listeners = new Set<NewMailThreadsListener>();
 
-export const publishNewGmailThreads = (event: NewGmailThreads): void => {
+/** Conversations that began with mail that just arrived in the Inbox. */
+export const publishNewMailThreads = (event: NewMailThreads): void => {
   for (const listener of listeners) {
     listener(event);
   }
 };
 
-export const subscribeNewGmailThreads = (
-  listener: NewGmailThreadsListener
+export const subscribeNewMailThreads = (
+  listener: NewMailThreadsListener
 ): (() => void) => {
   listeners.add(listener);
   return () => {

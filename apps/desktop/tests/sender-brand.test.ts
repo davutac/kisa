@@ -34,7 +34,7 @@ vi.mock(import("../src/main/database"), () => ({
               }),
             }),
             query: {
-              gmailSenderBrands: {
+              mailSenderBrands: {
                 findFirst: () => Promise.resolve(),
                 findMany: () => Promise.resolve([]),
               },

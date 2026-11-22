@@ -9,7 +9,13 @@ import type {
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useEffect, useRef, useState } from "react";
 
+import { runWithCleanup } from "@/lib/run-with-cleanup";
+
 import { PreviewError, PreviewPending } from "./preview-status";
+
+// pdf.js loads on demand; React Compiler cannot compile a component that
+// contains a dynamic `import()`, so the loader lives at module scope.
+const loadPdfjs = () => import("pdfjs-dist");
 
 const PdfPage = ({
   document,
@@ -67,36 +73,41 @@ const PdfPage = ({
     let page: PDFPageProxy | undefined;
     let renderTask: RenderTask | undefined;
     const render = async (): Promise<void> => {
-      try {
-        page = await document.getPage(pageNumber);
-        if (cancelled) {
-          return;
+      await runWithCleanup(
+        async () => {
+          try {
+            page = await document.getPage(pageNumber);
+            if (cancelled) {
+              return;
+            }
+            const baseViewport = page.getViewport({ scale: 1 });
+            const cssScale = width / baseViewport.width;
+            const viewport = page.getViewport({ scale: cssScale });
+            const outputScale = window.devicePixelRatio || 1;
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = "100%";
+            canvas.style.height = `${Math.floor(viewport.height)}px`;
+            setHeight(Math.floor(viewport.height));
+            renderTask = page.render({
+              canvas,
+              transform:
+                outputScale === 1
+                  ? undefined
+                  : [outputScale, 0, 0, outputScale, 0, 0],
+              viewport,
+            });
+            await renderTask.promise;
+          } catch {
+            if (!cancelled) {
+              setFailed(true);
+            }
+          }
+        },
+        () => {
+          page?.cleanup();
         }
-        const baseViewport = page.getViewport({ scale: 1 });
-        const cssScale = width / baseViewport.width;
-        const viewport = page.getViewport({ scale: cssScale });
-        const outputScale = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(viewport.width * outputScale);
-        canvas.height = Math.floor(viewport.height * outputScale);
-        canvas.style.width = "100%";
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
-        setHeight(Math.floor(viewport.height));
-        renderTask = page.render({
-          canvas,
-          transform:
-            outputScale === 1
-              ? undefined
-              : [outputScale, 0, 0, outputScale, 0, 0],
-          viewport,
-        });
-        await renderTask.promise;
-      } catch {
-        if (!cancelled) {
-          setFailed(true);
-        }
-      } finally {
-        page?.cleanup();
-      }
+      );
     };
     void render();
     return () => {
@@ -136,7 +147,7 @@ const PdfPreview = ({ bytes }: { bytes: Uint8Array }) => {
     let loadingTask: PDFDocumentLoadingTask | undefined;
     const load = async (): Promise<void> => {
       try {
-        const pdfjs = await import("pdfjs-dist");
+        const pdfjs = await loadPdfjs();
         pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
         loadingTask = pdfjs.getDocument({ data: new Uint8Array(bytes) });
         const nextDocument = await loadingTask.promise;

@@ -69,6 +69,9 @@ class DatabaseImportError extends Schema.TaggedError<DatabaseImportError>()(
 const importError = (): DatabaseImportError =>
   new DatabaseImportError({ message: "Could not import the database" });
 
+const VALIDATION_FAILED_MESSAGE =
+  "This database could not be opened with its recovery key. Databases from Kisa versions before the IMAP mail engine can't be imported.";
+
 const getImportManifestPath = (databasePath: string): string =>
   `${databasePath}.pending-import.json`;
 
@@ -348,8 +351,14 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
     const { databasePath: sourceDatabase, recoveryKeyPath } = session;
     databaseImportState = { state: "importing" };
 
+    // The copy did not open with its key, or its schema is not one Kisa reads.
+    let validationFailed = false;
+
     return yield* Effect.tryPromise({
-      catch: importError,
+      catch: () =>
+        validationFailed
+          ? new DatabaseImportError({ message: VALIDATION_FAILED_MESSAGE })
+          : importError(),
       try: async (): Promise<DatabaseImportOutcome> => {
         const key = decodeDatabaseRecoveryKeyFile(
           await readFile(recoveryKeyPath, "utf-8")
@@ -382,7 +391,14 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
           );
 
           options.onProgress("validating");
-          await options.validate(stagedDatabasePath, key);
+          // A database from before the mail engine fails here: its migration
+          // history predates the baseline, so it never replaces the live one.
+          try {
+            await options.validate(stagedDatabasePath, key);
+          } catch (error) {
+            validationFailed = true;
+            throw error;
+          }
           await rm(`${stagedDatabasePath}-wal`, { force: true });
           await rm(`${stagedDatabasePath}-shm`, { force: true });
 

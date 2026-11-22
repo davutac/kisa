@@ -27,6 +27,12 @@ export const AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL =
 export const AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL =
   "desktop:auth:google-reorder-accounts";
 export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";
+export const AUTH_OPEN_ACCOUNT_SETUP_CHANNEL =
+  "desktop:auth:open-account-setup";
+
+// Only the Add account window's preload uses these, and it inlines them.
+export const ACCOUNT_SETUP_CLOSE_CHANNEL = "desktop:account-setup:close";
+export const ACCOUNT_SETUP_SUBMIT_CHANNEL = "desktop:account-setup:submit";
 
 export const COMPOSER_TEMPLATE_CHANGED_CHANNEL =
   "desktop:composer-template:changed";

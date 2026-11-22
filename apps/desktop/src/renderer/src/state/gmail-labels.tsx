@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { sortGmailLabelCatalog } from "@/mail/label";
 import { getMailApi } from "@/platform/desktop";
 import type {
@@ -131,26 +132,33 @@ export const GmailLabelsProvider = ({
 
       const load = (async () => {
         setStatuses((current) => new Map(current).set(accountId, "loading"));
-        try {
-          const reply = await getMailApi()?.listLabels({ accountId });
+        await runWithCleanup(
+          async () => {
+            try {
+              const reply = await getMailApi()?.listLabels({ accountId });
 
-          if (reply?.ok === true) {
-            updateCatalog(accountId, reply.data);
-            setStatuses((current) => new Map(current).set(accountId, "ready"));
-          } else {
-            setStatuses((current) =>
-              new Map(current).set(accountId, "unavailable")
-            );
+              if (reply?.ok === true) {
+                updateCatalog(accountId, reply.data);
+                setStatuses((current) =>
+                  new Map(current).set(accountId, "ready")
+                );
+              } else {
+                setStatuses((current) =>
+                  new Map(current).set(accountId, "unavailable")
+                );
+              }
+            } catch {
+              // Labels are supplementary mailbox metadata; the sync action is the
+              // visible retry when a cached catalog cannot be loaded.
+              setStatuses((current) =>
+                new Map(current).set(accountId, "unavailable")
+              );
+            }
+          },
+          () => {
+            loadsInFlight.current.delete(accountId);
           }
-        } catch {
-          // Labels are supplementary mailbox metadata; the sync action is the
-          // visible retry when a cached catalog cannot be loaded.
-          setStatuses((current) =>
-            new Map(current).set(accountId, "unavailable")
-          );
-        } finally {
-          loadsInFlight.current.delete(accountId);
-        }
+        );
       })();
 
       loadsInFlight.current.set(accountId, load);

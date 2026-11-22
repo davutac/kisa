@@ -36,12 +36,12 @@ describe("account mail work supervisor", () => {
     await started.promise;
 
     let suspensionCompleted = false;
-    const suspension = Effect.runPromise(
-      supervisor.suspend("user@example.com")
-    ).then(() => {
+    const suspendAndRecord = async (): Promise<void> => {
+      await Effect.runPromise(supervisor.suspend("user@example.com"));
       suspensionCompleted = true;
       events.push("suspended");
-    });
+    };
+    const suspension = suspendAndRecord();
     await Promise.resolve();
 
     expect(signals).toHaveLength(2);

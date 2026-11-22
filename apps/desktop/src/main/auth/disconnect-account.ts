@@ -1,13 +1,12 @@
-import { googleAccounts } from "@repo/database/schemas";
+import { mailAccounts } from "@repo/database/schemas";
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import { cancelThreadCategorization } from "../ai/thread-categorization";
 import { withDatabaseClient } from "../database";
 import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor";
-import { cancelMailBackfill } from "../mail/mail-backfill";
+import { forgetMailEngineAccount } from "../mail/engine/mail-engine";
 import { forgetAccountDrafts } from "../mail/mail-drafts";
-import { forgetAccountMailData } from "../mail/mail-sync";
 import { forgetAccountScheduledMail } from "../mail/scheduled-mail";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
 import { forgetAccountSettings } from "../settings/account-settings";
@@ -31,14 +30,14 @@ const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
   function* deleteAccountRecord(email: string) {
     yield* withDatabaseClient((database) =>
       database
-        .delete(googleAccounts)
-        .where(eq(googleAccounts.email, email))
+        .delete(mailAccounts)
+        .where(eq(mailAccounts.accountId, email.toLowerCase()))
         .run()
     ).pipe(
       Effect.mapError(
         () =>
           new GoogleAccountDisconnectError({
-            message: "Could not remove the Google account",
+            message: "Could not remove the account",
           })
       )
     );
@@ -49,7 +48,6 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
   function* disconnectGoogleAccount(email: string) {
     // Prevent another poll or index run from starting, then wait until
     // every already-authorized writer has stopped before deleting local data.
-    cancelMailBackfill(email);
     cancelThreadCategorization(email);
     return yield* Effect.acquireUseRelease(
       accountMailWorkSupervisor.suspend(email),
@@ -57,7 +55,7 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
         Effect.gen(function* disconnectSuspendedAccount() {
           yield* revokeGoogleAccountAccess(email);
           yield* deleteAccountRecord(email);
-          yield* forgetAccountMailData(email).pipe(
+          yield* forgetMailEngineAccount(email).pipe(
             Effect.mapError(toDisconnectError)
           );
           yield* forgetAccountScheduledMail(email).pipe(

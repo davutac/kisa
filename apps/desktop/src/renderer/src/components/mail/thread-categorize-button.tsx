@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getAiApi } from "@/platform/desktop";
 
 interface ThreadCategorizeButtonProps {
@@ -39,24 +40,29 @@ const ThreadCategorizeButton = ({
 
   const categorize = async (): Promise<void> => {
     setIsCategorizing(true);
-    try {
-      const reply = await aiApi.categorizeThread({ accountId, threadId });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await aiApi.categorizeThread({ accountId, threadId });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
 
-      const count = reply.data.labelIds.length;
-      if (count === 0) {
-        toast.info("No new labels added");
-      } else {
-        toast.success(`Added ${count} ${count === 1 ? "label" : "labels"}`);
+          const count = reply.data.labelIds.length;
+          if (count === 0) {
+            toast.info("No new labels added");
+          } else {
+            toast.success(`Added ${count} ${count === 1 ? "label" : "labels"}`);
+          }
+        } catch {
+          toast.error("Could not categorize this conversation");
+        }
+      },
+      () => {
+        setIsCategorizing(false);
       }
-    } catch {
-      toast.error("Could not categorize this conversation");
-    } finally {
-      setIsCategorizing(false);
-    }
+    );
   };
 
   return (

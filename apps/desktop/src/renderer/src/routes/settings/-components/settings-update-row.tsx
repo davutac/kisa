@@ -10,6 +10,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { UpdateApi } from "@/platform/desktop";
 import {
   getManualUpdateFeedback,
@@ -42,16 +43,21 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
   const handleCheckForUpdates = async (): Promise<void> => {
     setIsManualCheckPending(true);
 
-    try {
-      const nextStatus = await updateApi.check();
-      showManualUpdateFeedback(getManualUpdateFeedback(nextStatus));
-    } catch {
-      toast.error("Could not check for updates", {
-        description: "Please try again later.",
-      });
-    } finally {
-      setIsManualCheckPending(false);
-    }
+    await runWithCleanup(
+      async () => {
+        try {
+          const nextStatus = await updateApi.check();
+          showManualUpdateFeedback(getManualUpdateFeedback(nextStatus));
+        } catch {
+          toast.error("Could not check for updates", {
+            description: "Please try again later.",
+          });
+        }
+      },
+      () => {
+        setIsManualCheckPending(false);
+      }
+    );
   };
 
   const view = getSettingsUpdateView(status, isManualCheckPending);

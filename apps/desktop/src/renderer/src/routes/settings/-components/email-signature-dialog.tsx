@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import {
   MAX_EMAIL_SIGNATURE_HTML_LENGTH,
   MAX_EMAIL_SIGNATURE_TEXT_LENGTH,
@@ -51,13 +52,16 @@ const EmailSignatureDialog = ({
 
   const save = async (): Promise<void> => {
     setIsSaving(true);
-    try {
-      if (await onSave(normalizedDraft)) {
-        setIsOpen(false);
+    await runWithCleanup(
+      async () => {
+        if (await onSave(normalizedDraft)) {
+          setIsOpen(false);
+        }
+      },
+      () => {
+        setIsSaving(false);
       }
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   return (

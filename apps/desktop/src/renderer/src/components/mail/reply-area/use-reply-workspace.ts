@@ -5,6 +5,7 @@ import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
 import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import {
   isDraftBodyOnlySignature,
   isThreadMailDraftEmpty,
@@ -13,6 +14,7 @@ import {
 } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
+import { describeSendOutcome } from "@/mail/send-outcome";
 import { getAiApi, getMailApi } from "@/platform/desktop";
 import { appendEmailSignatureHtml } from "@/shared/email-signature";
 import type { AiModelSelection } from "@/shared/ipc/ai";
@@ -119,7 +121,7 @@ export const useReplyWorkspace = ({
     }
     const save = async (): Promise<void> => {
       try {
-        const reply = await mailApi.saveDraft(currentDraftRef.current);
+        const reply = await mailApi.saveDraft(currentDraft);
         if (!reply.ok) {
           toast.error(reply.error);
         }
@@ -169,49 +171,57 @@ export const useReplyWorkspace = ({
       return;
     }
     setIsSending(true);
-    try {
-      const preparedAttachments = await prepareAttachments(
-        currentDraft.attachments
-      );
-      if (preparedAttachments === undefined) {
-        return;
-      }
-      const reply = await mailApi.sendThreadMessage({
-        accountId,
-        action,
-        attachments: preparedAttachments,
-        bcc: recipients.bcc,
-        body: { html: composer.html, text: composer.text },
-        cc: recipients.cc,
-        messageId: message.id,
-        threadId,
-        to: recipients.to,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      finalizedRef.current = true;
-      try {
-        const discarded = await mailApi.discardDraft({
-          accountId,
-          draftId: draft.id,
-        });
-        if (!discarded.ok) {
-          toast.error(discarded.error);
+    await runWithCleanup(
+      async () => {
+        try {
+          const preparedAttachments = await prepareAttachments(
+            currentDraft.attachments
+          );
+          if (preparedAttachments === undefined) {
+            return;
+          }
+          const reply = await mailApi.sendThreadMessage({
+            accountId,
+            action,
+            attachments: preparedAttachments,
+            bcc: recipients.bcc,
+            body: { html: composer.html, text: composer.text },
+            cc: recipients.cc,
+            messageId: message.id,
+            threadId,
+            to: recipients.to,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          finalizedRef.current = true;
+          try {
+            const discarded = await mailApi.discardDraft({
+              accountId,
+              draftId: draft.id,
+            });
+            if (!discarded.ok) {
+              toast.error(discarded.error);
+            }
+          } catch {
+            toast.error(
+              "Message sent, but its local draft could not be removed"
+            );
+          }
+          const notice = describeSendOutcome(reply.data);
+          toast[notice.tone](notice.message);
+          onSent();
+        } catch (error) {
+          toast.error(
+            error instanceof Error ? error.message : "Could not send message"
+          );
         }
-      } catch {
-        toast.error("Message sent, but its local draft could not be removed");
+      },
+      () => {
+        setIsSending(false);
       }
-      toast.success("Message sent");
-      onSent();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not send message"
-      );
-    } finally {
-      setIsSending(false);
-    }
+    );
   };
 
   const discard = async (): Promise<void> => {
@@ -237,45 +247,51 @@ export const useReplyWorkspace = ({
   };
 
   const createReply = async (instructions?: string): Promise<void> => {
-    if (!(aiApi && aiModel.selection && canCreateReply)) {
+    const model = aiModel.selection;
+    if (!(aiApi && model && canCreateReply)) {
       return;
     }
     setIsCreatingReply(true);
-    try {
-      const reply = await aiApi.generateReply({
-        accountId,
-        instructions,
-        model: aiModel.selection,
-        threadId,
-      });
-      if (!mountedRef.current) {
-        return;
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await aiApi.generateReply({
+            accountId,
+            instructions,
+            model,
+            threadId,
+          });
+          if (!mountedRef.current) {
+            return;
+          }
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          const replyBody =
+            signature === undefined
+              ? reply.data.body
+              : appendEmailSignatureHtml(reply.data.body, signature.body);
+          if (!replaceComposerContent(replyBody)) {
+            toast.error("Could not update the reply draft");
+            return;
+          }
+          cleanHistory.reset();
+          toast.success("Reply created");
+        } catch (error) {
+          if (mountedRef.current) {
+            toast.error(
+              error instanceof Error ? error.message : "Could not create reply"
+            );
+          }
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsCreatingReply(false);
+        }
       }
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      const replyBody =
-        signature === undefined
-          ? reply.data.body
-          : appendEmailSignatureHtml(reply.data.body, signature.body);
-      if (!replaceComposerContent(replyBody)) {
-        toast.error("Could not update the reply draft");
-        return;
-      }
-      cleanHistory.reset();
-      toast.success("Reply created");
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error ? error.message : "Could not create reply"
-        );
-      }
-    } finally {
-      if (mountedRef.current) {
-        setIsCreatingReply(false);
-      }
-    }
+    );
   };
 
   const updateComposer = (nextComposer: EmailComposerValue): void => {

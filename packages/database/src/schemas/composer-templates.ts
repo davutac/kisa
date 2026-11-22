@@ -1,14 +1,17 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import { googleAccounts } from "./google-accounts";
+import { mailAccounts } from "./mail-accounts";
 
 /** Reusable full-composer presets. Account deletion makes a preset portable. */
 export const composerTemplates = sqliteTable(
   "composer_templates",
   {
-    accountEmail: text("account_email").references(() => googleAccounts.email, {
-      onDelete: "set null",
-    }),
+    accountEmail: text("account_email").references(
+      () => mailAccounts.accountId,
+      {
+        onDelete: "set null",
+      }
+    ),
     bcc: text("bcc", { mode: "json" }).$type<readonly string[]>().notNull(),
     bodyHtml: text("body_html").notNull(),
     bodyText: text("body_text").notNull(),

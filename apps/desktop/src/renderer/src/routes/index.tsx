@@ -280,6 +280,7 @@ function HomeRoute() {
     clearCheckedThreads,
     closeThread,
     search.isShowingResults,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Each new search scope closes the open thread and clears the selection.
     search.resetKey,
     selectThread,
   ]);

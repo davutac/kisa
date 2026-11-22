@@ -11,6 +11,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { toMailIndexDescription } from "@/mail/mail-index-progress-view";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import type { MailApi } from "@/platform/desktop";
@@ -27,7 +28,6 @@ const SettingsAccountReindexRow = ({
   const confirm = useConfirm();
   const progress = useAccountIndexProgress(accountId);
   const [isStarting, setIsStarting] = useState(false);
-  const titleId = `account-${accountId}-reindex-title`;
   const isIndexing = progress?.status === "running";
   const isBusy = isStarting || isIndexing;
 
@@ -37,17 +37,15 @@ const SettingsAccountReindexRow = ({
     }
 
     const confirmed = await confirm({
-      confirmLabel: "Start reindex",
+      confirmLabel: "Sync now",
       description: (
         <ConfirmMessage subject={accountId}>
-          Kisa will download all email conversations again, including Spam and
-          Trash, to refresh your local history and search. This can consume
-          substantial Gmail API quota and may take a long time for large
-          accounts. Existing downloaded mail remains available. Use this only
-          when mail is missing or out of date.
+          Kisa will check the mail server for new mail and changes now. It
+          already keeps this account up to date on its own, so nothing is
+          downloaded again or deleted.
         </ConfirmMessage>
       ),
-      title: "Reindex mail?",
+      title: "Check for new mail now?",
     });
 
     if (!confirmed) {
@@ -55,37 +53,39 @@ const SettingsAccountReindexRow = ({
     }
 
     setIsStarting(true);
-    try {
-      const reply = await mailApi.reindex({ accountId });
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await mailApi.reindex({ accountId });
 
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+
+          toast.success("Checking for new mail");
+        } catch {
+          toast.error("Could not check for new mail", {
+            description: "Please try again.",
+          });
+        }
+      },
+      () => {
+        setIsStarting(false);
       }
-
-      toast.success("Mail reindex started", {
-        description: "Your existing downloaded mail remains available.",
-      });
-    } catch {
-      toast.error("Could not start the mail reindex", {
-        description: "Please try again.",
-      });
-    } finally {
-      setIsStarting(false);
-    }
+    );
   };
 
   return (
     <SettingsRow>
       <SettingsRowContent>
-        <SettingsRowTitle id={titleId}>Mail history</SettingsRowTitle>
+        <SettingsRowTitle>Mail sync</SettingsRowTitle>
         <SettingsRowDescription>
           {toMailIndexDescription(progress)}
         </SettingsRowDescription>
       </SettingsRowContent>
       <SettingsRowActions>
         <Button
-          aria-labelledby={titleId}
           disabled={isBusy}
           onClick={() => {
             void requestReindex();
@@ -98,7 +98,7 @@ const SettingsAccountReindexRow = ({
           ) : (
             <RefreshCwIcon />
           )}
-          Reindex
+          Sync now
         </Button>
       </SettingsRowActions>
     </SettingsRow>

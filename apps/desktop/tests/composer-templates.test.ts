@@ -22,6 +22,7 @@ import {
   saveComposerTemplate,
 } from "../src/main/templates/composer-templates";
 import type { ComposerTemplateChanged } from "../src/shared/ipc/templates";
+import { insertGmailAccount } from "./fixtures/mail-accounts";
 
 const rendererEvents = vi.hoisted(() => ({
   send: vi.fn<(...arguments_: unknown[]) => void>(),
@@ -93,14 +94,8 @@ const emittedChanges = (): ComposerTemplateChanged[] =>
 describe("composer templates", () => {
   beforeEach(() => {
     connection.prepare("DELETE FROM composer_templates").run();
-    connection.prepare("DELETE FROM google_accounts").run();
-    connection
-      .prepare(
-        `INSERT INTO google_accounts (
-          created_at, credentials, email, scopes, sort_order, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-      .run(1, Buffer.from([1]), "person@example.com", "[]", 1, 1);
+    connection.prepare("DELETE FROM mail_accounts").run();
+    insertGmailAccount(connection, "person@example.com");
     rendererEvents.send.mockClear();
   });
 
@@ -138,7 +133,7 @@ describe("composer templates", () => {
     await Effect.runPromise(saveComposerTemplate(template));
 
     connection
-      .prepare("DELETE FROM google_accounts WHERE email = ?")
+      .prepare("DELETE FROM mail_accounts WHERE account_id = ?")
       .run("person@example.com");
     await Effect.runPromise(notifyComposerTemplatesChanged());
 

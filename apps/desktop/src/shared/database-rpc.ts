@@ -1,10 +1,8 @@
+// oxlint-disable eslint/max-classes-per-file -- RPC declarations are nominal classes by design.
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-
-// RPC declarations are nominal classes by design.
-// oxlint-disable eslint/max-classes-per-file
 
 const EncodedDatabaseBytes = Schema.TaggedStruct("Bytes", {
   value: Schema.Uint8Array,

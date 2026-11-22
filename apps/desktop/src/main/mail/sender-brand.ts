@@ -3,7 +3,7 @@ import { get as httpsGet } from "node:https";
 import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 
-import { gmailSenderBrands } from "@repo/database/schemas";
+import { mailSenderBrands } from "@repo/database/schemas";
 import { Effect, Option, Schema } from "effect";
 import { getDomain } from "tldts";
 
@@ -163,7 +163,7 @@ export const hasCachedSenderBrand = Effect.fn("hasCachedSenderBrand")(
 
     const domains = getBimiLookupDomains(senderDomain);
     const rows = yield* withDatabaseClient((database) =>
-      database.query.gmailSenderBrands.findMany({
+      database.query.mailSenderBrands.findMany({
         where: {
           domain: { in: [...domains] },
           expiresAt: { gt: Date.now() },
@@ -474,7 +474,7 @@ const toSenderBrand = (domain: string, logoData: Buffer): GmailSenderBrand => ({
 const loadCachedSenderBrand = Effect.fn("loadCachedSenderBrand")(
   function* loadCachedSenderBrand(domain: string, selector: string) {
     const row = yield* withDatabaseClient((database) =>
-      database.query.gmailSenderBrands.findFirst({
+      database.query.mailSenderBrands.findFirst({
         where: { domain, selector },
       })
     ).pipe(
@@ -528,11 +528,11 @@ const storeSenderBrand = Effect.fn("storeSenderBrand")(
 
     yield* withDatabaseClient((database) =>
       database
-        .insert(gmailSenderBrands)
+        .insert(mailSenderBrands)
         .values(values)
         .onConflictDoUpdate({
           set: values,
-          target: [gmailSenderBrands.domain, gmailSenderBrands.selector],
+          target: [mailSenderBrands.domain, mailSenderBrands.selector],
         })
         .run()
     ).pipe(

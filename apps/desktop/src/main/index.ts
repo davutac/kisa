@@ -16,7 +16,7 @@ import { stopGoogleAuth } from "./auth/auth";
 import { closeDatabase } from "./database";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
-import { stopMailSync } from "./mail/mail-sync";
+import { stopMailEngine } from "./mail/engine/mail-engine";
 import { stopScheduledMail } from "./mail/scheduled-mail";
 import {
   flushAppSettings,
@@ -101,6 +101,7 @@ const finishShutdown = async (): Promise<void> => {
   destroyBackgroundTray();
   await stopThreadCategorization();
   await stopScheduledMail();
+  await stopMailEngine();
   await Promise.allSettled([
     flushAppSettings(),
     Effect.runPromise(closeDatabase()),
@@ -118,7 +119,6 @@ app.on("before-quit", (event) => {
   beginQuit();
   shutdownStarted = true;
   sendRendererEvent(APP_CLOSING_CHANNEL, AppClosingEvent, "closing");
-  stopMailSync();
   void finishShutdown();
 });
 

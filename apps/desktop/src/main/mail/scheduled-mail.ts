@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
-  googleAccounts,
+  mailAccounts,
   mailDrafts,
   scheduledMessages,
 } from "@repo/database/schemas";
@@ -268,9 +268,9 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
         let previousAttachments: readonly StoredMailDraftAttachment[] = [];
         await database.transaction(async (transaction) => {
           const [account] = await transaction
-            .select({ email: googleAccounts.email })
-            .from(googleAccounts)
-            .where(eq(googleAccounts.email, request.accountId))
+            .select({ accountId: mailAccounts.accountId })
+            .from(mailAccounts)
+            .where(eq(mailAccounts.accountId, request.accountId))
             .limit(1)
             .all();
           if (account === undefined) {
@@ -492,11 +492,10 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                 request.action.kind === "reschedule" ||
                 request.action.kind === "send-now"
               ) {
-                const account =
-                  await transaction.query.googleAccounts.findFirst({
-                    columns: { email: true },
-                    where: { email: request.accountId },
-                  });
+                const account = await transaction.query.mailAccounts.findFirst({
+                  columns: { accountId: true },
+                  where: { accountId: request.accountId },
+                });
                 if (account === undefined) {
                   throw scheduledMailError(
                     "The Google account is no longer connected"
@@ -776,9 +775,9 @@ export const sendScheduledMailNow = Effect.fn("sendScheduledMailNow")(
                 "The scheduled email is already being sent"
               );
             }
-            const account = await transaction.query.googleAccounts.findFirst({
-              columns: { email: true },
-              where: { email: request.accountId },
+            const account = await transaction.query.mailAccounts.findFirst({
+              columns: { accountId: true },
+              where: { accountId: request.accountId },
             });
             if (account === undefined) {
               throw scheduledMailError(

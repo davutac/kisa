@@ -10,6 +10,7 @@ interface LoginScreenProps {
   hasGoogleSetup: boolean;
   isSettingUp: boolean;
   isStarting: boolean;
+  onAddOtherAccount: () => void;
   onLogin: () => void;
   onSetup: () => Promise<boolean>;
 }
@@ -18,6 +19,7 @@ const LoginScreen = ({
   hasGoogleSetup,
   isSettingUp,
   isStarting,
+  onAddOtherAccount,
   onLogin,
   onSetup,
 }: LoginScreenProps) => {
@@ -41,10 +43,11 @@ const LoginScreen = ({
         <section className="[-webkit-app-region:no-drag]">
           <header className="mb-5 text-center">
             <h2 className="font-heading text-base font-medium">
-              Connect Gmail
+              Connect your mail
             </h2>
             <p className="text-muted-foreground mt-1 text-xs/relaxed">
               Set up your personal Google client once, then sign in to Gmail.
+              iCloud and other accounts sign in with an app password.
             </p>
           </header>
 
@@ -72,6 +75,15 @@ const LoginScreen = ({
                 src={googleLogo}
               />
               {isStarting ? "Opening Google…" : "Login with Google"}
+            </Button>
+            <Button
+              className="h-10 w-full"
+              disabled={isSettingUp || isStarting}
+              onClick={onAddOtherAccount}
+              type="button"
+              variant="outline"
+            >
+              Add iCloud or other account
             </Button>
           </div>
         </section>

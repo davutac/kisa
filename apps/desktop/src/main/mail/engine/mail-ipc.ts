@@ -1,0 +1,330 @@
+import type { RemoteDatabaseClient } from "@repo/database/remote-client";
+import { mailLabels } from "@repo/database/schemas";
+import { LabelId } from "@repo/mail/ids";
+import type { ThreadAction } from "@repo/mail/mutations";
+import { and, eq } from "drizzle-orm";
+import { Effect, Exit } from "effect";
+
+import type {
+  GmailMessageSendRequest,
+  GmailThreadMessageSendRequest,
+  MailSendOutcome,
+  GmailBulkThreadMutationOperation,
+  GmailBulkThreadMutationRequest,
+  GmailBulkThreadMutationResult,
+  GmailCachedThreadPageRequest,
+  GmailLabelCatalogRequest,
+  GmailLabelCreateRequest,
+  GmailLabelDeleteRequest,
+  GmailLabelInputColor,
+  GmailLabelSummary,
+  GmailLabelUpdateRequest,
+  GmailSpamStatusRequest,
+  GmailThreadLabelRequest,
+  GmailThreadReadStateRequest,
+  GmailThreadRequest,
+} from "../../../shared/ipc/mail";
+import {
+  OutgoingAttachmentAuthorizationError,
+  outgoingAttachmentAuthorizations,
+} from "../outgoing-attachment-authorizations";
+import { MailDatabase } from "./mail-database";
+import {
+  MailEngineError,
+  applyThreadActions,
+  createAccountLabel,
+  deleteAccountLabel,
+  inAccountEngine,
+  inEngine,
+  loadThread,
+  renameAccountLabel,
+  requestMailSync,
+  setThreadReadState,
+} from "./mail-engine";
+import {
+  readHasUnreadSpam,
+  readLabelCatalog,
+  readThreadPage,
+} from "./mail-reads";
+import { sendNewMessage, sendThreadMessage } from "./mail-send";
+
+// The renderer-facing operations over the engine's cache. Each one reads
+// SQLite through the database process; only opening a conversation and
+// changing read state may reach the mail server.
+
+const readDatabase = <A>(
+  message: string,
+  run: (database: RemoteDatabaseClient) => Promise<A>
+) =>
+  inEngine(
+    Effect.gen(function* readMailDatabase() {
+      const database = yield* MailDatabase;
+      return yield* database.use(message, run);
+    })
+  );
+
+export const listCachedThreadPage = (request: GmailCachedThreadPageRequest) =>
+  readDatabase("Could not load email", (database) =>
+    readThreadPage(database, request)
+  );
+
+export const listLabelCatalog = (request: GmailLabelCatalogRequest) =>
+  readDatabase("Could not load labels", (database) =>
+    readLabelCatalog(database, request.accountId)
+  );
+
+/**
+ * Labels and folders are listed by every sync, so a refresh is a sync of the
+ * account; the catalog returned is what the cache has now.
+ */
+export const refreshLabelCatalog = (request: GmailLabelCatalogRequest) =>
+  Effect.sync(() => {
+    requestMailSync(request.accountId);
+  }).pipe(Effect.andThen(listLabelCatalog(request)));
+
+export const loadSpamStatus = (request: GmailSpamStatusRequest) =>
+  readDatabase("Could not check spam", async (database) => ({
+    hasUnreadSpam: await readHasUnreadSpam(database, request.accountIds),
+  }));
+
+export const openThread = (request: GmailThreadRequest) =>
+  inAccountEngine(request.accountId, loadThread(request));
+
+export const changeThreadReadState = (request: GmailThreadReadStateRequest) =>
+  inAccountEngine(
+    request.accountId,
+    setThreadReadState({
+      accountId: request.accountId,
+      isRead: !request.isUnread,
+      threadId: request.threadId,
+    })
+  );
+
+const actOnThread = (request: GmailThreadRequest, action: ThreadAction) =>
+  inAccountEngine(
+    request.accountId,
+    applyThreadActions(request.accountId, [request.threadId], action)
+  );
+
+export const setThreadLabel = (request: GmailThreadLabelRequest) =>
+  actOnThread(request, {
+    applied: request.applied,
+    kind: "setLabel",
+    labelId: LabelId.make(request.labelId),
+  });
+
+export const trashThread = (request: GmailThreadRequest) =>
+  actOnThread(request, { kind: "trash" });
+
+export const deleteThreadForever = (request: GmailThreadRequest) =>
+  actOnThread(request, { kind: "deleteForever" });
+
+/** Out of Spam (or Trash) and back into the Inbox. */
+export const markThreadNotSpam = (request: GmailThreadRequest) =>
+  actOnThread(request, { kind: "moveToInbox" });
+
+const toThreadAction = (
+  operation: GmailBulkThreadMutationOperation
+): ThreadAction => {
+  switch (operation.kind) {
+    case "setLabel": {
+      return {
+        applied: operation.applied,
+        kind: "setLabel",
+        labelId: LabelId.make(operation.labelId),
+      };
+    }
+    case "setReadState": {
+      return { kind: "setRead", read: !operation.isUnread };
+    }
+    default: {
+      return { kind: operation.kind };
+    }
+  }
+};
+
+const MAX_BULK_THREADS = 5000;
+/** Conversations per server round; a failure leaves the other rounds done. */
+const BULK_CHUNK_SIZE = 250;
+
+/**
+ * One action over a selection that may span accounts. Each account's
+ * conversations are changed in rounds, and the reply says which ones did not
+ * change so the interface can put them back.
+ */
+export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
+  function* bulkMutateThreads(request: GmailBulkThreadMutationRequest) {
+    const threads = [
+      ...new Map(
+        request.threads.map((thread) => [
+          `${thread.accountId}\u0000${thread.threadId}`,
+          thread,
+        ])
+      ).values(),
+    ];
+    if (threads.length === 0 || threads.length > MAX_BULK_THREADS) {
+      return yield* new MailEngineError({
+        message: `Select between 1 and ${MAX_BULK_THREADS} conversations`,
+      });
+    }
+
+    const action = toThreadAction(request.operation);
+    const byAccount = new Map<string, GmailThreadRequest[]>();
+    for (const thread of threads) {
+      byAccount.set(thread.accountId, [
+        ...(byAccount.get(thread.accountId) ?? []),
+        thread,
+      ]);
+    }
+
+    const succeeded: GmailThreadRequest[] = [];
+    const failed: GmailThreadRequest[] = [];
+    for (const [accountId, accountThreads] of byAccount) {
+      for (
+        let start = 0;
+        start < accountThreads.length;
+        start += BULK_CHUNK_SIZE
+      ) {
+        const round = accountThreads.slice(start, start + BULK_CHUNK_SIZE);
+        const exit = yield* Effect.exit(
+          inAccountEngine(
+            accountId,
+            applyThreadActions(
+              accountId,
+              round.map((thread) => thread.threadId),
+              action
+            )
+          )
+        );
+        (Exit.isSuccess(exit) ? succeeded : failed).push(...round);
+      }
+    }
+
+    return { failed, succeeded } satisfies GmailBulkThreadMutationResult;
+  }
+);
+
+/** Label colours are Kisa's own; IMAP has nowhere to keep them. */
+const saveLabelColor = (
+  accountId: string,
+  labelId: string,
+  color: GmailLabelInputColor | undefined
+) =>
+  readDatabase("Could not save the label colour", (database) =>
+    database
+      .update(mailLabels)
+      .set({
+        backgroundColor: color?.background ?? null,
+        textColor: color?.text ?? null,
+      })
+      .where(
+        and(
+          eq(mailLabels.accountId, accountId),
+          eq(mailLabels.labelId, labelId)
+        )
+      )
+      .run()
+  );
+
+export const createAccountLabelFromRequest = Effect.fn(
+  "MailIpc.createAccountLabel"
+)(function* createAccountLabelFromRequest(request: GmailLabelCreateRequest) {
+  const label = yield* inAccountEngine(
+    request.accountId,
+    createAccountLabel(request.accountId, request.name)
+  );
+  if (request.color !== undefined) {
+    yield* saveLabelColor(request.accountId, label.id, request.color);
+  }
+  return {
+    color: request.color,
+    id: label.id,
+    name: label.name,
+    type: "user",
+  } satisfies GmailLabelSummary;
+});
+
+export const updateAccountLabel = Effect.fn("MailIpc.updateAccountLabel")(
+  function* updateAccountLabel(request: GmailLabelUpdateRequest) {
+    const label = yield* inAccountEngine(
+      request.accountId,
+      renameAccountLabel(request.accountId, request.labelId, request.name)
+    );
+    // An unchanged colour is sent as `undefined`.
+    if (request.color !== undefined) {
+      yield* saveLabelColor(request.accountId, label.id, request.color);
+    }
+    const catalog = yield* listLabelCatalog(request);
+    return (
+      catalog.labels.find((candidate) => candidate.id === label.id) ?? {
+        id: label.id,
+        name: label.name,
+        type: "user",
+      }
+    );
+  }
+);
+
+export const deleteAccountLabelFromRequest = (
+  request: GmailLabelDeleteRequest
+) =>
+  inAccountEngine(
+    request.accountId,
+    deleteAccountLabel(request.accountId, request.labelId)
+  );
+
+/** The files the composer attached, released to this send only. */
+const consumeAttachments = (
+  ownerWebContentsId: number,
+  capabilities: GmailMessageSendRequest["attachments"]
+) =>
+  Effect.tryPromise({
+    catch: (error) =>
+      error instanceof OutgoingAttachmentAuthorizationError
+        ? error
+        : new OutgoingAttachmentAuthorizationError({
+            message: "Could not read attachments",
+          }),
+    try: () =>
+      outgoingAttachmentAuthorizations.consume(
+        ownerWebContentsId,
+        capabilities.map(({ capability }) => capability)
+      ),
+  });
+
+const toOutcome = (result: { readonly refused: readonly string[] }) =>
+  ({ refusedRecipients: [...result.refused] }) satisfies MailSendOutcome;
+
+export const sendNewMessageFromRequest = Effect.fn("MailIpc.sendNewMessage")(
+  function* sendNewMessageFromRequest(
+    request: GmailMessageSendRequest,
+    ownerWebContentsId: number
+  ) {
+    const attachments = yield* consumeAttachments(
+      ownerWebContentsId,
+      request.attachments
+    );
+    const result = yield* inAccountEngine(
+      request.accountId,
+      sendNewMessage({ ...request, attachments })
+    );
+    return toOutcome(result);
+  }
+);
+
+export const sendThreadMessageFromRequest = Effect.fn(
+  "MailIpc.sendThreadMessage"
+)(function* sendThreadMessageFromRequest(
+  request: GmailThreadMessageSendRequest,
+  ownerWebContentsId: number
+) {
+  const attachments = yield* consumeAttachments(
+    ownerWebContentsId,
+    request.attachments
+  );
+  const result = yield* inAccountEngine(
+    request.accountId,
+    sendThreadMessage({ ...request, attachments })
+  );
+  return toOutcome(result);
+});
