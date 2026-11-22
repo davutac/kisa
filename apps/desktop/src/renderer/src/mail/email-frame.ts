@@ -28,23 +28,47 @@ const createContentSecurityPolicy = (allowRemoteImages: boolean): string =>
     "upgrade-insecure-requests",
   ].join("; ");
 
-// The HTML parser only creates a `<link>` element from these characters, in
-// any ASCII case, followed by whitespace, `/` or `>`.
-const LINK_START_TAG_PATTERN = /<link(?=[\t\n\f\r />])/giu;
+// The HTML parser only creates one of these elements from its name, in any
+// ASCII case, followed by whitespace, `/` or `>`. The alternatives are fixed
+// strings, so the scan stays linear in the length of the message.
+const ACTIVE_START_TAG_PATTERN = /<(?:iframe|link|meta)(?=[\t\n\f\r />])/giu;
 
 /**
- * Turns every `<link>` in a message into an inert `<wbr>`.
+ * Turns every `<link>`, `<meta>` and `<iframe>` in a message into an inert
+ * `<param>`. Each of them acts while the message is parsed, which is before
+ * anything can be done to the loaded document, and in a way the frame's
+ * policy does not govern:
  *
- * The frame's policy stops a link element from fetching anything, but Chromium
- * still resolves the host named by `rel="dns-prefetch"`, which tells the
- * sender's name server when the message was opened. Neither the policy nor the
- * `x-dns-prefetch-control` meta tag stops that lookup, so the element must not
- * exist. `<wbr>` is a void element with no attributes of its own, so the link's
- * attributes do nothing and no following content is swallowed.
+ * - `<link rel="dns-prefetch">` makes Chromium resolve the named host, which
+ *   tells the sender's name server when the message was opened. Neither the
+ *   policy nor the `x-dns-prefetch-control` meta tag stops that lookup.
+ * - `<iframe srcdoc>` is a second document that `frame-src` does not stop and
+ *   this module never sees. Its markup arrives entity-encoded inside an
+ *   attribute, so a `<link>` in it is not found here and is resolved all the
+ *   same, and its links are never prepared.
+ * - `<meta name="referrer">` replaces this document's `no-referrer`, since
+ *   the last one wins.
+ *
+ * The tag is renamed, not removed: removing text can join what is left into a
+ * new tag (`<<meta>link …>`), and a rename cannot. `<param>` is a void
+ * element, so no following content is swallowed, and it does nothing outside
+ * an `<object>`, which the policy keeps from loading. Chromium does not
+ * render it, so the message is laid out as if the tag were absent, unlike
+ * `<wbr>`, which adds an empty line above whatever follows a message's head.
+ * What stood inside an `<iframe>` becomes part of the message, under the
+ * same rules as the rest of it.
  */
-export const neutralizeLinkElements = (html: string): string =>
-  html.replaceAll(LINK_START_TAG_PATTERN, "<wbr");
+export const neutralizeActiveElements = (html: string): string =>
+  html.replaceAll(ACTIVE_START_TAG_PATTERN, "<param");
 
+/**
+ * The document a message is shown in. `<base target="_blank">` makes a link
+ * the message gave no target open a new window, which main sends to the
+ * system browser, from the moment it is parsed. Left to navigate the frame
+ * itself, a link clicked before `prepareEmailLinks` has run is refused by the
+ * page policy and replaces the message with an error page. Only the first
+ * `<base target>` in a document counts, so a message cannot set another.
+ */
 export const createEmailDocument = (
   html: string,
   { allowRemoteImages, colorScheme, lightSurface }: EmailDocumentOptions
@@ -61,6 +85,7 @@ export const createEmailDocument = (
     <meta http-equiv="Content-Security-Policy" content="${createContentSecurityPolicy(allowRemoteImages)}">
     <meta name="referrer" content="no-referrer">
     <meta name="color-scheme" content="${scheme}">
+    <base target="_blank">
     <style>
       :root { color-scheme: ${scheme}; }
       html, body {
@@ -86,7 +111,7 @@ export const createEmailDocument = (
       a[href] { color: LinkText; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
     </style>
   </head>
-  <body>${neutralizeLinkElements(html)}</body>
+  <body>${neutralizeActiveElements(html)}</body>
 </html>`;
 };
 
@@ -136,9 +161,31 @@ export const prepareEmailLinks = (document: Document): void => {
       continue;
     }
 
+    // A link is for opening and nothing else: `ping` would report the click to
+    // a second host, and `download` turns the click into a download the
+    // sandbox refuses, so the link would do nothing.
+    link.removeAttribute("download");
+    link.removeAttribute("ping");
     link.setAttribute("href", url);
     link.setAttribute("referrerpolicy", "no-referrer");
     link.setAttribute("rel", "noopener noreferrer");
     link.setAttribute("target", "_blank");
   }
 };
+
+/**
+ * Whether a frame now shows a parsed message other than the document it held
+ * when its content was last set.
+ *
+ * A message is ready to be prepared once it is parsed. The frame's `load`
+ * event comes later, after every image, and an image host that answers slowly
+ * or never holds it back for as long as it likes.
+ */
+export const isParsedMessageDocument = (
+  current: Pick<Document, "URL" | "readyState"> | null,
+  previous: Pick<Document, "URL" | "readyState"> | null
+): boolean =>
+  current !== null &&
+  current !== previous &&
+  current.URL === "about:srcdoc" &&
+  current.readyState !== "loading";
