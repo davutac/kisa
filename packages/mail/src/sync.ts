@@ -658,7 +658,8 @@ const sectionKey = (plan: PlannedMessage): string =>
 /**
  * Downloads structure, the kept header fields and the text parts of each
  * candidate, never its attachments. A message the server no longer has is
- * skipped; the next sync removes it.
+ * skipped; the next sync removes it. Returns nothing when no body was stored,
+ * so a batch that cannot make progress is not mistaken for work.
  */
 export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
   function* fetchBodies(
@@ -745,6 +746,10 @@ export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
       }
     }
 
+    if (bodies.length === 0) {
+      return;
+    }
+
     return yield* store.saveBodies(scope.accountId, bodies);
   }
 );
@@ -776,8 +781,10 @@ export const loadThreadBodies = Effect.fn("MailSync.loadThreadBodies")(
       threadId
     );
 
-    return candidates.length === 0
-      ? NO_THREAD_CHANGES
-      : yield* fetchBodies(scope, candidates);
+    if (candidates.length === 0) {
+      return NO_THREAD_CHANGES;
+    }
+
+    return (yield* fetchBodies(scope, candidates)) ?? NO_THREAD_CHANGES;
   }
 );

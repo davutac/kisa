@@ -54,6 +54,12 @@ const REPORT_STRUCTURE = {
   type: "multipart/mixed",
 };
 
+/** A single-part plain-text body, as the fake server serves it. */
+const plainText = (text: string) => ({
+  sections: { "1": text },
+  structure: { size: text.length, type: "text/plain" },
+});
+
 /** Two messages, synced, with one batch of bodies downloaded. */
 const syncTwoBodies = async (): Promise<SyncScope> => {
   insertAccount("gmail");
@@ -377,6 +383,51 @@ describe("mail engine with the generic dialect", () => {
     expect(threadRow(message?.thread_id ?? "")).toMatchObject({
       is_in_inbox: 0,
     });
+  });
+
+  it("downloads a body from the message's own copy when its folders number it differently", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+    // The Inbox's UID 1 is another message, already cached with its body.
+    server.deliver(
+      "INBOX",
+      genericMessage("earlier", plainText("earlier body"))
+    );
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+    await run(bodyStep(scope));
+
+    // One message in two folders: UID 2 in the Inbox, UID 1 in Receipts.
+    server.deliver("INBOX", genericMessage("copied", plainText("copied body")));
+    server.deliver(
+      "Receipts",
+      genericMessage("copied", plainText("copied body"))
+    );
+    await syncFully(scope);
+    await run(bodyStep(scope));
+
+    expect(
+      connection
+        .prepare(
+          "SELECT body_state, body_text FROM mail_messages WHERE subject = 'copied'"
+        )
+        .get()
+    ).toStrictEqual({ body_state: "ready", body_text: "copied body" });
+  });
+
+  it("reports nothing to do when no pending body could be downloaded", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+    const uid = server.deliver(
+      "INBOX",
+      genericMessage("gone", plainText("gone"))
+    );
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+    // Deleted elsewhere before its body was fetched; the next sync removes it.
+    server.expunge("INBOX", uid);
+
+    await expect(run(bodyStep(scope))).resolves.toBeUndefined();
   });
 
   it("never trusts a Gmail authentication header on another provider", async () => {

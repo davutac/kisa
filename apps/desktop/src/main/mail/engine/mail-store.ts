@@ -917,8 +917,13 @@ export const MailEngineStoreLive = Layer.effect(
         client.transaction((transaction) => run(transaction, Date.now()))
       );
 
+    // A message can have a copy in several mailboxes, each under its own UID,
+    // and a body is fetched by the mailbox and UID of one of them. SQLite
+    // reads a bare column from the row that holds the aggregate's minimum, so
+    // `mailboxPath` and `uid` name the same copy. That only holds while
+    // `min(uid)` is the query's sole min or max.
     const candidateColumns = {
-      mailboxPath: sql<string>`min(${mailMessageLocations.mailboxPath})`,
+      mailboxPath: mailMessageLocations.mailboxPath,
       messageId: mailMessages.messageId,
       receivedAt: mailMessages.receivedAt,
       size: mailMessages.size,
