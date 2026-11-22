@@ -63,6 +63,7 @@ describe("thread categorization output", () => {
     );
 
     expect(schema).not.toContain('"allOf"');
+    expect(schema).toContain('"additionalProperties":false');
     expect(schema).toContain('"items":{"type":"string"}');
     expect(AI_CATEGORIZATION_SYSTEM_INSTRUCTIONS).toContain(
       "zero to three unique label id strings"

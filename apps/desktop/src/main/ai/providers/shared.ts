@@ -78,7 +78,11 @@ export const makeTemporaryDirectory = (provider: AiProvider) =>
   );
 
 export const toJsonSchemaObject = (schema: Schema.Top): unknown => {
-  const document = Schema.toJsonSchemaDocument(schema);
+  // OpenAI's strict structured output (used by Codex) rejects any object
+  // schema that does not set `additionalProperties: false`.
+  const document = Schema.toJsonSchemaDocument(schema, {
+    onExcessProperty: "error",
+  });
   return document.definitions && Object.keys(document.definitions).length > 0
     ? { ...document.schema, $defs: document.definitions }
     : document.schema;

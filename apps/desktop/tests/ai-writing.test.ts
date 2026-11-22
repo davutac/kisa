@@ -316,6 +316,10 @@ describe("AI provider output parsing", () => {
     const schema = toJsonSchemaObject(AiCleanupGeneration);
 
     expect(JSON.stringify(schema)).not.toContain('"allOf"');
+    expect(schema).toMatchObject({
+      additionalProperties: false,
+      required: ["body", "subject"],
+    });
   });
 
   it("extracts a semantic version from provider CLI output", () => {
