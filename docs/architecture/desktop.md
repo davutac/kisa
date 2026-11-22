@@ -126,7 +126,7 @@ Expressions that scan message HTML or headers in main or the renderer must stay 
 
 The sandbox preload is emitted as CommonJS and bundles its non-Electron dependencies. Sandboxed Electron preloads cannot load the application's ESM entrypoint or resolve arbitrary package imports at runtime. If Electron starts without the bridge, the root route now reports a startup failure instead of silently rendering the browser fallback with an empty account list.
 
-On quit, the main process sends a typed closing event before stopping mail synchronization and waiting for the database and IPC runtimes to dispose. The renderer keeps a route-independent closing overlay mounted so cleanup remains visible even when quit is requested during startup or from a non-mail route.
+On quit, the main process sends a typed closing event before stopping mail synchronization and waiting for the database and IPC runtimes to dispose. Every quit request is held until that cleanup has ended, so asking to quit a second time cannot cut the database close short. A cleanup step that fails does not stop the steps after it. Cleanup runs in ordered stages of at most 10 seconds each: a stage still running then is left behind, so a hung stop can neither skip the database close nor keep the app open. The renderer keeps a route-independent closing overlay mounted so cleanup remains visible even when quit is requested during startup or from a non-mail route.
 
 ## Scope relative to t3code
 
