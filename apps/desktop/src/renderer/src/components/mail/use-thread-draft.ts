@@ -6,13 +6,34 @@ import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { createThreadMailDraft } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
+import type { MailApi } from "@/platform/desktop";
 import { getMailApi } from "@/platform/desktop";
 import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 import { useAccountSettings } from "@/state/account-settings";
 
-export const getThreadDraftAction = (
-  draft: MailDraftInput
-): MailMessageAction => (draft.kind === "new" ? "reply" : draft.kind);
+import { adoptSavedDraft, getThreadDraftStart } from "./thread-draft-state";
+import type { ThreadDraftLoad } from "./thread-draft-state";
+
+type ThreadDraftFetch =
+  | { readonly draft: MailDraftInput | null; readonly kind: "loaded" }
+  | { readonly kind: "failed" };
+
+const fetchThreadDraft = async (
+  mailApi: MailApi,
+  accountId: string,
+  threadId: string
+): Promise<ThreadDraftFetch> => {
+  try {
+    const reply = await mailApi.loadThreadDraft({ accountId, threadId });
+    if (reply.ok) {
+      return { draft: reply.data, kind: "loaded" };
+    }
+    toast.error(reply.error);
+  } catch {
+    toast.error("Could not load saved reply");
+  }
+  return { kind: "failed" };
+};
 
 const getDraftActionLabel = (action: MailMessageAction): string => {
   if (action === "forward") {
@@ -40,7 +61,13 @@ export const useThreadDraft = ({
   const [draft, setDraft] = useState<MailDraftInput | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
-  const [isLoadingDraft, setIsLoadingDraft] = useState(mailApi !== undefined);
+  // Until a load succeeds, whether a draft is stored is unknown.
+  const [loadState, setLoadState] = useState<ThreadDraftLoad>(
+    mailApi === undefined ? "loaded" : "loading"
+  );
+  const isLoadingDraft = loadState === "loading";
+  const isActiveRef = useRef(false);
+  const isComposerOpenRef = useRef(isComposerOpen);
   const restoredDraftIdRef = useRef<string | null>(null);
   const openMessage = useThreadConversationStore((state) => state.openMessage);
   const draftMessage = messages.find(
@@ -62,43 +89,30 @@ export const useThreadDraft = ({
   }, [draft, draftMessage, openMessage]);
 
   useEffect(() => {
-    let active = true;
+    isComposerOpenRef.current = isComposerOpen;
+  }, [isComposerOpen]);
 
+  const applyFetch = useCallback((fetched: ThreadDraftFetch): void => {
+    if (!isActiveRef.current) {
+      return;
+    }
+    if (fetched.kind === "failed") {
+      setLoadState("failed");
+      return;
+    }
+    setLoadState("loaded");
+    setDraft(fetched.draft);
+    setIsComposerOpen(fetched.draft !== null);
+  }, []);
+
+  useEffect(() => {
     if (mailApi === undefined) {
       return;
     }
+    isActiveRef.current = true;
 
     const load = async (): Promise<void> => {
-      await runWithCleanup(
-        async () => {
-          try {
-            const reply = await mailApi.loadThreadDraft({
-              accountId,
-              threadId,
-            });
-            if (!active) {
-              return;
-            }
-
-            if (!reply.ok) {
-              toast.error(reply.error);
-              return;
-            }
-
-            setDraft(reply.data);
-            setIsComposerOpen(reply.data !== null);
-          } catch {
-            if (active) {
-              toast.error("Could not load saved reply");
-            }
-          }
-        },
-        () => {
-          if (active) {
-            setIsLoadingDraft(false);
-          }
-        }
-      );
+      applyFetch(await fetchThreadDraft(mailApi, accountId, threadId));
     };
     void load();
 
@@ -117,15 +131,25 @@ export const useThreadDraft = ({
         change.draft.accountId === accountId &&
         change.draft.threadId === threadId
       ) {
-        setDraft((current) => current ?? change.draft);
+        setDraft((current) =>
+          adoptSavedDraft(current, change.draft, isComposerOpenRef.current)
+        );
       }
     });
 
     return () => {
-      active = false;
+      isActiveRef.current = false;
       unsubscribe();
     };
-  }, [accountId, mailApi, threadId]);
+  }, [accountId, applyFetch, mailApi, threadId]);
+
+  const reloadDraft = useCallback(async (): Promise<void> => {
+    if (mailApi === undefined) {
+      return;
+    }
+    setLoadState("loading");
+    applyFetch(await fetchThreadDraft(mailApi, accountId, threadId));
+  }, [accountId, applyFetch, mailApi, threadId]);
 
   const clearDraft = useCallback((): void => {
     setDraft(null);
@@ -163,19 +187,21 @@ export const useThreadDraft = ({
 
   const startAction = useCallback(
     (action: MailMessageAction): void => {
-      if (isLoadingDraft) {
+      const start = getThreadDraftStart({ action, draft, load: loadState });
+      if (start.kind === "wait") {
         return;
       }
-
-      if (draft !== null) {
-        const draftAction = getThreadDraftAction(draft);
-        if (draftAction === action) {
-          continueDraft();
-          return;
-        }
-
+      if (start.kind === "reload") {
+        void reloadDraft();
+        return;
+      }
+      if (start.kind === "continue") {
+        continueDraft();
+        return;
+      }
+      if (start.kind === "other-action") {
         toast.info(
-          `A ${getDraftActionLabel(draftAction)} draft is already in progress`
+          `A ${getDraftActionLabel(start.draftAction)} draft is already in progress`
         );
         return;
       }
@@ -201,7 +227,8 @@ export const useThreadDraft = ({
       createDraft,
       draft,
       emailSignature,
-      isLoadingDraft,
+      loadState,
+      reloadDraft,
       selectedMessage,
       threadId,
     ]

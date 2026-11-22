@@ -73,8 +73,9 @@ export const useReplyWorkspace = ({
     () => getInitialReplyRecipients(accountId, action, message),
     [accountId, action, message]
   );
-  // One per mounted composer: the reply area is keyed by its draft's id, so
-  // none of these change while it is open.
+  // One per mounted composer. The reply area is keyed by its draft's id, and
+  // the conversation never replaces the draft while its composer is open, so
+  // `draft` is the copy this composer opened with for as long as it is open.
   const persistence = useMemo(
     () =>
       mailApi === undefined
@@ -82,10 +83,10 @@ export const useReplyWorkspace = ({
         : createReplyDraftPersistence({
             accountId,
             api: mailApi,
-            draftId: draft.id,
+            initial: draft,
             onError: (error) => toast.error(error),
           }),
-    [accountId, draft.id, mailApi]
+    [accountId, draft, mailApi]
   );
   const mountedRef = useRef(false);
   const cleanHistory = useReplyCleanHistory({

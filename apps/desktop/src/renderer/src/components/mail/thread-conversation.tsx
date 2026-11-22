@@ -8,12 +8,10 @@ import {
   ThreadConversationStoreProvider,
 } from "@/components/mail/thread-conversation-store";
 import MailThreadDraftActions from "@/components/mail/thread-draft-actions";
+import { getThreadDraftAction } from "@/components/mail/thread-draft-state";
 import MailThreadMessage from "@/components/mail/thread-message";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
-import {
-  getThreadDraftAction,
-  useThreadDraft,
-} from "@/components/mail/use-thread-draft";
+import { useThreadDraft } from "@/components/mail/use-thread-draft";
 import { useThreadMessageNavigation } from "@/components/mail/use-thread-message-navigation";
 import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand } from "@/hotkeys";
