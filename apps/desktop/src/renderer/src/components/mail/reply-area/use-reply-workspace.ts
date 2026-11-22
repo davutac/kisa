@@ -20,6 +20,7 @@ import { appendEmailSignatureHtml } from "@/shared/email-signature";
 import type { AiModelSelection } from "@/shared/ipc/ai";
 import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
+import { createReplyDraftPersistence } from "./reply-draft-persistence";
 import { useReplyCleanHistory } from "./use-reply-clean-history";
 
 export const canCreateAiReply = (
@@ -72,7 +73,20 @@ export const useReplyWorkspace = ({
     () => getInitialReplyRecipients(accountId, action, message),
     [accountId, action, message]
   );
-  const finalizedRef = useRef(false);
+  // One per mounted composer: the reply area is keyed by its draft's id, so
+  // none of these change while it is open.
+  const persistence = useMemo(
+    () =>
+      mailApi === undefined
+        ? undefined
+        : createReplyDraftPersistence({
+            accountId,
+            api: mailApi,
+            draftId: draft.id,
+            onError: (error) => toast.error(error),
+          }),
+    [accountId, draft.id, mailApi]
+  );
   const mountedRef = useRef(false);
   const cleanHistory = useReplyCleanHistory({
     aiApi,
@@ -116,55 +130,38 @@ export const useReplyWorkspace = ({
   }, [currentDraft]);
 
   useEffect(() => {
-    if (mailApi === undefined) {
+    if (persistence === undefined) {
       return;
     }
-    const save = async (): Promise<void> => {
-      try {
-        const reply = await mailApi.saveDraft(currentDraft);
-        if (!reply.ok) {
-          toast.error(reply.error);
-        }
-      } catch {
-        toast.error("Could not save draft");
-      }
-    };
-    const timeout = window.setTimeout(save, 450);
+    const timeout = window.setTimeout(() => {
+      void persistence.save(currentDraft);
+    }, 450);
     return () => window.clearTimeout(timeout);
-  }, [currentDraft, mailApi]);
+  }, [currentDraft, persistence]);
+
+  useEffect(() => {
+    if (mailApi === undefined || persistence === undefined) {
+      return;
+    }
+    return mailApi.onDraftChanged(persistence.observe);
+  }, [mailApi, persistence]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       queueMicrotask(() => {
-        if (
-          mountedRef.current ||
-          finalizedRef.current ||
-          mailApi === undefined
-        ) {
+        if (mountedRef.current || persistence === undefined) {
           return;
         }
         const latest = currentDraftRef.current;
-        const settle = async (): Promise<void> => {
-          try {
-            const reply = isThreadMailDraftEmpty(latest, initialRecipients)
-              ? await mailApi.discardDraft({
-                  accountId: latest.accountId,
-                  draftId: latest.id,
-                })
-              : await mailApi.saveDraft(latest);
-            if (!reply.ok) {
-              toast.error(reply.error);
-            }
-          } catch {
-            toast.error("Could not save draft");
-          }
-        };
-        void settle();
+        void persistence.settle(
+          latest,
+          isThreadMailDraftEmpty(latest, initialRecipients)
+        );
       });
     };
-  }, [initialRecipients, mailApi]);
+  }, [initialRecipients, persistence]);
 
   const send = async (): Promise<void> => {
     if (mailApi === undefined || isBusy) {
@@ -195,7 +192,7 @@ export const useReplyWorkspace = ({
             toast.error(reply.error);
             return;
           }
-          finalizedRef.current = true;
+          persistence?.finalize();
           try {
             const discarded = await mailApi.discardDraft({
               accountId,
@@ -228,20 +225,20 @@ export const useReplyWorkspace = ({
     if (mailApi === undefined || isBusy) {
       return;
     }
-    finalizedRef.current = true;
+    persistence?.finalize();
     try {
       const reply = await mailApi.discardDraft({
         accountId,
         draftId: draft.id,
       });
       if (!reply.ok) {
-        finalizedRef.current = false;
+        persistence?.reopen();
         toast.error(reply.error);
         return;
       }
       onCancel();
     } catch {
-      finalizedRef.current = false;
+      persistence?.reopen();
       toast.error("Could not discard draft");
     }
   };

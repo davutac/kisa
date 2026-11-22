@@ -40,4 +40,4 @@ Immediately before send, main verifies that each reference belongs to the invoki
 
 ## Multi-window behavior
 
-Draft upserts and removals are broadcast to renderer windows. The database transaction replaces an older thread draft before publishing the new one, preserving the one-draft-per-conversation invariant across the main and popped-out thread views.
+Draft upserts and removals are broadcast to renderer windows. The database transaction replaces an older thread draft before publishing the new one, preserving the one-draft-per-conversation invariant across the main and popped-out thread views. When a thread draft is sent or discarded in one window, its removal closes the composer in any other window showing that conversation, and that composer writes nothing more: neither its close nor a save already waiting brings the draft back. Text typed there since its last save is dropped with the draft.
