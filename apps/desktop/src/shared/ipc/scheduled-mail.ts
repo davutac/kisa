@@ -142,8 +142,15 @@ export const ScheduledMailFinishEditRequest = Schema.Struct({
 export type ScheduledMailFinishEditRequest =
   typeof ScheduledMailFinishEditRequest.Type;
 
+/**
+ * `possible-duplicate` changes nothing: the email may already have been sent,
+ * and the request did not carry the user's acknowledgement of that. Main
+ * decides this from the stored outcome, because an open editor can be older
+ * than the attempt that left the outcome unknown.
+ */
 export const ScheduledMailFinishEditResult = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("finished") }),
+  Schema.Struct({ kind: Schema.Literal("possible-duplicate") }),
   Schema.Struct({
     kind: Schema.Literal("saved"),
     session: ScheduledMailEditSession,

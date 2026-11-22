@@ -253,6 +253,63 @@ describe("scheduled mail in-place save", () => {
     });
   });
 
+  it("asks for an acknowledgement before sending an email whose outcome became unknown after its editor opened", async () => {
+    const opened = await Effect.runPromise(
+      beginScheduledMailEdit({ accountId, draftId }, 71)
+    );
+    // The worker's attempt ends without a known outcome while the editor
+    // still shows the snapshot from before it.
+    connection
+      .prepare(
+        `UPDATE scheduled_messages
+         SET attempt_count = 1, attention_reason = 'outcome-unknown',
+             next_attempt_at = NULL, status = 'attention'
+         WHERE draft_id = ?`
+      )
+      .run(draftId);
+    const sendNow = (allowPossibleDuplicate: boolean) =>
+      Effect.runPromise(
+        finishScheduledMailEdit(
+          {
+            accountId,
+            action: {
+              allowPossibleDuplicate,
+              draft: opened.draft,
+              kind: "send-now",
+            },
+            draftId,
+          },
+          71
+        )
+      );
+    const storedSchedule = () =>
+      connection
+        .prepare(
+          `SELECT attention_reason AS attentionReason,
+                  rfc_message_id AS rfcMessageId, status
+           FROM scheduled_messages WHERE draft_id = ?`
+        )
+        .get(draftId);
+
+    await expect(sendNow(false)).resolves.toStrictEqual({
+      kind: "possible-duplicate",
+    });
+    expect(storedSchedule()).toStrictEqual({
+      attentionReason: "outcome-unknown",
+      rfcMessageId: "<stable@scheduled.kisa.invalid>",
+      status: "attention",
+    });
+
+    await expect(sendNow(true)).resolves.toStrictEqual({ kind: "finished" });
+    expect(storedSchedule()).toMatchObject({
+      attentionReason: null,
+      status: "scheduled",
+    });
+    expect(storedSchedule()).not.toMatchObject({
+      rfcMessageId: "<stable@scheduled.kisa.invalid>",
+    });
+  });
+
   it("preserves actionable scheduled-mail state errors", async () => {
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 71)

@@ -57,30 +57,16 @@ export const useScheduledComposer = ({
     !areMailDraftInputsEqual(currentDraft, scheduledEdit.draft);
   const canSchedule = canSend && api !== undefined;
 
-  const confirmPossibleDuplicate = (
-    actionLabel: "Reschedule" | "Send again"
-  ): Promise<boolean> => {
-    if (scheduledEdit?.item.attentionReason !== "outcome-unknown") {
-      return Promise.resolve(true);
-    }
-    return confirm({
-      cancelLabel: "Keep scheduled",
-      confirmLabel: actionLabel,
-      confirmVariant: "destructive",
-      description:
-        "This email may already have been sent. Check Sent first; continuing can create a duplicate.",
-      title: "Delivery could not be confirmed",
-    });
-  };
-
   const runEditAction = ({
     action,
+    duplicateConfirmLabel = "Send again",
     errorMessage,
     onFinished,
     onSaved,
     setPending,
   }: {
     readonly action: ScheduledMailEditAction;
+    readonly duplicateConfirmLabel?: "Reschedule" | "Send again";
     readonly errorMessage: string;
     readonly onFinished?: () => void;
     readonly onSaved?: () => void;
@@ -92,6 +78,15 @@ export const useScheduledComposer = ({
     }
     return runScheduledComposerEditAction({
       action,
+      confirmPossibleDuplicate: () =>
+        confirm({
+          cancelLabel: "Keep scheduled",
+          confirmLabel: duplicateConfirmLabel,
+          confirmVariant: "destructive",
+          description:
+            "This email may already have been sent. Check Sent first; continuing can create a duplicate.",
+          title: "Delivery could not be confirmed",
+        }),
       errorMessage,
       finishEdit: api.finishEdit,
       onError: (message) => toast.error(message),
@@ -126,13 +121,9 @@ export const useScheduledComposer = ({
     if (!(scheduledEdit && api && canSend)) {
       return;
     }
-    const allowPossibleDuplicate = await confirmPossibleDuplicate("Send again");
-    if (!allowPossibleDuplicate) {
-      return;
-    }
     await runEditAction({
       action: {
-        allowPossibleDuplicate,
+        allowPossibleDuplicate: false,
         draft: currentDraftRef.current,
         kind: "send-now",
       },
@@ -173,24 +164,19 @@ export const useScheduledComposer = ({
     }
     const draft = currentDraftRef.current;
     if (scheduledEdit !== undefined) {
-      const allowPossibleDuplicate =
-        await confirmPossibleDuplicate("Reschedule");
-      return allowPossibleDuplicate
-        ? runEditAction({
-            action: {
-              allowPossibleDuplicate,
-              draft,
-              kind: "reschedule",
-              scheduledAt,
-            },
-            errorMessage: "Could not reschedule email",
-            onSaved: () =>
-              toast.success(
-                `Rescheduled for ${formatScheduledAt(scheduledAt)}`
-              ),
-            setPending: setIsScheduling,
-          })
-        : false;
+      return runEditAction({
+        action: {
+          allowPossibleDuplicate: false,
+          draft,
+          kind: "reschedule",
+          scheduledAt,
+        },
+        duplicateConfirmLabel: "Reschedule",
+        errorMessage: "Could not reschedule email",
+        onSaved: () =>
+          toast.success(`Rescheduled for ${formatScheduledAt(scheduledAt)}`),
+        setPending: setIsScheduling,
+      });
     }
 
     setIsScheduling(true);

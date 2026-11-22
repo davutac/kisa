@@ -377,15 +377,19 @@ const actionDraft = (
   action: ScheduledMailFinishEditRequest["action"]
 ): MailDraftInput | undefined => ("draft" in action ? action.draft : undefined);
 
+const isUnacknowledgedPossibleDuplicate = (
+  schedule: ScheduledMessageRow,
+  allowPossibleDuplicate: boolean
+): boolean =>
+  schedule.status === "attention" &&
+  schedule.attentionReason === "outcome-unknown" &&
+  !allowPossibleDuplicate;
+
 const assertPossibleDuplicateAcknowledged = (
   schedule: ScheduledMessageRow,
   allowPossibleDuplicate: boolean
 ): void => {
-  if (
-    schedule.status === "attention" &&
-    schedule.attentionReason === "outcome-unknown" &&
-    !allowPossibleDuplicate
-  ) {
+  if (isUnacknowledgedPossibleDuplicate(schedule, allowPossibleDuplicate)) {
     throw scheduledMailError(
       "The mail server may already have sent this email. Confirm the possible duplicate before sending it again."
     );
@@ -500,14 +504,17 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                   );
                 }
               }
+              // Before any write, so the editor can ask and send the action
+              // again against an untouched email.
               if (
-                request.action.kind === "reschedule" ||
-                request.action.kind === "send-now"
-              ) {
-                assertPossibleDuplicateAcknowledged(
+                (request.action.kind === "reschedule" ||
+                  request.action.kind === "send-now") &&
+                isUnacknowledgedPossibleDuplicate(
                   row.schedule,
                   request.action.allowPossibleDuplicate
-                );
+                )
+              ) {
+                return { kind: "possible-duplicate" as const };
               }
 
               const previousAttachments = decodeAttachments(
@@ -629,6 +636,18 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
               ).pipe(Effect.andThen(Effect.fail(error)))
         )
       );
+
+    if (outcome.kind === "possible-duplicate") {
+      if (adoption !== undefined) {
+        yield* cleanupAdoptedAttachments((store) =>
+          store.delete(adoption.created)
+        );
+      }
+      const unconfirmed: ScheduledMailFinishEditResult = {
+        kind: "possible-duplicate",
+      };
+      return unconfirmed;
+    }
 
     yield* cleanupAdoptedAttachments((store) =>
       store.deleteNotRetained(

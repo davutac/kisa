@@ -52,6 +52,8 @@ The scheduled draft's From account stays fixed while editing, including when an 
 
 An item that becomes due while its editor is open continues through normal delivery. Once the worker claims it, edit and cancel lose the race and return an already-sending result. Confirmed delivery removes the item and the renderer closes its matching editor automatically.
 
+Main alone decides whether sending again risks a duplicate, because an open editor's snapshot can be older than the attempt that left the outcome unknown. Reschedule and Send now therefore never claim the user's acknowledgement up front. When the stored item is outcome-unknown and the request carries no acknowledgement, main changes nothing and answers `possible-duplicate`; the editor then asks the user and, only if they agree, sends the same action again with the acknowledgement set.
+
 Cancel schedule preserves the current saved content as a normal stash and publishes a normal draft upsert. Permanent discard remains a separate confirmed action and deletes both records. Scheduled saves publish scheduled invalidation only, so the item cannot leak into the ordinary stash picker.
 
 ## Renderer and notifications

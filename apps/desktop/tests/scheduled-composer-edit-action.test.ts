@@ -37,6 +37,7 @@ const session: ScheduledMailEditSession = {
 };
 
 const createHarness = () => ({
+  confirmPossibleDuplicate: vi.fn<() => Promise<boolean>>(),
   finishEdit:
     vi.fn<
       (
@@ -65,6 +66,7 @@ describe(runScheduledComposerEditAction, () => {
     await expect(
       runScheduledComposerEditAction({
         action: { draft: { ...draft, subject: " Normalized " }, kind: "save" },
+        confirmPossibleDuplicate: harness.confirmPossibleDuplicate,
         errorMessage: "Could not save",
         finishEdit: harness.finishEdit,
         onError: harness.onError,
@@ -90,6 +92,7 @@ describe(runScheduledComposerEditAction, () => {
     const run = () =>
       runScheduledComposerEditAction({
         action: { draft, kind: "save" },
+        confirmPossibleDuplicate: harness.confirmPossibleDuplicate,
         errorMessage: "Could not save",
         finishEdit: harness.finishEdit,
         onError: harness.onError,
@@ -132,6 +135,7 @@ describe(runScheduledComposerEditAction, () => {
           kind: "reschedule",
           scheduledAt: 3000,
         },
+        confirmPossibleDuplicate: harness.confirmPossibleDuplicate,
         errorMessage: "Could not reschedule",
         finishEdit: harness.finishEdit,
         onError: harness.onError,
@@ -156,6 +160,7 @@ describe(runScheduledComposerEditAction, () => {
     await expect(
       runScheduledComposerEditAction({
         action: { kind: "discard" },
+        confirmPossibleDuplicate: harness.confirmPossibleDuplicate,
         errorMessage: "Could not discard",
         finishEdit: harness.finishEdit,
         onError: harness.onError,
@@ -172,5 +177,73 @@ describe(runScheduledComposerEditAction, () => {
       draftId: session.item.draftId,
     });
     expect(harness.onFinished).toHaveBeenCalledOnce();
+  });
+
+  it("asks before sending a possible duplicate, then sends it acknowledged", async () => {
+    const harness = createHarness();
+    harness.finishEdit
+      .mockResolvedValueOnce({
+        data: { kind: "possible-duplicate" },
+        ok: true,
+      })
+      .mockResolvedValueOnce({ data: { kind: "finished" }, ok: true });
+    harness.confirmPossibleDuplicate.mockResolvedValue(true);
+
+    await expect(
+      runScheduledComposerEditAction({
+        action: { allowPossibleDuplicate: false, draft, kind: "send-now" },
+        confirmPossibleDuplicate: harness.confirmPossibleDuplicate,
+        errorMessage: "Could not send",
+        finishEdit: harness.finishEdit,
+        onError: harness.onError,
+        onFinished: harness.onFinished,
+        onSaved: harness.onSaved,
+        session,
+        setPending: harness.setPending,
+      })
+    ).resolves.toBeTruthy();
+
+    expect(harness.confirmPossibleDuplicate).toHaveBeenCalledOnce();
+    expect(
+      harness.finishEdit.mock.calls.map(([request]) => request.action)
+    ).toStrictEqual([
+      { allowPossibleDuplicate: false, draft, kind: "send-now" },
+      { allowPossibleDuplicate: true, draft, kind: "send-now" },
+    ]);
+    expect(harness.onFinished).toHaveBeenCalledOnce();
+    expect(harness.setPending.mock.calls).toStrictEqual([[true], [false]]);
+  });
+
+  it("leaves a possible duplicate unsent when the user declines", async () => {
+    const harness = createHarness();
+    harness.finishEdit.mockResolvedValue({
+      data: { kind: "possible-duplicate" },
+      ok: true,
+    });
+    harness.confirmPossibleDuplicate.mockResolvedValue(false);
+
+    await expect(
+      runScheduledComposerEditAction({
+        action: {
+          allowPossibleDuplicate: false,
+          draft,
+          kind: "reschedule",
+          scheduledAt: 3000,
+        },
+        confirmPossibleDuplicate: harness.confirmPossibleDuplicate,
+        errorMessage: "Could not reschedule",
+        finishEdit: harness.finishEdit,
+        onError: harness.onError,
+        onFinished: harness.onFinished,
+        onSaved: harness.onSaved,
+        session,
+        setPending: harness.setPending,
+      })
+    ).resolves.toBeFalsy();
+
+    expect(harness.finishEdit).toHaveBeenCalledOnce();
+    expect(harness.onError).not.toHaveBeenCalled();
+    expect(harness.onSaved).not.toHaveBeenCalled();
+    expect(harness.setPending.mock.calls).toStrictEqual([[true], [false]]);
   });
 });

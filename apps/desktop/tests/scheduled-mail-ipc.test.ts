@@ -197,6 +197,11 @@ describe("scheduled mail IPC", () => {
     expect(
       Schema.decodeSync(ScheduledMailFinishEditResult)({ kind: "finished" })
     ).toStrictEqual({ kind: "finished" });
+    expect(
+      Schema.decodeSync(ScheduledMailFinishEditResult)({
+        kind: "possible-duplicate",
+      })
+    ).toStrictEqual({ kind: "possible-duplicate" });
     expect(() =>
       Schema.decodeUnknownSync(ScheduledMailFinishEditResult)({ kind: "saved" })
     ).toThrow(/./u);
