@@ -21,7 +21,7 @@ The hotkey module owns commands that apply to an application screen or interacti
 - Selecting the composer account, attaching files, stashing a draft, and sending a message
 - Creating, searching, and explicitly saving templates
 
-Focused widgets retain their native keyboard behavior. Recipient completion, the search bar, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused.
+Focused widgets retain their native keyboard behavior. Recipient completion, the search bar, dialogs, and the rich-text editor continue to own keys such as arrows, Enter, Escape, and editing shortcuts while focused. The sidebar's resize handle takes the Left and Right arrows, Home, and End while focused to resize the sidebar; no application command binds them.
 
 Application renderer code should not import `@tanstack/react-hotkeys` outside `@/hotkeys` and the root provider setup.
 

@@ -2,12 +2,14 @@ import { Option, Schema } from "effect";
 
 /**
  * Sidebar layout preferences kept in the renderer's `localStorage`: whether
- * the sidebar is open, which accounts show their mailboxes, which show their
- * labels, and which labels are favorites. They are conveniences, so unreadable or malformed values fall
- * back to the defaults instead of failing.
+ * the sidebar is open, how wide it is, which accounts show their mailboxes,
+ * which show their labels, and which labels are favorites. They are
+ * conveniences, so unreadable or malformed values fall back to the defaults
+ * instead of failing.
  */
 
 const SIDEBAR_OPEN_KEY = "kisa.sidebar.open";
+const SIDEBAR_WIDTH_KEY = "kisa.sidebar.width";
 const EXPANDED_SCOPES_KEY = "kisa.sidebar.expandedScopes";
 const EXPANDED_LABEL_SCOPES_KEY = "kisa.sidebar.expandedLabelScopes";
 const FAVORITE_LABELS_KEY = "kisa.sidebar.favoriteLabels";
@@ -72,11 +74,48 @@ export const serializeExpandedScopes = (
 ): string =>
   JSON.stringify(accountIds.filter((scope) => expandedScopes.has(scope)));
 
+/** Sidebar widths in CSS pixels. */
+export const DEFAULT_SIDEBAR_WIDTH = 240;
+/**
+ * A floor under the measured minimum, which is wherever the sidebar's
+ * titlebar strip fits without truncating the app name.
+ */
+export const MIN_SIDEBAR_WIDTH = 160;
+/** Leaves the content column usable at the window's 520-pixel minimum. */
+export const MAX_SIDEBAR_WIDTH = 360;
+
+export const clampSidebarWidth = (
+  width: number,
+  minWidth: number = MIN_SIDEBAR_WIDTH
+): number =>
+  Math.round(
+    Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, minWidth, width))
+  );
+
+/**
+ * A stored width outside the limits is clamped rather than dropped, so
+ * changing the limits keeps the user's width as close as it can.
+ */
+export const parseSidebarWidth = (value: string | null): number => {
+  const width =
+    value === null || value.trim() === "" ? Number.NaN : Number(value);
+  return Number.isFinite(width)
+    ? clampSidebarWidth(width)
+    : DEFAULT_SIDEBAR_WIDTH;
+};
+
 export const readSidebarOpen = (): boolean =>
   parseSidebarOpen(readPreference(SIDEBAR_OPEN_KEY));
 
 export const writeSidebarOpen = (isOpen: boolean): void => {
   writePreference(SIDEBAR_OPEN_KEY, String(isOpen));
+};
+
+export const readSidebarWidth = (): number =>
+  parseSidebarWidth(readPreference(SIDEBAR_WIDTH_KEY));
+
+export const writeSidebarWidth = (width: number): void => {
+  writePreference(SIDEBAR_WIDTH_KEY, String(clampSidebarWidth(width)));
 };
 
 export const readExpandedScopes = (): ReadonlySet<string> =>
