@@ -10,6 +10,7 @@ import {
   MAIL_UPDATE_LABEL_CHANNEL,
   MAIL_DELETE_THREAD_FOREVER_CHANNEL,
   MAIL_GET_SPAM_STATUS_CHANNEL,
+  MAIL_GET_UNREAD_LABELS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_DRAFT_CHANGED_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
@@ -61,6 +62,7 @@ export const mailApi: Pick<
   | "getMailIndexProgress"
   | "getMailSyncStatus"
   | "getSpamStatus"
+  | "getUnreadLabels"
   | "listCachedThreadPage"
   | "listLabels"
   | "listSenders"
@@ -113,6 +115,8 @@ export const mailApi: Pick<
   getMailSyncStatus: () => ipcRenderer.invoke(MAIL_SYNC_STATUS_CHANNEL),
   getSpamStatus: (request) =>
     ipcRenderer.invoke(MAIL_GET_SPAM_STATUS_CHANNEL, request),
+  getUnreadLabels: (request) =>
+    ipcRenderer.invoke(MAIL_GET_UNREAD_LABELS_CHANNEL, request),
   listCachedThreadPage: (request) =>
     ipcRenderer.invoke(MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL, request),
   listLabels: (request) =>

@@ -55,6 +55,7 @@ export interface MailApi {
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
   getSyncStatus: DesktopBridge["getMailSyncStatus"];
   getSpamStatus: DesktopBridge["getSpamStatus"];
+  getUnreadLabels: DesktopBridge["getUnreadLabels"];
   listCachedThreadPage: DesktopBridge["listCachedThreadPage"];
   listLabels: DesktopBridge["listLabels"];
   listSenders: DesktopBridge["listSenders"];
@@ -210,6 +211,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       getIndexProgress: bridge.getMailIndexProgress,
       getSpamStatus: bridge.getSpamStatus,
       getSyncStatus: bridge.getMailSyncStatus,
+      getUnreadLabels: bridge.getUnreadLabels,
       listCachedThreadPage: bridge.listCachedThreadPage,
       listLabels: bridge.listLabels,
       listSenders: bridge.listSenders,

@@ -557,6 +557,19 @@ export type MailReindexRequest = typeof MailReindexRequest.Type;
 export const MailSpamStatus = Schema.Struct({ hasUnreadSpam: Schema.Boolean });
 export type MailSpamStatus = typeof MailSpamStatus.Type;
 
+export const MailUnreadLabelsRequest = Schema.Struct({
+  accountIds: Schema.Array(Schema.NonEmptyString),
+});
+export type MailUnreadLabelsRequest = typeof MailUnreadLabelsRequest.Type;
+
+/** Each account's user labels whose label place has unread conversations. */
+export const MailUnreadLabels = Schema.Struct({
+  labels: Schema.Array(
+    Schema.Struct({ accountId: Schema.String, label: Schema.String })
+  ),
+});
+export type MailUnreadLabels = typeof MailUnreadLabels.Type;
+
 export const MailCachedThreadPage = Schema.Struct({
   nextCursor: Schema.optional(MailThreadCursor),
   threads: Schema.Array(MailThreadSummary),
@@ -712,6 +725,9 @@ export type MailBulkThreadMutationReply =
 
 export const MailSpamStatusReply = IpcReply(MailSpamStatus);
 export type MailSpamStatusReply = typeof MailSpamStatusReply.Type;
+
+export const MailUnreadLabelsReply = IpcReply(MailUnreadLabels);
+export type MailUnreadLabelsReply = typeof MailUnreadLabelsReply.Type;
 
 export const MailReindexReply = IpcReply(Schema.Void);
 export type MailReindexReply = typeof MailReindexReply.Type;

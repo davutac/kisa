@@ -14,6 +14,7 @@ import type {
   MailboxPlace,
   ThreadMessage,
   MailThreadSummary,
+  MailUnreadLabels,
 } from "../../../shared/ipc/mail";
 import { isMailboxLabelPlace } from "../../../shared/ipc/mail";
 import { toDisplayedAttachment } from "../attachment-filename";
@@ -363,6 +364,45 @@ export const readHasUnreadSpam = async (
     .limit(1)
     .all();
   return row !== undefined;
+};
+
+/**
+ * The user labels with an unread conversation on their label place, the
+ * condition `mailboxCondition` lists a label by: outside Spam and Trash,
+ * whether or not in the Inbox. Paths keep the case the thread carries; the
+ * renderer folds them as the catalog does.
+ */
+export const readUnreadLabels = async (
+  database: RemoteDatabaseClient,
+  accountIds: readonly string[]
+): Promise<MailUnreadLabels> => {
+  if (accountIds.length === 0) {
+    return { labels: [] };
+  }
+
+  const accounts = sql.join(
+    [...new Set(accountIds)].map((accountId) => sql`${accountId}`),
+    sql`, `
+  );
+  const rows = await database.values<[string, string]>(sql`
+    SELECT DISTINCT t.account_id, thread_label.value
+    FROM mail_threads t
+    JOIN json_each(t.label_ids) AS thread_label
+    WHERE t.account_id IN (${accounts})
+      AND t.is_unread = 1
+      AND t.is_in_spam = 0
+      AND t.is_in_trash = 0
+      AND thread_label.type = 'text'
+  `);
+
+  return {
+    labels: rows.flatMap(([accountId, labelId]) => {
+      const label = userLabelPath(labelId);
+      return label === undefined || label.length === 0
+        ? []
+        : [{ accountId, label }];
+    }),
+  };
 };
 
 /** Unread Inbox conversations across accounts, for the dock badge. */

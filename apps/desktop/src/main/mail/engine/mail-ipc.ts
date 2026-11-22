@@ -20,6 +20,7 @@ import type {
   MailLabelSummary,
   MailLabelUpdateRequest,
   MailSpamStatusRequest,
+  MailUnreadLabelsRequest,
   MailThreadLabelRequest,
   MailThreadReadStateRequest,
   MailThreadRequest,
@@ -45,6 +46,7 @@ import {
   readHasUnreadSpam,
   readLabelCatalog,
   readThreadPage,
+  readUnreadLabels,
 } from "./mail-reads";
 import { sendNewMessage, sendThreadMessage } from "./mail-send";
 
@@ -86,6 +88,11 @@ export const loadSpamStatus = (request: MailSpamStatusRequest) =>
   readDatabase("Could not check spam", async (database) => ({
     hasUnreadSpam: await readHasUnreadSpam(database, request.accountIds),
   }));
+
+export const loadUnreadLabels = (request: MailUnreadLabelsRequest) =>
+  readDatabase("Could not check labels", (database) =>
+    readUnreadLabels(database, request.accountIds)
+  );
 
 export const openThread = (request: MailThreadRequest) =>
   inAccountEngine(request.accountId, loadThread(request));

@@ -69,6 +69,8 @@ import type {
   MailSpamStatusReply,
   MailSpamStatusRequest,
   MailSyncStatus,
+  MailUnreadLabelsReply,
+  MailUnreadLabelsRequest,
   MailThreadMutationReply,
   MailThreadMessageSendReply,
   MailThreadMessageSendRequest,
@@ -196,6 +198,9 @@ export interface DesktopBridge {
   getSpamStatus: (
     request: MailSpamStatusRequest
   ) => Promise<MailSpamStatusReply>;
+  getUnreadLabels: (
+    request: MailUnreadLabelsRequest
+  ) => Promise<MailUnreadLabelsReply>;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getVersions: () => ElectronVersions;
   installUpdate: () => Promise<void>;

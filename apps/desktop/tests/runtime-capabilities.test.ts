@@ -135,6 +135,8 @@ describe(getRuntimeCapabilities, () => {
       }),
     getSpamStatus: () =>
       Promise.resolve({ data: { hasUnreadSpam: false }, ok: true as const }),
+    getUnreadLabels: () =>
+      Promise.resolve({ data: { labels: [] }, ok: true as const }),
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
     getVersions: () => versions,
     importDatabase: () =>
@@ -317,6 +319,7 @@ describe(getRuntimeCapabilities, () => {
         getIndexProgress: desktopBridge.getMailIndexProgress,
         getSpamStatus: desktopBridge.getSpamStatus,
         getSyncStatus: desktopBridge.getMailSyncStatus,
+        getUnreadLabels: desktopBridge.getUnreadLabels,
         listCachedThreadPage: desktopBridge.listCachedThreadPage,
         listLabels: desktopBridge.listLabels,
         listSenders: desktopBridge.listSenders,
