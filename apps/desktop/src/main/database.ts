@@ -26,7 +26,10 @@ import {
   activatePendingDatabaseImport,
   attachDatabaseImportFile,
   cancelDatabaseImportSelection,
+  discardPendingDatabaseImport,
+  getDatabaseImportStatus as readDatabaseImportStatus,
   importExistingDatabase,
+  restartForPendingDatabaseImport,
   selectDatabaseImportFile as selectImportFile,
 } from "./database-import";
 import { loadOrCreateDatabaseKey } from "./database-key";
@@ -270,6 +273,33 @@ export const importDatabase = Effect.fn("importDatabase")(
       },
       sessionId: request.sessionId,
       validate: validateImportedDatabase,
+    });
+  }
+);
+
+// These three work from the database's path alone. They must not go through
+// `getDatabaseRuntime`, which activates a waiting import whenever no runtime
+// exists, as after the database has closed during quit.
+export const getDatabaseImportStatus = Effect.fn("getDatabaseImportStatus")(
+  function* getDatabaseImportStatusEffect() {
+    return yield* readDatabaseImportStatus({
+      activeDatabasePath: getActiveDatabasePath(),
+      isDevelopment: is.dev,
+    });
+  }
+);
+
+export const discardDatabaseImport = Effect.fn("discardDatabaseImport")(
+  function* discardDatabaseImportEffect() {
+    yield* discardPendingDatabaseImport(getActiveDatabasePath());
+  }
+);
+
+export const restartForDatabaseImport = Effect.fn("restartForDatabaseImport")(
+  function* restartForDatabaseImportEffect() {
+    yield* restartForPendingDatabaseImport({
+      activeDatabasePath: getActiveDatabasePath(),
+      isDevelopment: is.dev,
     });
   }
 );

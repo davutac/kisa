@@ -22,6 +22,7 @@ import type {
   DatabaseImportOutcome,
   DatabaseImportProgress,
   DatabaseImportSession,
+  DatabaseImportStatus,
 } from "../shared/ipc/settings";
 import type { DatabaseKeyEncryptor } from "./database-key";
 import { sealDatabaseKey } from "./database-key";
@@ -53,6 +54,11 @@ interface DatabaseImportSelectionSession {
   readonly state: "selecting";
 }
 
+/**
+ * What this process is doing about an import. Whether an import is waiting
+ * for a restart is not kept here: the manifest file is that fact, so it is
+ * read from disk whenever it is asked for and cannot go stale.
+ */
 type DatabaseImportState =
   | DatabaseImportSelectionSession
   | { readonly state: "importing" }
@@ -68,6 +74,19 @@ class DatabaseImportError extends Schema.TaggedError<DatabaseImportError>()(
 
 const importError = (): DatabaseImportError =>
   new DatabaseImportError({ message: "Could not import the database" });
+
+const statusError = (): DatabaseImportError =>
+  new DatabaseImportError({
+    message: "Could not check for a waiting database import",
+  });
+
+const discardError = (): DatabaseImportError =>
+  new DatabaseImportError({ message: "Could not discard the import" });
+
+const restartError = (): DatabaseImportError =>
+  new DatabaseImportError({
+    message: "Could not restart to finish the import",
+  });
 
 const VALIDATION_FAILED_MESSAGE =
   "This database could not be opened with its recovery key. Databases from Kisa versions before the IMAP mail engine can't be imported.";
@@ -161,8 +180,20 @@ const removeDatabaseFiles = async (databasePath: string): Promise<void> => {
   ]);
 };
 
+/**
+ * The manifest goes first: one left pointing at files already removed would
+ * fail every later start. A manifest that cannot be read names nothing that
+ * can be trusted, so only the manifest itself is removed.
+ */
 const discardPendingImport = async (databasePath: string): Promise<void> => {
-  const manifest = await readManifest(databasePath);
+  let manifest: DatabaseImportManifest | undefined;
+  try {
+    manifest = await readManifest(databasePath);
+  } catch {
+    manifest = undefined;
+  }
+
+  await rm(getImportManifestPath(databasePath), { force: true });
   if (manifest === undefined) {
     return;
   }
@@ -170,8 +201,86 @@ const discardPendingImport = async (databasePath: string): Promise<void> => {
   const directory = path.dirname(databasePath);
   await removeDatabaseFiles(path.join(directory, manifest.databaseFile));
   await rm(path.join(directory, manifest.keyFile), { force: true });
-  await rm(getImportManifestPath(databasePath), { force: true });
 };
+
+const hasPendingImport = async (databasePath: string): Promise<boolean> => {
+  try {
+    await stat(getImportManifestPath(databasePath));
+    return true;
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return false;
+    }
+    throw error;
+  }
+};
+
+/** Development cannot relaunch: `electron-vite` owns the renderer server. */
+const restartOrQuit = (isDevelopment: boolean): void => {
+  if (!isDevelopment) {
+    app.relaunch();
+  }
+  app.quit();
+};
+
+export const getDatabaseImportStatus = Effect.fn("getDatabaseImportStatus")(
+  function* getDatabaseImportStatusEffect(options: {
+    readonly activeDatabasePath: string;
+    readonly isDevelopment: boolean;
+  }) {
+    const restart = options.isDevelopment ? "quit" : "relaunch";
+    if (databaseImportState?.state === "importing") {
+      return { restart, state: "importing" } satisfies DatabaseImportStatus;
+    }
+
+    const isPending = yield* Effect.tryPromise({
+      catch: statusError,
+      try: () => hasPendingImport(options.activeDatabasePath),
+    });
+    return {
+      restart,
+      state: isPending ? "restart-pending" : "none",
+    } satisfies DatabaseImportStatus;
+  }
+);
+
+/**
+ * Drops an import that is waiting for a restart, so the next start keeps the
+ * current database. Refused while an import is running: that import writes
+ * the same manifest, which a discard could otherwise remove under it.
+ */
+export const discardPendingDatabaseImport = Effect.fn(
+  "discardPendingDatabaseImport"
+)(function* discardPendingDatabaseImportEffect(activeDatabasePath: string) {
+  if (databaseImportState?.state === "importing") {
+    return yield* discardError();
+  }
+
+  yield* Effect.tryPromise({
+    catch: discardError,
+    try: () => discardPendingImport(activeDatabasePath),
+  });
+});
+
+/** Restarts to activate a waiting import; does nothing without one. */
+export const restartForPendingDatabaseImport = Effect.fn(
+  "restartForPendingDatabaseImport"
+)(function* restartForPendingDatabaseImportEffect(options: {
+  readonly activeDatabasePath: string;
+  readonly isDevelopment: boolean;
+}) {
+  const isPending = yield* Effect.tryPromise({
+    catch: restartError,
+    try: () => hasPendingImport(options.activeDatabasePath),
+  });
+  if (databaseImportState?.state === "importing" || !isPending) {
+    return yield* restartError();
+  }
+
+  yield* Effect.sync(() => {
+    restartOrQuit(options.isDevelopment);
+  });
+});
 
 const writeManifest = async (
   databasePath: string,
@@ -327,10 +436,7 @@ const offerRestart = async (isDevelopment: boolean): Promise<void> => {
   });
 
   if (result.response === 0) {
-    if (!isDevelopment) {
-      app.relaunch();
-    }
-    app.quit();
+    restartOrQuit(isDevelopment);
   }
 };
 

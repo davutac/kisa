@@ -94,6 +94,8 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: undefined, ok: true as const }),
     discardMailDraft: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    discardDatabaseImport: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     discardScheduledMail: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     disconnectAccount: () => Promise.resolve({ data: [], ok: true as const }),
@@ -102,6 +104,11 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
     exportDatabaseRecoveryKey: () =>
       Promise.resolve({ data: "saved" as const, ok: true as const }),
+    getDatabaseImportStatus: () =>
+      Promise.resolve({
+        data: { restart: "relaunch" as const, state: "none" as const },
+        ok: true as const,
+      }),
     finishScheduledMailEdit: () =>
       Promise.resolve({
         data: { kind: "finished" as const },
@@ -192,6 +199,8 @@ describe(getRuntimeCapabilities, () => {
     prepareOutgoingAttachments: () =>
       Promise.resolve({ data: [], ok: true as const }),
     reindexMail: () => Promise.resolve({ data: undefined, ok: true as const }),
+    restartForDatabaseImport: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     reorderAccounts: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     saveAttachment: () =>
@@ -352,12 +361,15 @@ describe(getRuntimeCapabilities, () => {
       settings: {
         beginDatabaseImport: desktopBridge.beginDatabaseImport,
         cancelDatabaseImport: desktopBridge.cancelDatabaseImport,
+        discardDatabaseImport: desktopBridge.discardDatabaseImport,
         dropDatabaseImportFile: desktopBridge.dropDatabaseImportFile,
         exportDatabaseRecoveryKey: desktopBridge.exportDatabaseRecoveryKey,
+        getDatabaseImportStatus: desktopBridge.getDatabaseImportStatus,
         importDatabase: desktopBridge.importDatabase,
         listAccountSettings: desktopBridge.listAccountSettings,
         onAccountSettingsChanged: desktopBridge.onAccountSettingsChanged,
         onDatabaseImportProgress: desktopBridge.onDatabaseImportProgress,
+        restartForDatabaseImport: desktopBridge.restartForDatabaseImport,
         selectDatabaseImportFile: desktopBridge.selectDatabaseImportFile,
         updateAccountSettings: desktopBridge.updateAccountSettings,
       },

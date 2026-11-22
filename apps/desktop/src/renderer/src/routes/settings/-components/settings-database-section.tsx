@@ -1,5 +1,6 @@
 import { DownloadIcon, LoaderCircleIcon, UploadIcon } from "lucide-react";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
   SettingsRow,
@@ -15,6 +16,7 @@ import {
 import type { SettingsApi } from "@/platform/desktop";
 
 import SettingsDatabaseImportDialog from "./settings-database-import-dialog";
+import SettingsDatabasePendingImportRow from "./settings-database-pending-import-row";
 import {
   DATABASE_IMPORT_PROGRESS_LABELS,
   useSettingsDatabase,
@@ -27,9 +29,25 @@ interface SettingsDatabaseSectionProps {
 const SettingsDatabaseSection = ({
   settingsApi,
 }: SettingsDatabaseSectionProps) => {
+  const confirm = useConfirm();
   const workflow = useSettingsDatabase(settingsApi);
   const handleExportRecoveryKey = workflow.exportRecoveryKey;
   const handleOpenImport = workflow.openImport;
+  const { discardPendingImport, restartForPendingImport } = workflow;
+  const importState = workflow.importStatus?.state;
+  const handleDiscardPendingImport = async (): Promise<void> => {
+    const confirmed = await confirm({
+      cancelLabel: "Keep import",
+      confirmLabel: "Discard import",
+      confirmVariant: "destructive",
+      description:
+        "Kisa keeps using the current database. The file you imported from is not changed; import it again to use it.",
+      title: "Discard the waiting import?",
+    });
+    if (confirmed) {
+      await discardPendingImport();
+    }
+  };
 
   return (
     <>
@@ -41,6 +59,18 @@ const SettingsDatabaseSection = ({
           </SettingsSectionTitle>
         </SettingsSectionHeader>
         <SettingsRows>
+          {workflow.importStatus?.state === "restart-pending" ? (
+            <SettingsDatabasePendingImportRow
+              onDiscard={() => {
+                void handleDiscardPendingImport();
+              }}
+              onRestart={() => {
+                void restartForPendingImport();
+              }}
+              pendingAction={workflow.pendingImportAction}
+              restart={workflow.importStatus.restart}
+            />
+          ) : null}
           <SettingsRow>
             <SettingsRowContent>
               <SettingsRowTitle id="database-import-title">
@@ -59,7 +89,11 @@ const SettingsDatabaseSection = ({
               <Button
                 aria-describedby="database-import-description"
                 aria-labelledby="database-import-title"
-                disabled={workflow.pendingAction !== undefined}
+                disabled={
+                  workflow.pendingAction !== undefined ||
+                  workflow.pendingImportAction !== undefined ||
+                  importState === "importing"
+                }
                 onClick={handleOpenImport}
                 type="button"
                 variant="secondary"

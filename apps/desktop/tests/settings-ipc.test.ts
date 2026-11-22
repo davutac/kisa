@@ -2,23 +2,43 @@
 // The partial adapters keep this test at the settings IPC boundary.
 // oxlint-disable unicorn/no-useless-undefined vitest/no-standalone-expect vitest/prefer-import-in-mock
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { vi } from "vitest";
 
 import {
   SETTINGS_BEGIN_DATABASE_IMPORT_CHANNEL,
   SETTINGS_CANCEL_DATABASE_IMPORT_CHANNEL,
+  SETTINGS_DATABASE_IMPORT_STATUS_CHANNEL,
+  SETTINGS_DISCARD_DATABASE_IMPORT_CHANNEL,
   SETTINGS_DROP_DATABASE_IMPORT_FILE_CHANNEL,
   SETTINGS_EXPORT_DATABASE_RECOVERY_KEY_CHANNEL,
   SETTINGS_IMPORT_DATABASE_CHANNEL,
+  SETTINGS_RESTART_FOR_DATABASE_IMPORT_CHANNEL,
   SETTINGS_SELECT_DATABASE_IMPORT_FILE_CHANNEL,
 } from "../src/shared/ipc/channels";
+import {
+  DatabaseImportStatus,
+  DatabaseImportStatusReply,
+} from "../src/shared/ipc/settings";
 
 const state = vi.hoisted(() => ({
   beginDatabaseImport: vi.fn<
     () => Effect.Effect<{ readonly sessionId: string }>
   >(() => Effect.succeed({ sessionId: "import-1" })),
   cancelDatabaseImport: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
+  discardDatabaseImport: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
+  getDatabaseImportStatus: vi.fn<
+    () => Effect.Effect<{
+      readonly restart: "relaunch";
+      readonly state: "restart-pending";
+    }>
+  >(() =>
+    Effect.succeed({
+      restart: "relaunch" as const,
+      state: "restart-pending" as const,
+    })
+  ),
+  restartForDatabaseImport: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
   dropDatabaseImportFile: vi.fn<
     () => Effect.Effect<{ readonly fileName: string }>
   >(() => Effect.succeed({ fileName: "source.sqlite" })),
@@ -36,9 +56,12 @@ const state = vi.hoisted(() => ({
 vi.mock("../src/main/database", () => ({
   beginDatabaseImport: state.beginDatabaseImport,
   cancelDatabaseImport: state.cancelDatabaseImport,
+  discardDatabaseImport: state.discardDatabaseImport,
   dropDatabaseImportFile: state.dropDatabaseImportFile,
   exportDatabaseRecoveryKey: state.exportRecoveryKey,
+  getDatabaseImportStatus: state.getDatabaseImportStatus,
   importDatabase: state.importDatabase,
+  restartForDatabaseImport: state.restartForDatabaseImport,
   selectDatabaseImportFile: state.selectDatabaseImportFile,
 }));
 
@@ -50,9 +73,12 @@ vi.mock("../src/main/settings/account-settings", () => ({
 const {
   beginImport,
   cancelImport,
+  discardImport,
   dropImportFile,
   exportRecoveryKey,
+  getImportStatus,
   importExistingDatabase,
+  restartForImport,
   selectImportFile,
 } = await import("../src/main/ipc/methods/settings");
 
@@ -129,4 +155,51 @@ describe("settings IPC", () => {
       expect(state.selectDatabaseImportFile).toHaveBeenCalledWith(request);
     })
   );
+
+  it.effect("reports, discards and restarts for a waiting import", () =>
+    Effect.gen(function* manageWaitingImportThroughIpc() {
+      const status = yield* getImportStatus.handler(undefined);
+      const discarded = yield* discardImport.handler(undefined);
+      const restarted = yield* restartForImport.handler(undefined);
+
+      expect({
+        discard: discardImport.channel,
+        restart: restartForImport.channel,
+        status: getImportStatus.channel,
+      }).toStrictEqual({
+        discard: SETTINGS_DISCARD_DATABASE_IMPORT_CHANNEL,
+        restart: SETTINGS_RESTART_FOR_DATABASE_IMPORT_CHANNEL,
+        status: SETTINGS_DATABASE_IMPORT_STATUS_CHANNEL,
+      });
+      expect({ discarded, restarted, status }).toStrictEqual({
+        discarded: { data: undefined, ok: true },
+        restarted: { data: undefined, ok: true },
+        status: {
+          data: { restart: "relaunch", state: "restart-pending" },
+          ok: true,
+        },
+      });
+      expect(Schema.is(DatabaseImportStatusReply)(status)).toBeTruthy();
+      expect(state.discardDatabaseImport).toHaveBeenCalledOnce();
+      expect(state.restartForDatabaseImport).toHaveBeenCalledOnce();
+    })
+  );
+
+  it("carries only literals in the waiting-import status, never a path", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(DatabaseImportStatus, {
+        onExcessProperty: "error",
+      })({
+        databasePath: "/private/app.sqlite",
+        restart: "relaunch",
+        state: "restart-pending",
+      })
+    ).toThrow(/./u);
+    expect(() =>
+      Schema.decodeUnknownSync(DatabaseImportStatus)({
+        restart: "relaunch",
+        state: "/private/app.sqlite",
+      })
+    ).toThrow(/./u);
+  });
 });

@@ -100,12 +100,15 @@ export interface ScheduledMailApi {
 export interface SettingsApi {
   beginDatabaseImport: DesktopBridge["beginDatabaseImport"];
   cancelDatabaseImport: DesktopBridge["cancelDatabaseImport"];
+  discardDatabaseImport: DesktopBridge["discardDatabaseImport"];
   dropDatabaseImportFile: DesktopBridge["dropDatabaseImportFile"];
   exportDatabaseRecoveryKey: DesktopBridge["exportDatabaseRecoveryKey"];
+  getDatabaseImportStatus: DesktopBridge["getDatabaseImportStatus"];
   importDatabase: DesktopBridge["importDatabase"];
   listAccountSettings: DesktopBridge["listAccountSettings"];
   onAccountSettingsChanged: DesktopBridge["onAccountSettingsChanged"];
   onDatabaseImportProgress: DesktopBridge["onDatabaseImportProgress"];
+  restartForDatabaseImport: DesktopBridge["restartForDatabaseImport"];
   selectDatabaseImportFile: DesktopBridge["selectDatabaseImportFile"];
   updateAccountSettings: DesktopBridge["updateAccountSettings"];
 }
@@ -250,12 +253,15 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     settings: {
       beginDatabaseImport: bridge.beginDatabaseImport,
       cancelDatabaseImport: bridge.cancelDatabaseImport,
+      discardDatabaseImport: bridge.discardDatabaseImport,
       dropDatabaseImportFile: bridge.dropDatabaseImportFile,
       exportDatabaseRecoveryKey: bridge.exportDatabaseRecoveryKey,
+      getDatabaseImportStatus: bridge.getDatabaseImportStatus,
       importDatabase: bridge.importDatabase,
       listAccountSettings: bridge.listAccountSettings,
       onAccountSettingsChanged: bridge.onAccountSettingsChanged,
       onDatabaseImportProgress: bridge.onDatabaseImportProgress,
+      restartForDatabaseImport: bridge.restartForDatabaseImport,
       selectDatabaseImportFile: bridge.selectDatabaseImportFile,
       updateAccountSettings: bridge.updateAccountSettings,
     },

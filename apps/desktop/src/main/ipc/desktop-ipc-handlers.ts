@@ -75,10 +75,13 @@ import {
 import {
   beginImport,
   cancelImport,
+  discardImport,
   dropImportFile,
   exportRecoveryKey,
+  getImportStatus,
   importExistingDatabase,
   listSettings,
+  restartForImport,
   selectImportFile,
   updateSettings,
 } from "./methods/settings";
@@ -164,6 +167,9 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(dropImportFile);
   yield* ipc.handle(exportRecoveryKey);
   yield* ipc.handle(importExistingDatabase);
+  yield* ipc.handle(getImportStatus);
+  yield* ipc.handle(discardImport);
+  yield* ipc.handle(restartForImport);
   yield* ipc.handle(selectImportFile);
   yield* ipc.handle(listSettings);
   yield* ipc.handle(updateSettings);

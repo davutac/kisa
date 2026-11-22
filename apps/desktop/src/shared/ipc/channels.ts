@@ -122,6 +122,12 @@ export const SETTINGS_EXPORT_DATABASE_RECOVERY_KEY_CHANNEL =
   "desktop:settings:export-database-recovery-key";
 export const SETTINGS_IMPORT_DATABASE_CHANNEL =
   "desktop:settings:import-database";
+export const SETTINGS_DATABASE_IMPORT_STATUS_CHANNEL =
+  "desktop:settings:database-import-status";
+export const SETTINGS_DISCARD_DATABASE_IMPORT_CHANNEL =
+  "desktop:settings:discard-database-import";
+export const SETTINGS_RESTART_FOR_DATABASE_IMPORT_CHANNEL =
+  "desktop:settings:restart-for-database-import";
 export const SETTINGS_DATABASE_IMPORT_PROGRESS_CHANNEL =
   "desktop:settings:database-import-progress";
 export const SETTINGS_DROP_DATABASE_IMPORT_FILE_CHANNEL =

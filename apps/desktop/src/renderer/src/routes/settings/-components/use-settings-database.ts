@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { runWithCleanup } from "@/lib/run-with-cleanup";
@@ -6,7 +6,10 @@ import type { SettingsApi } from "@/platform/desktop";
 import type {
   DatabaseImportFileKind,
   DatabaseImportProgress,
+  DatabaseImportStatus,
 } from "@/shared/ipc/settings";
+
+import type { PendingImportAction } from "./settings-database-pending-import-row";
 
 type PendingAction = "export" | "import" | undefined;
 
@@ -30,11 +33,89 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
   const [importProgress, setImportProgress] =
     useState<DatabaseImportProgress>();
   const [selectingKind, setSelectingKind] = useState<DatabaseImportFileKind>();
+  // Whether an import waits for a restart is main's to say: it reads the
+  // manifest each time. This is only the last answer, asked again on mount
+  // and after everything here that can change it.
+  const [importStatus, setImportStatus] = useState<DatabaseImportStatus>();
+  const [pendingImportAction, setPendingImportAction] =
+    useState<PendingImportAction>();
+  const mountedRef = useRef(false);
+
+  const refreshImportStatus = useCallback(async (): Promise<void> => {
+    try {
+      const reply = await settingsApi.getDatabaseImportStatus();
+      if (mountedRef.current && reply.ok) {
+        setImportStatus(reply.data);
+      }
+    } catch {
+      // The last answer stays; the next refresh asks again.
+    }
+  }, [settingsApi]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    queueMicrotask(() => {
+      if (mountedRef.current) {
+        void refreshImportStatus();
+      }
+    });
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [refreshImportStatus]);
 
   useEffect(
-    () => settingsApi.onDatabaseImportProgress(setImportProgress),
-    [settingsApi]
+    () =>
+      settingsApi.onDatabaseImportProgress((progress) => {
+        setImportProgress(progress);
+        void refreshImportStatus();
+      }),
+    [refreshImportStatus, settingsApi]
   );
+
+  const discardPendingImport = async (): Promise<void> => {
+    setPendingImportAction("discard");
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await settingsApi.discardDatabaseImport();
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          // The Import row must stop saying a restart will activate it.
+          setImportProgress(undefined);
+          toast.success("Database import discarded");
+        } catch {
+          toast.error("Could not discard the import");
+        }
+        await refreshImportStatus();
+      },
+      () => {
+        setPendingImportAction(undefined);
+      }
+    );
+  };
+
+  const restartForPendingImport = async (): Promise<void> => {
+    setPendingImportAction("restart");
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await settingsApi.restartForDatabaseImport();
+          if (!reply.ok) {
+            toast.error(reply.error);
+          }
+        } catch {
+          toast.error("Could not restart to finish the import");
+        }
+        await refreshImportStatus();
+      },
+      () => {
+        setPendingImportAction(undefined);
+      }
+    );
+  };
 
   const exportRecoveryKey = async (): Promise<void> => {
     setPendingAction("export");
@@ -218,6 +299,9 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
           toast.error("Could not import the database");
           setImportProgress(undefined);
         }
+        // Main reports "importing" until the restart dialog is answered,
+        // which is when the reply above arrives.
+        await refreshImportStatus();
       },
       () => {
         setPendingAction(undefined);
@@ -241,9 +325,13 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
       selectingKind,
       session: importSession,
     },
+    discardPendingImport,
     exportRecoveryKey,
     importProgress,
+    importStatus,
     openImport,
     pendingAction,
+    pendingImportAction,
+    restartForPendingImport,
   };
 };

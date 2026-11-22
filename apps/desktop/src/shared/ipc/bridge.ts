@@ -99,13 +99,16 @@ import type {
   AccountSettingsReply,
   AccountSettingsUpdateRequest,
   DatabaseImportCancelReply,
+  DatabaseImportDiscardReply,
   DatabaseImportFileSelectionReply,
   DatabaseImportFileSelectionRequest,
   DatabaseImportFileKind,
   DatabaseImportReply,
   DatabaseImportProgress,
+  DatabaseImportRestartReply,
   DatabaseImportSession,
   DatabaseImportSessionReply,
+  DatabaseImportStatusReply,
   DatabaseRecoveryKeyExportReply,
 } from "./settings";
 import type {
@@ -172,6 +175,8 @@ export interface DesktopBridge {
   disconnectAccount: (
     request: AccountDisconnectRequest
   ) => Promise<AccountsReply>;
+  /** Drops an import that is waiting for a restart. */
+  discardDatabaseImport: () => Promise<DatabaseImportDiscardReply>;
   downloadUpdate: () => Promise<UpdateStatus>;
   dropDatabaseImportFile: (request: {
     readonly file: File;
@@ -179,6 +184,7 @@ export interface DesktopBridge {
     readonly sessionId: string;
   }) => Promise<DatabaseImportFileSelectionReply>;
   exportDatabaseRecoveryKey: () => Promise<DatabaseRecoveryKeyExportReply>;
+  getDatabaseImportStatus: () => Promise<DatabaseImportStatusReply>;
   getMailIndexProgress: () => Promise<MailIndexProgressList>;
   getScheduledMailAttentionCount: (
     request: ScheduledMailScope
@@ -272,6 +278,8 @@ export interface DesktopBridge {
     request: MailOutgoingAttachmentPrepareRequest
   ) => Promise<MailOutgoingAttachmentPrepareReply>;
   reindexMail: (request: MailReindexRequest) => Promise<MailReindexReply>;
+  /** Restarts to activate a waiting import, or quits in development. */
+  restartForDatabaseImport: () => Promise<DatabaseImportRestartReply>;
   reorderAccounts: (
     request: AccountReorderRequest
   ) => Promise<AccountReorderReply>;
