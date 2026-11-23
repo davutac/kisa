@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import MailThreadItem from "../src/renderer/src/components/mail/thread-item";
 import { calendarStore } from "../src/renderer/src/hooks/use-calendar";
 import { formatMailDate } from "../src/renderer/src/mail/mail-date";
+import { AccountsProvider } from "../src/renderer/src/state/accounts";
 import { LabelsProvider } from "../src/renderer/src/state/labels";
+import type { Account } from "../src/shared/ipc/accounts";
 import type { MailThreadSummary } from "../src/shared/ipc/mail";
 
 const thread: MailThreadSummary = {
@@ -23,23 +25,30 @@ const thread: MailThreadSummary = {
 
 const renderRow = (
   overrides: Partial<MailThreadSummary>,
-  mailboxLabel?: string
+  mailboxLabel?: string,
+  accounts?: readonly Account[]
 ): string =>
   renderToString(
-    <LabelsProvider accountIds={[]}>
-      <MailThreadItem
-        mailboxLabel={mailboxLabel}
-        onOpen={vi.fn<() => void>()}
-        onRowPointerDown={vi.fn<() => void>()}
-        onSelectionPointerDown={vi.fn<() => void>()}
-        onSelectionPointerEnter={vi.fn<() => void>()}
-        onToggleSelection={vi.fn<() => void>()}
-        position={1}
-        setSize={1}
-        thread={{ ...thread, ...overrides }}
-        top={0}
-      />
-    </LabelsProvider>
+    <AccountsProvider
+      accounts={accounts ?? []}
+      onReorder={vi.fn<() => Promise<void>>()}
+    >
+      <LabelsProvider accountIds={[]}>
+        <MailThreadItem
+          mailboxLabel={mailboxLabel}
+          onOpen={vi.fn<() => void>()}
+          onRowPointerDown={vi.fn<() => void>()}
+          onSelectionPointerDown={vi.fn<() => void>()}
+          onSelectionPointerEnter={vi.fn<() => void>()}
+          onToggleSelection={vi.fn<() => void>()}
+          position={1}
+          setSize={1}
+          showAccount={accounts !== undefined}
+          thread={{ ...thread, ...overrides }}
+          top={0}
+        />
+      </LabelsProvider>
+    </AccountsProvider>
   );
 
 const getRowLabel = (markup: string): string | undefined =>
@@ -109,6 +118,35 @@ describe("mail thread row", () => {
     });
     expect(renderRow({ labels }, "SENT")).not.toContain("lucide-send");
     expect(renderRow({ labels }, "INBOX")).toContain("lucide-send");
+  });
+
+  it("names its account by provider logo and address where accounts mix", () => {
+    const accounts: readonly Account[] = [
+      { email: "ada@gmail.com", provider: "gmail" },
+      { email: "ada@workspace.example", provider: "gmail" },
+    ];
+    const markup = renderRow({ accountId: "ada@gmail.com" }, "INBOX", accounts);
+
+    expect({
+      address: markup.includes(
+        '<span class="min-w-0 truncate">ada@gmail.com</span>'
+      ),
+      label: getRowLabel(markup),
+      logo: markup.match(/<img alt="" [^>]*src=/gu)?.length,
+    }).toStrictEqual({
+      address: true,
+      label: `Analytical engine, ${from}, in ada@gmail.com, ${sentAt}, 3 messages`,
+      logo: 1,
+    });
+  });
+
+  it("names an account it cannot find with a person icon", () => {
+    const markup = renderRow({ accountId: "ada@gmail.com" }, "INBOX", []);
+
+    expect(markup).toContain("lucide-user-round");
+    expect(markup).toContain(
+      '<span class="min-w-0 truncate">ada@gmail.com</span>'
+    );
   });
 
   it("shows the conversation size as a plain count", () => {

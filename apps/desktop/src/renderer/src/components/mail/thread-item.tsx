@@ -4,6 +4,7 @@ import { m, useReducedMotionConfig } from "motion/react";
 import { memo, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 
+import AccountChip from "@/components/accounts/account-chip";
 import MailAttachmentList from "@/components/mail/attachment-list";
 import MailLabelBadges from "@/components/mail/label-badges";
 import MailDate from "@/components/mail/mail-date";
@@ -68,11 +69,13 @@ interface MailThreadItemProps extends Omit<
 
 const getThreadRowLabel = (
   thread: MailThreadSummary,
-  calendar: Calendar
+  calendar: Calendar,
+  showAccount: boolean
 ): string =>
   [
     thread.subject,
     `from ${thread.from}`,
+    showAccount ? `in ${thread.accountId}` : undefined,
     formatMailDate(thread.latestAt, calendar, "detailed"),
     thread.isUnread ? "unread" : undefined,
     thread.messageCount > 1 ? `${thread.messageCount} messages` : undefined,
@@ -217,10 +220,10 @@ const ThreadSenderHeader = ({
       />
       {showAccount ? (
         <Badge
-          className="bg-muted text-muted-foreground ml-auto h-auto shrink-0 rounded-sm px-1.5 text-[10px] leading-none"
+          className="bg-muted text-muted-foreground ml-auto h-auto max-w-full shrink-0 rounded-sm px-1.5 text-[10px] leading-3"
           variant="secondary"
         >
-          {thread.accountId}
+          <AccountChip accountId={thread.accountId} />
         </Badge>
       ) : null}
     </ItemHeader>
@@ -335,7 +338,7 @@ const MailThreadItem = ({
           >
             <button
               aria-current={isSelected}
-              aria-label={getThreadRowLabel(thread, calendar)}
+              aria-label={getThreadRowLabel(thread, calendar, showAccount)}
               className="absolute inset-0 z-0 rounded-md text-left outline-none"
               onClick={(event) => {
                 onOpen(thread, event);

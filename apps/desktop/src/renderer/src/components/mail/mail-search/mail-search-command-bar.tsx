@@ -3,6 +3,7 @@ import { ListIcon, SearchIcon, XIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
+import AccountChip from "@/components/accounts/account-chip";
 import MailDate from "@/components/mail/mail-date";
 import {
   Command,
@@ -113,9 +114,10 @@ const ConversationItem = ({
         {thread.subject}
       </span>
       {showAccount ? (
-        <span className="text-muted-foreground max-w-32 shrink-0 truncate">
-          {thread.accountId}
-        </span>
+        <AccountChip
+          accountId={thread.accountId}
+          className="text-muted-foreground max-w-32 shrink-0"
+        />
       ) : null}
       <MailDate
         className="text-muted-foreground shrink-0"
