@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -13,6 +12,10 @@ import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
 import type { Account } from "@/shared/ipc/accounts";
 import { useAccountSettings } from "@/state/account-settings";
+
+import { toAccountSettingsPage } from "./settings-pages";
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 
 interface SettingsAccountSystemLabelsRowProps {
   account: Account;
@@ -52,7 +55,12 @@ const SettingsAccountSystemLabelsRow = ({
   };
 
   return (
-    <SettingsRow>
+    <SearchableSettingsRow
+      target={toSettingsTarget(
+        toAccountSettingsPage(account.email),
+        "system-labels"
+      )}
+    >
       <SettingsRowContent>
         <SettingsRowTitle id={titleId}>System labels</SettingsRowTitle>
         <SettingsRowDescription>
@@ -70,7 +78,7 @@ const SettingsAccountSystemLabelsRow = ({
           }}
         />
       </SettingsRowActions>
-    </SettingsRow>
+    </SearchableSettingsRow>
   );
 };
 

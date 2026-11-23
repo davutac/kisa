@@ -4,7 +4,6 @@ import { useState } from "react";
 import { ConfirmMessage, useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -14,6 +13,10 @@ import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { AccountsApi } from "@/platform/desktop";
 import type { Account } from "@/shared/ipc/accounts";
+
+import { toAccountSettingsPage } from "./settings-pages";
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 
 interface SettingsAccountDisconnectRowProps {
   account: Account;
@@ -85,7 +88,12 @@ const SettingsAccountDisconnectRow = ({
   };
 
   return (
-    <SettingsRow>
+    <SearchableSettingsRow
+      target={toSettingsTarget(
+        toAccountSettingsPage(account.email),
+        "disconnect"
+      )}
+    >
       <SettingsRowContent>
         <SettingsRowTitle id={titleId}>Disconnect</SettingsRowTitle>
         <SettingsRowDescription>
@@ -108,7 +116,7 @@ const SettingsAccountDisconnectRow = ({
           Disconnect
         </Button>
       </SettingsRowActions>
-    </SettingsRow>
+    </SearchableSettingsRow>
   );
 };
 

@@ -43,9 +43,9 @@ useAppCommand("mailbox.nextThread", () => moveSelection(1), {
 });
 ```
 
-The hook registers every binding while the command's scope is active and `enabled` is true, and unregisters it otherwise. It intentionally exposes only `enabled` and an optional element target; callers cannot override registry policy. Without a target, a command takes key presses anywhere in the window. A target limits it to key presses while focus is inside that element, so a present but unset target takes none.
+The hook registers every binding while the command's scope is active and `enabled` is true, and unregisters it otherwise. It intentionally exposes only `enabled`, an optional element target, and an optional layer; callers cannot override registry policy. Without a target, a command takes key presses anywhere in the window. A target limits it to key presses while focus is inside that element, so a present but unset target takes none. A layer is an element inside a ui-sdk popup that the command belongs to: ui-sdk then runs it while that popup is open, where a modal would pause a page command. Settings' search shortcut is the one command that uses it.
 
-ui-sdk runs a shortcut after the focused element's own key handlers, and calls `preventDefault()` but not `stopPropagation()` when it runs one. Every command skips a key that a focused widget already handled with `preventDefault()`, such as Escape closing the editor's slash menu or a recipient field's suggestions. While a ui-sdk modal is open (a Dialog or AlertDialog), ui-sdk pauses every command too, including under modals that register no Kisa layer, such as Pick date and time, the template variable picker, and the Settings dialogs. An open menu or popover takes Escape before any command: Escape closes it, and no command runs. A tooltip doesn't: Kisa's tooltips open as soon as the pointer rests on a button, so Escape closes a visible tooltip and still reaches the command, such as closing the conversation or clearing the selection.
+ui-sdk runs a shortcut after the focused element's own key handlers, and calls `preventDefault()` but not `stopPropagation()` when it runs one. Every command skips a key that a focused widget already handled with `preventDefault()`, such as Escape closing the editor's slash menu or a recipient field's suggestions. While a ui-sdk modal is open (a Dialog or AlertDialog), ui-sdk pauses every command too, including under modals that register no Kisa layer, such as Pick date and time, the template variable picker, Settings, and the dialogs Settings opens. An open menu or popover takes Escape before any command: Escape closes it, and no command runs. A tooltip doesn't: Kisa's tooltips open as soon as the pointer rests on a button, so Escape closes a visible tooltip and still reaches the command, such as closing the conversation or clearing the selection.
 
 `input: "allow"` commands run while focus is in a text field or the rich-text editor. `input: "ignore"` commands don't: a text field or contenteditable keeps every key, chords included, and a focused control keeps the plain keys it handles itself, after the WAI-ARIA keyboard patterns: Enter on a button or link, and the vertical arrows and typeahead letters in a menu, listbox, combobox, or tree. ui-sdk runs Command, Control, and Option chords in text fields whatever its `allowInInput` says, so `@/hotkeys` checks the focused element itself; that is what leaves `Mod+Z` to native text undo.
 
@@ -57,7 +57,7 @@ Account commands are static and follow sidebar order. `Mod+1` opens All accounts
 
 In the new-email composer, `Mod+S` stashes a non-empty draft, resets the form, and keeps the composer open. On a blank form, it opens the stash picker when saved stashes are available. The command can be pressed again without releasing `Mod`, while operating-system key repeat from holding `S` is ignored. The same command definition drives the Stash button hint and ARIA metadata.
 
-`U` toggles the unread-only mailbox filter, the same as the toggle beside sidebar search; the shell registers it, so from a workspace it also returns to the mailbox. The filter is remembered: switching accounts or mailboxes and restarting keep it until it is toggled off. `Shift+S` toggles Sent, `S` toggles Spam, and `T` toggles Trash. These shortcuts act on the current account scope. In the sidebar, All accounts opens the combined Inbox and has no rows of its own, so in that scope these shortcuts are the way to its Sent, Spam, and Trash; each account opens its Inbox and discloses its own Sent, Spam, and Trash rows. The hints and `aria-keyshortcuts` for these shortcuts sit only on the current scope's rows, the rows the shortcuts open, when those rows are shown. Rows and shortcuts share one resolver: choosing the mailbox or label and scope already on screen returns to that scope's Inbox, while choosing it from another scope or from a workspace such as Settings opens it. Labels have no shortcuts of their own; they are sidebar places like any other, and Go back and Go forward step through them. `Mod+1` through `Mod+9` open the matching scope's Inbox, the same as choosing its account row.
+`U` toggles the unread-only mailbox filter, the same as the toggle beside sidebar search; the shell registers it, so from a workspace it also returns to the mailbox. The filter is remembered: switching accounts or mailboxes and restarting keep it until it is toggled off. `Shift+S` toggles Sent, `S` toggles Spam, and `T` toggles Trash. These shortcuts act on the current account scope. In the sidebar, All accounts opens the combined Inbox and has no rows of its own, so in that scope these shortcuts are the way to its Sent, Spam, and Trash; each account opens its Inbox and discloses its own Sent, Spam, and Trash rows. The hints and `aria-keyshortcuts` for these shortcuts sit only on the current scope's rows, the rows the shortcuts open, when those rows are shown. Rows and shortcuts share one resolver: choosing the mailbox or label and scope already on screen returns to that scope's Inbox, while choosing it from another scope or from a workspace such as Templates opens it. Labels have no shortcuts of their own; they are sidebar places like any other, and Go back and Go forward step through them. `Mod+1` through `Mod+9` open the matching scope's Inbox, the same as choosing its account row.
 
 `Mod+\` shows or hides the main window's sidebar. It works inside text fields and the rich-text editor, which leave `Mod+B` to bold. The shell, not the sidebar, registers every navigation command the sidebar advertises, so the shortcuts keep working while the sidebar is hidden. `Mod+K` opens the search command bar from anywhere, without revealing a hidden sidebar; showing all results reveals it, and hiding the sidebar ends the results in the list. `Mod+[` and `Mod+]` go back and forward through the sidebar places visited, the same as the arrows beside the app name. They are ignored in text fields and the rich-text editor, and they are inactive while the composer or the search bar is open.
 
@@ -89,7 +89,7 @@ In the new-email composer, `Mod+Shift+Enter` opens Schedule send. Once a deliver
 
 `Mod+Shift+C` cleans up the current new-email draft using the provider and model shown in the Clean button tooltip. The command remains available while focus is in the subject or message editor and is disabled for an empty draft or while another compose action is running.
 
-`Mod+,`, `Mod+Shift+S`, and `Mod+Shift+T` toggle Settings, Scheduled, and Templates. Pressing the active workspace's shortcut, or choosing its sidebar row again, restores the previous view. The Scheduled command is registered only while scheduled mail exists or the workspace is already open. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
+`Mod+Shift+S` and `Mod+Shift+T` toggle Scheduled and Templates. Pressing the active workspace's shortcut, or choosing its sidebar row again, restores the previous view. `Mod+,` opens Settings, a modal dialog over the window, like the sidebar's Settings button. It only opens: ui-sdk pauses every application command while a modal is open, `Mod+,` included, so Escape or the dialog's Close button closes it, and focus returns to where it was. A toggle would need the command registered with a `layer` inside the dialog, as Settings' search is, not a key handler on its content. Inside Settings, `/` moves focus to its search, from anywhere in the dialog but a text field, where `/` is typed; `Shift+/` does the same, for layouts such as German that type `/` with Shift. A dialog Settings opens, such as Reply instructions, keeps `/` to itself. In the search, the arrow keys move through the results, Enter leads to the highlighted one, and Escape clears the search, then closes Settings once it is empty. The Scheduled command is registered only while scheduled mail exists or the workspace is already open. In the Templates workspace, `Mod+Shift+N` creates a template, `Mod+F` focuses template search, and `Mod+S` explicitly saves the active template. `Mod+Shift+]` and `Mod+Shift+[` select the next and previous filtered template, stopping at the list edges. The modified bracket pair remains available inside form fields and the rich-text editor without taking over ordinary `Tab` navigation or the operating system's app switcher.
 
 ## Interaction layers
 
@@ -108,13 +108,13 @@ The provider stores each declaration under a unique token. The highest-priority,
 | `scheduled`       | `always`, `app`, `scheduled`       |
 | `thread`          | `always`, `app`, `thread`          |
 | `thread-composer` | `always`, `app`, `thread-composer` |
-| `settings`        | `always`, `app`, `settings`        |
 | `templates`       | `always`, `app`, `templates`       |
 | `composer`        | `always`, `composer`               |
 | `search`          | `always`, `search`                 |
+| `settings`        | `always`, `settings`               |
 | `blocking`        | `always`                           |
 
-The composer and the open search bar suppress every underlying application command. Closing the search bar or removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
+The composer, the open search bar, and the open Settings dialog suppress every underlying application command. Settings ranks above the composer because it can open over a new email. Closing the search bar or removing an overlay registration restores the layer beneath it, so only the top interaction handles overlapping keys such as Escape.
 
 The inline thread composer uses the intermediate `thread-composer` layer. It suppresses thread navigation and message actions while keeping app commands available. A new-message composer or focused inline search field supersedes it.
 
@@ -125,13 +125,13 @@ The fixed priorities are:
 ```ts
 const LAYER_PRIORITY = {
   blocking: 1000,
+  settings: 200,
   composer: 100,
   search: 100,
   thread: 20,
   "thread-composer": 50,
   mailbox: 10,
   scheduled: 10,
-  settings: 10,
   templates: 10,
 } as const;
 ```

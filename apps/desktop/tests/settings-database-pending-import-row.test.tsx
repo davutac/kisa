@@ -1,7 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import SettingsDatabasePendingImportRow from "../src/renderer/src/routes/settings/-components/settings-database-pending-import-row";
+import SettingsDatabasePendingImportRow from "../src/renderer/src/components/settings/settings-database-pending-import-row";
 
 const render = (
   props: Partial<Parameters<typeof SettingsDatabasePendingImportRow>[0]> = {}

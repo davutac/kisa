@@ -10,7 +10,13 @@ import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export { Dialog, DialogClose, DialogTrigger } from "@ui-sdk/react/dialog";
+export {
+  createDialogController,
+  Dialog,
+  DialogClose,
+  DialogTrigger,
+} from "@ui-sdk/react/dialog";
+export type { DialogController } from "@ui-sdk/react/dialog";
 
 type ClassNameProps<Props> = Omit<Props, "className"> & { className?: string };
 

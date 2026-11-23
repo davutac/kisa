@@ -8,6 +8,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import AccountSetupApp from "../src/renderer/src/account-setup/account-setup-app";
 import { SendWithScheduleMenu } from "../src/renderer/src/components/mail/schedule-send-menu";
 import MailThreadItem from "../src/renderer/src/components/mail/thread-item";
+import AiInstructionsDialog from "../src/renderer/src/components/settings/ai-instructions-dialog";
+import AiProviderRow from "../src/renderer/src/components/settings/ai-provider-row";
+import SettingsAccountCategorizationRow from "../src/renderer/src/components/settings/settings-account-categorization-row";
+import SettingsAccountNotificationsRow from "../src/renderer/src/components/settings/settings-account-notifications-row";
+import SettingsAccountSystemLabelsRow from "../src/renderer/src/components/settings/settings-account-system-labels-row";
 import { Button } from "../src/renderer/src/components/ui/button";
 import {
   Field,
@@ -27,11 +32,6 @@ import {
 } from "../src/renderer/src/components/ui/settings";
 import { Switch } from "../src/renderer/src/components/ui/switch";
 import type { SettingsApi } from "../src/renderer/src/platform/desktop";
-import AiInstructionsDialog from "../src/renderer/src/routes/settings/-components/ai-instructions-dialog";
-import AiProviderRow from "../src/renderer/src/routes/settings/-components/ai-provider-row";
-import SettingsAccountCategorizationRow from "../src/renderer/src/routes/settings/-components/settings-account-categorization-row";
-import SettingsAccountNotificationsRow from "../src/renderer/src/routes/settings/-components/settings-account-notifications-row";
-import SettingsAccountSystemLabelsRow from "../src/renderer/src/routes/settings/-components/settings-account-system-labels-row";
 import TemplatesSidebar from "../src/renderer/src/routes/templates/-components/templates-sidebar";
 import { AccountsProvider } from "../src/renderer/src/state/accounts";
 import { AiProviderStateProvider } from "../src/renderer/src/state/ai-provider-state";

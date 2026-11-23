@@ -44,7 +44,7 @@ const disabledAttributes = (label: string) => {
 };
 
 const UNREAD = getHotkeyDisplay("app.toggleUnread").label;
-const SETTINGS = getHotkeyDisplay("app.openSettings").label;
+const TEMPLATES = getHotkeyDisplay("app.openTemplates").label;
 const COMPOSE = getHotkeyDisplay("app.composeMessage").label;
 const BACK = getHotkeyDisplay("app.navigateBack").label;
 
@@ -61,7 +61,7 @@ describe("sidebar toggles", () => {
           pressed={false}
         />
         <SidebarWorkspaceButton
-          command="app.openSettings"
+          command="app.openTemplates"
           isOpen
           onToggle={vi.fn<() => void>()}
         >
@@ -77,7 +77,7 @@ describe("sidebar toggles", () => {
     );
 
     expect(
-      [UNREAD, SETTINGS, COMPOSE].map((label) =>
+      [UNREAD, TEMPLATES, COMPOSE].map((label) =>
         agentEntries(label).map(({ component, pressed }) => ({
           component,
           pressed,
@@ -93,14 +93,14 @@ describe("sidebar toggles", () => {
   it("reports the state an agent or a press asks for", async () => {
     const user = userEvent.setup();
     const onUnread = vi.fn<(pressed: boolean) => void>();
-    const onSettings = vi.fn<() => void>();
+    const onTemplates = vi.fn<() => void>();
     render(
       <>
         <SidebarUnreadToggle onPressedChange={onUnread} pressed={false} />
         <SidebarWorkspaceButton
-          command="app.openSettings"
+          command="app.openTemplates"
           isOpen
-          onToggle={onSettings}
+          onToggle={onTemplates}
         >
           <span />
         </SidebarWorkspaceButton>
@@ -110,13 +110,13 @@ describe("sidebar toggles", () => {
     const result = await createAgent().act({
       steps: [{ action: "setPressed", args: [true], ref: UNREAD }],
     });
-    await user.click(screen.getByRole("button", { name: SETTINGS }));
+    await user.click(screen.getByRole("button", { name: TEMPLATES }));
 
     expect(result).toMatchObject({ ok: true });
     expect(onUnread.mock.calls.map(([pressed]) => pressed)).toStrictEqual([
       true,
     ]);
-    expect(onSettings).toHaveBeenCalledOnce();
+    expect(onTemplates).toHaveBeenCalledOnce();
   });
 
   it("keeps a compose button that can't open reachable for its tooltip, and refuses presses", async () => {

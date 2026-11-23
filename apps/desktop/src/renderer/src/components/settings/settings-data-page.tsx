@@ -3,7 +3,7 @@ import { DownloadIcon, LoaderCircleIcon, UploadIcon } from "lucide-react";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
-  SettingsRow,
+  Settings,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -18,20 +18,22 @@ import type { AppSettingsApi, SettingsApi } from "@/platform/desktop";
 import SettingsDatabaseImportDialog from "./settings-database-import-dialog";
 import SettingsDatabasePendingImportRow from "./settings-database-pending-import-row";
 import SettingsInlineImagesRow from "./settings-inline-images-row";
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 import {
   DATABASE_IMPORT_PROGRESS_LABELS,
   useSettingsDatabase,
 } from "./use-settings-database";
 
-interface SettingsDatabaseSectionProps {
+interface SettingsDataPageProps {
   appSettingsApi?: AppSettingsApi;
   settingsApi: SettingsApi;
 }
 
-const SettingsDatabaseSection = ({
+const SettingsDataPage = ({
   appSettingsApi,
   settingsApi,
-}: SettingsDatabaseSectionProps) => {
+}: SettingsDataPageProps) => {
   const confirm = useConfirm();
   const workflow = useSettingsDatabase(settingsApi);
   const handleExportRecoveryKey = workflow.exportRecoveryKey;
@@ -53,7 +55,7 @@ const SettingsDatabaseSection = ({
   };
 
   return (
-    <>
+    <Settings>
       <SettingsDatabaseImportDialog {...workflow.dialog} />
       <SettingsSection aria-labelledby="database-settings-title">
         <SettingsSectionHeader>
@@ -74,7 +76,9 @@ const SettingsDatabaseSection = ({
               restart={workflow.importStatus.restart}
             />
           ) : null}
-          <SettingsRow>
+          <SearchableSettingsRow
+            target={toSettingsTarget("data", "import-database")}
+          >
             <SettingsRowContent>
               <SettingsRowTitle id="database-import-title">
                 Import database
@@ -105,8 +109,10 @@ const SettingsDatabaseSection = ({
                 <span>Import</span>
               </Button>
             </SettingsRowActions>
-          </SettingsRow>
-          <SettingsRow>
+          </SearchableSettingsRow>
+          <SearchableSettingsRow
+            target={toSettingsTarget("data", "recovery-key")}
+          >
             <SettingsRowContent>
               <SettingsRowTitle id="database-recovery-key-title">
                 Recovery key
@@ -137,14 +143,23 @@ const SettingsDatabaseSection = ({
                 </span>
               </Button>
             </SettingsRowActions>
-          </SettingsRow>
-          {appSettingsApi === undefined ? null : (
-            <SettingsInlineImagesRow appSettingsApi={appSettingsApi} />
-          )}
+          </SearchableSettingsRow>
         </SettingsRows>
       </SettingsSection>
-    </>
+      {appSettingsApi === undefined ? null : (
+        <SettingsSection aria-labelledby="images-settings-title">
+          <SettingsSectionHeader>
+            <SettingsSectionTitle id="images-settings-title">
+              Images
+            </SettingsSectionTitle>
+          </SettingsSectionHeader>
+          <SettingsRows>
+            <SettingsInlineImagesRow appSettingsApi={appSettingsApi} />
+          </SettingsRows>
+        </SettingsSection>
+      )}
+    </Settings>
   );
 };
 
-export default SettingsDatabaseSection;
+export default SettingsDataPage;

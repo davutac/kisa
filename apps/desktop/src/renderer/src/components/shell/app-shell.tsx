@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import SettingsDialog from "@/components/settings/settings-dialog";
+import { createDialogController } from "@/components/ui/dialog";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { AppCommand, OPEN_ACCOUNT_COMMAND_IDS, useAppCommand } from "@/hotkeys";
 import { cn } from "@/lib/utils";
 import { useAccounts } from "@/state/accounts";
@@ -40,7 +43,8 @@ const AccountCommands = ({
 /**
  * The main window: a collapsible sidebar beside the content column. Whether
  * the sidebar is open is remembered across launches. Every place, including
- * a new email, is a route shown in the content column.
+ * a new email, is a route shown in the content column; Settings is a dialog
+ * over whichever place is on screen.
  */
 const AppShell = ({ children }: { readonly children: ReactNode }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(readSidebarOpen);
@@ -51,6 +55,7 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
   // State rather than a ref so views render into the slot once it mounts.
   const [titlebarSlot, setTitlebarSlot] = useState<HTMLDivElement | null>(null);
   const navigation = useShellNavigation();
+  const settingsDialog = useInstanceValue(createDialogController);
   const { canCompose, toggleWorkspace, view } = navigation;
   const isComposing = view.currentPath === "/compose";
   // Scheduled scrolls its own list, and a scheduled email opens over it as a
@@ -83,6 +88,11 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
   }, []);
 
   useAppCommand("app.toggleSidebar", toggleSidebar);
+  // Open only: a modal pauses every page shortcut, so Escape and Close are
+  // the ways out.
+  useAppCommand("app.openSettings", () => {
+    settingsDialog.setOpen(true, { reason: "shortcut" });
+  });
 
   // Collapsing makes the sidebar inert and expanding unmounts the titlebar's
   // toggle, so focus left on either would fall back to the document. Hand it
@@ -119,6 +129,7 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
         onReveal={revealSidebar}
         onToggle={toggleSidebar}
         onToggleComposer={toggleComposer}
+        settingsDialog={settingsDialog}
         sidebarRef={sidebarRef}
         toggleButtonRef={sidebarCloseButtonRef}
       />
@@ -151,6 +162,7 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
         </main>
       </div>
       <AccountCommands openAccount={navigation.openAccount} />
+      <SettingsDialog controller={settingsDialog} />
     </div>
   );
 };

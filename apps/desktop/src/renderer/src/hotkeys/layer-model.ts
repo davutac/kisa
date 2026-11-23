@@ -26,7 +26,8 @@ export const LAYER_PRIORITY = {
   mailbox: 10,
   scheduled: 10,
   search: 100,
-  settings: 10,
+  // Above the composer: Settings can open over a new email.
+  settings: 200,
   templates: 10,
   thread: 20,
   "thread-composer": 50,
@@ -81,7 +82,11 @@ export const isHotkeyScopeActive = (
     return scope === "app";
   }
 
-  if (topLayer === "composer" || topLayer === "search") {
+  if (
+    topLayer === "composer" ||
+    topLayer === "search" ||
+    topLayer === "settings"
+  ) {
     return scope === topLayer;
   }
 

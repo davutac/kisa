@@ -15,7 +15,7 @@ import {
 import type { MailboxView } from "../src/renderer/src/components/shell/shell-navigation";
 
 describe("workspace toggles", () => {
-  it.each(["/compose", "/scheduled", "/templates", "/settings"] as const)(
+  it.each(["/compose", "/scheduled", "/templates"] as const)(
     "opens and closes %s as a toggle",
     (targetPath) => {
       expect(
@@ -39,9 +39,9 @@ describe("workspace toggles", () => {
   it("falls back to the mailbox when no previous view was captured", () => {
     expect(
       resolveWorkspaceToggle({
-        currentPath: "/settings",
+        currentPath: "/templates",
         previousPath: null,
-        targetPath: "/settings",
+        targetPath: "/templates",
       })
     ).toBe("/");
   });
@@ -50,14 +50,16 @@ describe("workspace toggles", () => {
     expect(
       resolveWorkspaceToggle({
         currentPath: "/templates",
-        previousPath: "/settings",
+        previousPath: "/scheduled",
         targetPath: "/templates",
       })
-    ).toBe("/settings");
+    ).toBe("/scheduled");
   });
 
   it("normalizes routes outside the shell to the mailbox fallback", () => {
     expect(toShellViewPath("/thread/account/thread")).toBe("/");
+    // Settings is a dialog now, so an old /settings location is no page.
+    expect(toShellViewPath("/settings")).toBe("/");
   });
 
   it("treats a new email as its own page", () => {
@@ -65,7 +67,7 @@ describe("workspace toggles", () => {
   });
 
   it("remembers the view a workspace was opened from", () => {
-    expect(resolveWorkspacePreviousPath("/", "/settings", null)).toBe("/");
+    expect(resolveWorkspacePreviousPath("/", "/templates", null)).toBe("/");
     expect(resolveWorkspacePreviousPath("/templates", "/compose", null)).toBe(
       "/templates"
     );
@@ -73,16 +75,16 @@ describe("workspace toggles", () => {
 
   it("remembers what a new email was written over, never the email itself", () => {
     expect(
-      resolveWorkspacePreviousPath("/compose", "/settings", "/scheduled")
+      resolveWorkspacePreviousPath("/compose", "/templates", "/scheduled")
     ).toBe("/scheduled");
     expect(
-      resolveWorkspacePreviousPath("/compose", "/settings", null)
+      resolveWorkspacePreviousPath("/compose", "/templates", null)
     ).toBeNull();
   });
 
   it("never remembers a workspace as its own previous view", () => {
     expect(
-      resolveWorkspacePreviousPath("/compose", "/settings", "/settings")
+      resolveWorkspacePreviousPath("/compose", "/templates", "/templates")
     ).toBeNull();
   });
 
@@ -149,7 +151,7 @@ describe("mailbox selection", () => {
   it("opens the chosen mailbox from a workspace instead of toggling it off", () => {
     expect(
       resolveMailboxSelection(
-        mailboxView({ currentPath: "/settings", mailbox: "spam" }),
+        mailboxView({ currentPath: "/templates", mailbox: "spam" }),
         { accountId: null, mailbox: "spam" }
       )
     ).toStrictEqual({ accountId: null, mailbox: "spam" });
@@ -220,7 +222,6 @@ describe("account scope", () => {
       isAccountScopeCurrent("/scheduled", "one@example.com", "one@example.com")
     ).toBeFalsy();
     expect(isAccountScopeCurrent("/compose", null, null)).toBeFalsy();
-    expect(isAccountScopeCurrent("/settings", null, null)).toBeFalsy();
     expect(
       isAccountScopeCurrent("/templates", "one@example.com", "one@example.com")
     ).toBeFalsy();

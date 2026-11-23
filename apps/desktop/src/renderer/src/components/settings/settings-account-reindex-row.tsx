@@ -4,7 +4,6 @@ import { useState } from "react";
 import { ConfirmMessage, useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -15,6 +14,10 @@ import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { toMailIndexDescription } from "@/mail/mail-index-progress-view";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import type { AccountsApi, MailApi } from "@/platform/desktop";
+
+import { toAccountSettingsPage } from "./settings-pages";
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 
 interface SettingsAccountReindexRowProps {
   accountId: string;
@@ -93,7 +96,9 @@ const SettingsAccountReindexRow = ({
   };
 
   return (
-    <SettingsRow>
+    <SearchableSettingsRow
+      target={toSettingsTarget(toAccountSettingsPage(accountId), "mail-sync")}
+    >
       <SettingsRowContent>
         <SettingsRowTitle>Mail sync</SettingsRowTitle>
         <SettingsRowDescription>
@@ -130,7 +135,7 @@ const SettingsAccountReindexRow = ({
           Sync now
         </Button>
       </SettingsRowActions>
-    </SettingsRow>
+    </SearchableSettingsRow>
   );
 };
 

@@ -376,6 +376,14 @@ export const HOTKEY_COMMANDS = {
     repeat: "allow",
     scope: "scheduled",
   },
+  // A layout like German types `/` with Shift, which a plain `/` doesn't match.
+  "settings.focusSearch": {
+    bindings: ["/", "Shift+/"],
+    input: "ignore",
+    label: "Search settings",
+    repeat: "once",
+    scope: "settings",
+  },
   "templates.focusSearch": {
     bindings: ["Mod+F"],
     input: "allow",

@@ -8,6 +8,11 @@ import { isBindingKeptByFocus } from "@/hotkeys/focused-control";
 
 export interface UseAppCommandOptions {
   readonly enabled?: boolean;
+  /**
+   * An element inside a popup that the command belongs to, so it runs while
+   * that popup is open, though a modal pauses the page's commands.
+   */
+  readonly layer?: React.RefObject<HTMLElement | null>;
   readonly target?: React.RefObject<HTMLElement | null>;
 }
 
@@ -23,7 +28,7 @@ const hasFocusIn = (element: HTMLElement | null): boolean =>
 const registerAppCommand = (
   commandId: HotkeyCommandId,
   onCommand: () => void,
-  target?: React.RefObject<HTMLElement | null>
+  { layer, target }: Pick<UseAppCommandOptions, "layer" | "target">
 ): (() => void) => {
   const command = HOTKEY_COMMANDS[commandId];
   const unregister = command.bindings.flatMap((binding) => {
@@ -47,6 +52,7 @@ const registerAppCommand = (
         allowInInput: command.input === "allow",
         description: command.label,
         repeat: command.repeat === "allow",
+        layer: layer === undefined ? undefined : () => layer.current,
         ...when,
       })
     );
@@ -66,7 +72,7 @@ export const useAppCommand = (
 ): void => {
   const scopeActive = useIsHotkeyScopeActive(HOTKEY_COMMANDS[commandId].scope);
   const active = scopeActive && (options.enabled ?? true);
-  const { target } = options;
+  const { layer, target } = options;
   const runCommand = useEffectEvent(onCommand);
 
   useEffect(() => {
@@ -74,8 +80,11 @@ export const useAppCommand = (
       return;
     }
 
-    return registerAppCommand(commandId, () => runCommand(), target);
-  }, [active, commandId, target]);
+    return registerAppCommand(commandId, () => runCommand(), {
+      layer,
+      target,
+    });
+  }, [active, commandId, layer, target]);
 };
 
 export const AppCommand = ({ callback, command, options }: AppCommandProps) => {

@@ -1,8 +1,8 @@
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
+import { DATABASE_IMPORT_OVERLAY_CLASS_NAME } from "../src/renderer/src/components/settings/settings-database-import-dialog";
 import { DialogContent } from "../src/renderer/src/components/ui/dialog";
-import { DATABASE_IMPORT_OVERLAY_CLASS_NAME } from "../src/renderer/src/routes/settings/-components/settings-database-import-dialog";
 
 describe("database import overlay", () => {
   it("removes the dialog width cap at desktop breakpoints", () => {

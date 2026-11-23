@@ -3,17 +3,20 @@ import { RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RadioGroup } from "@/components/ui/radio";
 import {
+  Settings,
   SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
   SettingsRows,
+  settingsRowsClassName,
   SettingsRowTitle,
   SettingsSection,
   SettingsSectionDescription,
   SettingsSectionHeader,
   SettingsSectionTitle,
 } from "@/components/ui/settings";
+import { cn } from "@/lib/utils";
 import {
   DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
   DEFAULT_AI_REPLY_USER_INSTRUCTIONS,
@@ -22,20 +25,20 @@ import {
 import AiInstructionsDialog from "./ai-instructions-dialog";
 import AiProviderRow from "./ai-provider-row";
 import { AI_PROVIDER_ORDER } from "./ai-settings-view";
+import { toSettingsTarget } from "./settings-search";
+import {
+  SearchableSettingsRow,
+  SearchableSettingsSection,
+} from "./settings-search-target";
 import { useAiSettings } from "./use-ai-settings";
 
-const SettingsAiSection = () => {
+const SettingsAiPage = () => {
   const workflow = useAiSettings();
   const { draft, settings } = workflow;
 
   if (settings === null || draft === null) {
     return (
-      <SettingsSection aria-labelledby="ai-settings-title">
-        <SettingsSectionHeader>
-          <SettingsSectionTitle id="ai-settings-title">
-            AI writing
-          </SettingsSectionTitle>
-        </SettingsSectionHeader>
+      <Settings>
         <SettingsRows>
           <SettingsRow>
             <SettingsRowContent>
@@ -63,7 +66,7 @@ const SettingsAiSection = () => {
             )}
           </SettingsRow>
         </SettingsRows>
-      </SettingsSection>
+      </Settings>
     );
   }
 
@@ -74,38 +77,42 @@ const SettingsAiSection = () => {
   const handleCleanupInstructionsSave = workflow.setCleanupUserInstructions;
 
   return (
-    <SettingsSection aria-labelledby="ai-settings-title">
-      <SettingsSectionHeader className="flex-row items-start justify-between gap-4">
-        <div className="min-w-0">
-          <SettingsSectionTitle id="ai-settings-title">
-            AI writing
-          </SettingsSectionTitle>
-          <SettingsSectionDescription className="mt-0.5 pl-5">
-            Use an existing CLI subscription for replies and draft cleanup.
-          </SettingsSectionDescription>
-        </div>
-        <Button
-          aria-label="Refresh AI providers"
-          className="mt-0.5"
-          disabled={workflow.isLoadingProviders}
-          onClick={() => {
-            void workflow.refreshProviders();
-          }}
-          size="icon"
-          title="Refresh AI providers"
-          type="button"
-          variant="ghost"
-        >
-          <RefreshCwIcon
-            className={workflow.isLoadingProviders ? "animate-spin" : ""}
-          />
-        </Button>
-      </SettingsSectionHeader>
+    <Settings>
+      <SearchableSettingsSection
+        aria-labelledby="ai-provider-settings-title"
+        target={toSettingsTarget("ai", "provider")}
+      >
+        <SettingsSectionHeader className="flex-row items-start justify-between gap-4">
+          <div className="min-w-0">
+            <SettingsSectionTitle id="ai-provider-settings-title">
+              Provider
+            </SettingsSectionTitle>
+            <SettingsSectionDescription className="mt-0.5 pl-5">
+              Use an existing CLI subscription for replies, draft cleanup, and
+              categorization.
+            </SettingsSectionDescription>
+          </div>
+          <Button
+            aria-label="Refresh AI providers"
+            className="mt-0.5"
+            disabled={workflow.isLoadingProviders}
+            onClick={() => {
+              void workflow.refreshProviders();
+            }}
+            size="icon"
+            title="Refresh AI providers"
+            type="button"
+            variant="ghost"
+          >
+            <RefreshCwIcon
+              className={workflow.isLoadingProviders ? "animate-spin" : ""}
+            />
+          </Button>
+        </SettingsSectionHeader>
 
-      <div className="flex flex-col gap-4">
         <RadioGroup
           aria-label="AI provider used for generation"
-          className="bg-background gap-px overflow-hidden rounded-lg"
+          className={cn(settingsRowsClassName, "gap-0")}
           onValueChange={(provider) => {
             if (provider !== null) {
               workflow.setActiveProvider(provider);
@@ -133,13 +140,22 @@ const SettingsAiSection = () => {
         </RadioGroup>
 
         {workflow.providersError === null ? null : (
-          <p className="text-destructive px-4 text-xs" role="alert">
+          <p className="text-destructive px-5 text-xs" role="alert">
             {workflow.providersError}
           </p>
         )}
+      </SearchableSettingsSection>
 
+      <SettingsSection aria-labelledby="ai-instructions-settings-title">
+        <SettingsSectionHeader>
+          <SettingsSectionTitle id="ai-instructions-settings-title">
+            Instructions
+          </SettingsSectionTitle>
+        </SettingsSectionHeader>
         <SettingsRows>
-          <SettingsRow>
+          <SearchableSettingsRow
+            target={toSettingsTarget("ai", "reply-instructions")}
+          >
             <SettingsRowContent>
               <SettingsRowTitle>Reply instructions</SettingsRowTitle>
               <SettingsRowDescription>
@@ -155,8 +171,10 @@ const SettingsAiSection = () => {
                 value={draft.replyUserInstructions}
               />
             </SettingsRowActions>
-          </SettingsRow>
-          <SettingsRow>
+          </SearchableSettingsRow>
+          <SearchableSettingsRow
+            target={toSettingsTarget("ai", "cleanup-instructions")}
+          >
             <SettingsRowContent>
               <SettingsRowTitle>Draft cleanup instructions</SettingsRowTitle>
               <SettingsRowDescription>
@@ -172,11 +190,11 @@ const SettingsAiSection = () => {
                 value={draft.cleanupUserInstructions}
               />
             </SettingsRowActions>
-          </SettingsRow>
+          </SearchableSettingsRow>
         </SettingsRows>
-      </div>
-    </SettingsSection>
+      </SettingsSection>
+    </Settings>
   );
 };
 
-export default SettingsAiSection;
+export default SettingsAiPage;

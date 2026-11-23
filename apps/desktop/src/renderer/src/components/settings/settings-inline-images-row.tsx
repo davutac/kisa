@@ -9,7 +9,6 @@ import {
   MenuTrigger,
 } from "@/components/ui/menu";
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -18,6 +17,9 @@ import {
 import type { AppSettingsApi } from "@/platform/desktop";
 import type { InlineImageRetentionDays } from "@/shared/ipc/app";
 import { useAppSettings } from "@/state/app-settings";
+
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 
 export const INLINE_IMAGE_RETENTION_OPTIONS = [
   { days: 30, label: "30 days", value: "30" },
@@ -49,7 +51,7 @@ const SettingsInlineImagesRow = ({
   const selected = findInlineImageRetentionOption(inlineImageRetentionDays);
 
   return (
-    <SettingsRow>
+    <SearchableSettingsRow target={toSettingsTarget("data", "inline-images")}>
       <SettingsRowContent>
         <SettingsRowTitle id="inline-images-title">
           Keep images from opened emails
@@ -100,7 +102,7 @@ const SettingsInlineImagesRow = ({
           </MenuContent>
         </Menu>
       </SettingsRowActions>
-    </SettingsRow>
+    </SearchableSettingsRow>
   );
 };
 

@@ -1,12 +1,7 @@
 import { isLabelPlace, isSameMailboxPlace } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";
 
-export type ShellViewPath =
-  | "/"
-  | "/compose"
-  | "/scheduled"
-  | "/settings"
-  | "/templates";
+export type ShellViewPath = "/" | "/compose" | "/scheduled" | "/templates";
 export type WorkspacePath = Exclude<ShellViewPath, "/">;
 
 export interface WorkspaceToggleInput {
@@ -49,7 +44,6 @@ export const toShellViewPath = (pathname: string): ShellViewPath => {
   if (
     pathname === "/compose" ||
     pathname === "/scheduled" ||
-    pathname === "/settings" ||
     pathname === "/templates"
   ) {
     return pathname;
@@ -95,7 +89,7 @@ export const resolveMailboxSelection = (
 
 /**
  * An account row is current only while the mailbox shows its scope. Scheduled
- * is filtered by the scope too, but it is a page like Settings, so there its
+ * is filtered by the scope too, but it is a page like Templates, so there its
  * own row alone reads as current and its title names the scope.
  */
 export const isAccountScopeCurrent = (

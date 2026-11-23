@@ -1,11 +1,11 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import SettingsAccountReindexRow from "../src/renderer/src/components/settings/settings-account-reindex-row";
 import type {
   AccountsApi,
   MailApi,
 } from "../src/renderer/src/platform/desktop";
-import SettingsAccountReindexRow from "../src/renderer/src/routes/settings/-components/settings-account-reindex-row";
 
 const progress = vi.hoisted(() => ({ status: "complete" }));
 

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/tooltip";
 import { getHotkeyAriaLabel, getHotkeyDisplay, HotkeyHint } from "@/hotkeys";
 
-type SidebarWorkspaceCommand = "app.openSettings" | "app.openTemplates";
+type SidebarWorkspaceCommand = "app.openTemplates";
 
 /**
  * An icon-only workspace toggle in the sidebar footer. Its shortcut is

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import SettingsInlineImagesRow, {
   findInlineImageRetentionOption,
-} from "../src/renderer/src/routes/settings/-components/settings-inline-images-row";
+} from "../src/renderer/src/components/settings/settings-inline-images-row";
 import { DEFAULT_APP_SETTINGS } from "../src/shared/ipc/app";
 import type { InlineImageRetentionDays } from "../src/shared/ipc/app";
 

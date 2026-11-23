@@ -2,7 +2,6 @@ import { DownloadIcon, LoaderCircleIcon, RefreshCwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -12,6 +11,9 @@ import type { UpdateApi } from "@/platform/desktop";
 import { getSettingsUpdateView } from "@/updates/update-view";
 import { useUpdateActions } from "@/updates/use-update-actions";
 import { useUpdateStatus } from "@/updates/use-update-status";
+
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 
 interface SettingsUpdateRowProps {
   updateApi: UpdateApi;
@@ -25,7 +27,7 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
   const view = getSettingsUpdateView(status, isCheckPending);
 
   return (
-    <SettingsRow>
+    <SearchableSettingsRow target={toSettingsTarget("general", "updates")}>
       <SettingsRowContent>
         <SettingsRowTitle id="updates-title">Updates</SettingsRowTitle>
         <SettingsRowDescription id="updates-description">
@@ -71,7 +73,7 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
           </Button>
         )}
       </SettingsRowActions>
-    </SettingsRow>
+    </SearchableSettingsRow>
   );
 };
 

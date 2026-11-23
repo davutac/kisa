@@ -7,7 +7,7 @@ import {
   getAiProviderPresentation,
   getReasoningAfterModelChange,
   groupOpenCodeModelOptions,
-} from "../src/renderer/src/routes/settings/-components/ai-settings-view";
+} from "../src/renderer/src/components/settings/ai-settings-view";
 import type { AiProviderStatus } from "../src/shared/ipc/ai";
 
 const codex = {

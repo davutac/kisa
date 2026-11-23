@@ -5,9 +5,10 @@ import type { MailboxView, ShellViewPath } from "./shell-navigation";
 
 /**
  * A place Go back and Go forward move between: the sidebar destinations. A
- * mailbox or label and Scheduled are scoped to an account; Settings,
- * Templates, and a new email are not, so their place ignores the scope left
- * underneath them. Conversations are not places; Escape already closes one.
+ * mailbox or label and Scheduled are scoped to an account; Templates and a
+ * new email are not, so their place ignores the scope left underneath them.
+ * Conversations are not places; Escape already closes one, and neither is
+ * Settings, a dialog over the place it was opened from.
  */
 export type ShellPlace =
   | {
@@ -18,7 +19,7 @@ export type ShellPlace =
   | { readonly accountId: string | null; readonly kind: "scheduled" }
   | {
       readonly kind: "workspace";
-      readonly path: "/compose" | "/settings" | "/templates";
+      readonly path: "/compose" | "/templates";
     };
 
 export interface ShellHistory {
@@ -215,8 +216,8 @@ export interface ShellPlaceStep {
 /**
  * How to show a place from the current view. The scope changes only when the
  * place needs another one, because changing it closes the open conversation;
- * going back from Settings to the mailbox underneath keeps it, as closing
- * Settings does.
+ * going back from Templates to the mailbox underneath keeps it, as closing
+ * Templates does.
  */
 export const planShellPlaceStep = (
   view: MailboxView,

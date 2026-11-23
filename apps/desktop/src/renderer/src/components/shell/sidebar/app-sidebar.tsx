@@ -1,7 +1,8 @@
-import { FilesIcon, SettingsIcon } from "lucide-react";
+import { FilesIcon } from "lucide-react";
 import { useRef } from "react";
 import type { Ref } from "react";
 
+import type { DialogController } from "@/components/ui/dialog";
 import SidebarUpdateButton from "@/components/updates/sidebar-update-button";
 import { APP_NAME } from "@/constants";
 import { useHotkeyHintsRevealed } from "@/hotkeys";
@@ -20,6 +21,7 @@ import SidebarFavorites from "./sidebar-favorites";
 import SidebarFrame from "./sidebar-frame";
 import SidebarMailSearch from "./sidebar-mail-search";
 import SidebarScheduledRow from "./sidebar-scheduled-row";
+import SidebarSettingsButton from "./sidebar-settings-button";
 import SidebarUnreadToggle from "./sidebar-unread-toggle";
 import SidebarWorkspaceButton from "./sidebar-workspace-button";
 
@@ -32,6 +34,7 @@ interface AppSidebarProps {
   readonly onToggleComposer: () => void;
   readonly onReveal: () => void;
   readonly onToggle: () => void;
+  readonly settingsDialog: DialogController;
   readonly sidebarRef: Ref<HTMLElement>;
   readonly toggleButtonRef: Ref<HTMLButtonElement>;
 }
@@ -54,6 +57,7 @@ const AppSidebar = ({
   onToggleComposer,
   onReveal,
   onToggle,
+  settingsDialog,
   sidebarRef,
   toggleButtonRef,
 }: AppSidebarProps) => {
@@ -147,13 +151,7 @@ const AppSidebar = ({
         />
       </nav>
       <div className="flex shrink-0 items-center gap-1 px-2 pt-1 pb-2">
-        <SidebarWorkspaceButton
-          command="app.openSettings"
-          isOpen={view.currentPath === "/settings"}
-          onToggle={() => toggleWorkspace("/settings")}
-        >
-          <SettingsIcon className="stroke-[1.8]" />
-        </SidebarWorkspaceButton>
+        <SidebarSettingsButton controller={settingsDialog} />
         <SidebarWorkspaceButton
           command="app.openTemplates"
           isOpen={view.currentPath === "/templates"}

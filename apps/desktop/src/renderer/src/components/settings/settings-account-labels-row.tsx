@@ -7,7 +7,6 @@ import MailDate from "@/components/mail/mail-date";
 import MailLabelBadge from "@/components/mail/mail-label-badge";
 import { Button } from "@/components/ui/button";
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -23,6 +22,10 @@ import {
   useUpsertLabel,
   useUpdateLabelCatalog,
 } from "@/state/labels";
+
+import { toAccountSettingsPage } from "./settings-pages";
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 
 interface SettingsAccountLabelsRowProps {
   accountId: string;
@@ -156,7 +159,9 @@ const SettingsAccountLabelsRow = ({
 
   return (
     <>
-      <SettingsRow>
+      <SearchableSettingsRow
+        target={toSettingsTarget(toAccountSettingsPage(accountId), "labels")}
+      >
         <SettingsRowContent>
           <SettingsRowTitle>Labels</SettingsRowTitle>
           <SettingsRowDescription>
@@ -226,7 +231,7 @@ const SettingsAccountLabelsRow = ({
             <span>Sync</span>
           </Button>
         </SettingsRowActions>
-      </SettingsRow>
+      </SearchableSettingsRow>
       {catalog === undefined ? null : (
         <LabelDialog
           accountId={accountId}

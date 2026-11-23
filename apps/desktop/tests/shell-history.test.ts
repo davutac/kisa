@@ -35,7 +35,7 @@ const scheduled = (accountId: string | null): ShellPlace => ({
   accountId,
   kind: "scheduled",
 });
-const settings: ShellPlace = { kind: "workspace", path: "/settings" };
+const templates: ShellPlace = { kind: "workspace", path: "/templates" };
 const everyPlace = (): boolean => true;
 const isConnected = (place: ShellPlace): boolean =>
   place.kind === "workspace" || place.accountId !== "gone@example.com";
@@ -79,14 +79,14 @@ const takeStep = (
 };
 
 describe("shell places", () => {
-  it("ignores the scope left under Settings and Templates", () => {
+  it("ignores the scope left under Templates", () => {
     expect(
       toShellPlace({
-        currentPath: "/settings",
+        currentPath: "/templates",
         mailbox: "spam",
         selectedAccountId: "a@example.com",
       })
-    ).toStrictEqual(settings);
+    ).toStrictEqual(templates);
     expect(
       toShellPlace({
         currentPath: "/scheduled",
@@ -99,16 +99,16 @@ describe("shell places", () => {
 
 describe("shell history", () => {
   it("records new places and keeps one entry per visit", () => {
-    const history = visit(inbox(null), inbox(null), sent(null), settings);
+    const history = visit(inbox(null), inbox(null), sent(null), templates);
 
-    expect(history.entries).toStrictEqual([inbox(null), sent(null), settings]);
+    expect(history.entries).toStrictEqual([inbox(null), sent(null), templates]);
     expect(history.index).toBe(2);
-    expect(recordShellPlace(history, settings)).toBe(history);
+    expect(recordShellPlace(history, templates)).toBe(history);
   });
 
   it("drops the places ahead once a new place is visited", () => {
-    const visited = visit(inbox(null), sent(null), settings);
-    const back = takeStep(visited, -1, settings);
+    const visited = visit(inbox(null), sent(null), templates);
+    const back = takeStep(visited, -1, templates);
     const arrived = recordShellPlace(back.history, back.target);
     const branched = recordShellPlace(arrived, scheduled(null));
 
@@ -137,8 +137,8 @@ describe("shell history", () => {
   });
 
   it("resumes recording once a step that never arrived settles", () => {
-    const visited = visit(inbox(null), settings);
-    const back = takeStep(visited, -1, settings);
+    const visited = visit(inbox(null), templates);
+    const back = takeStep(visited, -1, templates);
     const ignored = recordShellPlace(back.history, sent(null));
     const settled = settleShellHistoryStep(ignored, back.target);
 
@@ -150,9 +150,9 @@ describe("shell history", () => {
   });
 
   it("leaves a newer step alone when an older one settles", () => {
-    const visited = visit(inbox(null), sent(null), settings);
-    const first = takeStep(visited, -1, settings);
-    const second = takeStep(first.history, -1, settings);
+    const visited = visit(inbox(null), sent(null), templates);
+    const first = takeStep(visited, -1, templates);
+    const second = takeStep(first.history, -1, templates);
 
     expect(settleShellHistoryStep(second.history, first.target)).toBe(
       second.history
@@ -163,17 +163,17 @@ describe("shell history", () => {
     const history = visit(
       inbox(null),
       inbox("gone@example.com"),
-      settings,
+      templates,
       inbox(null)
     );
 
     expect(findShellHistoryStep(history, -1, inbox(null), isConnected)).toBe(2);
-    expect(findShellHistoryStep(history, -1, settings, isConnected)).toBe(0);
+    expect(findShellHistoryStep(history, -1, templates, isConnected)).toBe(0);
     expect(
       findShellHistoryStep(
         { ...history, index: 2 },
         -1,
-        settings,
+        templates,
         (place) => isConnected(place) && place.kind !== "mailbox"
       )
     ).toBeUndefined();
@@ -193,12 +193,12 @@ describe("shell history", () => {
 
 describe("shell history steps", () => {
   const view = {
-    currentPath: "/settings",
+    currentPath: "/templates",
     mailbox: "sent",
     selectedAccountId: "a@example.com",
   } as const;
 
-  it("returns to the mailbox under Settings without touching its scope", () => {
+  it("returns to the mailbox under Templates without touching its scope", () => {
     expect(planShellPlaceStep(view, sent("a@example.com"))).toStrictEqual({
       path: "/",
       scope: { kind: "none" },

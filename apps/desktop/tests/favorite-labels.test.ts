@@ -81,7 +81,7 @@ describe(isHeldByFavorite, () => {
       isHeldByFavorite({ ...view, selectedAccountId: TWO }, favorites)
     ).toBeFalsy();
     expect(
-      isHeldByFavorite({ ...view, currentPath: "/settings" }, favorites)
+      isHeldByFavorite({ ...view, currentPath: "/templates" }, favorites)
     ).toBeFalsy();
   });
 });

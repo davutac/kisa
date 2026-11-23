@@ -1,5 +1,4 @@
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -12,6 +11,9 @@ import type { Account } from "@/shared/ipc/accounts";
 import { useAccountSettings } from "@/state/account-settings";
 
 import EmailSignatureDialog from "./email-signature-dialog";
+import { toAccountSettingsPage } from "./settings-pages";
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
 
 interface SettingsAccountSignatureRowProps {
   account: Account;
@@ -46,7 +48,12 @@ const SettingsAccountSignatureRow = ({
   };
 
   return (
-    <SettingsRow>
+    <SearchableSettingsRow
+      target={toSettingsTarget(
+        toAccountSettingsPage(account.email),
+        "signature"
+      )}
+    >
       <SettingsRowContent>
         <SettingsRowTitle>Email signature</SettingsRowTitle>
         <SettingsRowDescription>
@@ -60,7 +67,7 @@ const SettingsAccountSignatureRow = ({
           value={emailSignature}
         />
       </SettingsRowActions>
-    </SettingsRow>
+    </SearchableSettingsRow>
   );
 };
 

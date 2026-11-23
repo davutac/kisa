@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import {
-  SettingsRow,
   SettingsRowActions,
   SettingsRowContent,
   SettingsRowDescription,
@@ -9,25 +8,27 @@ import {
 } from "@/components/ui/settings";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toast";
-import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
 import type { Account } from "@/shared/ipc/accounts";
 import { useAccountSettings } from "@/state/account-settings";
 
-interface SettingsAccountCategorizationRowProps {
+import { toAccountSettingsPage } from "./settings-pages";
+import { toSettingsTarget } from "./settings-search";
+import { SearchableSettingsRow } from "./settings-search-target";
+
+interface SettingsAccountNotificationsRowProps {
   account: Account;
   settingsApi: SettingsApi;
 }
 
-const SettingsAccountCategorizationRow = ({
+const SettingsAccountNotificationsRow = ({
   account,
   settingsApi,
-}: SettingsAccountCategorizationRowProps) => {
-  const { categorizationEnabled } = useAccountSettings(account.email);
-  const { isLoading, selection } = useAiModelSelection();
+}: SettingsAccountNotificationsRowProps) => {
+  const { notificationsEnabled } = useAccountSettings(account.email);
   const [isSaving, setIsSaving] = useState(false);
-  const titleId = `account-${account.email}-categorization-title`;
+  const titleId = `account-${account.email}-notifications-title`;
 
   const handleChange = async (checked: boolean): Promise<void> => {
     setIsSaving(true);
@@ -36,7 +37,7 @@ const SettingsAccountCategorizationRow = ({
         try {
           const reply = await settingsApi.updateAccountSettings({
             accountId: account.email,
-            categorizationEnabled: checked,
+            notificationsEnabled: checked,
           });
           if (!reply.ok) {
             toast.error(reply.error);
@@ -54,35 +55,33 @@ const SettingsAccountCategorizationRow = ({
   };
 
   return (
-    <SettingsRow>
+    <SearchableSettingsRow
+      target={toSettingsTarget(
+        toAccountSettingsPage(account.email),
+        "notifications"
+      )}
+    >
       <SettingsRowContent>
         <SettingsRowTitle id={titleId}>
-          Automatic categorization
+          New email notifications
         </SettingsRowTitle>
         <SettingsRowDescription>
-          Add up to three existing labels when they are a good fit for a new
-          conversation. Kisa sends bounded email context and this account&apos;s
-          label names to the AI provider selected above.
+          Show a system notification when new unread mail arrives for this
+          account.
         </SettingsRowDescription>
-        {categorizationEnabled && !isLoading && selection === null ? (
-          <SettingsRowDescription className="text-destructive" role="alert">
-            Choose an available AI provider and model above. New conversations
-            received while AI is unavailable will not be retried.
-          </SettingsRowDescription>
-        ) : null}
       </SettingsRowContent>
       <SettingsRowActions>
         <Switch
           aria-labelledby={`${titleId} account-${account.email}-title`}
-          checked={categorizationEnabled}
+          checked={notificationsEnabled}
           disabled={isSaving}
           onCheckedChange={(checked) => {
             void handleChange(checked);
           }}
         />
       </SettingsRowActions>
-    </SettingsRow>
+    </SearchableSettingsRow>
   );
 };
 
-export default SettingsAccountCategorizationRow;
+export default SettingsAccountNotificationsRow;

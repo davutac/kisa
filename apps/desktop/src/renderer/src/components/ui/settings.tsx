@@ -57,7 +57,9 @@ const SettingsSectionHeader = ({
     render
   );
 
-export type SettingsSectionTitleProps = LayoutProps<"h2">;
+// An h3: the Settings dialog's title is the h2, and its page is named by the
+// selected tab.
+export type SettingsSectionTitleProps = LayoutProps<"h3">;
 
 const SettingsSectionTitle = ({
   className,
@@ -65,10 +67,10 @@ const SettingsSectionTitle = ({
   ...props
 }: SettingsSectionTitleProps) =>
   renderElement(
-    "h2",
+    "h3",
     {
       "data-slot": "settings-section-title",
-      className: cn("pl-5 text-lg font-semibold tracking-tight", className),
+      className: cn("pl-5 text-sm font-semibold", className),
       ...props,
     },
     render
@@ -91,6 +93,10 @@ const SettingsSectionDescription = ({
     render
   );
 
+/** The bordered card that holds a section's rows, with a line between rows. */
+export const settingsRowsClassName =
+  "bg-card text-card-foreground flex w-full flex-col divide-y overflow-hidden rounded-xl border";
+
 export type SettingsRowsProps = LayoutProps<"div">;
 
 const SettingsRows = ({ className, render, ...props }: SettingsRowsProps) =>
@@ -99,17 +105,14 @@ const SettingsRows = ({ className, render, ...props }: SettingsRowsProps) =>
     {
       role: "list",
       "data-slot": "settings-rows",
-      className: cn(
-        "bg-background text-card-foreground flex w-full flex-col gap-px overflow-hidden rounded-lg",
-        className
-      ),
+      className: cn(settingsRowsClassName, className),
       ...props,
     },
     render
   );
 
 const settingsRowVariants = cva(
-  "flex min-h-20 w-full flex-col gap-3 bg-card px-4 py-4 outline-none transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-6 md:px-5",
+  "flex min-h-16 w-full flex-col gap-3 bg-card px-4 py-3.5 outline-none transition-colors duration-300 data-[search-highlighted]:bg-muted sm:flex-row sm:items-center sm:justify-between sm:gap-6 md:px-5",
   {
     variants: {
       variant: {

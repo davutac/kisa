@@ -67,7 +67,6 @@ export const useShellNavigation = (): ShellNavigation => {
   const previousPathsRef = useRef<Record<WorkspacePath, ShellViewPath | null>>({
     "/compose": null,
     "/scheduled": null,
-    "/settings": null,
     "/templates": null,
   });
   const currentPath = toShellViewPath(pathname);
@@ -114,7 +113,6 @@ export const useShellNavigation = (): ShellNavigation => {
   useAppCommand("app.openScheduled", () => toggleWorkspace("/scheduled"), {
     enabled: showScheduled,
   });
-  useAppCommand("app.openSettings", () => toggleWorkspace("/settings"));
   useAppCommand("app.openTemplates", () => toggleWorkspace("/templates"));
   useAppCommand("app.toggleSent", () => toggleMailbox("sent"));
   useAppCommand("app.toggleSpam", () => toggleMailbox("spam"));

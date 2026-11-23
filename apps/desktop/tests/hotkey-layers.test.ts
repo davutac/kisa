@@ -85,7 +85,7 @@ describe("hotkey interaction layers", () => {
   it("isolates template commands while keeping app navigation active", () => {
     expect(isHotkeyScopeActive("templates", "templates")).toBeTruthy();
     expect(isHotkeyScopeActive("app", "templates")).toBeTruthy();
-    expect(isHotkeyScopeActive("settings", "templates")).toBeFalsy();
+    expect(isHotkeyScopeActive("scheduled", "templates")).toBeFalsy();
   });
 
   it("puts the inline composer above the thread while keeping app commands", () => {
@@ -109,15 +109,35 @@ describe("hotkey interaction layers", () => {
     ).toBe("composer");
   });
 
+  it("puts Settings above a new email, with only its own commands", () => {
+    expect([
+      getTopHotkeyLayer([
+        registration("composer", 1),
+        registration("settings", 2),
+      ]),
+      getTopHotkeyLayer([
+        registration("settings", 1),
+        registration("composer", 2),
+      ]),
+      getTopHotkeyLayer([
+        registration("settings", 1),
+        registration("blocking", 2),
+      ]),
+    ]).toStrictEqual(["settings", "settings", "blocking"]);
+    expect(isHotkeyScopeActive("settings", "settings")).toBeTruthy();
+    expect(isHotkeyScopeActive("app", "settings")).toBeFalsy();
+    expect(isHotkeyScopeActive("settings", "blocking")).toBeFalsy();
+  });
+
   it("blocks product hotkeys while a modal operation is active", () => {
     expect(
       getTopHotkeyLayer([
-        registration("settings", 1),
+        registration("templates", 1),
         registration("blocking", 2),
       ])
     ).toBe("blocking");
     expect(isHotkeyScopeActive("app", "blocking")).toBeFalsy();
-    expect(isHotkeyScopeActive("settings", "blocking")).toBeFalsy();
+    expect(isHotkeyScopeActive("templates", "blocking")).toBeFalsy();
     expect(isHotkeyScopeActive("always", "blocking")).toBeTruthy();
   });
 
