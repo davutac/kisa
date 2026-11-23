@@ -1,6 +1,6 @@
 import { TagIcon, TagsIcon } from "lucide-react";
 
-import { Collapsible, CollapsiblePanel } from "@/components/ui/collapsible";
+import { Collapsible } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toMailboxLabelRows } from "@/mail/mailbox-labels";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
@@ -18,6 +18,7 @@ import SidebarFavoriteToggle, {
 } from "./sidebar-favorite-toggle";
 import {
   SidebarDisclosureIndicator,
+  SidebarDisclosurePanel,
   SidebarRow,
   SidebarUnreadDot,
 } from "./sidebar-row";
@@ -159,20 +160,19 @@ const SidebarScopeLabels = ({
           </>
         }
       />
-      <CollapsiblePanel
-        className="mt-0.5 flex flex-col gap-0.5"
-        render={<ul />}
-      >
-        <SidebarScopeLabelList
-          accountId={accountId}
-          isHeldByFavorite={isHeldByFavorite}
-          labels={labels}
-          onSelect={onSelect}
-          scopeLabel={scopeLabel}
-          unreadLabels={unreadLabels}
-          view={view}
-        />
-      </CollapsiblePanel>
+      <SidebarDisclosurePanel>
+        <ul className="flex flex-col gap-0.5">
+          <SidebarScopeLabelList
+            accountId={accountId}
+            isHeldByFavorite={isHeldByFavorite}
+            labels={labels}
+            onSelect={onSelect}
+            scopeLabel={scopeLabel}
+            unreadLabels={unreadLabels}
+            view={view}
+          />
+        </ul>
+      </SidebarDisclosurePanel>
     </Collapsible>
   );
 };

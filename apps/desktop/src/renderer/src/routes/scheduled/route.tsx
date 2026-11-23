@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarClockIcon, LoaderCircleIcon } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 
 import { NewMessagePage } from "@/components/mail/new-message";
 import { PageTitlebar } from "@/components/shell/page-titlebar";
@@ -176,23 +177,25 @@ function ScheduledRoute() {
           rowCount={rowCount}
           tabIndex={-1}
         >
-          {(rows) =>
-            rows.map((row) => {
-              const item = itemsByKey.get(row.key);
-              return item === undefined ? null : (
-                <ScheduledMailRow
-                  item={item}
-                  key={row.key}
-                  onCancel={handleCancelSchedule}
-                  onDiscard={handleDiscardScheduledEmail}
-                  onOpen={handleOpenEditor}
-                  quickActionResetRevision={quickActionResetRevision}
-                  selected={selectedKey === row.key}
-                  style={{ transform: `translateY(${row.start}px)` }}
-                />
-              );
-            })
-          }
+          {(rows) => (
+            <AnimatePresence initial={false}>
+              {rows.map((row) => {
+                const item = itemsByKey.get(row.key);
+                return item === undefined ? null : (
+                  <ScheduledMailRow
+                    item={item}
+                    key={row.key}
+                    onCancel={handleCancelSchedule}
+                    onDiscard={handleDiscardScheduledEmail}
+                    onOpen={handleOpenEditor}
+                    quickActionResetRevision={quickActionResetRevision}
+                    selected={selectedKey === row.key}
+                    top={row.start}
+                  />
+                );
+              })}
+            </AnimatePresence>
+          )}
         </MailListRoot>
       </section>
       {editSession === null ? null : (

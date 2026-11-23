@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { settle } from "@ui-sdk/core/testing";
 import { createAgent } from "@ui-sdk/react/agent";
-import { domMax, LazyMotion } from "motion/react";
+import { domMax, LazyMotion, MotionConfig } from "motion/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -337,12 +337,17 @@ const Accounts = ({
 }) => (
   <AccountsProvider accounts={accounts} onReorder={onReorder}>
     <LabelsProvider accountIds={accounts.map(({ email }) => email)}>
-      <SidebarAccounts
-        onOpenAccount={(email) => navigation.openAccount(email)}
-        onOpenAllAccounts={() => navigation.openAllAccounts()}
-        onSelectMailbox={() => navigation.openMailbox()}
-        view={VIEW}
-      />
+      {/* With motion on, so a move runs the rows' layout animation. */}
+      <LazyMotion features={domMax}>
+        <MotionConfig reducedMotion="never">
+          <SidebarAccounts
+            onOpenAccount={(email) => navigation.openAccount(email)}
+            onOpenAllAccounts={() => navigation.openAllAccounts()}
+            onSelectMailbox={() => navigation.openMailbox()}
+            view={VIEW}
+          />
+        </MotionConfig>
+      </LazyMotion>
     </LabelsProvider>
   </AccountsProvider>
 );

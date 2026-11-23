@@ -49,7 +49,7 @@ Rows are memoized and keyed by `${accountId}:${threadId}` (Scheduled by account 
 
 ## Motion
 
-Rows fade in and out and the rows below slide into place with Motion: `AnimatePresence` and a `layout="position"` row rendered through the row part's `render` prop. ui-sdk leaves sliding items to CSS, View Transitions or a motion library, and a CSS transform transition would also animate the scroll anchoring above, which Motion's measured layout doesn't. The reveal of a row's checkbox and quick actions, and the selection bar's entrance, stay Motion animations too; `.reduce-animations` and the system setting turn them off through `MotionConfig`.
+Rows fade in and out and the rows below slide into place with Motion: `AnimatePresence` and a `layout="position"` row rendered through the row part's `render` prop, in the mailbox, search results and Scheduled alike. ui-sdk leaves sliding items to CSS, View Transitions or a motion library, and a CSS transform transition would also animate the scroll anchoring above, which Motion's measured layout doesn't. A row is placed with `top`, since Motion's layout animation owns its `transform`. A Scheduled row leaves only once main has canceled or discarded it, so while it fades out it is `inert`, and a second press can't ask again. The reveal of a row's checkbox and quick actions, and the selection bar's entrance, stay Motion animations too; `.reduce-animations` and the system setting turn them off through `MotionConfig`.
 
 ## Agents
 
@@ -57,4 +57,4 @@ The list is one component in the agent bridge, named after its place. Its action
 
 ## Tests
 
-`tests/mail-list-primitive.dom.test.tsx` mounts the primitive: keys, presses, drags, `checkServer` and `checkDirection`. `checkPattern` knows no grid, so the grid is checked key by key. `tests/mail-list.dom.test.tsx` renders `MailThreadList` and the Scheduled route with fakes: the keys, pointer painting, focus recovery, the selection bar (with `checkPattern` for its toolbar), colliding thread ids, paging, scroll anchoring, a 10,000-row list, render counts, and the agent bridge.
+`tests/mail-list-primitive.dom.test.tsx` mounts the primitive: keys, presses, drags, `checkServer` and `checkDirection`. `checkPattern` knows no grid, so the grid is checked key by key. `tests/mail-list.dom.test.tsx` renders `MailThreadList` and the Scheduled route with fakes: the keys, pointer painting, focus recovery, the selection bar (with `checkPattern` for its toolbar), colliding thread ids, paging, scroll anchoring, a 10,000-row list, render counts, rows fading out with motion on (a trashed conversation, a canceled scheduled email), and the agent bridge.

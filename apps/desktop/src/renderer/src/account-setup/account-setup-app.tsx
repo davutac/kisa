@@ -78,6 +78,11 @@ const FIELD_IDS = {
 } as const satisfies Record<AccountSetupField, string>;
 const PROBLEM_ID = "account-setup-problem";
 
+// The notices under the form ease in; the form's own problem line, which
+// changes as the user types, appears at once.
+const alertClassName =
+  "mt-4 transition-[opacity,translate] duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-opacity";
+
 const DESCRIPTIONS = {
   address: "Sign in with an app password from your mail provider.",
   lookup: "Sign in with an app password from your mail provider.",
@@ -722,7 +727,7 @@ const AccountSetupApp = () => {
           </fieldset>
 
           {isMicrosoftUnavailable ? (
-            <Alert className="mt-4">
+            <Alert className={alertClassName}>
               <AlertDescription>
                 This build of Kisa can’t sign in to Microsoft accounts.
               </AlertDescription>
@@ -730,7 +735,7 @@ const AccountSetupApp = () => {
           ) : null}
 
           {error === undefined ? null : (
-            <Alert className="mt-4" variant="destructive">
+            <Alert className={alertClassName} variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}

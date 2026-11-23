@@ -4,9 +4,8 @@ import {
   LoaderCircleIcon,
   Trash2Icon,
 } from "lucide-react";
-import { m, useReducedMotionConfig } from "motion/react";
+import { m, useIsPresent, useReducedMotionConfig } from "motion/react";
 import { useState } from "react";
-import type { CSSProperties } from "react";
 
 import { MailAttachmentSummaryPill } from "@/components/mail/attachment-pill";
 import MailDate from "@/components/mail/mail-date";
@@ -244,7 +243,7 @@ interface ScheduledMailRowProps {
   readonly onOpen: (item: ScheduledMailSummary) => void;
   readonly quickActionResetRevision: number;
   readonly selected: boolean;
-  readonly style?: CSSProperties;
+  readonly top: number;
 }
 
 const ScheduledMailRow = ({
@@ -254,9 +253,10 @@ const ScheduledMailRow = ({
   onOpen,
   quickActionResetRevision,
   selected,
-  style,
+  top,
 }: ScheduledMailRowProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
+  const isPresent = useIsPresent();
   const [hoveredAtRevision, setHoveredAtRevision] = useState<number | null>(
     null
   );
@@ -278,9 +278,29 @@ const ScheduledMailRow = ({
   const areQuickActionsRevealed = selected || isHovered;
 
   return (
+    // A row fading out after main canceled or discarded it is inert, so a
+    // second press can't ask again.
     <MailListRow
-      className="absolute top-0 left-0 w-full pb-px"
-      style={style}
+      className="absolute left-0 w-full pb-px"
+      inert={!isPresent}
+      render={
+        <m.div
+          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+          initial={shouldReduceMotion ? false : { opacity: 0 }}
+          layout={shouldReduceMotion ? false : "position"}
+          layoutId={
+            shouldReduceMotion
+              ? undefined
+              : `scheduled-mail:${getScheduledMailKey(item)}`
+          }
+          transition={{
+            layout: easeInOut(0.24),
+            opacity: easeInOut(0.16),
+          }}
+        />
+      }
+      style={{ top }}
       value={getScheduledMailKey(item)}
     >
       <m.div

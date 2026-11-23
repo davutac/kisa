@@ -108,7 +108,7 @@ const SidebarAccounts = ({
                 onSelect={onOpenAllAccounts}
               />
             </li>
-            {order.map((email) => {
+            {order.map((email, position) => {
               // Numbered by the dropped order, as `Mod+2`–`Mod+9` are,
               // never by where a move in progress has put the account.
               const index = accountIds.indexOf(email);
@@ -125,6 +125,7 @@ const SidebarAccounts = ({
                   onLabelsExpandedChange={setLabelsExpanded}
                   onOpen={onOpenAccount}
                   onSelectMailbox={onSelectMailbox}
+                  position={position}
                   reorderHintId={reorderHintId}
                   view={view}
                 />

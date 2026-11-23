@@ -86,7 +86,7 @@ export const SidebarScopeMailboxes = ({
   const isCurrentScope = accountId === view.selectedAccountId;
 
   return (
-    <ul className="mt-0.5 flex flex-col gap-0.5" id={id}>
+    <ul className="flex flex-col gap-0.5" id={id}>
       {SCOPE_MAILBOXES.map(({ command, icon: Icon, label, mailbox }) => {
         const target = { accountId, mailbox };
         const rowProps: SidebarRowProps = {

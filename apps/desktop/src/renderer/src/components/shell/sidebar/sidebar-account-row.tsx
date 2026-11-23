@@ -1,11 +1,13 @@
 import { CircleAlertIcon, GripVerticalIcon } from "lucide-react";
+import { m, useReducedMotionConfig } from "motion/react";
 import { useId } from "react";
 
 import AccountProviderIcon from "@/components/accounts/account-provider-icon";
-import { Collapsible, CollapsiblePanel } from "@/components/ui/collapsible";
+import { Collapsible } from "@/components/ui/collapsible";
 import { Progress, ProgressRing } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import type { HotkeyCommandId } from "@/hotkeys";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
 import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
@@ -26,6 +28,7 @@ import type { MailboxTarget, MailboxView } from "../shell-navigation";
 import { useIsHeldByFavorite } from "./favorite-labels";
 import {
   SidebarDisclosureIndicator,
+  SidebarDisclosurePanel,
   SidebarRow,
   SidebarUnreadDot,
 } from "./sidebar-row";
@@ -44,6 +47,8 @@ interface SidebarAccountRowProps {
   ) => void;
   readonly onOpen: (accountEmail: string) => void;
   readonly onSelectMailbox: (target: MailboxTarget) => void;
+  // Where the account sits in the list, a move in progress included.
+  readonly position: number;
   readonly reorderHintId: string;
   readonly view: MailboxView;
 }
@@ -122,9 +127,11 @@ const SidebarAccountRow = ({
   onLabelsExpandedChange,
   onOpen,
   onSelectMailbox,
+  position,
   reorderHintId,
   view,
 }: SidebarAccountRowProps) => {
+  const shouldReduceMotion = useReducedMotionConfig();
   const mailboxesId = useId();
   const hasUnreadMail = useHasUnreadMail(account.email);
   const isHeldByFavorite = useIsHeldByFavorite(view);
@@ -154,10 +161,20 @@ const SidebarAccountRow = ({
 
   // The handle sits over the row's empty icon slot, since a button can't nest
   // in the row's; a mouse click on it opens the account as the row does.
+  // A row slides only when its place in the order changes, and not while it
+  // is the one dragged, which follows the pointer up and down only.
   return (
     <SortableListItem
-      className="relative data-dragging:z-10 data-dragging:[translate:var(--drag-x,0)_var(--drag-y,0)]"
+      className="data-dragging:bg-sidebar relative data-dragging:z-10 data-dragging:[translate:0_var(--drag-y,0)] data-dragging:rounded-md"
       label={account.email}
+      render={(props, { dragging }) => (
+        <m.li
+          {...props}
+          layout={shouldReduceMotion || dragging ? false : "position"}
+          layoutDependency={position}
+          transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.2)}
+        />
+      )}
       value={account.email}
     >
       {/* A press on the row may open the Inbox as well as disclose, so it
@@ -234,7 +251,7 @@ const SidebarAccountRow = ({
             </>
           }
         />
-        <CollapsiblePanel>
+        <SidebarDisclosurePanel>
           <SidebarScopeMailboxes
             accountId={account.email}
             id={mailboxesId}
@@ -248,7 +265,7 @@ const SidebarAccountRow = ({
             scopeLabel={account.email}
             view={view}
           />
-        </CollapsiblePanel>
+        </SidebarDisclosurePanel>
       </Collapsible>
     </SortableListItem>
   );

@@ -26,8 +26,13 @@ import type {
 } from "@/mail/use-thread-actions";
 import type { MailThread } from "@/shared/ipc/mail";
 
+// A conversation the cache answers for replaces this before its delayed fade
+// begins, so a fast open never flashes it.
 const ThreadPending = () => (
-  <Empty aria-live="polite" className="h-full min-h-0 border-0">
+  <Empty
+    aria-live="polite"
+    className="h-full min-h-0 border-0 transition-opacity delay-200 duration-150 starting:opacity-0"
+  >
     <EmptyHeader>
       <EmptyMedia variant="icon">
         <Spinner />

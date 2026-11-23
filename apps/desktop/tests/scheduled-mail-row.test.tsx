@@ -37,6 +37,7 @@ const renderRow = ({ selected = false }: { selected?: boolean }): string =>
         onOpen={vi.fn<(item: ScheduledMailSummary) => void>()}
         quickActionResetRevision={0}
         selected={selected}
+        top={0}
       />
     </InMailList>
   );

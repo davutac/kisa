@@ -125,7 +125,7 @@ const AppSidebar = ({
       </div>
       <nav
         aria-label="Mailboxes and accounts"
-        className="scroll-fade-y flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 pb-2"
+        className="scroll-fade-y flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-2 pb-2"
       >
         <SidebarFavorites onSelect={selectMailbox} view={view} />
         {showScheduled ? (

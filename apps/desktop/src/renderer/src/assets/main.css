@@ -181,6 +181,14 @@
   transition: none !important;
 }
 
+/* ui-sdk writes a Progress root's value here; registered, a ring that reads
+   it can ease between readings. */
+@property --progress-value {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
+}
+
 .app-titlebar {
   height: var(--app-titlebar-height);
   padding-right: max(0.5rem, var(--app-titlebar-right));

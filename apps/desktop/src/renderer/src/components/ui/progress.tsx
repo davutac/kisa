@@ -15,7 +15,10 @@ const Progress = ({
   ...props
 }: WithClassName<React.ComponentProps<typeof ProgressPrimitive>>) => (
   <ProgressPrimitive
-    className={cn("flex items-center gap-1.5", className)}
+    className={cn(
+      "flex items-center gap-1.5 transition-[--progress-value] duration-300 ease-out motion-reduce:transition-none",
+      className
+    )}
     {...props}
   />
 );

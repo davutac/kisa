@@ -49,6 +49,7 @@ describe("scheduled mail row after a time-zone change", () => {
           onOpen={vi.fn<(item: ScheduledMailSummary) => void>()}
           quickActionResetRevision={0}
           selected={false}
+          top={0}
         />
       </InMailList>
     );

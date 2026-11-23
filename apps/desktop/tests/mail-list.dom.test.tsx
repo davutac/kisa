@@ -231,12 +231,12 @@ const renderMailbox = async (
 
 const ScheduledRoute = ScheduledRouteDefinition.options.component;
 
-const renderScheduled = async () => {
+const renderScheduled = async (animated = false) => {
   if (ScheduledRoute === undefined) {
     throw new Error("The Scheduled route has no component");
   }
   render(
-    <Providers>
+    <Providers animated={animated}>
       <ScheduledRoute />
     </Providers>
   );
@@ -1224,6 +1224,32 @@ describe("mail lists", () => {
         discarded: [[{ accountId: "ana@example.com", draftId: "draft-3" }]],
         focusedAfterCancel: "Edit scheduled email: Three",
         opened: [[{ accountId: "ana@example.com", draftId: "draft-2" }]],
+      });
+    });
+
+    it("moves focus on while a canceled row fades out, and ignores the row meanwhile", async () => {
+      await renderScheduled(true);
+      await press("j", {}, 2);
+      await press("s", { metaKey: true });
+      await act(settle);
+      const fading = screen
+        .queryAllByRole("row")
+        .filter((row) => row.textContent?.includes("Two") === true);
+      expect({
+        canceled: vi.mocked(scheduledApi.cancelToStash).mock.calls,
+        fadingInert: fading.every((row) => row.hasAttribute("inert")),
+        focused: focusedName()?.split(",")[0],
+      }).toStrictEqual({
+        canceled: [[{ accountId: "ana@example.com", draftId: "draft-2" }]],
+        fadingInert: true,
+        focused: "Edit scheduled email: Three",
+      });
+      await waitFor(() => {
+        expect(
+          screen.queryAllByRole("button", {
+            name: /^Edit scheduled email: Two,/u,
+          })
+        ).toHaveLength(0);
       });
     });
 

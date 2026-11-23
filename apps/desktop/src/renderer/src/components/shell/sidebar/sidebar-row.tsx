@@ -2,7 +2,10 @@ import { ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Tooltip,
   TooltipContent,
@@ -150,4 +153,16 @@ export const SidebarDisclosureIndicator = ({
       isExpanded && "rotate-90"
     )}
   />
+);
+
+// Its height moves with the chevron and clips while it does; reaching 2px past
+// its rows on every side keeps their focus rings inside the clip.
+export const SidebarDisclosurePanel = ({
+  children,
+}: {
+  readonly children: ReactNode;
+}) => (
+  <CollapsiblePanel className="-mx-0.5 h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+    <div className="p-0.5">{children}</div>
+  </CollapsiblePanel>
 );

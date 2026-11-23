@@ -1,4 +1,5 @@
 import { PaperclipIcon, XIcon } from "lucide-react";
+import { AnimatePresence, m, useReducedMotionConfig } from "motion/react";
 import type { Ref } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FileInput, FileInputTrigger } from "@/components/ui/file-input";
 import type { FileInputController } from "@/components/ui/file-input";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
+import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
 
@@ -91,41 +93,59 @@ interface OutgoingAttachmentListProps {
   onRemove: (attachmentId: string) => void;
 }
 
+// Pills enter and leave as the draft history's do. The tray itself appears
+// with its first pill and goes with its last, so those two don't animate.
 export const OutgoingAttachmentList = ({
   attachments,
   className,
   onRemove,
-}: OutgoingAttachmentListProps) =>
-  attachments.length === 0 ? null : (
+}: OutgoingAttachmentListProps) => {
+  const shouldReduceMotion = useReducedMotionConfig();
+
+  return attachments.length === 0 ? null : (
     <section
       aria-label="Attachments"
       className={cn(
-        "bg-card flex max-h-24 shrink-0 flex-wrap gap-1 overflow-y-auto px-2 py-1.5",
+        "bg-card relative flex max-h-24 shrink-0 flex-wrap gap-1 overflow-y-auto px-2 py-1.5",
         className
       )}
     >
-      {attachments.map((attachment) => (
-        <Badge
-          className="h-7 max-w-72 gap-1.5 pr-1.5 pl-2.5"
-          key={attachment.id}
-          variant="secondary"
-        >
-          <PaperclipIcon aria-hidden="true" />
-          <span className="min-w-0 truncate">{attachment.filename}</span>
-          <span className="text-muted-foreground shrink-0">
-            {formatAttachmentSize(attachment.size)}
-          </span>
-          <Button
-            aria-label={`Remove ${attachment.filename}`}
-            className="hover:bg-foreground/10 size-4 rounded-full"
-            onClick={() => onRemove(attachment.id)}
-            size="icon-xs"
-            type="button"
-            variant="ghost"
+      <AnimatePresence initial={false} mode="popLayout">
+        {attachments.map((attachment) => (
+          <m.div
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            className="flex"
+            exit={{ opacity: 0, scale: 0.96, x: -4 }}
+            initial={
+              shouldReduceMotion ? false : { opacity: 0, scale: 0.96, x: -4 }
+            }
+            key={attachment.id}
+            layout={shouldReduceMotion ? false : "position"}
+            transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.16)}
           >
-            <XIcon className="size-2.5" />
-          </Button>
-        </Badge>
-      ))}
+            <Badge
+              className="h-7 max-w-72 gap-1.5 pr-1.5 pl-2.5"
+              variant="secondary"
+            >
+              <PaperclipIcon aria-hidden="true" />
+              <span className="min-w-0 truncate">{attachment.filename}</span>
+              <span className="text-muted-foreground shrink-0">
+                {formatAttachmentSize(attachment.size)}
+              </span>
+              <Button
+                aria-label={`Remove ${attachment.filename}`}
+                className="hover:bg-foreground/10 size-4 rounded-full"
+                onClick={() => onRemove(attachment.id)}
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              >
+                <XIcon className="size-2.5" />
+              </Button>
+            </Badge>
+          </m.div>
+        ))}
+      </AnimatePresence>
     </section>
   );
+};

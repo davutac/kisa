@@ -7,6 +7,7 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { settle } from "@ui-sdk/core/testing";
 import { createAgent } from "@ui-sdk/react/agent";
 import type { EditorChange } from "@ui-sdk/react/trigger-menu";
+import { LazyMotion, MotionConfig, domMax } from "motion/react";
 import { createRef, useEffect, useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -947,30 +948,64 @@ describe("the draft history strip", () => {
   });
 });
 
+const OUTGOING = [
+  {
+    filename: "report.pdf",
+    id: "report",
+    mediaType: "application/pdf",
+    referenceId: "reference-report",
+    size: 2048,
+  },
+  {
+    filename: "notes.txt",
+    id: "notes",
+    mediaType: "text/plain",
+    referenceId: "reference-notes",
+    size: 12,
+  },
+] as const;
+
+const AnimatedAttachments = () => {
+  const [attachments, setAttachments] =
+    useState<readonly (typeof OUTGOING)[number][]>(OUTGOING);
+  return (
+    <LazyMotion features={domMax}>
+      <MotionConfig reducedMotion="never">
+        <OutgoingAttachmentList
+          attachments={attachments}
+          onRemove={(id) => {
+            setAttachments((current) =>
+              current.filter((attachment) => attachment.id !== id)
+            );
+          }}
+        />
+      </MotionConfig>
+    </LazyMotion>
+  );
+};
+
 describe("the outgoing attachment list", () => {
+  it("takes a removed file's pill away once it fades, and keeps the rest", async () => {
+    const user = userEvent.setup();
+    render(<AnimatedAttachments />);
+    await act(settle);
+
+    await user.click(screen.getByRole("button", { name: "Remove report.pdf" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Remove report.pdf" })
+      ).toBeNull();
+    });
+    expect(
+      screen.getByRole("button", { name: "Remove notes.txt" })
+    ).toBeDefined();
+  });
+
   it("names each remove button for its file", async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn<(attachmentId: string) => void>();
     render(
-      <OutgoingAttachmentList
-        attachments={[
-          {
-            filename: "report.pdf",
-            id: "report",
-            mediaType: "application/pdf",
-            referenceId: "reference-report",
-            size: 2048,
-          },
-          {
-            filename: "notes.txt",
-            id: "notes",
-            mediaType: "text/plain",
-            referenceId: "reference-notes",
-            size: 12,
-          },
-        ]}
-        onRemove={onRemove}
-      />
+      <OutgoingAttachmentList attachments={OUTGOING} onRemove={onRemove} />
     );
     await act(settle);
 
