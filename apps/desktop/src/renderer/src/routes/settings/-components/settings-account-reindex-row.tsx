@@ -1,6 +1,5 @@
 import { KeyRoundIcon, LoaderCircleIcon, RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { ConfirmMessage, useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { toMailIndexDescription } from "@/mail/mail-index-progress-view";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
@@ -103,6 +103,7 @@ const SettingsAccountReindexRow = ({
       <SettingsRowActions>
         {needsSignIn ? (
           <Button
+            aria-label={`Sign in again for ${accountId}`}
             onClick={() => {
               void signInAgain();
             }}
@@ -113,6 +114,7 @@ const SettingsAccountReindexRow = ({
           </Button>
         ) : null}
         <Button
+          aria-label={`Sync now for ${accountId}`}
           disabled={isBusy}
           onClick={() => {
             void requestReindex();

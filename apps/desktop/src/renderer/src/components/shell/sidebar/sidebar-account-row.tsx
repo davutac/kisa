@@ -1,14 +1,19 @@
-import { useSortable } from "@dnd-kit/react/sortable";
 import { CircleAlertIcon, GripVerticalIcon } from "lucide-react";
 import { useId } from "react";
 
 import AccountProviderIcon from "@/components/accounts/account-provider-icon";
+import { Collapsible, CollapsiblePanel } from "@/components/ui/collapsible";
+import { Progress, ProgressRing } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import type { HotkeyCommandId } from "@/hotkeys";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
 import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
+import {
+  SortableListHandle,
+  SortableListItem,
+} from "@/primitives/sortable-list";
 import type { Account, AccountProvider } from "@/shared/ipc/accounts";
 import { toMailIndexRatio } from "@/shared/mail-index-progress";
 import { useOpenThreadId } from "@/state/mailbox";
@@ -29,7 +34,6 @@ import { SidebarScopeMailboxes } from "./sidebar-scope-mailboxes";
 interface SidebarAccountRowProps {
   readonly account: Account;
   readonly command?: HotkeyCommandId;
-  readonly index: number;
   readonly isExpanded: boolean;
   readonly isLabelsExpanded: boolean;
   readonly labels: readonly MailboxLabelItem[];
@@ -40,6 +44,7 @@ interface SidebarAccountRowProps {
   ) => void;
   readonly onOpen: (accountEmail: string) => void;
   readonly onSelectMailbox: (target: MailboxTarget) => void;
+  readonly reorderHintId: string;
   readonly view: MailboxView;
 }
 
@@ -94,32 +99,22 @@ const AccountStatusIcon = ({
     return <AccountProviderIcon className="size-4" provider={provider} />;
   }
   return (
-    <svg
-      className={indexedRatio === undefined ? "animate-spin" : undefined}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
+    // The row's tooltip reads out the share; hidden, so an agent naming the
+    // account finds only its row.
+    <Progress
+      aria-hidden="true"
+      aria-label="Indexing progress"
+      max={1}
+      value={indexedRatio ?? null}
     >
-      <circle className="opacity-25" cx="12" cy="12" r="9" />
-      <circle
-        className="stroke-primary"
-        cx="12"
-        cy="12"
-        pathLength={100}
-        r="9"
-        strokeDasharray={`${indexedRatio === undefined ? 25 : indexedRatio * 100} 100`}
-        transform="rotate(-90 12 12)"
-      />
-    </svg>
+      <ProgressRing className="[--progress-ring-color:var(--primary)]" />
+    </Progress>
   );
 };
 
 const SidebarAccountRow = ({
   account,
   command,
-  index,
   isExpanded,
   isLabelsExpanded,
   labels,
@@ -127,17 +122,10 @@ const SidebarAccountRow = ({
   onLabelsExpandedChange,
   onOpen,
   onSelectMailbox,
+  reorderHintId,
   view,
 }: SidebarAccountRowProps) => {
   const mailboxesId = useId();
-  const { handleRef, ref, targetRef } = useSortable({
-    id: account.email,
-    index,
-  });
-  const iconRef = (element: HTMLSpanElement | null): void => {
-    handleRef(element);
-    targetRef(element);
-  };
   const hasUnreadMail = useHasUnreadMail(account.email);
   const isHeldByFavorite = useIsHeldByFavorite(view);
   const openThreadId = useOpenThreadId();
@@ -151,92 +139,118 @@ const SidebarAccountRow = ({
   const needsSignIn = status === "needs-sign-in";
   const indexedRatio = toMailIndexRatio(indexProgress);
 
-  // The list item is the sortable DOM node, because sorting moves that node,
-  // with its mailboxes, among its siblings. The icon is the drag handle, shown
-  // as a grip while hovered, so a press on the rest of the row stays an
-  // ordinary click. It is also the fixed-size collision target, so a long
-  // address cannot block a neighbouring position.
+  const select = (): void => {
+    const next = resolveScopeRowSelection(
+      view,
+      account.email,
+      isExpanded,
+      openThreadId !== null
+    );
+    onExpandedChange(account.email, next.isExpanded);
+    if (next.opensInbox) {
+      onOpen(account.email);
+    }
+  };
+
+  // The handle sits over the row's empty icon slot, since a button can't nest
+  // in the row's; a mouse click on it opens the account as the row does.
   return (
-    <li ref={ref}>
-      <SidebarRow
-        ariaBusy={isSyncing || isIndexing}
-        ariaControls={isExpanded ? mailboxesId : undefined}
-        ariaExpanded={isExpanded}
-        ariaLabel={`${account.email}${needsSignIn ? ", cannot sign in" : ""}${hasUnreadMail ? ", unread email" : ""}`}
-        command={command}
-        icon={
-          <span
-            aria-hidden="true"
-            className="group/account-handle grid size-4 shrink-0 cursor-grab place-items-center"
-            ref={iconRef}
-          >
-            <span className="contents group-hover/account-handle:hidden">
-              <AccountStatusIcon
-                indexedRatio={indexedRatio}
-                provider={account.provider}
-                status={status}
-              />
-            </span>
-            <GripVerticalIcon className="hidden group-hover/account-handle:block" />
-          </span>
-        }
-        isCurrent={
-          !isHeldByFavorite &&
-          isScopeRowCurrent(view, account.email, isExpanded)
-        }
-        label={account.email}
-        onSelect={() => {
-          const next = resolveScopeRowSelection(
-            view,
-            account.email,
-            isExpanded,
-            openThreadId !== null
-          );
-          onExpandedChange(account.email, next.isExpanded);
-          if (next.opensInbox) {
-            onOpen(account.email);
+    <SortableListItem
+      className="relative data-dragging:z-10 data-dragging:[translate:var(--drag-x,0)_var(--drag-y,0)]"
+      label={account.email}
+      value={account.email}
+    >
+      {/* A press on the row may open the Inbox as well as disclose, so it
+          runs the row's own selection; an agent's setOpen only discloses.
+          `contents` keeps the handle the row's sibling, for its peer styles. */}
+      <Collapsible
+        className="contents"
+        onOpenChange={(open, details) => {
+          if (details.reason === "trigger-press") {
+            select();
+          } else {
+            onExpandedChange(account.email, open);
           }
         }}
-        tooltipDetail={
-          <>
-            {account.displayName === undefined ? null : (
-              <span className="opacity-70">{account.displayName}</span>
-            )}
-            {needsSignIn ? (
-              <span className="opacity-70">Cannot sign in. See Settings.</span>
-            ) : null}
-            {isIndexing ? (
-              <span className="opacity-70">
-                {indexedRatio === undefined
-                  ? "Indexing mail"
-                  : `Indexing mail — ${Math.round(indexedRatio * 100)}%`}
-              </span>
-            ) : null}
-          </>
-        }
-        trailing={
-          <>
-            {hasUnreadMail ? <SidebarUnreadDot /> : null}
-            <SidebarDisclosureIndicator isExpanded={isExpanded} />
-          </>
-        }
-      />
-      {isExpanded ? (
-        <SidebarScopeMailboxes
-          accountId={account.email}
-          id={mailboxesId}
-          isLabelsExpanded={isLabelsExpanded}
-          labels={labels}
-          onLabelsExpandedChange={(expanded) =>
-            onLabelsExpandedChange(account.email, expanded)
+        open={isExpanded}
+      >
+        <SortableListHandle
+          aria-describedby={reorderHintId}
+          aria-label={`Reorder ${account.email}`}
+          className="peer/handle group/handle focus-visible:ring-ring/50 aria-pressed:ring-ring/50 absolute top-2 left-2 z-10 grid size-4 cursor-grab touch-none place-items-center rounded-sm outline-none focus-visible:ring-2 aria-pressed:ring-2 [&_svg:not([class*='size-'])]:size-4"
+          onClick={(event) => {
+            if (event.detail > 0) {
+              select();
+            }
+          }}
+        >
+          <span className="contents group-hover/handle:hidden group-focus-visible/handle:hidden">
+            <AccountStatusIcon
+              indexedRatio={indexedRatio}
+              provider={account.provider}
+              status={status}
+            />
+          </span>
+          <GripVerticalIcon
+            aria-hidden="true"
+            className="hidden group-hover/handle:block group-focus-visible/handle:block"
+          />
+        </SortableListHandle>
+        <SidebarRow
+          ariaBusy={isSyncing || isIndexing}
+          ariaLabel={`${account.email}${needsSignIn ? ", cannot sign in" : ""}${hasUnreadMail ? ", unread email" : ""}`}
+          className="peer-hover/handle:bg-sidebar-accent peer-hover/handle:text-sidebar-accent-foreground"
+          command={command}
+          icon={<span aria-hidden="true" className="size-4 shrink-0" />}
+          isCurrent={
+            !isHeldByFavorite &&
+            isScopeRowCurrent(view, account.email, isExpanded)
           }
-          onSelect={onSelectMailbox}
-          scopeAccountIds={[account.email]}
-          scopeLabel={account.email}
-          view={view}
+          disclosure
+          label={account.email}
+          tooltipDetail={
+            <>
+              {account.displayName === undefined ? null : (
+                <span className="opacity-70">{account.displayName}</span>
+              )}
+              {needsSignIn ? (
+                <span className="opacity-70">
+                  Cannot sign in. See Settings.
+                </span>
+              ) : null}
+              {isIndexing ? (
+                <span className="opacity-70">
+                  {indexedRatio === undefined
+                    ? "Indexing mail"
+                    : `Indexing mail — ${Math.round(indexedRatio * 100)}%`}
+                </span>
+              ) : null}
+            </>
+          }
+          trailing={
+            <>
+              {hasUnreadMail ? <SidebarUnreadDot /> : null}
+              <SidebarDisclosureIndicator isExpanded={isExpanded} />
+            </>
+          }
         />
-      ) : null}
-    </li>
+        <CollapsiblePanel>
+          <SidebarScopeMailboxes
+            accountId={account.email}
+            id={mailboxesId}
+            isLabelsExpanded={isLabelsExpanded}
+            labels={labels}
+            onLabelsExpandedChange={(expanded) =>
+              onLabelsExpandedChange(account.email, expanded)
+            }
+            onSelect={onSelectMailbox}
+            scopeAccountIds={[account.email]}
+            scopeLabel={account.email}
+            view={view}
+          />
+        </CollapsiblePanel>
+      </Collapsible>
+    </SortableListItem>
   );
 };
 

@@ -33,7 +33,10 @@ describe(SidebarRow, () => {
     // Under a held Mod, a plain `S` would be pressed as `Mod+S`.
     ["for a plain-key shortcut", "app.toggleSpam"],
   ] as const)("shows its trailing content as is %s", (_case, command) => {
-    const markup = renderRow(command);
+    // The row's tooltip is in the page while closed, with the shortcut in it.
+    const [markup = ""] = renderRow(command).split(
+      'data-slot="tooltip-content"'
+    );
 
     expect(markup).not.toContain("hotkey-hints");
     expect(markup).not.toContain("<kbd");

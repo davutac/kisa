@@ -7,9 +7,11 @@ import {
   HOTKEY_COMMANDS,
   isModHotkeyCommand,
   OPEN_ACCOUNT_COMMAND_IDS,
-  shouldRunHotkeyCommand,
   validateHotkeyCommands,
 } from "../src/renderer/src/hotkeys/commands";
+
+// ui-sdk wraps formatted keys in a left-to-right isolate.
+const isolated = (keys: string): string => `\u2066${keys}\u2069`;
 
 describe("hotkey command registry", () => {
   it("has no conflicts on any supported platform", () => {
@@ -197,11 +199,6 @@ describe("hotkey command registry", () => {
     );
   });
 
-  it("allows repeated stash key presses while ignoring keydown auto-repeat", () => {
-    expect(shouldRunHotkeyCommand("ignore-key-repeat", false)).toBeTruthy();
-    expect(shouldRunHotkeyCommand("ignore-key-repeat", true)).toBeFalsy();
-  });
-
   it("assigns selected-thread quick actions", () => {
     expect(
       HOTKEY_COMMANDS["mailbox.toggleThreadSelection"].bindings
@@ -258,16 +255,16 @@ describe("hotkey command registry", () => {
   it("formats selected-thread quick actions", () => {
     expect(
       getHotkeyDisplay("mailbox.toggleThreadRead", "mac").bindings
-    ).toStrictEqual(["⇧ ⌘ U"]);
+    ).toStrictEqual([isolated("⇧⌘U")]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "mac").bindings
-    ).toStrictEqual(["⌘ D"]);
+    ).toStrictEqual([isolated("⌘D")]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "windows").bindings
-    ).toStrictEqual(["Ctrl+D"]);
+    ).toStrictEqual([isolated("Ctrl+D")]);
     expect(
       getHotkeyDisplay("mailbox.trashThread", "linux").bindings
-    ).toStrictEqual(["Ctrl+D"]);
+    ).toStrictEqual([isolated("Ctrl+D")]);
   });
 
   it("assigns the thread popout shortcut", () => {
@@ -370,13 +367,13 @@ describe("hotkey command registry", () => {
 
   it("formats display keys for each platform", () => {
     expect(getHotkeyDisplay("app.searchMail", "mac").bindings).toStrictEqual([
-      "⌘ K",
+      isolated("⌘K"),
     ]);
     expect(
       getHotkeyDisplay("app.searchMail", "windows").bindings
-    ).toStrictEqual(["Ctrl+K"]);
+    ).toStrictEqual([isolated("Ctrl+K")]);
     expect(getHotkeyDisplay("app.searchMail", "linux").bindings).toStrictEqual([
-      "Ctrl+K",
+      isolated("Ctrl+K"),
     ]);
     expect(getHotkeyDisplay("mailbox.nextThread", "mac").bindings).toHaveLength(
       3
@@ -385,11 +382,11 @@ describe("hotkey command registry", () => {
 
   it("shows the backslash of the sidebar shortcut on each platform", () => {
     expect(getHotkeyDisplay("app.toggleSidebar", "mac").bindings).toStrictEqual(
-      ["⌘ \\"]
+      [isolated("⌘\\")]
     );
     expect(
       getHotkeyDisplay("app.toggleSidebar", "windows").bindings
-    ).toStrictEqual(["Ctrl+\\"]);
+    ).toStrictEqual([isolated("Ctrl+\\")]);
     expect(getHotkeyAriaLabel("app.toggleSidebar", "linux")).toBe("Control+\\");
   });
 
@@ -424,7 +421,7 @@ describe("hotkey command registry", () => {
     ).toHaveLength(1);
   });
 
-  it("rejects a sequence that extends an active command", () => {
+  it("rejects a key sequence, which ui-sdk's shortcuts can't register", () => {
     const common = {
       input: "ignore",
       label: "Command",
@@ -439,6 +436,27 @@ describe("hotkey command registry", () => {
           sequence: { ...common, bindings: ["G G"] },
         },
         ["linux"]
+      )
+    ).toStrictEqual([
+      "sequence (G G) is a key sequence, which ui-sdk shortcuts don't support",
+    ]);
+  });
+
+  it("rejects a shifted bracket that collides with what Shift types", () => {
+    const common = {
+      input: "allow",
+      label: "Command",
+      repeat: "once",
+      scope: "app",
+    } as const;
+
+    expect(
+      validateHotkeyCommands(
+        {
+          brace: { ...common, bindings: ["Mod+Shift+}"] },
+          bracket: { ...common, bindings: ["Mod+Shift+]"] },
+        },
+        ["mac"]
       )
     ).toHaveLength(1);
   });

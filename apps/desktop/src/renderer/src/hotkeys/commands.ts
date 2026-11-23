@@ -1,8 +1,8 @@
 import {
-  detectPlatform,
-  formatForDisplay,
-  normalizeHotkey,
-} from "@tanstack/react-hotkeys";
+  ariaKeyshortcuts,
+  formatShortcut,
+  matchesShortcut,
+} from "@ui-sdk/core/shortcuts";
 
 import { HOTKEY_LAYERS, isHotkeyScopeActive } from "@/hotkeys/layer-model";
 import type { HotkeyScope } from "@/hotkeys/layer-model";
@@ -12,11 +12,6 @@ export type HotkeyRepeat = "allow" | "ignore-key-repeat" | "once";
 
 interface HotkeyCommandDefinition {
   readonly bindings: readonly string[];
-  /**
-   * Skips a key that a focused widget already handled with
-   * `preventDefault()`, such as Escape closing the editor's slash menu.
-   */
-  readonly ignoreDefaultPrevented?: true;
   readonly input: "allow" | "ignore";
   readonly label: string;
   readonly repeat: HotkeyRepeat;
@@ -194,7 +189,6 @@ export const HOTKEY_COMMANDS = {
   },
   "composer.close": {
     bindings: ["Escape"],
-    ignoreDefaultPrevented: true,
     input: "allow",
     label: "Close",
     repeat: "once",
@@ -524,11 +518,6 @@ export const HOTKEY_COMMANDS = {
   },
 } as const satisfies Record<string, HotkeyCommandDefinition>;
 
-export const shouldRunHotkeyCommand = (
-  repeat: HotkeyRepeat,
-  isKeyboardRepeat: boolean
-): boolean => repeat !== "ignore-key-repeat" || !isKeyboardRepeat;
-
 export type HotkeyCommandId = keyof typeof HOTKEY_COMMANDS;
 
 /**
@@ -562,6 +551,17 @@ export const COMPOSER_ACCOUNT_COMMAND_IDS = [
   "composer.useAccount8",
 ] as const satisfies readonly HotkeyCommandId[];
 
+export interface HotkeyBinding {
+  readonly key: string;
+  readonly modifiers: readonly string[];
+}
+
+export const parseHotkeyBinding = (binding: string): HotkeyBinding => {
+  const parts = binding.split("+");
+
+  return { key: parts.at(-1) ?? "", modifiers: parts.slice(0, -1) };
+};
+
 /**
  * Whether every binding starts from `Mod`, so a hint revealed by holding
  * `Mod` stays true when followed. A plain `S` shown under a held `Mod` would
@@ -569,23 +569,60 @@ export const COMPOSER_ACCOUNT_COMMAND_IDS = [
  */
 export const isModHotkeyCommand = (commandId: HotkeyCommandId): boolean =>
   HOTKEY_COMMANDS[commandId].bindings.every((binding) =>
-    binding.split("+").includes("Mod")
+    parseHotkeyBinding(binding).modifiers.includes("Mod")
   );
+
+// A US layout reports Shift+] as "}", and ui-sdk matches punctuation by the
+// character typed, so a shifted bracket also registers what Shift produces.
+const SHIFTED_KEYS = new Map([
+  ["[", "{"],
+  ["]", "}"],
+]);
+
+const joinKeys = (modifiers: readonly string[], key: string): string =>
+  [...modifiers, key].join("+").toLowerCase();
+
+export const toShortcutKeys = (binding: string): readonly string[] => {
+  const { key, modifiers } = parseHotkeyBinding(binding);
+  const shifted = SHIFTED_KEYS.get(key);
+
+  return shifted !== undefined && modifiers.includes("Shift")
+    ? [joinKeys(modifiers, key), joinKeys(modifiers, shifted)]
+    : [joinKeys(modifiers, key)];
+};
+
+export const matchesHotkeyCommand = (
+  event: KeyboardEvent,
+  commandId: HotkeyCommandId
+): boolean =>
+  HOTKEY_COMMANDS[commandId].bindings.some((binding) =>
+    toShortcutKeys(binding).some((keys) => matchesShortcut(event, keys))
+  );
+
+const isApple = (platform?: HotkeyPlatform): boolean =>
+  platform === undefined
+    ? ariaKeyshortcuts("mod") === "Meta"
+    : platform === "mac";
+
+export const getHotkeyModifierKey = (platform?: HotkeyPlatform): string =>
+  ariaKeyshortcuts("mod", isApple(platform));
 
 export interface HotkeyCommandDisplay {
   readonly bindings: readonly string[];
   readonly label: string;
 }
 
-const resolveAriaModifier = (
-  part: string,
-  platform: HotkeyPlatform
-): string => {
-  if (part !== "Mod") {
-    return part;
-  }
+// macOS menus list ⇧ before ⌘; Windows and Linux lead with Ctrl.
+const toDisplayKeys = (binding: string, apple: boolean): string => {
+  const { key, modifiers } = parseHotkeyBinding(binding);
+  const ordered = apple
+    ? [
+        ...modifiers.filter((modifier) => modifier !== "Mod"),
+        ...modifiers.filter((modifier) => modifier === "Mod"),
+      ]
+    : modifiers;
 
-  return platform === "mac" ? "Meta" : "Control";
+  return joinKeys(ordered, key);
 };
 
 export const getHotkeyDisplay = (
@@ -593,13 +630,11 @@ export const getHotkeyDisplay = (
   platform?: HotkeyPlatform
 ): HotkeyCommandDisplay => {
   const command = HOTKEY_COMMANDS[commandId];
-  const resolvedPlatform = platform ?? detectPlatform();
+  const apple = isApple(platform);
 
   return {
     bindings: command.bindings.map((binding) =>
-      formatForDisplay(binding, {
-        platform: resolvedPlatform,
-      })
+      formatShortcut(toDisplayKeys(binding, apple), apple)
     ),
     label: command.label,
   };
@@ -609,15 +644,13 @@ export const getHotkeyAriaLabel = (
   commandId: HotkeyCommandId,
   platform?: HotkeyPlatform
 ): string => {
-  const resolvedPlatform = platform ?? detectPlatform();
+  const apple = isApple(platform);
 
   return HOTKEY_COMMANDS[commandId].bindings
-    .map((binding) =>
-      normalizeHotkey(binding, resolvedPlatform)
-        .split("+")
-        .map((part) => resolveAriaModifier(part, resolvedPlatform))
-        .join("+")
-    )
+    .map((binding) => {
+      const { key, modifiers } = parseHotkeyBinding(binding);
+      return ariaKeyshortcuts(joinKeys(modifiers, key), apple);
+    })
     .join(" ");
 };
 
@@ -630,21 +663,35 @@ const canScopesCoexist = (left: HotkeyScope, right: HotkeyScope): boolean =>
       isHotkeyScopeActive(right, topLayer)
   );
 
-const normalizeBindingSequence = (
-  binding: string,
-  platform: HotkeyPlatform
-): readonly string[] =>
-  binding
-    .trim()
-    .split(/\s+/u)
-    .map((part) => normalizeHotkey(part, platform));
+// One spelling per key press on a platform: `mod` resolved, modifiers sorted.
+const canonicalKeys = (keys: string, platform: HotkeyPlatform): string => {
+  const parts = keys.split("+");
+  const modifiers = parts
+    .slice(0, -1)
+    .map((modifier) => {
+      if (modifier !== "mod") {
+        return modifier;
+      }
+      return platform === "mac" ? "meta" : "control";
+    })
+    .toSorted();
 
-const isSequencePrefix = (
-  left: readonly string[],
-  right: readonly string[]
-): boolean =>
-  left.length <= right.length &&
-  left.every((binding, index) => binding === right[index]);
+  return [...modifiers, parts.at(-1) ?? ""].join("+");
+};
+
+const sharesKeys = (
+  left: string,
+  right: string,
+  platform: HotkeyPlatform
+): boolean => {
+  const leftKeys = new Set(
+    toShortcutKeys(left).map((keys) => canonicalKeys(keys, platform))
+  );
+
+  return toShortcutKeys(right).some((keys) =>
+    leftKeys.has(canonicalKeys(keys, platform))
+  );
+};
 
 export const validateHotkeyCommands = (
   commands: Readonly<Record<string, HotkeyCommandDefinition>> = HOTKEY_COMMANDS,
@@ -660,6 +707,14 @@ export const validateHotkeyCommands = (
 
     if (command.bindings.length === 0) {
       errors.push(`${commandId} has no bindings`);
+    }
+
+    for (const binding of command.bindings) {
+      if (/\s/u.test(binding.trim())) {
+        errors.push(
+          `${commandId} (${binding}) is a key sequence, which ui-sdk shortcuts don't support`
+        );
+      }
     }
   }
 
@@ -689,19 +744,7 @@ export const validateHotkeyCommands = (
               continue;
             }
 
-            const leftSequence = normalizeBindingSequence(
-              leftBinding,
-              platform
-            );
-            const rightSequence = normalizeBindingSequence(
-              rightBinding,
-              platform
-            );
-
-            if (
-              isSequencePrefix(leftSequence, rightSequence) ||
-              isSequencePrefix(rightSequence, leftSequence)
-            ) {
+            if (sharesKeys(leftBinding, rightBinding, platform)) {
               errors.push(
                 `${platform}: ${leftId} (${leftBinding}) conflicts with ${rightId} (${rightBinding})`
               );

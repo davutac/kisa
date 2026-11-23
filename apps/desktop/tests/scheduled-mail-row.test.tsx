@@ -10,6 +10,7 @@ import {
 } from "../src/renderer/src/mail/mail-date";
 import ScheduledMailRow from "../src/renderer/src/routes/scheduled/-components/scheduled-mail-row";
 import type { ScheduledMailSummary } from "../src/shared/ipc/scheduled-mail";
+import { InMailList } from "./fixtures/mail-list";
 
 const item: ScheduledMailSummary = {
   accountId: "person@example.com",
@@ -28,24 +29,22 @@ const item: ScheduledMailSummary = {
 
 const renderRow = ({ selected = false }: { selected?: boolean }): string =>
   renderToString(
-    <ScheduledMailRow
-      item={item}
-      measureElement={vi.fn<(element: HTMLLIElement | null) => void>()}
-      onCancel={vi.fn<(item: ScheduledMailSummary) => void>()}
-      onDiscard={vi.fn<(item: ScheduledMailSummary) => void>()}
-      onOpen={vi.fn<(item: ScheduledMailSummary) => void>()}
-      position={1}
-      quickActionResetRevision={0}
-      selected={selected}
-      setSize={2}
-      virtualIndex={0}
-    />
+    <InMailList rowKey={`${item.accountId}\u0000${item.draftId}`}>
+      <ScheduledMailRow
+        item={item}
+        onCancel={vi.fn<(item: ScheduledMailSummary) => void>()}
+        onDiscard={vi.fn<(item: ScheduledMailSummary) => void>()}
+        onOpen={vi.fn<(item: ScheduledMailSummary) => void>()}
+        quickActionResetRevision={0}
+        selected={selected}
+      />
+    </InMailList>
   );
 
 describe("scheduled mail row surface", () => {
   it("uses the mailbox thread row surface with a one-pixel separator", () => {
     const markup = renderRow({});
-    const listItem = markup.match(/<li[^>]*>/u)?.[0];
+    const listItem = markup.match(/<div[^>]*role="row"[^>]*>/u)?.[0];
     const rowSurface = markup.match(
       /<div[^>]*class="[^"]*bg-background[^"]*rounded-md[^"]*"[^>]*>/u
     )?.[0];
@@ -160,10 +159,10 @@ describe("scheduled mail row surface", () => {
       /<button[^>]*aria-label="Cancel schedule[^>]*>/u
     )?.[0];
     const hiddenRail = hiddenMarkup.match(
-      /<div[^>]*data-slot="scheduled-mail-quick-action"[^>]*>/u
+      /<div[^>]*data-slot="mail-list-actions"[^>]*>/u
     )?.[0];
     const revealedRail = revealedMarkup.match(
-      /<div[^>]*data-slot="scheduled-mail-quick-action"[^>]*>/u
+      /<div[^>]*data-slot="mail-list-actions"[^>]*>/u
     )?.[0];
     const discardButton = hiddenMarkup.match(
       /<button[^>]*aria-label="Discard scheduled email[^>]*>/u

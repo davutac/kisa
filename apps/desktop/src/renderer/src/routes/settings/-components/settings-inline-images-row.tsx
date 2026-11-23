@@ -2,12 +2,12 @@ import { ChevronDownIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Menu,
+  MenuContent,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import {
   SettingsRow,
   SettingsRowActions,
@@ -18,8 +18,6 @@ import {
 import type { AppSettingsApi } from "@/platform/desktop";
 import type { InlineImageRetentionDays } from "@/shared/ipc/app";
 import { useAppSettings } from "@/state/app-settings";
-
-const COLLISION_AVOIDANCE = { side: "none" } as const;
 
 export const INLINE_IMAGE_RETENTION_OPTIONS = [
   { days: 30, label: "30 days", value: "30" },
@@ -63,8 +61,8 @@ const SettingsInlineImagesRow = ({
         </SettingsRowDescription>
       </SettingsRowContent>
       <SettingsRowActions>
-        <DropdownMenu>
-          <DropdownMenuTrigger
+        <Menu>
+          <MenuTrigger
             render={
               <Button
                 aria-describedby="inline-images-description"
@@ -80,13 +78,9 @@ const SettingsInlineImagesRow = ({
               aria-hidden
               className="text-muted-foreground shrink-0"
             />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            collisionAvoidance={COLLISION_AVOIDANCE}
-            side="bottom"
-          >
-            <DropdownMenuRadioGroup
+          </MenuTrigger>
+          <MenuContent align="end" side="bottom">
+            <MenuRadioGroup
               onValueChange={(value: string) => {
                 const option = INLINE_IMAGE_RETENTION_OPTIONS.find(
                   (candidate) => candidate.value === value
@@ -98,13 +92,13 @@ const SettingsInlineImagesRow = ({
               value={selected.value}
             >
               {INLINE_IMAGE_RETENTION_OPTIONS.map((option) => (
-                <DropdownMenuRadioItem key={option.value} value={option.value}>
+                <MenuRadioItem key={option.value} value={option.value}>
                   {option.label}
-                </DropdownMenuRadioItem>
+                </MenuRadioItem>
               ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </MenuRadioGroup>
+          </MenuContent>
+        </Menu>
       </SettingsRowActions>
     </SettingsRow>
   );

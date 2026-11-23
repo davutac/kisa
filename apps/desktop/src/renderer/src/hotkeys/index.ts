@@ -7,6 +7,7 @@ export {
   getHotkeyAriaLabel,
   getHotkeyDisplay,
   isModHotkeyCommand,
+  matchesHotkeyCommand,
   OPEN_ACCOUNT_COMMAND_IDS,
 } from "@/hotkeys/commands";
 export type { HotkeyCommandId } from "@/hotkeys/commands";

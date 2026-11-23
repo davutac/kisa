@@ -1,6 +1,5 @@
 import { LoaderCircleIcon } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { ConfirmMessage, useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { AccountsApi } from "@/platform/desktop";
 import type { Account } from "@/shared/ipc/accounts";
@@ -94,7 +94,7 @@ const SettingsAccountDisconnectRow = ({
       </SettingsRowContent>
       <SettingsRowActions>
         <Button
-          aria-labelledby={titleId}
+          aria-label={`Disconnect ${account.email}`}
           disabled={isDisconnecting}
           onClick={() => {
             void requestDisconnect();

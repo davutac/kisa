@@ -12,10 +12,48 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { useHotkeyLayer } from "@/hotkeys";
-import { getScheduledMailKey } from "@/scheduled/scheduled-mail-view";
+import { MailListRoot } from "@/primitives/mail-list-root";
 
 import ScheduledMailRow from "./-components/scheduled-mail-row";
 import { useScheduledMailWorkspace } from "./-components/use-scheduled-mail-workspace";
+
+// After the rows: a failed load with Try again, or the next page loading.
+function ScheduledListFooter({
+  error,
+  hasMore,
+  isInitialLoading,
+  onRetry,
+}: {
+  readonly error: string | undefined;
+  readonly hasMore: boolean;
+  readonly isInitialLoading: boolean;
+  readonly onRetry: () => void;
+}) {
+  if (error !== undefined) {
+    return (
+      <div className="bg-popover text-popover-foreground absolute right-4 bottom-4 left-4 z-20 flex items-center justify-center gap-2 rounded-md px-3 py-2 shadow-sm">
+        <output className="text-destructive block text-xs">{error}</output>
+        <Button
+          disabled={isInitialLoading}
+          onClick={onRetry}
+          size="xs"
+          type="button"
+          variant="secondary"
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
+  return hasMore ? (
+    <p
+      aria-live="polite"
+      className="text-muted-foreground py-4 text-center text-sm"
+    >
+      Loading more…
+    </p>
+  ) : null;
+}
 
 export const Route = createFileRoute("/scheduled")({
   component: ScheduledRoute,
@@ -32,26 +70,27 @@ export const Route = createFileRoute("/scheduled")({
 function ScheduledRoute() {
   const {
     accounts,
+    activate,
     cancelSchedule: handleCancelSchedule,
     closeEditor,
     discardScheduledEmail: handleDiscardScheduledEmail,
     editSession,
     error,
     isInitialLoading,
+    itemKeys,
     items,
-    listRef,
-    measureElement,
+    itemsByKey,
+    labelOf,
+    list,
     openEditor: handleOpenEditor,
     quickActionResetRevision,
     reload,
     replaceEditSession,
-    scrollRef,
+    rowCount,
     selectedAccountId,
     selectedKey,
-    setRowRef,
-    setSize,
-    totalSize,
-    virtualItems,
+    setLastRenderedIndex,
+    setSelectedKey,
   } = useScheduledMailWorkspace();
   const isEditing = editSession !== null;
 
@@ -82,104 +121,79 @@ function ScheduledRoute() {
             titleId="scheduled-title"
           />
         )}
-        <section
+        <MailListRoot
+          after={
+            <ScheduledListFooter
+              error={error}
+              hasMore={rowCount === -1}
+              isInitialLoading={isInitialLoading}
+              onRetry={() => {
+                void reload();
+              }}
+            />
+          }
           aria-label="Scheduled emails"
-          className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4 outline-none"
-          ref={scrollRef}
+          before={
+            items.length === 0 ? (
+              <Empty
+                aria-live="polite"
+                className="absolute inset-4 w-auto border-0"
+              >
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    {isInitialLoading ? (
+                      <LoaderCircleIcon className="animate-spin motion-reduce:animate-none" />
+                    ) : (
+                      <CalendarClockIcon />
+                    )}
+                  </EmptyMedia>
+                  <EmptyTitle>
+                    {isInitialLoading
+                      ? "Loading scheduled emails…"
+                      : "No scheduled emails"}
+                  </EmptyTitle>
+                  {isInitialLoading ? null : (
+                    <EmptyDescription>
+                      Choose Schedule send from a new email.
+                    </EmptyDescription>
+                  )}
+                </EmptyHeader>
+              </Empty>
+            ) : null
+          }
+          className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4 outline-none"
+          controller={list}
+          current={selectedKey}
+          estimate={105}
+          gridLabel="Emails waiting to send"
+          keys={itemKeys}
+          labelOf={labelOf}
+          onActivate={activate}
+          onCurrentChange={setSelectedKey}
+          onRowsRendered={(rows) => {
+            setLastRenderedIndex(rows.at(-1)?.index);
+          }}
+          rowCount={rowCount}
           tabIndex={-1}
         >
-          {items.length === 0 ? (
-            <Empty
-              aria-live="polite"
-              className="absolute inset-4 w-auto border-0"
-            >
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  {isInitialLoading ? (
-                    <LoaderCircleIcon className="animate-spin motion-reduce:animate-none" />
-                  ) : (
-                    <CalendarClockIcon />
-                  )}
-                </EmptyMedia>
-                <EmptyTitle>
-                  {isInitialLoading
-                    ? "Loading scheduled emails…"
-                    : "No scheduled emails"}
-                </EmptyTitle>
-                {isInitialLoading ? null : (
-                  <EmptyDescription>
-                    Choose Schedule send from a new email.
-                  </EmptyDescription>
-                )}
-              </EmptyHeader>
-            </Empty>
-          ) : null}
-          <ol
-            className="relative"
-            ref={listRef}
-            style={{ height: `${totalSize}px` }}
-          >
-            {virtualItems.map((virtualItem) => {
-              const item = items[virtualItem.index];
-              if (item === undefined) {
-                return (
-                  <li
-                    className="absolute top-0 left-0 w-full py-4"
-                    data-index={virtualItem.index}
-                    key="scheduled-mail-next-page"
-                    ref={measureElement}
-                    style={{ transform: `translateY(${virtualItem.start}px)` }}
-                  >
-                    <p
-                      aria-live="polite"
-                      className="text-muted-foreground text-center text-sm"
-                    >
-                      Loading more…
-                    </p>
-                  </li>
-                );
-              }
-              const key = getScheduledMailKey(item);
-              return (
+          {(rows) =>
+            rows.map((row) => {
+              const item = itemsByKey.get(row.key);
+              return item === undefined ? null : (
                 <ScheduledMailRow
                   item={item}
-                  key={key}
-                  measureElement={measureElement}
+                  key={row.key}
                   onCancel={handleCancelSchedule}
                   onDiscard={handleDiscardScheduledEmail}
                   onOpen={handleOpenEditor}
-                  position={virtualItem.index + 1}
                   quickActionResetRevision={quickActionResetRevision}
-                  ref={(element) => setRowRef(key, element)}
-                  selected={selectedKey === key}
-                  setSize={setSize}
-                  style={{
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
-                  virtualIndex={virtualItem.index}
+                  selected={selectedKey === row.key}
+                  style={{ transform: `translateY(${row.start}px)` }}
                 />
               );
-            })}
-          </ol>
-          {error === undefined ? null : (
-            <div className="bg-popover text-popover-foreground absolute right-4 bottom-4 left-4 z-20 flex items-center justify-center gap-2 rounded-md px-3 py-2 shadow-sm">
-              <output className="text-destructive block text-xs">
-                {error}
-              </output>
-              <Button
-                disabled={isInitialLoading}
-                onClick={() => {
-                  void reload();
-                }}
-                size="xs"
-                type="button"
-                variant="secondary"
-              >
-                Try again
-              </Button>
-            </div>
-          )}
-        </section>
+            })
+          }
+        </MailListRoot>
       </section>
       {editSession === null ? null : (
         <div className="absolute inset-0 z-10 flex flex-col">

@@ -2,6 +2,7 @@ import { ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Tooltip,
   TooltipContent,
@@ -16,7 +17,13 @@ import { cn } from "@/lib/utils";
 export const sidebarRowClassName =
   "aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/75 aria-expanded:hover:bg-sidebar-accent aria-expanded:hover:text-sidebar-accent-foreground aria-expanded:data-current:bg-sidebar-accent aria-expanded:data-current:text-sidebar-accent-foreground text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-current:bg-sidebar-accent data-current:text-sidebar-accent-foreground h-8 w-full justify-start gap-2.5 px-2 text-[13px] font-normal data-current:font-medium [&_svg:not([class*='size-'])]:size-4";
 
-export interface SidebarRowProps {
+// A disclosure row is the trigger of the Collapsible around it, which opens
+// and closes it, so it takes no `onSelect`.
+type SidebarRowAction =
+  | { readonly disclosure?: false; readonly onSelect: () => void }
+  | { readonly disclosure: true; readonly onSelect?: undefined };
+
+export type SidebarRowProps = SidebarRowAction & {
   readonly ariaBusy?: boolean;
   /** With `ariaExpanded`, the element holding what the row discloses. */
   readonly ariaControls?: string;
@@ -28,11 +35,10 @@ export interface SidebarRowProps {
   readonly icon?: ReactNode;
   readonly isCurrent: boolean;
   readonly label: string;
-  readonly onSelect: () => void;
   /** Extra tooltip lines under the label and its shortcut. */
   readonly tooltipDetail?: ReactNode;
   readonly trailing?: ReactNode;
-}
+};
 
 /**
  * One sidebar destination. The tooltip carries the shortcut, so every row
@@ -47,6 +53,7 @@ export const SidebarRow = ({
   ariaLabel,
   className,
   command,
+  disclosure,
   icon,
   isCurrent,
   label,
@@ -54,22 +61,18 @@ export const SidebarRow = ({
   tooltipDetail,
   trailing,
 }: SidebarRowProps) => {
-  const button = (
-    <Button
-      aria-busy={ariaBusy}
-      aria-controls={ariaControls}
-      aria-current={isCurrent ? "page" : undefined}
-      aria-expanded={ariaExpanded}
-      aria-keyshortcuts={
-        command === undefined ? undefined : getHotkeyAriaLabel(command)
-      }
-      aria-label={ariaLabel}
-      className={cn(sidebarRowClassName, className)}
-      data-current={isCurrent ? "" : undefined}
-      onClick={onSelect}
-      type="button"
-      variant="ghost"
-    >
+  const rowProps = {
+    "aria-busy": ariaBusy,
+    "aria-current": isCurrent ? ("page" as const) : undefined,
+    "aria-keyshortcuts":
+      command === undefined ? undefined : getHotkeyAriaLabel(command),
+    "aria-label": ariaLabel,
+    className: cn(sidebarRowClassName, className),
+    "data-current": isCurrent ? "" : undefined,
+    variant: "ghost" as const,
+  };
+  const content = (
+    <>
       {icon}
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {command === undefined || !isModHotkeyCommand(command) ? (
@@ -82,11 +85,24 @@ export const SidebarRow = ({
             </span>
           )}
           <HotkeyHint
-            className="motion-safe:animate-in motion-safe:fade-in-0 hidden in-data-[hotkey-hints]:inline-flex"
+            className="hidden in-data-[hotkey-hints]:inline-flex motion-safe:transition-opacity motion-safe:starting:opacity-0"
             command={command}
           />
         </>
       )}
+    </>
+  );
+  const button = disclosure ? (
+    <CollapsibleTrigger {...rowProps}>{content}</CollapsibleTrigger>
+  ) : (
+    <Button
+      {...rowProps}
+      aria-controls={ariaControls}
+      aria-expanded={ariaExpanded}
+      onClick={onSelect}
+      type="button"
+    >
+      {content}
     </Button>
   );
 
@@ -97,7 +113,13 @@ export const SidebarRow = ({
   return (
     <Tooltip>
       <TooltipTrigger render={button} />
-      <TooltipContent className="flex flex-col items-start gap-1" side="right">
+      {/* Around a disclosure, the closed tooltip would share the row's name
+          with the bridge, so it hides from it, as on any popup trigger. */}
+      <TooltipContent
+        className="flex flex-col items-start gap-1"
+        data-agent-hidden={disclosure ? true : undefined}
+        side="right"
+      >
         <span className="flex items-center gap-2">
           {label}
           {command === undefined ? null : <HotkeyHint command={command} />}

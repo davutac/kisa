@@ -47,6 +47,7 @@ const MailThreadDraftActions = ({
       <Button
         aria-label="Discard draft"
         className={quietDestructiveClassName}
+        data-agent-confirm="Deletes this saved draft and what it says"
         disabled={disabled}
         onClick={onDiscard}
         size="footer-icon"

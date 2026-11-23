@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import type { MailApi } from "@/platform/desktop";
 import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 

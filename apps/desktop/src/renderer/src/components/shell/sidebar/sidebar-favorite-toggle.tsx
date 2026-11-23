@@ -1,13 +1,12 @@
 import { StarIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 import { useFavoriteLabelsStore, useIsFavoriteLabel } from "./favorite-labels";
 import type { FavoriteLabel } from "./favorite-labels";
@@ -42,17 +41,16 @@ const SidebarFavoriteToggle = ({
       <Tooltip>
         <TooltipTrigger
           render={
-            <Button
+            <Toggle
               aria-label={`Favorite ${favorite.label}`}
-              aria-pressed={isFavorite}
               className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1.5 -translate-y-1/2 opacity-0 group-hover/favorite:opacity-100 focus-visible:opacity-100"
-              onClick={() => toggleFavorite(favorite)}
+              onPressedChange={() => toggleFavorite(favorite)}
+              pressed={isFavorite}
+              pressedVariant="ghost"
               size="icon-sm"
-              type="button"
-              variant="ghost"
             >
-              <StarIcon className={cn(isFavorite && "fill-current")} />
-            </Button>
+              <StarIcon className="group-data-pressed/button:fill-current" />
+            </Toggle>
           }
         />
         <TooltipContent side="right">{action}</TooltipContent>

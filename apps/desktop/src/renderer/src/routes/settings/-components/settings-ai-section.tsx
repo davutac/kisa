@@ -1,7 +1,7 @@
 import { RefreshCwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { RadioGroup } from "@/components/ui/radio-group";
+import { RadioGroup } from "@/components/ui/radio";
 import {
   SettingsRow,
   SettingsRowActions,
@@ -107,15 +107,11 @@ const SettingsAiSection = () => {
           aria-label="AI provider used for generation"
           className="bg-background gap-px overflow-hidden rounded-lg"
           onValueChange={(provider) => {
-            if (
-              provider === "codex" ||
-              provider === "claude" ||
-              provider === "opencode"
-            ) {
+            if (provider !== null) {
               workflow.setActiveProvider(provider);
             }
           }}
-          value={draft.activeProvider ?? ""}
+          value={draft.activeProvider}
         >
           {AI_PROVIDER_ORDER.map((provider) => (
             <AiProviderRow

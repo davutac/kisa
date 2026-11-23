@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   SettingsRow,
@@ -9,6 +8,7 @@ import {
   SettingsRowTitle,
 } from "@/components/ui/settings";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "@/components/ui/toast";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
@@ -73,7 +73,7 @@ const SettingsAccountCategorizationRow = ({
       </SettingsRowContent>
       <SettingsRowActions>
         <Switch
-          aria-labelledby={titleId}
+          aria-labelledby={`${titleId} account-${account.email}-title`}
           checked={categorizationEnabled}
           disabled={isSaving}
           onCheckedChange={(checked) => {

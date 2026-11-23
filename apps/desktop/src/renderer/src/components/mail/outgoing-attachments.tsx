@@ -1,8 +1,10 @@
 import { PaperclipIcon, XIcon } from "lucide-react";
-import type { Ref, RefObject } from "react";
+import type { Ref } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FileInput, FileInputTrigger } from "@/components/ui/file-input";
+import type { FileInputController } from "@/components/ui/file-input";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import { cn } from "@/lib/utils";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
@@ -17,11 +19,13 @@ export type OutgoingAttachmentComposerController = Pick<
   | "discardInlineImages"
   | "fallbackInlineImagesToAttachments"
   | "getInlineImagePreview"
-  | "inputRef"
   | "loadInlineImagePreview"
+  | "picker"
   | "removeAttachment"
   | "setReferencedInlineContentIds"
 >;
+
+const NO_FILES: File[] = [];
 
 const formatAttachmentSize = (bytes: number): string => {
   if (bytes < 1000) {
@@ -39,44 +43,44 @@ interface OutgoingAttachmentButtonProps {
   command: "composer.attach" | "threadComposer.attach";
   disabled?: boolean;
   focusRef?: Ref<HTMLButtonElement>;
-  inputRef: RefObject<HTMLInputElement | null>;
-  onFiles: (files: FileList | null) => void;
+  onFiles: (files: readonly File[]) => void;
+  picker: FileInputController;
 }
 
+// The picked files are handed on and never held: the draft's attachments,
+// which main authorizes, are the list. The draft's own list announces nothing
+// either, so neither does the picker, before main has accepted a file.
 export const OutgoingAttachmentButton = ({
   command,
   disabled = false,
   focusRef,
-  inputRef,
   onFiles,
+  picker,
 }: OutgoingAttachmentButtonProps) => {
   const display = getHotkeyDisplay(command);
 
   return (
-    <>
-      <input
-        className="hidden"
-        multiple
-        onChange={(event) => {
-          onFiles(event.currentTarget.files);
-        }}
-        ref={inputRef}
-        type="file"
-      />
-      <Button
+    <FileInput
+      announcement={() => null}
+      className="contents"
+      controller={picker}
+      disabled={disabled}
+      multiple
+      onValueChange={(_files, details) => {
+        onFiles(details.added);
+      }}
+      value={NO_FILES}
+    >
+      <FileInputTrigger
         aria-keyshortcuts={getHotkeyAriaLabel(command)}
         aria-label={display.label}
-        disabled={disabled}
-        onClick={() => inputRef.current?.click()}
         ref={focusRef}
         size="icon"
         title={`${display.label} (${display.bindings[0]})`}
-        type="button"
-        variant="ghost"
       >
         <PaperclipIcon />
-      </Button>
-    </>
+      </FileInputTrigger>
+    </FileInput>
   );
 };
 
@@ -111,14 +115,16 @@ export const OutgoingAttachmentList = ({
           <span className="text-muted-foreground shrink-0">
             {formatAttachmentSize(attachment.size)}
           </span>
-          <button
+          <Button
             aria-label={`Remove ${attachment.filename}`}
-            className="hover:bg-foreground/10 focus-visible:ring-ring/50 grid size-4 shrink-0 place-items-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:bg-foreground/10 size-4 rounded-full"
             onClick={() => onRemove(attachment.id)}
+            size="icon-xs"
             type="button"
+            variant="ghost"
           >
             <XIcon className="size-2.5" />
-          </button>
+          </Button>
         </Badge>
       ))}
     </section>

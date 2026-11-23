@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { createContext, use, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getTemplateApi } from "@/platform/desktop";
 import type {

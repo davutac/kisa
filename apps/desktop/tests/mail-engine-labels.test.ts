@@ -7,6 +7,7 @@ import { syncAccount } from "@repo/mail/sync";
 import type { SyncScope } from "@repo/mail/sync";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { seededLabelColor } from "../src/shared/label-color";
 import { FakeImapServer } from "./fixtures/fake-imap-server";
 import {
   ALL_MAIL,
@@ -112,7 +113,10 @@ describe("labels with the Gmail dialect", () => {
     });
     expect(userLabels()).toStrictEqual([
       { background_color: "#16a766", label_id: "u:Office" },
-      { background_color: null, label_id: "u:Office/Sub" },
+      {
+        background_color: seededLabelColor("Work/Sub"),
+        label_id: "u:Office/Sub",
+      },
     ]);
     // Gmail relabels without a new mod-sequence; the cache already agrees.
     await expect(run(syncAccount(scope))).resolves.toMatchObject({
@@ -129,7 +133,10 @@ describe("labels with the Gmail dialect", () => {
       label_ids: JSON.stringify(["INBOX", "u:Work/Sub"]),
     });
     expect(userLabels()).toStrictEqual([
-      { background_color: null, label_id: "u:Work/Sub" },
+      {
+        background_color: seededLabelColor("Work/Sub"),
+        label_id: "u:Work/Sub",
+      },
     ]);
   });
 
@@ -147,6 +154,40 @@ describe("labels with the Gmail dialect", () => {
 
 describe("labels with the generic dialect", () => {
   beforeEach(resetDatabase);
+
+  it("colours a folder when first seen, and keeps a chosen colour through later syncs", async () => {
+    const { scope } = await syncIcloudReceipt();
+    const discovered = userLabels();
+    connection
+      .prepare(
+        "UPDATE mail_labels SET background_color = '#123456' WHERE label_id = 'u:Receipts'"
+      )
+      .run();
+    await run(syncAccount(scope));
+    const chosen = userLabels();
+    connection
+      .prepare(
+        "UPDATE mail_labels SET background_color = NULL WHERE label_id = 'u:Receipts'"
+      )
+      .run();
+    await run(syncAccount(scope));
+
+    expect({ chosen, discovered, refilled: userLabels() }).toStrictEqual({
+      chosen: [{ background_color: "#123456", label_id: "u:Receipts" }],
+      discovered: [
+        {
+          background_color: seededLabelColor("Receipts"),
+          label_id: "u:Receipts",
+        },
+      ],
+      refilled: [
+        {
+          background_color: seededLabelColor("Receipts"),
+          label_id: "u:Receipts",
+        },
+      ],
+    });
+  });
 
   it("creates a folder that takes mail at once", async () => {
     const { scope } = await syncIcloudReceipt();

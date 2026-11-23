@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import type { ThreadSelection } from "@/mail/thread-selection";
 import { getThreadSelectionKey } from "@/mail/thread-selection";
 import type { WindowApi } from "@/platform/desktop";

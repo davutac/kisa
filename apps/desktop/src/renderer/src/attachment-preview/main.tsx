@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import AnimationsProvider from "../components/animations-provider";
+import { ThemeProvider } from "../components/shell/theme-provider";
 import AttachmentPreviewApp from "./attachment-preview-app";
 
 const rootElement = document.querySelector("#root");
@@ -13,8 +14,10 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <AnimationsProvider>
-      <AttachmentPreviewApp />
-    </AnimationsProvider>
+    <ThemeProvider>
+      <AnimationsProvider>
+        <AttachmentPreviewApp />
+      </AnimationsProvider>
+    </ThemeProvider>
   </StrictMode>
 );

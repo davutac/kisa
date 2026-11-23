@@ -11,6 +11,8 @@ import type { ReactNode } from "react";
 
 import { SendWithScheduleMenu } from "@/components/mail/schedule-send-menu";
 import { Button } from "@/components/ui/button";
+import { createMenuController } from "@/components/ui/menu";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import {
   getHotkeyAriaLabel,
   getHotkeyDisplay,
@@ -26,9 +28,11 @@ import { cn } from "@/lib/utils";
 import { formatScheduledAt, LOCAL_TIME_ZONE } from "@/scheduled/schedule-time";
 
 import {
+  describeComposerDelivery,
   getComposerDeliveryLabel,
   submitNewMessageDelivery,
 } from "./new-message-delivery";
+import type { ComposerDeliveryTarget } from "./new-message-delivery";
 
 export interface ScheduledComposerControls {
   readonly canSchedule: boolean;
@@ -59,11 +63,9 @@ const SelectedDeliveryTime = ({
   const formatted = formatScheduledAt(scheduledAt);
 
   return (
-    <div
-      aria-label={label}
-      className="bg-muted/50 text-muted-foreground flex h-7 items-center gap-1.5 rounded-md pr-0.5 pl-2 text-xs"
-    >
-      <CalendarClockIcon className="size-3.5" />
+    <div className="bg-muted/50 text-muted-foreground flex h-7 items-center gap-1.5 rounded-md pr-0.5 pl-2 text-xs">
+      <CalendarClockIcon aria-hidden="true" className="size-3.5" />
+      <span className="sr-only">{label}:</span>
       <time
         className="text-foreground font-medium"
         dateTime={new Date(scheduledAt).toISOString()}
@@ -135,9 +137,19 @@ const ScheduledEditButtons = ({
   );
 };
 
+// Each has a word "Schedule send" lacks, so an agent's step by it finds one
+// control, and holds the button's visible text.
+const PRIMARY_ACTION_NAMES = {
+  Reschedule: "Reschedule email",
+  Schedule: "Schedule email",
+  Send: "Send email",
+  "Send now": "Send now",
+} as const;
+
 interface NewMessageFooterProps {
   readonly canSend: boolean;
   readonly canStash: boolean;
+  readonly delivery: ComposerDeliveryTarget;
   readonly isScheduling: boolean;
   readonly isSending: boolean;
   readonly onSend: () => Promise<void>;
@@ -151,6 +163,7 @@ interface NewMessageFooterProps {
 const NewMessageFooter = ({
   canSend,
   canStash,
+  delivery,
   isScheduling,
   isSending,
   onSend,
@@ -162,7 +175,7 @@ const NewMessageFooter = ({
   const [selectedScheduledAt, setSelectedScheduledAt] = useState<
     number | undefined
   >();
-  const [isScheduleMenuOpen, setIsScheduleMenuOpen] = useState(false);
+  const scheduleMenu = useInstanceValue(createMenuController);
   const primaryActionRef = useRef<HTMLButtonElement>(null);
   const {
     canSchedule,
@@ -211,7 +224,7 @@ const NewMessageFooter = ({
     "composer.schedule",
     () => {
       if (selectedScheduledAt === undefined) {
-        setIsScheduleMenuOpen(true);
+        void scheduleMenu.open({ focus: "first" });
       } else {
         void handlePrimaryAction();
       }
@@ -240,7 +253,13 @@ const NewMessageFooter = ({
       aria-keyshortcuts={getHotkeyAriaLabel(
         isScheduleSelected ? "composer.schedule" : "composer.send"
       )}
+      aria-label={PRIMARY_ACTION_NAMES[primaryLabel]}
       className={cn(primaryFooterActionClassName, "rounded-r-none px-2.5")}
+      data-agent-confirm={describeComposerDelivery(
+        isEdit,
+        selectedScheduledAt,
+        delivery
+      )}
       disabled={isBusy || (isScheduleSelected ? !canSchedule : !canSend)}
       onClick={() => {
         void handlePrimaryAction();
@@ -292,10 +311,9 @@ const NewMessageFooter = ({
       {isEdit ? null : stashPicker}
       {deliveryTime}
       <SendWithScheduleMenu
+        controller={scheduleMenu}
         disabled={isBusy || !canSchedule}
         onChoose={handleSelectSchedule}
-        onOpenChange={setIsScheduleMenuOpen}
-        open={isScheduleMenuOpen}
         selectedScheduledAt={selectedScheduledAt}
       >
         {primaryAction}

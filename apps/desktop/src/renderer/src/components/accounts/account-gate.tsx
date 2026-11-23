@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import { clearMailboxThreadsSnapshots } from "@/mail/mailbox-cache";
 import { getAccountsApi } from "@/platform/desktop";
 import { clearScheduledMailSnapshots } from "@/scheduled/scheduled-mail-cache";

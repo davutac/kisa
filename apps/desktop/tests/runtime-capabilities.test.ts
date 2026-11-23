@@ -268,7 +268,10 @@ describe(getRuntimeCapabilities, () => {
     updateLabel: (request) =>
       Promise.resolve({
         data: {
-          color: request.color,
+          color:
+            request.color === undefined
+              ? undefined
+              : { background: request.color, text: "#ffffff" },
           id: request.labelId,
           name: request.name,
           type: "user",

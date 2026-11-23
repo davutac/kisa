@@ -37,7 +37,7 @@ const SettingsAccountSection = ({
     <SettingsSection aria-labelledby={titleId}>
       <SettingsSectionHeader>
         <div className="flex min-w-0 items-center gap-3 pl-4 md:pl-5">
-          <Avatar size="lg">
+          <Avatar aria-hidden="true" size="lg">
             <AvatarFallback>
               <AccountProviderIcon
                 className="size-4"

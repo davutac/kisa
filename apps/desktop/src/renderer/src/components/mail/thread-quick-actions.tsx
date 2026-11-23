@@ -6,6 +6,7 @@ import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import { quietDestructiveClassName } from "@/lib/action-hierarchy";
 import { MOTION_EASE, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { MailListActions } from "@/primitives/mail-list";
 
 /** Width of each action column uncovered by the thread row. */
 const MAIL_THREAD_QUICK_ACTION_COLUMN_WIDTH = 48;
@@ -30,6 +31,8 @@ interface MailThreadQuickActionsProps {
   hotkeysEnabled: boolean;
   isRevealed: boolean;
   isUnread: boolean;
+  name: string;
+  subject: string;
   onDeleteForever?: () => void;
   onNotSpam?: () => void;
   onToggleRead?: () => void;
@@ -40,10 +43,12 @@ const MailThreadQuickActions = ({
   hotkeysEnabled,
   isRevealed,
   isUnread,
+  name,
   onDeleteForever,
   onNotSpam,
   onToggleRead,
   onTrash,
+  subject,
 }: MailThreadQuickActionsProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
@@ -53,6 +58,16 @@ const MailThreadQuickActions = ({
   const destructiveLabel =
     onDeleteForever === undefined ? trashKeys.label : "Delete forever";
   const destructiveAction = onDeleteForever ?? onTrash;
+  const destructiveName =
+    onDeleteForever === undefined
+      ? `Trash ${name}`
+      : `Permanently delete ${name}`;
+  const trimmedSubject = subject.trim();
+  // Delete forever asks through useConfirm, whose confirming button is marked.
+  const trashConfirmation =
+    onDeleteForever === undefined
+      ? `Moves ${trimmedSubject === "" ? "this conversation" : `“${trimmedSubject}”`} to Trash`
+      : undefined;
   const hasSecondaryAction = [onNotSpam, destructiveAction].some(
     (action) => action !== undefined
   );
@@ -62,19 +77,23 @@ const MailThreadQuickActions = ({
   return (
     // Parked behind the row: the row slides off it rather than the other way
     // round, and `inert` keeps the covered buttons out of the focus order.
-    <m.div
+    <MailListActions
       className={cn(
         "bg-card absolute inset-y-0 right-0 z-0 grid grid-flow-col overflow-hidden rounded-r-md",
         hasSecondaryAction ? "grid-rows-2" : "grid-rows-1",
         hasThreeActions ? "w-27 grid-cols-[60px_48px]" : "w-15 grid-cols-[60px]"
       )}
       inert={!isRevealed}
-      transition={
-        shouldReduceMotion
-          ? NO_MOTION
-          : { delay: 0.05, duration: 0.18, ease: MOTION_EASE }
+      render={
+        <m.div
+          transition={
+            shouldReduceMotion
+              ? NO_MOTION
+              : { delay: 0.05, duration: 0.18, ease: MOTION_EASE }
+          }
+          variants={quickActionsVariants}
+        />
       }
-      variants={quickActionsVariants}
     >
       <Button
         aria-keyshortcuts={
@@ -82,7 +101,7 @@ const MailThreadQuickActions = ({
             ? getHotkeyAriaLabel("mailbox.toggleThreadRead")
             : undefined
         }
-        aria-label={toggleReadLabel}
+        aria-label={`Mark ${name} as ${isUnread ? "read" : "unread"}`}
         className={`${overlappingQuickActionClassName} hover:text-foreground`}
         onClick={onToggleRead}
         size="icon"
@@ -97,7 +116,7 @@ const MailThreadQuickActions = ({
       </Button>
       {onNotSpam === undefined ? null : (
         <Button
-          aria-label="Not spam"
+          aria-label={`Mark ${name} as not spam`}
           className={`${overlappingQuickActionClassName} hover:text-foreground`}
           onClick={onNotSpam}
           size="icon"
@@ -114,12 +133,13 @@ const MailThreadQuickActions = ({
               ? getHotkeyAriaLabel("mailbox.trashThread")
               : undefined
           }
-          aria-label={destructiveLabel}
+          aria-label={destructiveName}
           className={cn(
             quickActionClassName,
             quietDestructiveClassName,
             hasThreeActions ? "row-span-2" : "pl-3"
           )}
+          data-agent-confirm={trashConfirmation}
           onClick={destructiveAction}
           size="icon"
           title={
@@ -132,7 +152,7 @@ const MailThreadQuickActions = ({
           <Trash2Icon />
         </Button>
       )}
-    </m.div>
+    </MailListActions>
   );
 };
 

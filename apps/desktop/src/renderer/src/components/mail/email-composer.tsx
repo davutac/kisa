@@ -1,17 +1,19 @@
 import { Placeholder } from "@tiptap/extensions";
 import { Fragment } from "@tiptap/pm/model";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { EditorContent, Extension, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { ComposerInlineImageNode } from "@/components/mail/composer-inline-images";
 import type { ComposerInlineImage } from "@/components/mail/composer-inline-images";
 import EmailComposerToolbar from "@/components/mail/email-composer-toolbar";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
+import { toast } from "@/components/ui/toast";
 import { resetEditorHistory } from "@/editor/reset-history";
+import { matchesHotkeyCommand } from "@/hotkeys";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/shared/ipc/accounts";
 import type {
@@ -21,10 +23,7 @@ import type {
 import type { TemplateVariableContext } from "@/shared/template-variables";
 import { resolveTemplateText } from "@/shared/template-variables";
 import { createTemplateVariableContext } from "@/templates/apply-composer-template";
-import {
-  configureTemplateSlashCommand,
-  TemplateSlashCommand,
-} from "@/templates/template-slash-command";
+import { TemplateSlashMenu } from "@/templates/template-slash-command";
 import {
   resolveTemplateVariableContent,
   TemplateVariable,
@@ -68,13 +67,34 @@ interface EmailComposerProps {
   toolbarActions?: ReactNode;
 }
 
-export const getComposerSendKeyboardShortcuts = () => ({
-  "Mod-Enter": () => true,
-});
+const LINE_BREAK_INPUTS = new Set(["insertLineBreak", "insertParagraph"]);
 
+// ui-sdk's shortcuts skip keys ProseMirror handled, so Send is kept from the
+// hard-break keymap unprevented, and a line break typed instead is cancelled.
 export const ComposerSendHotkeyGuard = Extension.create({
-  addKeyboardShortcuts() {
-    return getComposerSendKeyboardShortcuts();
+  addProseMirrorPlugins() {
+    let isSendPress = false;
+
+    return [
+      new Plugin({
+        key: new PluginKey("composerSendHotkeyGuard"),
+        props: {
+          handleDOMEvents: {
+            beforeinput: (_view, event) => {
+              if (!(isSendPress && LINE_BREAK_INPUTS.has(event.inputType))) {
+                return false;
+              }
+              event.preventDefault();
+              return true;
+            },
+            keydown: (_view, event) => {
+              isSendPress = matchesHotkeyCommand(event, "composer.send");
+              return isSendPress;
+            },
+          },
+        },
+      }),
+    ];
   },
   name: "composerSendHotkeyGuard",
   priority: 1000,
@@ -256,12 +276,10 @@ const EmailComposer = ({
         loadPreviewUrl: loadInlineImagePreview,
       }),
       enableTemplateVariables ? TemplateVariable : TemplateVariableDisplay,
-      ...(enableTemplateSlashMenu ? [TemplateSlashCommand] : []),
       ...(consumeModEnter ? [ComposerSendHotkeyGuard] : []),
     ],
     [
       consumeModEnter,
-      enableTemplateSlashMenu,
       enableTemplateVariables,
       getInlineImagePreview,
       loadInlineImagePreview,
@@ -287,40 +305,6 @@ const EmailComposer = ({
       editor.setEditable(editable, false);
     }
   }, [disabled, editor]);
-
-  useEffect(() => {
-    if (!(editor && enableTemplateSlashMenu)) {
-      return;
-    }
-
-    return configureTemplateSlashCommand(editor, {
-      getTemplates: () => templates,
-      onSelect: (template, currentEditor, range) => {
-        currentEditor.chain().focus().deleteRange(range).run();
-        const context = createTemplateVariableContext(
-          templateFallbackAccountId,
-          templateAccounts,
-          template,
-          Date.now()
-        );
-        const resolved = resolveComposerTemplate(
-          currentEditor,
-          template,
-          context
-        );
-        if (resolved !== undefined) {
-          onApplyTemplate?.(resolved);
-        }
-      },
-    });
-  }, [
-    editor,
-    enableTemplateSlashMenu,
-    onApplyTemplate,
-    templateFallbackAccountId,
-    templateAccounts,
-    templates,
-  ]);
 
   useLayoutEffect(() => {
     if (editor === null || contentKeyRef.current === contentKey) {
@@ -369,6 +353,34 @@ const EmailComposer = ({
         data-composer-drop-target=""
         editor={editor}
       />
+      {enableTemplateSlashMenu ? (
+        // `contents` keeps the dividers off the menu's status and popup.
+        <div className="contents">
+          <TemplateSlashMenu
+            editor={editor}
+            onSelect={(template, range) => {
+              if (editor === null) {
+                return;
+              }
+              editor.chain().focus().deleteRange(range).run();
+              const resolved = resolveComposerTemplate(
+                editor,
+                template,
+                createTemplateVariableContext(
+                  templateFallbackAccountId,
+                  templateAccounts,
+                  template,
+                  Date.now()
+                )
+              );
+              if (resolved !== undefined) {
+                onApplyTemplate?.(resolved);
+              }
+            }}
+            templates={templates}
+          />
+        </div>
+      ) : null}
       {toolbarHeader}
       <EmailComposerToolbar
         actions={
@@ -377,6 +389,7 @@ const EmailComposer = ({
               <TemplateVariablePicker
                 disabled={disabled}
                 editor={editor}
+                field="message"
                 previewContext={templateVariablePreviewContext}
               />
               {toolbarActions}

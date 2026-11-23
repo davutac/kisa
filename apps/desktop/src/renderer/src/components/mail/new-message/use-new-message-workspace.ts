@@ -6,12 +6,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
 
 import { useConfirm } from "@/components/confirm-dialog";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
+import { toast } from "@/components/ui/toast";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import {

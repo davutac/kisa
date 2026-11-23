@@ -7,17 +7,17 @@ import {
 } from "@/ai";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Menu,
+  MenuContent,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSub,
+  MenuSubContent,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import type { AiProvider, AiReasoningOption } from "@/shared/ipc/ai";
 
 import type {
@@ -25,8 +25,6 @@ import type {
   AiProviderModelOption,
 } from "./ai-settings-view";
 import { groupOpenCodeModelOptions } from "./ai-settings-view";
-
-const COLLISION_AVOIDANCE = { side: "none" } as const;
 
 interface AiModelMenuItemsProps {
   readonly currentModel: string | null;
@@ -43,40 +41,37 @@ const AiModelMenuItems = ({
 }: AiModelMenuItemsProps) => {
   if (modelGroups === null) {
     return (
-      <DropdownMenuRadioGroup
-        onValueChange={onSelectModel}
-        value={currentModel ?? ""}
-      >
+      <MenuRadioGroup onValueChange={onSelectModel} value={currentModel ?? ""}>
         {modelOptions.map((option) => (
-          <DropdownMenuRadioItem key={option.model} value={option.model}>
+          <MenuRadioItem key={option.model} value={option.model}>
             {option.label}
-          </DropdownMenuRadioItem>
+          </MenuRadioItem>
         ))}
-      </DropdownMenuRadioGroup>
+      </MenuRadioGroup>
     );
   }
 
   return modelGroups.map((group) => (
-    <DropdownMenuSub key={group.id}>
-      <DropdownMenuSubTrigger>{group.label}</DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="min-w-52">
-        <DropdownMenuRadioGroup
+    <MenuSub key={group.id}>
+      <MenuSubTrigger>{group.label}</MenuSubTrigger>
+      <MenuSubContent className="min-w-52">
+        <MenuRadioGroup
           onValueChange={onSelectModel}
           value={currentModel ?? ""}
         >
           {group.items.map((option) => (
-            <DropdownMenuRadioItem
+            <MenuRadioItem
               className="whitespace-nowrap"
-              closeOnClick
+              closeOnSelect
               key={option.model}
               value={option.model}
             >
               {option.label}
-            </DropdownMenuRadioItem>
+            </MenuRadioItem>
           ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+        </MenuRadioGroup>
+      </MenuSubContent>
+    </MenuSub>
   ));
 };
 
@@ -102,8 +97,8 @@ export const AiModelSelect = ({
     provider === "opencode" ? groupOpenCodeModelOptions(modelOptions) : null;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Menu>
+      <MenuTrigger
         disabled={disabled}
         render={
           <Button
@@ -122,20 +117,16 @@ export const AiModelSelect = ({
           aria-hidden
           className="text-muted-foreground shrink-0"
         />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        collisionAvoidance={COLLISION_AVOIDANCE}
-        side="bottom"
-      >
+      </MenuTrigger>
+      <MenuContent align="end" side="bottom">
         <AiModelMenuItems
           currentModel={currentModel}
           modelGroups={modelGroups}
           modelOptions={modelOptions}
           onSelectModel={onSelectModel}
         />
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </MenuContent>
+    </Menu>
   );
 };
 
@@ -159,8 +150,8 @@ export const AiReasoningSelect = ({
     : `Choose ${optionLabel.toLowerCase()}`;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Menu>
+      <MenuTrigger
         render={
           <Button
             aria-label={`${AI_PROVIDER_NAMES[provider]} ${optionLabel.toLowerCase()}, ${selectedLabel}`}
@@ -175,20 +166,16 @@ export const AiReasoningSelect = ({
           aria-hidden
           className="text-muted-foreground shrink-0"
         />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="w-fit"
-        collisionAvoidance={COLLISION_AVOIDANCE}
-        side="bottom"
-      >
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>{optionLabel}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
+      </MenuTrigger>
+      <MenuContent className="w-fit" side="bottom">
+        <MenuGroup>
+          <MenuGroupLabel>{optionLabel}</MenuGroupLabel>
+          <MenuRadioGroup
             onValueChange={onSelectReasoning}
             value={selectedId ?? ""}
           >
             {reasoningOptions.map((option) => (
-              <DropdownMenuRadioItem
+              <MenuRadioItem
                 key={option.id}
                 title={option.description}
                 value={option.id}
@@ -203,11 +190,11 @@ export const AiReasoningSelect = ({
                     </span>
                   ) : null}
                 </span>
-              </DropdownMenuRadioItem>
+              </MenuRadioItem>
             ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </MenuRadioGroup>
+        </MenuGroup>
+      </MenuContent>
+    </Menu>
   );
 };

@@ -9,6 +9,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import { getMailboxPlaceCrumbs } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";
@@ -16,8 +17,10 @@ import { useScopeLabelItems } from "@/mail/use-label-places";
 import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 
+// Crumbs read as text in the list's color: the link variant without its
+// color, underline, size, padding, or press nudge, and free to shrink.
 const crumbButtonClassName =
-  "app-titlebar-interactive hover:text-foreground focus-visible:ring-ring/50 block max-w-48 truncate rounded-sm transition-colors outline-none focus-visible:ring-2";
+  "app-titlebar-interactive hover:text-foreground focus-visible:ring-ring/50 block h-auto max-w-48 shrink truncate rounded-sm border-0 p-0 font-normal text-current text-[length:inherit] leading-[inherit] transition-colors hover:no-underline active:not-aria-[haspopup]:translate-y-0";
 
 interface OpenThreadCrumb {
   /** The mailbox crumb's name for leaving the conversation. */
@@ -69,7 +72,7 @@ const MailboxBreadcrumb = ({
       <Breadcrumb className="flex min-w-0 flex-1 items-center pl-4 in-data-[titlebar-inset=trailing]:pl-8">
         <BreadcrumbList className="min-w-0 flex-nowrap text-[13px]">
           <BreadcrumbItem className="min-w-0">
-            <button
+            <Button
               className={crumbButtonClassName}
               onClick={() => {
                 if (selectedAccountId === null) {
@@ -80,22 +83,24 @@ const MailboxBreadcrumb = ({
               }}
               title={`${scopeName} Inbox`}
               type="button"
+              variant="link"
             >
               {scopeName}
-            </button>
+            </Button>
           </BreadcrumbItem>
           {crumbs.map(({ name, place }) => {
             let crumb: ReactNode;
             if (place !== undefined) {
               crumb = (
-                <button
+                <Button
                   className={crumbButtonClassName}
                   onClick={() => openMailbox(selectedAccountId, place)}
                   title={place.label}
                   type="button"
+                  variant="link"
                 >
                   {name}
-                </button>
+                </Button>
               );
             } else if (thread === undefined) {
               crumb = (
@@ -108,15 +113,16 @@ const MailboxBreadcrumb = ({
               );
             } else {
               crumb = (
-                <button
+                <Button
                   aria-keyshortcuts={getHotkeyAriaLabel("thread.close")}
                   className={crumbButtonClassName}
                   onClick={handleBack}
                   title={`${thread.backLabel} (${closeDisplay.bindings[0]})`}
                   type="button"
+                  variant="link"
                 >
                   {name}
-                </button>
+                </Button>
               );
             }
 

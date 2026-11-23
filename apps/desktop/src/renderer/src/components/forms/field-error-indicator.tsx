@@ -1,5 +1,6 @@
 import { CircleAlertIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -15,16 +16,18 @@ const FieldErrorIndicator = ({ id, message }: FieldErrorIndicatorProps) => (
   <Tooltip>
     <TooltipTrigger
       render={
-        <button
+        <Button
           aria-label={message}
-          className="text-destructive focus-visible:ring-destructive/30 grid size-6 place-items-center rounded-md outline-none focus-visible:ring-2"
+          className="text-destructive hover:text-destructive focus-visible:ring-destructive/30 border-0 hover:bg-transparent active:not-aria-[haspopup]:translate-y-0 dark:hover:bg-transparent"
+          size="icon-sm"
           type="button"
+          variant="ghost"
         >
           <CircleAlertIcon aria-hidden="true" className="size-3.5" />
           <span className="sr-only" id={id} role="alert">
             {message}
           </span>
-        </button>
+        </Button>
       }
     />
     <TooltipContent side="top">{message}</TooltipContent>

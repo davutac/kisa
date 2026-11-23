@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { useThreadConversationStore } from "@/components/mail/thread-conversation-store";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { createThreadMailDraft } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";

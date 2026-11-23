@@ -1,85 +1,112 @@
-import * as React from "react";
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
-import { cva, type VariantProps } from "class-variance-authority";
+import { mergeProps, renderElement } from "@ui-sdk/react/primitive";
+import type { RenderProp } from "@ui-sdk/react/primitive";
+import { cva } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-export type SettingsProps = React.ComponentProps<"div">;
+type LayoutProps<Tag extends keyof React.JSX.IntrinsicElements> =
+  React.ComponentProps<Tag> & {
+    render?: RenderProp;
+  };
 
-function Settings({ className, ...props }: SettingsProps) {
-  return (
-    <div
-      data-slot="settings"
-      className={cn("mx-auto flex w-full max-w-3xl flex-col gap-8", className)}
-      {...props}
-    />
+export type SettingsProps = LayoutProps<"div">;
+
+const Settings = ({ className, render, ...props }: SettingsProps) =>
+  renderElement(
+    "div",
+    {
+      "data-slot": "settings",
+      className: cn("mx-auto flex w-full max-w-3xl flex-col gap-8", className),
+      ...props,
+    },
+    render
   );
-}
 
-export type SettingsSectionProps = React.ComponentProps<"section">;
+export type SettingsSectionProps = LayoutProps<"section">;
 
-function SettingsSection({ className, ...props }: SettingsSectionProps) {
-  return (
-    <section
-      data-slot="settings-section"
-      className={cn("flex w-full flex-col gap-3", className)}
-      {...props}
-    />
+const SettingsSection = ({
+  className,
+  render,
+  ...props
+}: SettingsSectionProps) =>
+  renderElement(
+    "section",
+    {
+      "data-slot": "settings-section",
+      className: cn("flex w-full flex-col gap-3", className),
+      ...props,
+    },
+    render
   );
-}
 
-export type SettingsSectionHeaderProps = React.ComponentProps<"div">;
+export type SettingsSectionHeaderProps = LayoutProps<"div">;
 
-function SettingsSectionHeader({ className, ...props }: SettingsSectionHeaderProps) {
-  return (
-    <div
-      data-slot="settings-section-header"
-      className={cn("flex flex-col gap-1", className)}
-      {...props}
-    />
+const SettingsSectionHeader = ({
+  className,
+  render,
+  ...props
+}: SettingsSectionHeaderProps) =>
+  renderElement(
+    "div",
+    {
+      "data-slot": "settings-section-header",
+      className: cn("flex flex-col gap-1", className),
+      ...props,
+    },
+    render
   );
-}
 
-export type SettingsSectionTitleProps = React.ComponentProps<"h2">;
+export type SettingsSectionTitleProps = LayoutProps<"h2">;
 
-function SettingsSectionTitle({ className, ...props }: SettingsSectionTitleProps) {
-  return (
-    <h2
-      data-slot="settings-section-title"
-      className={cn("font-semibold text-lg pl-5 tracking-tight", className)}
-      {...props}
-    />
+const SettingsSectionTitle = ({
+  className,
+  render,
+  ...props
+}: SettingsSectionTitleProps) =>
+  renderElement(
+    "h2",
+    {
+      "data-slot": "settings-section-title",
+      className: cn("pl-5 text-lg font-semibold tracking-tight", className),
+      ...props,
+    },
+    render
   );
-}
 
-export type SettingsSectionDescriptionProps = React.ComponentProps<"p">;
+export type SettingsSectionDescriptionProps = LayoutProps<"p">;
 
-function SettingsSectionDescription({ className, ...props }: SettingsSectionDescriptionProps) {
-  return (
-    <p
-      data-slot="settings-section-description"
-      className={cn("max-w-2xl text-muted-foreground text-sm", className)}
-      {...props}
-    />
+const SettingsSectionDescription = ({
+  className,
+  render,
+  ...props
+}: SettingsSectionDescriptionProps) =>
+  renderElement(
+    "p",
+    {
+      "data-slot": "settings-section-description",
+      className: cn("text-muted-foreground max-w-2xl text-sm", className),
+      ...props,
+    },
+    render
   );
-}
 
-export type SettingsRowsProps = React.ComponentProps<"div">;
+export type SettingsRowsProps = LayoutProps<"div">;
 
-function SettingsRows({ className, ...props }: SettingsRowsProps) {
-  return (
-    <div
-      role="list"
-      data-slot="settings-rows"
-      className={cn(
-        "flex w-full flex-col gap-px overflow-hidden rounded-lg bg-background text-card-foreground",
-        className,
-      )}
-      {...props}
-    />
+const SettingsRows = ({ className, render, ...props }: SettingsRowsProps) =>
+  renderElement(
+    "div",
+    {
+      role: "list",
+      "data-slot": "settings-rows",
+      className: cn(
+        "bg-background text-card-foreground flex w-full flex-col gap-px overflow-hidden rounded-lg",
+        className
+      ),
+      ...props,
+    },
+    render
   );
-}
 
 const settingsRowVariants = cva(
   "flex min-h-20 w-full flex-col gap-3 bg-card px-4 py-4 outline-none transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-6 md:px-5",
@@ -94,77 +121,99 @@ const settingsRowVariants = cva(
     defaultVariants: {
       variant: "default",
     },
-  },
+  }
 );
 
-export type SettingsRowProps = useRender.ComponentProps<"div"> &
+export type SettingsRowProps = LayoutProps<"div"> &
   VariantProps<typeof settingsRowVariants>;
 
-function SettingsRow({ className, variant = "default", render, ...props }: SettingsRowProps) {
-  return useRender({
-    defaultTagName: "div",
-    props: mergeProps<"div">(
+const SettingsRow = ({
+  className,
+  variant = "default",
+  render,
+  ...props
+}: SettingsRowProps) =>
+  renderElement(
+    "div",
+    mergeProps(
       {
+        "data-slot": "settings-row",
+        "data-variant": variant,
         role: "listitem",
         className: cn(settingsRowVariants({ variant, className })),
       },
-      props,
+      props
     ),
-    render,
-    state: {
-      slot: "settings-row",
-      variant,
+    render
+  );
+
+export type SettingsRowContentProps = LayoutProps<"div">;
+
+const SettingsRowContent = ({
+  className,
+  render,
+  ...props
+}: SettingsRowContentProps) =>
+  renderElement(
+    "div",
+    {
+      "data-slot": "settings-row-content",
+      className: cn("flex min-w-0 flex-1 flex-col gap-1", className),
+      ...props,
     },
-  });
-}
-
-export type SettingsRowContentProps = React.ComponentProps<"div">;
-
-function SettingsRowContent({ className, ...props }: SettingsRowContentProps) {
-  return (
-    <div
-      data-slot="settings-row-content"
-      className={cn("flex min-w-0 flex-1 flex-col gap-1", className)}
-      {...props}
-    />
+    render
   );
-}
 
-export type SettingsRowTitleProps = React.ComponentProps<"div">;
+export type SettingsRowTitleProps = LayoutProps<"div">;
 
-function SettingsRowTitle({ className, ...props }: SettingsRowTitleProps) {
-  return (
-    <div
-      data-slot="settings-row-title"
-      className={cn("font-medium text-sm leading-snug", className)}
-      {...props}
-    />
+const SettingsRowTitle = ({
+  className,
+  render,
+  ...props
+}: SettingsRowTitleProps) =>
+  renderElement(
+    "div",
+    {
+      "data-slot": "settings-row-title",
+      className: cn("text-sm leading-snug font-medium", className),
+      ...props,
+    },
+    render
   );
-}
 
-export type SettingsRowDescriptionProps = React.ComponentProps<"p">;
+export type SettingsRowDescriptionProps = LayoutProps<"p">;
 
-function SettingsRowDescription({ className, ...props }: SettingsRowDescriptionProps) {
-  return (
-    <p
-      data-slot="settings-row-description"
-      className={cn("text-muted-foreground text-sm leading-snug", className)}
-      {...props}
-    />
+const SettingsRowDescription = ({
+  className,
+  render,
+  ...props
+}: SettingsRowDescriptionProps) =>
+  renderElement(
+    "p",
+    {
+      "data-slot": "settings-row-description",
+      className: cn("text-muted-foreground text-sm leading-snug", className),
+      ...props,
+    },
+    render
   );
-}
 
-export type SettingsRowActionsProps = React.ComponentProps<"div">;
+export type SettingsRowActionsProps = LayoutProps<"div">;
 
-function SettingsRowActions({ className, ...props }: SettingsRowActionsProps) {
-  return (
-    <div
-      data-slot="settings-row-actions"
-      className={cn("flex shrink-0 items-center gap-2 sm:ml-auto", className)}
-      {...props}
-    />
+const SettingsRowActions = ({
+  className,
+  render,
+  ...props
+}: SettingsRowActionsProps) =>
+  renderElement(
+    "div",
+    {
+      "data-slot": "settings-row-actions",
+      className: cn("flex shrink-0 items-center gap-2 sm:ml-auto", className),
+      ...props,
+    },
+    render
   );
-}
 
 export {
   Settings,

@@ -7,18 +7,33 @@ import {
 } from "lucide-react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { useMemo, useState } from "react";
+import type { ComponentProps } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { getHotkeyAriaLabel, getHotkeyDisplay, useAppCommand } from "@/hotkeys";
+  createMenuController,
+  Menu,
+  MenuCheckboxItem,
+  MenuContent,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/menu";
+import {
+  Toolbar,
+  ToolbarButton,
+  ToolbarGroup,
+  ToolbarSeparator,
+} from "@/components/ui/toolbar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useInstanceValue } from "@/hooks/use-instance-value";
+import { getHotkeyAriaLabel, HotkeyHint, useAppCommand } from "@/hotkeys";
+import type { HotkeyCommandId } from "@/hotkeys";
 import { quietDestructiveClassName } from "@/lib/action-hierarchy";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { cn } from "@/lib/utils";
@@ -36,6 +51,23 @@ interface ThreadSelectionBarProps {
   threads: readonly MailThreadSummary[];
 }
 
+const SelectionBarButton = ({
+  command,
+  hint,
+  ...props
+}: ComponentProps<typeof ToolbarButton> & {
+  readonly command?: HotkeyCommandId;
+  readonly hint: string;
+}) => (
+  <Tooltip>
+    <TooltipTrigger render={<ToolbarButton {...props} />} />
+    <TooltipContent className="flex items-center gap-2">
+      {hint}
+      {command === undefined ? null : <HotkeyHint command={command} />}
+    </TooltipContent>
+  </Tooltip>
+);
+
 const ThreadSelectionBar = ({
   actions,
   onClear,
@@ -46,6 +78,7 @@ const ThreadSelectionBar = ({
   const shouldReduceMotion = useReducedMotionConfig();
   const catalogs = useLabelCatalogs();
   const [isLabelPickerOpen, setIsLabelPickerOpen] = useState(false);
+  const labelPicker = useInstanceValue(createMenuController);
   const [isPending, setIsPending] = useState(false);
   const labelGroups = useMemo(
     () => getBulkLabelGroups(threads, catalogs),
@@ -54,14 +87,13 @@ const ThreadSelectionBar = ({
   const isLoadingLabels = threads.some(
     (thread) => !catalogs.has(thread.accountId)
   );
-  const labelPickerHotkey = getHotkeyDisplay("mailbox.manageLabels");
   const isDeleteForever = onDeleteForever !== undefined;
   const hasDestructiveAction = isDeleteForever || onTrash !== undefined;
 
   useAppCommand(
     "mailbox.manageLabels",
     () => {
-      setIsLabelPickerOpen(true);
+      void labelPicker.open({ focus: "first" });
     },
     { enabled: !isLabelPickerOpen && !isPending }
   );
@@ -73,108 +105,131 @@ const ThreadSelectionBar = ({
     });
   };
 
+  const conversations = `${threads.length} conversation${threads.length === 1 ? "" : "s"}`;
+
   return (
-    <m.div
-      animate={{ opacity: 1, y: 0 }}
+    <Toolbar
       aria-label="Selected conversation actions"
       className="bg-popover/90 ring-foreground/10 absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1.5 rounded-full p-1.5 shadow-lg ring-1 backdrop-blur-xl"
-      exit={shouldReduceMotion ? undefined : { opacity: 0, y: 20 }}
-      initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
-      role="toolbar"
-      transition={{ duration: shouldReduceMotion ? 0 : 0.2, ease: "easeOut" }}
+      render={
+        <m.div
+          animate={{ opacity: 1, y: 0 }}
+          exit={shouldReduceMotion ? undefined : { opacity: 0, y: 20 }}
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
+          transition={{
+            duration: shouldReduceMotion ? 0 : 0.2,
+            ease: "easeOut",
+          }}
+        />
+      }
     >
-      <fieldset
+      <ToolbarGroup
         aria-label="Selection"
-        className="flex min-w-0 items-center border-0"
+        className="flex min-w-0 items-center"
       >
         <span className="text-muted-foreground flex h-8 items-center px-2.5 text-xs whitespace-nowrap tabular-nums">
           {threads.length} selected
         </span>
-        <Button
+        <SelectionBarButton
           aria-label="Clear conversation selection"
           className="text-muted-foreground size-8 rounded-full"
+          command="mailbox.clearSelection"
           disabled={isPending}
+          hint="Clear selection"
           onClick={onClear}
-          size="icon"
-          title="Clear selection"
-          type="button"
-          variant="ghost"
         >
           <XIcon />
-        </Button>
-      </fieldset>
-      <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-      <fieldset
+        </SelectionBarButton>
+      </ToolbarGroup>
+      <ToolbarSeparator className="bg-border mx-0.5 h-5" />
+      <ToolbarGroup
         aria-label="Message actions"
-        className="flex min-w-0 items-center border-0"
+        className="flex min-w-0 items-center"
       >
-        <Button
+        <SelectionBarButton
           aria-label="Mark selected conversations as read"
           className="size-8 rounded-full"
           disabled={isPending}
+          hint="Mark as read"
           onClick={() => {
             actions.bulkSetReadState(threads, false);
           }}
-          size="icon"
-          title="Mark as read"
-          type="button"
-          variant="ghost"
         >
           <MailOpenIcon />
-        </Button>
-        <Button
+        </SelectionBarButton>
+        <SelectionBarButton
           aria-label="Mark selected conversations as unread"
           className="size-8 rounded-full"
           disabled={isPending}
+          hint="Mark as unread"
           onClick={() => {
             actions.bulkSetReadState(threads, true);
           }}
-          size="icon"
-          title="Mark as unread"
-          type="button"
-          variant="ghost"
         >
           <MailIcon />
-        </Button>
-        <DropdownMenu
-          onOpenChange={setIsLabelPickerOpen}
+        </SelectionBarButton>
+        <Menu
+          controller={labelPicker}
+          onOpenChange={(open, details) => {
+            if (open && isPending) {
+              details.cancel();
+              return;
+            }
+            setIsLabelPickerOpen(open);
+          }}
           open={isLabelPickerOpen}
         >
-          <DropdownMenuTrigger
-            render={
-              <Button
-                aria-keyshortcuts={getHotkeyAriaLabel("mailbox.manageLabels")}
-                aria-label="Add or remove labels"
-                className="size-8 rounded-full"
-                disabled={isPending}
-                size="icon"
-                title={`Labels (${labelPickerHotkey.bindings.join(", ")})`}
-                type="button"
-                variant="ghost"
-              >
-                <TagIcon />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="center" className="w-60" side="top">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <MenuTrigger
+                  disabled={isPending}
+                  render={
+                    <ToolbarButton
+                      aria-keyshortcuts={getHotkeyAriaLabel(
+                        "mailbox.manageLabels"
+                      )}
+                      aria-label="Add or remove labels"
+                      className="size-8 rounded-full"
+                    />
+                  }
+                >
+                  <TagIcon />
+                </MenuTrigger>
+              }
+            />
+            {/* A tooltip around a menu trigger shares its name, so an agent's
+                step by that name would match both. */}
+            <TooltipContent
+              className="flex items-center gap-2"
+              data-agent-hidden
+            >
+              Labels
+              <HotkeyHint command="mailbox.manageLabels" />
+            </TooltipContent>
+          </Tooltip>
+          <MenuContent align="center" className="w-60" side="top">
             {labelGroups.every((group) => group.labels.length === 0) ? (
-              <DropdownMenuLabel>
+              <MenuItem
+                className="text-muted-foreground data-disabled:opacity-100"
+                disabled
+              >
                 {isLoadingLabels ? "Loading labels…" : "No labels"}
-              </DropdownMenuLabel>
+              </MenuItem>
             ) : (
               labelGroups.map((group, groupIndex) => (
-                <DropdownMenuGroup key={group.accountId}>
-                  {groupIndex === 0 ? null : <DropdownMenuSeparator />}
-                  <DropdownMenuLabel
-                    className="truncate"
-                    title={group.accountId}
-                  >
+                <MenuGroup key={group.accountId}>
+                  {groupIndex === 0 ? null : <MenuSeparator />}
+                  <MenuGroupLabel className="truncate" title={group.accountId}>
                     {group.accountId} · {group.threads.length}
-                  </DropdownMenuLabel>
+                  </MenuGroupLabel>
                   {group.labels.length === 0 ? (
-                    <DropdownMenuLabel>
+                    <MenuItem
+                      className="text-muted-foreground data-disabled:opacity-100"
+                      disabled
+                    >
                       No labels for this account
-                    </DropdownMenuLabel>
+                    </MenuItem>
                   ) : (
                     group.labels.map((label) => {
                       const appliedToAll =
@@ -183,9 +238,8 @@ const ThreadSelectionBar = ({
                         label.appliedCount > 0 && !appliedToAll;
 
                       return (
-                        <DropdownMenuCheckboxItem
+                        <MenuCheckboxItem
                           checked={appliedToAll}
-                          closeOnClick={false}
                           disabled={isPending}
                           key={label.id}
                           onCheckedChange={() => {
@@ -201,6 +255,7 @@ const ThreadSelectionBar = ({
                               labelName: label.name,
                             });
                           }}
+                          value={`${group.accountId}:${label.id}`}
                         >
                           <TagIcon
                             aria-hidden="true"
@@ -219,27 +274,33 @@ const ThreadSelectionBar = ({
                               Some
                             </span>
                           ) : null}
-                        </DropdownMenuCheckboxItem>
+                        </MenuCheckboxItem>
                       );
                     })
                   )}
-                </DropdownMenuGroup>
+                </MenuGroup>
               ))
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </fieldset>
+          </MenuContent>
+        </Menu>
+      </ToolbarGroup>
       {hasDestructiveAction ? (
         <>
-          <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-          <Button
+          <ToolbarSeparator className="bg-border mx-0.5 h-5" />
+          <SelectionBarButton
             aria-label={
               isDeleteForever
                 ? "Permanently delete selected conversations"
                 : "Move selected conversations to trash"
             }
             className={cn("size-8 rounded-full", quietDestructiveClassName)}
+            // Delete forever asks through useConfirm, whose confirming
+            // button is marked instead.
+            data-agent-confirm={
+              isDeleteForever ? undefined : `Moves ${conversations} to Trash`
+            }
             disabled={isPending}
+            hint={isDeleteForever ? "Delete forever" : "Move to trash"}
             onClick={() => {
               if (onDeleteForever === undefined) {
                 onTrash?.();
@@ -247,16 +308,12 @@ const ThreadSelectionBar = ({
                 void run(onDeleteForever);
               }
             }}
-            size="icon"
-            title={isDeleteForever ? "Delete forever" : "Move to trash"}
-            type="button"
-            variant="ghost"
           >
             <Trash2Icon />
-          </Button>
+          </SelectionBarButton>
         </>
       ) : null}
-    </m.div>
+    </Toolbar>
   );
 };
 

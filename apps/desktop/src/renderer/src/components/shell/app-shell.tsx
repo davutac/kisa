@@ -108,7 +108,9 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
   }, [isSidebarOpen]);
 
   return (
-    <div className="flex h-svh scroll-smooth antialiased">
+    // Positioned and clipped, so nothing inside can give the window a scroll
+    // of its own; every pane scrolls itself.
+    <div className="relative flex h-svh overflow-hidden scroll-smooth antialiased">
       <AppSidebar
         canCompose={canCompose}
         isComposing={isComposing}
@@ -132,10 +134,12 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
           slotRef={setTitlebarSlot}
         />
         {/* The composer page scrolls its own body; a fade here would dim its
-            From row at the top edge, so it reads as disabled. */}
+            From row at the top edge, so it reads as disabled. Positioned, so
+            the hidden native inputs ui-sdk's form controls place absolutely
+            scroll and clip with the page instead of lengthening the window. */}
         <main
           className={cn(
-            "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto",
+            "relative flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto",
             !scrollsItself && "scroll-fade-y"
           )}
         >

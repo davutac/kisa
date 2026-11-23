@@ -220,15 +220,12 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
 const saveLabelColor = (
   accountId: string,
   labelId: string,
-  color: MailLabelInputColor | undefined
+  background: MailLabelInputColor
 ) =>
   readDatabase("Could not save the label colour", (database) =>
     database
       .update(mailLabels)
-      .set({
-        backgroundColor: color?.background ?? null,
-        textColor: color?.text ?? null,
-      })
+      .set({ backgroundColor: background, textColor: null })
       .where(
         and(
           eq(mailLabels.accountId, accountId),
@@ -237,6 +234,23 @@ const saveLabelColor = (
       )
       .run()
   );
+
+const readSavedLabel = Effect.fn("MailIpc.readSavedLabel")(
+  function* readSavedLabel(
+    accountId: string,
+    label: { readonly id: string; readonly name: string }
+  ) {
+    const catalog = yield* listLabelCatalog({ accountId });
+    return (
+      catalog.labels.find((candidate) => candidate.id === label.id) ??
+      ({
+        id: label.id,
+        name: label.name,
+        type: "user",
+      } satisfies MailLabelSummary)
+    );
+  }
+);
 
 export const createAccountLabelFromRequest = Effect.fn(
   "MailIpc.createAccountLabel"
@@ -248,12 +262,7 @@ export const createAccountLabelFromRequest = Effect.fn(
   if (request.color !== undefined) {
     yield* saveLabelColor(request.accountId, label.id, request.color);
   }
-  return {
-    color: request.color,
-    id: label.id,
-    name: label.name,
-    type: "user",
-  } satisfies MailLabelSummary;
+  return yield* readSavedLabel(request.accountId, label);
 });
 
 export const updateAccountLabel = Effect.fn("MailIpc.updateAccountLabel")(
@@ -266,14 +275,7 @@ export const updateAccountLabel = Effect.fn("MailIpc.updateAccountLabel")(
     if (request.color !== undefined) {
       yield* saveLabelColor(request.accountId, label.id, request.color);
     }
-    const catalog = yield* listLabelCatalog(request);
-    return (
-      catalog.labels.find((candidate) => candidate.id === label.id) ?? {
-        id: label.id,
-        name: label.name,
-        type: "user",
-      }
-    );
+    return yield* readSavedLabel(request.accountId, label);
   }
 );
 

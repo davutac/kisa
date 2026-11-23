@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import {
   assignComposerInlineContentIds,
@@ -9,6 +8,9 @@ import {
   getRetainedComposerInlineBytes,
 } from "@/components/mail/composer-inline-images";
 import type { ComposerInlineImage } from "@/components/mail/composer-inline-images";
+import { createFileInputController } from "@/components/ui/file-input";
+import { toast } from "@/components/ui/toast";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { MailApi } from "@/platform/desktop";
 import { MAX_OUTGOING_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
@@ -38,7 +40,7 @@ export const useOutgoingAttachments = (
   const [pendingAuthorizations, setPendingAuthorizations] = useState(0);
   const activeRef = useRef(true);
   const attachmentsRef = useRef(attachmentState);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const picker = useInstanceValue(createFileInputController);
   const previewLoadsRef = useRef(new Map<string, Promise<string | null>>());
   const previewUrlsRef = useRef(new Map<string, string>());
   const [referencedContentIds, setReferencedContentIds] = useState(() =>
@@ -158,9 +160,6 @@ export const useOutgoingAttachments = (
   const addAttachments = useCallback(
     async (fileList: FileList | readonly File[] | null): Promise<void> => {
       await authorizeAttachments([...(fileList ?? [])], false);
-      if (inputRef.current !== null) {
-        inputRef.current.value = "";
-      }
     },
     [authorizeAttachments]
   );
@@ -341,9 +340,9 @@ export const useOutgoingAttachments = (
     discardInlineImages,
     fallbackInlineImagesToAttachments,
     getInlineImagePreview,
-    inputRef,
     isAuthorizing: pendingAuthorizations > 0,
     loadInlineImagePreview,
+    picker,
     prepareAttachments,
     removeAttachment,
     replaceAttachments,

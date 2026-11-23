@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
+import { toast } from "@/components/ui/toast";
 import { useAppCommand } from "@/hotkeys";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getTemplateApi } from "@/platform/desktop";

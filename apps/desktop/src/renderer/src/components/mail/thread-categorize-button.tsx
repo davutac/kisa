@@ -1,9 +1,9 @@
 import { SparklesIcon } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast";
 import {
   Tooltip,
   TooltipContent,
@@ -69,30 +69,25 @@ const ThreadCategorizeButton = ({
     <Tooltip>
       <TooltipTrigger
         render={
-          <span className="inline-flex shrink-0">
-            <Button
-              aria-busy={isCategorizing}
-              aria-label={
-                selection === null
-                  ? `Categorize with AI unavailable: ${modelLabel}`
-                  : "Categorize with AI"
-              }
-              className="rounded-full"
-              disabled={isDisabled}
-              onClick={() => {
-                void categorize();
-              }}
-              size="icon-sm"
-              type="button"
-              variant="ai"
-            >
-              {isCategorizing ? (
-                <Spinner aria-hidden="true" />
-              ) : (
-                <SparklesIcon />
-              )}
-            </Button>
-          </span>
+          <Button
+            aria-busy={isCategorizing}
+            aria-label={
+              selection === null
+                ? `Categorize with AI unavailable: ${modelLabel}`
+                : "Categorize with AI"
+            }
+            className="shrink-0 rounded-full"
+            disabled={isDisabled}
+            focusableWhenDisabled
+            onClick={() => {
+              void categorize();
+            }}
+            size="icon-sm"
+            type="button"
+            variant="ai"
+          >
+            {isCategorizing ? <Spinner aria-hidden="true" /> : <SparklesIcon />}
+          </Button>
         }
       />
       <TooltipContent side="bottom">{tooltip}</TooltipContent>

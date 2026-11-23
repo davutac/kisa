@@ -8,6 +8,7 @@ import {
 import type { ReactNode, Ref } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -39,6 +40,7 @@ const HistoryButton = ({
             aria-label={display.label}
             className="text-muted-foreground hover:text-foreground"
             disabled={!canGo}
+            focusableWhenDisabled
             onClick={onGo}
             size="icon"
             type="button"
@@ -142,28 +144,28 @@ export const NewMessageButton = ({
 }) => {
   const display = getHotkeyDisplay("app.composeMessage");
   const isInSidebar = placement === "sidebar";
-  const sidebarVariant = isOpen ? "secondary" : "ghost";
-  const sidebarClassName = isOpen
-    ? undefined
-    : "text-muted-foreground hover:text-foreground";
 
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button
+          <Toggle
             aria-keyshortcuts={getHotkeyAriaLabel("app.composeMessage")}
             aria-label={display.label}
-            aria-pressed={isOpen}
-            className={isInSidebar ? sidebarClassName : undefined}
+            className={
+              isInSidebar
+                ? "not-data-pressed:text-muted-foreground not-data-pressed:hover:text-foreground"
+                : undefined
+            }
             disabled={!canOpen}
-            onClick={onToggle}
+            focusableWhenDisabled
+            onPressedChange={onToggle}
+            pressed={isOpen}
             size={isInSidebar ? "icon-lg" : "icon"}
-            type="button"
-            variant={isInSidebar ? sidebarVariant : "default"}
+            variant={isInSidebar ? "ghost" : "default"}
           >
             <SquarePenIcon className="size-4 stroke-[1.8]" />
-          </Button>
+          </Toggle>
         }
       />
       <TooltipContent className="flex items-center gap-2" side="bottom">

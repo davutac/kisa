@@ -30,7 +30,7 @@ interface MailboxState {
   /** Moves to another account scope and mailbox in one step, keeping the unread filter. */
   selectMailbox: (accountId: string | null, mailbox: MailboxPlace) => void;
   selectThread: (threadId: string | null) => void;
-  retainCheckedThreads: (threadIds: ReadonlySet<string>) => void;
+  setCheckedThreads: (threadIds: ReadonlySet<string>) => void;
   setMailbox: (mailbox: MailboxPlace) => void;
   setShowUnread: (showUnread: boolean) => void;
 }
@@ -78,19 +78,7 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
     set({ openThreadId, selectedThreadId: openThreadId });
   },
   openThreadId: null,
-  retainCheckedThreads: (threadIds) => {
-    set((state) => {
-      const checkedThreadIds = new Set(
-        [...state.checkedThreadIds].filter((threadId) =>
-          threadIds.has(threadId)
-        )
-      );
 
-      return checkedThreadIds.size === state.checkedThreadIds.size
-        ? state
-        : { checkedThreadIds };
-    });
-  },
   selectAccount: (selectedAccountId) => {
     set({
       checkedThreadIds: new Set(),
@@ -124,6 +112,14 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
   },
   selectedAccountId: null,
   selectedThreadId: null,
+  setCheckedThreads: (threadIds) => {
+    set((state) =>
+      threadIds.size === state.checkedThreadIds.size &&
+      [...threadIds].every((threadId) => state.checkedThreadIds.has(threadId))
+        ? state
+        : { checkedThreadIds: threadIds }
+    );
+  },
   setMailbox: (mailbox) => {
     set((state) => ({
       checkedThreadIds: new Set(),

@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { EmailSignatureBody } from "../email-signature";
+import { LABEL_COLOR_PATTERN } from "../label-color";
 import { MAX_SUBJECT_LENGTH } from "../mail-subject";
 import { IpcReply } from "./reply";
 
@@ -103,116 +104,10 @@ export const MailLabelColor = Schema.Struct({
 });
 export type MailLabelColor = typeof MailLabelColor.Type;
 
-/** Label colors, from Gmail's palette, ordered as displayed in the 12-column picker. */
-export const LABEL_COLOR_VALUES = [
-  "#000000",
-  "#434343",
-  "#464646",
-  "#666666",
-  "#999999",
-  "#c2c2c2",
-  "#cccccc",
-  "#e7e7e7",
-  "#efefef",
-  "#f3f3f3",
-  "#ffffff",
-  "#ebdbde",
-  "#f6c5be",
-  "#ffe6c7",
-  "#ffdeb5",
-  "#fef1d1",
-  "#fdedc1",
-  "#c6f3de",
-  "#c9daf8",
-  "#e3d7ff",
-  "#e4d7f5",
-  "#fcdee8",
-  "#fbc8d9",
-  "#fbd3e0",
-  "#f2b2a8",
-  "#ffc8af",
-  "#ffd6a2",
-  "#fce8b3",
-  "#b3efd3",
-  "#b9e4d0",
-  "#a0eac9",
-  "#b6cff5",
-  "#a4c2f4",
-  "#b99aff",
-  "#d0bcf1",
-  "#f7a7c0",
-  "#efa093",
-  "#ffbc6b",
-  "#fcda83",
-  "#fad165",
-  "#fbe983",
-  "#a2dcc1",
-  "#89d3b2",
-  "#98d7e4",
-  "#b694e8",
-  "#f691b3",
-  "#f691b2",
-  "#cca6ac",
-  "#e66550",
-  "#ff7537",
-  "#ffad47",
-  "#ffad46",
-  "#f2c960",
-  "#68dfa9",
-  "#6d9eeb",
-  "#4986e7",
-  "#4a86e8",
-  "#8e63ce",
-  "#a479e2",
-  "#e07798",
-  "#fb4c2f",
-  "#cc3a21",
-  "#cf8933",
-  "#eaa041",
-  "#d5ae49",
-  "#43d692",
-  "#42d692",
-  "#44b984",
-  "#3dc789",
-  "#2da2bb",
-  "#3c78d8",
-  "#b65775",
-  "#ac2b16",
-  "#a46a21",
-  "#aa8831",
-  "#2a9c68",
-  "#16a765",
-  "#149e60",
-  "#16a766",
-  "#285bac",
-  "#3d188e",
-  "#653e9b",
-  "#994a64",
-  "#83334c",
-  "#8a1c0a",
-  "#822111",
-  "#7a2e0b",
-  "#7a4706",
-  "#684e07",
-  "#0b804b",
-  "#1a764d",
-  "#0d3472",
-  "#1c4587",
-  "#41236d",
-  "#711a36",
-  "#662e37",
-  "#594c05",
-  "#094228",
-  "#0b4f30",
-  "#076239",
-  "#04502e",
-  "#0d3b44",
-] as const;
-
-export const MailLabelInputColor = Schema.Struct({
-  background: Schema.Literals(LABEL_COLOR_VALUES),
-  text: Schema.Literals(LABEL_COLOR_VALUES),
-});
+/** A label's background as `#rrggbb`; main derives its text colour. */
+export const MailLabelInputColor = Schema.String.check(
+  Schema.isPattern(LABEL_COLOR_PATTERN)
+);
 export type MailLabelInputColor = typeof MailLabelInputColor.Type;
 
 export const MailLabelSummary = Schema.Struct({

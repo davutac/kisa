@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   SettingsRow,
@@ -9,6 +8,7 @@ import {
   SettingsRowTitle,
 } from "@/components/ui/settings";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { SettingsApi } from "@/platform/desktop";
 import type { Account } from "@/shared/ipc/accounts";
@@ -64,7 +64,7 @@ const SettingsAccountNotificationsRow = ({
       </SettingsRowContent>
       <SettingsRowActions>
         <Switch
-          aria-labelledby={titleId}
+          aria-labelledby={`${titleId} account-${account.email}-title`}
           checked={notificationsEnabled}
           disabled={isSaving}
           onCheckedChange={(checked) => {

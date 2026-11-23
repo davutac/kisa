@@ -121,6 +121,7 @@ const TemplateSubjectEditor = ({
         <TemplateVariablePicker
           disabled={editor === null}
           editor={editor}
+          field="subject"
           previewContext={previewContext}
         />
       </InputGroupAddon>

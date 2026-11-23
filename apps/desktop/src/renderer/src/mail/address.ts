@@ -70,30 +70,43 @@ export const getThreadEmailAddresses = (
   );
 };
 
-/** Finds the first longer address whose beginning is exactly what was typed. */
-export const findEmailAddressCompletion = (
+export interface EmailAddressSuggestion {
+  address: string;
+  name?: string;
+}
+
+// An exact match comes first, so Enter on a complete address keeps it rather
+// than a longer suggestion.
+export const findEmailAddressSuggestions = (
   draft: string,
-  candidates: readonly string[],
-  excluded: readonly string[] = []
-): string | undefined => {
+  candidates: readonly EmailAddressSuggestion[],
+  excluded: readonly string[] = [],
+  limit = 8
+): readonly EmailAddressSuggestion[] => {
   if (draft.length === 0 || draft.trim() !== draft) {
-    return undefined;
+    return [];
   }
 
   const prefix = draft.toLowerCase();
-  const excludedAddresses = new Set(
-    excluded.map((address) => address.toLowerCase())
+  const seen = new Set(excluded.map((address) => address.toLowerCase()));
+  const matches = candidates.filter(({ address }) => {
+    const normalizedAddress = address.toLowerCase();
+
+    if (seen.has(normalizedAddress) || !normalizedAddress.startsWith(prefix)) {
+      return false;
+    }
+
+    seen.add(normalizedAddress);
+    return true;
+  });
+  const exact = matches.filter(
+    ({ address }) => address.toLowerCase() === prefix
   );
 
-  return candidates.find((candidate) => {
-    const address = candidate.toLowerCase();
-
-    return (
-      address.length > prefix.length &&
-      address.startsWith(prefix) &&
-      !excludedAddresses.has(address)
-    );
-  });
+  return [
+    ...exact,
+    ...matches.filter(({ address }) => address.toLowerCase() !== prefix),
+  ].slice(0, limit);
 };
 
 export interface MailboxAddress {

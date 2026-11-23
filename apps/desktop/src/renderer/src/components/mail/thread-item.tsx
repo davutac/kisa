@@ -1,8 +1,6 @@
 import { MessagesSquareIcon, SendIcon } from "lucide-react";
-import type { HTMLMotionProps } from "motion/react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { memo, useState } from "react";
-import type { MouseEvent, PointerEvent } from "react";
 
 import AccountChip from "@/components/accounts/account-chip";
 import MailAttachmentList from "@/components/mail/attachment-list";
@@ -28,39 +26,28 @@ import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
 import { hasSentLabel } from "@/mail/label";
 import { formatMailDate } from "@/mail/mail-date";
+import { getThreadSelectionKey } from "@/mail/thread-selection";
+import {
+  MailListCell,
+  MailListCheck,
+  MailListOpen,
+  MailListRow,
+} from "@/primitives/mail-list";
 import type { MailThreadSummary } from "@/shared/ipc/mail";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
 
-interface MailThreadItemProps extends Omit<
-  HTMLMotionProps<"li">,
-  "children" | "style"
-> {
+interface MailThreadItemProps {
   hasCheckedThreads?: boolean;
   isChecked?: boolean;
   isSelected?: boolean;
   /** The listed mailbox's own system label, which every row would repeat. */
   mailboxLabel?: string;
   onDeleteForever?: (thread: MailThreadSummary) => void;
-  onOpen: (
-    thread: MailThreadSummary,
-    event: MouseEvent<HTMLButtonElement>
-  ) => void;
-  onRowPointerDown: (
-    thread: MailThreadSummary,
-    event: PointerEvent<HTMLButtonElement>
-  ) => void;
-  onSelectionPointerDown: (
-    thread: MailThreadSummary,
-    event: PointerEvent
-  ) => void;
-  onSelectionPointerEnter: (thread: MailThreadSummary) => void;
   onNotSpam?: (thread: MailThreadSummary) => void;
   onToggleRead?: (thread: MailThreadSummary) => void;
   onToggleSelection: (thread: MailThreadSummary) => void;
   onTrash?: (thread: MailThreadSummary) => void;
-  position: number;
-  setSize: number;
   showAccount?: boolean;
   thread: MailThreadSummary;
   /** Virtual row offset, passed as a number so memoized rows compare equal. */
@@ -84,6 +71,15 @@ const getThreadRowLabel = (
     .filter((part) => part !== undefined)
     .join(", ");
 
+// Names each row's controls apart, also across accounts that share a subject.
+export const getThreadControlName = (
+  thread: Pick<MailThreadSummary, "accountId" | "subject">,
+  showAccount: boolean
+): string => {
+  const subject = thread.subject.trim() || "No subject";
+  return showAccount ? `${subject} in ${thread.accountId}` : subject;
+};
+
 const bindThreadAction = (
   action: ((thread: MailThreadSummary) => void) | undefined,
   thread: MailThreadSummary
@@ -103,51 +99,50 @@ const getThreadItemRevealState = (
 const ThreadSelectionCheckbox = ({
   isChecked,
   isRevealed,
-  onPointerDown,
+  name,
   onToggle,
-  subject,
 }: {
   isChecked: boolean;
   isRevealed: boolean;
-  onPointerDown: (event: PointerEvent) => void;
+  name: string;
   onToggle: () => void;
-  subject: string;
 }) => {
   const shouldReduceMotion = useReducedMotionConfig();
 
   return (
-    <m.span
-      initial={{
-        marginRight: -8,
-        opacity: 0,
-        width: 0,
-      }}
-      animate={{
-        marginRight: isRevealed ? 2 : -8,
-        opacity: isRevealed ? 1 : 0,
-        width: isRevealed ? 16 : 0,
-      }}
+    <MailListCheck
       className="pointer-events-auto relative flex shrink-0 overflow-visible"
       inert={!isRevealed}
-      transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+      render={
+        <m.span
+          animate={{
+            marginRight: isRevealed ? 2 : -8,
+            opacity: isRevealed ? 1 : 0,
+            width: isRevealed ? 16 : 0,
+          }}
+          initial={{
+            marginRight: -8,
+            opacity: 0,
+            width: 0,
+          }}
+          transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+        />
+      }
     >
       <Checkbox
-        aria-label={`${isChecked ? "Deselect" : "Select"} ${subject}`}
+        aria-label={`Select ${name}`}
         checked={isChecked}
         onCheckedChange={() => onToggle()}
         onClick={(event) => {
           event.stopPropagation();
-          // Pointer-down toggles immediately for drag painting. Base UI still
-          // handles synthesized keyboard and assistive activation.
+          // Pressing it already painted the row for a drag; preventDefault
+          // skips the checkbox's own toggle. Keyboard clicks have detail 0.
           if (event.detail > 0) {
             event.preventDefault();
-            event.preventBaseUIHandler();
           }
         }}
-        onPointerDown={onPointerDown}
-        tabIndex={isRevealed ? 0 : -1}
       />
-    </m.span>
+    </MailListCheck>
   );
 };
 
@@ -155,7 +150,6 @@ const ThreadSenderHeader = ({
   isChecked,
   isSelectionRevealed,
   mailboxLabel,
-  onSelectionPointerDown,
   onToggleSelection,
   showAccount,
   thread,
@@ -163,7 +157,6 @@ const ThreadSenderHeader = ({
   isChecked: boolean;
   isSelectionRevealed: boolean;
   mailboxLabel?: string;
-  onSelectionPointerDown: (event: PointerEvent) => void;
   onToggleSelection: () => void;
   showAccount: boolean;
   thread: MailThreadSummary;
@@ -181,9 +174,8 @@ const ThreadSenderHeader = ({
       <ThreadSelectionCheckbox
         isChecked={isChecked}
         isRevealed={isSelectionRevealed}
-        onPointerDown={onSelectionPointerDown}
+        name={getThreadControlName(thread, showAccount)}
         onToggle={onToggleSelection}
-        subject={thread.subject}
       />
       <ItemTitle
         className="max-w-full min-w-0 gap-1.5 overflow-hidden text-xs"
@@ -236,20 +228,13 @@ const MailThreadItem = ({
   isSelected = false,
   mailboxLabel,
   onDeleteForever,
-  onOpen,
-  onRowPointerDown,
-  onSelectionPointerDown,
-  onSelectionPointerEnter,
   onNotSpam,
   onToggleRead,
   onToggleSelection,
   onTrash,
-  position,
-  setSize,
   showAccount = false,
   thread,
   top,
-  ...props
 }: MailThreadItemProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const calendar = useCalendar();
@@ -276,28 +261,27 @@ const MailThreadItem = ({
   );
 
   return (
-    <m.li
-      animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-      aria-posinset={position}
-      aria-setsize={setSize}
+    <MailListRow
       className="absolute left-0 w-full pb-px"
-      exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-      initial={shouldReduceMotion ? false : { opacity: 0 }}
-      layout={shouldReduceMotion ? false : "position"}
-      layoutId={
-        shouldReduceMotion
-          ? undefined
-          : `mail-thread:${thread.accountId}:${thread.threadId}`
+      render={
+        <m.div
+          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+          initial={shouldReduceMotion ? false : { opacity: 0 }}
+          layout={shouldReduceMotion ? false : "position"}
+          layoutId={
+            shouldReduceMotion
+              ? undefined
+              : `mail-thread:${thread.accountId}:${thread.threadId}`
+          }
+          transition={{
+            layout: easeInOut(0.24),
+            opacity: easeInOut(0.16),
+          }}
+        />
       }
-      transition={{
-        layout: easeInOut(0.24),
-        opacity: easeInOut(0.16),
-      }}
-      onPointerEnter={() => {
-        onSelectionPointerEnter(thread);
-      }}
       style={{ top }}
-      {...props}
+      value={getThreadSelectionKey(thread)}
     >
       <m.div
         className="relative"
@@ -309,23 +293,18 @@ const MailThreadItem = ({
           setIsHovered(true);
         }}
       >
-        <MailThreadQuickActions
-          hotkeysEnabled={isSelected}
-          isRevealed={areQuickActionsRevealed}
-          isUnread={thread.isUnread}
-          onDeleteForever={bindThreadAction(onDeleteForever, thread)}
-          onNotSpam={handleNotSpam}
-          onToggleRead={bindThreadAction(onToggleRead, thread)}
-          onTrash={bindThreadAction(onTrash, thread)}
-        />
         {/* Opaque, so the row hides the panel edge it overlaps. */}
-        <m.div
-          animate={{
-            marginRight: areQuickActionsRevealed ? quickActionsWidth : 0,
-          }}
+        <MailListCell
           className="bg-background relative z-10 rounded-md"
-          initial={false}
-          transition={revealTransition}
+          render={
+            <m.div
+              animate={{
+                marginRight: areQuickActionsRevealed ? quickActionsWidth : 0,
+              }}
+              initial={false}
+              transition={revealTransition}
+            />
+          }
         >
           <Item
             className={cn(
@@ -336,26 +315,15 @@ const MailThreadItem = ({
             data-checked={isChecked}
             data-selected={isSelected}
           >
-            <button
-              aria-current={isSelected}
+            <MailListOpen
               aria-label={getThreadRowLabel(thread, calendar, showAccount)}
               className="absolute inset-0 z-0 rounded-md text-left outline-none"
-              onClick={(event) => {
-                onOpen(thread, event);
-              }}
-              onPointerDown={(event) => {
-                onRowPointerDown(thread, event);
-              }}
-              type="button"
             />
             <ItemContent className="pointer-events-none relative z-10 min-w-0 gap-1">
               <ThreadSenderHeader
                 isChecked={isChecked}
                 isSelectionRevealed={isActive}
                 mailboxLabel={mailboxLabel}
-                onSelectionPointerDown={(event) => {
-                  onSelectionPointerDown(thread, event);
-                }}
                 onToggleSelection={() => {
                   onToggleSelection(thread);
                 }}
@@ -398,11 +366,13 @@ const MailThreadItem = ({
                   />
                   {hiddenAttachmentCount > 0 ? (
                     <Badge
-                      aria-label={`${hiddenAttachmentCount} more attachments`}
                       className="bg-muted text-muted-foreground shrink-0"
                       variant="secondary"
                     >
-                      +{hiddenAttachmentCount}
+                      <span aria-hidden="true">+{hiddenAttachmentCount}</span>
+                      <span className="sr-only">
+                        {hiddenAttachmentCount} more attachments
+                      </span>
                     </Badge>
                   ) : null}
                 </div>
@@ -426,9 +396,20 @@ const MailThreadItem = ({
               />
             </ItemActions>
           </Item>
-        </m.div>
+        </MailListCell>
+        <MailThreadQuickActions
+          hotkeysEnabled={isSelected}
+          isRevealed={areQuickActionsRevealed}
+          isUnread={thread.isUnread}
+          name={getThreadControlName(thread, showAccount)}
+          subject={thread.subject}
+          onDeleteForever={bindThreadAction(onDeleteForever, thread)}
+          onNotSpam={handleNotSpam}
+          onToggleRead={bindThreadAction(onToggleRead, thread)}
+          onTrash={bindThreadAction(onTrash, thread)}
+        />
       </m.div>
-    </m.li>
+    </MailListRow>
   );
 };
 

@@ -6,10 +6,10 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { toast } from "sonner";
 
 import { useTheme } from "@/components/shell/theme-provider";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
   createEmailDocument,

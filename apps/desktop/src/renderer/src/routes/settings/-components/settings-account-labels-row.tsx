@@ -1,6 +1,5 @@
 import { LoaderCircleIcon, PlusIcon, RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { ConfirmMessage, useConfirm } from "@/components/confirm-dialog";
 import LabelDialog from "@/components/mail/label-dialog";
@@ -14,6 +13,7 @@ import {
   SettingsRowDescription,
   SettingsRowTitle,
 } from "@/components/ui/settings";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { listUserLabels } from "@/mail/label";
 import type { MailApi } from "@/platform/desktop";
@@ -182,11 +182,11 @@ const SettingsAccountLabelsRow = ({
                 onClick={() => {
                   setLabelDialog({ kind: "edit", label });
                 }}
-                onClickAriaLabel={`Edit ${label.name}`}
+                onClickAriaLabel={`Edit ${label.name} for ${accountId}`}
                 onRemove={() => {
                   void requestDelete(label);
                 }}
-                removeAriaLabel={`Delete ${label.name}`}
+                removeAriaLabel={`Delete ${label.name} for ${accountId}`}
               />
             ))}
           </div>

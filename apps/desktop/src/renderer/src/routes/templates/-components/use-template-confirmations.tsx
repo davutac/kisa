@@ -23,7 +23,9 @@ export const useTemplateConfirmations = ({
   const confirmDelete = useCallback(
     (name: string): Promise<boolean> =>
       confirm({
-        confirmLabel: "Delete template",
+        // Not "Delete template", the trigger's name: an agent's press by this
+        // text must find only the confirming button.
+        confirmLabel: "Delete forever",
         confirmVariant: "destructive",
         description: (
           <ConfirmMessage subject={name}>

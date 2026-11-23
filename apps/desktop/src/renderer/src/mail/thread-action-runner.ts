@@ -23,7 +23,7 @@ export type ThreadActionOutcome =
       readonly succeeded: readonly MailThreadRequest[];
     };
 
-type ToastId = string | number;
+type ToastId = string;
 
 export interface ThreadActionPorts {
   readonly bulkMutateThreads: (

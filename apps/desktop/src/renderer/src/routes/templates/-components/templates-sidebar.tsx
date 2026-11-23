@@ -2,11 +2,9 @@ import { LoaderCircleIcon, SearchIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { Kbd } from "@/components/ui/kbd";
 import { getHotkeyAriaLabel, getHotkeyDisplay, HotkeyHint } from "@/hotkeys";
 import { cn } from "@/lib/utils";
@@ -61,35 +59,52 @@ const TemplatesSidebar = ({
       </p>
     );
   } else {
-    content = templates.map((template) => {
+    const rows = templates.map((template) => {
       const isSelected = selectedTemplateId === template.id;
+      const summaryId = `template-${template.id}-summary`;
 
       return (
-        <button
-          aria-current={isSelected ? "true" : undefined}
-          className={cn(
-            "text-foreground/80 hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/30 flex w-full shrink-0 flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left outline-none focus-visible:ring-2",
-            isSelected && "bg-accent text-accent-foreground"
-          )}
-          key={template.id}
-          onClick={() => onSelect(template)}
-          ref={isSelected ? selectedTemplateRef : undefined}
-          type="button"
-        >
-          <span
+        <li className="shrink-0" key={template.id}>
+          <Button
+            aria-current={isSelected ? "true" : undefined}
+            aria-describedby={summaryId}
+            aria-label={template.name}
             className={cn(
-              "w-full truncate text-[13px]",
-              isSelected ? "font-medium" : "font-normal"
+              "text-foreground/80 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent flex h-auto w-full flex-col items-start justify-start gap-0.5 px-2.5 py-2 text-left active:not-aria-[haspopup]:translate-y-0",
+              isSelected && "bg-accent text-accent-foreground"
             )}
+            onClick={() => onSelect(template)}
+            ref={isSelected ? selectedTemplateRef : undefined}
+            type="button"
+            variant="ghost"
           >
-            {template.name}
-          </span>
-          <span className="text-muted-foreground w-full truncate text-xs">
-            {getTemplateSummary(template)}
-          </span>
-        </button>
+            <span
+              className={cn(
+                "w-full truncate text-[13px]",
+                isSelected ? "font-medium" : "font-normal"
+              )}
+            >
+              {template.name}
+            </span>{" "}
+            <span
+              className="text-muted-foreground w-full truncate text-xs"
+              id={summaryId}
+            >
+              {getTemplateSummary(template)}
+            </span>
+          </Button>
+        </li>
       );
     });
+    content = (
+      <ul
+        aria-keyshortcuts={`${getHotkeyAriaLabel("templates.next")} ${getHotkeyAriaLabel("templates.previous")}`}
+        aria-label="Template list"
+        className="flex flex-col gap-0.5"
+      >
+        {rows}
+      </ul>
+    );
   }
 
   return (
@@ -99,7 +114,7 @@ const TemplatesSidebar = ({
           <InputGroupAddon>
             <SearchIcon className="stroke-[1.8]" />
           </InputGroupAddon>
-          <InputGroupInput
+          <Input
             aria-keyshortcuts={getHotkeyAriaLabel("templates.focusSearch")}
             aria-label={searchDisplay.label}
             className="text-[13px] md:text-[13px]"
@@ -116,11 +131,7 @@ const TemplatesSidebar = ({
           ) : null}
         </InputGroup>
       </div>
-      <div
-        aria-keyshortcuts={`${getHotkeyAriaLabel("templates.next")} ${getHotkeyAriaLabel("templates.previous")}`}
-        aria-label="Template list"
-        className="scroll-fade-y flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-2 pl-2"
-      >
+      <div className="scroll-fade-y flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-2 pl-2">
         {content}
       </div>
       <p className="text-muted-foreground flex shrink-0 items-center gap-1.5 pt-2 pr-2 pb-2 pl-4 text-xs">

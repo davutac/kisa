@@ -3,7 +3,6 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   formatLabel,
   labelColorStyle,
-  labelTextColor,
   hasInboxLabel,
   hasSentLabel,
   isSystemLabel,
@@ -13,6 +12,11 @@ import {
   filterVisibleLabels,
   withLabelState,
 } from "../src/renderer/src/mail/label";
+import {
+  contrastRatio,
+  labelTextColor,
+  seededLabelColor,
+} from "../src/shared/label-color";
 
 describe(labelColorStyle, () => {
   it("uses the paired foreground and background colors", () => {
@@ -42,6 +46,28 @@ describe(labelTextColor, () => {
   it("chooses an accepted contrasting text color", () => {
     expect(labelTextColor("#fef1d1")).toBe("#000000");
     expect(labelTextColor("#0d3472")).toBe("#ffffff");
+  });
+
+  it("reads at 4.5:1 on any background", () => {
+    const worst = Math.min(
+      ...Array.from({ length: 4096 }, (_, index) => {
+        const background = `#${(index * 4099).toString(16).padStart(6, "0").slice(-6)}`;
+        return contrastRatio(background, labelTextColor(background));
+      })
+    );
+    expect(worst).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe(seededLabelColor, () => {
+  it("gives a label the same color in every account, whatever its case", () => {
+    expect(seededLabelColor("Receipts")).toBe(seededLabelColor(" receipts "));
+    expect(seededLabelColor("Receipts")).toMatch(/^#[0-9a-f]{6}$/u);
+  });
+
+  it("spreads labels across many colors", () => {
+    const names = Array.from({ length: 200 }, (_, index) => `Label ${index}`);
+    expect(new Set(names.map(seededLabelColor)).size).toBeGreaterThan(150);
   });
 });
 

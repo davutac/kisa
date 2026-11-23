@@ -43,7 +43,15 @@ const AiInstructionsDialog = ({
       }}
       open={isOpen}
     >
-      <DialogTrigger render={<Button type="button" variant="secondary" />}>
+      <DialogTrigger
+        render={
+          <Button
+            aria-label={`Edit ${title}`}
+            type="button"
+            variant="secondary"
+          />
+        }
+      >
         Edit
       </DialogTrigger>
       <DialogContent className="sm:max-w-xl">

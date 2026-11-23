@@ -58,7 +58,7 @@ const MailMessageParticipants = ({
 
   return (
     <div className={cn("items-top flex min-w-0 gap-3", className)}>
-      <Avatar>
+      <Avatar aria-hidden="true">
         {senderImageUrl === undefined ? null : (
           <AvatarImage alt="" src={senderImageUrl} />
         )}

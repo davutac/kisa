@@ -59,9 +59,9 @@ export const MailAttachmentSummaryPill = ({
   );
   const label = `${attachment.filename} (${typeLabel})`;
 
+  // A name on a plain span is ignored, so the type is read out as text.
   return (
     <span
-      aria-label={label}
       className={cn(
         buttonVariants({ size: "sm", variant: "secondary" }),
         PILL_CLASS,
@@ -73,6 +73,7 @@ export const MailAttachmentSummaryPill = ({
         attachment={attachment}
         icon={<PaperclipIcon aria-hidden="true" data-icon="inline-start" />}
       />
+      <span className="sr-only"> ({typeLabel})</span>
     </span>
   );
 };

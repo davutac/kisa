@@ -11,4 +11,25 @@ export default defineConfig({
       { find: "@", replacement: path.resolve("src/renderer/src") },
     ],
   },
+  test: {
+    projects: [
+      {
+        extends: true,
+        test: {
+          exclude: ["tests/**/*.dom.test.tsx"],
+          include: ["tests/**/*.test.{ts,tsx}"],
+          name: "node",
+        },
+      },
+      {
+        extends: true,
+        test: {
+          environment: "jsdom",
+          include: ["tests/**/*.dom.test.tsx"],
+          name: "dom",
+          setupFiles: ["tests/setup/dom.ts"],
+        },
+      },
+    ],
+  },
 });

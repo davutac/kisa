@@ -43,6 +43,7 @@ import type { SQL } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { Effect, Layer, Option, Schema } from "effect";
 
+import { seededLabelColor } from "../../../shared/label-color";
 import {
   forgetCachedCorrespondents,
   rememberCorrespondentMessages,
@@ -1514,6 +1515,7 @@ export const MailEngineStoreLive = Layer.effect(
           for (const rows of chunkRows(
             labels.map((label) => ({
               accountId,
+              backgroundColor: seededLabelColor(label.name),
               kind: "user" as const,
               labelId: label.id,
               mailboxPath: label.path,
@@ -1522,17 +1524,21 @@ export const MailEngineStoreLive = Layer.effect(
             })),
             mailLabels
           )) {
-            // Local colours survive a refresh of the catalog.
+            // A label gets its colour when first seen, and a colour already
+            // chosen survives a refresh of the catalog.
             // oxlint-disable-next-line eslint/no-await-in-loop
             await transaction
               .insert(mailLabels)
               .values(rows)
               .onConflictDoUpdate({
-                set: excludedColumns(mailLabels, [
-                  "mailboxPath",
-                  "name",
-                  "updatedAt",
-                ]),
+                set: {
+                  ...excludedColumns(mailLabels, [
+                    "mailboxPath",
+                    "name",
+                    "updatedAt",
+                  ]),
+                  backgroundColor: sql`coalesce(${mailLabels.backgroundColor}, excluded.background_color)`,
+                },
                 target: [mailLabels.accountId, mailLabels.labelId],
               })
               .run();

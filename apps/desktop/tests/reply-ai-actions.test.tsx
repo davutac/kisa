@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import MailReplyArea from "../src/renderer/src/components/mail/reply-area";
+import { createFileInputController } from "../src/renderer/src/components/ui/file-input";
 import type {
   Tooltip as TooltipComponent,
   TooltipContent as TooltipContentComponent,
@@ -140,7 +141,7 @@ vi.mock(import("@/components/mail/reply-area/use-reply-workspace"), () => ({
         discardInlineImages: () => null,
         fallbackInlineImagesToAttachments: () => null,
         getInlineImagePreview: () => null,
-        inputRef: { current: null },
+        picker: createFileInputController(),
         isAuthorizing: false,
         loadInlineImagePreview: () => Promise.resolve(null),
         prepareAttachments: () => Promise.resolve([]),

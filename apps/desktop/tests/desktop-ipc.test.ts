@@ -193,7 +193,10 @@ describe(DesktopIpc.DesktopIpc, () => {
         handler: (request) =>
           Effect.succeed({
             data: {
-              color: request.color,
+              color:
+                request.color === undefined
+                  ? undefined
+                  : { background: request.color, text: "#000000" },
               id: "Label_1",
               name: request.name,
               threadCount: 0,
@@ -215,7 +218,10 @@ describe(DesktopIpc.DesktopIpc, () => {
         handler: (request) =>
           Effect.succeed({
             data: {
-              color: request.color,
+              color:
+                request.color === undefined
+                  ? undefined
+                  : { background: request.color, text: "#ffffff" },
               id: request.labelId,
               name: request.name,
               type: "user",
@@ -229,12 +235,12 @@ describe(DesktopIpc.DesktopIpc, () => {
       expect(
         yield* create.handler({
           accountId: "person@example.com",
-          color: { background: "#fef1d1", text: "#0d3472" },
+          color: "#fef1d1",
           name: "Projects/Kisa",
         })
       ).toStrictEqual({
         data: {
-          color: { background: "#fef1d1", text: "#0d3472" },
+          color: { background: "#fef1d1", text: "#000000" },
           id: "Label_1",
           name: "Projects/Kisa",
           threadCount: 0,
@@ -251,7 +257,7 @@ describe(DesktopIpc.DesktopIpc, () => {
       expect(
         yield* update.handler({
           accountId: "person@example.com",
-          color: { background: "#4a86e8", text: "#ffffff" },
+          color: "#4a86e8",
           labelId: "Label_1",
           name: "Projects/Kisa 2",
         })
@@ -271,7 +277,14 @@ describe(DesktopIpc.DesktopIpc, () => {
         Effect.exit(
           create.handler({
             accountId: "person@example.com",
-            color: { background: "#123456", text: "#ffffff" },
+            color: "#4A86E8",
+            name: "Projects/Kisa",
+          })
+        ),
+        Effect.exit(
+          create.handler({
+            accountId: "person@example.com",
+            color: "red; background: url(https://example.com)",
             name: "Projects/Kisa",
           })
         ),
@@ -288,6 +301,7 @@ describe(DesktopIpc.DesktopIpc, () => {
       ]);
 
       expect(invalid.map((exit) => exit._tag)).toStrictEqual([
+        "Failure",
         "Failure",
         "Failure",
         "Failure",

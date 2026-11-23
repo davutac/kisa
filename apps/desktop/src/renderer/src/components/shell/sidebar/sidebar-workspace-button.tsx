@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -31,20 +31,16 @@ const SidebarWorkspaceButton = ({
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button
+          <Toggle
             aria-keyshortcuts={getHotkeyAriaLabel(command)}
             aria-label={display.label}
-            aria-pressed={isOpen}
-            className={
-              isOpen ? undefined : "text-muted-foreground hover:text-foreground"
-            }
-            onClick={onToggle}
+            className="not-data-pressed:text-muted-foreground not-data-pressed:hover:text-foreground"
+            onPressedChange={onToggle}
+            pressed={isOpen}
             size="icon-lg"
-            type="button"
-            variant={isOpen ? "secondary" : "ghost"}
           >
             {children}
-          </Button>
+          </Toggle>
         }
       />
       <TooltipContent className="flex items-center gap-2" side="top">

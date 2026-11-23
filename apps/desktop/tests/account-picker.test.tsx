@@ -72,7 +72,9 @@ describe("account picker", () => {
     );
 
     expect(markup).toContain('aria-label="From first@example.com"');
-    expect(markup).toContain("disabled");
+    // Focusable while locked, so its tooltip still shows the account.
+    expect(markup).toContain('aria-disabled="true"');
+    expect(markup).not.toMatch(/\sdisabled=""/u);
     expect(markup).not.toContain("aria-keyshortcuts");
     expect(markup).not.toContain("second@example.com");
   });

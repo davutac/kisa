@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import NewMessageStashPicker from "@/components/mail/new-message-stash-picker";
 import { PageTitlebar } from "@/components/shell/page-titlebar";
+import { Button } from "@/components/ui/button";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import { getScheduledDueCheckDelay } from "@/scheduled/schedule-time";
 import type { MailDraft } from "@/shared/ipc/mail";
@@ -66,16 +67,18 @@ const ScheduledEmailTitle = ({
 
   return (
     <>
-      <button
+      <Button
         aria-keyshortcuts={getHotkeyAriaLabel("composer.close")}
-        className="app-titlebar-interactive text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 rounded-sm transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none"
+        aria-label="Back to Scheduled"
+        className="app-titlebar-interactive text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 h-auto rounded-sm border-0 p-0 text-[length:inherit] leading-[inherit] transition-colors hover:no-underline active:not-aria-[haspopup]:translate-y-0 data-disabled:opacity-100"
         disabled={disabled}
         onClick={onBack}
         title={`Back to Scheduled (${closeDisplay.bindings[0]})`}
         type="button"
+        variant="link"
       >
         Scheduled
-      </button>
+      </Button>
       <ChevronRightIcon
         aria-hidden="true"
         className="text-muted-foreground mx-1 inline size-3.5 align-[-2px]"
@@ -101,6 +104,8 @@ const NewMessageTitlebar = ({
   const draftId = useNewMessageStore((state) => state.draftId);
   const isSending = useNewMessageStore((state) => state.isSending);
   const isScheduling = useNewMessageStore((state) => state.isScheduling);
+  const recipients = useNewMessageStore((state) => state.recipients);
+  const subject = useNewMessageStore((state) => state.subject);
   const { isEdit, scheduledAt } = workspace.scheduled;
   const isOverdue = useIsScheduledSendOverdue(isEdit ? scheduledAt : undefined);
   const [sendBinding] = workspace.sendDisplay.bindings;
@@ -152,6 +157,7 @@ const NewMessageTitlebar = ({
       <NewMessageFooter
         canSend={workspace.canSend}
         canStash={workspace.canStash}
+        delivery={{ recipients, subject }}
         isScheduling={isScheduling}
         isSending={isSending}
         key={draftId}

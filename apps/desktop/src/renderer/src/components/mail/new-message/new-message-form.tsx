@@ -7,7 +7,8 @@ import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import MailComposer from "@/components/mail/mail-composer";
 import type { OutgoingAttachmentComposerController } from "@/components/mail/outgoing-attachments";
 import type { useComposerFocus } from "@/components/mail/use-composer-focus";
-import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
+import { Input } from "@/components/ui/input";
+import { InputGroup } from "@/components/ui/input-group";
 import type { Account } from "@/shared/ipc/accounts";
 import type {
   ComposerTemplate,
@@ -23,11 +24,11 @@ import { useNewMessageStore } from "./new-message-store";
  * hairlines, so the subject and message read as the document.
  */
 const PAGE_ROW_CLASS =
-  "min-h-10 border-b border-border bg-transparent dark:bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-border has-[[data-slot][aria-invalid=true]]:border-border";
+  "min-h-10 border-b border-border bg-transparent dark:bg-transparent has-[[data-slot=input]:focus-visible]:border-border has-[[data-slot][aria-invalid=true]]:border-border";
 
 /** The subject is the page's headline, set above the message it titles. */
 const SUBJECT_GROUP_CLASS =
-  "h-auto shrink-0 rounded-none border-0 bg-transparent px-4 pt-7 pb-1 shadow-none dark:bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0";
+  "h-auto shrink-0 rounded-none border-0 bg-transparent px-4 pt-7 pb-1 shadow-none dark:bg-transparent has-[[data-slot=input]:focus-visible]:border-transparent has-[[data-slot=input]:focus-visible]:ring-0";
 
 interface NewMessageFormProps {
   accounts: readonly Account[];
@@ -120,7 +121,7 @@ const NewMessageForm = ({
       <InputGroup className={SUBJECT_GROUP_CLASS}>
         {/* The headline needs no visible label; a hidden addon would still
             indent the input, so it is named directly. */}
-        <InputGroupInput
+        <Input
           aria-label="Subject"
           className="placeholder:text-muted-foreground h-auto px-0 py-0 text-xl leading-snug font-semibold tracking-tight md:text-xl"
           id="new-message-subject"

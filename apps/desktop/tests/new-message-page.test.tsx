@@ -39,6 +39,10 @@ const renderFooter = ({ isEdit }: { readonly isEdit: boolean }): string =>
       <NewMessageFooter
         canSend={isEdit}
         canStash={!isEdit}
+        delivery={{
+          recipients: { bcc: [], cc: [], to: ["ana@example.com"] },
+          subject: "Lunch?",
+        }}
         isScheduling={false}
         isSending={false}
         onSend={() => Promise.resolve()}
@@ -89,7 +93,7 @@ describe(NewMessageFooter, () => {
   it("shows a scheduled email's persisted send time without a Clear action", () => {
     const markup = renderFooter({ isEdit: true });
 
-    expect(markup).toContain('aria-label="Scheduled send time"');
+    expect(markup).toContain('<span class="sr-only">Scheduled send time');
     expect(markup).toContain(
       `dateTime="${new Date(scheduledAt).toISOString()}"`
     );

@@ -1,7 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { RadioGroup } from "../src/renderer/src/components/ui/radio-group";
+import { RadioGroup } from "../src/renderer/src/components/ui/radio";
 import AiProviderRow from "../src/renderer/src/routes/settings/-components/ai-provider-row";
 import type { AiProviderStatus } from "../src/shared/ipc/ai";
 

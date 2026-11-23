@@ -1,9 +1,10 @@
-import { useHotkeys } from "@tanstack/react-hotkeys";
-import type { UseHotkeyDefinition } from "@tanstack/react-hotkeys";
+import { registerShortcut } from "@ui-sdk/core/shortcuts";
+import { useEffect, useEffectEvent } from "react";
 
 import { useIsHotkeyScopeActive } from "@/hotkeys/app-hotkeys-provider";
-import { HOTKEY_COMMANDS, shouldRunHotkeyCommand } from "@/hotkeys/commands";
+import { HOTKEY_COMMANDS, toShortcutKeys } from "@/hotkeys/commands";
 import type { HotkeyCommandId } from "@/hotkeys/commands";
+import { isBindingKeptByFocus } from "@/hotkeys/focused-control";
 
 export interface UseAppCommandOptions {
   readonly enabled?: boolean;
@@ -16,35 +17,46 @@ interface AppCommandProps {
   readonly options?: UseAppCommandOptions;
 }
 
-export const getAppCommandHotkeys = (
+const hasFocusIn = (element: HTMLElement | null): boolean =>
+  element?.contains(document.activeElement) ?? false;
+
+const registerAppCommand = (
   commandId: HotkeyCommandId,
   onCommand: () => void,
   target?: React.RefObject<HTMLElement | null>
-): UseHotkeyDefinition[] => {
+): (() => void) => {
   const command = HOTKEY_COMMANDS[commandId];
+  const unregister = command.bindings.flatMap((binding) => {
+    const guards: (() => boolean)[] = [];
+    // ui-sdk runs Mod chords in text fields whatever `allowInInput` says, so
+    // an `ignore` command checks focus itself.
+    if (command.input === "ignore") {
+      guards.push(() => !isBindingKeptByFocus(binding));
+    }
+    if (target !== undefined) {
+      guards.push(() => hasFocusIn(target.current));
+    }
+    // Only an unguarded shortcut gets ui-sdk's duplicate-key warning.
+    const when =
+      guards.length === 0
+        ? {}
+        : { when: () => guards.every((guard) => guard()) };
 
-  const baseOptions = {
-    ignoreDefaultPrevented: "ignoreDefaultPrevented" in command,
-    ignoreInputs: command.input === "ignore",
-    requireReset: command.repeat === "once",
+    return toShortcutKeys(binding).map((keys) =>
+      registerShortcut(keys, () => onCommand(), {
+        allowInInput: command.input === "allow",
+        description: command.label,
+        repeat: command.repeat === "allow",
+        ...when,
+      })
+    );
+  });
+
+  return () => {
+    for (const off of unregister) {
+      off();
+    }
   };
-  // TanStack Hotkeys treats a present `target` key as element-scoped even when
-  // its value is undefined and registers nothing until it resolves. Only an
-  // omitted key listens on the document.
-  const options =
-    target === undefined ? baseOptions : { ...baseOptions, target };
-
-  return command.bindings.map((hotkey) => ({
-    callback: (event: KeyboardEvent) => {
-      if (!shouldRunHotkeyCommand(command.repeat, event.repeat)) {
-        return;
-      }
-
-      onCommand();
-    },
-    hotkey,
-    options,
-  }));
 };
 
 export const useAppCommand = (
@@ -53,13 +65,17 @@ export const useAppCommand = (
   options: UseAppCommandOptions = {}
 ): void => {
   const scopeActive = useIsHotkeyScopeActive(HOTKEY_COMMANDS[commandId].scope);
-  const enabled = options.enabled ?? true;
+  const active = scopeActive && (options.enabled ?? true);
+  const { target } = options;
+  const runCommand = useEffectEvent(onCommand);
 
-  useHotkeys(
-    scopeActive && enabled
-      ? getAppCommandHotkeys(commandId, onCommand, options.target)
-      : []
-  );
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    return registerAppCommand(commandId, () => runCommand(), target);
+  }, [active, commandId, target]);
 };
 
 export const AppCommand = ({ callback, command, options }: AppCommandProps) => {

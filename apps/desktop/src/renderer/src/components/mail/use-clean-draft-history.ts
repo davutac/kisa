@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
 import {
@@ -7,6 +6,7 @@ import {
   completePendingCleanDraftVersion,
   dismissCleanDraftVersion,
 } from "@/components/mail/clean-draft-history";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { getAiApi } from "@/platform/desktop";
 import type { AiModelSelection } from "@/shared/ipc/ai";

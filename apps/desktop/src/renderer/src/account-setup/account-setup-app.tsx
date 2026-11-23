@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useShortcut } from "@ui-sdk/react/shortcuts";
+import { useRef, useState } from "react";
 import type { FormEvent, RefObject } from "react";
 import { flushSync } from "react-dom";
 
@@ -8,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldGroup,
   FieldLabel,
   FieldLegend,
@@ -16,9 +16,16 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  PasswordInput,
+  PasswordInputControl,
+} from "@/components/ui/password-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type {
@@ -156,6 +163,11 @@ const SERVER_LEGENDS = {
   smtp: "Outgoing mail (SMTP)",
 } as const satisfies Record<ServerSide, string>;
 
+const SECURITY_ITEMS: { label: string; value: MailServerSecurity }[] = [
+  { label: "SSL/TLS", value: "tls" },
+  { label: "STARTTLS", value: "starttls" },
+];
+
 interface ServerFieldsetProps {
   readonly fields: ServerFields;
   readonly invalidField: AccountSetupField | undefined;
@@ -173,18 +185,16 @@ const ServerFieldset = ({
 }: ServerFieldsetProps) => {
   const hostField = side === "imap" ? "imapHost" : "smtpHost";
   const portField = side === "imap" ? "imapPort" : "smtpPort";
-  const securityId = `account-${side}-security`;
   const describe = (field: AccountSetupField) =>
     invalidField === field ? PROBLEM_ID : undefined;
 
   return (
     <FieldSet className="gap-3">
       <FieldLegend variant="label">{SERVER_LEGENDS[side]}</FieldLegend>
-      <Field data-invalid={invalidField === hostField ? true : undefined}>
-        <FieldLabel htmlFor={FIELD_IDS[hostField]}>Server</FieldLabel>
+      <Field invalid={invalidField === hostField}>
+        <FieldLabel>Server</FieldLabel>
         <Input
           aria-describedby={describe(hostField)}
-          aria-invalid={invalidField === hostField ? true : undefined}
           autoComplete="off"
           id={FIELD_IDS[hostField]}
           onChange={(event) =>
@@ -199,11 +209,10 @@ const ServerFieldset = ({
         />
       </Field>
       <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
-        <Field data-invalid={invalidField === portField ? true : undefined}>
-          <FieldLabel htmlFor={FIELD_IDS[portField]}>Port</FieldLabel>
+        <Field invalid={invalidField === portField}>
+          <FieldLabel>Port</FieldLabel>
           <Input
             aria-describedby={describe(portField)}
-            aria-invalid={invalidField === portField ? true : undefined}
             autoComplete="off"
             id={FIELD_IDS[portField]}
             inputMode="numeric"
@@ -216,25 +225,28 @@ const ServerFieldset = ({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={securityId}>Security</FieldLabel>
-          <NativeSelect
-            className="w-full"
-            disabled={isLocked}
-            id={securityId}
-            onChange={(event) =>
-              onChange(
-                withServerSecurity(
-                  side,
-                  fields,
-                  event.currentTarget.value === "starttls" ? "starttls" : "tls"
-                )
-              )
-            }
-            value={fields.security satisfies MailServerSecurity}
+          <FieldLabel>Security</FieldLabel>
+          <Select
+            items={SECURITY_ITEMS}
+            onValueChange={(security) => {
+              if (security !== null) {
+                onChange(withServerSecurity(side, fields, security));
+              }
+            }}
+            readOnly={isLocked}
+            value={fields.security}
           >
-            <NativeSelectOption value="tls">SSL/TLS</NativeSelectOption>
-            <NativeSelectOption value="starttls">STARTTLS</NativeSelectOption>
-          </NativeSelect>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SECURITY_ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
       </div>
     </FieldSet>
@@ -260,31 +272,32 @@ const PasswordField = ({
   onChange,
   preset,
 }: PasswordFieldProps) => {
-  const isInvalid = invalidField === "password" ? true : undefined;
+  const isInvalid = invalidField === "password";
 
   return (
-    <Field data-invalid={isInvalid}>
-      <FieldLabel htmlFor={FIELD_IDS.password}>
+    <Field invalid={isInvalid}>
+      <FieldLabel>
         {preset === undefined
           ? "App password"
           : PRESET_COPY[preset.provider].passwordLabel}
       </FieldLabel>
-      <Input
-        aria-describedby={isInvalid ? PROBLEM_ID : undefined}
-        aria-invalid={isInvalid}
+      <PasswordInput
         autoComplete="off"
-        // Signing in again, the password is the one thing to type.
-        // oxlint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus={isFirst}
-        id={FIELD_IDS.password}
-        onChange={(event) => {
-          onChange(event.currentTarget.value.length > 0);
+        onValueChange={(value) => {
+          onChange(value.length > 0);
         }}
-        ref={inputRef}
-        spellCheck={false}
         readOnly={isLocked}
-        type="password"
-      />
+      >
+        <PasswordInputControl
+          aria-describedby={isInvalid ? PROBLEM_ID : undefined}
+          // Signing in again, the password is the one thing to type.
+          // oxlint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus={isFirst}
+          id={FIELD_IDS.password}
+          ref={inputRef}
+          spellCheck={false}
+        />
+      </PasswordInput>
       {preset === undefined ? (
         <FieldDescription>
           Use an app password if your provider offers one.
@@ -332,16 +345,17 @@ const AddressNotes = ({
       ) : null}
       {signInSwitch === undefined ? null : (
         <FieldDescription>
-          <button
-            className="hover:text-primary underline underline-offset-4 disabled:opacity-50"
+          <Button
+            className="hover:text-primary h-auto rounded-sm border-0 p-0 text-[length:inherit] leading-[inherit] font-normal text-inherit underline active:not-aria-[haspopup]:translate-y-0"
             disabled={isLocked}
             onClick={() => {
               onSwitch(signInSwitch);
             }}
             type="button"
+            variant="link"
           >
             {switchLabel(signInSwitch, mode)}
-          </button>
+          </Button>
         </FieldDescription>
       )}
     </>
@@ -387,11 +401,10 @@ const NameField = ({
   value,
 }: NameFieldProps) =>
   SIGN_IN_AGAIN === undefined ? (
-    <Field data-invalid={isInvalid ? true : undefined}>
-      <FieldLabel htmlFor={FIELD_IDS.name}>Name</FieldLabel>
+    <Field invalid={isInvalid}>
+      <FieldLabel>Name</FieldLabel>
       <Input
         aria-describedby={describedBy}
-        aria-invalid={isInvalid ? true : undefined}
         autoComplete="name"
         // The window exists for this form, and the name comes first.
         // oxlint-disable-next-line jsx-a11y/no-autofocus
@@ -482,20 +495,15 @@ const AccountSetupApp = () => {
   const wasCancelledRef = useRef(false);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // Escape cancels, as Cancel does. This page is a dialog of its own and has
-  // no hotkey system, so its one dismissal key is handled here.
-  useEffect(() => {
-    const cancelOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape" && !event.defaultPrevented) {
-        event.preventDefault();
-        void bridge?.close();
-      }
-    };
-    window.addEventListener("keydown", cancelOnEscape);
-    return () => {
-      window.removeEventListener("keydown", cancelOnEscape);
-    };
-  }, [bridge]);
+  // Escape cancels, as Cancel does. This window has no @/hotkeys registry, so
+  // its one key goes to ui-sdk directly, which skips an Escape a list handled.
+  useShortcut(
+    "escape",
+    () => {
+      void bridge?.close();
+    },
+    { allowInInput: true }
+  );
 
   useDomainLookup(bridge, findDomainToAsk(form), setForm);
 
@@ -634,11 +642,10 @@ const AccountSetupApp = () => {
                 value={form.name}
               />
 
-              <Field data-invalid={invalidField === "email" ? true : undefined}>
-                <FieldLabel htmlFor={FIELD_IDS.email}>Email address</FieldLabel>
+              <Field invalid={invalidField === "email"}>
+                <FieldLabel>Email address</FieldLabel>
                 <Input
                   aria-describedby={describe("email")}
-                  aria-invalid={invalidField === "email" ? true : undefined}
                   autoComplete="email"
                   // Signing in with Microsoft again, nothing is typed here:
                   // Enter from the address starts the sign-in.
@@ -700,7 +707,17 @@ const AccountSetupApp = () => {
                 </>
               ) : null}
 
-              <FieldError id={PROBLEM_ID}>{visibleProblem?.message}</FieldError>
+              {visibleProblem === undefined ? null : (
+                // One message for the whole form: ui-sdk's FieldError shows
+                // only inside its Field, and a narrow column can't hold it.
+                <p
+                  className="text-destructive text-xs/relaxed"
+                  id={PROBLEM_ID}
+                  role="alert"
+                >
+                  {visibleProblem.message}
+                </p>
+              )}
             </FieldGroup>
           </fieldset>
 

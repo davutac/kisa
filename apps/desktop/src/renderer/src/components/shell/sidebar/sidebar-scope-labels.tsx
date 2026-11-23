@@ -1,6 +1,6 @@
 import { TagIcon, TagsIcon } from "lucide-react";
-import { useId } from "react";
 
+import { Collapsible, CollapsiblePanel } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toMailboxLabelRows } from "@/mail/mailbox-labels";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
@@ -48,7 +48,6 @@ interface SidebarScopeLabelsProps {
 
 interface SidebarScopeLabelListProps {
   readonly accountId: string;
-  readonly id: string;
   readonly isHeldByFavorite: boolean;
   readonly labels: readonly MailboxLabelItem[];
   readonly onSelect: (target: MailboxTarget) => void;
@@ -57,10 +56,9 @@ interface SidebarScopeLabelListProps {
   readonly view: MailboxView;
 }
 
-/** The open label list, nested by path. */
+/** The open label list's rows, nested by path. */
 const SidebarScopeLabelList = ({
   accountId,
-  id,
   isHeldByFavorite,
   labels,
   onSelect,
@@ -68,7 +66,7 @@ const SidebarScopeLabelList = ({
   unreadLabels,
   view,
 }: SidebarScopeLabelListProps) => (
-  <ul className="mt-0.5 flex flex-col gap-0.5" id={id}>
+  <>
     {toMailboxLabelRows(labels).map(({ depth, item, name }) => {
       const target = { accountId, mailbox: { label: item.name } };
       const isUnread = unreadLabels.has(toUnreadLabelKey(accountId, item.name));
@@ -105,7 +103,7 @@ const SidebarScopeLabelList = ({
         </li>
       );
     })}
-  </ul>
+  </>
 );
 
 /**
@@ -128,7 +126,6 @@ const SidebarScopeLabels = ({
   scopeLabel,
   view,
 }: SidebarScopeLabelsProps) => {
-  const labelsId = useId();
   const isHeldByFavorite = useIsHeldByFavorite(view);
   const unreadLabels = useUnreadLabels(labels.length === 0 ? [] : [accountId]);
   // Open, each label carries its own dot; closed, the Labels row carries one
@@ -141,18 +138,20 @@ const SidebarScopeLabels = ({
   }
 
   return (
-    <li>
+    <Collapsible
+      onOpenChange={onExpandedChange}
+      open={isExpanded}
+      render={<li />}
+    >
       <SidebarRow
-        ariaControls={isExpanded ? labelsId : undefined}
-        ariaExpanded={isExpanded}
         ariaLabel={`Labels, ${scopeLabel}${isUnreadHidden ? ", unread messages" : ""}`}
         className="pl-7"
+        disclosure
         icon={<TagsIcon />}
         isCurrent={
           !isHeldByFavorite && isLabelsRowCurrent(view, accountId, isExpanded)
         }
         label="Labels"
-        onSelect={() => onExpandedChange(!isExpanded)}
         trailing={
           <>
             {isUnreadHidden ? <SidebarUnreadDot /> : null}
@@ -160,10 +159,12 @@ const SidebarScopeLabels = ({
           </>
         }
       />
-      {isExpanded ? (
+      <CollapsiblePanel
+        className="mt-0.5 flex flex-col gap-0.5"
+        render={<ul />}
+      >
         <SidebarScopeLabelList
           accountId={accountId}
-          id={labelsId}
           isHeldByFavorite={isHeldByFavorite}
           labels={labels}
           onSelect={onSelect}
@@ -171,8 +172,8 @@ const SidebarScopeLabels = ({
           unreadLabels={unreadLabels}
           view={view}
         />
-      ) : null}
-    </li>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 };
 

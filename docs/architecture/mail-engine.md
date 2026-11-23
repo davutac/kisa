@@ -94,7 +94,7 @@ How they are derived:
 
 An Archive folder (`\Archive`) produces no label: archived mail is mail without `INBOX`, as it is in Gmail.
 
-Gmail's category labels (Promotions, Social and so on) are not exposed over IMAP and are dropped. Label colours are not part of IMAP; Kisa keeps an optional local colour per label.
+Gmail's category labels (Promotions, Social and so on) are not exposed over IMAP and are dropped. Label colours are not part of IMAP; Kisa keeps its own background colour per label. A user label gets one when the catalog refresh first stores it (and a stored label without one gets one on the next refresh): it looks random but is seeded by the case-insensitive name, so a label several accounts share has one colour in All Accounts. A colour chosen in Kisa is kept through refreshes and renames. The text colour is never stored: black or white, whichever contrasts more with the background, which always reaches 4.5:1.
 
 ## Schema
 

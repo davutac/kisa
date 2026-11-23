@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect } from "react";
-import { toast } from "sonner";
 
 import MailboxBreadcrumb from "@/components/mail/mailbox-breadcrumb";
 import MailThreadList from "@/components/mail/thread-list";
 import type { MailThreadListProps } from "@/components/mail/thread-list";
 import MailThreadView from "@/components/mail/thread-view";
 import type { MailThreadTitlebarProps } from "@/components/mail/thread-view";
+import { toast } from "@/components/ui/toast";
 import { useHotkeyLayer } from "@/hotkeys";
 import { getMailboxPlaceKey, isLabelPlace } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";

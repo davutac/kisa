@@ -9,6 +9,7 @@ import {
 } from "../src/renderer/src/components/mail/new-message/new-message-store";
 import type { OutgoingAttachmentComposerController } from "../src/renderer/src/components/mail/outgoing-attachments";
 import type { useComposerFocus } from "../src/renderer/src/components/mail/use-composer-focus";
+import { createFileInputController } from "../src/renderer/src/components/ui/file-input";
 import type {
   Tooltip as TooltipComponent,
   TooltipContent as TooltipContentComponent,
@@ -96,7 +97,7 @@ const renderForm = ({ canClean }: { canClean: boolean }): string => {
     discardInlineImages: () => {},
     fallbackInlineImagesToAttachments: () => {},
     getInlineImagePreview: () => null,
-    inputRef: { current: null },
+    picker: createFileInputController(),
     loadInlineImagePreview: () => Promise.resolve(null),
     removeAttachment: () => {},
     setReferencedInlineContentIds: () => {},

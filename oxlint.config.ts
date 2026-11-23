@@ -8,7 +8,7 @@ export default defineConfig({
   extends: [core, react, tanstack, vitest],
   ignorePatterns: [
     ...(core.ignorePatterns ?? []),
-    "**/components/ui/**",
+    "apps/marketing/src/components/ui/**",
     "packages/database/drizzle/**/snapshot.json",
     "repos/**",
   ],

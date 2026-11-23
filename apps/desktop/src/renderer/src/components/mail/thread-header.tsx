@@ -30,6 +30,7 @@ interface MailThreadHeaderActionProps {
   children: ReactNode;
   className?: string;
   command?: HotkeyCommandId;
+  confirm?: string;
   label: string;
   onClick: () => void;
   variant?: ComponentProps<typeof Button>["variant"];
@@ -39,6 +40,7 @@ const MailThreadHeaderAction = ({
   children,
   className,
   command,
+  confirm,
   label,
   onClick,
   variant = "ghost",
@@ -52,6 +54,7 @@ const MailThreadHeaderAction = ({
           }
           aria-label={label}
           className={className}
+          data-agent-confirm={confirm}
           onClick={onClick}
           size="icon"
           type="button"
@@ -79,6 +82,7 @@ interface MailThreadActionsProps {
   onPopOut?: () => void;
   onToggleRead: () => void;
   onTrash?: () => void;
+  subject: string;
 }
 
 /**
@@ -97,6 +101,7 @@ export const MailThreadActions = ({
   onPopOut,
   onToggleRead,
   onTrash,
+  subject,
 }: MailThreadActionsProps) => {
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
   const popOutDisplay = getHotkeyDisplay("thread.popout");
@@ -104,6 +109,12 @@ export const MailThreadActions = ({
   const destructiveLabel =
     onDeleteForever === undefined ? trashDisplay.label : "Delete forever";
   const destructiveAction = onDeleteForever ?? onTrash;
+  const trimmedSubject = subject.trim();
+  // Delete forever asks through useConfirm, whose confirming button is marked.
+  const trashConfirmation =
+    onDeleteForever === undefined
+      ? `Moves ${trimmedSubject === "" ? "this conversation" : `“${trimmedSubject}”`} to Trash`
+      : undefined;
 
   return (
     <>
@@ -133,6 +144,7 @@ export const MailThreadActions = ({
           <MailThreadHeaderAction
             className={quietDestructiveClassName}
             command="thread.trashThread"
+            confirm={trashConfirmation}
             label={destructiveLabel}
             onClick={destructiveAction}
           >
@@ -193,7 +205,6 @@ export const MailThreadCommands = ({
 interface MailThreadHeaderProps extends MailThreadActionsProps {
   onClose: () => void;
   showCloseButton?: boolean;
-  subject: string;
 }
 
 /**
@@ -203,7 +214,6 @@ interface MailThreadHeaderProps extends MailThreadActionsProps {
 const MailThreadHeader = ({
   onClose,
   showCloseButton = true,
-  subject,
   ...actions
 }: MailThreadHeaderProps) => {
   const closeDisplay = getHotkeyDisplay("thread.close");
@@ -226,7 +236,7 @@ const MailThreadHeader = ({
           </MailThreadHeaderAction>
         ) : null}
         <h1 className="min-w-0 flex-1 truncate text-lg font-semibold select-text">
-          {subject}
+          {actions.subject}
         </h1>
         <MailThreadActions dateClassName="text-sm" {...actions} />
       </div>

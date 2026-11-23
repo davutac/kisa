@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 
 import MailAttachmentPill from "@/components/mail/attachment-pill";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getMailApi } from "@/platform/desktop";
 import { getAttachmentPreviewKind } from "@/shared/attachments";

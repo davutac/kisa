@@ -1,17 +1,27 @@
 import { XIcon } from "lucide-react";
-import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
+import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { useState } from "react";
+import { flushSync } from "react-dom";
 
 import FieldErrorIndicator from "@/components/forms/field-error-indicator";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+  Combobox,
+  ComboboxChip,
+  ComboboxChipRemove,
+  ComboboxChips,
+  ComboboxContent,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+  ComboboxValue,
+  createComboboxController,
+} from "@/components/ui/combobox";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { cn } from "@/lib/utils";
 import {
-  findEmailAddressCompletion,
+  findEmailAddressSuggestions,
   mergeUniqueEmailAddresses,
   parseEmailAddressList,
 } from "@/mail/address";
@@ -34,6 +44,14 @@ interface EmailAddressInputProps {
 }
 
 const NO_SUGGESTED_ADDRESSES: readonly string[] = [];
+const SEPARATOR_KEYS = new Set([",", ";", " "]);
+// Closing the list would empty what was typed; a blur commits it instead.
+const KEEPS_DRAFT = new Set([
+  "escape-key",
+  "focus-out",
+  "outside-press",
+  "window-blur",
+]);
 
 const EmailAddressInput = ({
   actions,
@@ -49,21 +67,29 @@ const EmailAddressInput = ({
   suggestedAddresses = NO_SUGGESTED_ADDRESSES,
   value,
 }: EmailAddressInputProps) => {
+  const combobox = useInstanceValue(createComboboxController<string, true>);
   const [draft, setDraft] = useState("");
   const [isInvalid, setIsInvalid] = useState(false);
+  const [isListWanted, setIsListWanted] = useState(false);
   const indexedSuggestions = useAddressSuggestions(
     accountId.length === 0 ? [] : [accountId],
     "correspondent",
     accountId.length === 0 || draft.length === 0 ? undefined : draft
   );
-  const completion = findEmailAddressCompletion(
+  const suggestions = findEmailAddressSuggestions(
     draft,
     [
-      ...suggestedAddresses,
-      ...indexedSuggestions.map((suggestion) => suggestion.address),
+      ...suggestedAddresses.map((address) => ({ address })),
+      ...indexedSuggestions,
     ],
     [accountId, ...value]
   );
+
+  const add = (addresses: readonly string[]) => {
+    onChange(mergeUniqueEmailAddresses(value, addresses));
+    setDraft("");
+    setIsInvalid(false);
+  };
 
   const commit = (candidate: string): boolean => {
     if (candidate.trim().length === 0) {
@@ -77,137 +103,184 @@ const EmailAddressInput = ({
       return false;
     }
 
-    onChange(mergeUniqueEmailAddresses(value, addresses));
-    setDraft("");
-    setIsInvalid(false);
+    add(addresses);
     return true;
   };
 
+  // Enter chooses a highlighted suggestion through the combobox; without one
+  // it commits the typed text and must never submit the surrounding form.
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Backspace" && draft.length === 0) {
-      onChange(value.slice(0, -1));
-      return;
-    }
+    const highlighted = combobox.getHighlighted();
 
-    if (event.key === "Tab" && completion !== undefined) {
+    if (event.key === "Tab" && highlighted !== null && !event.shiftKey) {
       event.preventDefault();
-      commit(completion);
+      add([highlighted]);
       return;
     }
 
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commit(completion ?? draft);
+    const isEnter = event.key === "Enter";
+    if (!isEnter && !SEPARATOR_KEYS.has(event.key)) {
       return;
     }
 
-    if (event.key === "," || event.key === ";" || event.key === " ") {
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      // A chord like Mod+Enter adds what Enter would, emptying the field first
+      // so the combobox's own Enter keeps nothing and `@/hotkeys` can send.
+      flushSync(() => {
+        if (isEnter && highlighted !== null) {
+          add([highlighted]);
+        } else {
+          commit(draft);
+        }
+      });
+      return;
+    }
+
+    if (!isEnter || highlighted === null) {
       event.preventDefault();
       commit(draft);
     }
   };
 
-  const removeAddress = (addressToRemove: string) => {
-    onChange(value.filter((address) => address !== addressToRemove));
-  };
-
-  const clearInvalidDraft = (event: MouseEvent<HTMLButtonElement>): void => {
-    const input = event.currentTarget
-      .closest('[data-slot="input-group"]')
-      ?.querySelector("input");
-    setDraft("");
-    setIsInvalid(false);
-    input?.focus();
-  };
-
   return (
-    <InputGroup
+    <div
       className={cn(
-        "bg-card dark:bg-card h-auto min-h-9 rounded-none border-0 px-4 shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0",
+        "bg-card dark:bg-card flex min-h-9 w-full min-w-0 items-center px-4",
         className
       )}
+      id={id}
     >
-      <InputGroupAddon className="w-10 justify-start p-0">
-        <label htmlFor={id}>{label}</label>
-      </InputGroupAddon>
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 py-1">
-        {value.map((address) => (
-          <Badge
-            className="h-6 max-w-64 px-2.5 pr-1.5 text-xs"
-            key={address}
-            variant="secondary"
-          >
-            <span className="truncate">{address}</span>
-            <button
-              aria-label={`Remove ${address}`}
-              className="hover:bg-foreground/10 focus-visible:ring-ring/50 grid size-3.5 shrink-0 place-items-center rounded-full p-0 focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-2.5!"
-              disabled={disabled}
-              onClick={() => removeAddress(address)}
-              type="button"
-            >
-              <XIcon />
-            </button>
-          </Badge>
-        ))}
-        <div className="grid min-w-32 flex-1">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none col-start-1 row-start-1 flex h-6 min-w-0 items-center overflow-hidden px-0 py-0.5 text-sm whitespace-pre md:text-sm"
-          >
-            <span className="invisible">{draft}</span>
-            {completion === undefined ? null : (
-              <span className="text-muted-foreground">
-                {completion.slice(draft.length)}
-              </span>
-            )}
-          </div>
-          <InputGroupInput
+      <Combobox
+        allowCustomValue
+        autoHighlight
+        controller={combobox}
+        disabled={disabled}
+        filter={false}
+        multiple
+        onOpenChange={(open, details) => {
+          // Typing asks before its suggestions load; anything else opens now.
+          if (
+            open &&
+            suggestions.length === 0 &&
+            details.reason !== "input-change"
+          ) {
+            details.cancel();
+            return;
+          }
+          setIsListWanted(open);
+        }}
+        onQueryChange={(query, details) => {
+          if (KEEPS_DRAFT.has(details.reason)) {
+            return;
+          }
+          setDraft(query);
+          setIsInvalid(false);
+        }}
+        onValueChange={(next, details) => {
+          const kept = next.filter((address) => value.includes(address));
+          const added = next.filter((address) => !value.includes(address));
+          const addresses = parseEmailAddressList(added.join(","));
+
+          if (added.length > 0 && addresses.length === 0) {
+            details.cancel();
+            setIsInvalid(true);
+            return;
+          }
+
+          onChange(mergeUniqueEmailAddresses(kept, addresses));
+          if (added.length > 0) {
+            setDraft("");
+            setIsInvalid(false);
+          }
+        }}
+        items={suggestions.map(({ address }) => ({
+          label: address,
+          value: address,
+        }))}
+        open={isListWanted && suggestions.length > 0}
+        query={draft}
+        value={[...value]}
+      >
+        <ComboboxLabel className="text-muted-foreground w-10 shrink-0 text-xs/relaxed font-medium">
+          {label}
+        </ComboboxLabel>
+        <ComboboxChips className="py-1">
+          <ComboboxValue>
+            {(state) =>
+              (state.value as string[]).map((address) => (
+                <ComboboxChip key={address} value={address}>
+                  <span className="truncate">{address}</span>
+                  <ComboboxChipRemove aria-label={`Remove ${address}`}>
+                    <XIcon aria-hidden="true" />
+                  </ComboboxChipRemove>
+                </ComboboxChip>
+              ))
+            }
+          </ComboboxValue>
+          <ComboboxInput
             aria-describedby={isInvalid ? `${id}-error` : undefined}
             aria-invalid={isInvalid || undefined}
-            aria-label={label}
-            autoComplete="off"
             autoFocus={autoFocus}
-            className="aria-invalid:text-destructive z-10 col-start-1 row-start-1 h-6 w-full px-0 text-sm aria-invalid:border-0 md:text-sm"
-            disabled={disabled}
-            id={id}
+            className="min-w-32 flex-1"
             inputMode="email"
-            onBlur={() => commit(draft)}
-            onChange={(event) => {
-              setDraft(event.currentTarget.value);
-              setIsInvalid(false);
+            onBlur={() => {
+              setIsListWanted(false);
+              commit(draft);
             }}
             onFocus={onFocus}
             onKeyDown={handleKeyDown}
             ref={inputRef}
-            spellCheck={false}
-            type="text"
-            value={draft}
           />
-        </div>
-      </div>
+        </ComboboxChips>
+        <ComboboxContent>
+          <ComboboxList>
+            {suggestions.map((suggestion) => (
+              <ComboboxItem
+                key={suggestion.address}
+                label={suggestion.address}
+                value={suggestion.address}
+              >
+                {suggestion.name === undefined ? null : (
+                  <span className="truncate font-medium">
+                    {suggestion.name}
+                  </span>
+                )}
+                <span className="text-muted-foreground truncate">
+                  {suggestion.address}
+                </span>
+              </ComboboxItem>
+            ))}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
       {actions === undefined && !isInvalid ? null : (
-        <InputGroupAddon align="inline-end" className="gap-0.5 p-0">
+        <div className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-xs/relaxed font-medium">
           {isInvalid ? (
             <>
               <FieldErrorIndicator
                 id={`${id}-error`}
                 message="Invalid email address"
               />
-              <button
+              <Button
                 aria-label="Clear invalid email address"
-                className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-ring/50 grid size-6 place-items-center rounded-md outline-none focus-visible:ring-2"
-                onClick={clearInvalidDraft}
+                onClick={() => {
+                  setDraft("");
+                  setIsInvalid(false);
+                  combobox.focus();
+                }}
+                size="icon-xs"
                 title="Clear"
                 type="button"
+                variant="ghost"
               >
-                <XIcon className="size-3.5" />
-              </button>
+                <XIcon />
+              </Button>
             </>
           ) : null}
           {actions}
-        </InputGroupAddon>
+        </div>
       )}
-    </InputGroup>
+    </div>
   );
 };
 

@@ -7,6 +7,7 @@ import {
 } from "../src/renderer/src/mail/mail-date";
 import ScheduledMailRow from "../src/renderer/src/routes/scheduled/-components/scheduled-mail-row";
 import type { ScheduledMailSummary } from "../src/shared/ipc/scheduled-mail";
+import { InMailList } from "./fixtures/mail-list";
 
 // A calendar in a zone the process did not start in, as after travelling
 // with Scheduled open: everything the row says about time must follow it.
@@ -40,18 +41,16 @@ const item: ScheduledMailSummary = {
 describe("scheduled mail row after a time-zone change", () => {
   it("draws the date, tooltip, and spoken summary from the current zone", () => {
     const markup = renderToString(
-      <ScheduledMailRow
-        item={item}
-        measureElement={vi.fn<(element: HTMLLIElement | null) => void>()}
-        onCancel={vi.fn<(item: ScheduledMailSummary) => void>()}
-        onDiscard={vi.fn<(item: ScheduledMailSummary) => void>()}
-        onOpen={vi.fn<(item: ScheduledMailSummary) => void>()}
-        position={1}
-        quickActionResetRevision={0}
-        selected={false}
-        setSize={1}
-        virtualIndex={0}
-      />
+      <InMailList rowKey={`${item.accountId}\u0000${item.draftId}`}>
+        <ScheduledMailRow
+          item={item}
+          onCancel={vi.fn<(item: ScheduledMailSummary) => void>()}
+          onDiscard={vi.fn<(item: ScheduledMailSummary) => void>()}
+          onOpen={vi.fn<(item: ScheduledMailSummary) => void>()}
+          quickActionResetRevision={0}
+          selected={false}
+        />
+      </InMailList>
     );
     const exact = formatExactMailDate(item.scheduledAt, calendar);
     const retry = formatMailDate(item.nextAttemptAt ?? 0, calendar, "detailed");

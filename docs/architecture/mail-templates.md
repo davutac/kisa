@@ -6,7 +6,7 @@ A template has a required name and a complete set of composer-owned values: an o
 
 ## Applying a template
 
-Typing `/` in the new-email Body opens a keyboard-accessible menu filtered by template name. Choosing a template replaces To, Cc, Bcc, Subject, and Body, including replacing them with empty values. A stored Account changes the From account; a null Account preserves the account already selected in the composer. Existing attachments are preserved because they are outside the template model. Reply, reply-all, forward, and template-editing composers do not expose the template menu.
+Typing `/` in the new-email Body, at the start of a paragraph or after a space or line break, opens a keyboard-accessible menu filtered by template name. It is ui-sdk's Trigger Menu, connected to the Tiptap editor by the adapter in `renderer/src/editor`, which reads ProseMirror positions as text offsets. Choosing a template replaces To, Cc, Bcc, Subject, and Body, including replacing them with empty values. A stored Account changes the From account; a null Account preserves the account already selected in the composer. Existing attachments are preserved because they are outside the template model. Applying a template restarts the Body's undo history, so undo never brings back the text the template replaced, the typed `/` and query included. Reply, reply-all, forward, and template-editing composers do not expose the template menu.
 
 The renderer captures one timestamp for the application. It resolves Subject and Body variables from that same timestamp before the new composer state becomes visible. Resolved values are ordinary editable text and never execute or render as HTML.
 

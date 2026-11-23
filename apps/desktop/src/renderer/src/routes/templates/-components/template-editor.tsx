@@ -7,11 +7,8 @@ import type { EmailComposerValue } from "@/components/mail/email-composer";
 import EmailRecipientFields from "@/components/mail/email-recipient-fields";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
 import { Button } from "@/components/ui/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import {
   Tooltip,
   TooltipContent,
@@ -31,7 +28,7 @@ import TemplateSubjectEditor from "@/templates/template-subject-editor";
 export const TEMPLATE_EDITOR_FORM_ID = "template-editor";
 
 const FIELD_GROUP_FOCUS_RESET =
-  "shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0";
+  "shadow-none has-[[data-slot=input]:focus-visible]:border-transparent has-[[data-slot=input]:focus-visible]:ring-0 has-[[data-slot][aria-invalid=true]]:border-transparent has-[[data-slot][aria-invalid=true]]:ring-0 dark:has-[[data-slot][aria-invalid=true]]:ring-0";
 
 interface TemplateEditorProps {
   readonly accounts: readonly Account[];
@@ -89,7 +86,7 @@ const TemplateEditor = ({
             FIELD_GROUP_FOCUS_RESET
           )}
         >
-          <InputGroupInput
+          <Input
             aria-describedby={
               nameError === undefined ? undefined : "template-name-error"
             }
@@ -118,6 +115,7 @@ const TemplateEditor = ({
                 aria-label="Delete template"
                 className={quietDestructiveClassName}
                 disabled={isCreating || isSaving}
+                focusableWhenDisabled
                 onClick={onDelete}
                 size="icon"
                 type="button"

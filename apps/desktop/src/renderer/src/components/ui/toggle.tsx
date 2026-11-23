@@ -1,51 +1,90 @@
-"use client";
+import {
+  Toggle as TogglePrimitive,
+  ToggleGroup as ToggleGroupPrimitive,
+} from "@ui-sdk/react/toggle";
 
-import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
-import { cva, type VariantProps } from "class-variance-authority";
-
+import { buttonVariants } from "@/components/ui/button";
+import type { ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const toggleVariants = cva(
-  "group/toggle inline-flex items-center justify-center gap-1 rounded-md text-xs font-medium whitespace-nowrap transition-all outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:ring-destructive/20 aria-pressed:bg-muted data-[state=on]:bg-muted dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-transparent",
-        outline: "border border-transparent bg-input/20 hover:bg-muted dark:bg-input/30",
-      },
-      size: {
-        default:
-          "h-7 min-w-7 px-2 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        xs: "h-5 min-w-5 rounded-sm px-2 text-[0.625rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-2.5",
-        sm: "h-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-2 text-[0.625rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        lg: "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-4",
-        icon: "size-7 [&_svg:not([class*='size-'])]:size-3.5",
-        "icon-xs":
-          "size-5 rounded-sm [&_svg:not([class*='size-'])]:size-2.5",
-        "icon-sm": "size-6 [&_svg:not([class*='size-'])]:size-3",
-        "icon-lg": "size-8 [&_svg:not([class*='size-'])]:size-4",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  },
-);
+export { ToggleIcon } from "@ui-sdk/react/toggle";
 
-function Toggle({
+type ClassNameProps<Props> = Omit<Props, "className"> & { className?: string };
+
+// The pressed look holds on hover: the unpressed variant's `hover:text-*` and
+// ghost's later-emitted `dark:hover:bg-muted/50` tie with it otherwise.
+const pressedClassName = {
+  default:
+    "data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:hover:bg-primary/80 dark:data-pressed:hover:bg-primary/80 data-pressed:hover:text-primary-foreground",
+  ghost: "",
+  secondary:
+    "data-pressed:bg-secondary data-pressed:text-secondary-foreground data-pressed:hover:bg-secondary/80 dark:data-pressed:hover:bg-secondary/80 data-pressed:hover:text-secondary-foreground",
+} as const;
+
+type ToggleVariant = "default" | "ghost" | "outline" | "secondary";
+
+const defaultPressedVariant = {
+  default: "default",
+  ghost: "secondary",
+  outline: "default",
+  secondary: "secondary",
+} as const satisfies Record<ToggleVariant, keyof typeof pressedClassName>;
+
+// ui-sdk's Toggle has no `focusableWhenDisabled`, so this mirrors Button's:
+// it stays in the Tab order with `aria-disabled`, which a Tooltip around it
+// needs, and refuses every change, an agent's included.
+const Toggle = ({
   className,
-  variant = "default",
-  size = "default",
+  focusableWhenDisabled = false,
+  pressedVariant,
+  size = "icon",
+  variant = "ghost",
   ...props
-}: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
+}: ClassNameProps<React.ComponentProps<typeof TogglePrimitive>> & {
+  focusableWhenDisabled?: boolean;
+  pressedVariant?: keyof typeof pressedClassName;
+  size?: ButtonProps["size"];
+  variant?: ToggleVariant;
+}) => {
+  const {
+    disabled: _disabled,
+    onPressedChange: _onPressedChange,
+    ...enabledProps
+  } = props;
   return (
     <TogglePrimitive
-      data-slot="toggle"
-      className={cn(toggleVariants({ variant, size, className }))}
-      {...props}
+      className={cn(
+        buttonVariants({ size, variant }),
+        pressedClassName[pressedVariant ?? defaultPressedVariant[variant]],
+        className
+      )}
+      {...(props.disabled === true && focusableWhenDisabled
+        ? {
+            ...enabledProps,
+            "aria-disabled": true,
+            "data-disabled": "",
+            onPressedChange: (
+              _pressed: boolean,
+              details: { cancel: () => void }
+            ) => {
+              details.cancel();
+            },
+          }
+        : props)}
     />
   );
-}
+};
 
-export { Toggle, toggleVariants };
+const ToggleGroup = <T extends string = string>({
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof ToggleGroupPrimitive<T>>, "className"> & {
+  className?: string;
+}) => (
+  <ToggleGroupPrimitive
+    className={cn("flex items-center gap-1", className)}
+    {...props}
+  />
+);
+
+export { Toggle, ToggleGroup };

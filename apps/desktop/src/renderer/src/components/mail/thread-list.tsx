@@ -1,4 +1,4 @@
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { createController } from "@ui-sdk/core";
 import {
   CircleAlertIcon,
   InboxIcon,
@@ -9,8 +9,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { AnimatePresence } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { MouseEvent, PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
 import {
@@ -29,7 +28,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { useRemeasureOnScrollSettle } from "@/hooks/use-remeasure-on-scroll-settle";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
 import { getMailboxSystemLabel } from "@/mail/label";
 import { isLabelPlace } from "@/mail/mailbox-place";
@@ -43,21 +42,19 @@ import {
   getBulkThreadDestructiveAction,
   getThreadDestructiveAction,
 } from "@/mail/thread-destructive-action";
-import type { ThreadSelectionDirection } from "@/mail/thread-selection";
-import {
-  getNextThreadSelectionIndex,
-  getSelectionAfterRemoval,
-  getThreadSelectionKey,
-  getThreadSelectionScrollBehavior,
-  getVisibleThreadSelectionIndex,
-} from "@/mail/thread-selection";
+import { getThreadSelectionKey } from "@/mail/thread-selection";
 import { useOpenThread } from "@/mail/use-open-thread";
 import type { ThreadActions } from "@/mail/use-thread-actions";
-import { useThreadDragSelection } from "@/mail/use-thread-drag-selection";
+import type {
+  MailListActivateDetails,
+  MailListController,
+} from "@/primitives/mail-list";
+import { MailListRoot } from "@/primitives/mail-list-root";
 import type { MailThreadSummary } from "@/shared/ipc/mail";
 import {
   useCheckedThreadIds,
   useMailboxStore,
+  useOpenThreadId,
   useSelectedThreadId,
 } from "@/state/mailbox";
 
@@ -243,6 +240,12 @@ const ThreadListTrailingNote = ({
     </div>
   );
 
+const conversationCount = (count: number): string =>
+  `${count} conversation${count === 1 ? "" : "s"}`;
+
+const selectedMessage = (count: number): string =>
+  count === 0 ? "Selection cleared" : `${conversationCount(count)} selected`;
+
 const MailThreadList = ({
   actions,
   emptyMessage,
@@ -264,32 +267,29 @@ const MailThreadList = ({
 }: MailThreadListProps) => {
   const confirm = useConfirm();
   const scrollElementRef = useRef<HTMLElement>(null);
-  const listElementRef = useRef<HTMLOListElement>(null);
+  const list = useInstanceValue(() => createController<MailListController>());
   const selectedThreadKey = useSelectedThreadId();
   const checkedThreadIds = useCheckedThreadIds();
+  // A conversation read over the list covers it, so the list keeps no keys.
+  const isCovered = useOpenThreadId() !== null;
   const openThread = useOpenThread();
   const checkThread = useMailboxStore((state) => state.checkThread);
   const clearCheckedThreads = useMailboxStore(
     (state) => state.clearCheckedThreads
   );
-  const retainCheckedThreads = useMailboxStore(
-    (state) => state.retainCheckedThreads
-  );
+  const setCheckedThreads = useMailboxStore((state) => state.setCheckedThreads);
   const selectThread = useMailboxStore((state) => state.selectThread);
-  const lastSelectionMoveAtRef = useRef<number | null>(null);
   const previousScrollResetKeyRef = useRef(scrollResetKey);
   const threadKeys = useMemo(
     () => threads.map((thread) => getThreadSelectionKey(thread)),
     [threads]
   );
-  const previousThreadKeysRef = useRef(threadKeys);
-  const dragSelection = useThreadDragSelection({
-    checkThread,
-    checkedThreadIds,
-    scrollElementRef,
-    selectThread,
-    threadKeys,
-  });
+  const threadsByKey = useMemo(
+    () =>
+      new Map(threads.map((thread) => [getThreadSelectionKey(thread), thread])),
+    [threads]
+  );
+  const checkedKeys = useMemo(() => [...checkedThreadIds], [checkedThreadIds]);
   // The trailing row can be a paging trigger or a passive note. Auto-load still
   // keys off `hasNextPage`, so a note cannot start a paging loop.
   // A failure with rows on screen is reported after them; without rows the
@@ -301,28 +301,11 @@ const MailThreadList = ({
   // The floating selection bar (bottom-4 plus its 44px height) would cover
   // the last row, so the list reserves room below it while it is shown.
   const bottomClearance = checkedThreadIds.size > 0 ? 80 : 16;
-  const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
-  // oxlint-disable-next-line react/incompatible-library -- TanStack Virtual returns a mutable instance, so React Compiler leaves this component uncompiled; only per-render values and the stable `measureElement` leave it.
-  const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
-    count: threads.length + (hasTrailingRow ? 1 : 0),
-    estimateSize: () => 88,
-    getItemKey: (index) => {
-      const thread = threads[index];
-      return thread === undefined
-        ? "next-page-loader"
-        : `${thread.accountId}:${thread.threadId}`;
-    },
-    getScrollElement: () => scrollElementRef.current,
-    onChange: remeasureOnScrollSettle,
-    overscan: 8,
-    scrollPaddingEnd: bottomClearance + 8,
-    scrollPaddingStart: 24,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const selectedThreadIndex = threads.findIndex(
-    (thread) => getThreadSelectionKey(thread) === selectedThreadKey
-  );
-  const selectedThread = threads[selectedThreadIndex];
+  const [lastRenderedIndex, setLastRenderedIndex] = useState<number>();
+  const selectedThread =
+    selectedThreadKey === null
+      ? undefined
+      : threadsByKey.get(selectedThreadKey);
   const checkedThreads = useMemo(
     () =>
       threads.filter((thread) =>
@@ -331,35 +314,34 @@ const MailThreadList = ({
     [checkedThreadIds, threads]
   );
   const bulkDestructiveAction = getBulkThreadDestructiveAction(checkedThreads);
-  // This component calls `useVirtualizer`, so React Compiler skips it and every
-  // scroll range change re-renders it. Row props stay referentially stable so
-  // memoized rows skip that render; checked state is read at event time rather
-  // than captured, so toggling one row does not re-render the others.
-  const {
-    consumeSuppressedOpen,
-    onRowPointerDown,
-    onSelectionPointerDown,
-    onSelectionPointerEnter,
-  } = dragSelection;
-  const handleOpen = useCallback(
-    (target: MailThreadSummary, event: MouseEvent): void => {
-      if (consumeSuppressedOpen(event.detail)) {
+  // Checked state is read at event time, not captured, so these props stay
+  // stable and toggling one row doesn't re-render the memoized others.
+  const handleActivate = useCallback(
+    (key: string, { source }: MailListActivateDetails): void => {
+      const target = threadsByKey.get(key);
+      const { checkedThreadIds: checked } = useMailboxStore.getState();
+
+      if (target === undefined) {
         return;
       }
-
-      const { checkedThreadIds: currentCheckedThreadIds } =
-        useMailboxStore.getState();
-
-      if (currentCheckedThreadIds.size === 0) {
+      if (checked.size === 0 || source === "agent") {
         openThread(target);
         return;
       }
-
-      const key = getThreadSelectionKey(target);
-      checkThread(key, !currentCheckedThreadIds.has(key));
-      selectThread(key);
+      // With conversations checked a click adds or removes the row, as X
+      // does; Enter opens nothing until the selection is cleared.
+      if (source === "pointer") {
+        checkThread(key, !checked.has(key));
+        selectThread(key);
+      }
     },
-    [checkThread, consumeSuppressedOpen, openThread, selectThread]
+    [checkThread, openThread, selectThread, threadsByKey]
+  );
+  const handleCheckedChange = useCallback(
+    (keys: readonly string[]): void => {
+      setCheckedThreads(new Set(keys));
+    },
+    [setCheckedThreads]
   );
   const handleToggleSelection = useCallback(
     (target: MailThreadSummary): void => {
@@ -369,23 +351,9 @@ const MailThreadList = ({
     },
     [checkThread, selectThread]
   );
-  const handleRowPointerDown = useCallback(
-    (target: MailThreadSummary, event: PointerEvent<HTMLButtonElement>) => {
-      onRowPointerDown(getThreadSelectionKey(target), event);
-    },
-    [onRowPointerDown]
-  );
-  const handleSelectionPointerDown = useCallback(
-    (target: MailThreadSummary, event: PointerEvent) => {
-      onSelectionPointerDown(getThreadSelectionKey(target), event);
-    },
-    [onSelectionPointerDown]
-  );
-  const handleSelectionPointerEnter = useCallback(
-    (target: MailThreadSummary) => {
-      onSelectionPointerEnter(getThreadSelectionKey(target));
-    },
-    [onSelectionPointerEnter]
+  const labelOf = useCallback(
+    (key: string): string => threadsByKey.get(key)?.subject ?? key,
+    [threadsByKey]
   );
   const handleToggleRead = actions.toggleRead;
   const requestDeleteForever = useCallback(
@@ -418,86 +386,29 @@ const MailThreadList = ({
   const requestBulkTrash = useCallback((): void => {
     actions.bulkTrash(checkedThreads);
   }, [actions, checkedThreads]);
-  const getVisibleSelectionIndex = (
-    direction: ThreadSelectionDirection
-  ): number | null => {
-    const scrollElement = scrollElementRef.current;
-    const listElement = listElementRef.current;
-
-    if (scrollElement === null || listElement === null) {
-      return null;
-    }
-
-    // Virtual row offsets are measured from the list, which sits inside the
-    // scroller's padding, so the viewport has to be moved into that space.
-    const viewportStart = scrollElement.scrollTop - listElement.offsetTop;
-
-    return getVisibleThreadSelectionIndex(
-      // Drop the next-page loader row; it is not selectable.
-      virtualRows.filter((row) => row.index < threads.length),
-      viewportStart,
-      viewportStart + scrollElement.clientHeight,
-      direction
-    );
-  };
-
-  const moveSelection = (direction: ThreadSelectionDirection): void => {
-    // With nothing selected the keys pick up from what is on screen rather than
-    // teleporting to a list edge the reader has already scrolled away from.
-    const nextIndex =
-      (selectedThreadIndex === -1
-        ? getVisibleSelectionIndex(direction)
-        : null) ??
-      getNextThreadSelectionIndex(threadKeys, selectedThreadKey, direction);
-
-    if (nextIndex === null) {
-      return;
-    }
-
-    const nextThread = threads[nextIndex];
-
-    if (nextThread === undefined) {
-      return;
-    }
-
-    selectThread(getThreadSelectionKey(nextThread));
-    const now = performance.now();
-    const scrollBehavior = getThreadSelectionScrollBehavior(
-      lastSelectionMoveAtRef.current,
-      now
-    );
-    lastSelectionMoveAtRef.current = now;
-    rowVirtualizer.scrollToIndex(nextIndex, {
-      align: "center",
-      behavior: scrollBehavior,
-    });
-  };
-
   useHotkeyLayer("mailbox", true);
   useAppCommand(
     "mailbox.nextThread",
     () => {
-      moveSelection(1);
+      list.move(1);
     },
     { enabled: threads.length > 0 }
   );
   useAppCommand(
     "mailbox.previousThread",
     () => {
-      moveSelection(-1);
+      list.move(-1);
     },
     { enabled: threads.length > 0 }
   );
   useAppCommand("mailbox.clearSelection", () => {
-    clearCheckedThreads();
-    selectThread(null);
+    list.clear();
   });
   useAppCommand(
     "mailbox.toggleThreadSelection",
     () => {
-      if (selectedThread !== undefined) {
-        const key = getThreadSelectionKey(selectedThread);
-        checkThread(key, !checkedThreadIds.has(key));
+      if (selectedThreadKey !== null) {
+        list.toggle(selectedThreadKey);
       }
     },
     { enabled: selectedThread !== undefined }
@@ -552,26 +463,6 @@ const MailThreadList = ({
   );
 
   useEffect(() => {
-    retainCheckedThreads(new Set(threadKeys));
-  }, [retainCheckedThreads, threadKeys]);
-
-  // Trashing or reading the selected row takes it out of the list at once;
-  // selecting the row that takes its place keeps keyboard triage going.
-  useEffect(() => {
-    const replacement = getSelectionAfterRemoval(
-      previousThreadKeysRef.current,
-      threadKeys,
-      selectedThreadKey
-    );
-
-    previousThreadKeysRef.current = threadKeys;
-
-    if (replacement !== undefined) {
-      selectThread(replacement);
-    }
-  }, [selectThread, selectedThreadKey, threadKeys]);
-
-  useEffect(() => {
     if (previousScrollResetKeyRef.current === scrollResetKey) {
       return;
     }
@@ -587,7 +478,7 @@ const MailThreadList = ({
         hasLoadError: loadError !== undefined,
         hasNextPage,
         isLoadingNextPage,
-        lastVisibleIndex: virtualRows.at(-1)?.index,
+        lastVisibleIndex: lastRenderedIndex,
         threadCount: threads.length,
       })
     ) {
@@ -596,95 +487,94 @@ const MailThreadList = ({
   }, [
     hasNextPage,
     isLoadingNextPage,
+    lastRenderedIndex,
     loadError,
     loadNextPage,
     threads.length,
-    virtualRows,
   ]);
 
   return (
     <>
-      <section
+      <MailListRoot
+        after={
+          hasTrailingRow ? (
+            <div className="py-4">
+              <ThreadListTrailingNote
+                hasNextPage={hasNextPage}
+                loadError={trailingError}
+                onRetryLoad={onRetryLoad}
+                trailingMessage={trailingMessage}
+              />
+            </div>
+          ) : null
+        }
         aria-label={presentation.label}
-        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4"
+        before={
+          <ThreadListPlaceholderPane
+            copy={{
+              emptyIcon: presentation.emptyIcon,
+              emptyMessage,
+              emptyTitle,
+              loadError,
+              loadErrorTitle,
+              loadingTitle,
+            }}
+            isInitialLoading={isInitialLoading}
+            onRetryLoad={onRetryLoad}
+            threadCount={threads.length}
+          />
+        }
+        checkable
+        checked={checkedKeys}
+        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 outline-none"
+        controller={list}
+        current={selectedThreadKey}
+        estimate={88}
+        gridLabel="Conversations"
+        inert={isCovered}
+        keys={threadKeys}
+        labelOf={labelOf}
+        onActivate={handleActivate}
+        onCheckedChange={handleCheckedChange}
+        onCurrentChange={selectThread}
+        onRowsRendered={(rows) => {
+          setLastRenderedIndex(rows.at(-1)?.index);
+        }}
         ref={scrollElementRef}
+        rowCount={threads.length}
+        selectedMessage={selectedMessage}
         style={{ paddingBottom: bottomClearance }}
         tabIndex={-1}
       >
-        <ThreadListPlaceholderPane
-          copy={{
-            emptyIcon: presentation.emptyIcon,
-            emptyMessage,
-            emptyTitle,
-            loadError,
-            loadErrorTitle,
-            loadingTitle,
-          }}
-          isInitialLoading={isInitialLoading}
-          onRetryLoad={onRetryLoad}
-          threadCount={threads.length}
-        />
-        <ol
-          className="relative"
-          ref={listElementRef}
-          style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
-        >
+        {(rows) => (
           <AnimatePresence initial={false}>
-            {virtualRows.map((virtualRow) => {
-              const thread = threads[virtualRow.index];
+            {rows.map((row) => {
+              const thread = threadsByKey.get(row.key);
 
-              return thread === undefined ? (
-                <li
-                  className="absolute top-0 left-0 w-full py-4"
-                  data-index={virtualRow.index}
-                  key={virtualRow.key}
-                  ref={rowVirtualizer.measureElement}
-                  style={{ transform: `translateY(${virtualRow.start}px)` }}
-                >
-                  <ThreadListTrailingNote
-                    hasNextPage={hasNextPage}
-                    loadError={trailingError}
-                    onRetryLoad={onRetryLoad}
-                    trailingMessage={trailingMessage}
-                  />
-                </li>
-              ) : (
+              return thread === undefined ? null : (
                 <MailThreadItem
-                  data-index={virtualRow.index}
-                  data-thread-selection-key={getThreadSelectionKey(thread)}
                   hasCheckedThreads={checkedThreadIds.size > 0}
-                  isChecked={checkedThreadIds.has(
-                    getThreadSelectionKey(thread)
-                  )}
-                  isSelected={
-                    getThreadSelectionKey(thread) === selectedThreadKey
-                  }
-                  key={virtualRow.key}
+                  isChecked={checkedThreadIds.has(row.key)}
+                  isSelected={row.key === selectedThreadKey}
+                  key={row.key}
                   mailboxLabel={presentation.mailboxLabel}
                   {...getRowDestructiveActions(
                     thread,
                     handleDeleteForever,
                     actions.trash
                   )}
-                  onOpen={handleOpen}
-                  onRowPointerDown={handleRowPointerDown}
                   onNotSpam={mailbox === "spam" ? actions.notSpam : undefined}
-                  onSelectionPointerDown={handleSelectionPointerDown}
-                  onSelectionPointerEnter={handleSelectionPointerEnter}
                   onToggleRead={handleToggleRead}
                   onToggleSelection={handleToggleSelection}
-                  position={virtualRow.index + 1}
-                  ref={rowVirtualizer.measureElement}
-                  setSize={threads.length}
                   showAccount={showAccount}
-                  top={virtualRow.start}
+                  top={row.start}
                   thread={thread}
                 />
               );
             })}
           </AnimatePresence>
-        </ol>
-      </section>
+        )}
+      </MailListRoot>
       <AnimatePresence initial={false}>
         {checkedThreads.length === 0 ? null : (
           <ThreadSelectionBar

@@ -5,6 +5,8 @@ import LabelDialog from "@/components/mail/label-dialog";
 import ThreadCategorizeButton from "@/components/mail/thread-categorize-button";
 import ThreadLabelPicker from "@/components/mail/thread-label-picker";
 import { Badge } from "@/components/ui/badge";
+import { createMenuController } from "@/components/ui/menu";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand } from "@/hotkeys";
 import { cn } from "@/lib/utils";
 import { listUserLabels } from "@/mail/label";
@@ -38,6 +40,7 @@ const ThreadLabels = ({
   const rowRef = useRef<HTMLDivElement>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const picker = useInstanceValue(createMenuController);
   const pendingChanges = usePendingThreadChanges();
   const catalog = useLabelCatalog(accountId);
   const mailApi = getMailApi();
@@ -62,7 +65,7 @@ const ThreadLabels = ({
         block: "start",
         inline: "nearest",
       });
-      setIsPickerOpen(true);
+      void picker.open({ focus: "first" });
     },
     { enabled: !isPickerOpen }
   );
@@ -105,6 +108,7 @@ const ThreadLabels = ({
       />
       <ThreadLabelPicker
         appliedLabels={labels}
+        controller={picker}
         isOpen={isPickerOpen}
         isLoading={catalog === undefined}
         labels={userLabels}

@@ -1,6 +1,6 @@
 import { ListFilterIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -26,24 +26,17 @@ const SidebarUnreadToggle = ({
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button
+          <Toggle
             aria-keyshortcuts={getHotkeyAriaLabel("app.toggleUnread")}
             aria-label={display.label}
-            aria-pressed={pressed}
-            className={
-              pressed
-                ? undefined
-                : "text-muted-foreground hover:text-foreground"
-            }
-            onClick={() => {
-              onPressedChange(!pressed);
-            }}
+            className="not-data-pressed:text-muted-foreground not-data-pressed:hover:text-foreground"
+            onPressedChange={onPressedChange}
+            pressed={pressed}
+            pressedVariant="default"
             size="icon-lg"
-            type="button"
-            variant={pressed ? "default" : "ghost"}
           >
             <ListFilterIcon className="stroke-[1.8]" />
-          </Button>
+          </Toggle>
         }
       />
       <TooltipContent className="flex items-center gap-2" side="bottom">

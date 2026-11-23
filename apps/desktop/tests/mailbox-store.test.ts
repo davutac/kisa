@@ -69,17 +69,20 @@ describe("mailbox store", () => {
     ]);
   });
 
-  it("retains only checked threads still present in the mailbox", () => {
+  it("replaces the checked threads, and keeps the set when nothing changed", () => {
     const store = useMailboxStore.getState();
     store.checkThread("person@example.com:first", true);
-    store.checkThread("person@example.com:second", true);
+    const before = useMailboxStore.getState().checkedThreadIds;
 
-    store.retainCheckedThreads(
+    store.setCheckedThreads(new Set(["person@example.com:first"]));
+    expect(useMailboxStore.getState().checkedThreadIds).toBe(before);
+
+    store.setCheckedThreads(
       new Set(["person@example.com:second", "person@example.com:third"])
     );
-
     expect([...useMailboxStore.getState().checkedThreadIds]).toStrictEqual([
       "person@example.com:second",
+      "person@example.com:third",
     ]);
   });
 

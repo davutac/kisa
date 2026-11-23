@@ -1,8 +1,9 @@
 import { LoaderCircleIcon } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { FileInput, FileInputDropzone } from "@/components/ui/file-input";
+
+const NO_FILES: File[] = [];
 
 interface FileSelectionRowProps {
   readonly disabled: boolean;
@@ -13,6 +14,8 @@ interface FileSelectionRowProps {
   readonly onSelect: () => void;
 }
 
+// The row takes a dropped or pasted file and hands it on; Select opens main's
+// own file dialog, so the file input never holds a file or opens a picker.
 const FileSelectionRow = ({
   disabled,
   fileName,
@@ -20,38 +23,19 @@ const FileSelectionRow = ({
   label,
   onDropFile,
   onSelect,
-}: FileSelectionRowProps) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const isDisabled = disabled || isSelecting;
-
-  return (
-    <div
-      className={cn(
-        "border-border flex items-center justify-between gap-4 rounded-lg border p-3 text-left transition-colors",
-        isDragging && "bg-muted"
-      )}
-      onDragEnter={(event) => {
-        event.preventDefault();
-        if (!isDisabled) {
-          setIsDragging(true);
-        }
-      }}
-      onDragLeave={() => {
-        setIsDragging(false);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = isDisabled ? "none" : "copy";
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        setIsDragging(false);
-        const file = event.dataTransfer.files.item(0);
-        if (!isDisabled && file !== null) {
-          onDropFile(file);
-        }
-      }}
-    >
+}: FileSelectionRowProps) => (
+  <FileInput
+    aria-label={label}
+    disabled={disabled || isSelecting}
+    onValueChange={(_files, details) => {
+      const [file] = details.added;
+      if (file !== undefined) {
+        onDropFile(file);
+      }
+    }}
+    value={NO_FILES}
+  >
+    <FileInputDropzone className="border-border data-dragging:bg-muted flex items-center justify-between gap-4 rounded-lg border p-3 text-left transition-colors">
       <div className="min-w-0">
         <div className="font-medium">{label}</div>
         <div className="text-muted-foreground truncate" title={fileName}>
@@ -59,7 +43,7 @@ const FileSelectionRow = ({
         </div>
       </div>
       <Button
-        disabled={isDisabled}
+        disabled={disabled || isSelecting}
         onClick={onSelect}
         type="button"
         variant="outline"
@@ -67,8 +51,8 @@ const FileSelectionRow = ({
         {isSelecting ? <LoaderCircleIcon className="animate-spin" /> : null}
         {fileName === undefined ? `Select ${label}` : "Change"}
       </Button>
-    </div>
-  );
-};
+    </FileInputDropzone>
+  </FileInput>
+);
 
 export default FileSelectionRow;

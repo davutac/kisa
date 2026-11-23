@@ -167,6 +167,7 @@ const MailThreadContent = ({
     onPopOut: onPopOutThread,
     onToggleRead: handleToggleRead,
     onTrash: onTrashThread,
+    subject: thread.subject,
   };
   const labels = (
     <ThreadLabels
@@ -193,7 +194,6 @@ const MailThreadContent = ({
             {...actions}
             onClose={onClose}
             showCloseButton={showCloseButton}
-            subject={thread.subject}
           />
           {labels}
         </>

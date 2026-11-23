@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { useState } from "react";
-import type { CSSProperties, Ref } from "react";
+import type { CSSProperties } from "react";
 
 import { MailAttachmentSummaryPill } from "@/components/mail/attachment-pill";
 import MailDate from "@/components/mail/mail-date";
@@ -28,7 +28,14 @@ import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { formatExactMailDate, formatMailDate } from "@/mail/mail-date";
 import {
+  MailListActions,
+  MailListCell,
+  MailListOpen,
+  MailListRow,
+} from "@/primitives/mail-list";
+import {
   getScheduledMailAttentionCopy,
+  getScheduledMailKey,
   getScheduledRecipientSummary,
 } from "@/scheduled/scheduled-mail-view";
 import type { ScheduledMailSummary } from "@/shared/ipc/scheduled-mail";
@@ -96,16 +103,19 @@ const ScheduledMailQuickAction = ({
   return (
     // Like mailbox thread actions, this stays parked behind the opaque row.
     // `inert` keeps its covered button out of the focus order.
-    <m.div
-      animate={isRevealed ? "revealed" : "idle"}
+    <MailListActions
       className="bg-card absolute inset-y-0 right-0 z-0 grid w-15 grid-cols-[60px] grid-rows-2 overflow-hidden rounded-r-md"
-      data-slot="scheduled-mail-quick-action"
       inert={!isRevealed}
-      initial={false}
-      transition={
-        shouldReduceMotion ? NO_MOTION : { ...easeInOut(0.18), delay: 0.05 }
+      render={
+        <m.div
+          animate={isRevealed ? "revealed" : "idle"}
+          initial={false}
+          transition={
+            shouldReduceMotion ? NO_MOTION : { ...easeInOut(0.18), delay: 0.05 }
+          }
+          variants={quickActionVariants}
+        />
       }
-      variants={quickActionVariants}
     >
       <Button
         aria-keyshortcuts={getHotkeyAriaLabel("scheduled.cancel")}
@@ -136,7 +146,7 @@ const ScheduledMailQuickAction = ({
       >
         <Trash2Icon />
       </Button>
-    </m.div>
+    </MailListActions>
   );
 };
 
@@ -201,11 +211,13 @@ const ScheduledMailDetails = ({
           ))}
           {hiddenAttachmentCount > 0 ? (
             <Badge
-              aria-label={`${hiddenAttachmentCount} more attachments`}
               className="bg-muted text-muted-foreground shrink-0"
               variant="secondary"
             >
-              +{hiddenAttachmentCount}
+              <span aria-hidden="true">+{hiddenAttachmentCount}</span>
+              <span className="sr-only">
+                {hiddenAttachmentCount} more attachments
+              </span>
             </Badge>
           ) : null}
         </div>
@@ -227,32 +239,22 @@ const ScheduledMailDetails = ({
 
 interface ScheduledMailRowProps {
   readonly item: ScheduledMailSummary;
-  readonly measureElement: (element: HTMLLIElement | null) => void;
   readonly onCancel: (item: ScheduledMailSummary) => void;
   readonly onDiscard: (item: ScheduledMailSummary) => void;
   readonly onOpen: (item: ScheduledMailSummary) => void;
-  readonly position: number;
   readonly quickActionResetRevision: number;
-  readonly ref?: Ref<HTMLButtonElement>;
   readonly selected: boolean;
-  readonly setSize: number;
   readonly style?: CSSProperties;
-  readonly virtualIndex: number;
 }
 
 const ScheduledMailRow = ({
   item,
-  measureElement,
   onCancel,
   onDiscard,
   onOpen,
-  position,
   quickActionResetRevision,
-  ref,
   selected,
-  setSize,
   style,
-  virtualIndex,
 }: ScheduledMailRowProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const [hoveredAtRevision, setHoveredAtRevision] = useState<number | null>(
@@ -276,13 +278,10 @@ const ScheduledMailRow = ({
   const areQuickActionsRevealed = selected || isHovered;
 
   return (
-    <li
-      aria-posinset={position}
-      aria-setsize={setSize}
+    <MailListRow
       className="absolute top-0 left-0 w-full pb-px"
-      data-index={virtualIndex}
-      ref={measureElement}
       style={style}
+      value={getScheduledMailKey(item)}
     >
       <m.div
         className="relative"
@@ -294,22 +293,19 @@ const ScheduledMailRow = ({
           setHoveredAtRevision(quickActionResetRevision);
         }}
       >
-        <ScheduledMailQuickAction
-          disabled={item.deliveryState === "sending"}
-          isRevealed={areQuickActionsRevealed}
-          onCancel={() => onCancel(item)}
-          onDiscard={() => onDiscard(item)}
-          subject={subject}
-        />
-        <m.div
-          animate={{
-            marginRight: areQuickActionsRevealed
-              ? SCHEDULED_MAIL_QUICK_ACTION_WIDTH
-              : 0,
-          }}
+        <MailListCell
           className="bg-background relative z-10 rounded-md"
-          initial={false}
-          transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+          render={
+            <m.div
+              animate={{
+                marginRight: areQuickActionsRevealed
+                  ? SCHEDULED_MAIL_QUICK_ACTION_WIDTH
+                  : 0,
+              }}
+              initial={false}
+              transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+            />
+          }
         >
           <Item
             className={cn(
@@ -322,18 +318,10 @@ const ScheduledMailRow = ({
             data-selected={selected}
             render={<article />}
           >
-            <button
-              aria-current={selected ? "true" : undefined}
+            <MailListOpen
               aria-disabled={!canOpen}
               aria-label={`Edit scheduled email: ${subject}, from ${item.accountId}, to ${recipientLabel}, ${deliverySummary}`}
               className="absolute inset-0 rounded-md text-left outline-none"
-              onClick={() => {
-                if (canOpen) {
-                  onOpen(item);
-                }
-              }}
-              ref={ref}
-              type="button"
             />
             <ScheduledMailDetails
               deliveryNotice={deliveryNotice}
@@ -357,9 +345,16 @@ const ScheduledMailRow = ({
               />
             </ItemActions>
           </Item>
-        </m.div>
+        </MailListCell>
+        <ScheduledMailQuickAction
+          disabled={item.deliveryState === "sending"}
+          isRevealed={areQuickActionsRevealed}
+          onCancel={() => onCancel(item)}
+          onDiscard={() => onDiscard(item)}
+          subject={subject}
+        />
       </m.div>
-    </li>
+    </MailListRow>
   );
 };
 

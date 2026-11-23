@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 
 import { AI_PROVIDER_NAMES } from "@/ai";
-import { RadioGroupItem } from "@/components/ui/radio-group";
+import { Radio } from "@/components/ui/radio";
 import {
   SettingsRow,
   SettingsRowActions,
@@ -122,6 +122,7 @@ const AiProviderRow = ({
   const canActivateProvider = modelOptions.some(
     (option) => option.model === currentModel
   );
+  const nameId = `ai-provider-${provider}-name`;
   const statusId = `ai-provider-${provider}-status`;
   const showStatusText =
     presentation?.showHeadline !== false || presentation.detail !== null;
@@ -132,9 +133,9 @@ const AiProviderRow = ({
       data-provider={provider}
     >
       <SettingsRowContent className="flex-row items-start gap-3">
-        <RadioGroupItem
+        <Radio
           aria-describedby={showStatusText ? statusId : undefined}
-          aria-label={`Use ${AI_PROVIDER_NAMES[provider]} for generation`}
+          aria-labelledby={nameId}
           className="mt-0.5"
           disabled={!canActivateProvider}
           value={provider}
@@ -152,7 +153,10 @@ const AiProviderRow = ({
                 )}
               />
             </span>
-            <span className="text-foreground truncate text-sm font-medium tracking-[-0.005em]">
+            <span
+              className="text-foreground truncate text-sm font-medium tracking-[-0.005em]"
+              id={nameId}
+            >
               {AI_PROVIDER_NAMES[provider]}
             </span>
             {status?.version ? (

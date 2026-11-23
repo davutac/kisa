@@ -1,6 +1,7 @@
 import { LoaderCircleIcon, XIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { labelColorStyle } from "@/mail/label";
 import type { MailLabelColor } from "@/shared/ipc/mail";
@@ -8,7 +9,6 @@ import type { MailLabelColor } from "@/shared/ipc/mail";
 export type MailLabelBadgeSize = "compact" | "default";
 
 export interface MailLabelBadgeProps {
-  readonly ariaLabel?: string;
   readonly className?: string;
   readonly color?: MailLabelColor;
   readonly disabled?: boolean;
@@ -21,8 +21,12 @@ export interface MailLabelBadgeProps {
   readonly size?: MailLabelBadgeSize;
 }
 
+// The badge's own buttons only take Kisa's Button for its behavior; these
+// classes undo its padding, height and focus ring to keep the badge's look.
+const badgeButtonClassName =
+  "h-auto min-w-0 gap-0 border-0 p-0 text-[length:inherit] leading-[inherit] hover:bg-transparent hover:text-current focus-visible:ring-0 active:not-aria-[haspopup]:translate-y-0 dark:hover:bg-transparent";
+
 const MailLabelBadge = ({
-  ariaLabel,
   className,
   color,
   disabled = false,
@@ -39,7 +43,6 @@ const MailLabelBadge = ({
 
   return (
     <Badge
-      aria-label={ariaLabel}
       className={cn(
         "bg-muted text-muted-foreground shrink-0",
         size === "compact"
@@ -56,37 +59,46 @@ const MailLabelBadge = ({
       {onClick === undefined ? (
         <span className="min-w-0 truncate">{label}</span>
       ) : (
-        <button
+        <Button
           aria-label={onClickAriaLabel}
-          className="min-w-0 cursor-pointer truncate text-left focus-visible:underline focus-visible:outline-none"
+          className={cn(
+            badgeButtonClassName,
+            "shrink cursor-pointer justify-start rounded-none text-left focus-visible:underline data-disabled:opacity-100"
+          )}
           disabled={disabled}
           onClick={onClick}
+          size="xs"
           type="button"
+          variant="ghost"
         >
-          {label}
-        </button>
+          <span className="truncate">{label}</span>
+        </Button>
       )}
       {canRemove ? (
-        <button
+        <Button
           aria-label={removeLabel}
           className={cn(
-            "pointer-events-none flex h-3 w-0 shrink-0 items-center justify-center overflow-hidden rounded-full opacity-0 transition-[width,margin,opacity] group-hover/badge:pointer-events-auto group-hover/badge:ml-0.5 group-hover/badge:w-3 group-hover/badge:opacity-100 focus-visible:pointer-events-auto focus-visible:ml-0.5 focus-visible:w-3 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-current focus-visible:outline-none",
-            isRemoving && "pointer-events-auto ml-0.5 w-3 opacity-100"
+            badgeButtonClassName,
+            "pointer-events-none flex h-3 w-0 overflow-hidden rounded-full opacity-0 transition-[width,margin,opacity] group-hover/badge:pointer-events-auto group-hover/badge:ml-0.5 group-hover/badge:w-3 group-hover/badge:opacity-100 focus-visible:pointer-events-auto focus-visible:ml-0.5 focus-visible:w-3 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-current focus-visible:outline-none",
+            isRemoving &&
+              "pointer-events-auto ml-0.5 w-3 opacity-100 data-disabled:opacity-100"
           )}
           disabled={disabled || isRemoving}
           onClick={(event) => {
             event.stopPropagation();
             onRemove();
           }}
+          size="xs"
           title={removeLabel}
           type="button"
+          variant="ghost"
         >
           {isRemoving ? (
             <LoaderCircleIcon className="size-2.5 animate-spin" />
           ) : (
             <XIcon className="size-2.5" />
           )}
-        </button>
+        </Button>
       ) : null}
     </Badge>
   );

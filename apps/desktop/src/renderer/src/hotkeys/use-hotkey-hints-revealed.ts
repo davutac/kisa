@@ -1,7 +1,7 @@
-import { detectPlatform, getKeyStateTracker } from "@tanstack/react-hotkeys";
 import { useSyncExternalStore } from "react";
 
 import { useIsHotkeyScopeActive } from "@/hotkeys/app-hotkeys-provider";
+import { getHotkeyModifierKey } from "@/hotkeys/commands";
 import type { HotkeyPlatform } from "@/hotkeys/commands";
 
 /**
@@ -15,11 +15,9 @@ export const HINT_REVEAL_DELAY_MS = 400;
 
 export const getModifierHold = (
   heldKeys: readonly string[],
-  platform: HotkeyPlatform
+  platform?: HotkeyPlatform
 ): ModifierHold => {
-  const modifier = platform === "mac" ? "Meta" : "Control";
-
-  if (!heldKeys.includes(modifier)) {
+  if (!heldKeys.includes(getHotkeyModifierKey(platform))) {
     return "none";
   }
 
@@ -45,7 +43,7 @@ export interface HotkeyHintReveal {
  */
 export const createHotkeyHintReveal = (
   keys: HeldKeysSource,
-  platform: HotkeyPlatform
+  platform?: HotkeyPlatform
 ): HotkeyHintReveal => {
   const listeners = new Set<() => void>();
   let isRevealed = false;
@@ -103,21 +101,114 @@ export const createHotkeyHintReveal = (
   };
 };
 
-const trackedHeldKeys: HeldKeysSource = {
-  getHeldKeys: () => getKeyStateTracker().getHeldKeys(),
-  subscribe: (onChange) => {
-    const subscription = getKeyStateTracker().store.subscribe(onChange);
+const MODIFIER_FLAGS = {
+  Alt: "altKey",
+  Control: "ctrlKey",
+  Meta: "metaKey",
+  Shift: "shiftKey",
+} as const;
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  },
+const isModifier = (key: string): key is keyof typeof MODIFIER_FLAGS =>
+  Object.hasOwn(MODIFIER_FLAGS, key);
+
+export const createHeldKeys = (
+  target: Window,
+  platform?: HotkeyPlatform
+): HeldKeysSource => {
+  const held = new Map<string, string>();
+  const listeners = new Set<() => void>();
+  let heldKeys: readonly string[] = [];
+
+  const publish = (): void => {
+    const next = [...new Set(held.values())];
+    if (
+      next.length === heldKeys.length &&
+      next.every((key, index) => key === heldKeys[index])
+    ) {
+      return;
+    }
+    heldKeys = next;
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+  // A modifier released where the window didn't hear it still reads as held
+  // until a real key event says otherwise.
+  const forgetReleasedModifiers = (event: KeyboardEvent): void => {
+    if (!event.isTrusted) {
+      return;
+    }
+    for (const [code, key] of held) {
+      if (isModifier(key) && !event[MODIFIER_FLAGS[key]]) {
+        held.delete(code);
+      }
+    }
+  };
+  const onKeyDown = (event: KeyboardEvent): void => {
+    forgetReleasedModifiers(event);
+    held.set(event.code || event.key, event.key);
+    publish();
+  };
+  const onKeyUp = (event: KeyboardEvent): void => {
+    held.delete(event.code || event.key);
+    forgetReleasedModifiers(event);
+    // macOS sends no keyup for a key released while ⌘ is down.
+    if (event.key === "Meta" && getHotkeyModifierKey(platform) === "Meta") {
+      for (const [code, key] of held) {
+        if (!isModifier(key)) {
+          held.delete(code);
+        }
+      }
+    }
+    publish();
+  };
+  const forgetAll = (): void => {
+    held.clear();
+    publish();
+  };
+  const onVisibilityChange = (): void => {
+    if (target.document.hidden) {
+      forgetAll();
+    }
+  };
+
+  return {
+    getHeldKeys: () => heldKeys,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      if (listeners.size === 1) {
+        target.addEventListener("keydown", onKeyDown, true);
+        target.addEventListener("keyup", onKeyUp, true);
+        target.addEventListener("blur", forgetAll);
+        target.document.addEventListener(
+          "visibilitychange",
+          onVisibilityChange
+        );
+      }
+
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size > 0) {
+          return;
+        }
+        target.removeEventListener("keydown", onKeyDown, true);
+        target.removeEventListener("keyup", onKeyUp, true);
+        target.removeEventListener("blur", forgetAll);
+        target.document.removeEventListener(
+          "visibilitychange",
+          onVisibilityChange
+        );
+        held.clear();
+        heldKeys = [];
+      };
+    },
+  };
 };
 
 let appHintReveal: HotkeyHintReveal | undefined;
 
 const getAppHintReveal = (): HotkeyHintReveal => {
-  appHintReveal ??= createHotkeyHintReveal(trackedHeldKeys, detectPlatform());
+  appHintReveal ??= createHotkeyHintReveal(createHeldKeys(window));
   return appHintReveal;
 };
 

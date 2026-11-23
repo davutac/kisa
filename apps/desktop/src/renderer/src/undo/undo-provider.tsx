@@ -6,8 +6,8 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import { useAppCommand } from "@/hotkeys";
 
 const UNDO_DURATION_MS = 8000;
@@ -41,7 +41,7 @@ type OfferUndo = (offer: UndoOffer) => void;
 interface ActiveUndo {
   readonly offer: UndoOffer;
   readonly order: number;
-  readonly toastId: string | number;
+  readonly toastId: string;
 }
 
 const UndoContext = createContext<OfferUndo | null>(null);
@@ -111,14 +111,13 @@ export const UndoProvider = ({
 
       const undoAction = {
         label: "Undo",
-        onClick: () => {
+        onAction: () => {
           void runUndo(order);
         },
       };
       const toastId = toast.success(offer.message, {
         action: undoAction,
         duration: UNDO_DURATION_MS,
-        onAutoClose: () => clear(order),
         onDismiss: () => clear(order),
       });
 
@@ -138,11 +137,14 @@ export const UndoProvider = ({
           clear(order);
         }
 
-        // Amends the toast in place while it is still the one on offer; a
-        // newer action or an Undo already took its place otherwise.
+        const keepsUndo = outcome.kind === "partial" && isOnOffer;
+
+        // Amends the toast in place while it is still on offer. An update keeps
+        // an omitted action and falls back to the default duration.
         toast.error(outcome.message, {
-          action: outcome.kind === "partial" && isOnOffer ? undoAction : null,
+          action: keepsUndo ? undoAction : undefined,
           description: outcome.description,
+          duration: keepsUndo ? UNDO_DURATION_MS : undefined,
           id: isOnOffer ? toastId : undefined,
         });
       };

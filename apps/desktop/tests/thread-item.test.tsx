@@ -8,6 +8,7 @@ import { AccountsProvider } from "../src/renderer/src/state/accounts";
 import { LabelsProvider } from "../src/renderer/src/state/labels";
 import type { Account } from "../src/shared/ipc/accounts";
 import type { MailThreadSummary } from "../src/shared/ipc/mail";
+import { InMailList } from "./fixtures/mail-list";
 
 const thread: MailThreadSummary = {
   accountId: "person@example.com",
@@ -34,19 +35,15 @@ const renderRow = (
       onReorder={vi.fn<() => Promise<void>>()}
     >
       <LabelsProvider accountIds={[]}>
-        <MailThreadItem
-          mailboxLabel={mailboxLabel}
-          onOpen={vi.fn<() => void>()}
-          onRowPointerDown={vi.fn<() => void>()}
-          onSelectionPointerDown={vi.fn<() => void>()}
-          onSelectionPointerEnter={vi.fn<() => void>()}
-          onToggleSelection={vi.fn<() => void>()}
-          position={1}
-          setSize={1}
-          showAccount={accounts !== undefined}
-          thread={{ ...thread, ...overrides }}
-          top={0}
-        />
+        <InMailList rowKey={`${thread.accountId}:${thread.threadId}`}>
+          <MailThreadItem
+            mailboxLabel={mailboxLabel}
+            onToggleSelection={vi.fn<() => void>()}
+            showAccount={accounts !== undefined}
+            thread={{ ...thread, ...overrides }}
+            top={0}
+          />
+        </InMailList>
       </LabelsProvider>
     </AccountsProvider>
   );

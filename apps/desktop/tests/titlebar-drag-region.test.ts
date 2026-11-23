@@ -12,6 +12,10 @@ const threadItem = fs.readFileSync(
   path.join(desktopRoot, "src/renderer/src/components/mail/thread-item.tsx"),
   "utf-8"
 );
+const mailList = fs.readFileSync(
+  path.join(desktopRoot, "src/renderer/src/primitives/mail-list.ts"),
+  "utf-8"
+);
 
 const getRule = (selector: string): string | undefined => {
   const escapedSelector = selector.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -35,7 +39,8 @@ const selectorDeclares = (selector: string, declaration: string): boolean => {
 
 describe("titlebar drag region", () => {
   it("keeps the full thread-row button out of the native no-drag region", () => {
-    expect(threadItem).toContain("<button");
+    expect(threadItem).toContain("<MailListOpen");
+    expect(mailList).toContain('open: "button"');
     expect(
       selectorDeclares("button:not(:disabled)", "-webkit-app-region: no-drag")
     ).toBeFalsy();

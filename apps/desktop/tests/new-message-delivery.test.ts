@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  describeComposerDelivery,
   getComposerDeliveryLabel,
   shouldConfirmScheduledEditorClose,
   submitNewMessageDelivery,
 } from "../src/renderer/src/components/mail/new-message/new-message-delivery";
+import { formatScheduledAt } from "../src/renderer/src/scheduled/schedule-time";
 
 describe("new message delivery choice", () => {
   it("selects and clears a send time without starting delivery", () => {
@@ -45,5 +47,40 @@ describe("new message delivery choice", () => {
 
     expect(send).toHaveBeenCalledOnce();
     expect(schedule).not.toHaveBeenCalled();
+  });
+});
+
+describe(describeComposerDelivery, () => {
+  const target = {
+    recipients: {
+      bcc: ["cy@example.com"],
+      cc: [],
+      to: ["ana@example.com", "bo@example.com"],
+    },
+    subject: "  Lunch?  ",
+  };
+  const at = new Date(2030, 4, 20, 13).getTime();
+
+  it("says what the composer's primary action will do, to whom", () => {
+    expect([
+      describeComposerDelivery(false, undefined, target),
+      describeComposerDelivery(false, at, target),
+      describeComposerDelivery(true, undefined, target),
+      describeComposerDelivery(true, at, target),
+    ]).toStrictEqual([
+      "Sends “Lunch?” to ana@example.com, bo@example.com, cy@example.com",
+      `Schedules “Lunch?” to ana@example.com, bo@example.com, cy@example.com for ${formatScheduledAt(at)}`,
+      "Sends “Lunch?” to ana@example.com, bo@example.com, cy@example.com now, before its scheduled time",
+      `Reschedules “Lunch?” to ana@example.com, bo@example.com, cy@example.com for ${formatScheduledAt(at)}`,
+    ]);
+  });
+
+  it("names an email without a subject or recipients plainly", () => {
+    expect(
+      describeComposerDelivery(false, undefined, {
+        recipients: { bcc: [], cc: [], to: [] },
+        subject: " ",
+      })
+    ).toBe("Sends this email");
   });
 });

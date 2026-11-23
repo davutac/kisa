@@ -17,6 +17,7 @@ import type {
   MailUnreadLabels,
 } from "../../../shared/ipc/mail";
 import { isMailboxLabelPlace } from "../../../shared/ipc/mail";
+import { labelTextColor } from "../../../shared/label-color";
 import { toDisplayedAttachment } from "../attachment-filename";
 
 export const THREAD_PAGE_SIZE = 50;
@@ -333,9 +334,12 @@ export const readLabelCatalog = async (
   return {
     labels: rows.map((row) => ({
       color:
-        row.backgroundColor === null || row.textColor === null
+        row.backgroundColor === null
           ? undefined
-          : { background: row.backgroundColor, text: row.textColor },
+          : {
+              background: row.backgroundColor,
+              text: labelTextColor(row.backgroundColor),
+            },
       id: row.labelId,
       name: row.kind === "user" ? toLabelName(row.labelId) : row.name,
       type: row.kind,

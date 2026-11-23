@@ -1,6 +1,7 @@
+@layer ui-sdk;
+
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./utilities.css";
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
@@ -164,7 +165,6 @@
   }
 
   button:not(:disabled),
-  [data-slot="sidebar-menu-button"],
   [role="button"]:not(:disabled) {
     cursor: default;
   }

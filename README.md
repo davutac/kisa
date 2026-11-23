@@ -44,7 +44,7 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 | Area | Technology |
 | --- | --- |
 | Desktop | [Electron](https://github.com/electron/electron) |
-| Interface | [React](https://github.com/react/react), [TypeScript](https://github.com/microsoft/TypeScript), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss), [shadcn](https://github.com/shadcn-ui/ui) |
+| Interface | [React](https://github.com/react/react), [TypeScript](https://github.com/microsoft/TypeScript), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss), [ui-sdk](https://ui-sdk.dev) |
 | Application runtime | [Effect](https://github.com/Effect-TS/effect) |
 | Routing and state | [TanStack Router](https://github.com/TanStack/router), [Zustand](https://github.com/pmndrs/zustand) |
 | Local data | [better-sqlite3-multiple-ciphers](https://github.com/m4heshd/better-sqlite3-multiple-ciphers), [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm), FTS5 |

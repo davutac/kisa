@@ -16,7 +16,9 @@ const isComposerDropTarget = (target: EventTarget | null): boolean =>
 
 /**
  * Files dropped anywhere on the composer attach to it, except over the
- * message editor, which takes its own drops as inline content.
+ * message editor, which takes its own drops as inline content. Not a
+ * FileInputDropzone: one claims every drop inside it before its children see
+ * it, so the editor would never place an image inline.
  */
 const useComposerFileDrop = (onFiles: (files: FileList) => void) => {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);

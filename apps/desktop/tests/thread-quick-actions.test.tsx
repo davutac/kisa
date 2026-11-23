@@ -4,16 +4,21 @@ import { describe, expect, it } from "vitest";
 import MailThreadQuickActions, {
   getMailThreadQuickActionsWidth,
 } from "../src/renderer/src/components/mail/thread-quick-actions";
+import { InMailList } from "./fixtures/mail-list";
 
 describe("thread quick actions", () => {
   it("lets a lone action fill its column", () => {
     const markup = renderToString(
-      <MailThreadQuickActions
-        hotkeysEnabled={false}
-        isRevealed
-        isUnread
-        onToggleRead={() => {}}
-      />
+      <InMailList rowKey="ana@example.com:t1" withRow>
+        <MailThreadQuickActions
+          hotkeysEnabled={false}
+          isRevealed
+          isUnread
+          name="Alpha"
+          subject="Alpha"
+          onToggleRead={() => {}}
+        />
+      </InMailList>
     );
 
     expect(markup).toContain("grid-rows-1");
@@ -25,13 +30,17 @@ describe("thread quick actions", () => {
     expect(getMailThreadQuickActionsWidth(false, true)).toBe(48);
 
     const markup = renderToString(
-      <MailThreadQuickActions
-        hotkeysEnabled={false}
-        isRevealed
-        isUnread
-        onToggleRead={() => {}}
-        onTrash={() => {}}
-      />
+      <InMailList rowKey="ana@example.com:t1" withRow>
+        <MailThreadQuickActions
+          hotkeysEnabled={false}
+          isRevealed
+          isUnread
+          name="Alpha"
+          subject="Alpha"
+          onToggleRead={() => {}}
+          onTrash={() => {}}
+        />
+      </InMailList>
     );
 
     expect(markup).toContain("grid-rows-2");
@@ -43,14 +52,18 @@ describe("thread quick actions", () => {
     expect(getMailThreadQuickActionsWidth(true, true)).toBe(96);
 
     const markup = renderToString(
-      <MailThreadQuickActions
-        hotkeysEnabled={false}
-        isRevealed
-        isUnread
-        onDeleteForever={() => {}}
-        onNotSpam={() => {}}
-        onToggleRead={() => {}}
-      />
+      <InMailList rowKey="ana@example.com:t1" withRow>
+        <MailThreadQuickActions
+          hotkeysEnabled={false}
+          isRevealed
+          isUnread
+          name="Alpha"
+          subject="Alpha"
+          onDeleteForever={() => {}}
+          onNotSpam={() => {}}
+          onToggleRead={() => {}}
+        />
+      </InMailList>
     );
 
     expect(markup).toContain("grid-cols-[60px_48px]");

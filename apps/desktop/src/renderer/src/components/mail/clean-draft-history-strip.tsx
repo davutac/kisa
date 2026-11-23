@@ -2,8 +2,9 @@ import { LoaderCircleIcon, XIcon } from "lucide-react";
 import { AnimatePresence, m, useReducedMotionConfig } from "motion/react";
 
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
-import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Toggle, ToggleGroup } from "@/components/ui/toggle";
+import { Toolbar, ToolbarButton } from "@/components/ui/toolbar";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 
 interface CleanDraftHistoryStripProps {
@@ -14,6 +15,8 @@ interface CleanDraftHistoryStripProps {
   versions: readonly CleanDraftVersion[];
 }
 
+// A toggle group rather than radios: choosing a version rewrites the draft, so
+// arrow keys only move focus and Enter or Space chooses.
 const CleanDraftHistoryStrip = ({
   disabled,
   onDismiss,
@@ -28,11 +31,23 @@ const CleanDraftHistoryStrip = ({
   }
 
   return (
-    <div
+    <Toolbar
       aria-label="Draft history"
       className="scroll-fade-x min-w-0 shrink-0 scrollbar-thin overflow-x-auto px-2 py-1"
+      disabled={disabled}
     >
-      <div className="flex w-max min-w-full items-center gap-1">
+      <ToggleGroup
+        aria-label="Draft version"
+        className="w-max min-w-full"
+        deselectable={false}
+        onValueChange={([id]) => {
+          const version = versions.find((candidate) => candidate.id === id);
+          if (version !== undefined) {
+            onSelect(version);
+          }
+        }}
+        value={selectedVersionId === null ? [] : [selectedVersionId]}
+      >
         <AnimatePresence mode="popLayout">
           {versions.map((version) => {
             const isSelected = version.id === selectedVersionId;
@@ -53,14 +68,12 @@ const CleanDraftHistoryStrip = ({
                 transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.16)}
               >
                 <ButtonGroup>
-                  <Button
+                  <Toggle
                     aria-label={`Use ${version.label} draft`}
-                    aria-pressed={isSelected}
-                    disabled={disabled || isLoading}
-                    onClick={() => onSelect(version)}
+                    disabled={isLoading}
                     size="sm"
-                    type="button"
-                    variant={isSelected ? "default" : "outline"}
+                    value={version.id}
+                    variant="outline"
                   >
                     {isLoading ? (
                       <LoaderCircleIcon className="animate-spin" />
@@ -68,27 +81,25 @@ const CleanDraftHistoryStrip = ({
                     {isLoading
                       ? version.label.replace("Clean", "Cleaning…")
                       : version.label}
-                  </Button>
+                  </Toggle>
                   {version.id === "original" ? null : (
-                    <Button
+                    <ToolbarButton
                       aria-label={`Dismiss ${version.label} draft`}
-                      disabled={disabled}
                       onClick={() => onDismiss(version)}
                       size="icon-sm"
                       title={`Dismiss ${version.label}`}
-                      type="button"
                       variant={isSelected ? "default" : "outline"}
                     >
                       <XIcon />
-                    </Button>
+                    </ToolbarButton>
                   )}
                 </ButtonGroup>
               </m.div>
             );
           })}
         </AnimatePresence>
-      </div>
-    </div>
+      </ToggleGroup>
+    </Toolbar>
   );
 };
 

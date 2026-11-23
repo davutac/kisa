@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
-import { toast } from "sonner";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { toast } from "@/components/ui/toast";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { areMailDraftInputsEqual } from "@/mail/mail-draft";
 import { getScheduledMailApi } from "@/platform/desktop";

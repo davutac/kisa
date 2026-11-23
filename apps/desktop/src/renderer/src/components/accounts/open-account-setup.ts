@@ -1,5 +1,4 @@
-import { toast } from "sonner";
-
+import { toast } from "@/components/ui/toast";
 import { getAccountsApi } from "@/platform/desktop";
 
 /**

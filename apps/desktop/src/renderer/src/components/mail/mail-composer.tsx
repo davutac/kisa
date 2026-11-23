@@ -129,7 +129,7 @@ const useMailComposerAttachmentHandlers = (
   );
 
   const handleAttachmentFiles = useCallback(
-    (files: FileList | null): void => {
+    (files: readonly File[]): void => {
       void addAttachments?.(files);
     },
     [addAttachments]
@@ -175,11 +175,9 @@ const MailComposer = ({
     onChange
   );
   const attachmentCommand = attachments?.command ?? "composer.attach";
-  useAppCommand(
-    attachmentCommand,
-    () => attachmentController?.inputRef.current?.click(),
-    { enabled: attachments !== undefined && !disabled }
-  );
+  useAppCommand(attachmentCommand, () => attachmentController?.picker.open(), {
+    enabled: attachments !== undefined && !disabled,
+  });
 
   const aiButtons = aiActions.map((action) => {
     const handleClick = action.onClick;
@@ -239,8 +237,8 @@ const MailComposer = ({
               command={attachments.command}
               disabled={disabled}
               focusRef={attachments.focusRef}
-              inputRef={attachments.controller.inputRef}
               onFiles={handleAttachmentFiles}
+              picker={attachments.controller.picker}
             />
           )}
         </>

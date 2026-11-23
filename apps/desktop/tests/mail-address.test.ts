@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   extractEmailAddresses,
-  findEmailAddressCompletion,
+  findEmailAddressSuggestions,
   getThreadEmailAddresses,
   mergeUniqueEmailAddresses,
   parseEmailAddressList,
@@ -101,33 +101,55 @@ describe(getThreadEmailAddresses, () => {
   });
 });
 
-describe(findEmailAddressCompletion, () => {
-  it("returns the first case-insensitive prefix match", () => {
+describe(findEmailAddressSuggestions, () => {
+  it("returns case-insensitive prefix matches in order, an exact one first", () => {
     expect(
-      findEmailAddressCompletion("TES", [
-        "another@example.com",
-        "test@example.com",
+      findEmailAddressSuggestions("TES", [
+        { address: "another@example.com" },
+        { address: "test@example.com.au" },
+        { address: "test@example.com", name: "Test" },
       ])
-    ).toBe("test@example.com");
+    ).toStrictEqual([
+      { address: "test@example.com.au" },
+      { address: "test@example.com", name: "Test" },
+    ]);
+    expect(
+      findEmailAddressSuggestions("test@example.com", [
+        { address: "test@example.com.au" },
+        { address: "Test@example.com" },
+      ])
+    ).toStrictEqual([
+      { address: "Test@example.com" },
+      { address: "test@example.com.au" },
+    ]);
   });
 
-  it("does not suggest committed, exact, empty, or whitespace drafts", () => {
+  it("skips committed and repeated addresses, and empty or padded drafts", () => {
     expect(
-      findEmailAddressCompletion(
+      findEmailAddressSuggestions(
         "tes",
-        ["test@example.com"],
+        [
+          { address: "test@example.com" },
+          { address: "tess@example.com" },
+          { address: "TESS@example.com" },
+        ],
         ["TEST@example.com"]
       )
-    ).toBeUndefined();
+    ).toStrictEqual([{ address: "tess@example.com" }]);
     expect(
-      findEmailAddressCompletion("test@example.com", ["test@example.com"])
-    ).toBeUndefined();
+      findEmailAddressSuggestions("", [{ address: "test@example.com" }])
+    ).toStrictEqual([]);
     expect(
-      findEmailAddressCompletion("", ["test@example.com"])
-    ).toBeUndefined();
-    expect(
-      findEmailAddressCompletion(" tes", ["test@example.com"])
-    ).toBeUndefined();
+      findEmailAddressSuggestions(" tes", [{ address: "test@example.com" }])
+    ).toStrictEqual([]);
+  });
+
+  it("keeps the list short", () => {
+    const candidates = Array.from({ length: 12 }, (_, index) => ({
+      address: `t${index}@example.com`,
+    }));
+
+    expect(findEmailAddressSuggestions("t", candidates, [], 3)).toHaveLength(3);
   });
 });
 

@@ -67,7 +67,7 @@ describe("clean draft history strip", () => {
 
     expect(markup).toContain("#1 Cleaning…");
     expect(markup).toContain("animate-spin");
-    expect(loadingButton).toContain(' disabled=""');
+    expect(loadingButton).toContain('aria-disabled="true"');
     expect(loadingButton).toContain('aria-pressed="false"');
   });
 

@@ -14,7 +14,7 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <ThemeProvider>
       <AnimationsProvider>
         <AccountSetupApp />
       </AnimationsProvider>

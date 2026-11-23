@@ -1,11 +1,8 @@
 import { LoaderCircleIcon } from "lucide-react";
 import { useId, useState } from "react";
 import type { SubmitEvent } from "react";
-import { toast } from "sonner";
 
-import LabelColorField, {
-  isLabelColorValue,
-} from "@/components/mail/label-color-field";
+import LabelColorField from "@/components/mail/label-color-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,11 +15,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/toast";
 import { useHotkeyLayer } from "@/hotkeys";
 import { runWithCleanup } from "@/lib/run-with-cleanup";
-import { labelTextColor } from "@/mail/label";
 import type { MailApi } from "@/platform/desktop";
-import type { MailLabelInputColor, MailLabelSummary } from "@/shared/ipc/mail";
+import type { MailLabelSummary } from "@/shared/ipc/mail";
+import { seededLabelColor } from "@/shared/label-color";
 
 interface LabelDialogProps {
   readonly accountId: string;
@@ -34,29 +32,17 @@ interface LabelDialogProps {
   readonly onOpenChange: (isOpen: boolean) => void;
 }
 
-const toLabelInputColor = (
-  background: string | undefined,
-  text: string | undefined
-): MailLabelInputColor | undefined => {
-  if (
-    background === undefined ||
-    text === undefined ||
-    !isLabelColorValue(background) ||
-    !isLabelColorValue(text)
-  ) {
-    return;
-  }
-
-  return { background, text };
-};
-
-const isLabelColorChanged = (
+const resolveLabelColor = (
   label: MailLabelSummary | undefined,
-  color: MailLabelInputColor | undefined
-): boolean =>
-  color !== undefined &&
-  (color.background !== label?.color?.background ||
-    color.text !== label?.color?.text);
+  chosen: string | undefined,
+  name: string
+) => {
+  const saved = label?.color?.background;
+  return {
+    color: chosen ?? saved ?? seededLabelColor(name),
+    colorChanged: chosen !== undefined && chosen !== saved,
+  };
+};
 
 const LABEL_DIALOG_COPY = {
   create: {
@@ -89,18 +75,17 @@ const LabelDialog = ({
   const inputId = useId();
   const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState(label?.name ?? "");
-  const [selectedBackground, setSelectedBackground] = useState<
-    string | undefined
-  >(label?.color?.background);
-  const [selectedText, setSelectedText] = useState<string | undefined>(
-    label?.color?.text
-  );
+  // Until a colour is chosen, a new label shows the one sync would give it.
+  const [chosenColor, setChosenColor] = useState<string>();
   const trimmedName = name.trim();
   const alreadyExists = existingLabels.some(
     (candidate) => candidate.id !== label?.id && candidate.name === trimmedName
   );
-  const selectedColor = toLabelInputColor(selectedBackground, selectedText);
-  const colorChanged = isLabelColorChanged(label, selectedColor);
+  const { color, colorChanged } = resolveLabelColor(
+    label,
+    chosenColor,
+    trimmedName
+  );
   const hasChanges =
     label === undefined || trimmedName !== label.name || colorChanged;
   const canSubmit =
@@ -113,8 +98,7 @@ const LabelDialog = ({
 
   const reset = (): void => {
     setName(label?.name ?? "");
-    setSelectedBackground(label?.color?.background);
-    setSelectedText(label?.color?.text);
+    setChosenColor(undefined);
   };
 
   const setOpen = (open: boolean): void => {
@@ -144,12 +128,12 @@ const LabelDialog = ({
             label === undefined
               ? await mailApi.createLabel({
                   accountId,
-                  color: selectedColor,
+                  color,
                   name: trimmedName,
                 })
               : await mailApi.updateLabel({
                   accountId,
-                  color: colorChanged ? selectedColor : undefined,
+                  color: colorChanged ? chosenColor : undefined,
                   labelId: label.id,
                   name: trimmedName,
                 });
@@ -211,32 +195,8 @@ const LabelDialog = ({
           <LabelColorField
             disabled={isSaving}
             label={trimmedName || "New label"}
-            onClear={
-              label?.color === undefined
-                ? () => {
-                    setSelectedBackground(undefined);
-                    setSelectedText(undefined);
-                  }
-                : undefined
-            }
-            onSelectBackground={(background) => {
-              setSelectedBackground(background);
-              setSelectedText((current) =>
-                current !== undefined && isLabelColorValue(current)
-                  ? current
-                  : labelTextColor(background)
-              );
-            }}
-            onSelectText={(text) => {
-              setSelectedText(text);
-              setSelectedBackground((current) =>
-                current !== undefined && isLabelColorValue(current)
-                  ? current
-                  : labelTextColor(text)
-              );
-            }}
-            selectedBackground={selectedBackground}
-            selectedText={selectedText}
+            onValueChange={setChosenColor}
+            value={color}
           />
 
           <DialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">

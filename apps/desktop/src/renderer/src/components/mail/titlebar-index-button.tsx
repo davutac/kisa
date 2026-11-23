@@ -1,5 +1,12 @@
 import { Button } from "@/components/ui/button";
 import {
+  Progress,
+  ProgressIndicator,
+  ProgressRing,
+  ProgressTrack,
+  ProgressValue,
+} from "@/components/ui/progress";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -47,44 +54,22 @@ const TitlebarIndexButton = () => {
     <Tooltip>
       <TooltipTrigger
         render={
+          // A fixed name, so the moving value is never read as the name; the
+          // tooltip, its description, gives each account's share.
           <Button
-            aria-live="polite"
-            className="app-titlebar-interactive gap-1.5 px-2"
+            aria-label="Indexing mail"
+            className="app-titlebar-interactive px-2"
             type="button"
             variant="ghost"
           >
-            <span
-              aria-hidden="true"
-              className="relative grid size-4 shrink-0 place-items-center"
+            <Progress
+              aria-label="Indexing mail"
+              max={1}
+              value={overall ?? null}
             >
-              <span className="border-muted-foreground/25 absolute inset-0 rounded-full border-2" />
-              {/*
-                `closest-side` matters: the default `farthest-corner` puts the
-                gradient's 100% at the box corner, so the mask stop lands
-                outside the circle and the ring renders invisible.
-              */}
-              <span
-                className={
-                  overall === undefined
-                    ? "absolute inset-0 animate-spin rounded-full"
-                    : "absolute inset-0 rounded-full"
-                }
-                style={{
-                  WebkitMask:
-                    "radial-gradient(circle closest-side, transparent 60%, black 62%)",
-                  background:
-                    overall === undefined
-                      ? "conic-gradient(currentColor 0deg, currentColor 90deg, transparent 90deg)"
-                      : `conic-gradient(currentColor ${overall * 360}deg, transparent 0deg)`,
-                  mask: "radial-gradient(circle closest-side, transparent 60%, black 62%)",
-                }}
-              />
-            </span>
-            <span className="text-xs tabular-nums">
-              {overall === undefined
-                ? "Indexing"
-                : `${Math.round(overall * 100)}%`}
-            </span>
+              <ProgressRing />
+              <ProgressValue>{({ text }) => text || "Indexing"}</ProgressValue>
+            </Progress>
           </Button>
         }
       />
@@ -123,12 +108,16 @@ const TitlebarIndexButton = () => {
                     {eta === undefined ? "" : ` · ${formatRemaining(eta)}`}
                   </span>
                 </span>
-                <span className="bg-background/20 h-0.5 w-full overflow-hidden rounded-full">
-                  <span
-                    className="bg-background block h-full rounded-full"
-                    style={{ width: `${(ratio ?? 0) * 100}%` }}
-                  />
-                </span>
+                <Progress
+                  aria-hidden="true"
+                  aria-label="Indexing progress"
+                  max={1}
+                  value={ratio ?? 0}
+                >
+                  <ProgressTrack className="bg-background/20 h-0.5">
+                    <ProgressIndicator className="bg-background" />
+                  </ProgressTrack>
+                </Progress>
                 <span className="opacity-60">
                   {formatIndexedMessages(entry)}
                 </span>

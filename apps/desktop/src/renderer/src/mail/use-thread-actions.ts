@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import { getMailApi } from "@/platform/desktop";
 import type { MailThreadRequest } from "@/shared/ipc/mail";
 import { useOfferUndo } from "@/undo/undo-provider";

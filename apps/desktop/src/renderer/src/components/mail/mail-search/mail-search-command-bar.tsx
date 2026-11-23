@@ -1,5 +1,10 @@
-import { Command as CommandPrimitive } from "cmdk";
-import { ListIcon, SearchIcon, XIcon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  MailIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
@@ -8,6 +13,8 @@ import MailDate from "@/components/mail/mail-date";
 import {
   Command,
   CommandGroup,
+  CommandGroupLabel,
+  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
@@ -18,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   getHotkeyAriaLabel,
   getHotkeyDisplay,
@@ -54,7 +61,13 @@ import {
   resolveMailSearchBarSelection,
   SHOW_ALL_RESULTS_VALUE,
 } from "./mail-search-bar";
-import MailSearchCompletionGroup from "./mail-search-completion-group";
+import MailSearchCompletionGroup, {
+  MAIL_SEARCH_GROUP_CLASS_NAME,
+  MAIL_SEARCH_GROUP_LABEL_CLASS_NAME,
+  MAIL_SEARCH_ITEM_CLASS_NAME,
+  MailSearchCompletionHint,
+  MailSearchItemIcon,
+} from "./mail-search-completion-group";
 import {
   getMailSearchAddressRole,
   getMailSearchCompletions,
@@ -63,6 +76,8 @@ import MailSearchFilterPill from "./mail-search-filter-pill";
 
 /** Enough to recognise the match; the mailbox list holds the rest. */
 const RESULT_LIMIT = 8;
+
+const FOOTER_KBD_CLASS_NAME = "h-5 min-w-5 rounded-md px-1.5 text-[11px]";
 
 const toConversationValue = (thread: MailThreadSummary): string =>
   `thread:${getThreadSelectionKey(thread)}`;
@@ -99,28 +114,44 @@ const ConversationItem = ({
   const sender = parseMailboxAddress(thread.from);
 
   return (
-    <CommandItem onSelect={onSelect} value={toConversationValue(thread)}>
-      <span
-        className={cn(
-          "w-36 shrink-0 truncate",
-          thread.isUnread
-            ? "text-foreground font-semibold"
-            : "text-foreground/80"
-        )}
-      >
-        {sender.name ?? sender.email}
-      </span>
-      <span className="text-muted-foreground min-w-0 flex-1 truncate">
-        {thread.subject}
-      </span>
+    <CommandItem
+      className={MAIL_SEARCH_ITEM_CLASS_NAME}
+      onSelect={onSelect}
+      value={toConversationValue(thread)}
+    >
+      <MailSearchItemIcon className="mt-0.5 self-start" icon={MailIcon} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span
+          className={cn(
+            "text-foreground truncate",
+            thread.isUnread && "font-semibold"
+          )}
+        >
+          {sender.name ?? sender.email}
+        </span>{" "}
+        <span className="text-muted-foreground truncate text-xs/5">
+          {thread.subject}
+        </span>
+      </span>{" "}
       {showAccount ? (
-        <AccountChip
-          accountId={thread.accountId}
-          className="text-muted-foreground max-w-32 shrink-0"
+        <>
+          <AccountChip
+            accountId={thread.accountId}
+            className="text-muted-foreground max-w-32 shrink-0"
+          />{" "}
+        </>
+      ) : null}
+      {thread.isUnread ? (
+        <span
+          aria-hidden="true"
+          className="bg-primary size-1.5 shrink-0 rounded-full"
         />
       ) : null}
       <MailDate
-        className="text-muted-foreground shrink-0"
+        className={cn(
+          "shrink-0 text-xs tabular-nums",
+          thread.isUnread ? "text-foreground" : "text-muted-foreground"
+        )}
         timestamp={thread.latestAt}
         tooltip={false}
       />
@@ -133,11 +164,13 @@ const MailSearchCommandBarBody = ({
   initialQuery,
   inputRef,
   onClear,
+  onDismiss,
   onOpenThread,
   onShowAll,
 }: MailSearchCommandBarActions & {
   readonly initialQuery: SearchQuery;
   readonly inputRef: RefObject<HTMLInputElement | null>;
+  readonly onDismiss: () => void;
 }) => {
   const { accountIds } = useMailboxAccountScope();
   const scope = {
@@ -204,9 +237,16 @@ const MailSearchCommandBarBody = ({
 
     if (section === "clear") {
       return onClear === undefined ? null : (
-        <CommandGroup heading="Results in the mailbox" key={section}>
-          <CommandItem onSelect={onClear} value={CLEAR_SEARCH_VALUE}>
-            <XIcon className="opacity-60" />
+        <CommandGroup className={MAIL_SEARCH_GROUP_CLASS_NAME} key={section}>
+          <CommandGroupLabel className={MAIL_SEARCH_GROUP_LABEL_CLASS_NAME}>
+            Results in the mailbox
+          </CommandGroupLabel>
+          <CommandItem
+            className={MAIL_SEARCH_ITEM_CLASS_NAME}
+            onSelect={onClear}
+            value={CLEAR_SEARCH_VALUE}
+          >
+            <MailSearchItemIcon icon={XIcon} />
             Clear search results
           </CommandItem>
         </CommandGroup>
@@ -214,11 +254,20 @@ const MailSearchCommandBarBody = ({
     }
 
     return (
-      <CommandGroup heading="Conversations" key={section}>
-        <CommandItem onSelect={showAll} value={SHOW_ALL_RESULTS_VALUE}>
-          <ListIcon className="opacity-60" />
-          <span className="shrink-0">Show all results</span>
-          <span className="text-muted-foreground min-w-0 truncate">
+      <CommandGroup className={MAIL_SEARCH_GROUP_CLASS_NAME} key={section}>
+        <CommandGroupLabel className={MAIL_SEARCH_GROUP_LABEL_CLASS_NAME}>
+          Conversations
+        </CommandGroupLabel>
+        <CommandItem
+          className={MAIL_SEARCH_ITEM_CLASS_NAME}
+          onSelect={showAll}
+          value={SHOW_ALL_RESULTS_VALUE}
+        >
+          <MailSearchItemIcon icon={SearchIcon} />
+          <span className="text-foreground shrink-0">
+            Show all results
+          </span>{" "}
+          <span className="text-muted-foreground ml-auto min-w-0 truncate">
             {formatSearchQuery(liveQuery)}
           </span>
         </CommandItem>
@@ -231,7 +280,7 @@ const MailSearchCommandBarBody = ({
           />
         ))}
         {results.threads.length === 0 ? (
-          <p className="text-muted-foreground px-2.5 py-2">
+          <p className="text-muted-foreground px-3 py-2.5">
             {results.isLoading
               ? "Searching…"
               : `Nothing matches in ${scopeDescription}.`}
@@ -244,15 +293,26 @@ const MailSearchCommandBarBody = ({
   return (
     <Command
       className="rounded-none bg-transparent p-0"
-      onValueChange={setSelection}
-      shouldFilter={false}
-      value={resolveMailSearchBarSelection(selectableValues, selection)}
+      filter={false}
+      onQueryChange={(text) => {
+        const extraction = extractSearchFilters(text);
+        setQuery(
+          addSearchFilters(
+            { ...query, text: extraction.draft },
+            extraction.filters
+          )
+        );
+      }}
+      onValueChange={(value) => setSelection(value ?? "")}
+      query={query.text}
+      value={resolveMailSearchBarSelection(selectableValues, selection) || null}
     >
-      <InputGroup className="h-12 rounded-none border-0 border-b bg-transparent px-1 has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:bg-transparent">
-        <InputGroupAddon className="shrink-0 py-0">
-          <SearchIcon className="size-4 opacity-60" />
-        </InputGroupAddon>
-        <div className="scroll-fade-x no-scrollbar flex max-w-[50%] min-w-0 shrink-0 items-center gap-1 overflow-x-auto">
+      <div className="flex h-14 w-full min-w-0 items-center gap-3 px-4">
+        <SearchIcon
+          aria-hidden="true"
+          className="text-muted-foreground size-4 shrink-0"
+        />
+        <div className="scroll-fade-x no-scrollbar flex max-w-[50%] min-w-0 shrink-0 items-center gap-1 overflow-x-auto empty:hidden">
           {query.filters.map((filter, index) => (
             <MailSearchFilterPill
               filter={filter}
@@ -264,11 +324,11 @@ const MailSearchCommandBarBody = ({
             />
           ))}
         </div>
-        <CommandPrimitive.Input
+        <CommandInput
           aria-keyshortcuts={getHotkeyAriaLabel("app.searchMail")}
           aria-label={getHotkeyDisplay("app.searchMail").label}
-          className="h-12 min-w-24 flex-1 bg-transparent text-sm outline-hidden"
-          data-slot="input-group-control"
+          className="h-14 min-w-24 text-base"
+          onEscape={onDismiss}
           onKeyDown={(event) => {
             if (
               event.key === "Backspace" &&
@@ -279,32 +339,43 @@ const MailSearchCommandBarBody = ({
               setQuery(removeSearchFilterAt(query, query.filters.length - 1));
             }
           }}
-          onValueChange={(value) => {
-            const extraction = extractSearchFilters(value);
-            setQuery(
-              addSearchFilters(
-                { ...query, text: extraction.draft },
-                extraction.filters
-              )
-            );
-          }}
           placeholder={getMailSearchPlaceholder(scope.mailbox)}
           ref={inputRef}
-          value={query.text}
         />
-      </InputGroup>
-      {/* Choosing with the pointer keeps the caret in the field. */}
-      <CommandList
-        className="scroll-fade-y max-h-[min(24rem,50vh)] p-1 **:data-[slot=command-item]:text-[13px]"
-        onPointerDown={(event) => {
-          event.preventDefault();
-        }}
-      >
+      </div>
+      <MailSearchCompletionHint {...completions} />
+      <CommandList className="scroll-fade-y max-h-[min(28rem,55vh)] px-1 pb-1.5 **:data-[slot=command-item]:text-sm">
         {sections.map(renderSection)}
       </CommandList>
-      <p className="text-muted-foreground truncate border-t px-3 py-2">
-        Searching {scopeDescription}
-      </p>
+      {/* Always shown: the placeholder goes once typing starts, and only this
+          line says a search is limited to unread mail. */}
+      <div className="text-muted-foreground flex min-w-0 items-center gap-4 border-t px-4 py-2.5 text-xs">
+        {/* The list's own keys, which no hotkey command owns. */}
+        <span aria-hidden="true" className="flex shrink-0 items-center gap-4">
+          <span className="flex items-center gap-1.5">
+            <KbdGroup>
+              <Kbd className={FOOTER_KBD_CLASS_NAME}>
+                <ArrowUpIcon />
+              </Kbd>
+              <Kbd className={FOOTER_KBD_CLASS_NAME}>
+                <ArrowDownIcon />
+              </Kbd>
+            </KbdGroup>
+            Navigate
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd className={FOOTER_KBD_CLASS_NAME}>Enter</Kbd>
+            Select
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd className={FOOTER_KBD_CLASS_NAME}>Esc</Kbd>
+            Close
+          </span>
+        </span>
+        <p className="ml-auto min-w-0 truncate">
+          Searching <span className="text-foreground">{scopeDescription}</span>
+        </p>
+      </div>
     </Command>
   );
 };
@@ -328,12 +399,14 @@ const MailSearchCommandBar = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
-        className="top-[18vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
-        initialFocus={inputRef}
+        className="top-[14vh] translate-y-0 gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl shadow-black/40 sm:max-w-[40rem]"
+        initialFocus={() => inputRef.current}
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>Search mail</DialogTitle>
+          {/* Not "Search mail", the field's name: an agent finds each by a
+              word the other lacks. */}
+          <DialogTitle>Find mail</DialogTitle>
           <DialogDescription>
             Find a conversation, or show every result in the mailbox.
           </DialogDescription>
@@ -341,6 +414,7 @@ const MailSearchCommandBar = ({
         <MailSearchCommandBarBody
           initialQuery={initialQuery}
           inputRef={inputRef}
+          onDismiss={() => onOpenChange(false)}
           {...actions}
         />
       </DialogContent>

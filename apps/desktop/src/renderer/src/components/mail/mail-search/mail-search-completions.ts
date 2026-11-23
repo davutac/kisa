@@ -9,10 +9,8 @@ import type {
 } from "@/mail/search-query";
 import type { MailAddressRole, MailSenderSuggestion } from "@/shared/ipc/mail";
 
-export type MailSearchCompletionIcon = "address" | "attachment" | "operator";
-
 export interface MailSearchCompletionItem {
-  icon: MailSearchCompletionIcon;
+  field: SearchFilterField;
   label: string;
   onSelect: () => void;
   shortcut?: string;
@@ -70,7 +68,7 @@ const toAddressItems = (
   heading: ADDRESS_HEADINGS[field],
   items: [
     ...senders.map((sender) => ({
-      icon: "address" as const,
+      field,
       label: sender.name ?? sender.address,
       onSelect: () => onSelectFilter({ field, value: sender.address }),
       shortcut: NUMBER_FORMAT.format(sender.messageCount),
@@ -85,7 +83,7 @@ const toAddressItems = (
       ? []
       : [
           {
-            icon: "operator" as const,
+            field,
             label: `Use “${typedValue}” as typed`,
             onSelect: () => onSelectFilter({ field, value: typedValue }),
             value: "address:as-typed",
@@ -112,7 +110,7 @@ export const getMailSearchCompletions = ({
     return {
       heading: "Filters",
       items: fields.map((field) => ({
-        icon: "operator" as const,
+        field,
         label: `${field}:`,
         onSelect: () => onSelectField(field),
         sublabel: FILTER_EXAMPLES[field],
@@ -133,7 +131,7 @@ export const getMailSearchCompletions = ({
       empty: "No search options match that value.",
       heading: getSearchFilterLabel(draft.field),
       items: matches.map((value) => ({
-        icon: "attachment" as const,
+        field: draft.field,
         label: `${draft.field}:${value}`,
         onSelect: () => onSelectFilter({ field: draft.field, value }),
         value: `value:${value}`,
@@ -151,7 +149,7 @@ export const getMailSearchCompletions = ({
         heading: getSearchFilterLabel(draftFilter.field),
         items: [
           {
-            icon: "operator",
+            field: draftFilter.field,
             label: `${draftFilter.field}: ${draftFilter.value}`,
             onSelect: () => onSelectFilter(draftFilter),
             value: "draft:commit",
