@@ -13,9 +13,8 @@ export const Route = createFileRoute("/templates")({
 });
 
 /**
- * Templates as a list beside an editor, set flat on the page like the
- * new-email page rather than in cards, with the title, New, Delete, and Save
- * in the content titlebar.
+ * Templates as a list beside an editor card (or its empty state, in the same
+ * card), with the title, New, and Save in the content titlebar.
  */
 function TemplatesRoute() {
   useHotkeyLayer("templates", true);
