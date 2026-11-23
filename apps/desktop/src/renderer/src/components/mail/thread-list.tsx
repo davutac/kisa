@@ -526,7 +526,7 @@ const MailThreadList = ({
         }
         checkable
         checked={checkedKeys}
-        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 outline-none"
+        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 outline-none"
         controller={list}
         current={selectedThreadKey}
         estimate={88}
