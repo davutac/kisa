@@ -9,6 +9,7 @@ import {
 } from "../src/main/ai/prompts";
 import {
   CLAUDE_MODELS,
+  claudeReportedModels,
   getClaudeModelsForVersion,
   getClaudeReasoningArgs,
 } from "../src/main/ai/providers/claude";
@@ -258,6 +259,71 @@ describe("AI provider output parsing", () => {
         { id: "enabled", label: "On" },
       ],
     });
+  });
+
+  it("adds models Claude Code reports that the catalog does not cover", () => {
+    expect(
+      claudeReportedModels([
+        { description: "", displayName: "Default", value: "default" },
+        {
+          description: "",
+          displayName: "Opus",
+          resolvedModel: "claude-opus-5-5",
+          value: "opus",
+        },
+        {
+          description: "",
+          displayName: "Sonnet (1M context)",
+          resolvedModel: "claude-sonnet-5[1m]",
+          value: "sonnet[1m]",
+        },
+        { description: "", displayName: "Haiku", value: "claude-haiku-4-5" },
+        {
+          description: "",
+          displayName: "Opus 6",
+          resolvedModel: "claude-opus-6",
+          supportedEffortLevels: ["low", "high", "xhigh"],
+          supportsEffort: true,
+          value: "claude-opus-6",
+        },
+        {
+          description: "",
+          displayName: "Opus 6 alias",
+          resolvedModel: "claude-opus-6",
+          value: "opus-next",
+        },
+        { description: "", displayName: " ", value: "custom-gateway-model" },
+      ])
+    ).toStrictEqual([
+      {
+        id: "claude-opus-6",
+        isDefault: false,
+        name: "Opus 6",
+        reasoningOptions: [
+          { id: "default", isDefault: true, label: "Default" },
+          { id: "low", label: "Low" },
+          { id: "high", label: "High" },
+          { id: "xhigh", label: "Extra High" },
+        ],
+      },
+      {
+        id: "custom-gateway-model",
+        isDefault: false,
+        name: "custom-gateway-model",
+        reasoningOptions: [],
+      },
+    ]);
+    expect(claudeReportedModels(undefined)).toStrictEqual([]);
+  });
+
+  it("sends reported models' efforts unchanged and no effort for Default", () => {
+    expect(getClaudeReasoningArgs("default", "claude-opus-6")).toStrictEqual(
+      []
+    );
+    expect(getClaudeReasoningArgs("xhigh", "claude-opus-6")).toStrictEqual([
+      "--effort",
+      "xhigh",
+    ]);
   });
 
   it("only reports Claude models supported by the installed CLI", () => {

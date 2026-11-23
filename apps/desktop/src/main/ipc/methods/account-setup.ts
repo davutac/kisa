@@ -2,11 +2,14 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
+  MailDomainLookupReply,
+  MailDomainLookupRequest,
   MicrosoftAccountSetupReply,
   PasswordAccountSetupReply,
 } from "../../../shared/ipc/account-setup";
 import {
   ACCOUNT_SETUP_CLOSE_CHANNEL,
+  ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL,
   ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL,
   ACCOUNT_SETUP_MICROSOFT_CHANNEL,
   ACCOUNT_SETUP_SUBMIT_CHANNEL,
@@ -14,6 +17,7 @@ import {
 import {
   cancelMicrosoftAccountSetup,
   closeAccountSetup,
+  lookupAccountSetupDomain,
   startMicrosoftAccountSetup,
   submitAccountSetup,
 } from "../../auth/account-setup-window";
@@ -51,6 +55,18 @@ export const signInMicrosoftAccount = makeIpcMethod({
     ),
   payload: Schema.Unknown,
   result: MicrosoftAccountSetupReply,
+});
+
+/** The Add account window's question about who hosts a domain's mail. */
+export const lookupMailDomain = makeIpcMethod({
+  channel: ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL,
+  handler: ({ domain }, event) =>
+    toIpcReply(
+      lookupAccountSetupDomain(event?.sender.id, domain),
+      "Could not look up the domain"
+    ),
+  payload: MailDomainLookupRequest,
+  result: MailDomainLookupReply,
 });
 
 export const cancelMicrosoftAccountSignIn = makeIpcMethod({

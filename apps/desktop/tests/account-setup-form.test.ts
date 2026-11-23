@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createSignInAgainForm,
   findAccountSetupProblem,
+  findDomainToLookUp,
   findSetupProblem,
   findSetupSignInSwitch,
   findSignInSwitch,
@@ -14,6 +15,7 @@ import {
   toMicrosoftSignIn,
   toMicrosoftSubmission,
   toPasswordSubmission,
+  withDomainLookup,
   withServerSecurity,
   withSignInMethod,
 } from "../src/renderer/src/account-setup/account-setup-form";
@@ -23,11 +25,14 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
 } from "../src/shared/mail-account-presets";
 
+/** A custom domain main has answered for: nobody Kisa knows hosts it. */
 const manualForm: AccountSetupForm = {
+  domainLookup: { domain: "example.org", provider: undefined },
   email: "me@example.org",
   imap: { host: "imap.example.org", port: "993", security: "tls" },
   name: "",
   prefersMicrosoft: false,
+  prefersServers: false,
   smtp: { host: "smtp.example.org", port: "587", security: "starttls" },
 };
 
@@ -51,12 +56,13 @@ describe("the Add account form", () => {
     }
   );
 
-  it("asks for servers for any other domain, and nothing before the address is complete", () => {
+  it("asks main who hosts any other domain, and nothing before the address is complete", () => {
     expect(
       ["me@example.org", "me@icloud.com.example", "me@", "me@icloud", ""].map(
         (email) => modeOf(email).kind
       )
-    ).toStrictEqual(["manual", "manual", "address", "address", "address"]);
+    ).toStrictEqual(["lookup", "lookup", "address", "address", "address"]);
+    expect(getAccountSetupMode(manualForm)).toStrictEqual({ kind: "manual" });
     expect(findMailAccountPreset("name@icloud.com.example")).toBeUndefined();
   });
 
@@ -358,9 +364,9 @@ describe("signing an account in again", () => {
   // The account keeps its name and servers, so a generic account must not
   // be held up by server fields this page never shows.
   it("asks only for the password, even for an account with its own servers", () => {
+    // The page never looks the domain up, so the form stays unanswered.
     const form = createSignInAgainForm(passwordTarget);
 
-    expect(getAccountSetupMode(form)).toStrictEqual({ kind: "manual" });
     expect(findSetupProblem(form, false, passwordTarget)).toStrictEqual({
       field: "password",
       message: "Enter the new app password.",
@@ -395,5 +401,98 @@ describe("signing an account in again", () => {
     expect(toMicrosoftSubmission(form, microsoftTarget)).toStrictEqual({
       email: "me@contoso.com",
     });
+  });
+});
+
+describe("a custom domain in the Add account form", () => {
+  const pendingForm: AccountSetupForm = {
+    ...INITIAL_ACCOUNT_SETUP_FORM,
+    email: " Me@Example.ORG ",
+  };
+  const googleForm = withDomainLookup(pendingForm, {
+    domain: "example.org",
+    provider: "gmail",
+  });
+  const gmail = findMailAccountPreset("me@gmail.com");
+
+  it("asks main once about the address's domain, and never about one it can tell", () => {
+    expect(findDomainToLookUp(pendingForm)).toBe("example.org");
+    expect(findDomainToLookUp(googleForm)).toBeUndefined();
+    expect(findDomainToLookUp(manualForm)).toBeUndefined();
+    for (const email of ["me@gmail.com", "me@outlook.com", "me@example", ""]) {
+      expect(
+        findDomainToLookUp({ ...INITIAL_ACCOUNT_SETUP_FORM, email })
+      ).toBeUndefined();
+    }
+  });
+
+  it("waits for the answer before it lets the form be sent", () => {
+    expect(getAccountSetupMode(pendingForm)).toStrictEqual({ kind: "lookup" });
+    expect(findAccountSetupProblem(pendingForm, true)).toStrictEqual({
+      field: "email",
+      message: "Still finding your mail provider’s settings.",
+    });
+    expect(
+      findAccountSetupProblem({ ...pendingForm, name: "Me\tToo" }, true)?.field
+    ).toBe("name");
+  });
+
+  it("counts an answer for another domain as none", () => {
+    const edited = { ...googleForm, email: "me@example.net" };
+
+    expect(getAccountSetupMode(edited)).toStrictEqual({ kind: "lookup" });
+    expect(findDomainToLookUp(edited)).toBe("example.net");
+  });
+
+  it("uses Gmail's servers for a domain whose mail Google hosts, and sends them", () => {
+    const mode = getAccountSetupMode(googleForm);
+
+    expect(mode).toStrictEqual({
+      kind: "preset",
+      preset: gmail,
+      via: "domain",
+    });
+    expect(findAccountSetupProblem(googleForm, false)?.field).toBe("password");
+    expect(findAccountSetupProblem(googleForm, true)).toBeUndefined();
+    expect(toAccountServers(googleForm)).toStrictEqual({
+      imap: { host: "imap.gmail.com", port: 993, security: "tls" },
+      smtp: { host: "smtp.gmail.com", port: 465, security: "tls" },
+    });
+    expect(toPasswordSubmission(googleForm, "pw", undefined)).toStrictEqual({
+      email: "Me@Example.ORG",
+      name: undefined,
+      password: "pw",
+      servers: toAccountServers(googleForm),
+    });
+  });
+
+  it("lets the user enter servers instead, and go back to Gmail's", () => {
+    expect(findSignInSwitch(getAccountSetupMode(googleForm), true)).toBe(
+      "servers"
+    );
+
+    const typed = {
+      ...withSignInMethod(googleForm, "servers"),
+      imap: { host: "imap.example.org", port: "993", security: "tls" as const },
+      smtp: {
+        host: "smtp.example.org",
+        port: "587",
+        security: "starttls" as const,
+      },
+    };
+    const mode = getAccountSetupMode(typed);
+
+    expect(mode).toStrictEqual({ hosted: gmail, kind: "manual" });
+    expect(findSignInSwitch(mode, true)).toBe("hosted");
+    expect(toAccountServers(typed)?.imap.host).toBe("imap.example.org");
+    expect(
+      getAccountSetupMode(withSignInMethod(typed, "hosted"))
+    ).toStrictEqual({ kind: "preset", preset: gmail, via: "domain" });
+  });
+
+  it("shows typed servers at once, while the answer is still on its way", () => {
+    expect(
+      getAccountSetupMode(withSignInMethod(pendingForm, "servers"))
+    ).toStrictEqual({ kind: "manual" });
   });
 });

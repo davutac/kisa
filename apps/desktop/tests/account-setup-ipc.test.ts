@@ -9,6 +9,7 @@ import type * as Electron from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { MailExchange } from "../src/main/auth/mail-domain-lookup";
 import type {
   saveMicrosoftAccount,
   verifyMicrosoftAccount,
@@ -25,6 +26,7 @@ import type { AccountSetupBridge } from "../src/shared/ipc/account-setup";
 import type { AccountsReply } from "../src/shared/ipc/accounts";
 import {
   ACCOUNT_SETUP_CLOSE_CHANNEL,
+  ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL,
   ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL,
   ACCOUNT_SETUP_MICROSOFT_CHANNEL,
   ACCOUNT_SETUP_SUBMIT_CHANNEL,
@@ -124,6 +126,8 @@ const mocks = vi.hoisted(() => ({
   openExternalUrl: vi.fn<(url: string) => boolean>(() => true),
   appFocus: vi.fn<() => void>(),
   microsoftAvailable: true,
+  mailExchanges: [] as MailExchange[],
+  resolvedDomains: [] as string[],
   save: vi.fn<typeof savePasswordAccount>(),
   saveMicrosoft: vi.fn<typeof saveMicrosoftAccount>(),
   verify: vi.fn<typeof verifyPasswordAccount>(),
@@ -210,6 +214,28 @@ vi.mock(
   })
 );
 
+// DNS is never reached: the domain's MX records are whatever the test says.
+vi.mock(
+  import("../src/main/auth/mail-domain-lookup"),
+  async (importOriginal) => {
+    const original = await importOriginal();
+    const { Effect: MockEffect, Layer: MockLayer } = await import("effect");
+    return {
+      ...original,
+      MailExchangeLookupLive: MockLayer.succeed(
+        original.MailExchangeLookup,
+        original.MailExchangeLookup.of({
+          resolve: (domain) =>
+            MockEffect.sync(() => {
+              mocks.resolvedDomains.push(domain);
+              return mocks.mailExchanges;
+            }),
+        })
+      ),
+    };
+  }
+);
+
 // The real module reaches for Electron's network stack and shell.
 vi.mock(import("../src/main/auth/microsoft-client"), () => ({
   getMicrosoftOAuthEnvironment: () => {},
@@ -219,6 +245,7 @@ vi.mock(import("../src/main/auth/microsoft-client"), () => ({
 const {
   cancelMicrosoftAccountSignIn,
   closeAccountSetupWindow,
+  lookupMailDomain,
   signInMicrosoftAccount,
   submitPasswordAccount,
 } = await import("../src/main/ipc/methods/account-setup");
@@ -271,6 +298,7 @@ const installMethods = async () => {
         yield* ipc.handle(signInMicrosoftAccount);
         yield* ipc.handle(cancelMicrosoftAccountSignIn);
         yield* ipc.handle(closeAccountSetupWindow);
+        yield* ipc.handle(lookupMailDomain);
       })
     )
   );
@@ -280,6 +308,7 @@ const installMethods = async () => {
 /** What a renderer could send: a request, or anything else. */
 type SubmitPayload =
   | string
+  | { readonly domain: string }
   | { readonly email: string; readonly name?: string }
   | { readonly email: string; readonly password: string };
 
@@ -812,6 +841,73 @@ describe("the Add account window", () => {
     });
   });
 
+  describe("looking up who hosts a domain", () => {
+    beforeEach(() => {
+      mocks.mailExchanges = [];
+      mocks.resolvedDomains.length = 0;
+    });
+
+    it("answers Google for a domain whose mail Google hosts", async () => {
+      const listeners = await installMethods();
+      const window = await openWindow();
+      mocks.mailExchanges = [{ exchange: "smtp.google.com", priority: 1 }];
+
+      await expect(
+        invoke(
+          listeners,
+          ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL,
+          window.webContents.id,
+          {
+            domain: "example.org",
+          }
+        )
+      ).resolves.toStrictEqual({ data: "gmail", ok: true });
+      expect(mocks.resolvedDomains).toStrictEqual(["example.org"]);
+    });
+
+    it("answers null, never a host name, for any other domain", async () => {
+      const listeners = await installMethods();
+      const window = await openWindow();
+      mocks.mailExchanges = [{ exchange: "mx.example.org", priority: 10 }];
+
+      await expect(
+        invoke(
+          listeners,
+          ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL,
+          window.webContents.id,
+          {
+            domain: "example.org",
+          }
+        )
+      ).resolves.toStrictEqual({ data: null, ok: true });
+    });
+
+    it("answers only the setup window, and only for a domain", async () => {
+      const listeners = await installMethods();
+      const window = await openWindow();
+
+      await expect(
+        invoke(listeners, ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL, 1, {
+          domain: "example.org",
+        })
+      ).resolves.toStrictEqual({
+        error: "Account setup is no longer open",
+        ok: false,
+      });
+      await expect(
+        invoke(
+          listeners,
+          ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL,
+          window.webContents.id,
+          {
+            domain: "example",
+          }
+        )
+      ).rejects.toThrow(/a mail domain/u);
+      expect(mocks.resolvedDomains).toStrictEqual([]);
+    });
+  });
+
   it("closes only when the setup window asks", async () => {
     const listeners = await installMethods();
     const window = await openWindow();
@@ -998,7 +1094,7 @@ describe("the account setup preloads", () => {
     mocks.invoke.mockClear();
   });
 
-  it("expose only the sign-ins, cancel and close, on the channels main listens on", async () => {
+  it("expose only the domain lookup, the sign-ins, cancel and close, on the channels main listens on", async () => {
     await import("../src/preload/account-setup");
     const bridge = mocks.exposed.get("accountSetup");
     const microsoftRequest = { email: "person@outlook.com" };
@@ -1006,26 +1102,31 @@ describe("the account setup preloads", () => {
     expect(Object.keys(bridge ?? {}).toSorted()).toStrictEqual([
       "cancelMicrosoftSignIn",
       "close",
+      "lookupMailDomain",
       "signInWithMicrosoft",
       "submit",
     ]);
+    await bridge?.lookupMailDomain({ domain: "example.org" });
     await bridge?.submit(validRequest);
     await bridge?.signInWithMicrosoft(microsoftRequest);
     await bridge?.cancelMicrosoftSignIn();
     await bridge?.close();
 
     expect(mocks.invoke.mock.calls).toStrictEqual([
+      [ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL, { domain: "example.org" }],
       [ACCOUNT_SETUP_SUBMIT_CHANNEL, validRequest],
       [ACCOUNT_SETUP_MICROSOFT_CHANNEL, microsoftRequest],
       [ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL],
       [ACCOUNT_SETUP_CLOSE_CHANNEL],
     ]);
     expect([
+      lookupMailDomain.channel,
       submitPasswordAccount.channel,
       signInMicrosoftAccount.channel,
       cancelMicrosoftAccountSignIn.channel,
       closeAccountSetupWindow.channel,
     ]).toStrictEqual([
+      ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL,
       ACCOUNT_SETUP_SUBMIT_CHANNEL,
       ACCOUNT_SETUP_MICROSOFT_CHANNEL,
       ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL,

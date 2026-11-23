@@ -120,6 +120,8 @@ pnpm build
 
 Build packages with `pnpm build:mac`, `pnpm build:win`, or `pnpm build:linux`. `pnpm build:unpack` creates an unpacked app.
 
+To build a signed production app and install it in `/Applications` on this Mac, run `scripts/install-mac.sh` (add `--notarize` to require notarization). See [macOS signing](docs/releasing/macos-signing.md#installing-a-signed-build-on-this-mac).
+
 Release by exact version or bump type:
 
 ```bash

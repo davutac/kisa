@@ -1,4 +1,5 @@
 import { query as claudeQuery } from "@anthropic-ai/claude-agent-sdk";
+import type { ModelInfo as ClaudeModelInfo } from "@anthropic-ai/claude-agent-sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -86,6 +87,75 @@ export const CLAUDE_MODELS: readonly AiModel[] = [
   },
 ];
 
+const CLAUDE_EFFORT_LABELS = {
+  high: "High",
+  low: "Low",
+  max: "Max",
+  medium: "Medium",
+  xhigh: "Extra High",
+} satisfies Record<
+  NonNullable<ClaudeModelInfo["supportedEffortLevels"]>[number],
+  string
+>;
+
+// `default` is a reasoning choice that sends no effort, so Claude Code picks.
+const CLAUDE_DEFAULT_REASONING = "default";
+
+const stripContextWindowSuffix = (id: string): string =>
+  id.replace(/\[[^\]]*\]$/u, "").trim();
+
+/**
+ * Adds the models Claude Code reports at initialization that the catalog does
+ * not cover. Its list holds moving aliases such as `opus`; a row whose id or
+ * resolved model the catalog already names is skipped, so only models this
+ * catalog predates (or account-specific ones) are added.
+ */
+export const claudeReportedModels = (
+  reported: readonly ClaudeModelInfo[] | undefined
+): AiModel[] => {
+  const known = new Set(CLAUDE_MODELS.map(({ id }) => id));
+  const models: AiModel[] = [];
+  for (const info of reported ?? []) {
+    const id = info.value.trim();
+    // `default` points at Claude Code's own default model, not a model.
+    if (id === "" || id === "default") {
+      continue;
+    }
+    const ids = [id, info.resolvedModel ?? ""]
+      .map((value) => stripContextWindowSuffix(value).toLowerCase())
+      .filter((value) => value.length > 0);
+    if (ids.some((value) => known.has(value))) {
+      continue;
+    }
+    for (const value of ids) {
+      known.add(value);
+    }
+    const efforts = info.supportsEffort
+      ? (info.supportedEffortLevels ?? [])
+      : [];
+    models.push({
+      id,
+      isDefault: false,
+      name: info.displayName.trim() || id,
+      reasoningOptions:
+        efforts.length === 0
+          ? []
+          : [
+              {
+                id: CLAUDE_DEFAULT_REASONING,
+                isDefault: true,
+                label: "Default",
+              },
+              ...efforts.map((effort) => ({
+                id: effort,
+                label: CLAUDE_EFFORT_LABELS[effort],
+              })),
+            ],
+    });
+  }
+  return models;
+};
+
 const compareVersions = (left: string, right: string): number => {
   const leftParts = left.split(".").map(Number);
   const rightParts = right.split(".").map(Number);
@@ -145,8 +215,13 @@ interface ClaudeAccountProbe {
   readonly tokenSource?: string;
 }
 
-const probeClaudeAccount = Effect.fn("probeClaudeAccount")(
-  function* probeClaudeAccount() {
+interface ClaudeInitializationProbe {
+  readonly account: ClaudeAccountProbe;
+  readonly models: readonly ClaudeModelInfo[];
+}
+
+const probeClaudeInitialization = Effect.fn("probeClaudeInitialization")(
+  function* probeClaudeInitialization() {
     const environment = yield* aiProcessEnvironment;
     const executablePath = resolveAiExecutablePath("claude", environment);
     if (executablePath === undefined) {
@@ -181,7 +256,10 @@ const probeClaudeAccount = Effect.fn("probeClaudeAccount")(
         })(),
       });
       const initialized = await probe.initializationResult();
-      return initialized.account satisfies ClaudeAccountProbe;
+      return {
+        account: initialized.account,
+        models: initialized.models,
+      } satisfies ClaudeInitializationProbe;
     }).pipe(
       Effect.timeoutOption(PROVIDER_PROBE_TIMEOUT_MS),
       Effect.option,
@@ -252,7 +330,8 @@ export const getClaudeStatus = Effect.fn("getClaudeStatus")(
       } satisfies AiProviderStatus;
     }
 
-    const account = yield* probeClaudeAccount();
+    const initialization = yield* probeClaudeInitialization();
+    const account = initialization?.account;
     const authentication: AiAuthenticationStatus =
       account === undefined ? "unknown" : "authenticated";
     const cliVersion = parseCliVersion(`${version.stdout}\n${version.stderr}`);
@@ -263,7 +342,10 @@ export const getClaudeStatus = Effect.fn("getClaudeStatus")(
       authentication,
       installed: true,
       message: getClaudeUpgradeMessage(cliVersion),
-      models: getClaudeModelsForVersion(cliVersion),
+      models: [
+        ...getClaudeModelsForVersion(cliVersion),
+        ...claudeReportedModels(initialization?.models),
+      ],
       provider: "claude",
       version: cliVersion,
     } satisfies AiProviderStatus;
@@ -278,6 +360,10 @@ const normalizeClaudeReasoning = (
   reasoning: string,
   model: string | undefined
 ): string => {
+  // Reported models list only the efforts Claude Code accepts for them.
+  if (model !== undefined && !CLAUDE_MODELS.some(({ id }) => id === model)) {
+    return reasoning;
+  }
   if (
     reasoning === "xhigh" &&
     model !== "claude-fable-5-1" &&
@@ -299,7 +385,7 @@ export const getClaudeReasoningArgs = (
   reasoning?: string,
   model?: string
 ): readonly string[] => {
-  if (reasoning === undefined) {
+  if (reasoning === undefined || reasoning === CLAUDE_DEFAULT_REASONING) {
     return [];
   }
   if (model === "claude-haiku-4-5") {

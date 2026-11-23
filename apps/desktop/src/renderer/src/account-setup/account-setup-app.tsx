@@ -28,6 +28,7 @@ import type {
 import {
   MAX_DISPLAY_NAME_LENGTH,
   OUTLOOK_IMAP_HELP_URL,
+  toAddressDomain,
 } from "@/shared/mail-account-presets";
 import type {
   MailAccountPreset,
@@ -37,6 +38,7 @@ import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import {
   createSignInAgainForm,
+  findDomainToLookUp,
   findSetupProblem,
   findSetupSignInSwitch,
   getAccountSetupMode,
@@ -53,8 +55,10 @@ import type {
   AccountSetupMode,
   ServerFields,
   ServerSide,
+  SetupSwitch,
   SignInMethod,
 } from "./account-setup-form";
+import { useDomainLookup } from "./use-domain-lookup";
 
 const FIELD_IDS = {
   email: "account-email",
@@ -69,6 +73,7 @@ const PROBLEM_ID = "account-setup-problem";
 
 const DESCRIPTIONS = {
   address: "Sign in with an app password from your mail provider.",
+  lookup: "Sign in with an app password from your mail provider.",
   manual:
     "Enter your mail provider's server settings. Kisa checks them before saving.",
   microsoft: "Kisa signs in to Outlook through Microsoft, in your browser.",
@@ -105,10 +110,23 @@ const PENDING_LABELS = {
 const SIGN_IN_SWITCH_LABELS = {
   microsoft: "Sign in with Microsoft instead",
   password: "Use a password instead",
-} as const satisfies Record<SignInMethod, string>;
+  servers: "Enter server settings instead",
+} as const satisfies Record<Exclude<SetupSwitch, "hosted">, string>;
+
+/** The switch's label; going back to a hosting provider names it. */
+const switchLabel = (target: SetupSwitch, mode: AccountSetupMode): string => {
+  if (target !== "hosted") {
+    return SIGN_IN_SWITCH_LABELS[target];
+  }
+  return mode.kind === "manual" && mode.hosted !== undefined
+    ? `Use ${mode.hosted.title} settings instead`
+    : "Use your provider’s settings instead";
+};
 
 interface PresetCopy {
   readonly description: string;
+  /** Who runs the provider, for a custom domain whose mail they host. */
+  readonly host: string;
   /** Says which password not to use, before the link to make the right one. */
   readonly hint: string;
   readonly linkText: string;
@@ -119,12 +137,14 @@ interface PresetCopy {
 const PRESET_COPY = {
   gmail: {
     description: "Kisa signs in to Gmail with an app password.",
+    host: "Google",
     hint: "Your Google password won’t work, and app passwords need 2-Step Verification.",
     linkText: "Create an app password",
     passwordLabel: "App password",
   },
   icloud: {
     description: "Kisa signs in to iCloud Mail with an app-specific password.",
+    host: "Apple",
     hint: "Your Apple Account password won’t work.",
     linkText: "Create an app-specific password",
     passwordLabel: "App-specific password",
@@ -284,8 +304,8 @@ const PasswordField = ({
 interface AddressNotesProps {
   readonly isLocked: boolean;
   readonly mode: AccountSetupMode;
-  readonly onSwitch: (method: SignInMethod) => void;
-  readonly signInSwitch: SignInMethod | undefined;
+  readonly onSwitch: (method: SetupSwitch) => void;
+  readonly signInSwitch: SetupSwitch | undefined;
 }
 
 /**
@@ -320,7 +340,7 @@ const AddressNotes = ({
             }}
             type="button"
           >
-            {SIGN_IN_SWITCH_LABELS[signInSwitch]}
+            {switchLabel(signInSwitch, mode)}
           </button>
         </FieldDescription>
       )}
@@ -413,6 +433,10 @@ const CAN_SIGN_IN_WITH_MICROSOFT =
  */
 const SIGN_IN_AGAIN = readSignInAgain(window.location.search);
 
+/** Signing in again keeps the account's servers, so nothing is looked up. */
+const findDomainToAsk = (form: AccountSetupForm): string | undefined =>
+  SIGN_IN_AGAIN === undefined ? findDomainToLookUp(form) : undefined;
+
 const SIGN_IN_AGAIN_DESCRIPTIONS = {
   microsoft: (email: string) =>
     `Sign in to ${email} with Microsoft, in your browser. Kisa keeps the account's mail.`,
@@ -420,15 +444,21 @@ const SIGN_IN_AGAIN_DESCRIPTIONS = {
     `Enter a new app password for ${email}. Kisa keeps the account's mail and settings.`,
 } as const satisfies Record<SignInMethod, (email: string) => string>;
 
-const describeMode = (mode: AccountSetupMode): string => {
+const describeMode = (mode: AccountSetupMode, email: string): string => {
   if (SIGN_IN_AGAIN !== undefined) {
     return SIGN_IN_AGAIN_DESCRIPTIONS[SIGN_IN_AGAIN.method](
       SIGN_IN_AGAIN.email
     );
   }
-  return mode.kind === "preset"
-    ? PRESET_COPY[mode.preset.provider].description
-    : DESCRIPTIONS[mode.kind];
+  if (mode.kind !== "preset") {
+    return DESCRIPTIONS[mode.kind];
+  }
+  const copy = PRESET_COPY[mode.preset.provider];
+  const domain = toAddressDomain(email.trim());
+  // Says why a custom domain gets a provider's settings without asking.
+  return mode.via === "domain" && domain !== undefined
+    ? `${copy.host} hosts mail for ${domain}. ${copy.description}`
+    : copy.description;
 };
 
 /**
@@ -466,6 +496,8 @@ const AccountSetupApp = () => {
       window.removeEventListener("keydown", cancelOnEscape);
     };
   }, [bridge]);
+
+  useDomainLookup(bridge, findDomainToAsk(form), setForm);
 
   const mode = getAccountSetupMode(form);
   const isMicrosoft = mode.kind === "microsoft";
@@ -586,7 +618,7 @@ const AccountSetupApp = () => {
               {titleFor(mode)}
             </h1>
             <p className="text-muted-foreground mt-1 text-xs/relaxed">
-              {describeMode(mode)}
+              {describeMode(mode, form.email)}
             </p>
           </header>
 

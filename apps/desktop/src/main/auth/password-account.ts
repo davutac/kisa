@@ -14,6 +14,7 @@ import {
   isGoogleMailHost,
   isMicrosoftConsumerAddress,
   isMicrosoftMailHost,
+  toAccountProvider,
 } from "../../shared/mail-account-presets";
 import type { MailServerSettings } from "../../shared/mail-account-presets";
 import { MailDatabase } from "../mail/engine/mail-database";
@@ -147,14 +148,27 @@ const PROVIDER_MESSAGES = {
   },
 } as const;
 
+/**
+ * The provider whose wording a failure uses. A custom domain on Google's or
+ * Apple's servers, such as a Google Workspace domain, gets theirs too.
+ */
+const findProviderMessages = (plan: AccountPlan) => {
+  const provider = toAccountProvider({
+    imapHost: plan.imap.host,
+    provider: plan.provider,
+  });
+  return provider === "gmail" || provider === "icloud"
+    ? PROVIDER_MESSAGES[provider]
+    : undefined;
+};
+
 /** Says what went wrong in words the user can act on, never the server's. */
 const toSetupError = (
   plan: AccountPlan,
   side: "incoming" | "outgoing",
   error: MailSendError | MailTransportError
 ): PasswordAccountError => {
-  const provider =
-    plan.provider === "imap" ? undefined : PROVIDER_MESSAGES[plan.provider];
+  const provider = findProviderMessages(plan);
   const isIncoming = side === "incoming";
 
   switch (error._tag) {

@@ -491,6 +491,31 @@ describe("adding an app password account", () => {
     expect(exposed(exit)).not.toContain(PASSWORD);
   });
 
+  // The Add account window sends Gmail's servers for a domain Google hosts.
+  it("names Google when it refuses a Google Workspace address, and drops the spaces", async () => {
+    const exit = await addAccount(
+      {
+        email: "me@company.example",
+        password: "abcd efgh ijkl mnop",
+        servers: {
+          imap: { host: "imap.gmail.com", port: 993, security: "tls" },
+          smtp: { host: "smtp.gmail.com", port: 465, security: "tls" },
+        },
+      },
+      { imap: "refuse" }
+    );
+
+    expect(failureMessage(exit)).toBe(
+      PASSWORD_ACCOUNT_MESSAGES.gmailPasswordRefused
+    );
+    expect(
+      imapRequests.map(({ auth }) =>
+        auth.kind === "password" ? Redacted.value(auth.password) : auth.kind
+      )
+    ).toStrictEqual(["abcdefghijklmnop"]);
+    expect(accountRows()).toStrictEqual([]);
+  });
+
   it("leaves the sender name out when it is blank", async () => {
     await addAccount({
       email: "name@icloud.com",

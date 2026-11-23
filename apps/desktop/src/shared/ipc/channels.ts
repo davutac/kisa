@@ -23,6 +23,8 @@ export const ACCOUNTS_REORDER_CHANNEL = "desktop:accounts:reorder";
 
 // Only the Add account window's preload uses these, and it inlines them.
 export const ACCOUNT_SETUP_CLOSE_CHANNEL = "desktop:account-setup:close";
+export const ACCOUNT_SETUP_LOOKUP_DOMAIN_CHANNEL =
+  "desktop:account-setup:lookup-domain";
 export const ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL =
   "desktop:account-setup:microsoft-cancel";
 export const ACCOUNT_SETUP_MICROSOFT_CHANNEL =

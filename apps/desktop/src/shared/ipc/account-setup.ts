@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import {
   isMailAddress,
+  isMailDomain,
   isMailHost,
   isMailPort,
   MAX_DISPLAY_NAME_LENGTH,
@@ -83,6 +84,26 @@ export type MicrosoftAccountSetupRequest =
 export const MicrosoftAccountSetupReply = IpcReply(Schema.Void);
 export type MicrosoftAccountSetupReply = typeof MicrosoftAccountSetupReply.Type;
 
+/**
+ * What the Add account window asks main about an address without a preset:
+ * only its domain, which is all an MX lookup needs.
+ */
+export const MailDomainLookupRequest = Schema.Struct({
+  domain: Schema.String.check(
+    Schema.makeFilter<string>(isMailDomain, { expected: "a mail domain" })
+  ),
+});
+export type MailDomainLookupRequest = typeof MailDomainLookupRequest.Type;
+
+/**
+ * Who hosts the domain's mail, when Kisa knows them, or `null`. A fixed
+ * literal: no host name from DNS ever reaches the window.
+ */
+export const MailDomainLookupReply = IpcReply(
+  Schema.NullOr(Schema.Literal("gmail"))
+);
+export type MailDomainLookupReply = typeof MailDomainLookupReply.Type;
+
 export const AccountSetupOpenReply = IpcReply(Schema.Void);
 export type AccountSetupOpenReply = typeof AccountSetupOpenReply.Type;
 
@@ -91,6 +112,10 @@ export interface AccountSetupBridge {
   /** Stops a Microsoft sign-in that is waiting for the browser. */
   cancelMicrosoftSignIn: () => Promise<void>;
   close: () => Promise<void>;
+  /** Asks main who hosts a domain's mail, so a Google domain needs no servers. */
+  lookupMailDomain: (
+    request: MailDomainLookupRequest
+  ) => Promise<MailDomainLookupReply>;
   /**
    * Opens Microsoft's sign-in page in the system browser and settles once the
    * account is added, the sign-in fails, or it is cancelled.
