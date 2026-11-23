@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "@effect/vitest";
+import { vi } from "vitest";
 
 import { useMailboxStore } from "../src/renderer/src/state/mailbox";
+import {
+  parseUnreadFilter,
+  readUnreadFilter,
+} from "../src/renderer/src/state/unread-filter-preference";
 
 const initialState = useMailboxStore.getState();
 
@@ -186,7 +191,7 @@ describe("mailbox store", () => {
     expect(useMailboxStore.getState().checkedThreadIds.size).toBe(0);
   });
 
-  it("selects an account inbox without mailbox filters", () => {
+  it("selects an account inbox, keeping the unread filter", () => {
     const store = useMailboxStore.getState();
     store.setMailbox("spam");
     store.setShowUnread(true);
@@ -202,7 +207,48 @@ describe("mailbox store", () => {
       openThreadId: null,
       selectedAccountId: "other@example.com",
       selectedThreadId: null,
-      showUnread: false,
+      showUnread: true,
     });
+  });
+});
+
+describe("remembered unread filter", () => {
+  beforeEach(() => {
+    useMailboxStore.setState(initialState, true);
+    vi.unstubAllGlobals();
+  });
+
+  it("is on only when it was saved on", () => {
+    expect(parseUnreadFilter("true")).toBeTruthy();
+    expect(parseUnreadFilter("false")).toBeFalsy();
+    expect(parseUnreadFilter(null)).toBeFalsy();
+    expect(parseUnreadFilter("yes")).toBeFalsy();
+  });
+
+  it("saves the toggle so the next window starts with it", () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+      },
+    });
+
+    useMailboxStore.getState().setShowUnread(true);
+    expect(readUnreadFilter()).toBeTruthy();
+
+    useMailboxStore.getState().setShowUnread(false);
+    expect(readUnreadFilter()).toBeFalsy();
+  });
+
+  it("starts off when storage is unavailable", () => {
+    vi.stubGlobal("window", {
+      get localStorage(): Storage {
+        throw new Error("blocked");
+      },
+    });
+
+    expect(readUnreadFilter()).toBeFalsy();
+    expect(() => useMailboxStore.getState().setShowUnread(true)).not.toThrow();
   });
 });

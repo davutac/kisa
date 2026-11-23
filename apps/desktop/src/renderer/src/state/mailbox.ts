@@ -2,6 +2,10 @@ import { create } from "zustand";
 
 import { isSameMailboxPlace } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";
+import {
+  readUnreadFilter,
+  writeUnreadFilter,
+} from "@/state/unread-filter-preference";
 
 interface MailboxState {
   /** Account-qualified thread keys checked for a mailbox bulk action. */
@@ -14,12 +18,14 @@ interface MailboxState {
   selectedAccountId: string | null;
   /** A thread selection key, see `getThreadSelectionKey`. */
   selectedThreadId: string | null;
+  /** Remembered across inbox switches and restarts; see `setShowUnread`. */
   showUnread: boolean;
   checkThread: (threadId: string, checked: boolean) => void;
   clearCheckedThreads: () => void;
   closeThread: () => void;
   openThread: (threadId: string) => void;
   selectAccount: (accountId: string | null) => void;
+  /** Opens an account scope's Inbox, keeping the unread filter. */
   selectInbox: (accountId: string | null) => void;
   /** Moves to another account scope and mailbox in one step, keeping the unread filter. */
   selectMailbox: (accountId: string | null, mailbox: MailboxPlace) => void;
@@ -100,7 +106,6 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
       openThreadId: null,
       selectedAccountId,
       selectedThreadId: null,
-      showUnread: false,
     });
   },
   selectMailbox: (selectedAccountId, mailbox) => {
@@ -128,6 +133,7 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
     }));
   },
   setShowUnread: (showUnread) => {
+    writeUnreadFilter(showUnread);
     set({
       checkedThreadIds: new Set(),
       openThreadId: null,
@@ -135,7 +141,7 @@ export const useMailboxStore = create<MailboxState>()((set) => ({
       showUnread,
     });
   },
-  showUnread: false,
+  showUnread: readUnreadFilter(),
 }));
 
 export const useOpenThreadId = (): string | null =>

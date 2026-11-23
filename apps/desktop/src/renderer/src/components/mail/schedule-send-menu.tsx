@@ -40,7 +40,6 @@ import {
 } from "@/components/ui/popover";
 import { useInstanceValue } from "@/hooks/use-instance-value";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
-import { cn } from "@/lib/utils";
 import {
   formatScheduledAt,
   getInitialCustomSchedule,
@@ -208,13 +207,12 @@ const CustomScheduleDialog = ({
 };
 
 const ScheduleSendMenu = ({
-  compact,
   disabled,
   onChoose,
   onOpenChange,
   open,
   selectedScheduledAt,
-}: ScheduleSendMenuProps & { readonly compact: boolean }) => {
+}: ScheduleSendMenuProps) => {
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [presets, setPresets] = useState(() => getSchedulePresets(new Date()));
   const triggerLabel =
@@ -255,9 +253,9 @@ const ScheduleSendMenu = ({
               aria-pressed={
                 selectedScheduledAt === undefined ? undefined : true
               }
-              className={compact ? "rounded-l-none" : "rounded-none!"}
+              className="rounded-l-none"
               disabled={disabled}
-              size={compact ? "icon" : "footer-icon"}
+              size="icon"
               title={
                 selectedScheduledAt === undefined
                   ? `${triggerLabel} (${scheduleDisplay.bindings[0]})`
@@ -305,26 +303,18 @@ const ScheduleSendMenu = ({
   );
 };
 
-/**
- * Send beside its schedule menu: a full-width footer strip in the dialog,
- * or with `compact`, a split button sized to its content.
- */
+/** Send beside its schedule menu, as a split button sized to its content. */
 export const SendWithScheduleMenu = ({
   children,
-  compact = false,
   ...menuProps
 }: ScheduleSendMenuProps & {
   readonly children: ReactNode;
-  readonly compact?: boolean;
 }) => (
   <fieldset
     aria-label="Send options"
-    className={cn(
-      "m-0 flex min-w-0 items-stretch gap-px border-0 p-0",
-      compact ? "flex-none" : "flex-1"
-    )}
+    className="m-0 flex min-w-0 flex-none items-stretch gap-px border-0 p-0"
   >
     {children}
-    <ScheduleSendMenu {...menuProps} compact={compact} />
+    <ScheduleSendMenu {...menuProps} />
   </fieldset>
 );

@@ -198,28 +198,27 @@ describe("account rows", () => {
     expect(isScopeRowCurrent(view, "one@example.com", false)).toBeTruthy();
   });
 
-  it("keeps the account row current in Scheduled, which has no mailbox row", () => {
+  it("leaves every account row plain in Scheduled, whose own row is current", () => {
     expect(
-      isScopeRowCurrent(
-        mailboxView({ currentPath: "/scheduled", mailbox: "trash" }),
-        null,
-        true
-      )
-    ).toBeTruthy();
+      isScopeRowCurrent(mailboxView({ currentPath: "/scheduled" }), null, false)
+    ).toBeFalsy();
   });
 });
 
 describe("account scope", () => {
-  it("marks the selected scope current in the mailbox and Scheduled", () => {
+  it("marks the selected scope current in the mailbox", () => {
     expect(isAccountScopeCurrent("/", null, null)).toBeTruthy();
     expect(
-      isAccountScopeCurrent("/scheduled", "one@example.com", "one@example.com")
+      isAccountScopeCurrent("/", "one@example.com", "one@example.com")
     ).toBeTruthy();
     expect(isAccountScopeCurrent("/", "one@example.com", null)).toBeFalsy();
     expect(isAccountScopeCurrent("/", null, "one@example.com")).toBeFalsy();
   });
 
-  it("marks no scope current in unscoped workspaces", () => {
+  it("marks no scope current on a page, even Scheduled, which it filters", () => {
+    expect(
+      isAccountScopeCurrent("/scheduled", "one@example.com", "one@example.com")
+    ).toBeFalsy();
     expect(isAccountScopeCurrent("/compose", null, null)).toBeFalsy();
     expect(isAccountScopeCurrent("/settings", null, null)).toBeFalsy();
     expect(

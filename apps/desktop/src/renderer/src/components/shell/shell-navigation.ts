@@ -94,20 +94,19 @@ export const resolveMailboxSelection = (
     : target;
 
 /**
- * The account scope filters the mailbox and Scheduled, so an account row is
- * current only while one of those views is on screen.
+ * An account row is current only while the mailbox shows its scope. Scheduled
+ * is filtered by the scope too, but it is a page like Settings, so there its
+ * own row alone reads as current and its title names the scope.
  */
 export const isAccountScopeCurrent = (
   currentPath: ShellViewPath,
   selectedAccountId: string | null,
   accountId: string | null
-): boolean =>
-  (currentPath === "/" || currentPath === "/scheduled") &&
-  selectedAccountId === accountId;
+): boolean => currentPath === "/" && selectedAccountId === accountId;
 
 /**
  * An account row stands for its scope's Inbox, so it is current while that
- * Inbox or Scheduled shows the scope. Sent, Spam, Trash, or a label on screen
+ * Inbox shows the scope. Sent, Spam, Trash, or a label on screen
  * moves the current state to that row once it is shown, so only one row
  * reads as current; while the rows are hidden the account row keeps it.
  */

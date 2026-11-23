@@ -53,6 +53,9 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
   const navigation = useShellNavigation();
   const { canCompose, toggleWorkspace, view } = navigation;
   const isComposing = view.currentPath === "/compose";
+  // Scheduled scrolls its own list, and a scheduled email opens over it as a
+  // composer page, which the fade would dim just as it would a new email.
+  const scrollsItself = isComposing || view.currentPath === "/scheduled";
   const toggleComposer = (): void => {
     toggleWorkspace("/compose");
   };
@@ -128,12 +131,12 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
           sidebarToggleRef={sidebarOpenButtonRef}
           slotRef={setTitlebarSlot}
         />
-        {/* The compose page scrolls its own body; a fade here would dim its
+        {/* The composer page scrolls its own body; a fade here would dim its
             From row at the top edge, so it reads as disabled. */}
         <main
           className={cn(
             "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto",
-            !isComposing && "scroll-fade-y"
+            !scrollsItself && "scroll-fade-y"
           )}
         >
           <ShellWorkspaceContext.Provider value={toggleWorkspace}>

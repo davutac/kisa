@@ -351,11 +351,16 @@ export const useNewMessageWorkspace = ({
   };
 
   /**
-   * Keeps anything written in Stash before the composer goes away, without
-   * closing it. Resolves false while the composer is busy or when the save
-   * failed, so the composer stays open with the draft and nothing is lost.
+   * Readies the composer to go away, without closing it. A new email keeps
+   * anything written in Stash; a scheduled email's editor asks before
+   * abandoning unsaved edits instead, since the email itself stays queued.
+   * Resolves false while the composer is busy, when the save failed, or when
+   * the user keeps editing, so the composer stays open and nothing is lost.
    */
-  const keepDraftForLeaving = async (): Promise<boolean> => {
+  const prepareToLeave = async (): Promise<boolean> => {
+    if (scheduled.isEdit) {
+      return await scheduled.confirmLeave();
+    }
     const draft = currentDraftRef.current;
     const action = getNewMessageLeave(draft, isBusy);
     if (action !== "stash") {
@@ -375,9 +380,9 @@ export const useNewMessageWorkspace = ({
     return succeeded;
   };
 
-  /** Closes the composer as Escape does, keeping anything written in Stash. */
+  /** Closes the composer as Escape does, once `prepareToLeave` allows it. */
   const leave = async (): Promise<void> => {
-    if (await keepDraftForLeaving()) {
+    if (await prepareToLeave()) {
       onOpenChange(false);
     }
   };
@@ -550,10 +555,9 @@ export const useNewMessageWorkspace = ({
     focus,
     isBusy,
     isCleaning: cleanup.isCleaning,
-    keepDraftForLeaving,
     leave,
     outgoingAttachments,
-    requestClose: scheduled.requestClose,
+    prepareToLeave,
     scheduled: {
       canSchedule: scheduled.canSchedule,
       isDirty: scheduled.isDirty,

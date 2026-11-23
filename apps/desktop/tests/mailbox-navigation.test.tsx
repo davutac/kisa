@@ -22,7 +22,6 @@ const state = vi.hoisted(() => {
       selectAccount,
       selectInbox,
       selectedAccountId: null as string | null,
-      showUnread: false,
     },
   };
 });
@@ -66,7 +65,6 @@ describe("mailbox navigation from a workspace", () => {
     state.pathname = "/scheduled";
     state.store.openThreadId = null;
     state.store.selectedAccountId = null;
-    state.store.showUnread = false;
     state.navigate.mockClear();
     state.requestMailboxReload.mockClear();
     state.retainMailboxThreadsSnapshotsForAccounts.mockClear();
@@ -94,7 +92,6 @@ describe("mailbox navigation from an open conversation", () => {
     state.pathname = "/";
     state.store.openThreadId = "first@example.com:thread-1";
     state.store.selectedAccountId = "first@example.com";
-    state.store.showUnread = true;
     state.closeThread.mockClear();
     state.requestMailboxReload.mockClear();
     state.selectInbox.mockClear();
@@ -113,5 +110,22 @@ describe("mailbox navigation from an open conversation", () => {
 
     expect(state.closeThread).not.toHaveBeenCalled();
     expect(state.selectInbox).toHaveBeenCalledWith("second@example.com");
+  });
+});
+
+describe("mailbox navigation on the Inbox it shows", () => {
+  beforeEach(() => {
+    state.pathname = "/";
+    state.store.openThreadId = null;
+    state.store.selectedAccountId = "first@example.com";
+    state.requestMailboxReload.mockClear();
+    state.selectInbox.mockClear();
+  });
+
+  it("reloads it, leaving the unread filter to its own toggle", () => {
+    mailboxNavigationFactory().openAccount("first@example.com");
+
+    expect(state.requestMailboxReload).toHaveBeenCalledOnce();
+    expect(state.selectInbox).not.toHaveBeenCalled();
   });
 });

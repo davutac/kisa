@@ -5,6 +5,7 @@ import NewMessageFooter from "../src/renderer/src/components/mail/new-message/ne
 import { getNewMessageLeave } from "../src/renderer/src/components/mail/new-message/new-message-leave";
 import { AppHotkeysProvider } from "../src/renderer/src/hotkeys/app-hotkeys-provider";
 import { createNewMailDraft } from "../src/renderer/src/mail/mail-draft";
+import { formatScheduledAt } from "../src/renderer/src/scheduled/schedule-time";
 
 const blankDraft = createNewMailDraft("one@example.com");
 
@@ -30,33 +31,37 @@ describe(getNewMessageLeave, () => {
   });
 });
 
+const scheduledAt = new Date(2030, 4, 20, 13).getTime();
+
+const renderFooter = ({ isEdit }: { readonly isEdit: boolean }): string =>
+  renderToString(
+    <AppHotkeysProvider>
+      <NewMessageFooter
+        canSend={isEdit}
+        canStash={!isEdit}
+        isScheduling={false}
+        isSending={false}
+        onSend={() => Promise.resolve()}
+        onStash={vi.fn<() => void>()}
+        scheduled={{
+          canSchedule: isEdit,
+          isDirty: isEdit,
+          isEdit,
+          onDiscard: () => Promise.resolve(false),
+          onPendingScheduleChange: vi.fn<() => void>(),
+          onSave: () => Promise.resolve(false),
+          onSchedule: () => Promise.resolve(false),
+          scheduledAt: isEdit ? scheduledAt : undefined,
+        }}
+        sendShortcutLabel="Send"
+        stashPicker={<button type="button">Stash 2</button>}
+      />
+    </AppHotkeysProvider>
+  );
+
 describe(NewMessageFooter, () => {
   it("sets Stash, the stash picker, and Send in one titlebar row on the page", () => {
-    const markup = renderToString(
-      <AppHotkeysProvider>
-        <NewMessageFooter
-          canSend={false}
-          canStash
-          isScheduling={false}
-          isSending={false}
-          layout="page"
-          onSend={() => Promise.resolve()}
-          onStash={vi.fn<() => void>()}
-          scheduled={{
-            canSchedule: false,
-            isDirty: false,
-            isEdit: false,
-            onDiscard: () => Promise.resolve(false),
-            onPendingScheduleChange: vi.fn<() => void>(),
-            onSave: () => Promise.resolve(false),
-            onSchedule: () => Promise.resolve(false),
-            scheduledAt: undefined,
-          }}
-          sendShortcutLabel="Send"
-          stashPicker={<button type="button">Stash 2</button>}
-        />
-      </AppHotkeysProvider>
-    );
+    const markup = renderFooter({ isEdit: false });
     const stash = markup.indexOf('aria-label="Stash draft"');
     const picker = markup.indexOf("Stash 2");
     const send = markup.indexOf('aria-label="Send options"');
@@ -64,7 +69,31 @@ describe(NewMessageFooter, () => {
     expect(stash).toBeGreaterThan(-1);
     expect(picker).toBeGreaterThan(stash);
     expect(send).toBeGreaterThan(picker);
-    // The dialog's full-height footer segments are `size-12`.
-    expect(markup).not.toContain("size-12");
+    expect(
+      markup.match(/<button[^>]*aria-label="Schedule send"[^>]*>/u)?.[0]
+    ).toContain("aria-keyshortcuts");
+  });
+
+  it("offers a scheduled email Discard, Save, and Send now instead of Stash", () => {
+    const markup = renderFooter({ isEdit: true });
+
+    expect(markup).toContain(
+      'aria-label="Permanently discard scheduled email"'
+    );
+    expect(markup).toContain(">Save<");
+    expect(markup).toContain("Send now");
+    expect(markup).not.toContain('aria-label="Stash draft"');
+    expect(markup).not.toContain("Stash 2");
+  });
+
+  it("shows a scheduled email's persisted send time without a Clear action", () => {
+    const markup = renderFooter({ isEdit: true });
+
+    expect(markup).toContain('aria-label="Scheduled send time"');
+    expect(markup).toContain(
+      `dateTime="${new Date(scheduledAt).toISOString()}"`
+    );
+    expect(markup).toContain(formatScheduledAt(scheduledAt));
+    expect(markup).not.toContain('aria-label="Clear selected send time"');
   });
 });

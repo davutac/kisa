@@ -3,7 +3,6 @@ import { m, useReducedMotionConfig } from "motion/react";
 import { useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 
-import { DialogContent } from "@/components/ui/dialog";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 
 interface NewMessageShellProps {
@@ -121,28 +120,6 @@ const FileDropOverlay = ({
         Drop files to attach
       </div>
     </m.div>
-  );
-};
-
-/** The composer as a modal dialog, for editing a scheduled email. */
-export const NewMessageDialogShell = ({
-  children,
-  initialFocus,
-  onFiles,
-}: NewMessageShellProps & {
-  readonly initialFocus: () => HTMLElement | null;
-}) => {
-  const { handlers, isDraggingFiles } = useComposerFileDrop(onFiles);
-
-  return (
-    <DialogContent
-      className="top-[calc(var(--app-titlebar-height)+1rem)] flex max-h-[calc(100svh-var(--app-titlebar-height)-2rem)] min-h-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 ring-0 sm:max-w-2xl"
-      initialFocus={initialFocus}
-      {...handlers}
-    >
-      <FileDropOverlay isDraggingFiles={isDraggingFiles} />
-      {children}
-    </DialogContent>
   );
 };
 

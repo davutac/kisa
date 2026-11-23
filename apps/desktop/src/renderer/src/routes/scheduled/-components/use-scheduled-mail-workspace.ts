@@ -68,7 +68,6 @@ export const useScheduledMailWorkspace = () => {
   );
   const scrollRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const lastSelectionMoveAtRef = useRef<number | null>(null);
   const openingKeyRef = useRef<string | null>(null);
@@ -106,7 +105,9 @@ export const useScheduledMailWorkspace = () => {
       return;
     }
     pendingFocusKeyRef.current = false;
-    focusScheduledMailTarget(pending, rowRefs.current, headingRef.current);
+    // With no row to land on, focus rests on the list itself, so the arrow
+    // keys and J/K still move through it.
+    focusScheduledMailTarget(pending, rowRefs.current, scrollRef.current);
   }, [focusRevision, items]);
 
   const getVisibleSelectionIndex = (
@@ -393,7 +394,6 @@ export const useScheduledMailWorkspace = () => {
     editSession,
     error,
     discardScheduledEmail,
-    headingRef,
     isInitialLoading,
     items,
     listRef,

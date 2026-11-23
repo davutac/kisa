@@ -31,7 +31,6 @@ export const useMailboxNavigation = (): MailboxNavigation => {
   const selectAccount = useMailboxStore((state) => state.selectAccount);
   const selectInbox = useMailboxStore((state) => state.selectInbox);
   const selectMailbox = useMailboxStore((state) => state.selectMailbox);
-  const showUnread = useMailboxStore((state) => state.showUnread);
   const isMailSearchActive = useIsMailSearchActive();
   const isMailboxRoute = pathname === "/";
 
@@ -49,8 +48,7 @@ export const useMailboxNavigation = (): MailboxNavigation => {
     isMailboxRoute &&
     selectedAccountId === accountId &&
     mailbox === "inbox" &&
-    openThreadId === null &&
-    !showUnread;
+    openThreadId === null;
   // Opening the Inbox a conversation is open over goes back to it, as Escape
   // does: the list keeps its filter, selection, and scroll.
   const isReadingOverInbox = (accountId: string | null): boolean =>

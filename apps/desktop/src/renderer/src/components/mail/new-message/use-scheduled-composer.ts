@@ -209,36 +209,34 @@ export const useScheduledComposer = ({
     );
   };
 
-  const requestClose = async (): Promise<void> => {
+  /**
+   * Whether the editor may go away: never while an action is pending, and
+   * with unsaved edits only once the user agrees to abandon them. Leaving
+   * never stashes, because the email stays queued as it was last saved.
+   */
+  const confirmLeave = async (): Promise<boolean> => {
     if (isBusy) {
-      return;
+      return false;
     }
-    if (scheduledEdit === undefined) {
-      onOpenChange(false);
-      return;
+    if (!shouldConfirmScheduledEditorClose(isDirty, hasPendingReschedule)) {
+      return true;
     }
-    if (
-      shouldConfirmScheduledEditorClose(isDirty, hasPendingReschedule) &&
-      !(await confirm({
-        cancelLabel: "Keep editing",
-        confirmLabel: "Discard changes",
-        confirmVariant: "destructive",
-        description:
-          "Your unsaved edits will be lost. The original scheduled email will remain queued.",
-        title: "Discard unsaved changes?",
-      }))
-    ) {
-      return;
-    }
-    onOpenChange(false);
+    return await confirm({
+      cancelLabel: "Keep editing",
+      confirmLabel: "Discard changes",
+      confirmVariant: "destructive",
+      description:
+        "Your unsaved edits will be lost. The original scheduled email will remain queued.",
+      title: "Discard unsaved changes?",
+    });
   };
 
   return {
     canSchedule,
+    confirmLeave,
     discard,
     isDirty,
     isEdit,
-    requestClose,
     save,
     schedule,
     sendNow,

@@ -65,15 +65,24 @@ type ScheduledComposer = ReturnType<typeof useScheduledComposer>;
 
 /** Renders the hook once and hands back the actions its composer would call. */
 const composerFor = (
-  scheduledEdit: ScheduledMailEditSession
+  scheduledEdit: ScheduledMailEditSession,
+  {
+    currentDraft = scheduledEdit.draft,
+    hasPendingReschedule = false,
+    isBusy = false,
+  }: {
+    readonly currentDraft?: ScheduledMailEditSession["draft"];
+    readonly hasPendingReschedule?: boolean;
+    readonly isBusy?: boolean;
+  } = {}
 ): ScheduledComposer => {
   let composer: ScheduledComposer | undefined;
   const Probe = (): null => {
     composer = useScheduledComposer({
       canSend: true,
-      currentDraft: scheduledEdit.draft,
-      hasPendingReschedule: false,
-      isBusy: false,
+      currentDraft,
+      hasPendingReschedule,
+      isBusy,
       onOpenChange: () => {},
       onSessionChange: () => {},
       scheduledEdit,
@@ -133,4 +142,47 @@ describe("scheduled composer duplicate acknowledgement", () => {
       });
     }
   );
+});
+
+// The editor is a page, so the sidebar, Go back, and Escape can all take it
+// away; leaving must never stash a copy of an email that is still queued.
+describe("leaving the scheduled editor", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("leaves without asking when nothing changed", async () => {
+    await expect(
+      composerFor(scheduledSession).confirmLeave()
+    ).resolves.toBeTruthy();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(finishEdit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: "an edited draft",
+      options: { currentDraft: { ...draft, subject: "Hello again" } },
+    },
+    { name: "a chosen new time", options: { hasPendingReschedule: true } },
+  ])("asks before abandoning $name", async ({ options }) => {
+    confirm.mockResolvedValueOnce(false);
+    await expect(
+      composerFor(scheduledSession, options).confirmLeave()
+    ).resolves.toBeFalsy();
+
+    confirm.mockResolvedValueOnce(true);
+    await expect(
+      composerFor(scheduledSession, options).confirmLeave()
+    ).resolves.toBeTruthy();
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(finishEdit).not.toHaveBeenCalled();
+  });
+
+  it("stays while an action is pending", async () => {
+    await expect(
+      composerFor(scheduledSession, { isBusy: true }).confirmLeave()
+    ).resolves.toBeFalsy();
+    expect(confirm).not.toHaveBeenCalled();
+  });
 });
