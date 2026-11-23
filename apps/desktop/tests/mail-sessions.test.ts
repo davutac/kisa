@@ -173,3 +173,52 @@ describe("opening a connection", () => {
     expect(signIn.forgotten).toStrictEqual([]);
   });
 });
+
+const use = (owner: MailAccount, lane: "background" | "foreground") =>
+  withAccountSession(owner, lane, () => Effect.void);
+
+describe("closing connections on quit", () => {
+  const second: MailAccount = {
+    ...account,
+    accountId: AccountId.make("other@outlook.com"),
+    email: "other@outlook.com",
+    username: "other@outlook.com",
+  };
+
+  it("closes every account's connections together", async () => {
+    signIn.next = [password, password, password, password];
+    const connections = 4;
+    let closing = 0;
+    // Opens only once every close has started: closing one connection after
+    // another would wait here forever.
+    const everyCloseStarted = Promise.withResolvers<null>();
+    const connector = Layer.succeed(
+      ImapConnector,
+      ImapConnector.of({
+        connect: () =>
+          Effect.acquireRelease(
+            Effect.succeed(new FakeImapServer([{ path: "INBOX" }]).session()),
+            () =>
+              Effect.promise(() => {
+                closing += 1;
+                if (closing === connections) {
+                  everyCloseStarted.resolve(null);
+                }
+                return everyCloseStarted.promise;
+              })
+          ),
+      })
+    );
+    await Effect.runPromise(
+      Effect.all([
+        use(account, "background"),
+        use(account, "foreground"),
+        use(second, "background"),
+        use(second, "foreground"),
+      ]).pipe(Effect.provide(connector))
+    );
+    await Effect.runPromise(closeAllSessions);
+
+    expect(closing).toBe(connections);
+  });
+});

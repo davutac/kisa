@@ -3,7 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import { getMailApi } from "@/platform/desktop";
 import type { MailThread, MailThreadReply } from "@/shared/ipc/mail";
 
-import { toOpenThreadUpdate } from "./open-thread-update";
+import { loadOpenThread, toOpenThreadUpdate } from "./open-thread-update";
+import {
+  beginPendingThreadChange,
+  projectThreadLabels,
+  usePendingThreadChanges,
+} from "./pending-thread-changes";
 
 type MailThreadState =
   | { status: "loading" }
@@ -21,6 +26,7 @@ export const useMailThread = (
   threadId: string
 ): MailThreadState => {
   const mailApi = useMemo(() => getMailApi(), []);
+  const pendingChanges = usePendingThreadChanges();
   const [result, setResult] = useState<MailThreadResult>({
     accountId,
     state: { status: "loading" },
@@ -64,24 +70,33 @@ export const useMailThread = (
       );
     };
 
+    const read = async (cachedOnly: boolean): Promise<MailThreadReply> => {
+      try {
+        return await mailApi.loadThread({ accountId, cachedOnly, threadId });
+      } catch {
+        return { error: "Could not load email", ok: false };
+      }
+    };
+
     const load = async (): Promise<void> => {
       if (isLoading) {
         isReloadWanted = true;
         return;
       }
       isLoading = true;
-      let reply: MailThreadReply | undefined;
-      try {
-        reply = await mailApi.loadThread({ accountId, threadId });
-      } catch {
-        reply = { error: "Could not load email", ok: false };
-      }
+      // Main marks an unread conversation read as it opens it; the list shows
+      // that now rather than after the server has it.
+      const settleRead = beginPendingThreadChange([{ accountId, threadId }], {
+        isUnread: false,
+        kind: "setReadState",
+      });
+      await loadOpenThread({ isShown: () => isActive, read, show });
+      settleRead();
       isLoading = false;
 
       if (!isActive) {
         return;
       }
-      show(reply);
       if (isReloadWanted) {
         isReloadWanted = false;
         void load();
@@ -133,7 +148,18 @@ export const useMailThread = (
     };
   }
 
-  return result.accountId === accountId && result.threadId === threadId
+  if (result.accountId !== accountId || result.threadId !== threadId) {
+    return { status: "loading" };
+  }
+
+  if (result.state.status !== "ready") {
+    return result.state;
+  }
+
+  const { thread } = result.state;
+  const labels = projectThreadLabels(thread, pendingChanges);
+
+  return labels === thread.labels
     ? result.state
-    : { status: "loading" };
+    : { status: "ready", thread: { ...thread, labels } };
 };

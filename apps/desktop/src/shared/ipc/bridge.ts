@@ -78,6 +78,7 @@ import type {
   MailThreadListUpdated,
   MailThreadReply,
   MailThreadReadStateRequest,
+  MailThreadLoadRequest,
   MailThreadRequest,
   MailTrustedImageSenderRequest,
   MailTrustedImageSendersReply,
@@ -231,7 +232,7 @@ export interface DesktopBridge {
   loadOutgoingInlineImagePreview: (
     request: MailOutgoingInlineImagePreviewRequest
   ) => Promise<MailOutgoingInlineImagePreviewReply>;
-  loadThread: (request: MailThreadRequest) => Promise<MailThreadReply>;
+  loadThread: (request: MailThreadLoadRequest) => Promise<MailThreadReply>;
   loadThreadDraft: (request: MailThreadRequest) => Promise<MailDraftLoadReply>;
   markThreadNotSpam: (
     request: MailThreadRequest

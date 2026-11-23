@@ -36,25 +36,34 @@ export interface StoredMailHeader {
 export const mailMessages = sqliteTable(
   "mail_messages",
   {
+    // Columns are in the order SQLite stores them, set by the migration that
+    // put the bodies last: what the engine reads most comes first, and a body,
+    // often spilling into overflow pages, comes after everything else, so
+    // reading a message's thread or subject does not walk through it. Drizzle
+    // recreates a table in this order, so keep it.
     accountId: text("account_id").notNull(),
-    attachments: text("attachments", { mode: "json" }).$type<
-      readonly StoredMailAttachment[]
-    >(),
-    bccAddresses: text("bcc_addresses", { mode: "json" })
-      .$type<readonly string[]>()
-      .notNull(),
-    bodyHtml: blob("body_html", { mode: "buffer" }),
+    messageId: text("message_id").notNull(),
+    threadId: text("thread_id").notNull(),
+    /** When the server received it (INTERNALDATE), epoch milliseconds. */
+    receivedAt: integer("received_at").notNull(),
+    isUnread: integer("is_unread", { mode: "boolean" }).notNull(),
+    isStarred: integer("is_starred", { mode: "boolean" }).notNull(),
+    isDraft: integer("is_draft", { mode: "boolean" }).notNull(),
     bodyState: text("body_state", { enum: ["failed", "none", "ready"] })
       .notNull()
       .default("none"),
-    bodyText: text("body_text"),
-    ccAddresses: text("cc_addresses", { mode: "json" })
+    size: integer("size").notNull(),
+    /** The union of the labels its copies give it. */
+    labelIds: text("label_ids", { mode: "json" })
       .$type<readonly string[]>()
       .notNull(),
-    /** First `References` entry, kept so threads can be recomputed. */
-    firstReference: text("first_reference"),
     fromAddress: text("from_address").notNull(),
     fromName: text("from_name"),
+    subject: text("subject").notNull(),
+    snippet: text("snippet").notNull().default(""),
+    attachments: text("attachments", { mode: "json" }).$type<
+      readonly StoredMailAttachment[]
+    >(),
     hasAttachments: integer("has_attachments", { mode: "boolean" })
       .notNull()
       .default(false),
@@ -63,38 +72,34 @@ export const mailMessages = sqliteTable(
     })
       .notNull()
       .default(false),
+    senderAuthenticated: integer("sender_authenticated", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    /** Which body parser produced the stored body. */
+    schemaVersion: integer("schema_version").notNull().default(0),
+    /** The `Date` header, epoch milliseconds, when it parsed. */
+    sentAt: integer("sent_at"),
+    updatedAt: integer("updated_at").notNull(),
+    rfc822MessageId: text("rfc822_message_id"),
+    inReplyTo: text("in_reply_to"),
+    /** First `References` entry, kept so threads can be recomputed. */
+    firstReference: text("first_reference"),
+    replyToAddress: text("reply_to_address"),
+    toAddresses: text("to_addresses", { mode: "json" })
+      .$type<readonly string[]>()
+      .notNull(),
+    ccAddresses: text("cc_addresses", { mode: "json" })
+      .$type<readonly string[]>()
+      .notNull(),
+    bccAddresses: text("bcc_addresses", { mode: "json" })
+      .$type<readonly string[]>()
+      .notNull(),
     /** The few raw headers sender branding and replies need. */
     headers: text("headers", { mode: "json" }).$type<
       readonly StoredMailHeader[]
     >(),
-    inReplyTo: text("in_reply_to"),
-    isDraft: integer("is_draft", { mode: "boolean" }).notNull(),
-    isStarred: integer("is_starred", { mode: "boolean" }).notNull(),
-    isUnread: integer("is_unread", { mode: "boolean" }).notNull(),
-    /** The union of the labels its copies give it. */
-    labelIds: text("label_ids", { mode: "json" })
-      .$type<readonly string[]>()
-      .notNull(),
-    messageId: text("message_id").notNull(),
-    /** When the server received it (INTERNALDATE), epoch milliseconds. */
-    receivedAt: integer("received_at").notNull(),
-    replyToAddress: text("reply_to_address"),
-    rfc822MessageId: text("rfc822_message_id"),
-    /** Which body parser produced the stored body. */
-    schemaVersion: integer("schema_version").notNull().default(0),
-    senderAuthenticated: integer("sender_authenticated", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    /** The `Date` header, epoch milliseconds, when it parsed. */
-    sentAt: integer("sent_at"),
-    size: integer("size").notNull(),
-    snippet: text("snippet").notNull().default(""),
-    subject: text("subject").notNull(),
-    threadId: text("thread_id").notNull(),
-    toAddresses: text("to_addresses", { mode: "json" })
-      .$type<readonly string[]>()
-      .notNull(),
-    updatedAt: integer("updated_at").notNull(),
+    bodyText: text("body_text"),
+    bodyHtml: blob("body_html", { mode: "buffer" }),
   },
   (table) => [
     primaryKey({ columns: [table.accountId, table.messageId] }),
@@ -109,8 +114,15 @@ export const mailMessages = sqliteTable(
       table.accountId,
       table.rfc822MessageId
     ),
-    // Sender suggestions group indexed messages by address on each keystroke;
-    // without this the grouping scans every body in the mailbox.
-    index("mail_messages_sender_idx").on(table.accountId, table.fromAddress),
+    // Sender suggestions group messages by address on each keystroke, and a
+    // `from:` search matches every message's address and name. The index
+    // holds both, and what that search returns, so neither reads the table.
+    index("mail_messages_from_idx").on(
+      table.accountId,
+      table.fromAddress,
+      table.fromName,
+      table.receivedAt,
+      table.threadId
+    ),
   ]
 );

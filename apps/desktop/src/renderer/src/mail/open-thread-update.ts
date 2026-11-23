@@ -1,4 +1,4 @@
-import type { MailThreadListChange } from "@/shared/ipc/mail";
+import type { MailThreadListChange, MailThreadReply } from "@/shared/ipc/mail";
 
 export type OpenThreadUpdate =
   /** Its messages changed (a reply sent, one arrived or was removed). */
@@ -35,4 +35,36 @@ export const toOpenThreadUpdate = (
     summary.thread.messageCount !== open.shownMessageCount
     ? { kind: "reread" }
     : { kind: "labels", labels: summary.thread.labels };
+};
+
+/**
+ * Reads an open conversation in two steps. The cache's answer shows at once;
+ * when it says the server still owes something, inline images or marking it
+ * read, a full load follows and replaces it. The full load runs even once the
+ * conversation is no longer shown: it was opened, so it is marked read.
+ */
+export const loadOpenThread = async ({
+  isShown,
+  read,
+  show,
+}: {
+  readonly isShown: () => boolean;
+  /** Never rejects; a failed read is a failed reply. */
+  readonly read: (cachedOnly: boolean) => Promise<MailThreadReply>;
+  readonly show: (reply: MailThreadReply) => void;
+}): Promise<void> => {
+  const cached = await read(true);
+
+  if (isShown()) {
+    show(cached);
+  }
+  if (!(cached.ok && cached.data.awaitsServer)) {
+    return;
+  }
+
+  const full = await read(false);
+
+  if (isShown()) {
+    show(full);
+  }
 };

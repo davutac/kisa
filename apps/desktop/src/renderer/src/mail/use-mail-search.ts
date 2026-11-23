@@ -9,7 +9,14 @@ import type {
   MailThreadSummary,
 } from "@/shared/ipc/mail";
 
-import { getThreadListChangeAccountId } from "./mailbox-model";
+import {
+  getThreadListChangeAccountId,
+  updateListedThreads,
+} from "./mailbox-model";
+import {
+  projectThreadSummaries,
+  usePendingThreadChanges,
+} from "./pending-thread-changes";
 import { formatSearchQuery, isMailSearchQueryReady } from "./search-query";
 import type { SearchQuery } from "./search-query";
 
@@ -89,6 +96,7 @@ export const useMailSearch = (
   limit = SEARCH_RESULT_LIMIT
 ): MailSearchState => {
   const mailApi = getMailApi();
+  const pendingChanges = usePendingThreadChanges();
   const isReady = isEnabled && isMailSearchQueryReady(query);
   const [results, setResults] = useState<LoadedResults>(NO_RESULTS);
   const [revision, setRevision] = useState(0);
@@ -111,7 +119,9 @@ export const useMailSearch = (
   );
 
   // Mail that arrives while a search is running is mail its results should
-  // find. The index is written before this fires, so a refetch sees it.
+  // find. The index is written before this fires, so a refetch sees it. The
+  // rows already shown take the change at once, so a finished action does not
+  // flash back to its old state while the search runs again.
   useEffect(() => {
     if (mailApi === undefined || !isReady) {
       return;
@@ -119,6 +129,12 @@ export const useMailSearch = (
 
     return mailApi.onThreadListUpdated(({ changes }) => {
       if (includesSelectedAccount(changes)) {
+        setResults((current) => {
+          const threads = updateListedThreads(current.threads, changes);
+          return threads === current.threads
+            ? current
+            : { ...current, threads };
+        });
         setRevision((current) => current + 1);
       }
     });
@@ -163,7 +179,7 @@ export const useMailSearch = (
         hasMore: results.hasMore,
         isLoading: results.key !== requestKey,
         retry,
-        threads: results.threads,
+        threads: projectThreadSummaries(results.threads, pendingChanges),
       }
     : EMPTY_STATE;
 };

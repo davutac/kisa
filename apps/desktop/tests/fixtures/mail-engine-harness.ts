@@ -163,6 +163,7 @@ export const messageRow = (messageId: string) =>
 export const resetDatabase = (): void => {
   for (const table of [
     "mail_accounts",
+    "mail_inline_images",
     "mail_labels",
     "mail_mailboxes",
     "mail_message_locations",

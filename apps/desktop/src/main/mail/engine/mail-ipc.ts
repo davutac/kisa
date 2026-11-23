@@ -22,6 +22,7 @@ import type {
   MailSpamStatusRequest,
   MailUnreadLabelsRequest,
   MailThreadLabelRequest,
+  MailThreadLoadRequest,
   MailThreadReadStateRequest,
   MailThreadRequest,
 } from "../../../shared/ipc/mail";
@@ -94,7 +95,7 @@ export const loadUnreadLabels = (request: MailUnreadLabelsRequest) =>
     readUnreadLabels(database, request.accountIds)
   );
 
-export const openThread = (request: MailThreadRequest) =>
+export const openThread = (request: MailThreadLoadRequest) =>
   inAccountEngine(request.accountId, loadThread(request));
 
 export const changeThreadReadState = (request: MailThreadReadStateRequest) =>
@@ -151,8 +152,12 @@ const toThreadAction = (
 };
 
 const MAX_BULK_THREADS = 5000;
-/** Conversations per server round; a failure leaves the other rounds done. */
-const BULK_CHUNK_SIZE = 250;
+/**
+ * Conversations per server round; a failure leaves the other rounds done. No
+ * more than one thread list event carries (`MAX_UPSERTS` in the engine), so
+ * every conversation of a round reaches the renderer changed.
+ */
+const BULK_CHUNK_SIZE = 200;
 
 /**
  * One action over a selection that may span accounts. Each account's

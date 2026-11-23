@@ -25,6 +25,10 @@ import {
 import { requestMailboxReload } from "./mailbox-reload";
 import { failMailboxLoad, retryMailboxLoad } from "./mailbox-threads-load";
 import type { MailboxThreadsLoad } from "./mailbox-threads-load";
+import {
+  projectThreadSummaries,
+  usePendingThreadChanges,
+} from "./pending-thread-changes";
 
 interface MailboxThreadsState {
   /** Why the last load failed, until it is retried or the mailbox changes. */
@@ -74,6 +78,7 @@ export const useMailboxThreads = ({
   unreadOnly = false,
 }: MailboxThreadsOptions): MailboxThreadsState => {
   const mailApi = getMailApi();
+  const pendingChanges = usePendingThreadChanges();
   const scopeKey = getMailboxScopeKey(accountIds, unreadOnly, mailbox);
   const createStartingResult = (): MailboxThreadsResult =>
     getMailboxThreadsSnapshot(scopeKey) ?? {
@@ -325,6 +330,16 @@ export const useMailboxThreads = ({
     isLoadingNextPage: currentResult.isLoadingNextPage,
     loadNextPage,
     retry,
-    threads: currentResult.threads,
+    // Only what is shown runs ahead of the server: paging, snapshots and the
+    // next read keep the cache's rows, so a refused action leaves no trace.
+    threads:
+      pendingChanges.size === 0
+        ? currentResult.threads
+        : filterThreadsByScope(
+            projectThreadSummaries(currentResult.threads, pendingChanges),
+            accountIds,
+            unreadOnly,
+            mailbox
+          ),
   };
 };

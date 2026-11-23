@@ -16,13 +16,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { getHotkeyAriaLabel, getHotkeyDisplay, HotkeyHint } from "@/hotkeys";
+import type { ThreadLabelChange } from "@/mail/use-thread-actions";
 import type { MailLabelSummary } from "@/shared/ipc/mail";
-
-export interface ThreadLabelChange {
-  readonly applied: boolean;
-  readonly labelId: string;
-  readonly labelName: string;
-}
 
 interface ThreadLabelPickerProps {
   appliedLabels: readonly string[];

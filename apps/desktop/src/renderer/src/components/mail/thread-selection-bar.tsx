@@ -30,8 +30,9 @@ import { useLabelCatalogs } from "@/state/labels";
 interface ThreadSelectionBarProps {
   actions: ThreadActions;
   onClear: () => void;
+  /** Confirms first, so the bar waits for it. */
   onDeleteForever?: () => Promise<void>;
-  onTrash?: () => Promise<void>;
+  onTrash?: () => void;
   threads: readonly MailThreadSummary[];
 }
 
@@ -54,8 +55,8 @@ const ThreadSelectionBar = ({
     (thread) => !catalogs.has(thread.accountId)
   );
   const labelPickerHotkey = getHotkeyDisplay("mailbox.manageLabels");
-  const destructiveAction = onDeleteForever ?? onTrash;
   const isDeleteForever = onDeleteForever !== undefined;
+  const hasDestructiveAction = isDeleteForever || onTrash !== undefined;
 
   useAppCommand(
     "mailbox.manageLabels",
@@ -112,7 +113,7 @@ const ThreadSelectionBar = ({
           className="size-8 rounded-full"
           disabled={isPending}
           onClick={() => {
-            void run(() => actions.bulkSetReadState(threads, false));
+            actions.bulkSetReadState(threads, false);
           }}
           size="icon"
           title="Mark as read"
@@ -126,7 +127,7 @@ const ThreadSelectionBar = ({
           className="size-8 rounded-full"
           disabled={isPending}
           onClick={() => {
-            void run(() => actions.bulkSetReadState(threads, true));
+            actions.bulkSetReadState(threads, true);
           }}
           size="icon"
           title="Mark as unread"
@@ -194,12 +195,11 @@ const ThreadSelectionBar = ({
                                 thread.labels.includes(label.name) !== applied
                             );
 
-                            void run(() =>
-                              actions.bulkSetLabel(changedThreads, {
-                                applied,
-                                labelId: label.id,
-                              })
-                            );
+                            actions.bulkSetLabel(changedThreads, {
+                              applied,
+                              labelId: label.id,
+                              labelName: label.name,
+                            });
                           }}
                         >
                           <TagIcon
@@ -229,7 +229,7 @@ const ThreadSelectionBar = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </fieldset>
-      {destructiveAction === undefined ? null : (
+      {hasDestructiveAction ? (
         <>
           <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
           <Button
@@ -241,7 +241,11 @@ const ThreadSelectionBar = ({
             className={cn("size-8 rounded-full", quietDestructiveClassName)}
             disabled={isPending}
             onClick={() => {
-              void run(destructiveAction);
+              if (onDeleteForever === undefined) {
+                onTrash?.();
+              } else {
+                void run(onDeleteForever);
+              }
             }}
             size="icon"
             title={isDeleteForever ? "Delete forever" : "Move to trash"}
@@ -251,7 +255,7 @@ const ThreadSelectionBar = ({
             <Trash2Icon />
           </Button>
         </>
-      )}
+      ) : null}
     </m.div>
   );
 };

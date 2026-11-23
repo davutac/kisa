@@ -85,6 +85,11 @@ export type ThreadMessage = typeof ThreadMessage.Type;
 
 export const MailThread = Schema.Struct({
   accountId: Schema.String,
+  /**
+   * Read from the cache alone, with work left for the server: inline images
+   * to fetch, or the conversation to mark read. Loading it in full does that.
+   */
+  awaitsServer: Schema.Boolean,
   labels: Schema.Array(Schema.String),
   messages: Schema.Array(ThreadMessage),
   subject: Schema.String,
@@ -264,6 +269,17 @@ export const MailThreadRequest = Schema.Struct({
   threadId: Schema.NonEmptyString,
 });
 export type MailThreadRequest = typeof MailThreadRequest.Type;
+
+export const MailThreadLoadRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  /**
+   * Answers from the cache, downloading only bodies it lacks, so the
+   * conversation shows before inline images arrive or it is marked read.
+   */
+  cachedOnly: Schema.optional(Schema.Boolean),
+  threadId: Schema.NonEmptyString,
+});
+export type MailThreadLoadRequest = typeof MailThreadLoadRequest.Type;
 
 export const MailThreadListChange = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("upsert"), thread: MailThreadSummary }),

@@ -1,5 +1,7 @@
+import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import {
   mailAccounts,
+  mailInlineImages,
   mailLabels,
   mailMailboxes,
   mailMessageLocations,
@@ -26,7 +28,17 @@ import type {
   MessageMetadata,
   ThreadChanges,
 } from "@repo/mail/store";
-import { and, desc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  lt,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { Effect, Layer, Option, Schema } from "effect";
@@ -41,10 +53,15 @@ import {
   MailDatabase,
   chunk,
   chunkRows,
+  chunkValues,
   excludedColumns,
   fromBigIntText,
+  inJson,
+  insertRows,
   toBigIntText,
   unique,
+  updateEach,
+  valuesList,
 } from "./mail-database";
 import type { MailTransaction } from "./mail-database";
 import {
@@ -116,7 +133,7 @@ const recomputeMessages = async (
       .where(
         and(
           eq(mailMessageLocations.accountId, accountId),
-          inArray(mailMessageLocations.messageId, ids)
+          inJson(mailMessageLocations.messageId, ids)
         )
       )
       .all();
@@ -131,7 +148,7 @@ const recomputeMessages = async (
       .where(
         and(
           eq(mailMessages.accountId, accountId),
-          inArray(mailMessages.messageId, ids)
+          inJson(mailMessages.messageId, ids)
         )
       )
       .all();
@@ -143,31 +160,37 @@ const recomputeMessages = async (
       labelsByMessage.set(location.messageId, labels);
     }
 
+    const relabelled: (readonly unknown[])[] = [];
     for (const message of messages) {
       threadIds.add(message.threadId);
       const labels = sortLabels(labelsByMessage.get(message.messageId) ?? []);
 
-      if (sameLabels(labels, message.labelIds)) {
-        continue;
+      if (!sameLabels(labels, message.labelIds)) {
+        relabelled.push([
+          message.messageId,
+          labels,
+          labels.includes(SystemLabel.draft),
+          labels.includes(SystemLabel.starred),
+          labels.includes(SystemLabel.unread),
+        ]);
       }
+    }
 
+    if (relabelled.length > 0) {
       // oxlint-disable-next-line eslint/no-await-in-loop
-      await transaction
-        .update(mailMessages)
-        .set({
-          isDraft: labels.includes(SystemLabel.draft),
-          isStarred: labels.includes(SystemLabel.starred),
-          isUnread: labels.includes(SystemLabel.unread),
-          labelIds: labels,
-          updatedAt: now,
+      await transaction.run(
+        updateEach(mailMessages, relabelled, {
+          match: [mailMessages.messageId],
+          same: [[mailMessages.updatedAt, now]],
+          set: [
+            mailMessages.labelIds,
+            mailMessages.isDraft,
+            mailMessages.isStarred,
+            mailMessages.isUnread,
+          ],
+          where: eq(mailMessages.accountId, accountId),
         })
-        .where(
-          and(
-            eq(mailMessages.accountId, accountId),
-            eq(mailMessages.messageId, message.messageId)
-          )
-        )
-        .run();
+      );
     }
   }
 
@@ -208,7 +231,7 @@ const recomputeThreads = async (
       .where(
         and(
           eq(mailMessages.accountId, accountId),
-          inArray(mailMessages.threadId, ids)
+          inJson(mailMessages.threadId, ids)
         )
       )
       .orderBy(mailMessages.receivedAt, mailMessages.messageId)
@@ -223,7 +246,7 @@ const recomputeThreads = async (
       .where(
         and(
           eq(mailThreads.accountId, accountId),
-          inArray(mailThreads.threadId, ids)
+          inJson(mailThreads.threadId, ids)
         )
       )
       .all();
@@ -248,7 +271,7 @@ const recomputeThreads = async (
         .where(
           and(
             eq(mailThreads.accountId, accountId),
-            inArray(mailThreads.threadId, emptied)
+            inJson(mailThreads.threadId, emptied)
           )
         )
         .run();
@@ -298,13 +321,11 @@ const recomputeThreads = async (
       };
     });
 
-    for (const rowChunk of chunkRows(rows, mailThreads)) {
+    if (rows.length > 0) {
       // oxlint-disable-next-line eslint/no-await-in-loop
-      await transaction
-        .insert(mailThreads)
-        .values(rowChunk)
-        .onConflictDoUpdate({
-          set: excludedColumns(mailThreads, [
+      await transaction.run(
+        insertRows(mailThreads, rows, {
+          set: [
             "attachments",
             "fromAddress",
             "fromName",
@@ -322,10 +343,10 @@ const recomputeThreads = async (
             "spamAddedAt",
             "subject",
             "updatedAt",
-          ]),
+          ],
           target: [mailThreads.accountId, mailThreads.threadId],
         })
-        .run();
+      );
     }
   }
 
@@ -439,7 +460,7 @@ const deleteMessagesWithoutCopies = async (
       .where(
         and(
           eq(mailMessages.accountId, accountId),
-          ids === undefined ? undefined : inArray(mailMessages.messageId, ids),
+          ids === undefined ? undefined : inJson(mailMessages.messageId, ids),
           withoutCopies
         )
       )
@@ -457,7 +478,18 @@ const deleteMessagesWithoutCopies = async (
       .where(
         and(
           eq(mailMessages.accountId, accountId),
-          inArray(mailMessages.messageId, ids)
+          inJson(mailMessages.messageId, ids)
+        )
+      )
+      .run();
+    // A message's kept inline images leave with it.
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    await transaction
+      .delete(mailInlineImages)
+      .where(
+        and(
+          eq(mailInlineImages.accountId, accountId),
+          inJson(mailInlineImages.messageId, ids)
         )
       )
       .run();
@@ -597,7 +629,7 @@ const applyBatch = async (
       .where(
         and(
           eq(mailMessages.accountId, accountId),
-          inArray(mailMessages.messageId, ids)
+          inJson(mailMessages.messageId, ids)
         )
       )
       .all();
@@ -623,42 +655,36 @@ const applyBatch = async (
       now
     )
   );
-  for (const rows of chunkRows(messageRows, mailMessages)) {
-    // oxlint-disable-next-line eslint/no-await-in-loop
-    await transaction
-      .insert(mailMessages)
-      .values(rows)
-      .onConflictDoUpdate({
-        set: excludedColumns(mailMessages, MESSAGE_METADATA_COLUMNS),
+  if (messageRows.length > 0) {
+    await transaction.run(
+      insertRows(mailMessages, messageRows, {
+        set: MESSAGE_METADATA_COLUMNS,
         target: [mailMessages.accountId, mailMessages.messageId],
       })
-      .run();
+    );
   }
 
   const locationRows = batch.locations.map((location) =>
     toLocationRow(accountId, batch.path, batch.uidValidity, location, now)
   );
-  for (const rows of chunkRows(locationRows, mailMessageLocations)) {
-    // oxlint-disable-next-line eslint/no-await-in-loop
-    await transaction
-      .insert(mailMessageLocations)
-      .values(rows)
-      .onConflictDoUpdate({
-        set: excludedColumns(mailMessageLocations, [
+  if (locationRows.length > 0) {
+    await transaction.run(
+      insertRows(mailMessageLocations, locationRows, {
+        set: [
           "flags",
           "labelIds",
           "messageId",
           "modseq",
           "uidValidity",
           "updatedAt",
-        ]),
+        ],
         target: [
           mailMessageLocations.accountId,
           mailMessageLocations.mailboxPath,
           mailMessageLocations.uid,
         ],
       })
-      .run();
+    );
   }
 
   const changes = await recomputeFromMessages(
@@ -707,9 +733,13 @@ const applyChanges = async (
   >[2],
   now: number
 ): Promise<readonly string[]> => {
+  // A copy reported twice ends as its last report says, as if written in turn.
+  const byUid = new Map(changes.map((change) => [change.uid, change]));
   const touched: string[] = [];
+  const reflagged: (readonly unknown[])[] = [];
+  const resequenced: (readonly unknown[])[] = [];
 
-  for (const changeChunk of chunk(changes, ID_CHUNK_SIZE)) {
+  for (const uids of chunk([...byUid.keys()], ID_CHUNK_SIZE)) {
     // oxlint-disable-next-line eslint/no-await-in-loop
     const known = await transaction
       .select({
@@ -724,49 +754,57 @@ const applyChanges = async (
         and(
           eq(mailMessageLocations.accountId, accountId),
           eq(mailMessageLocations.mailboxPath, path),
-          inArray(
-            mailMessageLocations.uid,
-            changeChunk.map((change) => change.uid)
-          )
+          inJson(mailMessageLocations.uid, uids)
         )
       )
       .all();
-    const knownByUid = new Map(known.map((row) => [row.uid, row]));
 
-    for (const change of changeChunk) {
-      const current = knownByUid.get(change.uid);
-      if (current === undefined) {
+    for (const current of known) {
+      const change = byUid.get(current.uid);
+      if (change === undefined) {
         continue;
       }
 
       const labelIds = sortLabels(change.labelIds);
       const modseq = toBigIntText(change.modseq) ?? null;
-      const isChanged =
+      if (
         !sameSet(current.flags, change.flags) ||
-        !sameLabels(current.labelIds, labelIds);
-      if (isChanged) {
+        !sameLabels(current.labelIds, labelIds)
+      ) {
         touched.push(current.messageId);
-      } else if (modseq === current.modseq) {
-        continue;
+        reflagged.push([change.uid, change.flags, labelIds, modseq]);
+      } else if (modseq !== current.modseq) {
+        resequenced.push([change.uid, modseq]);
       }
-
-      // oxlint-disable-next-line eslint/no-await-in-loop
-      await transaction
-        .update(mailMessageLocations)
-        .set(
-          isChanged
-            ? { flags: change.flags, labelIds, modseq, updatedAt: now }
-            : { modseq }
-        )
-        .where(
-          and(
-            eq(mailMessageLocations.accountId, accountId),
-            eq(mailMessageLocations.mailboxPath, path),
-            eq(mailMessageLocations.uid, change.uid)
-          )
-        )
-        .run();
     }
+  }
+
+  const inPath = and(
+    eq(mailMessageLocations.accountId, accountId),
+    eq(mailMessageLocations.mailboxPath, path)
+  );
+  if (reflagged.length > 0) {
+    await transaction.run(
+      updateEach(mailMessageLocations, reflagged, {
+        match: [mailMessageLocations.uid],
+        same: [[mailMessageLocations.updatedAt, now]],
+        set: [
+          mailMessageLocations.flags,
+          mailMessageLocations.labelIds,
+          mailMessageLocations.modseq,
+        ],
+        where: inPath,
+      })
+    );
+  }
+  if (resequenced.length > 0) {
+    await transaction.run(
+      updateEach(mailMessageLocations, resequenced, {
+        match: [mailMessageLocations.uid],
+        set: [mailMessageLocations.modseq],
+        where: inPath,
+      })
+    );
   }
 
   return touched;
@@ -843,6 +881,89 @@ const toBodyCandidate = (row: {
   uid: row.uid,
 });
 
+// A message can have a copy in several mailboxes, each under its own UID,
+// and a body is fetched by the mailbox and UID of one of them. SQLite
+// reads a bare column from the row that holds the aggregate's minimum, so
+// `mailboxPath` and `uid` name the same copy. That only holds while
+// `min(uid)` is the query's sole min or max.
+//
+// The messages are chosen first and their copies looked up by message:
+// CROSS JOIN keeps SQLite from starting at the account's copies instead,
+// which reads every copy in the mailbox to find a handful.
+const withCopies = (
+  client: RemoteDatabaseClient,
+  queue: SQL | undefined,
+  options: { readonly limit?: number } = {}
+) => {
+  const queued = client
+    .select({
+      accountId: mailMessages.accountId,
+      messageId: mailMessages.messageId,
+      receivedAt: mailMessages.receivedAt,
+      size: mailMessages.size,
+    })
+    .from(mailMessages)
+    .where(
+      and(
+        queue,
+        exists(
+          client
+            .select({ uid: mailMessageLocations.uid })
+            .from(mailMessageLocations)
+            .where(
+              and(
+                eq(mailMessageLocations.accountId, mailMessages.accountId),
+                eq(mailMessageLocations.messageId, mailMessages.messageId)
+              )
+            )
+        )
+      )
+    )
+    .orderBy(desc(mailMessages.receivedAt));
+  const messages = (
+    options.limit === undefined ? queued : queued.limit(options.limit)
+  ).as("queued");
+
+  return (
+    client
+      .select({
+        mailboxPath: mailMessageLocations.mailboxPath,
+        messageId: messages.messageId,
+        receivedAt: messages.receivedAt,
+        size: messages.size,
+        uid: sql<number>`min(${mailMessageLocations.uid})`,
+      })
+      .from(messages)
+      .crossJoin(mailMessageLocations)
+      .where(
+        and(
+          eq(mailMessageLocations.accountId, messages.accountId),
+          eq(mailMessageLocations.messageId, messages.messageId)
+        )
+      )
+      // Grouped by the copy's id, which is the message's: grouped by the
+      // message's own, SQLite walks every message in the account in key order
+      // to save sorting a few.
+      .groupBy(mailMessageLocations.messageId)
+      .orderBy(desc(messages.receivedAt))
+      .all()
+  );
+};
+
+/** The values `saveBodyRows` sets, in the order its rows list them. */
+const BODY_COLUMNS = [
+  mailMessages.messageId,
+  mailMessages.attachments,
+  mailMessages.bodyHtml,
+  mailMessages.bodyState,
+  mailMessages.bodyText,
+  mailMessages.hasAttachments,
+  mailMessages.hasBlockedRemoteImages,
+  mailMessages.headers,
+  mailMessages.senderAuthenticated,
+  mailMessages.snippet,
+];
+
 const saveBodyRows = async (
   transaction: MailTransaction,
   accountId: string,
@@ -850,35 +971,48 @@ const saveBodyRows = async (
   now: number
 ): Promise<ThreadChanges> => {
   const threadIds: string[] = [];
+  // A message named twice keeps the last body, as if written in turn.
+  const latest = new Map(prepared.map((body) => [body.messageId, body]));
+  const rows = [...latest.values()].map((body) => [
+    body.messageId,
+    body.attachments,
+    body.bodyHtml,
+    body.bodyState,
+    body.bodyText,
+    body.hasAttachments,
+    body.hasBlockedRemoteImages,
+    body.headers,
+    body.senderAuthenticated,
+    body.snippet,
+  ]);
 
-  for (const body of prepared) {
+  for (const bodies of chunkValues(rows, BODY_COLUMNS.length)) {
     // oxlint-disable-next-line eslint/no-await-in-loop
-    const [row] = await transaction
+    const saved = await transaction
       .update(mailMessages)
       .set({
-        attachments: body.attachments,
-        bodyHtml: body.bodyHtml,
-        bodyState: body.bodyState,
-        bodyText: body.bodyText,
-        hasAttachments: body.hasAttachments,
-        hasBlockedRemoteImages: body.hasBlockedRemoteImages,
-        headers: body.headers,
+        attachments: sql`body.column2`,
+        bodyHtml: sql`body.column3`,
+        bodyState: sql`body.column4`,
+        bodyText: sql`body.column5`,
+        hasAttachments: sql`body.column6`,
+        hasBlockedRemoteImages: sql`body.column7`,
+        headers: sql`body.column8`,
         schemaVersion: MAIL_BODY_SCHEMA_VERSION,
-        senderAuthenticated: body.senderAuthenticated,
-        snippet: body.snippet,
+        senderAuthenticated: sql`body.column9`,
+        snippet: sql`body.column10`,
         updatedAt: now,
       })
+      .from(sql`(VALUES ${valuesList(BODY_COLUMNS, bodies)}) AS body`)
       .where(
         and(
           eq(mailMessages.accountId, accountId),
-          eq(mailMessages.messageId, body.messageId)
+          eq(mailMessages.messageId, sql`body.column1`)
         )
       )
       .returning({ threadId: mailMessages.threadId })
       .all();
-    if (row !== undefined) {
-      threadIds.push(row.threadId);
-    }
+    threadIds.push(...saved.map((row) => row.threadId));
   }
 
   return recomputeThreads(transaction, accountId, threadIds, now);
@@ -916,23 +1050,6 @@ export const MailEngineStoreLive = Layer.effect(
       database.use(message, (client) =>
         client.transaction((transaction) => run(transaction, Date.now()))
       );
-
-    // A message can have a copy in several mailboxes, each under its own UID,
-    // and a body is fetched by the mailbox and UID of one of them. SQLite
-    // reads a bare column from the row that holds the aggregate's minimum, so
-    // `mailboxPath` and `uid` name the same copy. That only holds while
-    // `min(uid)` is the query's sole min or max.
-    const candidateColumns = {
-      mailboxPath: mailMessageLocations.mailboxPath,
-      messageId: mailMessages.messageId,
-      receivedAt: mailMessages.receivedAt,
-      size: mailMessages.size,
-      uid: sql<number>`min(${mailMessageLocations.uid})`,
-    };
-    const candidateJoin = and(
-      eq(mailMessageLocations.accountId, mailMessages.accountId),
-      eq(mailMessageLocations.messageId, mailMessages.messageId)
-    );
 
     return MailEngineStore.of({
       applyLocationChanges: (accountId, path, changes, progress) =>
@@ -979,23 +1096,18 @@ export const MailEngineStoreLive = Layer.effect(
 
       bodyCandidates: (accountId, options) =>
         database.use("Could not load pending mail", async (client) => {
-          const rows = await client
-            .select(candidateColumns)
-            .from(mailMessages)
-            .innerJoin(mailMessageLocations, candidateJoin)
-            .where(
-              and(
-                eq(mailMessages.accountId, accountId),
-                eq(mailMessages.bodyState, "none"),
-                options.receivedAfter === undefined
-                  ? undefined
-                  : gte(mailMessages.receivedAt, options.receivedAfter)
-              )
-            )
-            .groupBy(mailMessages.messageId)
-            .orderBy(desc(mailMessages.receivedAt))
-            .limit(options.limit)
-            .all();
+          // Walks the body queue index newest first and stops at the limit.
+          const rows = await withCopies(
+            client,
+            and(
+              eq(mailMessages.accountId, accountId),
+              eq(mailMessages.bodyState, "none"),
+              options.receivedAfter === undefined
+                ? undefined
+                : gte(mailMessages.receivedAt, options.receivedAfter)
+            ),
+            { limit: options.limit }
+          );
           return rows.map(toBodyCandidate);
         }),
 
@@ -1008,6 +1120,7 @@ export const MailEngineStoreLive = Layer.effect(
             for (const table of [
               mailMessageLocations,
               mailMessages,
+              mailInlineImages,
               mailThreads,
               mailMailboxes,
               mailLabels,
@@ -1180,7 +1293,7 @@ export const MailEngineStoreLive = Layer.effect(
                 const where = and(
                   eq(mailMessageLocations.accountId, accountId),
                   eq(mailMessageLocations.mailboxPath, path),
-                  inArray(mailMessageLocations.uid, uidChunk)
+                  inJson(mailMessageLocations.uid, uidChunk)
                 );
                 // oxlint-disable-next-line eslint/no-await-in-loop
                 const rows = await transaction
@@ -1535,20 +1648,16 @@ export const MailEngineStoreLive = Layer.effect(
 
       threadBodyCandidates: (accountId, threadId) =>
         database.use("Could not load pending mail", async (client) => {
-          const rows = await client
-            .select(candidateColumns)
-            .from(mailMessages)
-            .innerJoin(mailMessageLocations, candidateJoin)
-            .where(
-              and(
-                eq(mailMessages.accountId, accountId),
-                eq(mailMessages.threadId, threadId),
-                inArray(mailMessages.bodyState, ["none", "failed"])
-              )
+          const rows = await withCopies(
+            client,
+            and(
+              eq(mailMessages.accountId, accountId),
+              eq(mailMessages.threadId, threadId),
+              // The unary plus keeps SQLite from walking the account's whole
+              // body queue for one conversation's few messages.
+              inArray(sql`+${mailMessages.bodyState}`, ["none", "failed"])
             )
-            .groupBy(mailMessages.messageId)
-            .orderBy(desc(mailMessages.receivedAt))
-            .all();
+          );
           return rows.map(toBodyCandidate);
         }),
 
@@ -1565,18 +1674,15 @@ export const MailEngineStoreLive = Layer.effect(
                   threadId: mailMessages.threadId,
                   uid: mailMessageLocations.uid,
                 })
-                .from(mailMessageLocations)
-                .innerJoin(
-                  mailMessages,
-                  and(
-                    eq(mailMessages.accountId, mailMessageLocations.accountId),
-                    eq(mailMessages.messageId, mailMessageLocations.messageId)
-                  )
-                )
+                // Threads first, then their copies: see `withCopies`.
+                .from(mailMessages)
+                .crossJoin(mailMessageLocations)
                 .where(
                   and(
-                    eq(mailMessageLocations.accountId, accountId),
-                    inArray(mailMessages.threadId, ids)
+                    eq(mailMessages.accountId, accountId),
+                    inJson(mailMessages.threadId, ids),
+                    eq(mailMessageLocations.accountId, mailMessages.accountId),
+                    eq(mailMessageLocations.messageId, mailMessages.messageId)
                   )
                 )
                 .all()

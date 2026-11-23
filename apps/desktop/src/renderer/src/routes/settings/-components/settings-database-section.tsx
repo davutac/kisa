@@ -13,20 +13,23 @@ import {
   SettingsSectionHeader,
   SettingsSectionTitle,
 } from "@/components/ui/settings";
-import type { SettingsApi } from "@/platform/desktop";
+import type { AppSettingsApi, SettingsApi } from "@/platform/desktop";
 
 import SettingsDatabaseImportDialog from "./settings-database-import-dialog";
 import SettingsDatabasePendingImportRow from "./settings-database-pending-import-row";
+import SettingsInlineImagesRow from "./settings-inline-images-row";
 import {
   DATABASE_IMPORT_PROGRESS_LABELS,
   useSettingsDatabase,
 } from "./use-settings-database";
 
 interface SettingsDatabaseSectionProps {
+  appSettingsApi?: AppSettingsApi;
   settingsApi: SettingsApi;
 }
 
 const SettingsDatabaseSection = ({
+  appSettingsApi,
   settingsApi,
 }: SettingsDatabaseSectionProps) => {
   const confirm = useConfirm();
@@ -135,6 +138,9 @@ const SettingsDatabaseSection = ({
               </Button>
             </SettingsRowActions>
           </SettingsRow>
+          {appSettingsApi === undefined ? null : (
+            <SettingsInlineImagesRow appSettingsApi={appSettingsApi} />
+          )}
         </SettingsRows>
       </SettingsSection>
     </>

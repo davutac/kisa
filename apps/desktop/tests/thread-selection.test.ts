@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   getNextThreadSelectionIndex,
+  getSelectionAfterRemoval,
   getThreadSelectionAutoScrollDelta,
   getThreadSelectionRangeChanges,
   getThreadSelectionScrollBehavior,
@@ -190,5 +191,30 @@ describe(parseThreadSelectionKey, () => {
     expect(parseThreadSelectionKey("no-separator")).toBeNull();
     expect(parseThreadSelectionKey(":thread-42")).toBeNull();
     expect(parseThreadSelectionKey("person@example.com:")).toBeNull();
+  });
+});
+
+describe(getSelectionAfterRemoval, () => {
+  const before = ["a:1", "a:2", "a:3", "a:4"];
+
+  it("selects the row that takes the removed one's place", () => {
+    expect(getSelectionAfterRemoval(before, ["a:1", "a:3", "a:4"], "a:2")).toBe(
+      "a:3"
+    );
+  });
+
+  it("skips rows removed with it, and falls back to the row before at the end", () => {
+    expect(getSelectionAfterRemoval(before, ["a:1", "a:4"], "a:2")).toBe("a:4");
+    expect(getSelectionAfterRemoval(before, ["a:1", "a:2"], "a:4")).toBe("a:2");
+  });
+
+  it("keeps a selection that is still listed, or that never was", () => {
+    expect(getSelectionAfterRemoval(before, before, "a:2")).toBeUndefined();
+    expect(getSelectionAfterRemoval(before, before, "b:9")).toBeUndefined();
+    expect(getSelectionAfterRemoval(before, before, null)).toBeUndefined();
+  });
+
+  it("leaves nothing selected when the list empties", () => {
+    expect(getSelectionAfterRemoval(["a:1"], [], "a:1")).toBeUndefined();
   });
 });

@@ -4,12 +4,15 @@
 import { gmailDialect } from "@repo/mail/dialects";
 import { ImapConnector } from "@repo/mail/session";
 import { SmtpTransport } from "@repo/mail/smtp";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { sendRendererEvent } from "../src/main/electron/renderer-events";
 import { announceArrivals } from "../src/main/mail/engine/mail-arrivals";
 import { applyThreadActions } from "../src/main/mail/engine/mail-engine";
 import { closeAllSessions } from "../src/main/mail/engine/mail-sessions";
+import { MAIL_THREAD_LIST_UPDATED_CHANNEL } from "../src/shared/ipc/channels";
+import { MailThreadListUpdated } from "../src/shared/ipc/mail";
 import { FakeImapServer } from "./fixtures/fake-imap-server";
 import {
   ALL_MAIL,
@@ -97,5 +100,40 @@ describe("thread actions in the engine", () => {
       ["1001"],
       expect.anything()
     );
+  });
+
+  // The renderer drops its optimistic copy of an acted-on conversation when
+  // the action answers; if the event left it out, the row would snap back.
+  it("keeps the conversation it acted on in a crowded thread list event", async () => {
+    insertAccount("gmail");
+    const server = new FakeImapServer(GMAIL_MAILBOXES);
+    server.deliver(ALL_MAIL, gmailMessage("1000", "1000"));
+    await syncFully(scopeFor(server, gmailDialect));
+    // More new conversations than one event carries, all newer than it.
+    for (let id = 1001; id <= 1200; id += 1) {
+      server.deliver(ALL_MAIL, gmailMessage(String(id), String(id)));
+    }
+    vi.mocked(sendRendererEvent).mockClear();
+
+    await Effect.runPromise(
+      applyThreadActions(accountId, ["1000"], { kind: "trash" }).pipe(
+        Effect.provide(layers(server))
+      )
+    );
+
+    const isListUpdate = Schema.is(MailThreadListUpdated);
+    const upserts = vi
+      .mocked(sendRendererEvent)
+      .mock.calls.flatMap(([channel, , payload]) =>
+        channel === MAIL_THREAD_LIST_UPDATED_CHANNEL && isListUpdate(payload)
+          ? payload.changes
+          : []
+      )
+      .flatMap((change) => (change.kind === "upsert" ? [change.thread] : []));
+
+    expect(upserts).toHaveLength(200);
+    expect(
+      upserts.find((thread) => thread.threadId === "1000")?.labels
+    ).toContain("TRASH");
   });
 });

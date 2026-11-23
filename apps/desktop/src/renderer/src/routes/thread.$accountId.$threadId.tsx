@@ -14,8 +14,10 @@ function closeWindow(): void {
 
 function ThreadWindowRoute() {
   const { accountId, threadId } = Route.useParams();
+  // Closing this window is how its actions leave the conversation, and a
+  // closed window cannot report a failure: it closes once the server agrees.
   const { deleteForever, notSpam, setLabel, toggleRead, trash } =
-    useThreadActions();
+    useThreadActions({ leaveAfterConfirmation: true });
 
   useHotkeyLayer("thread", true);
 

@@ -1,12 +1,27 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { IpcReply } from "./reply";
 
 export const AppClosingEvent = Schema.Literal("closing");
 
+/** How long images kept from opened emails last unused; `null` is forever. */
+export const InlineImageRetentionDays = Schema.NullOr(
+  Schema.Literals([30, 90, 365])
+);
+export type InlineImageRetentionDays = typeof InlineImageRetentionDays.Type;
+
+export const DEFAULT_INLINE_IMAGE_RETENTION_DAYS = 90;
+
 export const AppSettings = Schema.Struct({
   /** Whether renderer motion and CSS transitions are enabled. */
   animationsEnabled: Schema.Boolean,
+  // Settings files written before this setting existed keep their values.
+  inlineImageRetentionDays: InlineImageRetentionDays.pipe(
+    Schema.withDecodingDefaultKey(
+      Effect.succeed(DEFAULT_INLINE_IMAGE_RETENTION_DAYS)
+    )
+  ),
   /** Whether mailbox thread selections open in native windows by default. */
   openThreadsInNewWindows: Schema.Boolean,
   /** Whether closing the main window keeps Kisa running in the tray. */
@@ -17,6 +32,7 @@ export type AppSettings = typeof AppSettings.Type;
 /** Apps without stored settings behave as if they had these settings. */
 export const DEFAULT_APP_SETTINGS = {
   animationsEnabled: true,
+  inlineImageRetentionDays: DEFAULT_INLINE_IMAGE_RETENTION_DAYS,
   openThreadsInNewWindows: false,
   runInBackground: true,
 } as const satisfies AppSettings;

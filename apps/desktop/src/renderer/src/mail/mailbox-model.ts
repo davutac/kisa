@@ -125,6 +125,43 @@ export const applyThreadListChanges = (
   return updatedThreads;
 };
 
+/**
+ * Live changes to the rows of a list whose membership a query decides, such
+ * as search results: listed rows are updated or dropped, never added, until
+ * the query runs again.
+ */
+export const updateListedThreads = (
+  threads: readonly MailThreadSummary[],
+  changes: readonly MailThreadListChange[]
+): readonly MailThreadSummary[] => {
+  const latest = new Map<string, MailThreadSummary | null>();
+
+  for (const change of changes) {
+    if (change.kind === "upsert") {
+      latest.set(
+        `${change.thread.accountId}:${change.thread.threadId}`,
+        change.thread
+      );
+    } else {
+      latest.set(`${change.accountId}:${change.threadId}`, null);
+    }
+  }
+
+  if (latest.size === 0) {
+    return threads;
+  }
+
+  return threads.flatMap((thread) => {
+    const next = latest.get(`${thread.accountId}:${thread.threadId}`);
+
+    if (next === undefined) {
+      return [thread];
+    }
+
+    return next === null ? [] : [next];
+  });
+};
+
 export const toThreadCursor = (
   thread: MailThreadSummary
 ): MailThreadCursor => ({

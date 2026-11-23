@@ -60,11 +60,21 @@ const configureCipher = (connection: DatabaseConnection): void => {
   connection.pragma("plaintext_header_size = 0");
 };
 
+/**
+ * The page cache, in KiB. A mail cache with bodies runs to hundreds of
+ * megabytes, and each page read again after it left the cache is decrypted
+ * again: at SQLite's 16 MB default, a search's lookups spent most of their
+ * time doing that. SQLite fills the cache only as pages are read, so a small
+ * mailbox never reaches it.
+ */
+const PAGE_CACHE_KIB = 128 * 1024;
+
 const configureWalConnection = (connection: DatabaseConnection): void => {
   connection.pragma("foreign_keys = ON");
   connection.pragma("journal_mode = WAL");
   connection.pragma("synchronous = NORMAL");
   connection.pragma("busy_timeout = 5000");
+  connection.pragma(`cache_size = -${PAGE_CACHE_KIB}`);
 };
 
 const configureEncryptedConnection = (

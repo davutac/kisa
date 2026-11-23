@@ -405,21 +405,20 @@ export const readUnreadLabels = async (
   };
 };
 
-/** Unread Inbox conversations across accounts, for the dock badge. */
+/**
+ * Unread Inbox conversations across accounts, for the dock badge. It counts
+ * `mail_threads_unread_idx`, which holds only unread conversations outside
+ * Spam and Trash: left to choose, SQLite walks every thread outside Trash.
+ */
 export const readUnreadInboxCount = async (
   database: RemoteDatabaseClient
 ): Promise<number> => {
-  const [row] = await database
-    .select({ count: sql<number>`count(*)` })
-    .from(mailThreads)
-    .where(
-      and(
-        eq(mailThreads.isInInbox, true),
-        eq(mailThreads.isUnread, true),
-        eq(mailThreads.isInSpam, false),
-        eq(mailThreads.isInTrash, false)
-      )
-    )
-    .all();
-  return row?.count ?? 0;
+  const [row] = await database.values<[number]>(sql`
+    SELECT count(*) FROM ${mailThreads} INDEXED BY mail_threads_unread_idx
+    WHERE ${mailThreads.isInInbox} = 1
+      AND ${mailThreads.isUnread} = 1
+      AND ${mailThreads.isInSpam} = 0
+      AND ${mailThreads.isInTrash} = 0
+  `);
+  return row?.[0] ?? 0;
 };

@@ -236,15 +236,16 @@ describe("account row selection", () => {
     });
 
     expect(
-      resolveScopeRowSelection(view, "one@example.com", false)
+      resolveScopeRowSelection(view, "one@example.com", false, false)
     ).toStrictEqual({ isExpanded: true, opensInbox: true });
     expect(
-      resolveScopeRowSelection(view, "one@example.com", true)
+      resolveScopeRowSelection(view, "one@example.com", true, false)
     ).toStrictEqual({ isExpanded: true, opensInbox: true });
     expect(
       resolveScopeRowSelection(
         mailboxView({ currentPath: "/scheduled" }),
         null,
+        false,
         false
       )
     ).toStrictEqual({ isExpanded: true, opensInbox: true });
@@ -254,11 +255,22 @@ describe("account row selection", () => {
     const view = mailboxView({ selectedAccountId: "one@example.com" });
 
     expect(
-      resolveScopeRowSelection(view, "one@example.com", true)
+      resolveScopeRowSelection(view, "one@example.com", true, false)
     ).toStrictEqual({ isExpanded: false, opensInbox: false });
     expect(
-      resolveScopeRowSelection(view, "one@example.com", false)
+      resolveScopeRowSelection(view, "one@example.com", false, false)
     ).toStrictEqual({ isExpanded: true, opensInbox: false });
+  });
+
+  it("goes back to its Inbox from a conversation open over it, keeping the mailboxes", () => {
+    const view = mailboxView({ selectedAccountId: "one@example.com" });
+
+    expect(
+      resolveScopeRowSelection(view, "one@example.com", true, true)
+    ).toStrictEqual({ isExpanded: true, opensInbox: true });
+    expect(
+      resolveScopeRowSelection(view, "one@example.com", false, true)
+    ).toStrictEqual({ isExpanded: false, opensInbox: true });
   });
 });
 

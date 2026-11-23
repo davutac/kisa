@@ -129,16 +129,24 @@ export interface ScopeRowSelection {
 /**
  * The whole account row discloses its mailboxes. Choosing it away from its
  * Inbox opens that Inbox and shows its mailboxes; choosing it while its
- * Inbox is on screen only opens or closes them.
+ * Inbox is on screen only opens or closes them. A conversation open over that
+ * Inbox hides the list, so choosing the row then goes back to it, as Escape
+ * does, and leaves the mailboxes as they are.
  */
 export const resolveScopeRowSelection = (
   view: MailboxView,
   accountId: string | null,
-  isExpanded: boolean
-): ScopeRowSelection =>
-  isMailboxCurrent(view, { accountId, mailbox: "inbox" })
-    ? { isExpanded: !isExpanded, opensInbox: false }
-    : { isExpanded: true, opensInbox: true };
+  isExpanded: boolean,
+  isReadingThread: boolean
+): ScopeRowSelection => {
+  if (!isMailboxCurrent(view, { accountId, mailbox: "inbox" })) {
+    return { isExpanded: true, opensInbox: true };
+  }
+
+  return isReadingThread
+    ? { isExpanded, opensInbox: true }
+    : { isExpanded: !isExpanded, opensInbox: false };
+};
 
 /**
  * A scope's Labels row stands in for the label on screen while its labels are

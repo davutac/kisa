@@ -106,6 +106,9 @@ export const createEmailDocument = (
       }
       body, body * { user-select: text !important; }
       img { max-width: 100%; height: auto; }
+      /* An inline image still on its way from the server, or one it could not
+         give, keeps its space without a broken-image icon. */
+      img[src^="cid:" i] { visibility: hidden; }
       pre { overflow: auto; white-space: pre-wrap; }
       table { max-width: 100%; }
       a[href] { color: LinkText; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

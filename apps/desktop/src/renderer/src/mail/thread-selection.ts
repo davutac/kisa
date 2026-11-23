@@ -179,3 +179,32 @@ export const getNextThreadSelectionIndex = (
     Math.min(threadKeys.length - 1, selectedIndex + direction)
   );
 };
+
+/**
+ * The row to select when the selected one leaves the list, as an action on it
+ * shows at once: the next row still listed, or the one before it at the end.
+ * `undefined` keeps the selection as it is.
+ */
+export const getSelectionAfterRemoval = (
+  previousKeys: readonly string[],
+  threadKeys: readonly string[],
+  selectedThreadKey: string | null
+): string | undefined => {
+  if (selectedThreadKey === null || threadKeys.includes(selectedThreadKey)) {
+    return undefined;
+  }
+
+  const removedIndex = previousKeys.indexOf(selectedThreadKey);
+
+  if (removedIndex === -1) {
+    return undefined;
+  }
+
+  const listed = new Set(threadKeys);
+  const isListed = (key: string): boolean => listed.has(key);
+
+  return (
+    previousKeys.slice(removedIndex + 1).find(isListed) ??
+    previousKeys.slice(0, removedIndex).findLast(isListed)
+  );
+};

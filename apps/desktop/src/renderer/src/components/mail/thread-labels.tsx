@@ -4,12 +4,18 @@ import MailLabelBadges from "@/components/mail/label-badges";
 import LabelDialog from "@/components/mail/label-dialog";
 import ThreadCategorizeButton from "@/components/mail/thread-categorize-button";
 import ThreadLabelPicker from "@/components/mail/thread-label-picker";
-import type { ThreadLabelChange } from "@/components/mail/thread-label-picker";
 import { Badge } from "@/components/ui/badge";
 import { useAppCommand } from "@/hotkeys";
 import { cn } from "@/lib/utils";
-import { listUserLabels, withLabelState } from "@/mail/label";
-import type { ThreadActions } from "@/mail/use-thread-actions";
+import { listUserLabels } from "@/mail/label";
+import {
+  getPendingLabelIds,
+  usePendingThreadChanges,
+} from "@/mail/pending-thread-changes";
+import type {
+  ThreadActions,
+  ThreadLabelChange,
+} from "@/mail/use-thread-actions";
 import { getMailApi } from "@/platform/desktop";
 import { useLabelCatalog, useUpsertLabel } from "@/state/labels";
 
@@ -22,12 +28,6 @@ interface ThreadLabelsProps {
   threadId: string;
 }
 
-interface OptimisticLabelState {
-  readonly applied: boolean;
-  readonly labelName: string;
-  readonly requestId: number;
-}
-
 const ThreadLabels = ({
   accountId,
   className,
@@ -38,10 +38,7 @@ const ThreadLabels = ({
   const rowRef = useRef<HTMLDivElement>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const [optimisticLabels, setOptimisticLabels] = useState<
-    ReadonlyMap<string, OptimisticLabelState>
-  >(new Map());
-  const nextRequestIdRef = useRef(0);
+  const pendingChanges = usePendingThreadChanges();
   const catalog = useLabelCatalog(accountId);
   const mailApi = getMailApi();
   const upsertLabel = useUpsertLabel();
@@ -50,17 +47,12 @@ const ThreadLabels = ({
     userLabels.map((label) => [label.name, label] as const)
   );
 
-  let displayedLabels = labels;
-
-  for (const state of optimisticLabels.values()) {
-    displayedLabels = withLabelState(
-      displayedLabels,
-      state.labelName,
-      state.applied
-    );
-  }
-
-  const pendingLabelIds = new Set(optimisticLabels.keys());
+  // `labels` already shows changes still on their way to the server; a label
+  // with one pending waits for it before it can be changed again.
+  const pendingLabelIds = getPendingLabelIds(
+    { accountId, threadId },
+    pendingChanges
+  );
 
   useAppCommand(
     "thread.manageLabels",
@@ -75,27 +67,8 @@ const ThreadLabels = ({
     { enabled: !isPickerOpen }
   );
 
-  const setLabel = async (label: ThreadLabelChange): Promise<void> => {
-    const requestId = nextRequestIdRef.current + 1;
-    nextRequestIdRef.current = requestId;
-    setOptimisticLabels(
-      (current) =>
-        new Map([...current, [label.labelId, { ...label, requestId }]])
-    );
-
-    await onSetLabel(
-      { accountId, threadId },
-      { applied: label.applied, labelId: label.labelId }
-    );
-    setOptimisticLabels((current) => {
-      if (current.get(label.labelId)?.requestId !== requestId) {
-        return current;
-      }
-
-      const next = new Map(current);
-      next.delete(label.labelId);
-      return next;
-    });
+  const setLabel = (label: ThreadLabelChange): void => {
+    onSetLabel({ accountId, threadId }, label);
   };
 
   return (
@@ -116,12 +89,12 @@ const ThreadLabels = ({
             No labels
           </Badge>
         }
-        labels={displayedLabels}
+        labels={labels}
         onRemoveLabel={(labelName) => {
           const label = userLabelsByName.get(labelName);
 
           if (label !== undefined) {
-            void setLabel({
+            setLabel({
               applied: false,
               labelId: label.id,
               labelName: label.name,
@@ -131,7 +104,7 @@ const ThreadLabels = ({
         removableLabels={new Set(userLabelsByName.keys())}
       />
       <ThreadLabelPicker
-        appliedLabels={displayedLabels}
+        appliedLabels={labels}
         isOpen={isPickerOpen}
         isLoading={catalog === undefined}
         labels={userLabels}
@@ -143,9 +116,7 @@ const ThreadLabels = ({
               }
         }
         onOpenChange={setIsPickerOpen}
-        onSetLabel={(label) => {
-          void setLabel(label);
-        }}
+        onSetLabel={setLabel}
         pendingLabelIds={pendingLabelIds}
       />
       <ThreadCategorizeButton accountId={accountId} threadId={threadId} />
@@ -157,7 +128,7 @@ const ThreadLabels = ({
           mailApi={mailApi}
           onSaved={(label) => {
             upsertLabel(accountId, label);
-            void setLabel({
+            setLabel({
               applied: true,
               labelId: label.id,
               labelName: label.name,

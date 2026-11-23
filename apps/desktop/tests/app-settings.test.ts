@@ -86,6 +86,7 @@ describe("app settings", () => {
   it("persists and reloads all app settings", async () => {
     const settings = {
       animationsEnabled: false,
+      inlineImageRetentionDays: null,
       openThreadsInNewWindows: true,
       runInBackground: false,
     };
@@ -144,6 +145,26 @@ describe("app settings", () => {
     hydrateAppSettings();
 
     expect(getCurrentAppSettings()).toStrictEqual(DEFAULT_APP_SETTINGS);
+  });
+
+  it("keeps a settings file's values from before images were kept", () => {
+    fileState.files.set(
+      settingsPath,
+      JSON.stringify({
+        animationsEnabled: false,
+        openThreadsInNewWindows: true,
+        runInBackground: false,
+      })
+    );
+
+    hydrateAppSettings();
+
+    expect(getCurrentAppSettings()).toStrictEqual({
+      animationsEnabled: false,
+      inlineImageRetentionDays: 90,
+      openThreadsInNewWindows: true,
+      runInBackground: false,
+    });
   });
 
   it("uses defaults when reading an older incomplete settings file", () => {

@@ -74,8 +74,8 @@ describe("bulk thread actions", () => {
     expect(
       state.calls.map((call) => [call.accountId, call.threadIds.length])
     ).toStrictEqual([
-      ["a@example.com", 250],
-      ["a@example.com", 50],
+      ["a@example.com", 200],
+      ["a@example.com", 100],
       ["b@example.com", 2],
     ]);
     expect(result.succeeded).toHaveLength(300);

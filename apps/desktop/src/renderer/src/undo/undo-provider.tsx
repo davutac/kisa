@@ -12,32 +12,51 @@ import { useAppCommand } from "@/hotkeys";
 
 const UNDO_DURATION_MS = 8000;
 
-interface UndoAction {
-  readonly description?: string;
+/** What the server made of an action whose Undo is already on offer. */
+export type UndoOutcome =
+  | { readonly kind: "confirmed" }
+  /** Some of it went through; Undo reverses that part. */
+  | {
+      readonly description: string;
+      readonly kind: "partial";
+      readonly message: string;
+    }
+  /** Nothing went through, so there is nothing to undo. */
+  | {
+      readonly description?: string;
+      readonly kind: "failed";
+      readonly message: string;
+    };
+
+export interface UndoOffer {
   readonly message: string;
-  readonly tone?: "error" | "success";
+  readonly outcome: Promise<UndoOutcome>;
+  /** Waits for `outcome` itself, so it only reverses what went through. */
   readonly undo: () => Promise<void>;
   readonly undoneMessage: string;
 }
 
-type CommitUndo = (action: UndoAction) => void;
-type PrepareUndo = () => CommitUndo;
+type OfferUndo = (offer: UndoOffer) => void;
 
 interface ActiveUndo {
-  readonly action: UndoAction;
+  readonly offer: UndoOffer;
   readonly order: number;
   readonly toastId: string | number;
 }
 
-const UndoContext = createContext<PrepareUndo | null>(null);
+const UndoContext = createContext<OfferUndo | null>(null);
 
+/**
+ * One level of Undo for actions that are shown as done before the server
+ * answers. The offer appears with the action; its outcome then amends the
+ * toast, or withdraws the offer when nothing went through.
+ */
 export const UndoProvider = ({
   children,
 }: {
   readonly children: ReactNode;
 }) => {
   const nextOrderRef = useRef(0);
-  const committedOrderRef = useRef(0);
   const activeRef = useRef<ActiveUndo | null>(null);
   const [hasActiveUndo, setHasActiveUndo] = useState(false);
 
@@ -60,13 +79,15 @@ export const UndoProvider = ({
     activeRef.current = null;
     setHasActiveUndo(false);
     toast.dismiss(active.toastId);
+    // The inverse shows at once too; only its failure is worth a second word.
+    const toastId = toast.success(active.offer.undoneMessage);
 
     try {
-      await active.action.undo();
-      toast.success(active.action.undoneMessage);
+      await active.offer.undo();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not undo the action"
+        error instanceof Error ? error.message : "Could not undo the action",
+        { id: toastId }
       );
     }
   }, []);
@@ -79,50 +100,67 @@ export const UndoProvider = ({
     { enabled: hasActiveUndo }
   );
 
-  const prepareUndo = useCallback<PrepareUndo>(() => {
-    nextOrderRef.current += 1;
-    const order = nextOrderRef.current;
-
-    return (action) => {
-      // A slower request must not replace a newer completed action.
-      if (order < committedOrderRef.current) {
-        return;
-      }
-
-      committedOrderRef.current = order;
+  const offerUndo = useCallback<OfferUndo>(
+    (offer) => {
+      nextOrderRef.current += 1;
+      const order = nextOrderRef.current;
 
       if (activeRef.current !== null) {
         toast.dismiss(activeRef.current.toastId);
       }
 
-      const showToast = action.tone === "error" ? toast.error : toast.success;
-      const toastId = showToast(action.message, {
-        action: {
-          label: "Undo",
-          onClick: () => {
-            void runUndo(order);
-          },
+      const undoAction = {
+        label: "Undo",
+        onClick: () => {
+          void runUndo(order);
         },
-        description: action.description,
+      };
+      const toastId = toast.success(offer.message, {
+        action: undoAction,
         duration: UNDO_DURATION_MS,
         onAutoClose: () => clear(order),
         onDismiss: () => clear(order),
       });
 
-      activeRef.current = { action, order, toastId };
+      activeRef.current = { offer, order, toastId };
       setHasActiveUndo(true);
-    };
-  }, [clear, runUndo]);
 
-  return <UndoContext value={prepareUndo}>{children}</UndoContext>;
+      const amend = async (): Promise<void> => {
+        const outcome = await offer.outcome;
+
+        if (outcome.kind === "confirmed") {
+          return;
+        }
+
+        const isOnOffer = activeRef.current?.order === order;
+
+        if (outcome.kind === "failed" && isOnOffer) {
+          clear(order);
+        }
+
+        // Amends the toast in place while it is still the one on offer; a
+        // newer action or an Undo already took its place otherwise.
+        toast.error(outcome.message, {
+          action: outcome.kind === "partial" && isOnOffer ? undoAction : null,
+          description: outcome.description,
+          id: isOnOffer ? toastId : undefined,
+        });
+      };
+
+      void amend();
+    },
+    [clear, runUndo]
+  );
+
+  return <UndoContext value={offerUndo}>{children}</UndoContext>;
 };
 
-export const usePrepareUndo = (): PrepareUndo => {
-  const prepareUndo = useContext(UndoContext);
+export const useOfferUndo = (): OfferUndo => {
+  const offerUndo = useContext(UndoContext);
 
-  if (prepareUndo === null) {
-    throw new Error("usePrepareUndo must be used within UndoProvider");
+  if (offerUndo === null) {
+    throw new Error("useOfferUndo must be used within UndoProvider");
   }
 
-  return prepareUndo;
+  return offerUndo;
 };

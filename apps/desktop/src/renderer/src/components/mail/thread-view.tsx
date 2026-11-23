@@ -128,11 +128,8 @@ const MailThreadContent = ({
     } satisfies ThreadActionTarget);
   }, [accountId, isUnread, onToggleRead, threadId]);
   const handleTrash = useCallback((): void => {
-    onTrash(
-      { accountId, isUnread, threadId } satisfies ThreadActionTarget,
-      onClose
-    );
-  }, [accountId, isUnread, onClose, onTrash, threadId]);
+    onTrash({ accountId, threadId }, onClose);
+  }, [accountId, onClose, onTrash, threadId]);
   const requestDeleteForever = useCallback(async (): Promise<void> => {
     const confirmed = await confirm(
       getDeleteForeverConfirmation(thread.subject)

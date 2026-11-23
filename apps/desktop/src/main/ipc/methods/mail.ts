@@ -75,6 +75,7 @@ import {
   MailThreadMessageSendReply,
   MailThreadMessageSendRequest,
   MailThreadMutationReply,
+  MailThreadLoadRequest,
   MailThreadReadStateRequest,
   MailThreadReply,
   MailThreadRequest,
@@ -372,7 +373,7 @@ export const listSenders = makeIpcMethod({
 export const loadThread = makeIpcMethod({
   channel: MAIL_LOAD_THREAD_CHANNEL,
   handler: (request) => toIpcReply(openThread(request), "Could not load email"),
-  payload: MailThreadRequest,
+  payload: MailThreadLoadRequest,
   result: MailThreadReply,
 });
 

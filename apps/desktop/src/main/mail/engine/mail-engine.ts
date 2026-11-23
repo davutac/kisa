@@ -47,15 +47,18 @@ import type {
   MailIndexProgress,
   MailThread,
   MailThreadListChange,
+  MailThreadLoadRequest,
   ThreadMessage,
   MailThreadRequest,
 } from "../../../shared/ipc/mail";
 import { canApplySenderTrust } from "../../../shared/sender-trust";
 import { onAccountConnected } from "../../auth/account-events";
 import { sendRendererEvent } from "../../electron/renderer-events";
+import { getCurrentAppSettings } from "../../settings/app-settings";
 import { accountMailWorkSupervisor } from "../account-mail-work-supervisor";
 import {
   inlineImageDataUrls,
+  isInlineImageMediaType,
   normalizeContentId,
   selectInlineImages,
   toImageDataUrl,
@@ -67,6 +70,22 @@ import { refreshUnreadBadge } from "../unread-badge";
 import { createAccountWorker, toCycleOutcome } from "./account-worker";
 import type { AccountWorker, SyncRequestSource } from "./account-worker";
 import { ImapFlowConnectorLive } from "./imap-session";
+import {
+  DAY_MS,
+  clearUnusedInlineImages,
+  isInlineImageClearingDue,
+  isInlineImageUseStale,
+  markInlineImagesUsed,
+  readCachedInlineImages,
+  saveInlineImages,
+  toInlineImageKey,
+} from "./inline-image-cache";
+import type {
+  CachedInlineImage,
+  InlineImageClearing,
+  InlineImagePart,
+  KeptInlineImage,
+} from "./inline-image-cache";
 import { announceArrivals } from "./mail-arrivals";
 import type { ArrivalActions } from "./mail-arrivals";
 import { MailDatabase } from "./mail-database";
@@ -231,9 +250,17 @@ export const withCacheLock = <A, E, R>(
  * Upserts for the newest changed threads and removals for every removed
  * one. A reload is never sent: it would put a scrolled list back at the top,
  * and threads past the loaded pages arrive through ordinary paging.
+ *
+ * The threads a user acted on come first: the renderer stops showing its
+ * optimistic copy of them once the action answers, so theirs are the upserts
+ * that must not be cut.
  */
 export const publishChanges = Effect.fn("MailEngine.publishChanges")(
-  function* publishChanges(accountId: string, changes: ThreadChanges) {
+  function* publishChanges(
+    accountId: string,
+    changes: ThreadChanges,
+    actedOn: readonly string[] = []
+  ) {
     if (changes.changed.length === 0 && changes.removed.length === 0) {
       return;
     }
@@ -242,9 +269,15 @@ export const publishChanges = Effect.fn("MailEngine.publishChanges")(
     const summaries = yield* database.use("Could not load updated mail", (db) =>
       readThreadSummaries(db, accountId, changes.changed)
     );
+    const isActedOn = new Set(actedOn);
     const list: MailThreadListChange[] = [
       ...summaries
-        .toSorted((left, right) => right.latestAt - left.latestAt)
+        .toSorted(
+          (left, right) =>
+            Number(isActedOn.has(right.threadId)) -
+              Number(isActedOn.has(left.threadId)) ||
+            right.latestAt - left.latestAt
+        )
         .slice(0, MAX_UPSERTS)
         .map((thread) => ({ kind: "upsert" as const, thread })),
       ...changes.removed.map((threadId) => ({
@@ -420,6 +453,53 @@ const notificationActions: ArrivalActions = {
   trash: actFromNotification({ kind: "trash" }),
 };
 
+/** Each account's last clearing of unused inline images. */
+const inlineImageClearings = new Map<string, InlineImageClearing>();
+
+/**
+ * Clears the account's inline images not shown for as long as the user keeps
+ * them, at most once a day. Failing only leaves them for the next cycle.
+ */
+const clearUnusedInlineImagesWhenDue = Effect.fn(
+  "MailEngine.clearUnusedInlineImagesWhenDue"
+)(function* clearUnusedInlineImagesWhenDue(accountId: string) {
+  const { inlineImageRetentionDays } = getCurrentAppSettings();
+  const now = Date.now();
+
+  if (
+    !isInlineImageClearingDue(
+      inlineImageClearings.get(accountId),
+      inlineImageRetentionDays,
+      now
+    )
+  ) {
+    return;
+  }
+
+  const database = yield* MailDatabase;
+  yield* database
+    .use("Could not clear unused inline images", (db) =>
+      clearUnusedInlineImages(
+        db,
+        accountId,
+        now - inlineImageRetentionDays * DAY_MS
+      )
+    )
+    .pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          inlineImageClearings.set(accountId, {
+            at: now,
+            retentionDays: inlineImageRetentionDays,
+          });
+        })
+      ),
+      Effect.catch(() =>
+        Effect.logWarning("Could not clear unused inline images")
+      )
+    );
+});
+
 /**
  * One background cycle: catch up with the server, then spend the budget on
  * the skeleton walk and on bodies, newest first. Reports whether background
@@ -455,6 +535,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
           notificationActions
         ).pipe(Effect.ignore);
         yield* publishProgress(accountId, true);
+        yield* clearUnusedInlineImagesWhenDue(accountId);
 
         const deadline = Date.now() + CYCLE_BUDGET_MS;
         while (Date.now() < deadline) {
@@ -659,6 +740,7 @@ export const forgetMailEngineAccount = Effect.fn("MailEngine.forgetAccount")(
     const wasSyncing = workers.get(accountId)?.phase().kind === "syncing";
     workers.delete(accountId);
     cacheLocks.delete(accountId);
+    inlineImageClearings.delete(accountId);
     latestProgress.delete(accountId);
     progressPublishedAt.delete(accountId);
     sendIndexProgress();
@@ -693,81 +775,181 @@ export const withForeground = <A, E>(
 
 const INLINE_IMAGE_CONCURRENCY = 3;
 
+/** The image parts the messages' bodies point at with `cid:` urls. */
+const selectThreadInlineImages = (
+  sources: readonly ConversationMessage[],
+  messages: readonly ThreadMessage[]
+) =>
+  sources.flatMap((source, index) => {
+    const html = messages[index]?.body.html;
+    return html === undefined
+      ? []
+      : selectInlineImages(html, source.attachments).map((attachment) => ({
+          attachment,
+          index,
+        }));
+  });
+
+interface ResolvedInlineImage {
+  readonly contentId: string;
+  readonly dataUrl: string;
+  readonly index: number;
+  readonly section: string;
+}
+
+/** Fetched images that show; one that does not is not kept, and is retried. */
+const fetchInlineImages = (
+  account: MailAccount,
+  parts: readonly InlineImagePart[]
+) =>
+  withForeground(account, (scope) =>
+    Effect.forEach(
+      parts,
+      (part) =>
+        fetchAttachment(
+          scope,
+          MessageId.make(part.messageId),
+          part.section
+        ).pipe(
+          Effect.map((image): readonly CachedInlineImage[] =>
+            image === undefined || !isInlineImageMediaType(image.mediaType)
+              ? []
+              : [{ ...part, bytes: image.bytes, mediaType: image.mediaType }]
+          ),
+          Effect.orElseSucceed(() => [])
+        ),
+      { concurrency: INLINE_IMAGE_CONCURRENCY }
+    )
+  ).pipe(
+    Effect.map((images) => images.flat()),
+    Effect.orElseSucceed((): readonly CachedInlineImage[] => [])
+  );
+
 /**
- * Replaces `cid:` references with the image parts they name. An image that
- * cannot be fetched keeps its dead reference rather than failing the thread.
+ * Replaces `cid:` references with the image parts they name: kept ones from
+ * the cache, and with `fetchMissing` the rest from the server, which are then
+ * kept. `missing` counts the images the cache lacked. An image that cannot be
+ * fetched keeps its dead reference rather than failing the thread, and the
+ * cache failing only costs a fetch.
  */
 const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
   function* withInlineImages(
     account: MailAccount,
     sources: readonly ConversationMessage[],
-    messages: readonly ThreadMessage[]
+    messages: readonly ThreadMessage[],
+    fetchMissing: boolean
   ) {
-    const wanted = sources.flatMap((source, index) => {
-      const html = messages[index]?.body.html;
-      return html === undefined
-        ? []
-        : selectInlineImages(html, source.attachments).map((attachment) => ({
-            attachment,
-            index,
-          }));
-    });
+    const wanted = selectThreadInlineImages(sources, messages).map(
+      ({ attachment, index }) => ({
+        contentId: normalizeContentId(attachment.contentId),
+        index,
+        part: {
+          messageId: messages[index]?.id ?? "",
+          section: attachment.section,
+        },
+      })
+    );
 
     if (wanted.length === 0) {
-      return messages;
+      return { messages, missing: 0 };
     }
 
-    const loaded = yield* withForeground(account, (scope) =>
-      Effect.forEach(
-        wanted,
-        ({ attachment, index }) =>
-          fetchAttachment(
-            scope,
-            MessageId.make(messages[index]?.id ?? ""),
-            attachment.section
-          ).pipe(
-            Effect.map((image) =>
-              image === undefined
-                ? null
-                : {
-                    contentId: normalizeContentId(attachment.contentId),
-                    dataUrl: toImageDataUrl(image.mediaType, image.bytes),
-                    index,
-                    section: attachment.section,
-                  }
-            ),
-            Effect.orElseSucceed(() => null)
-          ),
-        { concurrency: INLINE_IMAGE_CONCURRENCY }
+    const database = yield* MailDatabase;
+    const cached = yield* database
+      .use("Could not read kept inline images", (db) =>
+        readCachedInlineImages(
+          db,
+          account.accountId,
+          wanted.map(({ part }) => part.messageId)
+        )
       )
-    ).pipe(Effect.orElseSucceed(() => []));
-
-    return messages.map((message, index) => {
-      const images = loaded.filter(
-        (image) => image?.index === index && image.dataUrl !== undefined
-      );
-      if (images.length === 0 || message.body.html === undefined) {
-        return message;
-      }
-      const sections = new Set(images.map((image) => image?.section));
-      const dataUrls = new Map(
-        images.flatMap((image) =>
-          image?.dataUrl === undefined
-            ? []
-            : [[image.contentId, image.dataUrl] as const]
+      .pipe(
+        Effect.orElseSucceed(
+          (): ReadonlyMap<string, KeptInlineImage> => new Map()
         )
       );
-      return {
-        ...message,
-        attachments: message.attachments.filter(
-          (attachment) => !sections.has(attachment.partId)
-        ),
-        body: {
-          ...message.body,
-          html: inlineImageDataUrls(message.body.html, dataUrls),
-        },
-      };
-    });
+    const now = Date.now();
+
+    if (
+      [...cached.values()].some((image) =>
+        isInlineImageUseStale(image.usedAt, now)
+      )
+    ) {
+      yield* database
+        .use("Could not record shown inline images", (db) =>
+          markInlineImagesUsed(
+            db,
+            account.accountId,
+            wanted.map(({ part }) => part.messageId),
+            now
+          )
+        )
+        .pipe(Effect.ignore);
+    }
+
+    const missing = wanted.filter(
+      ({ part }) => !cached.has(toInlineImageKey(part))
+    );
+    const fetched =
+      fetchMissing && missing.length > 0
+        ? yield* fetchInlineImages(
+            account,
+            missing.map(({ part }) => part)
+          )
+        : [];
+
+    if (fetched.length > 0) {
+      yield* database
+        .use("Could not keep inline images", (db) =>
+          saveInlineImages(db, account.accountId, fetched, now)
+        )
+        .pipe(
+          Effect.catch(() => Effect.logWarning("Could not keep inline images"))
+        );
+    }
+
+    const images = new Map<string, CachedInlineImage>(cached);
+    for (const image of fetched) {
+      images.set(toInlineImageKey(image), image);
+    }
+    const resolved = wanted.flatMap(
+      ({ contentId, index, part }): readonly ResolvedInlineImage[] => {
+        const image = images.get(toInlineImageKey(part));
+        const dataUrl =
+          image === undefined
+            ? undefined
+            : toImageDataUrl(image.mediaType, image.bytes);
+        return dataUrl === undefined
+          ? []
+          : [{ contentId, dataUrl, index, section: part.section }];
+      }
+    );
+
+    return {
+      messages: messages.map((message, index) => {
+        const shown = resolved.filter((image) => image.index === index);
+        if (shown.length === 0 || message.body.html === undefined) {
+          return message;
+        }
+        const sections = new Set(shown.map((image) => image.section));
+        return {
+          ...message,
+          attachments: message.attachments.filter(
+            (attachment) =>
+              attachment.partId === undefined ||
+              !sections.has(attachment.partId)
+          ),
+          body: {
+            ...message.body,
+            html: inlineImageDataUrls(
+              message.body.html,
+              new Map(shown.map((image) => [image.contentId, image.dataUrl]))
+            ),
+          },
+        };
+      }),
+      missing: missing.length,
+    };
   }
 );
 
@@ -812,13 +994,14 @@ const withSenderBrands = Effect.fn("MailEngine.withSenderBrands")(
 const runAction = <A, E>(
   account: MailAccount,
   action: (scope: SyncScope) => Effect.Effect<A, E, EngineServices>,
-  changesOf: (result: A) => ThreadChanges
+  changesOf: (result: A) => ThreadChanges,
+  actedOn: readonly string[] = []
 ) =>
   withForeground(account, (scope) =>
     withCacheLock(account.accountId, action(scope))
   ).pipe(
     Effect.tap((result) =>
-      publishChanges(account.accountId, changesOf(result)).pipe(
+      publishChanges(account.accountId, changesOf(result), actedOn).pipe(
         Effect.tapError(() =>
           Effect.sync(() => requestMailSync(account.accountId))
         ),
@@ -845,7 +1028,8 @@ const markRead = (account: MailAccount, threadId: string, read: boolean) =>
         kind: "setRead",
         read,
       }),
-    (changes) => changes
+    (changes) => changes,
+    [threadId]
   );
 
 /** Applies one action to conversations of one account. */
@@ -864,7 +1048,8 @@ export const applyThreadActions = Effect.fn("MailEngine.applyThreadActions")(
           threadIds.map((threadId) => ThreadId.make(threadId)),
           action
         ),
-      (changes) => changes
+      (changes) => changes,
+      threadIds
     );
   }
 );
@@ -924,9 +1109,13 @@ export const deleteAccountLabel = Effect.fn("MailEngine.deleteAccountLabel")(
  * Opens a conversation from the cache, first downloading any bodies the
  * background has not reached. Offline, what is cached is shown. Opening an
  * unread conversation marks it read, as Gmail does.
+ *
+ * Inline images are not cached and marking read is a server round trip, so a
+ * `cachedOnly` load leaves both out and says whether they are owed: the
+ * interface shows the conversation at once and loads it in full after.
  */
 export const loadThread = Effect.fn("MailEngine.loadThread")(
-  function* loadThread(request: MailThreadRequest) {
+  function* loadThread(request: MailThreadLoadRequest) {
     const database = yield* MailDatabase;
     const read = () =>
       database.use("Could not load email", (db) =>
@@ -954,11 +1143,27 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
       request.accountId,
       conversation.messages
     );
-    const messages = yield* withInlineImages(
+    const shown = {
+      accountId: request.accountId,
+      labels: conversation.labels,
+      subject: conversation.subject,
+      threadId: request.threadId,
+    };
+
+    const inline = yield* withInlineImages(
       account,
       conversation.messages,
-      branded
+      branded,
+      request.cachedOnly !== true
     );
+
+    if (request.cachedOnly === true) {
+      return {
+        ...shown,
+        awaitsServer: conversation.isUnread || inline.missing > 0,
+        messages: inline.messages,
+      } satisfies MailThread;
+    }
 
     if (conversation.isUnread) {
       yield* markRead(account, request.threadId, true).pipe(
@@ -969,11 +1174,9 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
     }
 
     return {
-      accountId: request.accountId,
-      labels: conversation.labels,
-      messages,
-      subject: conversation.subject,
-      threadId: request.threadId,
+      ...shown,
+      awaitsServer: false,
+      messages: inline.messages,
     } satisfies MailThread;
   }
 );

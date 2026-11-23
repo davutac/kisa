@@ -161,7 +161,11 @@ export const withAccountSession = <A, E, R>(
   );
 };
 
-/** Closes an account's connections, for disconnect and quit. */
+/**
+ * Closes an account's connections, for disconnect and quit. Each close says
+ * goodbye to its server, so they run together rather than one round trip
+ * after another.
+ */
 export const closeAccountSessions = (accountId: string): Effect.Effect<void> =>
   Effect.forEach(
     ["background", "foreground"] as const,
@@ -172,13 +176,13 @@ export const closeAccountSessions = (accountId: string): Effect.Effect<void> =>
       const open = pool === undefined ? undefined : detach(pool);
       return open === undefined ? Effect.void : closeSession(open);
     },
-    { discard: true }
+    { concurrency: "unbounded", discard: true }
   );
 
 export const closeAllSessions: Effect.Effect<void> = Effect.suspend(() =>
   Effect.forEach(
     [...new Set([...pools.keys()].map((key) => key.split("\u0000")[1] ?? ""))],
     closeAccountSessions,
-    { discard: true }
+    { concurrency: "unbounded", discard: true }
   )
 );

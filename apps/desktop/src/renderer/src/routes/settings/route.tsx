@@ -169,7 +169,10 @@ function SettingsRoute() {
         {ai === undefined ? null : <SettingsAiSection />}
 
         {settings === undefined ? null : (
-          <SettingsDatabaseSection settingsApi={settings} />
+          <SettingsDatabaseSection
+            appSettingsApi={appSettings}
+            settingsApi={settings}
+          />
         )}
 
         {accounts === undefined ? null : (

@@ -6,6 +6,7 @@ import {
   getMailboxScopeKey,
   mergeAndSortThreads,
   replaceFirstPage,
+  updateListedThreads,
 } from "../src/renderer/src/mail/mailbox-model";
 import type { MailThreadSummary } from "../src/shared/ipc/mail";
 
@@ -202,5 +203,33 @@ describe("mailbox place request scope", () => {
     expect(
       getMailboxScopeKey(["one@example.com"], false, { label: "Sent" })
     ).not.toBe(getMailboxScopeKey(["one@example.com"], false, "sent"));
+  });
+});
+
+describe(updateListedThreads, () => {
+  it("updates and drops listed rows but never adds one", () => {
+    const kept = makeThread("one@example.com", "thread-1", 300);
+    const read = makeThread("one@example.com", "thread-2", 200, {
+      isUnread: true,
+    });
+    const deleted = makeThread("two@example.com", "thread-2", 100);
+
+    expect(
+      updateListedThreads(
+        [kept, read, deleted],
+        [
+          { kind: "upsert", thread: { ...read, isUnread: false } },
+          {
+            accountId: "two@example.com",
+            kind: "remove",
+            threadId: "thread-2",
+          },
+          {
+            kind: "upsert",
+            thread: makeThread("one@example.com", "thread-9", 400),
+          },
+        ]
+      )
+    ).toStrictEqual([kept, { ...read, isUnread: false }]);
   });
 });

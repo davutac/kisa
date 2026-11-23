@@ -684,14 +684,30 @@ const openClient = (request: ImapConnectRequest) =>
     },
   });
 
-const closeClient = (client: ImapFlow) =>
-  Effect.promise(async () => {
-    if (client.usable) {
-      await client.logout().catch(() => client.close());
-    } else {
-      client.close();
-    }
-  });
+/**
+ * How long a server gets to answer `LOGOUT`. Quit and disconnect close every
+ * connection, and a server that does not answer, or a network that has gone,
+ * must not hold them for the socket timeout. The socket closes either way.
+ */
+export const LOGOUT_TIMEOUT_MS = 1000;
+
+export const closeClient = (
+  client: Pick<ImapFlow, "close" | "logout" | "usable">
+): Effect.Effect<void> =>
+  Effect.suspend(() =>
+    client.usable
+      ? Effect.tryPromise(() => client.logout()).pipe(
+          Effect.timeout(LOGOUT_TIMEOUT_MS),
+          Effect.ignore
+        )
+      : Effect.void
+  ).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        client.close();
+      })
+    )
+  );
 
 export const ImapFlowConnectorLive = Layer.succeed(
   ImapConnector,

@@ -11,6 +11,7 @@ import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
 import type { Account, AccountProvider } from "@/shared/ipc/accounts";
 import { toMailIndexRatio } from "@/shared/mail-index-progress";
+import { useOpenThreadId } from "@/state/mailbox";
 
 import {
   isScopeRowCurrent,
@@ -139,6 +140,7 @@ const SidebarAccountRow = ({
   };
   const hasUnreadMail = useHasUnreadMail(account.email);
   const isHeldByFavorite = useIsHeldByFavorite(view);
+  const openThreadId = useOpenThreadId();
   const isSyncing = useIsAccountSyncing(account.email);
   const indexProgress = useAccountIndexProgress(account.email);
   const status = getAccountRowStatus({
@@ -187,7 +189,8 @@ const SidebarAccountRow = ({
           const next = resolveScopeRowSelection(
             view,
             account.email,
-            isExpanded
+            isExpanded,
+            openThreadId !== null
           );
           onExpandedChange(account.email, next.isExpanded);
           if (next.opensInbox) {

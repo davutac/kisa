@@ -168,6 +168,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({
         data: {
           accountId: "person@example.com",
+          awaitsServer: false,
           labels: [],
           messages: [],
           subject: "Subject",

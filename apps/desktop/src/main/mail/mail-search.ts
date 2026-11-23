@@ -303,11 +303,13 @@ const toThreadSearchQuery = (
     statement: sql`
       ${matched?.sql ?? sql``}
       SELECT t.account_id, t.thread_id
-      FROM mail_threads t
       ${
+        // From the matched threads to their rows: left to choose, SQLite
+        // reads every thread in the mailbox and looks each up in the matches.
         matched === undefined
-          ? sql``
-          : sql`JOIN matched ON matched.account_id = t.account_id
+          ? sql`FROM mail_threads t`
+          : sql`FROM matched CROSS JOIN mail_threads t
+                ON matched.account_id = t.account_id
                 AND matched.thread_id = t.thread_id`
       }
       WHERE t.account_id IN (${accounts})${andAll([

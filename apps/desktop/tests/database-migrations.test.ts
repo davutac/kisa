@@ -19,6 +19,7 @@ const temporaryDirectories: string[] = [];
 const BASELINE = "20261121231100_baseline";
 const DROP_OAUTH_COLUMNS = "20261122102513_drop_oauth_columns";
 const FLAG_CURSOR = "20261122123610_flag_cursor";
+const RESET_GENERIC_BODIES = "20261122205708_reset_generic_bodies";
 
 const makeTemporaryDirectory = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
@@ -192,6 +193,36 @@ const bodyOf = (
     )
     .get(messageId);
 
+/** A database the build before left: messages, one with a whole body. */
+const openBeforeBodiesLast = () => {
+  const connection = openDatabaseWith(
+    BASELINE,
+    DROP_OAUTH_COLUMNS,
+    FLAG_CURSOR,
+    RESET_GENERIC_BODIES
+  );
+  insertMessage(connection, "m1", "Quarterly report", "numbers inside");
+  insertMessage(connection, "m2", "Lunch", "café on friday");
+  connection
+    .prepare(
+      `UPDATE mail_messages
+       SET attachments = '[]', body_html = X'1f8b08', body_state = 'ready',
+           from_name = 'Ann', headers = '[]', snippet = 'numbers inside'
+       WHERE message_id = 'm1'`
+    )
+    .run();
+  return connection;
+};
+
+const rowsOf = (connection: ReturnType<typeof openDatabaseConnection>) =>
+  connection.prepare("SELECT rowid, * FROM mail_messages ORDER BY rowid").all();
+
+const columnsOf = (connection: ReturnType<typeof openDatabaseConnection>) =>
+  connection
+    .prepare("SELECT name FROM pragma_table_info('mail_messages')")
+    .all()
+    .map((row) => (row as { readonly name: string }).name);
+
 describe("database baseline", () => {
   afterEach(() => {
     for (const directory of temporaryDirectories.splice(0)) {
@@ -213,6 +244,7 @@ describe("database baseline", () => {
       [
         "mail_accounts",
         "mail_drafts",
+        "mail_inline_images",
         "mail_labels",
         "mail_mailboxes",
         "mail_message_locations",
@@ -388,6 +420,113 @@ describe("database baseline", () => {
           snippet: "gmailbody",
         },
       ]);
+    });
+  });
+
+  describe("putting message bodies at the end of their rows", () => {
+    it("keeps every message, value and rowid, and moves the bodies last", () => {
+      const connection = openBeforeBodiesLast();
+      const before = rowsOf(connection);
+
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      expect(rowsOf(connection)).toStrictEqual(before);
+      expect(columnsOf(connection).slice(0, 3)).toStrictEqual([
+        "account_id",
+        "message_id",
+        "thread_id",
+      ]);
+      expect(columnsOf(connection).slice(-2)).toStrictEqual([
+        "body_text",
+        "body_html",
+      ]);
+    });
+
+    it("keeps full-text search whole", () => {
+      const connection = openBeforeBodiesLast();
+
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      // Throws if the index and the rows it names disagree.
+      connection
+        .prepare(
+          "INSERT INTO mail_messages_fts(mail_messages_fts, rank) VALUES ('integrity-check', 1)"
+        )
+        .run();
+      expect(matches(connection, "quarterly")).toStrictEqual([
+        { messageId: "m1" },
+      ]);
+      expect(matches(connection, "cafe")).toStrictEqual([{ messageId: "m2" }]);
+    });
+
+    it("keeps full-text search in step with later writes", () => {
+      const connection = openBeforeBodiesLast();
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      insertMessage(connection, "m3", "Offsite", "agenda attached");
+      connection
+        .prepare(
+          "UPDATE mail_messages SET subject = 'Annual report' WHERE message_id = 'm1'"
+        )
+        .run();
+      connection
+        .prepare("DELETE FROM mail_messages WHERE message_id = 'm2'")
+        .run();
+
+      expect(matches(connection, "agenda")).toStrictEqual([
+        { messageId: "m3" },
+      ]);
+      expect(matches(connection, "quarterly")).toStrictEqual([]);
+      expect(matches(connection, "annual")).toStrictEqual([
+        { messageId: "m1" },
+      ]);
+      expect(matches(connection, "friday")).toStrictEqual([]);
+    });
+
+    it("keeps the table's indexes and triggers", () => {
+      const connection = openBeforeBodiesLast();
+
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      expect(
+        connection
+          .prepare(
+            `SELECT type, name FROM sqlite_master
+             WHERE tbl_name = 'mail_messages' AND sql IS NOT NULL
+               AND type IN ('index', 'trigger')
+             ORDER BY type, name`
+          )
+          .all()
+      ).toStrictEqual([
+        { name: "mail_messages_body_queue_idx", type: "index" },
+        { name: "mail_messages_from_idx", type: "index" },
+        { name: "mail_messages_rfc822_idx", type: "index" },
+        { name: "mail_messages_thread_idx", type: "index" },
+        { name: "mail_messages_fts_delete", type: "trigger" },
+        { name: "mail_messages_fts_insert", type: "trigger" },
+        { name: "mail_messages_fts_update", type: "trigger" },
+      ]);
+    });
+
+    it("gives a new database the same layout", () => {
+      const upgraded = openBeforeBodiesLast();
+      applyDatabaseMigrations(createDatabaseClient(upgraded), migrationsFolder);
+
+      expect(columnsOf(openMigratedDatabase())).toStrictEqual(
+        columnsOf(upgraded)
+      );
     });
   });
 });

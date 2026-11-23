@@ -46,6 +46,7 @@ import {
 import type { ThreadSelectionDirection } from "@/mail/thread-selection";
 import {
   getNextThreadSelectionIndex,
+  getSelectionAfterRemoval,
   getThreadSelectionKey,
   getThreadSelectionScrollBehavior,
   getVisibleThreadSelectionIndex,
@@ -281,6 +282,7 @@ const MailThreadList = ({
     () => threads.map((thread) => getThreadSelectionKey(thread)),
     [threads]
   );
+  const previousThreadKeysRef = useRef(threadKeys);
   const dragSelection = useThreadDragSelection({
     checkThread,
     checkedThreadIds,
@@ -410,11 +412,11 @@ const MailThreadList = ({
     );
 
     if (confirmed) {
-      await actions.bulkDeleteForever(checkedThreads);
+      actions.bulkDeleteForever(checkedThreads);
     }
   }, [actions, checkedThreads, confirm]);
-  const requestBulkTrash = useCallback(async (): Promise<void> => {
-    await actions.bulkTrash(checkedThreads);
+  const requestBulkTrash = useCallback((): void => {
+    actions.bulkTrash(checkedThreads);
   }, [actions, checkedThreads]);
   const getVisibleSelectionIndex = (
     direction: ThreadSelectionDirection
@@ -514,7 +516,7 @@ const MailThreadList = ({
     () => {
       if (checkedThreads.length > 0) {
         const markUnread = checkedThreads.every((thread) => !thread.isUnread);
-        void actions.bulkSetReadState(checkedThreads, markUnread);
+        actions.bulkSetReadState(checkedThreads, markUnread);
       } else if (selectedThread !== undefined) {
         actions.toggleRead(selectedThread);
       }
@@ -528,7 +530,7 @@ const MailThreadList = ({
         if (bulkDestructiveAction === "deleteForever") {
           void requestBulkDeleteForever();
         } else if (bulkDestructiveAction === "trash") {
-          void requestBulkTrash();
+          requestBulkTrash();
         }
       } else if (selectedThread !== undefined) {
         if (
@@ -552,6 +554,22 @@ const MailThreadList = ({
   useEffect(() => {
     retainCheckedThreads(new Set(threadKeys));
   }, [retainCheckedThreads, threadKeys]);
+
+  // Trashing or reading the selected row takes it out of the list at once;
+  // selecting the row that takes its place keeps keyboard triage going.
+  useEffect(() => {
+    const replacement = getSelectionAfterRemoval(
+      previousThreadKeysRef.current,
+      threadKeys,
+      selectedThreadKey
+    );
+
+    previousThreadKeysRef.current = threadKeys;
+
+    if (replacement !== undefined) {
+      selectThread(replacement);
+    }
+  }, [selectThread, selectedThreadKey, threadKeys]);
 
   useEffect(() => {
     if (previousScrollResetKeyRef.current === scrollResetKey) {
