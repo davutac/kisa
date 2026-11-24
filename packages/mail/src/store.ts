@@ -153,6 +153,12 @@ export interface StoredAttachment {
   readonly uid: number;
 }
 
+/** Where one copy of a message was before an action moved it to Trash. */
+export interface CopyOrigin {
+  readonly mailboxPath: string;
+  readonly messageId: MessageId;
+}
+
 /** A user label renamed on the server, with its mailbox. */
 export interface LabelRename {
   readonly delimiter: string;
@@ -196,6 +202,11 @@ export interface MailEngineStoreService {
    * mailbox's skeleton is complete, because before then a missing copy may
    * only be one the walk has not reached.
    */
+  /** The mailboxes remembered for these messages, one entry per copy. */
+  readonly copyOrigins: (
+    accountId: AccountId,
+    messageIds: readonly MessageId[]
+  ) => Effect.Effect<ReadonlyMap<MessageId, readonly string[]>>;
   readonly collectOrphans: (
     accountId: AccountId
   ) => Effect.Effect<ThreadChanges, MailStoreError>;
@@ -204,6 +215,10 @@ export interface MailEngineStoreService {
     messageId: MessageId,
     section: string
   ) => Effect.Effect<Option.Option<StoredAttachment>, MailStoreError>;
+  readonly forgetCopyOrigins: (
+    accountId: AccountId,
+    messageIds: readonly MessageId[]
+  ) => Effect.Effect<void>;
   readonly getAccount: (
     accountId: AccountId
   ) => Effect.Effect<Option.Option<MailAccount>, MailStoreError>;
@@ -219,6 +234,17 @@ export interface MailEngineStoreService {
    * `collectOrphans`, it does not wait for skeletons: it is for messages the
    * user deleted for good.
    */
+  /**
+   * Remembers where copies were before an action moved them to Trash, so
+   * Undo can put them back, and forgets whatever was remembered for every
+   * other message in `moved`. Kept in memory, not in SQLite: only Undo reads
+   * it, seconds later, and after a restart a restore falls back to the Inbox.
+   */
+  readonly rememberCopyOrigins: (
+    accountId: AccountId,
+    moved: readonly MessageId[],
+    origins: readonly CopyOrigin[]
+  ) => Effect.Effect<void>;
   readonly removeMessagesWithoutCopies: (
     accountId: AccountId,
     messageIds: readonly MessageId[]

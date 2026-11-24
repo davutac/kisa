@@ -39,6 +39,7 @@ import {
   inAccountEngine,
   inEngine,
   loadThread,
+  partitionReportable,
   renameAccountLabel,
   requestMailSync,
   setThreadReadState,
@@ -155,6 +156,33 @@ const toThreadAction = (
   }
 };
 
+/**
+ * Report spam refuses a conversation of only the user's own mail. Set apart
+ * before its round, it fails alone, rather than passing as reported because
+ * the others in the round had something to move.
+ */
+const splitRound = Effect.fn("MailIpc.splitRound")(function* splitRound(
+  accountId: string,
+  round: readonly MailThreadRequest[],
+  operation: MailBulkThreadMutationOperation
+) {
+  if (operation.kind !== "moveToSpam") {
+    return { refused: [], toChange: round };
+  }
+  const { ownOnly } = yield* inAccountEngine(
+    accountId,
+    partitionReportable(
+      accountId,
+      round.map((thread) => thread.threadId)
+    )
+  );
+  const refused = new Set<string>(ownOnly);
+  return {
+    refused: round.filter((thread) => refused.has(thread.threadId)),
+    toChange: round.filter((thread) => !refused.has(thread.threadId)),
+  };
+});
+
 const MAX_BULK_THREADS = 5000;
 /**
  * Conversations per server round; a failure leaves the other rounds done. No
@@ -202,17 +230,29 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
         start += BULK_CHUNK_SIZE
       ) {
         const round = accountThreads.slice(start, start + BULK_CHUNK_SIZE);
+        const split = yield* Effect.exit(
+          splitRound(accountId, round, request.operation)
+        );
+        if (Exit.isFailure(split)) {
+          failed.push(...round);
+          continue;
+        }
+        const { refused, toChange } = split.value;
+        failed.push(...refused);
+        if (toChange.length === 0) {
+          continue;
+        }
         const exit = yield* Effect.exit(
           inAccountEngine(
             accountId,
             applyThreadActions(
               accountId,
-              round.map((thread) => thread.threadId),
+              toChange.map((thread) => thread.threadId),
               action
             )
           )
         );
-        (Exit.isSuccess(exit) ? succeeded : failed).push(...round);
+        (Exit.isSuccess(exit) ? succeeded : failed).push(...toChange);
       }
     }
 

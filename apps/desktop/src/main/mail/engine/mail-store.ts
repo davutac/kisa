@@ -1042,6 +1042,54 @@ const toCorrespondentMessages = (
     }));
 };
 
+/**
+ * Where copies were before Trash took them, by account and message, one path
+ * per copy. Only Undo reads it, seconds after the move, so it lives in memory
+ * rather than SQLite; a restore it cannot answer goes to the Inbox, as one
+ * after a restart does. Kept outside the layer so every runtime sees it.
+ */
+const copyOriginsByAccount = new Map<string, Map<string, readonly string[]>>();
+
+/**
+ * Messages remembered per account. Undo consumes its own entries, so this
+ * only bounds what a session of trashing without undoing leaves behind; the
+ * oldest go first.
+ */
+const MAX_REMEMBERED_MESSAGES = 2000;
+
+const rememberOrigins = (
+  accountId: string,
+  moved: readonly string[],
+  origins: readonly {
+    readonly mailboxPath: string;
+    readonly messageId: string;
+  }[]
+): void => {
+  const remembered = copyOriginsByAccount.get(accountId) ?? new Map();
+
+  for (const messageId of moved) {
+    remembered.delete(messageId);
+  }
+  for (const { mailboxPath, messageId } of origins) {
+    remembered.set(messageId, [
+      ...(remembered.get(messageId) ?? []),
+      mailboxPath,
+    ]);
+  }
+  for (const messageId of remembered.keys()) {
+    if (remembered.size <= MAX_REMEMBERED_MESSAGES) {
+      break;
+    }
+    remembered.delete(messageId);
+  }
+
+  if (remembered.size === 0) {
+    copyOriginsByAccount.delete(accountId);
+  } else {
+    copyOriginsByAccount.set(accountId, remembered);
+  }
+};
+
 export const MailEngineStoreLive = Layer.effect(
   MailEngineStore,
   Effect.gen(function* makeMailEngineStore() {
@@ -1120,6 +1168,7 @@ export const MailEngineStoreLive = Layer.effect(
           "Could not clear the mail account",
           async (transaction) => {
             forgetCachedCorrespondents(accountId);
+            copyOriginsByAccount.delete(accountId);
             // Deleting message rows also clears their FTS entries (triggers).
             for (const table of [
               mailMessageLocations,
@@ -1167,6 +1216,25 @@ export const MailEngineStoreLive = Layer.effect(
             undefined,
             now
           );
+        }),
+
+      copyOrigins: (accountId, messageIds) =>
+        Effect.sync(() => {
+          const remembered = copyOriginsByAccount.get(accountId);
+          const origins = new Map<MessageId, readonly string[]>();
+
+          for (const messageId of messageIds) {
+            const paths = remembered?.get(messageId);
+            if (paths !== undefined) {
+              origins.set(messageId, paths);
+            }
+          }
+          return origins;
+        }),
+
+      forgetCopyOrigins: (accountId, messageIds) =>
+        Effect.sync(() => {
+          rememberOrigins(accountId, messageIds, []);
         }),
 
       findAttachment: (accountId, messageId, section) =>
@@ -1321,6 +1389,11 @@ export const MailEngineStoreLive = Layer.effect(
                 now
               );
             }),
+
+      rememberCopyOrigins: (accountId, moved, origins) =>
+        Effect.sync(() => {
+          rememberOrigins(accountId, moved, origins);
+        }),
 
       removeMessagesWithoutCopies: (accountId, messageIds) =>
         messageIds.length === 0

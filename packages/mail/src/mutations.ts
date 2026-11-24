@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import { MailProtocolError } from "./errors";
 import { SystemLabel, userLabelPath } from "./ids";
-import type { LabelId, MailboxRole, ThreadId } from "./ids";
+import type { AccountId, LabelId, MailboxRole, ThreadId } from "./ids";
 import { MailEngineStore } from "./store";
 import type {
   LocationChange,
@@ -167,6 +167,21 @@ const DISCARDED_ROLES: ReadonlySet<MailboxRole> = new Set(["junk", "trash"]);
 const isDiscarded = (context: ActionContext, path: string): boolean =>
   DISCARDED_ROLES.has(roleOf(context, path));
 
+/**
+ * The user's own copies: what they sent and their drafts. Spam is a verdict
+ * on other people's mail, so these stay in Sent and Drafts, and "Not spam"
+ * never moves them into the Inbox.
+ */
+const isOwnCopy = (location: ThreadLocation): boolean =>
+  location.labelIds.includes(SystemLabel.sent) ||
+  location.labelIds.includes(SystemLabel.draft);
+
+/** A mailbox a copy can go back to: still there, and not on its way out. */
+const isRestorable = (context: ActionContext, path: string): boolean =>
+  context.mailboxes.some(
+    (mailbox) => mailbox.path === path && mailbox.selectable
+  ) && !isDiscarded(context, path);
+
 const labelNotAvailable = (context: ActionContext) =>
   new MailProtocolError({
     accountId: context.scope.accountId,
@@ -227,23 +242,36 @@ const storeOnCopies = Effect.fn("MailMutations.storeOnCopies")(
   }
 );
 
+/**
+ * Moves each group of copies to its destination, then catches up every
+ * mailbox involved, once.
+ */
+const moveCopiesTo = Effect.fn("MailMutations.moveCopiesTo")(
+  function* moveCopiesTo(
+    context: ActionContext,
+    byDestination: ReadonlyMap<string, readonly ThreadLocation[]>
+  ) {
+    const touched = new Set<string>();
+    for (const [destination, targets] of byDestination) {
+      const sources = groupByMailbox(
+        targets.filter((location) => location.mailboxPath !== destination)
+      );
+      for (const [path, locations] of sources) {
+        yield* context.scope.session.move(path, uidsOf(locations), destination);
+        touched.add(path);
+      }
+      touched.add(destination);
+    }
+    return yield* refreshMailboxes(context.scope, [...touched]);
+  }
+);
+
 /** Moves copies to `destination`, then catches up both ends. */
-const moveCopies = Effect.fn("MailMutations.moveCopies")(function* moveCopies(
+const moveCopies = (
   context: ActionContext,
   targets: readonly ThreadLocation[],
   destination: string
-) {
-  const sources = groupByMailbox(
-    targets.filter((location) => location.mailboxPath !== destination)
-  );
-  for (const [path, locations] of sources) {
-    yield* context.scope.session.move(path, uidsOf(locations), destination);
-  }
-  return yield* refreshMailboxes(context.scope, [
-    ...sources.keys(),
-    destination,
-  ]);
-});
+) => moveCopiesTo(context, new Map([[destination, targets]]));
 
 const setRead = (context: ActionContext, read: boolean) =>
   storeOnCopies(
@@ -446,23 +474,24 @@ const trash = Effect.fn("MailMutations.trash")(function* trash(
   context: ActionContext
 ) {
   const destination = yield* requireMailbox(context, "trash", "Trash");
-  return yield* moveCopies(
-    context,
-    context.locations.filter(
-      (location) => roleOf(context, location.mailboxPath) !== "trash"
-    ),
-    destination.path
+  const targets = context.locations.filter(
+    (location) => roleOf(context, location.mailboxPath) !== "trash"
   );
+  // Outside Gmail a copy in Trash forgets its folder, so where the user's own
+  // copies were is remembered first, for Undo to put them back.
+  if (context.scope.dialect.kind === "generic") {
+    const store = yield* MailEngineStore;
+    yield* store.rememberCopyOrigins(
+      context.scope.accountId,
+      [...new Set(targets.map((location) => location.messageId))],
+      targets.filter(isOwnCopy).map(({ mailboxPath, messageId }) => ({
+        mailboxPath,
+        messageId,
+      }))
+    );
+  }
+  return yield* moveCopies(context, targets, destination.path);
 });
-
-/**
- * The user's own copies: what they sent and their drafts. Spam is a verdict
- * on other people's mail, so these stay in Sent and Drafts, and "Not spam"
- * never moves them into the Inbox.
- */
-const isOwnCopy = (location: ThreadLocation): boolean =>
-  location.labelIds.includes(SystemLabel.sent) ||
-  location.labelIds.includes(SystemLabel.draft);
 
 const moveToSpam = Effect.fn("MailMutations.moveToSpam")(function* moveToSpam(
   context: ActionContext
@@ -484,16 +513,50 @@ const moveToSpam = Effect.fn("MailMutations.moveToSpam")(function* moveToSpam(
   return yield* moveCopies(context, received, destination.path);
 });
 
-/** Out of Spam or Trash and back into the Inbox. */
-const moveToInbox = (context: ActionContext) =>
-  moveCopies(
-    context,
-    context.locations.filter((location) => {
-      const role = roleOf(context, location.mailboxPath);
-      return role === "junk" || role === "trash";
-    }),
-    INBOX_PATH
-  );
+/**
+ * Out of Spam or Trash and back into the Inbox. Outside Gmail, the user's own
+ * copies that Trash took return to the Sent or Drafts mailbox they came from,
+ * one remembered origin per copy, while it is still there. Gmail's restore
+ * is unchanged: it was verified only into the Inbox.
+ */
+const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
+  function* moveToInbox(context: ActionContext) {
+    const discarded = context.locations.filter((location) =>
+      isDiscarded(context, location.mailboxPath)
+    );
+    if (context.scope.dialect.kind === "gmail") {
+      return yield* moveCopies(context, discarded, INBOX_PATH);
+    }
+
+    const store = yield* MailEngineStore;
+    const messageIds = [
+      ...new Set(discarded.map((location) => location.messageId)),
+    ];
+    const origins = yield* store.copyOrigins(
+      context.scope.accountId,
+      messageIds
+    );
+    const unclaimed = new Map(
+      [...origins].map(([messageId, paths]) => [messageId, [...paths]])
+    );
+    const byDestination = new Map<string, ThreadLocation[]>();
+    for (const location of discarded) {
+      const origin = unclaimed.get(location.messageId)?.shift();
+      const destination =
+        origin !== undefined && isRestorable(context, origin)
+          ? origin
+          : INBOX_PATH;
+      byDestination.set(destination, [
+        ...(byDestination.get(destination) ?? []),
+        location,
+      ]);
+    }
+
+    const changes = yield* moveCopiesTo(context, byDestination);
+    yield* store.forgetCopyOrigins(context.scope.accountId, messageIds);
+    return changes;
+  }
+);
 
 /**
  * Permanent deletion of the copies in Spam or Trash, as Gmail's "Delete
@@ -577,6 +640,36 @@ export const applyThreadAction = Effect.fn("MailMutations.applyThreadAction")(
     }
   }
 );
+
+/**
+ * Splits conversations for Report spam by what the cache holds. One whose
+ * every copy is the user's own has nothing to report, and Report spam refuses
+ * it; across a selection it is set apart so it fails alone instead of riding
+ * along, unchanged, with the others in its round. One without a cached copy
+ * stays with the rest, where the action leaves it as it is.
+ */
+export const partitionReportableThreads = Effect.fn(
+  "MailMutations.partitionReportableThreads"
+)(function* partitionReportableThreads(
+  accountId: AccountId,
+  threadIds: readonly ThreadId[]
+) {
+  const store = yield* MailEngineStore;
+  const locations = yield* store.threadLocations(accountId, threadIds);
+  const cached = new Set(locations.map((location) => location.threadId));
+  const received = new Set(
+    locations
+      .filter((location) => !isOwnCopy(location))
+      .map((location) => location.threadId)
+  );
+  const isOwnOnly = (threadId: ThreadId): boolean =>
+    cached.has(threadId) && !received.has(threadId);
+
+  return {
+    ownOnly: threadIds.filter(isOwnOnly),
+    reportable: threadIds.filter((threadId) => !isOwnOnly(threadId)),
+  };
+});
 
 /** Marks every copy of a conversation's messages read or unread. */
 export const setThreadRead = (

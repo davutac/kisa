@@ -162,9 +162,11 @@ A change is applied to the server first, then to the cache, so the cache never s
 | User label | Add or remove the label in `X-GM-LABELS` on the All Mail copy | Copy into the folder. On removal, delete the folder's copy if a live copy remains elsewhere; otherwise move it to Archive |
 | Important | `\Important` on the All Mail copy | Not available |
 | Trash | Move every copy to `\Trash` | Same |
-| Spam | Move every copy but the user's own to `\Junk`: copies labelled Sent or Draft stay, so a reply never leaves Sent and Not spam never files it in the Inbox. A conversation of only the user's own mail is refused | Same |
-| Not spam, restore | Move copies out of `\Junk` or `\Trash` into `INBOX`, which Gmail files in All Mail | Same, into `INBOX` |
+| Spam | Move every copy but the user's own to `\Junk`: copies labelled Sent or Draft stay, so a reply never leaves Sent and Not spam never files it in the Inbox. A conversation of only the user's own mail is refused; across a selection, main sets such conversations apart from the cache before each round, so they fail alone and the rest of the round still goes | Same |
+| Not spam, restore | Move copies out of `\Junk` or `\Trash` into `INBOX`, which Gmail files in All Mail | Same, into `INBOX`, except the user's own copies Trash took: before moving, Trash remembers which Sent or Drafts mailbox each such copy was in, and restoring puts it back there, one remembered origin per copy, while that mailbox still exists. The record lives in main's memory, since only Undo reads it seconds later; a new Trash of the same message replaces it, a restore or disconnect clears it, and after a restart a restore falls back to `INBOX` |
 | Delete forever | Expunge the copies in `\Junk` or `\Trash`; copies elsewhere stay | Same |
+
+Gmail's restore keeps no record and moves every copy to `INBOX`, the one restore verified against Gmail. With the fake server, which keeps `\Sent` on a message in Trash as Gmail is expected to, a trashed conversation of only sent mail comes back with the Inbox label too; restoring a sent message anywhere else has not been tried against Gmail.
 
 "A live copy" excludes copies in Trash and Spam, and the mailboxes holding the other copies are re-read before the decision. A label the account does not have, or a system label that cannot be set, is refused rather than ignored.
 

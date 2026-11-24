@@ -6,15 +6,15 @@ The renderer owns only the short-lived opportunity to Undo. The mail server and 
 
 ## Actions with Undo
 
-| Action                     | Inverse                               |
-| -------------------------- | ------------------------------------- |
+| Action | Inverse |
+| --- | --- |
 | Add or remove a user label | Restore the previous label membership |
-| Archive                    | Add the conversation back to Inbox    |
-| Move to Trash              | Remove Trash and restore Inbox        |
-| Report spam                | Move the conversation back to Inbox   |
-| Mark as not spam           | Move the conversation back to Spam    |
+| Archive | Add the conversation back to Inbox |
+| Move to Trash | Remove Trash and restore the Inbox; outside Gmail the user's own replies and drafts return to Sent and Drafts |
+| Report spam | Move the conversation back to Inbox |
+| Mark as not spam | Move the conversation back to Spam |
 
-Single and bulk interaction paths use the same renderer module. Bulk label changes omit conversations already in the requested state, making the inverse exact for mixed selections; bulk Archive likewise sends only the selected conversations in the Inbox, so its Undo returns nothing that was not there. Report spam's Undo, like Not spam, puts what it moved into the Inbox even if the conversation was archived before; the user's own sent mail and drafts never move to Spam, so they stay in Sent and Drafts throughout. If part of a bulk request fails, Undo reverses only the conversations main reports as successfully changed.
+Single and bulk interaction paths use the same renderer module. Bulk label changes omit conversations already in the requested state, making the inverse exact for mixed selections; bulk Archive likewise sends only the selected conversations in the Inbox, so its Undo returns nothing that was not there. Report spam's Undo, like Not spam, puts what it moved into the Inbox even if the conversation was archived before; the user's own sent mail and drafts never move to Spam, so they stay in Sent and Drafts throughout, and a selected conversation of only the user's own mail is refused alone, counted in the toast among those that could not be updated. Trash's Undo returns received mail to the Inbox the same way. On iCloud and other IMAP servers a copy in Trash no longer says where it was, so main remembers, while Trash moves them, which Sent or Drafts mailbox the user's own copies came from, and Undo puts each back there (see [Mail engine](mail-engine.md)); Gmail moves them to the Inbox, so a trashed conversation of only sent mail comes back with the Inbox label. If part of a bulk request fails, Undo reverses only the conversations main reports as successfully changed.
 
 ## Actions without Undo
 

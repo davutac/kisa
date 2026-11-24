@@ -5,7 +5,10 @@ import { MailProtocolError } from "@repo/mail/errors";
 import type { MailTransportError } from "@repo/mail/errors";
 import { AccountId, LabelId, MessageId, ThreadId } from "@repo/mail/ids";
 import { createLabel, deleteLabel, renameLabel } from "@repo/mail/labels";
-import { applyThreadAction } from "@repo/mail/mutations";
+import {
+  applyThreadAction,
+  partitionReportableThreads,
+} from "@repo/mail/mutations";
 import type { ThreadAction } from "@repo/mail/mutations";
 import type { ImapConnector, ImapSession } from "@repo/mail/session";
 import type { SmtpTransport } from "@repo/mail/smtp";
@@ -1083,6 +1086,19 @@ export const applyThreadActions = Effect.fn("MailEngine.applyThreadActions")(
     );
   }
 );
+
+/**
+ * Which conversations Report spam can act on, read from the cache alone, so
+ * no server is asked: see `partitionReportableThreads`.
+ */
+export const partitionReportable = (
+  accountId: string,
+  threadIds: readonly string[]
+) =>
+  partitionReportableThreads(
+    AccountId.make(accountId),
+    threadIds.map((threadId) => ThreadId.make(threadId))
+  );
 
 export const createAccountLabel = Effect.fn("MailEngine.createAccountLabel")(
   function* createAccountLabel(accountId: string, name: string) {

@@ -281,7 +281,7 @@ export const useThreadActions = ({
           undo: {
             change: { kind: "moveToInbox" },
             failureMessage: "Could not restore the conversations",
-            undoneMessage: "Restored conversations to the inbox",
+            undoneMessage: "Restored the conversations",
           },
         });
       },
@@ -442,7 +442,7 @@ export const useThreadActions = ({
             undo: {
               change: { kind: "moveToInbox" },
               failureMessage: "Could not restore the conversation",
-              undoneMessage: "Restored conversation to the inbox",
+              undoneMessage: "Restored the conversation",
             },
           },
           (request) =>

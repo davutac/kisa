@@ -1,7 +1,10 @@
 // oxlint-disable typescript/no-unsafe-type-assertion
 import { genericDialect, gmailDialect } from "@repo/mail/dialects";
 import { SystemLabel, ThreadId, userLabelId } from "@repo/mail/ids";
-import { applyThreadAction } from "@repo/mail/mutations";
+import {
+  applyThreadAction,
+  partitionReportableThreads,
+} from "@repo/mail/mutations";
 import type { ThreadAction } from "@repo/mail/mutations";
 import { bodyStep, skeletonStep, syncAccount } from "@repo/mail/sync";
 import type { SyncScope } from "@repo/mail/sync";
@@ -10,6 +13,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { FakeImapServer, envelope } from "./fixtures/fake-imap-server";
 import {
   ALL_MAIL,
+  accountId,
   GMAIL_MAILBOXES,
   ICLOUD_MAILBOXES,
   TRASH,
@@ -60,6 +64,17 @@ const syncIcloud = async (
   await syncFully(scope);
   return { scope, server };
 };
+
+/** A generic reply to `parent`, as another message of its conversation. */
+const genericReply = (id: string, parent: string) =>
+  genericMessage(id, {
+    envelope: envelope({
+      inReplyTo: `<${parent}@example.com>`,
+      messageId: `<${id}@example.com>`,
+      subject: id,
+    }),
+    headers: { references: `<${parent}@example.com>` },
+  });
 
 /** The cached ids of the generic message with this subject. */
 const genericIds = (subject: string) =>
@@ -372,6 +387,110 @@ describe("thread actions with the generic dialect", () => {
       server.calls.filter((call) => call.startsWith("move"))
     ).toStrictEqual([]);
     expect(locationPaths(messageId)).toStrictEqual(["Sent Messages"]);
+  });
+
+  it("puts the user's reply back in Sent when Trash is undone", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+    server.deliver("INBOX", genericMessage("k"));
+    server.deliver("Sent Messages", genericReply("l", "k"));
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+    const received = genericIds("k");
+    const reply = genericIds("l");
+    const copies = () => [
+      locationPaths(received.message_id),
+      locationPaths(reply.message_id),
+    ];
+
+    await act(scope, received.thread_id, { kind: "trash" });
+    const trashed = copies();
+    await act(scope, received.thread_id, { kind: "moveToInbox" });
+
+    expect({ restored: copies(), trashed }).toStrictEqual({
+      restored: [["INBOX"], ["Sent Messages"]],
+      trashed: [["Deleted Messages"], ["Deleted Messages"]],
+    });
+  });
+
+  it("puts a conversation of only sent mail back in Sent", async () => {
+    const { scope } = await syncIcloud([{ id: "m", path: "Sent Messages" }]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("m");
+
+    await act(scope, threadId, { kind: "trash" });
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["Sent Messages"]);
+    expect(threadRow(threadId)).toMatchObject({
+      is_in_inbox: 0,
+      is_in_sent: 1,
+    });
+  });
+
+  it("gives each copy of one message its own way back", async () => {
+    // Mail to oneself, or a list echoing a post: one Message-ID, two copies.
+    const { scope } = await syncIcloud([
+      { id: "n", path: "INBOX" },
+      { id: "n", path: "Sent Messages" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("n");
+
+    await act(scope, threadId, { kind: "trash" });
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["INBOX", "Sent Messages"]);
+  });
+
+  it("restores to the Inbox when the remembered mailbox is gone", async () => {
+    const { scope, server } = await syncIcloud([
+      { id: "s", path: "Sent Messages" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("s");
+    await act(scope, threadId, { kind: "trash" });
+    server.removeMailbox("Sent Messages");
+    await run(syncAccount(scope));
+
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["INBOX"]);
+  });
+
+  it("forgets where a copy was once it is trashed again from elsewhere", async () => {
+    const { scope, server } = await syncIcloud([
+      { id: "p", path: "Sent Messages" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("p");
+    await act(scope, threadId, { kind: "trash" });
+    // Another mail app files it in the Inbox; Kisa then trashes it from there.
+    const { uid } = connection
+      .prepare(
+        "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages'"
+      )
+      .get(messageId) as { uid: number };
+    server.move("Deleted Messages", uid, "INBOX");
+    await run(syncAccount(scope));
+    await act(scope, threadId, { kind: "trash" });
+
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["INBOX"]);
+  });
+
+  it("sets apart a conversation of only the user's own mail for Report spam", async () => {
+    await syncIcloud([
+      { id: "q", path: "INBOX" },
+      { id: "r", path: "Sent Messages" },
+    ]);
+    const received = ThreadId.make(genericIds("q").thread_id);
+    const own = ThreadId.make(genericIds("r").thread_id);
+    const uncached = ThreadId.make("not-cached");
+
+    await expect(
+      run(partitionReportableThreads(accountId, [received, own, uncached]))
+    ).resolves.toStrictEqual({
+      ownOnly: [own],
+      reportable: [received, uncached],
+    });
   });
 
   it("trashes every copy into Deleted Messages", async () => {

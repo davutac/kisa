@@ -14,6 +14,9 @@ const state = vi.hoisted(() => ({
     threadIds: string[];
   }[],
   failingAccounts: new Set<string>(),
+  /** Conversations whose every cached copy is the user's own. */
+  ownOnly: new Set<string>(),
+  partitioned: [] as string[][],
 }));
 
 vi.mock("../src/main/mail/engine/mail-send", () => ({
@@ -43,6 +46,14 @@ vi.mock("../src/main/mail/engine/mail-engine", async () => {
           : MockEffect.void;
       }),
     inAccountEngine: <A>(_accountId: string, effect: A): A => effect,
+    partitionReportable: (_accountId: string, threadIds: readonly string[]) =>
+      MockEffect.sync(() => {
+        state.partitioned.push([...threadIds]);
+        return {
+          ownOnly: threadIds.filter((id) => state.ownOnly.has(id)),
+          reportable: threadIds.filter((id) => !state.ownOnly.has(id)),
+        };
+      }),
   };
 });
 
@@ -56,6 +67,8 @@ describe("bulk thread actions", () => {
   beforeEach(() => {
     state.calls.length = 0;
     state.failingAccounts.clear();
+    state.ownOnly.clear();
+    state.partitioned.length = 0;
   });
 
   it("changes each account in rounds and reports the ones that failed", async () => {
@@ -80,6 +93,55 @@ describe("bulk thread actions", () => {
     ]);
     expect(result.succeeded).toHaveLength(300);
     expect(result.failed).toStrictEqual(threads("b@example.com", 2));
+  });
+
+  it("fails a conversation of only the user's own mail alone when reporting spam", async () => {
+    state.ownOnly.add("a@example.com-1");
+    const selection = threads("a@example.com", 3);
+
+    const result = await Effect.runPromise(
+      bulkMutateThreads({
+        operation: { kind: "moveToSpam" },
+        threads: selection,
+      })
+    );
+
+    expect({
+      failed: result.failed,
+      sent: state.calls.map((call) => call.threadIds),
+      succeeded: result.succeeded,
+    }).toStrictEqual({
+      failed: [selection[1]],
+      sent: [["a@example.com-0", "a@example.com-2"]],
+      succeeded: [selection[0], selection[2]],
+    });
+  });
+
+  it("asks no server when every conversation in a round is the user's own", async () => {
+    state.ownOnly.add("a@example.com-0");
+
+    const result = await Effect.runPromise(
+      bulkMutateThreads({
+        operation: { kind: "moveToSpam" },
+        threads: threads("a@example.com", 1),
+      })
+    );
+
+    expect({ calls: state.calls, failed: result.failed }).toStrictEqual({
+      calls: [],
+      failed: threads("a@example.com", 1),
+    });
+  });
+
+  it("checks for the user's own mail only when reporting spam", async () => {
+    await Effect.runPromise(
+      bulkMutateThreads({
+        operation: { kind: "trash" },
+        threads: threads("a@example.com", 2),
+      })
+    );
+
+    expect(state.partitioned).toStrictEqual([]);
   });
 
   it("turns read state into the engine's read action", async () => {
