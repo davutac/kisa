@@ -611,7 +611,11 @@ const MailThreadList = ({
   ]);
 
   return (
-    <>
+    // Positioned and clipped, but not a scroll container: the selection bar
+    // rests against this box, so nothing it holds can lengthen the scrolling
+    // <main>. Tooltips and the label menu show in the top layer, which the
+    // clip leaves alone.
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-clip">
       <MailListRoot
         after={
           hasTrailingRow ? (
@@ -719,7 +723,7 @@ const MailThreadList = ({
           />
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 };
 

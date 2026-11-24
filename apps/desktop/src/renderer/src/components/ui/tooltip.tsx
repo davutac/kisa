@@ -66,6 +66,12 @@ const Tooltip = ({
   );
 };
 
+// ui-sdk renders the content in place and shows it as a popover in the top
+// layer. A class that sets `display` overrides the browser's own rule that
+// hides a closed popover, and `hidden` is written only a render after the
+// popover closes. Without `not-open:hidden` the content is laid out in between
+// as a fixed box against any transformed ancestor, far from its trigger, and
+// lengthens whatever scrolls around it.
 const TooltipContent = ({
   className,
   side = "top",
@@ -88,7 +94,7 @@ const TooltipContent = ({
     side={side}
     sideOffset={sideOffset}
     className={cn(
-      "bg-foreground text-background inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 overflow-visible rounded-md px-3 py-1.5 text-xs transition-[opacity,scale] duration-100 has-data-[slot=kbd]:pr-1.5 data-closes-at-once:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-instant:transition-none data-starting-style:scale-95 data-starting-style:opacity-0 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm",
+      "bg-foreground text-background inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 overflow-visible rounded-md px-3 py-1.5 text-xs transition-[opacity,scale] duration-100 not-open:hidden has-data-[slot=kbd]:pr-1.5 data-closes-at-once:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-instant:transition-none data-starting-style:scale-95 data-starting-style:opacity-0 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm",
       className
     )}
     {...props}

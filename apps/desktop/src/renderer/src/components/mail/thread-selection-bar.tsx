@@ -206,8 +206,7 @@ const ThreadSelectionBar = ({
 
   const conversations = `${threads.length} conversation${threads.length === 1 ? "" : "s"}`;
   // The bar rests 16px (bottom-4) above the mailbox's edge. Sliding further
-  // than that would push it past the edge, overflowing the scrolling <main>
-  // and flashing a second scrollbar beside the list's own.
+  // than that would start it past the edge, where the list's box clips it.
   const enterOffsetY = 12;
 
   return (
