@@ -3,7 +3,6 @@ import { Effect } from "effect";
 import { MailProtocolError } from "./errors";
 import { SystemLabel, userLabelPath } from "./ids";
 import type { LabelId, MailboxRole, ThreadId } from "./ids";
-import type { ImapMailbox } from "./session";
 import { MailEngineStore } from "./store";
 import type {
   LocationChange,
@@ -11,7 +10,12 @@ import type {
   ThreadChanges,
   ThreadLocation,
 } from "./store";
-import { NO_THREAD_CHANGES, mergeThreadChanges, syncMailbox } from "./sync";
+import {
+  NO_THREAD_CHANGES,
+  mergeThreadChanges,
+  syncMailbox,
+  toImapMailbox,
+} from "./sync";
 import type { SyncScope } from "./sync";
 
 /** What the user asked to do with one or more conversations. */
@@ -96,14 +100,6 @@ const toggled = (
     uid: location.uid,
   };
 };
-
-export const toImapMailbox = (record: MailboxRecord): ImapMailbox => ({
-  delimiter: record.delimiter,
-  flags: [],
-  path: record.path,
-  role: record.role,
-  selectable: record.selectable,
-});
 
 /**
  * Catches the cache up with mailboxes a move, copy or expunge touched. The

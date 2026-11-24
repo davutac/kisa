@@ -3,10 +3,10 @@ import { Effect } from "effect";
 import { MailProtocolError } from "./errors";
 import { userLabelId } from "./ids";
 import type { LabelId } from "./ids";
-import { refreshMailboxes, toImapMailbox } from "./mutations";
+import { refreshMailboxes } from "./mutations";
 import { MailEngineStore } from "./store";
 import type { MailboxRecord } from "./store";
-import { discoverMailboxes, mergeThreadChanges } from "./sync";
+import { discoverMailboxes, mergeThreadChanges, toImapMailbox } from "./sync";
 import type { SyncScope } from "./sync";
 
 /** Names that would read as, or collide with, a system mailbox. */

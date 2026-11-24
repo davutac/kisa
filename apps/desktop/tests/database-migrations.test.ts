@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +20,7 @@ const BASELINE = "20261121231100_baseline";
 const DROP_OAUTH_COLUMNS = "20261122102513_drop_oauth_columns";
 const FLAG_CURSOR = "20261122123610_flag_cursor";
 const RESET_GENERIC_BODIES = "20261122205708_reset_generic_bodies";
+const LABEL_CURSOR = "20261124083947_mail_mailboxes_label_cursor";
 
 const makeTemporaryDirectory = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
@@ -350,6 +351,39 @@ describe("database baseline", () => {
         .all()
     ).toStrictEqual([
       { flag_cursor: null, path: "INBOX", skeleton_floor: 1, uid_next: 42 },
+    ]);
+  });
+
+  it("adds an empty label cursor to mailboxes, keeping their sync progress", () => {
+    const connection = openDatabaseWith(
+      ...readdirSync(migrationsFolder).filter((name) => name < LABEL_CURSOR)
+    );
+    connection
+      .prepare(
+        `INSERT INTO mail_mailboxes (account_id, delimiter, flag_cursor, path,
+          role, selectable, skeleton_floor, synced, uid_next, uid_validity,
+          updated_at)
+         VALUES ('a@example.com', '/', 30, 'INBOX', 'inbox', 1, 1, 1, 42, '7',
+          1)`
+      )
+      .run();
+
+    applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+
+    expect(
+      connection
+        .prepare(
+          "SELECT path, flag_cursor, label_cursor, skeleton_floor, uid_next FROM mail_mailboxes"
+        )
+        .all()
+    ).toStrictEqual([
+      {
+        flag_cursor: 30,
+        label_cursor: null,
+        path: "INBOX",
+        skeleton_floor: 1,
+        uid_next: 42,
+      },
     ]);
   });
 

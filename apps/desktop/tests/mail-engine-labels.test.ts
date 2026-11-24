@@ -3,8 +3,9 @@ import { genericDialect, gmailDialect } from "@repo/mail/dialects";
 import { ThreadId, userLabelId } from "@repo/mail/ids";
 import { createLabel, deleteLabel, renameLabel } from "@repo/mail/labels";
 import { applyThreadAction } from "@repo/mail/mutations";
-import { syncAccount } from "@repo/mail/sync";
+import { relabelStep, syncAccount } from "@repo/mail/sync";
 import type { SyncScope } from "@repo/mail/sync";
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { seededLabelColor } from "../src/shared/label-color";
@@ -30,6 +31,39 @@ const userLabels = () =>
       "SELECT label_id, background_color FROM mail_labels WHERE kind = 'user' ORDER BY label_id"
     )
     .all();
+
+const labelCursors = () =>
+  connection
+    .prepare(
+      "SELECT path, label_cursor FROM mail_mailboxes WHERE label_cursor IS NOT NULL ORDER BY path"
+    )
+    .all();
+
+/** A full pass that also reports whether its discovery changed the labels. */
+const syncReportingLabels = async (scope: SyncScope) => {
+  let labelsChanged: boolean | undefined;
+  const changes = await run(
+    syncAccount({
+      ...scope,
+      discovered: (discovery) =>
+        Effect.sync(() => {
+          ({ labelsChanged } = discovery);
+        }),
+    })
+  );
+  return { changes, labelsChanged };
+};
+
+/** Runs the label reread to its end and returns how many steps it took. */
+const relabelFully = async (scope: SyncScope): Promise<number> => {
+  for (let step = 0; step < 100; step += 1) {
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    if ((await run(relabelStep(scope))) === undefined) {
+      return step;
+    }
+  }
+  throw new Error("label reread did not finish");
+};
 
 const fileUnder = (scope: SyncScope, threadId: string, labelId: string) =>
   run(
@@ -140,6 +174,106 @@ describe("labels with the Gmail dialect", () => {
     ]);
   });
 
+  it("reads labels again after a label is renamed on the web", async () => {
+    const { scope, server } = await syncGmailWorkMessage();
+    server.deliver(
+      ALL_MAIL,
+      gmailMessage("801", "801", { gmailLabels: ["\\Inbox"] })
+    );
+    await run(syncAccount(scope));
+
+    server.renameMailbox("Work", "Office");
+    const synced = await syncReportingLabels(scope);
+    const beforeReread = threadRow("800")?.label_ids;
+    const armed = labelCursors();
+    const firstStep = await run(relabelStep(scope));
+    const steps = await relabelFully(scope);
+
+    expect({
+      armed,
+      beforeReread,
+      firstStep,
+      labelIds: threadRow("800")?.label_ids,
+      labelsChanged: synced.labelsChanged,
+      left: labelCursors(),
+      steps,
+    }).toStrictEqual({
+      armed: [{ label_cursor: 3, path: ALL_MAIL }],
+      // The old names come off at once; the new ones need the reread.
+      beforeReread: JSON.stringify(["INBOX"]),
+      // Only the conversation whose labels differ is written.
+      firstStep: { changed: ["800"], removed: [] },
+      labelIds: JSON.stringify(["INBOX", "u:Office", "u:Office/Sub"]),
+      labelsChanged: true,
+      left: [],
+      steps: 1,
+    });
+  });
+
+  it("takes a label deleted on the web off its conversations without reading them again", async () => {
+    const { scope, server } = await syncGmailWorkMessage();
+
+    server.removeMailbox("Work");
+    const synced = await syncReportingLabels(scope);
+
+    expect({
+      labelIds: threadRow("800")?.label_ids,
+      labelsChanged: synced.labelsChanged,
+      reread: await run(relabelStep(scope)),
+    }).toStrictEqual({
+      labelIds: JSON.stringify(["INBOX", "u:Work/Sub"]),
+      labelsChanged: true,
+      reread: undefined,
+    });
+  });
+
+  it("reads no labels again for an unchanged list, a new label, or a rename in Kisa", async () => {
+    const { scope, server } = await syncGmailWorkMessage();
+
+    const unchanged = await syncReportingLabels(scope);
+    await run(createLabel(scope, "Travel"));
+    await run(renameLabel(scope, "u:Travel", "Trips"));
+    server.addMailbox("Receipts");
+    const added = await syncReportingLabels(scope);
+
+    expect({
+      added: added.labelsChanged,
+      cursors: labelCursors(),
+      unchanged: unchanged.labelsChanged,
+    }).toStrictEqual({ added: true, cursors: [], unchanged: false });
+  });
+
+  it("resumes a label reread that failed, and starts it over after another rename", async () => {
+    const { scope, server } = await syncGmailWorkMessage();
+    server.renameMailbox("Work", "Office");
+    await run(syncAccount(scope));
+
+    server.dropFetch = () => true;
+    await expect(run(relabelStep(scope))).rejects.toMatchObject({
+      _tag: "MailConnectionError",
+    });
+    server.dropFetch = undefined;
+    const kept = labelCursors();
+    await run(relabelStep(scope));
+    const moved = labelCursors();
+    server.renameMailbox("Office", "Desk");
+    await run(syncAccount(scope));
+    const restarted = labelCursors();
+    await relabelFully(scope);
+
+    expect({
+      kept,
+      labelIds: threadRow("800")?.label_ids,
+      moved,
+      restarted,
+    }).toStrictEqual({
+      kept: [{ label_cursor: 2, path: ALL_MAIL }],
+      labelIds: JSON.stringify(["INBOX", "u:Desk", "u:Desk/Sub"]),
+      moved: [{ label_cursor: 1, path: ALL_MAIL }],
+      restarted: [{ label_cursor: 2, path: ALL_MAIL }],
+    });
+  });
+
   it("refuses names Gmail or the mailbox list would misread", async () => {
     const { scope } = await syncGmailWorkMessage();
 
@@ -187,6 +321,64 @@ describe("labels with the generic dialect", () => {
         },
       ],
     });
+  });
+
+  it("reports folders another client added or deleted", async () => {
+    const { scope, server } = await syncIcloudReceipt();
+
+    const unchanged = await syncReportingLabels(scope);
+    server.removeMailbox("Receipts");
+    const deleted = await syncReportingLabels(scope);
+    const deletedLabels = userLabels();
+    server.addMailbox("Travel");
+    const added = await syncReportingLabels(scope);
+    server.renameMailbox("Travel", "Trips");
+    await run(syncAccount(scope));
+
+    expect({
+      added: added.labelsChanged,
+      deleted: deleted.labelsChanged,
+      deletedLabels,
+      labels: userLabels(),
+      unchanged: unchanged.labelsChanged,
+    }).toStrictEqual({
+      added: true,
+      deleted: true,
+      deletedLabels: [],
+      labels: [
+        {
+          background_color: seededLabelColor("Trips"),
+          label_id: "u:Trips",
+        },
+      ],
+      unchanged: false,
+    });
+    // Folders are read as mailboxes, so a rename needs no label reread.
+    expect(labelCursors()).toStrictEqual([]);
+  });
+
+  it("reports a deleted folder even when the rest of the pass fails", async () => {
+    const { scope, server } = await syncIcloudReceipt();
+    const { thread_id: threadId } = genericMessageIds("receipt");
+    server.removeMailbox("Receipts");
+    server.deliver("INBOX", genericMessage("later"));
+    server.dropFetch = () => true;
+    const reported: unknown[] = [];
+
+    await expect(
+      run(
+        syncAccount({
+          ...scope,
+          discovered: ({ changes, labelsChanged }) =>
+            Effect.sync(() => {
+              reported.push({ changed: changes.changed, labelsChanged });
+            }),
+        })
+      )
+    ).rejects.toMatchObject({ _tag: "MailConnectionError" });
+    expect(reported).toStrictEqual([
+      { changed: [threadId], labelsChanged: true },
+    ]);
   });
 
   it("creates a folder that takes mail at once", async () => {

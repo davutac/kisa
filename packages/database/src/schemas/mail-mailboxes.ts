@@ -20,6 +20,12 @@ export const mailMailboxes = sqliteTable(
      * the next slice starts below the newest copies, which every pass reads.
      */
     flagCursor: integer("flag_cursor"),
+    /**
+     * Gmail: a label renamed elsewhere is not reported as a change to its
+     * messages, so their cached labels are read again, newest first; the
+     * next slice starts below this UID. `null` means nothing is to be read.
+     */
+    labelCursor: integer("label_cursor"),
     /** HIGHESTMODSEQ when the cache last caught up, absent without CONDSTORE. */
     highestModseq: text("highest_modseq"),
     /** The message count the cache last saw, for spotting deletions. */

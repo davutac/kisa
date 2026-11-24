@@ -239,6 +239,39 @@ export class FakeImapServer {
     });
   }
 
+  /**
+   * A mailbox deleted, here or by another client. Gmail takes a deleted
+   * label off its messages without a new mod-sequence.
+   */
+  removeMailbox(path: string): void {
+    this.mailboxes.delete(path);
+    this.relabel((label) => (label === path ? undefined : label));
+  }
+
+  /**
+   * A mailbox renamed, here or by another client. Mailboxes under it move
+   * with it, keeping UIDVALIDITY, and Gmail relabels the messages without a
+   * new mod-sequence.
+   */
+  renameMailbox(path: string, destination: string): void {
+    const renamed = (name: string): string =>
+      name === path || name.startsWith(`${path}/`)
+        ? `${destination}${name.slice(path.length)}`
+        : name;
+    // Copied first: the loop moves entries of the map it reads.
+    const before = [...this.mailboxes];
+    for (const [name, mailbox] of before) {
+      if (renamed(name) !== name) {
+        this.mailboxes.delete(name);
+        this.mailboxes.set(renamed(name), {
+          ...mailbox,
+          info: { ...mailbox.info, path: renamed(name) },
+        });
+      }
+    }
+    this.relabel(renamed);
+  }
+
   private mailbox(path: string): FakeMailbox {
     const mailbox = this.mailboxes.get(path);
     if (mailbox === undefined) {
@@ -384,10 +417,7 @@ export class FakeImapServer {
       deleteMailbox: (path) =>
         Effect.sync(() => {
           this.calls.push(`delete ${path}`);
-          this.mailboxes.delete(path);
-          // Gmail takes a deleted label off its messages without a new
-          // mod-sequence.
-          this.relabel((label) => (label === path ? undefined : label));
+          this.removeMailbox(path);
         }),
       expunge: (path, uids) =>
         withMailbox(path, (mailbox) => {
@@ -457,22 +487,7 @@ export class FakeImapServer {
       renameMailbox: (path, destination) =>
         Effect.sync(() => {
           this.calls.push(`rename ${path} -> ${destination}`);
-          const renamed = (name: string): string =>
-            name === path || name.startsWith(`${path}/`)
-              ? `${destination}${name.slice(path.length)}`
-              : name;
-          // Mailboxes under it move with it, keeping UIDVALIDITY.
-          const before = [...this.mailboxes];
-          for (const [name, mailbox] of before) {
-            if (renamed(name) !== name) {
-              this.mailboxes.delete(name);
-              this.mailboxes.set(renamed(name), {
-                ...mailbox,
-                info: { ...mailbox.info, path: renamed(name) },
-              });
-            }
-          }
-          this.relabel(renamed);
+          this.renameMailbox(path, destination);
         }),
       search: (path, search) =>
         withMailbox(path, (mailbox) => {

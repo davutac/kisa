@@ -386,6 +386,7 @@ const saveProgress = async (
   const set = {
     flagCursor: progress.flagCursor,
     highestModseq: toBigIntText(progress.highestModseq),
+    labelCursor: progress.labelCursor,
     messageCount: progress.messageCount,
     skeletonFloor: progress.skeletonFloor,
     uidNext: progress.uidNext,
@@ -858,6 +859,7 @@ const toMailboxRecord = (
   delimiter: row.delimiter,
   flagCursor: row.flagCursor ?? undefined,
   highestModseq: fromBigIntText(row.highestModseq),
+  labelCursor: row.labelCursor ?? undefined,
   messageCount: row.messageCount ?? undefined,
   path: row.path,
   role: Option.getOrElse(decodeRole(row.role), () => "none" as const),
@@ -1485,6 +1487,7 @@ export const MailEngineStoreLive = Layer.effect(
               .set({
                 flagCursor: null,
                 highestModseq: null,
+                labelCursor: null,
                 messageCount: null,
                 skeletonFloor: null,
                 uidNext: null,
@@ -1567,10 +1570,11 @@ export const MailEngineStoreLive = Layer.effect(
             [],
             now
           );
-          // The old UIDs mean nothing now; the flag slices start over.
+          // The old UIDs mean nothing now: the flag slices start over, and
+          // the walk reads every label again anyway.
           await transaction
             .update(mailMailboxes)
-            .set({ flagCursor: null })
+            .set({ flagCursor: null, labelCursor: null })
             .where(
               and(
                 eq(mailMailboxes.accountId, accountId),

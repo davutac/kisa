@@ -16,6 +16,7 @@ import {
   bodyStep,
   loadThreadBodies,
   mergeThreadChanges,
+  relabelStep,
   skeletonStep,
   syncAccount,
 } from "@repo/mail/sync";
@@ -255,6 +256,15 @@ export const withCacheLock = <A, E, R>(
  * optimistic copy of them once the action answers, so theirs are the upserts
  * that must not be cut.
  */
+const publishLabelCatalogChanged = (accountId: string) =>
+  Effect.sync(() => {
+    sendRendererEvent(
+      MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
+      MailLabelCatalogChanged,
+      { accountId }
+    );
+  });
+
 export const publishChanges = Effect.fn("MailEngine.publishChanges")(
   function* publishChanges(
     accountId: string,
@@ -515,9 +525,25 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
     return yield* withAccountSession(account, "background", (session) =>
       Effect.gen(function* runCycle() {
         const scope = scopeOf(account, session);
+        const context = yield* Effect.context<MailDatabase>();
 
         const synced = yield* syncAccount({
           ...scope,
+          // Announced once saved: a later mailbox may fail the pass, and the
+          // next pass finds nothing new to announce.
+          discovered: ({ changes, labelsChanged }) =>
+            Effect.gen(function* announceDiscovery() {
+              if (labelsChanged) {
+                // A folder or label added, renamed or deleted elsewhere.
+                yield* publishLabelCatalogChanged(accountId);
+              }
+              yield* publishChanges(accountId, changes);
+            }).pipe(
+              Effect.provideContext(context),
+              Effect.catch(() =>
+                Effect.logWarning("Could not announce changed mailboxes")
+              )
+            ),
           // Taken per mailbox, so a change the user makes waits for one
           // mailbox at most rather than the whole pass.
           exclusive: (effect) => withCacheLock(accountId, effect),
@@ -539,6 +565,8 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
 
         const deadline = Date.now() + CYCLE_BUDGET_MS;
         while (Date.now() < deadline) {
+          // Labels of mail already shown come before older mail.
+          const relabeled = yield* withCacheLock(accountId, relabelStep(scope));
           const skeleton = yield* withCacheLock(accountId, skeletonStep(scope));
           const recent = yield* bodyStep(scope, {
             receivedAfter: Date.now() - RECENT_BODY_WINDOW_MS,
@@ -549,6 +577,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
               : undefined;
 
           if (
+            relabeled === undefined &&
             skeleton === undefined &&
             recent === undefined &&
             older === undefined
@@ -560,6 +589,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
           yield* publishChanges(
             accountId,
             mergeThreadChanges(
+              relabeled ?? NO_THREAD_CHANGES,
               skeleton ?? NO_THREAD_CHANGES,
               recent ?? NO_THREAD_CHANGES,
               older ?? NO_THREAD_CHANGES
@@ -1053,15 +1083,6 @@ export const applyThreadActions = Effect.fn("MailEngine.applyThreadActions")(
     );
   }
 );
-
-const publishLabelCatalogChanged = (accountId: string) =>
-  Effect.sync(() => {
-    sendRendererEvent(
-      MAIL_LABEL_CATALOG_CHANGED_CHANNEL,
-      MailLabelCatalogChanged,
-      { accountId }
-    );
-  });
 
 export const createAccountLabel = Effect.fn("MailEngine.createAccountLabel")(
   function* createAccountLabel(accountId: string, name: string) {

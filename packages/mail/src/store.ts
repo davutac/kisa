@@ -35,6 +35,11 @@ export interface MailboxRecord {
   /** Where the next slice of re-read flags starts, without CONDSTORE. */
   readonly flagCursor?: number | undefined;
   readonly highestModseq?: bigint | undefined;
+  /**
+   * Gmail: while set, cached copies' labels are read again below this UID,
+   * since a label renamed elsewhere is not reported as a change to them.
+   */
+  readonly labelCursor?: number | undefined;
   readonly messageCount?: number | undefined;
   readonly path: string;
   readonly role: MailboxRole;
@@ -50,6 +55,8 @@ export interface MailboxRecord {
 export interface MailboxProgress {
   readonly flagCursor?: number | undefined;
   readonly highestModseq?: bigint | undefined;
+  /** `null` ends the label reread. */
+  readonly labelCursor?: number | null | undefined;
   readonly messageCount?: number | undefined;
   readonly skeletonFloor?: number | undefined;
   readonly uidNext?: number | undefined;

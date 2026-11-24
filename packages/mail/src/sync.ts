@@ -1,9 +1,15 @@
 import { Effect } from "effect";
 
-import type { Dialect, MessageIdentity } from "./dialects";
+import type { Dialect, MessageIdentity, UserLabel } from "./dialects";
 import type { MailStoreError, MailTransportError } from "./errors";
 import { getHeaderValue, parseHeaderBlock, parseMessageIds } from "./headers";
-import type { AccountId, MailboxRole, MessageId, ThreadId } from "./ids";
+import type {
+  AccountId,
+  LabelId,
+  MailboxRole,
+  MessageId,
+  ThreadId,
+} from "./ids";
 import { planMessageStructure } from "./mime-structure";
 import type {
   FetchedMessage,
@@ -74,6 +80,15 @@ export interface SyncScope {
    * Runs one step of a full pass that writes cached copies, so the caller can
    * keep other writers out for that step only, not for the whole pass.
    */
+  /**
+   * Told what a full pass's discovery saved as soon as it is saved, so the
+   * caller can announce it even if a later step of the pass fails: the next
+   * pass finds no difference to report again.
+   */
+  readonly discovered?: (discovery: {
+    readonly changes: ThreadChanges;
+    readonly labelsChanged: boolean;
+  }) => Effect.Effect<void>;
   readonly exclusive?: <A, E, R>(
     effect: Effect.Effect<A, E, R>
   ) => Effect.Effect<A, E, R>;
@@ -290,9 +305,38 @@ const storeSkeleton = Effect.fn("MailSync.storeSkeleton")(
 
 // ------------------------------------------------------------ discovery
 
+export const toImapMailbox = (record: MailboxRecord): ImapMailbox => ({
+  delimiter: record.delimiter,
+  flags: [],
+  path: record.path,
+  role: record.role,
+  selectable: record.selectable,
+});
+
+/** User labels in `next` and not in `previous`, by id. */
+const labelsMissingFrom = (
+  previous: readonly UserLabel[],
+  next: readonly UserLabel[]
+): readonly LabelId[] => {
+  const known = new Set(previous.map((label) => label.id));
+  return next.filter((label) => !known.has(label.id)).map((label) => label.id);
+};
+
+/**
+ * Saves the server's mailbox list. `labelsChanged` says whether its user
+ * labels differ from the cached ones, as when another client added, renamed
+ * or deleted a folder, so the label catalog can be announced again.
+ *
+ * Gmail does not report a label renamed or deleted elsewhere as a change to
+ * its messages. A label gone from the list is taken off cached copies at
+ * once; when labels also appeared, as a rename looks, the synced mailboxes'
+ * labels are read again by `relabelStep`. Both happen before the catalog is
+ * saved, so a pass cut short finds the same difference and repeats them.
+ */
 export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
   function* discoverMailboxes(scope: SyncScope) {
     const store = yield* MailEngineStore;
+    const cached = yield* store.getMailboxes(scope.accountId);
     const listed = yield* scope.session.listMailboxes;
     const synced = new Set(
       scope.dialect.syncedMailboxes(listed).map((mailbox) => mailbox.path)
@@ -304,18 +348,93 @@ export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
       selectable: mailbox.selectable,
       synced: synced.has(mailbox.path),
     }));
-    const changes = yield* store.replaceMailboxes(
-      scope.accountId,
-      records,
-      scope.dialect.userLabels(listed)
+    const cachedLabels = scope.dialect.userLabels(cached.map(toImapMailbox));
+    const listedLabels = scope.dialect.userLabels(listed);
+    const added = labelsMissingFrom(cachedLabels, listedLabels);
+    const removed = labelsMissingFrom(listedLabels, cachedLabels);
+    const results: ThreadChanges[] = [];
+
+    if (scope.dialect.kind === "gmail") {
+      for (const labelId of removed) {
+        results.push(yield* store.removeLabel(scope.accountId, labelId));
+      }
+      if (removed.length > 0 && added.length > 0) {
+        for (const record of cached) {
+          if (
+            synced.has(record.path) &&
+            record.uidNext !== undefined &&
+            (record.skeletonFloor ?? record.uidNext) < record.uidNext
+          ) {
+            yield* store.applyLocationChanges(
+              scope.accountId,
+              record.path,
+              [],
+              {
+                labelCursor: record.uidNext,
+              }
+            );
+          }
+        }
+      }
+    }
+
+    results.push(
+      yield* store.replaceMailboxes(scope.accountId, records, listedLabels)
     );
 
     return {
-      changes,
+      changes: mergeThreadChanges(...results),
+      labelsChanged: added.length > 0 || removed.length > 0,
       mailboxes: listed
         .filter((mailbox) => synced.has(mailbox.path))
         .toSorted(byMailboxPriority),
     };
+  }
+);
+
+/**
+ * Reads the labels of one slice of cached copies again, below the label
+ * cursor of the first mailbox that has one, and moves the cursor down in the
+ * same transaction; past the oldest cached copy the cursor is cleared.
+ * Returns `undefined` when no mailbox has a label reread left.
+ */
+export const relabelStep = Effect.fn("MailSync.relabelStep")(
+  function* relabelStep(scope: SyncScope) {
+    const store = yield* MailEngineStore;
+    const record = (yield* store.getMailboxes(scope.accountId)).find(
+      (candidate) => candidate.synced && candidate.labelCursor !== undefined
+    );
+
+    if (record?.labelCursor === undefined) {
+      return;
+    }
+
+    const cursor = record.labelCursor;
+    const floor = record.skeletonFloor ?? cursor;
+    const start =
+      floor < cursor
+        ? yield* store.uidWindowStart(
+            scope.accountId,
+            record.path,
+            cursor,
+            FLAG_SLICE_SIZE
+          )
+        : undefined;
+    const fetched =
+      start === undefined
+        ? []
+        : yield* scope.session.fetch(
+            record.path,
+            { from: Math.max(start, floor), kind: "range", to: cursor - 1 },
+            changeFields(scope.dialect)
+          );
+
+    return yield* store.applyLocationChanges(
+      scope.accountId,
+      record.path,
+      toLocationChanges(scope.dialect, toImapMailbox(record), fetched),
+      { labelCursor: start ?? null }
+    );
   }
 );
 
@@ -519,7 +638,9 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
  * One pass over every synced mailbox. A copy that vanished from one mailbox
  * is dropped at once, but messages left without any copy are deleted only at
  * the end of the pass, so a message moved between mailboxes keeps its id and
- * bodies when its new copy is read later in the same pass.
+ * bodies when its new copy is read later in the same pass. Discovery's
+ * changes go to `scope.discovered` when it is given, and are otherwise
+ * returned with the rest.
  */
 export const syncAccount = Effect.fn("MailSync.syncAccount")(
   function* syncAccount(scope: SyncScope) {
@@ -527,7 +648,8 @@ export const syncAccount = Effect.fn("MailSync.syncAccount")(
     const exclusive =
       scope.exclusive ?? (<A, E, R>(effect: Effect.Effect<A, E, R>) => effect);
     const discovered = yield* exclusive(discoverMailboxes(scope));
-    const results: ThreadChanges[] = [discovered.changes];
+    yield* scope.discovered?.(discovered) ?? Effect.void;
+    const results: ThreadChanges[] = [];
 
     for (const mailbox of discovered.mailboxes) {
       // Read under the same turn as the step: a change made between steps
@@ -547,7 +669,9 @@ export const syncAccount = Effect.fn("MailSync.syncAccount")(
     }
 
     results.push(yield* exclusive(store.collectOrphans(scope.accountId)));
-    return mergeThreadChanges(...results);
+    return scope.discovered === undefined
+      ? mergeThreadChanges(discovered.changes, ...results)
+      : mergeThreadChanges(...results);
   }
 );
 
