@@ -332,10 +332,8 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
       }, "Could not schedule email")
     )
     .pipe(
-      Effect.catch((error) =>
-        cleanupAdoptedAttachments((store) =>
-          store.delete(adoption.created)
-        ).pipe(Effect.andThen(Effect.fail(error)))
+      Effect.tapError(() =>
+        cleanupAdoptedAttachments((store) => store.delete(adoption.created))
       )
     );
   yield* cleanupAdoptedAttachments((store) =>
@@ -923,10 +921,8 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
                 .all(),
             "Could not prepare scheduled attachments"
           ).pipe(
-            Effect.catch((error) =>
-              bestEffortDraftAttachmentCleanup(
-                store.delete(adoption.created)
-              ).pipe(Effect.andThen(Effect.fail(error)))
+            Effect.tapError(() =>
+              bestEffortDraftAttachmentCleanup(store.delete(adoption.created))
             )
           );
           if (updated.length === 0) {
@@ -951,25 +947,21 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
 });
 
 const scheduledMailLifecycle = createScheduledMailLifecycle({
-  dispatchPendingNotifications: dispatchPendingScheduledMailNotifications,
+  dispatchPendingNotifications: dispatchPendingScheduledMailNotifications(),
   listenForResume: (listener) => {
     powerMonitor.on("resume", listener);
     return () => powerMonitor.off("resume", listener);
   },
-  releaseStaleNotificationClaims: releaseStaleScheduledMailNotificationClaims,
-  scheduleRetry: (run, delayMs) => {
-    const timeout = setTimeout(run, delayMs);
-    return { cancel: () => clearTimeout(timeout) };
-  },
-  startWorker: () => scheduledMailWorker.start(),
-  stopWorker: () => scheduledMailWorker.stop(),
+  releaseStaleNotificationClaims: releaseStaleScheduledMailNotificationClaims(),
+  startWorker: scheduledMailWorker.start(),
+  stopWorker: scheduledMailWorker.stop(),
   wakeWorker: () => {
     void scheduledMailWorker.wake();
   },
 });
 
 export const startScheduledMail = (): Promise<void> =>
-  scheduledMailLifecycle.start();
+  Effect.runPromise(scheduledMailLifecycle.start);
 
 export const stopScheduledMail = (): Promise<void> =>
-  scheduledMailLifecycle.stop();
+  Effect.runPromise(scheduledMailLifecycle.stop);

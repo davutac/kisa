@@ -30,10 +30,10 @@ import {
 import { decodeStoredOutgoingAttachmentsStrict } from "./outgoing-attachment-files";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class MailDraftError extends Schema.TaggedError<MailDraftError>()(
-  "MailDraftError",
-  { message: Schema.String }
-) {}
+class MailDraftError extends Schema.TaggedError<
+  MailDraftError,
+  { readonly brand: unique symbol }
+>()("MailDraftError", { message: Schema.String }) {}
 
 type MailDraftRow = typeof mailDrafts.$inferSelect;
 

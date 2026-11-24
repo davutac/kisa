@@ -841,7 +841,9 @@ describe("signing an app password account in again", () => {
       imap: "refuse",
     });
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
+    expect(failureMessage(exit)).toBe(
+      PASSWORD_ACCOUNT_MESSAGES.icloudPasswordRefused
+    );
     expect(accountRows()).toStrictEqual(before);
     expect(connected).toStrictEqual(["name@icloud.com"]);
   });

@@ -1,81 +1,65 @@
-import type { Mock } from "vitest";
-import { describe, expect, it, vi } from "vitest";
+// Oxlint does not recognize @effect/vitest's it.effect as a test declaration.
+// oxlint-disable vitest/no-standalone-expect
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Fiber, Schema } from "effect";
+import { TestClock } from "effect/testing";
+import { vi } from "vitest";
 
 import { createScheduledMailLifecycle } from "../src/main/mail/scheduled-mail-lifecycle";
 
-interface ScheduledRetry {
-  readonly cancel: Mock<() => void>;
-  readonly delayMs: number;
-  readonly run: () => void;
-}
+/** Every startup retry together: 1 + 2 + 4 + 8 + 16 + 30 seconds. */
+const ALL_START_RETRIES = "61 seconds";
+const RECOVERY_DELAY = "5 minutes";
 
-const START_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16_000, 30_000];
+// oxlint-disable-next-line unicorn/throw-new-error -- Effect Schema tagged errors are declared as generated classes.
+class StepFailure extends Schema.TaggedError<
+  StepFailure,
+  { readonly brand: unique symbol }
+>()("StepFailure", { message: Schema.String }) {}
 
-const flushMicrotasks = async (): Promise<void> => {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+/** A step that fails while `failing` says so, counting every attempt. */
+const fakeStep = (failing: () => boolean, message: string) =>
+  vi.fn<() => Effect.Effect<void, StepFailure>>(() =>
+    failing() ? Effect.fail(new StepFailure({ message })) : Effect.void
+  );
+
+/** A step that fails its first `times` attempts, then succeeds. */
+const failingTimes = (times: number, message: string) => {
+  let remaining = times;
+  return fakeStep(() => {
+    remaining -= 1;
+    return remaining >= 0;
+  }, message);
 };
 
-const runScheduledRetries = async (
-  retries: readonly ScheduledRetry[],
-  expectedDelays: readonly number[],
-  index = 0
-): Promise<void> => {
-  if (index === expectedDelays.length) {
-    return;
-  }
-  await flushMicrotasks();
-  expect(retries[index]?.delayMs).toBe(expectedDelays[index]);
-  retries[index]?.run();
-  await runScheduledRetries(retries, expectedDelays, index + 1);
-};
+const succeeding = () => fakeStep(() => false, "");
 
 const createLifecycleHarness = (overrides?: {
-  dispatchPendingNotifications?: () => Promise<void>;
-  exhaustedRetryDelayMs?: number;
-  retryDelaysMs?: readonly number[];
-  startWorker?: () => Promise<void>;
+  dispatchPendingNotifications?: ReturnType<typeof fakeStep>;
+  startWorker?: ReturnType<typeof fakeStep>;
 }) => {
-  const retries: ScheduledRetry[] = [];
   let resumeListener: (() => void) | undefined;
   const removeResumeListener = vi.fn<() => void>(() => {
     resumeListener = undefined;
   });
-  const dispatchPendingNotifications = vi.fn<() => Promise<void>>(
-    overrides?.dispatchPendingNotifications ?? (async () => {})
-  );
-  const releaseStaleNotificationClaims = vi.fn<() => Promise<void>>(
-    async () => {}
-  );
-  const startWorker = vi.fn<() => Promise<void>>(
-    overrides?.startWorker ?? (async () => {})
-  );
-  const stopWorker = vi.fn<() => Promise<void>>(async () => {});
+  const dispatchPendingNotifications =
+    overrides?.dispatchPendingNotifications ?? succeeding();
+  const releaseStaleNotificationClaims = succeeding();
+  const startWorker = overrides?.startWorker ?? succeeding();
+  const stopWorker = succeeding();
   const wakeWorker = vi.fn<() => void>();
-  const lifecycleOptions = {
-    dispatchPendingNotifications,
+  const lifecycle = createScheduledMailLifecycle({
+    dispatchPendingNotifications: Effect.suspend(dispatchPendingNotifications),
     listenForResume: (listener) => {
       resumeListener = listener;
       return removeResumeListener;
     },
-    releaseStaleNotificationClaims,
-    scheduleRetry: (run, delayMs) => {
-      const retry = { cancel: vi.fn<() => void>(), delayMs, run };
-      retries.push(retry);
-      return retry;
-    },
-    startWorker,
-    stopWorker,
+    releaseStaleNotificationClaims: Effect.suspend(
+      releaseStaleNotificationClaims
+    ),
+    startWorker: Effect.suspend(startWorker),
+    stopWorker: Effect.suspend(stopWorker),
     wakeWorker,
-  } satisfies Parameters<typeof createScheduledMailLifecycle>[0];
-  const lifecycle = createScheduledMailLifecycle({
-    ...lifecycleOptions,
-    exhaustedRetryDelayMs: overrides?.exhaustedRetryDelayMs,
-    retryDelaysMs: overrides?.retryDelaysMs,
   });
 
   return {
@@ -86,217 +70,245 @@ const createLifecycleHarness = (overrides?: {
     get resumeListener() {
       return resumeListener;
     },
-    retries,
     startWorker,
     stopWorker,
     wakeWorker,
   };
 };
 
-describe(createScheduledMailLifecycle, () => {
-  it("recovers when the worker reset fails on its first startup attempt", async () => {
-    const harness = createLifecycleHarness({
-      startWorker: vi
-        .fn<() => Promise<void>>()
-        .mockRejectedValueOnce(new Error("temporary database failure"))
-        .mockImplementation(async () => {}),
-    });
+describe("the scheduled mail lifecycle", () => {
+  it.effect(
+    "recovers when the worker reset fails on its first startup attempt",
+    () =>
+      Effect.gen(function* recoversFromFirstFailure() {
+        const harness = createLifecycleHarness({
+          startWorker: failingTimes(1, "temporary database failure"),
+        });
 
-    const started = harness.lifecycle.start();
-    await flushMicrotasks();
+        const started = yield* Effect.forkChild(harness.lifecycle.start);
+        yield* TestClock.adjust("999 millis");
+        expect(harness.startWorker).toHaveBeenCalledOnce();
+        yield* TestClock.adjust("1 millis");
+        yield* Fiber.join(started);
 
-    expect([
-      harness.resumeListener,
-      harness.retries.length,
-      harness.retries[0]?.delayMs,
-    ]).toStrictEqual([expect.any(Function), 1, 1000]);
-    harness.retries[0]?.run();
-    await started;
+        harness.resumeListener?.();
+        expect([
+          harness.releaseStaleNotificationClaims.mock.calls.length,
+          harness.startWorker.mock.calls.length,
+          harness.dispatchPendingNotifications.mock.calls.length,
+          harness.wakeWorker.mock.calls.length,
+          harness.removeResumeListener.mock.calls.length,
+        ]).toStrictEqual([1, 2, 1, 1, 0]);
 
-    harness.resumeListener?.();
-    expect([
-      harness.releaseStaleNotificationClaims.mock.calls.length,
-      harness.startWorker.mock.calls.length,
-      harness.dispatchPendingNotifications.mock.calls.length,
-      harness.wakeWorker.mock.calls.length,
-      harness.removeResumeListener.mock.calls.length,
-    ]).toStrictEqual([1, 2, 1, 1, 0]);
+        yield* harness.lifecycle.stop;
+      })
+  );
 
-    await harness.lifecycle.stop();
-  });
+  it.effect(
+    "retries a pending-notification failure without restarting the worker",
+    () =>
+      Effect.gen(function* retriesNotificationFailure() {
+        const harness = createLifecycleHarness({
+          dispatchPendingNotifications: failingTimes(
+            1,
+            "temporary notification query failure"
+          ),
+        });
 
-  it("retries a pending-notification failure without restarting the worker", async () => {
-    const harness = createLifecycleHarness({
-      dispatchPendingNotifications: vi
-        .fn<() => Promise<void>>()
-        .mockRejectedValueOnce(
-          new Error("temporary notification query failure")
+        const started = yield* Effect.forkChild(harness.lifecycle.start);
+        yield* TestClock.adjust("1 second");
+        yield* Fiber.join(started);
+
+        expect([
+          harness.releaseStaleNotificationClaims.mock.calls.length,
+          harness.startWorker.mock.calls.length,
+          harness.dispatchPendingNotifications.mock.calls.length,
+        ]).toStrictEqual([1, 1, 2]);
+        expect(harness.resumeListener).toBeTypeOf("function");
+
+        yield* harness.lifecycle.stop;
+      })
+  );
+
+  it.effect(
+    "cancels a pending retry and removes the resume listener only on stop",
+    () =>
+      Effect.gen(function* cancelsPendingRetry() {
+        const harness = createLifecycleHarness({
+          startWorker: failingTimes(1, "temporary database failure"),
+        });
+
+        const firstStart = yield* Effect.forkChild(harness.lifecycle.start);
+        yield* TestClock.adjust("500 millis");
+        expect([
+          harness.startWorker.mock.calls.length,
+          harness.removeResumeListener.mock.calls.length,
+        ]).toStrictEqual([1, 0]);
+
+        yield* harness.lifecycle.stop;
+        yield* Fiber.join(firstStart);
+        yield* TestClock.adjust("1 minute");
+
+        expect([
+          harness.startWorker.mock.calls.length,
+          harness.removeResumeListener.mock.calls.length,
+          harness.resumeListener,
+          harness.stopWorker.mock.calls.length,
+        ]).toStrictEqual([1, 1, undefined, 1]);
+
+        yield* harness.lifecycle.start;
+
+        expect([
+          harness.startWorker.mock.calls.length,
+          harness.dispatchPendingNotifications.mock.calls.length,
+        ]).toStrictEqual([2, 1]);
+        yield* harness.lifecycle.stop;
+      })
+  );
+
+  it.effect(
+    "starts a fresh run on resume after the startup retries are used up",
+    () =>
+      Effect.gen(function* resumesAfterExhaustion() {
+        let shouldFail = true;
+        const harness = createLifecycleHarness({
+          startWorker: fakeStep(() => shouldFail, "persistent failure"),
+        });
+
+        const firstStart = yield* Effect.forkChild(
+          Effect.flip(harness.lifecycle.start)
+        );
+        yield* TestClock.adjust(ALL_START_RETRIES);
+        const failure = yield* Fiber.join(firstStart);
+
+        expect(failure.message).toBe("persistent failure");
+        expect([
+          harness.resumeListener,
+          harness.removeResumeListener.mock.calls.length,
+          harness.startWorker.mock.calls.length,
+        ]).toStrictEqual([expect.any(Function), 0, 7]);
+
+        shouldFail = false;
+        harness.resumeListener?.();
+        yield* harness.lifecycle.start;
+
+        expect([
+          harness.startWorker.mock.calls.length,
+          harness.dispatchPendingNotifications.mock.calls.length,
+        ]).toStrictEqual([8, 1]);
+        yield* harness.lifecycle.stop;
+        expect(harness.removeResumeListener).toHaveBeenCalledOnce();
+      })
+  );
+
+  it.effect(
+    "tries again five minutes after the startup retries are used up",
+    () =>
+      Effect.gen(function* recoversLater() {
+        let shouldFail = true;
+        const harness = createLifecycleHarness({
+          startWorker: fakeStep(() => shouldFail, "persistent failure"),
+        });
+
+        const firstStart = yield* Effect.forkChild(
+          Effect.flip(harness.lifecycle.start)
+        );
+        yield* TestClock.adjust(ALL_START_RETRIES);
+        yield* Fiber.join(firstStart);
+
+        shouldFail = false;
+        yield* TestClock.adjust("4 minutes");
+        expect(harness.startWorker).toHaveBeenCalledTimes(7);
+        yield* TestClock.adjust("1 minute");
+
+        expect([
+          harness.startWorker.mock.calls.length,
+          harness.dispatchPendingNotifications.mock.calls.length,
+          harness.resumeListener,
+        ]).toStrictEqual([8, 1, expect.any(Function)]);
+        yield* harness.lifecycle.stop;
+      })
+  );
+
+  it.effect("cancels the later attempt on stop", () =>
+    Effect.gen(function* cancelsRecovery() {
+      const harness = createLifecycleHarness({
+        startWorker: fakeStep(() => true, "persistent failure"),
+      });
+
+      const firstStart = yield* Effect.forkChild(
+        Effect.flip(harness.lifecycle.start)
+      );
+      yield* TestClock.adjust(ALL_START_RETRIES);
+      yield* Fiber.join(firstStart);
+
+      yield* harness.lifecycle.stop;
+      yield* TestClock.adjust(RECOVERY_DELAY);
+
+      expect([
+        harness.startWorker.mock.calls.length,
+        harness.removeResumeListener.mock.calls.length,
+        harness.stopWorker.mock.calls.length,
+      ]).toStrictEqual([7, 1, 1]);
+    })
+  );
+
+  it.effect(
+    "retries a used-up notification drain on resume without restarting the live worker",
+    () =>
+      Effect.gen(function* resumesNotificationDrain() {
+        let shouldFail = true;
+        const harness = createLifecycleHarness({
+          dispatchPendingNotifications: fakeStep(
+            () => shouldFail,
+            "persistent notification failure"
+          ),
+        });
+
+        const firstStart = yield* Effect.forkChild(
+          Effect.flip(harness.lifecycle.start)
+        );
+        yield* TestClock.adjust(ALL_START_RETRIES);
+        const failure = yield* Fiber.join(firstStart);
+
+        expect(failure.message).toBe("persistent notification failure");
+        expect([
+          harness.startWorker.mock.calls.length,
+          harness.dispatchPendingNotifications.mock.calls.length,
+        ]).toStrictEqual([1, 7]);
+        shouldFail = false;
+        harness.resumeListener?.();
+        yield* harness.lifecycle.start;
+
+        expect([
+          harness.wakeWorker.mock.calls.length,
+          harness.startWorker.mock.calls.length,
+          harness.dispatchPendingNotifications.mock.calls.length,
+        ]).toStrictEqual([1, 1, 8]);
+        yield* harness.lifecycle.stop;
+      })
+  );
+
+  it.effect("waits for a step in flight before stopping the worker", () =>
+    Effect.gen(function* waitsForStepInFlight() {
+      const events: string[] = [];
+      const startWorker = vi.fn<() => Effect.Effect<void, StepFailure>>(() =>
+        Effect.sleep("2 seconds").pipe(
+          Effect.andThen(Effect.sync(() => events.push("worker started")))
         )
-        .mockImplementation(async () => {}),
-    });
+      );
+      const harness = createLifecycleHarness({ startWorker });
+      harness.stopWorker.mockReturnValue(
+        Effect.sync(() => events.push("worker stopped"))
+      );
 
-    const started = harness.lifecycle.start();
-    await flushMicrotasks();
-    harness.retries[0]?.run();
-    await started;
+      yield* Effect.forkChild(harness.lifecycle.start);
+      yield* TestClock.adjust("1 second");
+      const stopping = yield* Effect.forkChild(harness.lifecycle.stop);
+      yield* TestClock.adjust("1 second");
+      yield* Fiber.join(stopping);
 
-    expect(harness.releaseStaleNotificationClaims).toHaveBeenCalledOnce();
-    expect(harness.startWorker).toHaveBeenCalledOnce();
-    expect(harness.dispatchPendingNotifications).toHaveBeenCalledTimes(2);
-    expect(harness.resumeListener).toBeTypeOf("function");
-
-    await harness.lifecycle.stop();
-  });
-
-  it("cancels a pending retry and removes the resume listener only on stop", async () => {
-    const harness = createLifecycleHarness({
-      startWorker: vi
-        .fn<() => Promise<void>>()
-        .mockRejectedValueOnce(new Error("temporary database failure"))
-        .mockImplementation(async () => {}),
-    });
-
-    const firstStart = harness.lifecycle.start();
-    await flushMicrotasks();
-    const [staleRetry] = harness.retries;
-
-    expect([
-      harness.resumeListener,
-      harness.removeResumeListener.mock.calls.length,
-    ]).toStrictEqual([expect.any(Function), 0]);
-    await harness.lifecycle.stop();
-    await expect(firstStart).resolves.toBeUndefined();
-
-    expect([
-      staleRetry?.cancel.mock.calls.length,
-      harness.removeResumeListener.mock.calls.length,
-      harness.resumeListener,
-      harness.stopWorker.mock.calls.length,
-    ]).toStrictEqual([1, 1, undefined, 1]);
-
-    const secondStart = harness.lifecycle.start();
-    staleRetry?.run();
-    await secondStart;
-
-    expect([
-      harness.startWorker.mock.calls.length,
-      harness.dispatchPendingNotifications.mock.calls.length,
-    ]).toStrictEqual([2, 1]);
-    await harness.lifecycle.stop();
-  });
-
-  it("starts a fresh worker generation on resume after bounded retries are exhausted", async () => {
-    let shouldFail = true;
-    const harness = createLifecycleHarness({
-      startWorker: () => {
-        if (shouldFail) {
-          return Promise.reject(new Error("persistent failure"));
-        }
-        return Promise.resolve();
-      },
-    });
-
-    const firstStart = harness.lifecycle.start();
-    await runScheduledRetries(harness.retries, START_RETRY_DELAYS_MS);
-    await expect(firstStart).rejects.toThrow("persistent failure");
-
-    expect([
-      harness.resumeListener,
-      harness.removeResumeListener.mock.calls.length,
-      harness.startWorker.mock.calls.length,
-    ]).toStrictEqual([expect.any(Function), 0, 7]);
-
-    shouldFail = false;
-    harness.resumeListener?.();
-    await harness.lifecycle.start();
-
-    expect([
-      harness.startWorker.mock.calls.length,
-      harness.dispatchPendingNotifications.mock.calls.length,
-    ]).toStrictEqual([8, 1]);
-    await harness.lifecycle.stop();
-    expect(harness.removeResumeListener).toHaveBeenCalledOnce();
-  });
-
-  it("keeps a low-frequency recovery retry after bounded startup attempts", async () => {
-    let shouldFail = true;
-    const harness = createLifecycleHarness({
-      exhaustedRetryDelayMs: 300_000,
-      startWorker: () =>
-        shouldFail
-          ? Promise.reject(new Error("persistent failure"))
-          : Promise.resolve(),
-    });
-
-    const firstStart = harness.lifecycle.start();
-    await runScheduledRetries(harness.retries, START_RETRY_DELAYS_MS);
-    await expect(firstStart).rejects.toThrow("persistent failure");
-    await flushMicrotasks();
-
-    const continuation = harness.retries[START_RETRY_DELAYS_MS.length];
-    expect(continuation?.delayMs).toBe(300_000);
-    shouldFail = false;
-    continuation?.run();
-    await flushMicrotasks();
-
-    expect([
-      harness.startWorker.mock.calls.length,
-      harness.dispatchPendingNotifications.mock.calls.length,
-      harness.resumeListener,
-    ]).toStrictEqual([8, 1, expect.any(Function)]);
-    await harness.lifecycle.stop();
-  });
-
-  it("cancels the low-frequency recovery retry on stop", async () => {
-    const harness = createLifecycleHarness({
-      exhaustedRetryDelayMs: 300_000,
-      startWorker: () => Promise.reject(new Error("persistent failure")),
-    });
-
-    const firstStart = harness.lifecycle.start();
-    await runScheduledRetries(harness.retries, START_RETRY_DELAYS_MS);
-    await expect(firstStart).rejects.toThrow("persistent failure");
-    await flushMicrotasks();
-    const continuation = harness.retries[START_RETRY_DELAYS_MS.length];
-
-    await harness.lifecycle.stop();
-
-    expect([
-      continuation?.delayMs,
-      continuation?.cancel.mock.calls.length,
-      harness.removeResumeListener.mock.calls.length,
-      harness.stopWorker.mock.calls.length,
-    ]).toStrictEqual([300_000, 1, 1, 1]);
-  });
-
-  it("retries an exhausted notification drain on resume without restarting the live worker", async () => {
-    let shouldFail = true;
-    const harness = createLifecycleHarness({
-      dispatchPendingNotifications: () => {
-        if (shouldFail) {
-          return Promise.reject(new Error("persistent notification failure"));
-        }
-        return Promise.resolve();
-      },
-    });
-
-    const firstStart = harness.lifecycle.start();
-    await runScheduledRetries(harness.retries, START_RETRY_DELAYS_MS);
-    await expect(firstStart).rejects.toThrow("persistent notification failure");
-
-    expect([
-      harness.startWorker.mock.calls.length,
-      harness.dispatchPendingNotifications.mock.calls.length,
-    ]).toStrictEqual([1, 7]);
-    shouldFail = false;
-    harness.resumeListener?.();
-    await harness.lifecycle.start();
-
-    expect([
-      harness.wakeWorker.mock.calls.length,
-      harness.startWorker.mock.calls.length,
-      harness.dispatchPendingNotifications.mock.calls.length,
-    ]).toStrictEqual([1, 1, 8]);
-    await harness.lifecycle.stop();
-  });
+      expect(events).toStrictEqual(["worker started", "worker stopped"]);
+    })
+  );
 });

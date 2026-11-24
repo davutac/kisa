@@ -1,5 +1,4 @@
-import * as Effect from "effect/Effect";
-import * as Semaphore from "effect/Semaphore";
+import { Effect, Semaphore } from "effect";
 
 import type { AiThreadCategorizationRequest } from "../../shared/ipc/ai";
 import type { MailLabelSummary } from "../../shared/ipc/mail";
@@ -120,15 +119,15 @@ const applyThreadLabelIds = Effect.fn("applyThreadLabelIds")(
     const missingLabelIds = selectedLabelIds.filter(
       (labelId) => !latestLabelIds.has(labelId)
     );
-    yield* Effect.all(
-      missingLabelIds.map((labelId) =>
+    yield* Effect.forEach(
+      missingLabelIds,
+      (labelId) =>
         setThreadLabel({
           accountId: item.accountId,
           applied: true,
           labelId,
           threadId: item.threadId,
-        })
-      ),
+        }),
       { concurrency: 1, discard: true }
     );
     return missingLabelIds;

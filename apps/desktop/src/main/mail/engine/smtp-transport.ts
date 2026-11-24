@@ -117,7 +117,7 @@ export const toSendError = (
 const SmtpFailureFields = Schema.Struct({
   code: Schema.optional(Schema.String),
   command: Schema.optional(Schema.String),
-  responseCode: Schema.optional(Schema.Number),
+  responseCode: Schema.optional(Schema.Finite),
 });
 const decodeFailure = Schema.decodeUnknownOption(SmtpFailureFields);
 

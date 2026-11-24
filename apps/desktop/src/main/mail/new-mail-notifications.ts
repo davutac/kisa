@@ -89,10 +89,10 @@ export interface NewMailNotificationThreadRow {
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class NewMailNotificationError extends Schema.TaggedError<NewMailNotificationError>()(
-  "NewMailNotificationError",
-  { message: Schema.String }
-) {}
+class NewMailNotificationError extends Schema.TaggedError<
+  NewMailNotificationError,
+  { readonly brand: unique symbol }
+>()("NewMailNotificationError", { message: Schema.String }) {}
 
 const cleanNotificationText = (value: string): string =>
   [...value]

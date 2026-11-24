@@ -85,7 +85,7 @@ const pathTaken = (
 /** The user label behind `labelId`, resolved from the cached mailbox list. */
 const findLabel = Effect.fn("MailLabels.findLabel")(function* findLabel(
   scope: SyncScope,
-  labelId: string
+  labelId: LabelId
 ) {
   const store = yield* MailEngineStore;
   const mailboxes = yield* store.getMailboxes(scope.accountId);
@@ -140,7 +140,7 @@ export const createLabel = Effect.fn("MailLabels.createLabel")(
 );
 
 export const renameLabel = Effect.fn("MailLabels.renameLabel")(
-  function* renameLabel(scope: SyncScope, labelId: string, name: string) {
+  function* renameLabel(scope: SyncScope, labelId: LabelId, name: string) {
     const store = yield* MailEngineStore;
     const { label, mailbox, mailboxes } = yield* findLabel(scope, labelId);
     const target = toLabelPath(name, mailbox.delimiter);
@@ -182,7 +182,7 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
  * is kept if anything is still in it.
  */
 export const deleteLabel = Effect.fn("MailLabels.deleteLabel")(
-  function* deleteLabel(scope: SyncScope, labelId: string) {
+  function* deleteLabel(scope: SyncScope, labelId: LabelId) {
     const store = yield* MailEngineStore;
     const { label, mailboxes } = yield* findLabel(scope, labelId);
 

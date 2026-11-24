@@ -1,6 +1,6 @@
 // oxlint-disable unicorn/no-useless-undefined vitest/no-standalone-expect vitest/prefer-import-in-mock
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Exit } from "effect";
+import { Effect, Schema } from "effect";
 import type { BrowserWindow } from "electron";
 import { beforeEach, vi } from "vitest";
 
@@ -83,17 +83,19 @@ describe("app settings IPC", () => {
     })
   );
 
-  it("rejects a non-boolean run-in-background value", async () => {
-    const exit = await Effect.runPromiseExit(
-      updateAppSettings.handler({
-        ...DEFAULT_APP_SETTINGS,
-        runInBackground: "yes",
-      })
-    );
+  it.effect("rejects a non-boolean run-in-background value", () =>
+    Effect.gen(function* rejectsANonBooleanRunInBackgroundValue() {
+      const error = yield* Effect.flip(
+        updateAppSettings.handler({
+          ...DEFAULT_APP_SETTINGS,
+          runInBackground: "yes",
+        })
+      );
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
-    expect(mocks.writeAppSettings).not.toHaveBeenCalled();
-  });
+      expect(Schema.isSchemaError(error)).toBeTruthy();
+      expect(mocks.writeAppSettings).not.toHaveBeenCalled();
+    })
+  );
 
   it.effect(
     "saves and returns how long images from opened emails are kept",
@@ -117,15 +119,17 @@ describe("app settings IPC", () => {
       })
   );
 
-  it("rejects a period the setting does not offer", async () => {
-    const exit = await Effect.runPromiseExit(
-      updateAppSettings.handler({
-        ...DEFAULT_APP_SETTINGS,
-        inlineImageRetentionDays: 45,
-      })
-    );
+  it.effect("rejects a period the setting does not offer", () =>
+    Effect.gen(function* rejectsAPeriodTheSettingDoesNotOffer() {
+      const error = yield* Effect.flip(
+        updateAppSettings.handler({
+          ...DEFAULT_APP_SETTINGS,
+          inlineImageRetentionDays: 45,
+        })
+      );
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
-    expect(mocks.writeAppSettings).not.toHaveBeenCalled();
-  });
+      expect(Schema.isSchemaError(error)).toBeTruthy();
+      expect(mocks.writeAppSettings).not.toHaveBeenCalled();
+    })
+  );
 });

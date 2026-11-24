@@ -1,8 +1,10 @@
+// Oxlint does not recognize @effect/vitest's it.effect as a test declaration.
+// oxlint-disable vitest/no-standalone-expect
+import { it as effectIt } from "@effect/vitest";
 import type { ProviderRequestError } from "@opencode/client";
 import type * as ClientService from "@opencode/client/service";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
+import { Effect, Exit, Fiber, Schema } from "effect";
+import { TestClock } from "effect/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -244,19 +246,20 @@ describe("OpenCode V2", () => {
       expect(signal?.aborted).toBeTruthy();
     });
 
-    it("times out and aborts a stalled generation", async () => {
-      vi.useFakeTimers();
-      const stalled = stallRequest();
-      fetchMock.mockImplementation(stalled.respond);
-      const result = Effect.runPromise(
-        Effect.scoped(generateWithOpenCode(input)).pipe(Effect.flip)
-      );
-      const signal = await stalled.started;
-      await vi.advanceTimersByTimeAsync(GENERATION_TIMEOUT_MS);
-      const error = await result;
-      expect(error.message).toBe("OpenCode AI request timed out");
-      expect(signal?.aborted).toBeTruthy();
-    });
+    effectIt.effect("times out and aborts a stalled generation", () =>
+      Effect.gen(function* timesOutStalledGeneration() {
+        const stalled = stallRequest();
+        fetchMock.mockImplementation(stalled.respond);
+        const generation = yield* Effect.forkChild(
+          Effect.scoped(generateWithOpenCode(input)).pipe(Effect.flip)
+        );
+        const signal = yield* Effect.promise(() => stalled.started);
+        yield* TestClock.adjust(GENERATION_TIMEOUT_MS);
+        const error = yield* Fiber.join(generation);
+        expect(error.message).toBe("OpenCode AI request timed out");
+        expect(signal?.aborted).toBeTruthy();
+      })
+    );
 
     it("starts the service through the CLI only when discovery finds none", async () => {
       mocks.discover
@@ -338,28 +341,29 @@ describe("OpenCode V2", () => {
       expect(signal?.aborted).toBeTruthy();
     });
 
-    it.each(["no activation arrives", "only another location activates"])(
-      "times out and aborts the event stream when %s",
-      async (scenario) => {
-        vi.useFakeTimers();
+    effectIt.effect.each([
+      "no activation arrives",
+      "only another location activates",
+    ])("times out and aborts the event stream when %s", (scenario) =>
+      Effect.gen(function* timesOutEventStream() {
         const catalog = mockCatalogFetch(
           () => Promise.resolve(new Response(null, { status: 204 })),
           false
         );
-        const result = Effect.runPromise(getOpenCodeStatus());
-        await catalog.locationStarted;
+        const probe = yield* Effect.forkChild(getOpenCodeStatus());
+        yield* Effect.promise(() => catalog.locationStarted);
         if (scenario === "only another location activates") {
           catalog.emitActivation("/another-location");
         }
-        await vi.advanceTimersByTimeAsync(PROVIDER_PROBE_TIMEOUT_MS);
+        yield* TestClock.adjust(PROVIDER_PROBE_TIMEOUT_MS);
 
-        const status = await result;
+        const status = yield* Fiber.join(probe);
         expect(status.error).toBe("OpenCode model discovery timed out");
         expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBeTruthy();
         expect(
           fetchMock.mock.calls.map(([url]) => new URL(String(url)).pathname)
         ).toStrictEqual(["/api/event", "/api/location", "/api/debug/location"]);
-      }
+      })
     );
 
     it("waits for plugins and filters disabled models and unavailable providers", async () => {

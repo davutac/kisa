@@ -145,7 +145,7 @@ describe("the database RPC codec", () => {
     ];
 
     expect(
-      Schema.decodeUnknownExit(resultCodec)(
+      Schema.decodeExit(resultCodec)(
         structuredClone(Schema.encodeSync(resultCodec)(rows))
       )
     ).toStrictEqual(Exit.succeed(rows));
@@ -158,9 +158,7 @@ describe("the database RPC codec", () => {
       [[["nested"]]],
       ["row"],
     ]) {
-      expect(
-        Exit.isFailure(Schema.decodeUnknownExit(resultCodec)(rows))
-      ).toBeTruthy();
+      expect(Exit.isFailure(Schema.decodeExit(resultCodec)(rows))).toBeTruthy();
     }
   });
 });

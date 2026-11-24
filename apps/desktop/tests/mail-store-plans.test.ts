@@ -90,7 +90,7 @@ const plansOf = (
     Effect.runPromise(
       Effect.gen(function* runStore() {
         yield* operate(yield* MailEngineStore);
-      }).pipe(Effect.provide(Store)) as Effect.Effect<void>
+      }).pipe(Effect.provide(Store))
     )
   );
 

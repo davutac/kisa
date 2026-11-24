@@ -14,10 +14,10 @@ const DatabaseRecoveryKeyFile = Schema.Struct({
 type DatabaseRecoveryKeyFile = typeof DatabaseRecoveryKeyFile.Type;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class DatabaseRecoveryKeyError extends Schema.TaggedError<DatabaseRecoveryKeyError>()(
-  "DatabaseRecoveryKeyError",
-  { message: Schema.String }
-) {}
+class DatabaseRecoveryKeyError extends Schema.TaggedError<
+  DatabaseRecoveryKeyError,
+  { readonly brand: unique symbol }
+>()("DatabaseRecoveryKeyError", { message: Schema.String }) {}
 
 const exportError = (): DatabaseRecoveryKeyError =>
   new DatabaseRecoveryKeyError({

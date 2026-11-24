@@ -7,17 +7,17 @@ export type ScheduledMailAttachmentReason =
   | "attachment-too-large";
 
 // oxlint-disable-next-line unicorn/throw-new-error -- Effect Schema tagged errors are declared as generated classes.
-export class ScheduledMailAttachmentError extends Schema.TaggedError<ScheduledMailAttachmentError>()(
-  "ScheduledMailAttachmentError",
-  {
-    reason: Schema.Literals([
-      "attachment-changed",
-      "attachment-invalid",
-      "attachment-missing",
-      "attachment-too-large",
-    ]),
-  }
-) {}
+export class ScheduledMailAttachmentError extends Schema.TaggedError<
+  ScheduledMailAttachmentError,
+  { readonly brand: unique symbol }
+>()("ScheduledMailAttachmentError", {
+  reason: Schema.Literals([
+    "attachment-changed",
+    "attachment-invalid",
+    "attachment-missing",
+    "attachment-too-large",
+  ]),
+}) {}
 
 export const scheduledMailAttachmentError = (
   reason: ScheduledMailAttachmentReason

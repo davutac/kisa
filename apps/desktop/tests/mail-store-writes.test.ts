@@ -1,11 +1,12 @@
 // The store's bulk writes, read back as SQLite holds them: one statement per
 // batch must store exactly what one statement per row did.
 // oxlint-disable typescript/no-unsafe-type-assertion
+import { MailStoreError } from "@repo/mail/errors";
 import { LabelId, MessageId, SystemLabel, ThreadId } from "@repo/mail/ids";
 import { MailEngineStore } from "@repo/mail/store";
 import type { MailboxBatch, MessageMetadata } from "@repo/mail/store";
 import { Effect } from "effect";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ALL_MAIL,
@@ -18,13 +19,30 @@ import {
   threadRow,
 } from "./fixtures/mail-engine-harness";
 
+/** A body whose preparation throws, as hostile content could make it. */
+const UNPREPARABLE = "unpreparable body";
+
+vi.mock(
+  import("../src/main/mail/engine/message-content"),
+  async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+      ...actual,
+      prepareBody: (body, context) =>
+        body.text === UNPREPARABLE
+          ? Promise.reject(new Error("malformed"))
+          : actual.prepareBody(body, context),
+    };
+  }
+);
+
 const store = <A>(
   use: (service: MailEngineStore["Service"]) => Effect.Effect<A, unknown>
 ) =>
   run(
     Effect.gen(function* useStore() {
       return yield* use(yield* MailEngineStore);
-    }) as Effect.Effect<A, never, MailEngineStore>
+    })
   );
 
 const metadata = (
@@ -170,6 +188,24 @@ describe("the mail store's bulk writes", () => {
         subject: "Renamed",
       });
     });
+  });
+
+  it("fails typed, and saves nothing, when a body cannot be prepared", async () => {
+    const message = metadata("1");
+    await store((service) =>
+      service.applyMailboxBatch(accountId, batch([message]))
+    );
+
+    const failure = await store((service) =>
+      service
+        .saveBodies(accountId, [
+          { headers: [], messageId: message.messageId, text: UNPREPARABLE },
+        ])
+        .pipe(Effect.flip)
+    );
+
+    expect(failure).toBeInstanceOf(MailStoreError);
+    expect(messageRow("1")).toMatchObject({ body_text: null });
   });
 
   describe("re-reading flags", () => {

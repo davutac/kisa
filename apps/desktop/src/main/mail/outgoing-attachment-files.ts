@@ -20,7 +20,6 @@ import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-auth
 
 const AUTHORIZATION_VERSION = 1 as const;
 const MEDIA_TYPE_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/u;
-const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 const MediaType = Schema.String.check(Schema.isPattern(MEDIA_TYPE_PATTERN));
 const COMPOSER_INLINE_IMAGE_TAG = /<img\b(?<attributes>[^>]*)>/giu;
@@ -40,7 +39,7 @@ const StoredAuthorizedAttachment = Schema.Struct({
   mediaType: MediaType,
   mtimeMs: NonNegativeNumber,
   path: Schema.NonEmptyString,
-  size: NonNegativeInt,
+  size: Schema.Natural,
   storage: Schema.optional(Schema.Literal("app-owned")),
 });
 

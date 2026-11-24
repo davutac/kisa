@@ -87,43 +87,45 @@ const storeRefreshToken = (
  * `refreshToken`. An account renews one at a time, so two connections opened
  * together make one request and share its token.
  */
-export const getMicrosoftAccessToken = (
-  accountId: string,
-  refreshToken: Redacted.Redacted<string>
-): Effect.Effect<MicrosoftAccessToken, MicrosoftSignInError> => {
-  let renewal = renewals.get(accountId);
-  if (renewal === undefined) {
-    renewal = Semaphore.makeUnsafe(1);
-    renewals.set(accountId, renewal);
+export const getMicrosoftAccessToken = Effect.fn("getMicrosoftAccessToken")(
+  function* getMicrosoftAccessToken(
+    accountId: string,
+    refreshToken: Redacted.Redacted<string>
+  ): Effect.fn.Return<MicrosoftAccessToken, MicrosoftSignInError> {
+    let renewal = renewals.get(accountId);
+    if (renewal === undefined) {
+      renewal = Semaphore.makeUnsafe(1);
+      renewals.set(accountId, renewal);
+    }
+
+    return yield* renewal.withPermit(
+      Effect.gen(function* renew() {
+        // Another connection may have renewed while this one waited.
+        const current = usable(accountId);
+        if (current !== undefined) {
+          return current;
+        }
+
+        const environment = getMicrosoftOAuthEnvironment();
+        if (environment === undefined) {
+          return yield* new MicrosoftSignInError({ kind: "local" });
+        }
+
+        const tokens = yield* refreshMicrosoftTokens(environment, refreshToken);
+        rememberMicrosoftAccessToken(accountId, tokens);
+
+        if (
+          tokens.refreshToken !== undefined &&
+          Redacted.value(tokens.refreshToken) !== Redacted.value(refreshToken)
+        ) {
+          yield* storeRefreshToken(accountId, tokens.refreshToken);
+        }
+
+        return {
+          accessToken: tokens.accessToken,
+          expiresAt: tokens.expiresAt,
+        } satisfies MicrosoftAccessToken;
+      })
+    );
   }
-
-  return renewal.withPermit(
-    Effect.gen(function* renew() {
-      // Another connection may have renewed while this one waited.
-      const current = usable(accountId);
-      if (current !== undefined) {
-        return current;
-      }
-
-      const environment = getMicrosoftOAuthEnvironment();
-      if (environment === undefined) {
-        return yield* new MicrosoftSignInError({ kind: "local" });
-      }
-
-      const tokens = yield* refreshMicrosoftTokens(environment, refreshToken);
-      rememberMicrosoftAccessToken(accountId, tokens);
-
-      if (
-        tokens.refreshToken !== undefined &&
-        Redacted.value(tokens.refreshToken) !== Redacted.value(refreshToken)
-      ) {
-        yield* storeRefreshToken(accountId, tokens.refreshToken);
-      }
-
-      return {
-        accessToken: tokens.accessToken,
-        expiresAt: tokens.expiresAt,
-      } satisfies MicrosoftAccessToken;
-    })
-  );
-};
+);

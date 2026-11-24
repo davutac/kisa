@@ -50,10 +50,10 @@ export const MICROSOFT_ACCOUNT_MESSAGES = {
 } as const;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class MicrosoftAccountError extends Schema.TaggedError<MicrosoftAccountError>()(
-  "MicrosoftAccountError",
-  { message: Schema.String }
-) {}
+export class MicrosoftAccountError extends Schema.TaggedError<
+  MicrosoftAccountError,
+  { readonly brand: unique symbol }
+>()("MicrosoftAccountError", { message: Schema.String }) {}
 
 const failWith = (message: string): MicrosoftAccountError =>
   new MicrosoftAccountError({ message });
@@ -263,73 +263,73 @@ export const verifyMicrosoftAccount = Effect.fn("verifyMicrosoftAccount")(
  * one already connected through Microsoft has its sign-in replaced.
  * Uninterruptible, so a saved account always starts.
  */
-export const saveMicrosoftAccount = ({
-  credentials,
-  dialect,
-  plan,
-  tokens,
-}: VerifiedMicrosoftAccount) =>
-  Effect.uninterruptible(
-    Effect.gen(function* saveAndStartAccount() {
-      const database = yield* MailDatabase;
-      const now = Date.now();
-      const outcome = yield* database
-        .use("Could not save the account", (db) =>
-          db.transaction(async (transaction) => {
-            const [existing] = await transaction
-              .select({ provider: mailAccounts.provider })
-              .from(mailAccounts)
-              .where(eq(mailAccounts.accountId, plan.accountId))
-              .limit(1)
-              .all();
+export const saveMicrosoftAccount = Effect.fn("saveMicrosoftAccount")(
+  function* saveMicrosoftAccount({
+    credentials,
+    dialect,
+    plan,
+    tokens,
+  }: VerifiedMicrosoftAccount) {
+    const database = yield* MailDatabase;
+    const now = Date.now();
+    const outcome = yield* database
+      .use("Could not save the account", (db) =>
+        db.transaction(async (transaction) => {
+          const [existing] = await transaction
+            .select({ provider: mailAccounts.provider })
+            .from(mailAccounts)
+            .where(eq(mailAccounts.accountId, plan.accountId))
+            .limit(1)
+            .all();
 
-            if (existing !== undefined) {
-              if (existing.provider !== "outlook") {
-                return "conflict" as const;
-              }
-              await transaction
-                .update(mailAccounts)
-                .set({ credentials, updatedAt: now })
-                .where(eq(mailAccounts.accountId, plan.accountId))
-                .run();
-              return "replaced" as const;
+          if (existing !== undefined) {
+            if (existing.provider !== "outlook") {
+              return "conflict" as const;
             }
-
             await transaction
-              .insert(mailAccounts)
-              .values({
-                accountId: plan.accountId,
-                createdAt: now,
-                credentials,
-                dialect,
-                displayName: plan.displayName,
-                email: plan.email,
-                imapHost: plan.imap.host,
-                imapPort: plan.imap.port,
-                imapSecurity: plan.imap.security,
-                provider: "outlook",
-                smtpHost: plan.smtp.host,
-                smtpPort: plan.smtp.port,
-                smtpSecurity: plan.smtp.security,
-                sortOrder: now,
-                updatedAt: now,
-                username: plan.username,
-              })
+              .update(mailAccounts)
+              .set({ credentials, updatedAt: now })
+              .where(eq(mailAccounts.accountId, plan.accountId))
               .run();
-            return "added" as const;
-          })
-        )
-        .pipe(
-          Effect.mapError(() => failWith(MICROSOFT_ACCOUNT_MESSAGES.saveFailed))
-        );
+            return "replaced" as const;
+          }
 
-      if (outcome === "conflict") {
-        return yield* failWith(MICROSOFT_ACCOUNT_MESSAGES.alreadyConnected);
-      }
+          await transaction
+            .insert(mailAccounts)
+            .values({
+              accountId: plan.accountId,
+              createdAt: now,
+              credentials,
+              dialect,
+              displayName: plan.displayName,
+              email: plan.email,
+              imapHost: plan.imap.host,
+              imapPort: plan.imap.port,
+              imapSecurity: plan.imap.security,
+              provider: "outlook",
+              smtpHost: plan.smtp.host,
+              smtpPort: plan.smtp.port,
+              smtpSecurity: plan.smtp.security,
+              sortOrder: now,
+              updatedAt: now,
+              username: plan.username,
+            })
+            .run();
+          return "added" as const;
+        })
+      )
+      .pipe(
+        Effect.mapError(() => failWith(MICROSOFT_ACCOUNT_MESSAGES.saveFailed))
+      );
 
-      // The token the servers have just accepted serves the first connection.
-      rememberMicrosoftAccessToken(plan.accountId, tokens);
-      notifyAccountConnected(plan.accountId);
-      return plan.accountId;
-    })
-  );
+    if (outcome === "conflict") {
+      return yield* failWith(MICROSOFT_ACCOUNT_MESSAGES.alreadyConnected);
+    }
+
+    // The token the servers have just accepted serves the first connection.
+    rememberMicrosoftAccessToken(plan.accountId, tokens);
+    notifyAccountConnected(plan.accountId);
+    return plan.accountId;
+  },
+  Effect.uninterruptible
+);

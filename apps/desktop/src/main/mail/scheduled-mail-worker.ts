@@ -183,12 +183,12 @@ export class ScheduledMailWorker {
     this.#dependencies = dependencies;
   }
 
-  start(): Promise<void> {
-    return Effect.runPromise(this.#start());
+  start(): Effect.Effect<void, ScheduledMailWorkerError> {
+    return this.#start();
   }
 
-  stop(): Promise<void> {
-    return Effect.runPromise(this.#stop());
+  stop(): Effect.Effect<void> {
+    return this.#stop();
   }
 
   wake(): Promise<void> {
@@ -204,10 +204,10 @@ export class ScheduledMailWorker {
       yield* promiseEffect(() =>
         this.#store.resetPreparing(this.#dependencies.now())
       ).pipe(
-        Effect.catch((error) =>
+        Effect.tapError(() =>
           Effect.sync(() => {
             this.#running = false;
-          }).pipe(Effect.andThen(Effect.fail(error)))
+          })
         )
       );
       yield* this.#wake();

@@ -14,10 +14,10 @@ import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class ComposerTemplateError extends Schema.TaggedError<ComposerTemplateError>()(
-  "ComposerTemplateError",
-  { message: Schema.String }
-) {}
+class ComposerTemplateError extends Schema.TaggedError<
+  ComposerTemplateError,
+  { readonly brand: unique symbol }
+>()("ComposerTemplateError", { message: Schema.String }) {}
 
 type ComposerTemplateRow = typeof composerTemplates.$inferSelect;
 

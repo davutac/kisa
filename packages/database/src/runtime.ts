@@ -10,32 +10,28 @@ import {
 } from "./client";
 import type { DatabaseClient, DatabaseConnection } from "./client";
 
-export type DatabaseErrorReason =
-  | "create-directory"
-  | "migrate"
-  | "not-ready"
-  | "open"
-  | "query";
+export const DatabaseErrorReason = Schema.Literals([
+  "create-directory",
+  "migrate",
+  "not-ready",
+  "open",
+  "query",
+]);
+export type DatabaseErrorReason = typeof DatabaseErrorReason.Type;
 
 const formatErrorCause = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class DatabaseError extends Schema.TaggedError<DatabaseError>()(
-  "DatabaseError",
-  {
-    cause: Schema.optional(Schema.Defect()),
-    causeMessage: Schema.optional(Schema.String),
-    message: Schema.String,
-    reason: Schema.Literals([
-      "create-directory",
-      "migrate",
-      "not-ready",
-      "open",
-      "query",
-    ]),
-  }
-) {
+export class DatabaseError extends Schema.TaggedError<
+  DatabaseError,
+  { readonly brand: unique symbol }
+>()("DatabaseError", {
+  cause: Schema.optional(Schema.Defect()),
+  causeMessage: Schema.optional(Schema.String),
+  message: Schema.String,
+  reason: DatabaseErrorReason,
+}) {
   static readonly new = (args: {
     cause?: unknown;
     reason: DatabaseErrorReason;

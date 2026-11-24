@@ -9,10 +9,10 @@ import * as ElectronUtilityRunner from "./electron-utility-runner";
 const DatabasePaths = Schema.Tuple([Schema.String, Schema.String]);
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class DatabaseUnlockError extends Schema.TaggedError<DatabaseUnlockError>()(
-  "DatabaseUnlockError",
-  { message: Schema.String }
-) {}
+class DatabaseUnlockError extends Schema.TaggedError<
+  DatabaseUnlockError,
+  { readonly brand: unique symbol }
+>()("DatabaseUnlockError", { message: Schema.String }) {}
 
 const receiveDatabaseKey = Effect.fn("receiveDatabaseKey")(
   function* receiveDatabaseKeyEffect() {

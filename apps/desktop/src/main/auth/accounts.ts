@@ -11,10 +11,10 @@ import { sendRendererEvent } from "../electron/renderer-events";
 import { requireSecureCredentialStorage } from "./credential-storage";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class AccountsError extends Schema.TaggedError<AccountsError>()(
-  "AccountsError",
-  { message: Schema.String }
-) {}
+export class AccountsError extends Schema.TaggedError<
+  AccountsError,
+  { readonly brand: unique symbol }
+>()("AccountsError", { message: Schema.String }) {}
 
 export const notifyAccountsChanged = (reply: AccountsReply): void => {
   sendRendererEvent(ACCOUNTS_CHANGED_CHANNEL, AccountsReply, reply);

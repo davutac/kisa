@@ -114,9 +114,7 @@ export const MailLabelSummary = Schema.Struct({
   color: Schema.optional(MailLabelColor),
   id: Schema.String,
   name: Schema.String,
-  threadCount: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
-  ),
+  threadCount: Schema.optional(Schema.Natural),
   /** The label's kind: "system" for built-in labels, "user" for the rest. */
   type: Schema.optional(Schema.String),
 });

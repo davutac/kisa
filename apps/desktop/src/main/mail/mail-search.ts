@@ -35,10 +35,10 @@ const MAX_SENDER_LIMIT = 50;
 const MAX_MATCHED_MESSAGES = 5000;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class MailSearchError extends Schema.TaggedError<MailSearchError>()(
-  "MailSearchError",
-  { message: Schema.String }
-) {}
+class MailSearchError extends Schema.TaggedError<
+  MailSearchError,
+  { readonly brand: unique symbol }
+>()("MailSearchError", { message: Schema.String }) {}
 
 const withDatabase = <A>(
   message: string,

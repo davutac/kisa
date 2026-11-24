@@ -24,10 +24,10 @@ vi.mock("../src/main/mail/engine/mail-send", () => ({
 vi.mock("../src/main/mail/engine/mail-engine", async () => {
   const { Effect: MockEffect, Schema } = await import("effect");
   // oxlint-disable-next-line unicorn/throw-new-error
-  class MailEngineError extends Schema.TaggedError<MailEngineError>()(
-    "MailEngineError",
-    { message: Schema.String }
-  ) {}
+  class MailEngineError extends Schema.TaggedError<
+    MailEngineError,
+    { readonly brand: unique symbol }
+  >()("MailEngineError", { message: Schema.String }) {}
 
   return {
     MailEngineError,

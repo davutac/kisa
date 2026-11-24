@@ -3,7 +3,7 @@ import { fetchAttachment } from "@repo/mail/attachments";
 import { dialects } from "@repo/mail/dialects";
 import { MailProtocolError } from "@repo/mail/errors";
 import type { MailTransportError } from "@repo/mail/errors";
-import { AccountId, MessageId, ThreadId } from "@repo/mail/ids";
+import { AccountId, LabelId, MessageId, ThreadId } from "@repo/mail/ids";
 import { createLabel, deleteLabel, renameLabel } from "@repo/mail/labels";
 import { applyThreadAction } from "@repo/mail/mutations";
 import type { ThreadAction } from "@repo/mail/mutations";
@@ -23,6 +23,7 @@ import {
 import type { SyncScope } from "@repo/mail/sync";
 import { and, eq, sql } from "drizzle-orm";
 import {
+  Clock,
   Effect,
   Exit,
   Layer,
@@ -102,10 +103,10 @@ import { MailEngineStoreLive } from "./mail-store";
 import { SmtpTransportLive } from "./smtp-transport";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class MailEngineError extends Schema.TaggedError<MailEngineError>()(
-  "MailEngineError",
-  { message: Schema.String }
-) {}
+export class MailEngineError extends Schema.TaggedError<
+  MailEngineError,
+  { readonly brand: unique symbol }
+>()("MailEngineError", { message: Schema.String }) {}
 
 const EngineLayer = Layer.mergeAll(
   MailEngineStoreLive,
@@ -139,11 +140,8 @@ export const runEngineExit = <A, E>(
 export const inEngine = <A, E>(
   effect: Effect.Effect<A, E, EngineServices>
 ): Effect.Effect<A, E> =>
-  Effect.flatMap(
-    Effect.promise((signal) =>
-      engineRuntime.runPromiseExit(effect, { signal })
-    ),
-    (exit) => exit
+  Effect.flatten(
+    Effect.promise((signal) => engineRuntime.runPromiseExit(effect, { signal }))
   );
 
 /**
@@ -418,7 +416,7 @@ const sendIndexProgress = (): void => {
 
 const publishProgress = Effect.fn("MailEngine.publishProgress")(
   function* publishProgress(accountId: string, force = false) {
-    const now = Date.now();
+    const now = yield* Clock.currentTimeMillis;
     if (
       !force &&
       now - (progressPublishedAt.get(accountId) ?? 0) < PROGRESS_INTERVAL_MS
@@ -474,7 +472,7 @@ const clearUnusedInlineImagesWhenDue = Effect.fn(
   "MailEngine.clearUnusedInlineImagesWhenDue"
 )(function* clearUnusedInlineImagesWhenDue(accountId: string) {
   const { inlineImageRetentionDays } = getCurrentAppSettings();
-  const now = Date.now();
+  const now = yield* Clock.currentTimeMillis;
 
   if (
     !isInlineImageClearingDue(
@@ -563,13 +561,14 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
         yield* publishProgress(accountId, true);
         yield* clearUnusedInlineImagesWhenDue(accountId);
 
-        const deadline = Date.now() + CYCLE_BUDGET_MS;
-        while (Date.now() < deadline) {
+        const deadline = (yield* Clock.currentTimeMillis) + CYCLE_BUDGET_MS;
+        while ((yield* Clock.currentTimeMillis) < deadline) {
           // Labels of mail already shown come before older mail.
           const relabeled = yield* withCacheLock(accountId, relabelStep(scope));
           const skeleton = yield* withCacheLock(accountId, skeletonStep(scope));
           const recent = yield* bodyStep(scope, {
-            receivedAfter: Date.now() - RECENT_BODY_WINDOW_MS,
+            receivedAfter:
+              (yield* Clock.currentTimeMillis) - RECENT_BODY_WINDOW_MS,
           });
           const older =
             skeleton === undefined && recent === undefined
@@ -777,7 +776,8 @@ export const forgetMailEngineAccount = Effect.fn("MailEngine.forgetAccount")(
     if (wasSyncing) {
       sendSyncStatus();
     }
-    yield* Effect.promise(() => runEngine(closeAccountSessions(accountId)));
+    // Disconnect interrupts its caller; the goodbyes still finish.
+    yield* Effect.uninterruptible(closeAccountSessions(accountId));
     yield* Effect.tryPromise({
       catch: () =>
         new MailEngineError({ message: "Could not remove the account's mail" }),
@@ -898,7 +898,7 @@ const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
           (): ReadonlyMap<string, KeptInlineImage> => new Map()
         )
       );
-    const now = Date.now();
+    const now = yield* Clock.currentTimeMillis;
 
     if (
       [...cached.values()].some((image) =>
@@ -1106,7 +1106,7 @@ export const renameAccountLabel = Effect.fn("MailEngine.renameAccountLabel")(
     const account = yield* requireAccount(accountId);
     const renamed = yield* runAction(
       account,
-      (scope) => renameLabel(scope, labelId, name),
+      (scope) => renameLabel(scope, LabelId.make(labelId), name),
       (result) => result.changes
     );
     yield* publishLabelCatalogChanged(accountId);
@@ -1119,7 +1119,7 @@ export const deleteAccountLabel = Effect.fn("MailEngine.deleteAccountLabel")(
     const account = yield* requireAccount(accountId);
     yield* runAction(
       account,
-      (scope) => deleteLabel(scope, labelId),
+      (scope) => deleteLabel(scope, LabelId.make(labelId)),
       (changes) => changes
     );
     yield* publishLabelCatalogChanged(accountId);

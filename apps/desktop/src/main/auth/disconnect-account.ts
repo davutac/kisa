@@ -15,10 +15,10 @@ import { notifyComposerTemplatesChanged } from "../templates/composer-templates"
 import { listAccounts, notifyAccountsChanged } from "./accounts";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class AccountDisconnectError extends Schema.TaggedError<AccountDisconnectError>()(
-  "AccountDisconnectError",
-  { message: Schema.String }
-) {}
+class AccountDisconnectError extends Schema.TaggedError<
+  AccountDisconnectError,
+  { readonly brand: unique symbol }
+>()("AccountDisconnectError", { message: Schema.String }) {}
 
 const toDisconnectError = (error: { readonly message: string }) =>
   new AccountDisconnectError({ message: error.message });

@@ -29,10 +29,10 @@ const DRAFT_DIRECTORY_PATTERN = /^[\da-f]{64}$/u;
 const ATTACHMENT_FILE_PATTERN = /^[\da-f-]{36}$/u;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class DraftAttachmentStoreError extends Schema.TaggedError<DraftAttachmentStoreError>()(
-  "DraftAttachmentStoreError",
-  { message: Schema.String }
-) {}
+export class DraftAttachmentStoreError extends Schema.TaggedError<
+  DraftAttachmentStoreError,
+  { readonly brand: unique symbol }
+>()("DraftAttachmentStoreError", { message: Schema.String }) {}
 
 const storeError = (): DraftAttachmentStoreError =>
   new DraftAttachmentStoreError({
@@ -316,11 +316,8 @@ export const makeDraftAttachmentStore = (
               attachments: [copied, ...rest.attachments],
               created: [copied, ...rest.created],
             })),
-            // oxlint-disable-next-line promise/prefer-await-to-callbacks, promise/prefer-await-to-then -- This is Effect error-channel recovery, not Promise chaining.
-            Effect.catch((error) =>
-              bestEffortDraftAttachmentCleanup(
-                deleteAttachments([copied])
-              ).pipe(Effect.andThen(Effect.fail(error)))
+            Effect.tapError(() =>
+              bestEffortDraftAttachmentCleanup(deleteAttachments([copied]))
             )
           )
         )

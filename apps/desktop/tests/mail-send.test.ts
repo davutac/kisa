@@ -8,7 +8,7 @@ import { ImapConnector } from "@repo/mail/session";
 import type { ImapSession } from "@repo/mail/session";
 import { SmtpTransport } from "@repo/mail/smtp";
 import type { SmtpSendRequest } from "@repo/mail/smtp";
-import { Effect, Exit, Layer } from "effect";
+import { Effect, Exit, Layer, Option } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendRendererEvent } from "../src/main/electron/renderer-events";
@@ -170,15 +170,14 @@ describe("sending", () => {
 
   it("files nothing when the outcome of the send is unknown", async () => {
     const server = await syncedIcloud();
-    smtpResult = Effect.fail(
-      new MailSendUnknownError({ accountId, message: "dropped" })
-    );
+    const unknown = new MailSendUnknownError({ accountId, message: "dropped" });
+    smtpResult = Effect.fail(unknown);
 
     const exit = await Effect.runPromiseExit(
       sendNewMessage(newMessage).pipe(Effect.provide(layers(server)))
     );
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
+    expect(Exit.findErrorOption(exit)).toStrictEqual(Option.some(unknown));
     expect(server.appended).toStrictEqual([]);
   });
 

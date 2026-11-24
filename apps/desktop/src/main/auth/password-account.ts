@@ -62,10 +62,10 @@ export const PASSWORD_ACCOUNT_MESSAGES = {
 } as const;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class PasswordAccountError extends Schema.TaggedError<PasswordAccountError>()(
-  "PasswordAccountError",
-  { message: Schema.String }
-) {}
+export class PasswordAccountError extends Schema.TaggedError<
+  PasswordAccountError,
+  { readonly brand: unique symbol }
+>()("PasswordAccountError", { message: Schema.String }) {}
 
 const failWith = (message: string): PasswordAccountError =>
   new PasswordAccountError({ message });
@@ -312,65 +312,65 @@ export const verifyPasswordAccount = Effect.fn("verifyPasswordAccount")(
  * Inserts a verified account unless its address was connected meanwhile,
  * then starts its mail. Uninterruptible, so a saved account always starts.
  */
-export const savePasswordAccount = ({
-  credentials,
-  dialect,
-  plan,
-}: VerifiedPasswordAccount) =>
-  Effect.uninterruptible(
-    Effect.gen(function* saveAndStartAccount() {
-      const database = yield* MailDatabase;
-      const now = Date.now();
-      const inserted = yield* database
-        .use("Could not save the account", (db) =>
-          db.transaction(async (transaction) => {
-            const existing = await transaction
-              .select({ accountId: mailAccounts.accountId })
-              .from(mailAccounts)
-              .where(eq(mailAccounts.accountId, plan.accountId))
-              .limit(1)
-              .all();
+export const savePasswordAccount = Effect.fn("savePasswordAccount")(
+  function* savePasswordAccount({
+    credentials,
+    dialect,
+    plan,
+  }: VerifiedPasswordAccount) {
+    const database = yield* MailDatabase;
+    const now = Date.now();
+    const inserted = yield* database
+      .use("Could not save the account", (db) =>
+        db.transaction(async (transaction) => {
+          const existing = await transaction
+            .select({ accountId: mailAccounts.accountId })
+            .from(mailAccounts)
+            .where(eq(mailAccounts.accountId, plan.accountId))
+            .limit(1)
+            .all();
 
-            if (existing.length > 0) {
-              return false;
-            }
+          if (existing.length > 0) {
+            return false;
+          }
 
-            await transaction
-              .insert(mailAccounts)
-              .values({
-                accountId: plan.accountId,
-                createdAt: now,
-                credentials,
-                dialect,
-                displayName: plan.displayName,
-                email: plan.email,
-                imapHost: plan.imap.host,
-                imapPort: plan.imap.port,
-                imapSecurity: plan.imap.security,
-                provider: plan.provider,
-                smtpHost: plan.smtp.host,
-                smtpPort: plan.smtp.port,
-                smtpSecurity: plan.smtp.security,
-                sortOrder: now,
-                updatedAt: now,
-                username: plan.username,
-              })
-              .run();
-            return true;
-          })
-        )
-        .pipe(
-          Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
-        );
+          await transaction
+            .insert(mailAccounts)
+            .values({
+              accountId: plan.accountId,
+              createdAt: now,
+              credentials,
+              dialect,
+              displayName: plan.displayName,
+              email: plan.email,
+              imapHost: plan.imap.host,
+              imapPort: plan.imap.port,
+              imapSecurity: plan.imap.security,
+              provider: plan.provider,
+              smtpHost: plan.smtp.host,
+              smtpPort: plan.smtp.port,
+              smtpSecurity: plan.smtp.security,
+              sortOrder: now,
+              updatedAt: now,
+              username: plan.username,
+            })
+            .run();
+          return true;
+        })
+      )
+      .pipe(
+        Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
+      );
 
-      if (!inserted) {
-        return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.alreadyConnected);
-      }
+    if (!inserted) {
+      return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.alreadyConnected);
+    }
 
-      notifyAccountConnected(plan.accountId);
-      return plan.accountId;
-    })
-  );
+    notifyAccountConnected(plan.accountId);
+    return plan.accountId;
+  },
+  Effect.uninterruptible
+);
 
 /** How a connected account signs in, for signing it in again. */
 export type AccountSignInMethod = "microsoft" | "password";
@@ -481,36 +481,36 @@ export const verifyPasswordSignInAgain = Effect.fn("verifyPasswordSignInAgain")(
  * and nothing is announced for it. Uninterruptible, so a saved sign-in
  * always restarts the account.
  */
-export const savePasswordSignInAgain = ({
-  accountId,
-  credentials,
-}: VerifiedPasswordSignIn) =>
-  Effect.uninterruptible(
-    Effect.gen(function* saveSignInAgain() {
-      const database = yield* MailDatabase;
-      const updated = yield* database
-        .use("Could not save the sign-in", (db) =>
-          db
-            .update(mailAccounts)
-            .set({ credentials, updatedAt: Date.now() })
-            .where(
-              and(
-                eq(mailAccounts.accountId, accountId),
-                ne(mailAccounts.provider, "outlook")
-              )
+export const savePasswordSignInAgain = Effect.fn("savePasswordSignInAgain")(
+  function* savePasswordSignInAgain({
+    accountId,
+    credentials,
+  }: VerifiedPasswordSignIn) {
+    const database = yield* MailDatabase;
+    const updated = yield* database
+      .use("Could not save the sign-in", (db) =>
+        db
+          .update(mailAccounts)
+          .set({ credentials, updatedAt: Date.now() })
+          .where(
+            and(
+              eq(mailAccounts.accountId, accountId),
+              ne(mailAccounts.provider, "outlook")
             )
-            .returning({ accountId: mailAccounts.accountId })
-            .all()
-        )
-        .pipe(
-          Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
-        );
+          )
+          .returning({ accountId: mailAccounts.accountId })
+          .all()
+      )
+      .pipe(
+        Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
+      );
 
-      if (updated.length === 0) {
-        return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.notConnected);
-      }
+    if (updated.length === 0) {
+      return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.notConnected);
+    }
 
-      notifyAccountConnected(accountId);
-      return accountId;
-    })
-  );
+    notifyAccountConnected(accountId);
+    return accountId;
+  },
+  Effect.uninterruptible
+);

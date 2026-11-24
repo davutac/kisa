@@ -57,10 +57,10 @@ export const DatabaseExecutePayload = Schema.Struct({
 export type DatabaseExecutePayload = typeof DatabaseExecutePayload.Type;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class DatabaseQueryError extends Schema.TaggedError<DatabaseQueryError>()(
-  "DatabaseQueryError",
-  { message: Schema.String }
-) {}
+export class DatabaseQueryError extends Schema.TaggedError<
+  DatabaseQueryError,
+  { readonly brand: unique symbol }
+>()("DatabaseQueryError", { message: Schema.String }) {}
 
 export class ExecuteDatabase extends Rpc.make("ExecuteDatabase", {
   error: DatabaseQueryError,

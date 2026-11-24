@@ -15,17 +15,12 @@ const WINDOWS_SHELL_META_CHARS = /(?<character>[()\][%!^"`<>&|;, *?])/gu;
 const execFileAsync = promisify(execFile);
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class AiCommandError extends Schema.TaggedError<AiCommandError>()(
-  "AiCommandError",
-  {
-    kind: Schema.Literals([
-      "failed",
-      "not-installed",
-      "output-limit",
-      "timeout",
-    ]),
-  }
-) {}
+export class AiCommandError extends Schema.TaggedError<
+  AiCommandError,
+  { readonly brand: unique symbol }
+>()("AiCommandError", {
+  kind: Schema.Literals(["failed", "not-installed", "output-limit", "timeout"]),
+}) {}
 
 export interface AiCommandResult {
   readonly exitCode: number;
@@ -279,21 +274,11 @@ export const runAiCommand = Effect.fn("runAiCommand")(function* runAiCommand(
     let stderr = "";
     let stdout = "";
 
-    const timeout = setTimeout(() => {
-      terminateAiProcess(child);
-      if (!settled) {
-        settled = true;
-        resume(Effect.fail(new AiCommandError({ kind: "timeout" })));
-      }
-    }, input.timeoutMs);
-    timeout.unref();
-
     const finish = (effect: Effect.Effect<AiCommandResult, AiCommandError>) => {
       if (settled) {
         return;
       }
       settled = true;
-      clearTimeout(timeout);
       resume(effect);
     };
     const append = (target: "stderr" | "stdout", chunk: Buffer) => {
@@ -336,9 +321,12 @@ export const runAiCommand = Effect.fn("runAiCommand")(function* runAiCommand(
       child.stdin.end(input.stdin, "utf-8");
     }
 
-    return Effect.sync(() => {
-      clearTimeout(timeout);
-      terminateAiProcess(child);
-    });
-  });
+    // Interruption, including the timeout below, ends the process.
+    return Effect.sync(() => terminateAiProcess(child));
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: input.timeoutMs,
+      orElse: () => Effect.fail(new AiCommandError({ kind: "timeout" })),
+    })
+  );
 });

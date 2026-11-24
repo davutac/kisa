@@ -13,10 +13,10 @@ import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class TrustedImageSenderError extends Schema.TaggedError<TrustedImageSenderError>()(
-  "TrustedImageSenderError",
-  { message: Schema.String }
-) {}
+class TrustedImageSenderError extends Schema.TaggedError<
+  TrustedImageSenderError,
+  { readonly brand: unique symbol }
+>()("TrustedImageSenderError", { message: Schema.String }) {}
 
 // Addresses arrive from headers and from the renderer, so both sides have to
 // agree on one spelling before they are compared.

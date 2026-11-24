@@ -67,10 +67,10 @@ type SenderBrandDiscovery =
     };
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class SenderBrandError extends Schema.TaggedError<SenderBrandError>()(
-  "SenderBrandError",
-  { message: Schema.String }
-) {}
+export class SenderBrandError extends Schema.TaggedError<
+  SenderBrandError,
+  { readonly brand: unique symbol }
+>()("SenderBrandError", { message: Schema.String }) {}
 
 const isValidSelector = (selector: string): boolean =>
   selector.length <= 253 &&

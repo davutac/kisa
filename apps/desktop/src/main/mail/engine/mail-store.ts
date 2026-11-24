@@ -10,6 +10,7 @@ import {
 } from "@repo/database/schemas";
 import type { StoredMailAttachment } from "@repo/database/schemas";
 import type { DialectKind } from "@repo/mail/dialects";
+import { MailStoreError } from "@repo/mail/errors";
 import {
   AccountId,
   LabelId,
@@ -1632,21 +1633,27 @@ export const MailEngineStoreLive = Layer.effect(
           );
           // Compression and text extraction happen before the connection is
           // taken, so they never hold up foreground reads.
-          const prepared = yield* Effect.promise(() =>
-            Promise.all(
-              bodies.flatMap((body) => {
-                const fromAddress = context.senders.get(body.messageId);
-                return fromAddress === undefined
-                  ? []
-                  : [
-                      prepareBody(body, {
-                        dialect: context.dialect,
-                        fromAddress,
-                      }),
-                    ];
-              })
-            )
-          );
+          const prepared = yield* Effect.tryPromise({
+            catch: (cause) =>
+              new MailStoreError({
+                cause,
+                message: "Could not prepare message bodies",
+              }),
+            try: () =>
+              Promise.all(
+                bodies.flatMap((body) => {
+                  const fromAddress = context.senders.get(body.messageId);
+                  return fromAddress === undefined
+                    ? []
+                    : [
+                        prepareBody(body, {
+                          dialect: context.dialect,
+                          fromAddress,
+                        }),
+                      ];
+                })
+              ),
+          });
 
           return yield* inTransaction(
             "Could not save message bodies",

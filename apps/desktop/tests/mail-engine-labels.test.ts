@@ -140,7 +140,7 @@ describe("labels with the Gmail dialect", () => {
       )
       .run();
 
-    await run(renameLabel(scope, "u:Work", "Office"));
+    await run(renameLabel(scope, userLabelId("Work"), "Office"));
 
     expect(threadRow("800")).toMatchObject({
       label_ids: JSON.stringify(["INBOX", "u:Office", "u:Office/Sub"]),
@@ -161,7 +161,7 @@ describe("labels with the Gmail dialect", () => {
   it("deletes a label and takes it off its conversations", async () => {
     const { scope } = await syncGmailWorkMessage();
 
-    await run(deleteLabel(scope, "u:Work"));
+    await run(deleteLabel(scope, userLabelId("Work")));
 
     expect(threadRow("800")).toMatchObject({
       label_ids: JSON.stringify(["INBOX", "u:Work/Sub"]),
@@ -232,7 +232,7 @@ describe("labels with the Gmail dialect", () => {
 
     const unchanged = await syncReportingLabels(scope);
     await run(createLabel(scope, "Travel"));
-    await run(renameLabel(scope, "u:Travel", "Trips"));
+    await run(renameLabel(scope, userLabelId("Travel"), "Trips"));
     server.addMailbox("Receipts");
     const added = await syncReportingLabels(scope);
 

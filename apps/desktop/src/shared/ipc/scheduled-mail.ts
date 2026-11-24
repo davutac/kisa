@@ -13,7 +13,6 @@ export const MAX_SCHEDULED_MAIL_PREVIEW_LENGTH = 240;
 // Bound IPC payloads without imposing a product-level account limit.
 export const MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT = 1000;
 
-const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
 
 export const ScheduledMailAttentionReason = Schema.Literals([
@@ -91,7 +90,7 @@ export const ScheduledMailPage = Schema.Struct({
 export type ScheduledMailPage = typeof ScheduledMailPage.Type;
 
 export const ScheduledMailAttentionCount = Schema.Struct({
-  count: NonNegativeInt,
+  count: Schema.Natural,
   hasScheduledMail: Schema.Boolean,
 });
 export type ScheduledMailAttentionCount =

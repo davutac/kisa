@@ -7,10 +7,10 @@ import {
 } from "../app/linux-secret-storage";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class CredentialStorageError extends Schema.TaggedError<CredentialStorageError>()(
-  "CredentialStorageError",
-  { message: Schema.String }
-) {}
+export class CredentialStorageError extends Schema.TaggedError<
+  CredentialStorageError,
+  { readonly brand: unique symbol }
+>()("CredentialStorageError", { message: Schema.String }) {}
 
 /**
  * Every saved sign-in is sealed with `safeStorage`. On Linux only a real

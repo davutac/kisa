@@ -572,8 +572,10 @@ describe("the Add account window", () => {
 
   it("runs one submission at a time, and closing the window stops it unsaved", async () => {
     let interrupted = false;
+    const verifying = Promise.withResolvers<null>();
     mocks.verify.mockReturnValue(
-      Effect.never.pipe(
+      Effect.sync(() => verifying.resolve(null)).pipe(
+        Effect.andThen(Effect.never),
         Effect.onInterrupt(() =>
           Effect.sync(() => {
             interrupted = true;
@@ -590,9 +592,7 @@ describe("the Add account window", () => {
       window.webContents.id,
       validRequest
     );
-    await vi.waitFor(() => {
-      expect(mocks.verify).toHaveBeenCalledOnce();
-    });
+    await verifying.promise;
     const second = await invoke(
       listeners,
       ACCOUNT_SETUP_SUBMIT_CHANNEL,
@@ -719,11 +719,14 @@ describe("the Add account window", () => {
     });
 
     it("passes on a failure's fixed message and keeps the window open", async () => {
+      const { MicrosoftAccountError } =
+        await import("../src/main/auth/microsoft-account");
       mocks.verifyMicrosoft.mockReturnValue(
-        Effect.fail({
-          _tag: "MicrosoftAccountError",
-          message: MICROSOFT_ACCOUNT_MESSAGES.mailboxRefused,
-        } as never)
+        Effect.fail(
+          new MicrosoftAccountError({
+            message: MICROSOFT_ACCOUNT_MESSAGES.mailboxRefused,
+          })
+        )
       );
       const listeners = await installMethods();
       const window = await openWindow();

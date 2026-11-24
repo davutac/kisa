@@ -95,12 +95,12 @@ const openSession = Effect.fn("MailSessions.open")(function* openSession(
   const auth = yield* resolveImapAuth(account);
 
   return yield* connect(account, auth).pipe(
-    Effect.catch((error) =>
-      error._tag === "MailAuthError" && auth.kind === "oauth"
-        ? resolveImapAuth(account).pipe(
-            Effect.flatMap((renewed) => connect(account, renewed))
-          )
-        : Effect.fail(error)
+    Effect.catchIf(
+      (error) => error._tag === "MailAuthError" && auth.kind === "oauth",
+      () =>
+        resolveImapAuth(account).pipe(
+          Effect.flatMap((renewed) => connect(account, renewed))
+        )
     )
   );
 });
@@ -143,6 +143,7 @@ export const withAccountSession = <A, E, R>(
       pool.current = open;
 
       const exit = yield* Effect.exit(use(open.session));
+      const context = yield* Effect.context();
 
       if (Exit.isFailure(exit) && shouldDropSession(exit.cause)) {
         detach(pool);
@@ -151,7 +152,7 @@ export const withAccountSession = <A, E, R>(
         pool.idleTimer = setTimeout(() => {
           const idle = detach(pool);
           if (idle !== undefined) {
-            void Effect.runPromise(closeSession(idle));
+            void Effect.runPromiseWith(context)(closeSession(idle));
           }
         }, IDLE_CLOSE_MS);
       }

@@ -15,7 +15,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
-import { Effect, Schema } from "effect";
+import { Effect, Exit, Schema, Scope } from "effect";
 import { app, dialog } from "electron";
 
 import type {
@@ -94,8 +94,11 @@ interface DatabaseImportRun {
   /** Resolves once the import has ended and cleaned up after itself. */
   readonly ended: Promise<null>;
   readonly state: "importing";
-  /** Quit stops the import through this. */
-  readonly stop: AbortController;
+  /**
+   * Owns the import's abort signal. Quit stops the import by closing it; the
+   * import closes it too when it ends, which is harmless after a stop.
+   */
+  readonly stop: Scope.Closeable;
 }
 
 type DatabaseImportState =
@@ -106,10 +109,10 @@ type DatabaseImportState =
 let databaseImportState: DatabaseImportState;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class DatabaseImportError extends Schema.TaggedError<DatabaseImportError>()(
-  "DatabaseImportError",
-  { message: Schema.String }
-) {}
+class DatabaseImportError extends Schema.TaggedError<
+  DatabaseImportError,
+  { readonly brand: unique symbol }
+>()("DatabaseImportError", { message: Schema.String }) {}
 
 const importError = (): DatabaseImportError =>
   new DatabaseImportError({ message: "Could not import the database" });
@@ -591,7 +594,7 @@ export const stopDatabaseImport = async (): Promise<void> => {
   if (running?.state !== "importing") {
     return;
   }
-  running.stop.abort();
+  await Effect.runPromise(Scope.close(running.stop, Exit.void));
   await running.ended;
 };
 
@@ -610,10 +613,10 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
     }
 
     const { databasePath: sourceDatabase, recoveryKeyPath } = session;
-    const stop = new AbortController();
+    const stop = yield* Scope.make();
+    const signal = yield* Scope.provide(Effect.abortSignal, stop);
     const ended = Promise.withResolvers<null>();
     databaseImportState = { ended: ended.promise, state: "importing", stop };
-    const { signal } = stop;
 
     // The copy did not open with its key, or its schema is not one Kisa reads.
     let validationFailed = false;
@@ -710,10 +713,14 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
       },
     }).pipe(
       Effect.ensuring(
-        Effect.sync(() => {
-          databaseImportState = undefined;
-          ended.resolve(null);
-        })
+        Scope.close(stop, Exit.void).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              databaseImportState = undefined;
+              ended.resolve(null);
+            })
+          )
+        )
       )
     );
   }

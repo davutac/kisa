@@ -364,13 +364,16 @@ describe("database import", () => {
   it("reports an import as running until its restart prompt is answered", async () => {
     const sessionId = await prepareImport();
     const answered = Promise.withResolvers<Electron.MessageBoxReturnValue>();
+    const prompted = Promise.withResolvers<null>();
     state.messageBox.mockReset();
-    state.messageBox.mockReturnValueOnce(answered.promise);
+    state.messageBox.mockImplementationOnce(() => {
+      prompted.resolve(null);
+      return answered.promise;
+    });
 
     const running = runImport(sessionId);
-    await vi.waitFor(() => {
-      expect(state.messageBox).toHaveBeenCalledOnce();
-    });
+    await prompted.promise;
+    expect(state.messageBox).toHaveBeenCalledOnce();
     await expect(importStatus()).resolves.toMatchObject({ state: "importing" });
     await expect(
       Effect.runPromise(discardPendingDatabaseImport(activeDatabasePath))
@@ -823,12 +826,15 @@ describe("database import", () => {
   it("ignores an answer to the restart prompt that comes after quit began", async () => {
     const sessionId = await prepareImport();
     const answered = Promise.withResolvers<Electron.MessageBoxReturnValue>();
+    const prompted = Promise.withResolvers<null>();
     state.messageBox.mockReset();
-    state.messageBox.mockReturnValueOnce(answered.promise);
-    const running = runImport(sessionId);
-    await vi.waitFor(() => {
-      expect(state.messageBox).toHaveBeenCalledOnce();
+    state.messageBox.mockImplementationOnce(() => {
+      prompted.resolve(null);
+      return answered.promise;
     });
+    const running = runImport(sessionId);
+    await prompted.promise;
+    expect(state.messageBox).toHaveBeenCalledOnce();
 
     await stopDatabaseImport();
     await expect(running).resolves.toBe("restart-pending");

@@ -110,7 +110,7 @@ describe("saving an account's sender name", () => {
 
 const decodes = (name: string): boolean =>
   Exit.isSuccess(
-    Schema.decodeUnknownExit(AccountNameUpdateRequest)({
+    Schema.decodeExit(AccountNameUpdateRequest)({
       email: "ana@gmail.com",
       name,
     })

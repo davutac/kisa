@@ -120,10 +120,10 @@ vi.mock(import("../src/main/mail/scheduled-mail-notifications"), () => ({
     vi.fn<typeof closeScheduledMailNotifications>(),
   dispatchPendingScheduledMailNotifications: vi.fn<
     typeof dispatchPendingScheduledMailNotifications
-  >(async () => {}),
+  >(() => Effect.void),
   releaseStaleScheduledMailNotificationClaims: vi.fn<
     typeof releaseStaleScheduledMailNotificationClaims
-  >(async () => {}),
+  >(() => Effect.void),
   showScheduledMailNotification: vi.fn<typeof showScheduledMailNotification>(
     async () => {}
   ),

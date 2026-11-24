@@ -50,10 +50,10 @@ interface PreviewSession {
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class AttachmentActionError extends Schema.TaggedError<AttachmentActionError>()(
-  "AttachmentActionError",
-  { message: Schema.String }
-) {}
+class AttachmentActionError extends Schema.TaggedError<
+  AttachmentActionError,
+  { readonly brand: unique symbol }
+>()("AttachmentActionError", { message: Schema.String }) {}
 
 const actionError = (message: string): AttachmentActionError =>
   new AttachmentActionError({ message });

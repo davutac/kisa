@@ -1,9 +1,13 @@
+// Oxlint does not recognize @effect/vitest's it.effect as a test declaration.
+// oxlint-disable vitest/no-standalone-expect
 // Microsoft sign-in against the real loopback listener: the "browser" is a
 // function that requests the redirect, and the token endpoint is a stand-in
 // `fetch`. No request leaves the machine and no real token is involved.
 import { createHash } from "node:crypto";
 
+import { it as effectIt } from "@effect/vitest";
 import { Cause, Effect, Exit, Fiber, Redacted } from "effect";
+import { TestClock } from "effect/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -266,6 +270,38 @@ describe("Microsoft browser sign-in", () => {
     );
     expect(calls).toStrictEqual([]);
   });
+
+  effectIt.effect(
+    "gives up and closes the listener when no redirect arrives in time",
+    () =>
+      Effect.gen(function* timesOutSignIn() {
+        let redirect = "";
+        const browserOpened = Promise.withResolvers<undefined>();
+        const { calls, environment: oauth } = environment(
+          (url) => {
+            redirect = url.searchParams.get("redirect_uri") ?? "";
+            browserOpened.resolve(undefined);
+            return Promise.resolve();
+          },
+          () => tokenReply({ access_token: "never" })
+        );
+
+        const signIn = yield* Effect.forkChild(
+          signInWithMicrosoft(oauth, "a@b.example")
+        );
+        yield* Effect.promise(() => browserOpened.promise);
+        yield* TestClock.adjust("10 minutes");
+        const exit = yield* Fiber.await(signIn);
+
+        expect(failureKind(exit)).toMatchObject({ kind: "timeout" });
+        yield* Effect.promise(() =>
+          expect(visit(`${redirect}/?code=late&state=x`)).rejects.toThrow(
+            "fetch failed"
+          )
+        );
+        expect(calls).toStrictEqual([]);
+      })
+  );
 
   it("reports a browser that cannot be opened", async () => {
     const { environment: oauth } = environment(

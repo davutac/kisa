@@ -1,5 +1,5 @@
 // oxlint-disable typescript/no-unsafe-type-assertion
-import { Effect, Exit } from "effect";
+import { Effect, Schema } from "effect";
 import type { BrowserWindow } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -84,11 +84,13 @@ describe("openThreadWindow IPC", () => {
   });
 
   it("rejects an empty account or thread identifier", async () => {
-    const exit = await Effect.runPromiseExit(
-      openThreadWindowMethod.handler({ accountId: "", threadId: "" })
+    const error = await Effect.runPromise(
+      Effect.flip(
+        openThreadWindowMethod.handler({ accountId: "", threadId: "" })
+      )
     );
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
+    expect(Schema.isSchemaError(error)).toBeTruthy();
     expect(mocks.openThreadWindow).not.toHaveBeenCalled();
   });
 });

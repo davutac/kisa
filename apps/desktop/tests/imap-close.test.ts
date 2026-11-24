@@ -3,6 +3,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
+import type { ImapFlow } from "imapflow";
 
 import {
   LOGOUT_TIMEOUT_MS,
@@ -24,7 +25,7 @@ const client = (logout: () => Promise<unknown>, usable = true) => {
         calls.push("logged out");
       },
       usable,
-    },
+    } satisfies Pick<ImapFlow, "close" | "logout" | "usable">,
   };
 };
 
@@ -33,7 +34,7 @@ describe("closing an IMAP connection", () => {
     Effect.gen(function* answeringServer() {
       const { calls, client: answering } = client(() => Promise.resolve());
 
-      yield* closeClient(answering as never);
+      yield* closeClient(answering);
 
       expect(calls).toStrictEqual(["logout", "logged out", "close"]);
     })
@@ -48,7 +49,7 @@ describe("closing an IMAP connection", () => {
 
       // Releases run uninterruptibly, as a session scope's close does.
       const closing = yield* Effect.forkChild(
-        Effect.uninterruptible(closeClient(silent as never))
+        Effect.uninterruptible(closeClient(silent))
       );
       yield* TestClock.adjust(LOGOUT_TIMEOUT_MS);
       yield* Fiber.join(closing);
@@ -64,7 +65,7 @@ describe("closing an IMAP connection", () => {
         false
       );
 
-      yield* closeClient(unusable as never);
+      yield* closeClient(unusable);
 
       expect(calls).toStrictEqual(["close"]);
     })

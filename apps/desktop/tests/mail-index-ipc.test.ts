@@ -1,7 +1,7 @@
 // Oxlint does not recognize @effect/vitest's it.effect as a test declaration.
 // oxlint-disable unicorn/no-useless-undefined vitest/no-standalone-expect vitest/prefer-import-in-mock
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Exit } from "effect";
+import { Effect, Schema } from "effect";
 import { beforeEach, vi } from "vitest";
 
 import { MAIL_REINDEX_CHANNEL } from "../src/shared/ipc/channels";
@@ -51,12 +51,12 @@ describe("mail reindex IPC", () => {
     })
   );
 
-  it("rejects an empty account id", async () => {
-    const exit = await Effect.runPromiseExit(
-      reindexMail.handler({ accountId: "" })
-    );
+  it.effect("rejects an empty account id", () =>
+    Effect.gen(function* rejectsAnEmptyAccountId() {
+      const error = yield* Effect.flip(reindexMail.handler({ accountId: "" }));
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
-    expect(state.requestMailSync).not.toHaveBeenCalled();
-  });
+      expect(Schema.isSchemaError(error)).toBeTruthy();
+      expect(state.requestMailSync).not.toHaveBeenCalled();
+    })
+  );
 });

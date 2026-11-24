@@ -9,7 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 
-import { Effect, Option, Predicate, Redacted, Schema } from "effect";
+import { Clock, Effect, Option, Predicate, Redacted, Schema } from "effect";
 
 import { renderSignInCallbackPage } from "./sign-in-callback-page";
 
@@ -50,18 +50,18 @@ const MAX_ADDRESS_LENGTH = 320;
  * - `local`: the listener or the browser could not be started.
  */
 // oxlint-disable-next-line unicorn/throw-new-error
-export class MicrosoftSignInError extends Schema.TaggedError<MicrosoftSignInError>()(
-  "MicrosoftSignInError",
-  {
-    kind: Schema.Literals([
-      "cancelled",
-      "local",
-      "refused",
-      "timeout",
-      "unavailable",
-    ]),
-  }
-) {}
+export class MicrosoftSignInError extends Schema.TaggedError<
+  MicrosoftSignInError,
+  { readonly brand: unique symbol }
+>()("MicrosoftSignInError", {
+  kind: Schema.Literals([
+    "cancelled",
+    "local",
+    "refused",
+    "timeout",
+    "unavailable",
+  ]),
+}) {}
 
 const failWith = (kind: MicrosoftSignInError["kind"]): MicrosoftSignInError =>
   new MicrosoftSignInError({ kind });
@@ -223,7 +223,7 @@ const requestTokens = Effect.fn("MicrosoftOAuth.requestTokens")(
       response.status < 300 &&
       Option.isSome(tokens)
     ) {
-      return toTokens(tokens.value, Date.now());
+      return toTokens(tokens.value, yield* Clock.currentTimeMillis);
     }
 
     const failure = decodeTokenFailure(response.body);
@@ -355,12 +355,6 @@ const awaitRedirect = (
         );
       }
     });
-    const timeout = setTimeout(() => {
-      closeListener(server);
-      settle(Effect.fail(failWith("timeout")));
-    }, SIGN_IN_TIMEOUT_MS);
-    ended.signal.addEventListener("abort", () => clearTimeout(timeout));
-
     server.once("error", () => {
       closeListener(server);
       settle(Effect.fail(failWith("local")));
@@ -402,7 +396,12 @@ const awaitRedirect = (
       ended.abort();
       closeListener(server);
     });
-  });
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: SIGN_IN_TIMEOUT_MS,
+      orElse: () => Effect.fail(failWith("timeout")),
+    })
+  );
 
 /**
  * The whole browser sign-in: Microsoft's page, the redirect, and the code

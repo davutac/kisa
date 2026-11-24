@@ -6,13 +6,13 @@ import { setNativeUnreadBadgeCount } from "../app/native-unread-badge";
 import { withDatabaseClient } from "../database-query";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class UnreadBadgeError extends Schema.TaggedError<UnreadBadgeError>()(
-  "UnreadBadgeError",
-  {
-    cause: Schema.optional(Schema.Defect()),
-    message: Schema.String,
-  }
-) {}
+class UnreadBadgeError extends Schema.TaggedError<
+  UnreadBadgeError,
+  { readonly brand: unique symbol }
+>()("UnreadBadgeError", {
+  cause: Schema.optional(Schema.Defect()),
+  message: Schema.String,
+}) {}
 
 export const refreshUnreadBadge = Effect.fn("refreshUnreadBadge")(
   function* refreshUnreadBadge() {

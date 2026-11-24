@@ -413,6 +413,12 @@ describe(showNewMailNotifications, () => {
     async (_activation, event, details) => {
       mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
       mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
+      const focused = Promise.withResolvers<null>();
+      mocks.openThreadWindow.mockResolvedValueOnce({
+        focus: vi.fn<() => void>(() => focused.resolve(null)),
+        isDestroyed: () => false,
+        show: vi.fn<() => void>(),
+      });
 
       await Effect.runPromise(
         showNotifications("user@example.com", ["new"], () =>
@@ -422,11 +428,10 @@ describe(showNewMailNotifications, () => {
 
       emitNotification(0, event, details);
 
-      await vi.waitFor(() => {
-        expect(mocks.openThreadWindow).toHaveBeenCalledWith({
-          accountId: "user@example.com",
-          threadId: "thread-new",
-        });
+      await focused.promise;
+      expect(mocks.openThreadWindow).toHaveBeenCalledWith({
+        accountId: "user@example.com",
+        threadId: "thread-new",
       });
       expect(mocks.appFocus).toHaveBeenCalledWith({ steal: true });
     }
@@ -471,6 +476,10 @@ describe(showNewMailNotifications, () => {
     mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
     mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
     mocks.openThreadWindow.mockRejectedValue(new Error("load failed"));
+    const focused = Promise.withResolvers<null>();
+    mocks.mainWindow.focus.mockImplementationOnce(() => {
+      focused.resolve(null);
+    });
 
     await Effect.runPromise(
       showNotifications("user@example.com", ["new"], () => Effect.succeed(null))
@@ -478,9 +487,8 @@ describe(showNewMailNotifications, () => {
 
     mocks.notificationListeners[0]?.get("click")?.();
 
-    await vi.waitFor(() => {
-      expect(mocks.mainWindow.focus).toHaveBeenCalledOnce();
-    });
+    await focused.promise;
+    expect(mocks.mainWindow.focus).toHaveBeenCalledOnce();
   });
 
   it("rasterizes an authenticated BIMI logo for the native icon", async () => {

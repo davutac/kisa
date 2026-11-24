@@ -1,18 +1,28 @@
-import { Effect, Schema } from "effect";
+import { Cause, Duration, Effect, Exit, Fiber, Schedule, Schema } from "effect";
+import type { Context } from "effect";
 
-const SCHEDULED_MAIL_START_RETRY_DELAYS_MS = [
-  1000, 2000, 4000, 8000, 16_000, 30_000,
-] as const;
-const SCHEDULED_MAIL_EXHAUSTED_RETRY_DELAY_MS = 5 * 60_000;
+/**
+ * A startup step that fails is tried again after 1, 2, 4, 8 and 16 seconds,
+ * then 30: seven attempts in all.
+ */
+const startRetrySchedule = Schedule.exponential("1 second").pipe(
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.seconds(30)))
+  ),
+  Schedule.upTo({ times: 6 })
+);
+
+/** After a step runs out of attempts, startup is tried again this long after. */
+const EXHAUSTED_RETRY_DELAY = Duration.minutes(5);
 
 // oxlint-disable-next-line unicorn/throw-new-error -- Effect Schema tagged errors are declared as generated classes.
-class ScheduledMailLifecycleError extends Schema.TaggedError<ScheduledMailLifecycleError>()(
-  "ScheduledMailLifecycleError",
-  { message: Schema.String }
-) {}
+class ScheduledMailLifecycleError extends Schema.TaggedError<
+  ScheduledMailLifecycleError,
+  { readonly brand: unique symbol }
+>()("ScheduledMailLifecycleError", { message: Schema.String }) {}
 
 const lifecycleError = (
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Promise rejection values are unknown at this adapter boundary.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Step failures are unknown at this boundary.
   error: unknown
 ): ScheduledMailLifecycleError =>
   new ScheduledMailLifecycleError({
@@ -22,288 +32,187 @@ const lifecycleError = (
         : "Scheduled mail startup operation failed",
   });
 
+// A step is not interrupted while it runs, so stopping waits for one in
+// flight instead of leaving it to finish after the worker has stopped.
+const step = (operation: Effect.Effect<void, unknown>) =>
+  operation.pipe(
+    Effect.mapError(lifecycleError),
+    Effect.uninterruptible,
+    Effect.retry(startRetrySchedule)
+  );
+
 interface ScheduledMailLifecycleOptions {
-  readonly dispatchPendingNotifications: () => Promise<void>;
-  readonly exhaustedRetryDelayMs?: number;
+  readonly dispatchPendingNotifications: Effect.Effect<void, unknown>;
   readonly listenForResume: (listener: () => void) => () => void;
-  readonly releaseStaleNotificationClaims: () => Promise<void>;
-  readonly retryDelaysMs?: readonly number[];
-  readonly scheduleRetry: (
-    run: () => void,
-    delayMs: number
-  ) => { readonly cancel: () => void };
-  readonly startWorker: () => Promise<void>;
-  readonly stopWorker: () => Promise<void>;
+  readonly releaseStaleNotificationClaims: Effect.Effect<void, unknown>;
+  readonly startWorker: Effect.Effect<void, unknown>;
+  readonly stopWorker: Effect.Effect<void, unknown>;
   readonly wakeWorker: () => void;
 }
 
 interface ScheduledMailLifecycle {
-  readonly start: () => Promise<void>;
-  readonly stop: () => Promise<void>;
+  /**
+   * Starts scheduled mail, and fails once a step has used up its attempts.
+   * Stopping meanwhile ends it without failing.
+   */
+  readonly start: Effect.Effect<void, ScheduledMailLifecycleError>;
+  readonly stop: Effect.Effect<void, ScheduledMailLifecycleError>;
 }
 
-export const createScheduledMailLifecycle = ({
-  dispatchPendingNotifications,
-  exhaustedRetryDelayMs = SCHEDULED_MAIL_EXHAUSTED_RETRY_DELAY_MS,
-  listenForResume,
-  releaseStaleNotificationClaims,
-  retryDelaysMs = SCHEDULED_MAIL_START_RETRY_DELAYS_MS,
-  scheduleRetry,
-  startWorker,
-  stopWorker,
-  wakeWorker,
-}: ScheduledMailLifecycleOptions): ScheduledMailLifecycle => {
+/**
+ * Brings scheduled mail up: stale notification claims are released, the
+ * worker started, and pending notifications shown, each step retried on its
+ * own and done once. A run of attempts that gives up is tried again later,
+ * and on resume from sleep; stopping ends whatever is still waiting.
+ */
+export const createScheduledMailLifecycle = (
+  options: ScheduledMailLifecycleOptions
+): ScheduledMailLifecycle => {
   let active = false;
-  let exhaustedRetryCancellation: (() => void) | undefined;
-  let generation = 0;
   let notificationClaimsReleased = false;
   let notificationsDrained = false;
-  let removeResumeListener: (() => void) | undefined;
-  let retryCancellation: (() => void) | undefined;
-  let startPromise: Promise<void> | undefined;
   let workerStarted = false;
-
-  const isCurrentGeneration = (candidate: number): boolean =>
-    active && candidate === generation;
-
-  const cancelExhaustedRetry = (): void => {
-    exhaustedRetryCancellation?.();
-    exhaustedRetryCancellation = undefined;
-  };
-
-  const waitForRetry = (
-    candidate: number,
-    delayMs: number
-  ): Effect.Effect<boolean, ScheduledMailLifecycleError> =>
-    Effect.callback<boolean, ScheduledMailLifecycleError>((resume) => {
-      let settled = false;
-      let retryHandle: { readonly cancel: () => void } | undefined;
-      const finish = (shouldRetry: boolean): void => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        retryCancellation = undefined;
-        resume(Effect.succeed(shouldRetry));
-      };
-      const cancel = (): void => {
-        retryHandle?.cancel();
-        finish(false);
-      };
-
-      try {
-        retryHandle = scheduleRetry(
-          () => finish(isCurrentGeneration(candidate)),
-          delayMs
-        );
-        if (!settled) {
-          retryCancellation = cancel;
-        }
-      } catch (error) {
-        resume(Effect.fail(lifecycleError(error)));
+  let removeResumeListener: (() => void) | undefined;
+  /** Where resume and recovery run: the context `start` was first run in. */
+  let context: Context.Context<never> | undefined;
+  /** The startup run in progress, which every caller of `start` shares. */
+  let running:
+    | {
+        readonly fiber: Fiber.Fiber<void, ScheduledMailLifecycleError>;
+        readonly token: object;
       }
-      return Effect.sync(cancel);
-    });
+    | undefined;
+  /** The later attempt armed after a run gave up. */
+  let recovery: Fiber.Fiber<void> | undefined;
 
-  const runWithRetry = (
-    candidate: number,
-    operation: () => Promise<void>,
-    retryIndex = 0
-  ): Effect.Effect<boolean, ScheduledMailLifecycleError> => {
-    if (!isCurrentGeneration(candidate)) {
-      return Effect.succeed(false);
+  const runSteps = Effect.gen(function* runScheduledMailStartup() {
+    if (!notificationClaimsReleased) {
+      yield* step(options.releaseStaleNotificationClaims);
+      notificationClaimsReleased = true;
     }
-    return Effect.tryPromise({ catch: lifecycleError, try: operation }).pipe(
-      Effect.as({ ok: true as const }),
-      // oxlint-disable-next-line promise/prefer-await-to-callbacks, promise/prefer-await-to-then -- This folds the typed Effect error channel into retry state.
-      Effect.catch((error) => Effect.succeed({ error, ok: false as const })),
-      Effect.flatMap((result) => {
-        if (result.ok) {
-          return Effect.succeed(isCurrentGeneration(candidate));
-        }
-        if (!isCurrentGeneration(candidate)) {
-          return Effect.succeed(false);
-        }
-        const delayMs = retryDelaysMs[retryIndex];
-        if (delayMs === undefined) {
-          return Effect.fail(result.error);
-        }
-        return waitForRetry(candidate, delayMs).pipe(
-          Effect.flatMap((shouldRetry) =>
-            shouldRetry
-              ? runWithRetry(candidate, operation, retryIndex + 1)
-              : Effect.succeed(false)
-          )
-        );
-      })
-    );
-  };
-
-  const runGeneration = Effect.fn("ScheduledMailLifecycle.runGeneration")(
-    function* runGeneration(candidate: number) {
-      if (!notificationClaimsReleased) {
-        if (!(yield* runWithRetry(candidate, releaseStaleNotificationClaims))) {
-          return;
-        }
-        notificationClaimsReleased = true;
-      }
-
-      if (!workerStarted) {
-        if (!(yield* runWithRetry(candidate, startWorker))) {
-          return;
-        }
-        workerStarted = true;
-      }
-
-      if (
-        !notificationsDrained &&
-        (yield* runWithRetry(candidate, dispatchPendingNotifications))
-      ) {
-        notificationsDrained = true;
-      }
+    if (!workerStarted) {
+      yield* step(options.startWorker);
+      workerStarted = true;
     }
-  );
+    if (!notificationsDrained) {
+      yield* step(options.dispatchPendingNotifications);
+      notificationsDrained = true;
+    }
+  });
 
-  const scheduleExhaustedRetry = (
-    candidate: number,
-    retryGeneration: () => void
-  ): void => {
+  const cancelRecovery = Effect.suspend(() => {
+    const pending = recovery;
+    recovery = undefined;
+    return pending === undefined ? Effect.void : Fiber.interrupt(pending);
+  });
+
+  const armRecovery: Effect.Effect<void> = Effect.suspend(() => {
     if (
-      !isCurrentGeneration(candidate) ||
+      !active ||
       (workerStarted && notificationsDrained) ||
-      exhaustedRetryCancellation !== undefined
+      recovery !== undefined
     ) {
-      return;
+      return Effect.void;
     }
+    return Effect.forkDetach(
+      Effect.sleep(EXHAUSTED_RETRY_DELAY).pipe(
+        Effect.andThen(
+          Effect.suspend(() => {
+            // Cleared first, so starting does not interrupt this fiber.
+            recovery = undefined;
+            return beginRun;
+          })
+        ),
+        Effect.asVoid
+      )
+    ).pipe(
+      Effect.flatMap((fiber) =>
+        Effect.sync(() => {
+          recovery = fiber;
+        })
+      )
+    );
+  });
 
-    let settled = false;
-    let retryHandle: { readonly cancel: () => void } | undefined;
-    const cancel = (): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      retryHandle?.cancel();
-    };
-    const retry = (): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      exhaustedRetryCancellation = undefined;
-      if (isCurrentGeneration(candidate)) {
-        retryGeneration();
-      }
-    };
-
-    try {
-      retryHandle = scheduleRetry(retry, exhaustedRetryDelayMs);
-      if (!settled) {
-        exhaustedRetryCancellation = cancel;
-      }
-    } catch {
-      // The resume listener remains available if the host timer cannot arm.
+  const beginRun: Effect.Effect<
+    Fiber.Fiber<void, ScheduledMailLifecycleError>
+  > = Effect.gen(function* beginScheduledMailStartup() {
+    if (running !== undefined) {
+      return running.fiber;
     }
-  };
-
-  const beginGeneration = (): Promise<void> => {
-    if (startPromise !== undefined) {
-      return startPromise;
-    }
-    cancelExhaustedRetry();
+    yield* cancelRecovery;
     if (!workerStarted) {
       notificationClaimsReleased = false;
     }
 
-    generation += 1;
-    const candidate = generation;
-    const pendingStart = Effect.runPromise(runGeneration(candidate));
-    startPromise = pendingStart;
-    const clearPendingStart = async (): Promise<void> => {
-      let exhausted = false;
-      try {
-        await pendingStart;
-      } catch {
-        exhausted = true;
-      }
-      if (startPromise === pendingStart) {
-        startPromise = undefined;
-      }
-      if (exhausted) {
-        const retryAfterExhaustion = async (): Promise<void> => {
-          try {
-            await beginGeneration();
-          } catch {
-            // Exhaustion arms the next low-frequency generation.
-          }
-        };
-        scheduleExhaustedRetry(candidate, () => {
-          void retryAfterExhaustion();
-        });
-      }
-    };
-    void clearPendingStart();
-    return pendingStart;
-  };
-
-  const retryGenerationAfterResume = async (): Promise<void> => {
-    try {
-      await beginGeneration();
-    } catch {
-      // The listener remains installed so a later resume can try again.
-    }
-  };
+    const token = {};
+    // Detached, so a caller that stops waiting does not end the run. A
+    // forked fiber starts on a later tick, after `running` names it.
+    const fiber = yield* Effect.forkDetach(
+      runSteps.pipe(
+        Effect.onExit((exit) =>
+          Effect.suspend(() => {
+            if (running?.token !== token) {
+              return Effect.void;
+            }
+            running = undefined;
+            return Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+              ? armRecovery
+              : Effect.void;
+          })
+        )
+      )
+    );
+    running = { fiber, token };
+    return fiber;
+  });
 
   const handleResume = (): void => {
-    if (!active) {
+    if (!active || context === undefined) {
       return;
     }
     if (workerStarted) {
-      wakeWorker();
+      options.wakeWorker();
     }
     if (!workerStarted || !notificationsDrained) {
-      void retryGenerationAfterResume();
+      Effect.runForkWith(context)(beginRun);
     }
   };
 
-  const start = (): Promise<void> => {
+  const start = Effect.gen(function* startScheduledMail() {
     if (!active) {
       active = true;
-      removeResumeListener = listenForResume(handleResume);
+      context = yield* Effect.context<never>();
+      removeResumeListener = options.listenForResume(handleResume);
     }
     if (notificationsDrained) {
-      return Promise.resolve();
+      return;
     }
-    return beginGeneration();
-  };
+    const exit = yield* Fiber.await(yield* beginRun);
+    if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) {
+      return yield* exit;
+    }
+  });
 
-  const stop = async (): Promise<void> => {
+  const stop = Effect.gen(function* stopScheduledMail() {
     if (!active) {
       return;
     }
     active = false;
-    generation += 1;
     removeResumeListener?.();
     removeResumeListener = undefined;
-    retryCancellation?.();
-    retryCancellation = undefined;
-    cancelExhaustedRetry();
-
-    const pendingStart = startPromise;
-    await stopWorker();
-    if (pendingStart !== undefined) {
-      try {
-        await pendingStart;
-      } catch {
-        // Stop owns teardown; the matching start caller owns its rejection.
-      }
+    yield* cancelRecovery;
+    const pending = running;
+    running = undefined;
+    if (pending !== undefined) {
+      yield* Fiber.interrupt(pending.fiber);
     }
+    yield* options.stopWorker.pipe(Effect.mapError(lifecycleError));
 
     notificationClaimsReleased = false;
     notificationsDrained = false;
-    startPromise = undefined;
     workerStarted = false;
-  };
+  });
 
   return { start, stop };
 };
