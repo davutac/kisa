@@ -32,6 +32,8 @@
     "@anthropic-ai/claude-agent-sdk": "catalog:",
     "@electron-toolkit/utils": "catalog:",
     "@fontsource-variable/geist": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
+    "@number-flow/react": "catalog:",
     "@opencode/client": "catalog:",
     "@repo/database": "workspace:*",
     "@repo/mail": "workspace:*",

@@ -7,7 +7,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 
-import { toast } from "@/components/ui/toast";
+import { toast, ToastCountdown } from "@/components/ui/toast";
 import { useAppCommand } from "@/hotkeys";
 
 const UNDO_DURATION_MS = 8000;
@@ -45,7 +45,12 @@ export type UndoOutcome =
     };
 
 export interface UndoOffer {
-  /** How long Undo is on offer, when the action sets its own deadline. */
+  /** What the action was on, under its message. */
+  readonly description?: string;
+  /**
+   * How long Undo is on offer, when the action sets its own deadline, as
+   * Undo send does; the toast then counts down to it.
+   */
   readonly durationMs?: number;
   readonly message: string;
   readonly outcome: Promise<UndoOutcome>;
@@ -136,6 +141,11 @@ export const UndoProvider = ({
       const duration = offer.durationMs ?? UNDO_DURATION_MS;
       const toastId = toast.success(offer.message, {
         action: undoAction,
+        data:
+          offer.durationMs === undefined
+            ? undefined
+            : new ToastCountdown(offer.durationMs),
+        description: offer.description,
         duration,
         onDismiss: () => clear(order),
       });
@@ -153,11 +163,15 @@ export const UndoProvider = ({
         const isOnOffer = activeRef.current?.order === order;
 
         // Said even after the offer ended, so a late Undo learns how it went.
+        // An update keeps what it omits, so the Undo and countdown go
+        // explicitly; the description stays, to say what is done.
         if (outcome.kind === "done") {
           if (isOnOffer) {
             clear(order);
           }
           toast[outcome.tone](outcome.message, {
+            action: undefined,
+            data: undefined,
             id: isOnOffer ? toastId : undefined,
           });
           return;
@@ -180,6 +194,7 @@ export const UndoProvider = ({
         // an omitted action and falls back to the default duration.
         toast.error(outcome.message, {
           action: action ?? (keepsUndo ? undoAction : undefined),
+          data: undefined,
           description: outcome.description,
           duration: toastDuration,
           id: isOnOffer ? toastId : undefined,

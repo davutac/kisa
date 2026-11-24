@@ -36,11 +36,13 @@ import type { MailDraft } from "../src/shared/ipc/mail";
 const agent = createAgent();
 const MOD_Z = "{Control>}z{/Control}";
 
+// The title is matched in the toast, not in ui-sdk's announcement of it.
 const getToast = (title: string): HTMLElement => {
   const element = screen
-    .getByText(title)
-    .closest<HTMLElement>("[data-slot=toast]");
-  if (element === null) {
+    .getAllByText(title)
+    .map((text) => text.closest<HTMLElement>("[data-slot=toast]"))
+    .find((toastElement) => toastElement !== null);
+  if (element === undefined || element === null) {
     throw new Error(`No toast titled ${title}`);
   }
   return element;
@@ -60,7 +62,9 @@ const OfferButton = ({ offer }: { readonly offer: UndoOffer }) => {
   );
 };
 
-const renderUndo = () => {
+const renderUndo = (
+  extra: Pick<UndoOffer, "description" | "durationMs"> = {}
+) => {
   const outcome = Promise.withResolvers<UndoOutcome>();
   const undo = vi.fn<() => Promise<void>>(() => Promise.resolve());
   render(
@@ -68,6 +72,7 @@ const renderUndo = () => {
       <UndoProvider>
         <OfferButton
           offer={{
+            ...extra,
             message: "Moved to Trash",
             outcome: outcome.promise,
             undo,
@@ -314,6 +319,69 @@ describe("toasts", () => {
     expect(toast.toasts()[0]?.duration).toBe(8000);
     await user.click(within(partial).getByRole("button", { name: "Undo" }));
     expect(undo).toHaveBeenCalledOnce();
+  });
+
+  it("counts an action's own deadline down in whole seconds, without a close button", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    try {
+      const { outcome } = renderUndo({
+        description: "Lunch?",
+        durationMs: 3000,
+      });
+      act(() => {
+        screen.getByRole("button", { name: "Trash" }).click();
+      });
+      const shown = () =>
+        getToast("Moved to Trash").querySelector("[data-slot=toast-countdown]")
+          ?.textContent;
+
+      const counted = [shown()];
+      for (const _ of [1, 2]) {
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+        counted.push(shown());
+      }
+      const closeButtons = within(getToast("Moved to Trash"))
+        .getAllByRole("button")
+        .map((button) => button.textContent);
+      await act(async () => {
+        outcome.resolve({
+          kind: "done",
+          message: "Message sent",
+          tone: "success",
+        });
+        await Promise.resolve();
+      });
+      const sent = getToast("Message sent");
+
+      expect({
+        buttons: closeButtons,
+        counted,
+        sentButtons: within(sent).queryAllByRole("button").length,
+        sentSays: within(sent).queryByText("Lunch?") !== null,
+        sentCountdown: sent.querySelector("[data-slot=toast-countdown]"),
+      }).toStrictEqual({
+        buttons: ["Undo"],
+        counted: ["3", "2", "1"],
+        sentButtons: 0,
+        sentCountdown: null,
+        sentSays: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows no countdown on an Undo that keeps the usual eight seconds", async () => {
+    const user = userEvent.setup();
+    renderUndo();
+
+    await user.click(screen.getByRole("button", { name: "Trash" }));
+
+    expect(
+      getToast("Moved to Trash").querySelector("[data-slot=toast-countdown]")
+    ).toBeNull();
   });
 
   it("lets an agent find a toast by its title and press Undo", async () => {

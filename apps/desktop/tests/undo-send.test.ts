@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  describeSendingTo,
   restoreComposeDraft,
   restoreReplyDraft,
   takeComposeDraft,
@@ -14,11 +15,45 @@ const heldSend = () => ({
   cancel: vi.fn<HeldSend["cancel"]>(),
   delayMs: 10_000,
   keptIn: "It is in Stash.",
+  recipients: ["ben@example.com"],
   restore: vi.fn<() => void>(),
   send: vi.fn<HeldSend["send"]>(),
+  subject: "Lunch?",
 });
 
+const heldSendToast = (recipients: readonly string[], subject = "Lunch?") => {
+  const held = heldSend();
+  // The offer settles its outcome at once, so the send must answer.
+  held.send.mockResolvedValue({
+    data: { kind: "sent", refusedRecipients: [] },
+    ok: true,
+  });
+  const { description, message } = toUndoSendOffer({
+    ...held,
+    recipients,
+    subject,
+  });
+  return { description, message };
+};
+
 describe("sending as an Undo offer", () => {
+  it("names who the message goes to, and its subject, while it is held", () => {
+    expect([
+      heldSendToast(['"Ben Carter" <ben@example.com>']),
+      heldSendToast(["ben@example.com", "Ann Lee <ann@example.com>"]),
+      heldSendToast(
+        ["ben@example.com", "ann@example.com", "cy@example.com"],
+        "  "
+      ),
+      describeSendingTo([]),
+    ]).toStrictEqual([
+      { description: "Lunch?", message: "Sending to Ben Carter" },
+      { description: "Lunch?", message: "Sending to ben@example.com +1" },
+      { description: "No subject", message: "Sending to ben@example.com +2" },
+      "Sending…",
+    ]);
+  });
+
   it("lasts as long as main holds the message, then says how it went", async () => {
     const sent = heldSend();
     sent.send.mockResolvedValue({

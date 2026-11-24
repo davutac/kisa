@@ -7,6 +7,7 @@ import type {
 } from "@/shared/ipc/mail";
 import type { UndoOffer, UndoOutcome } from "@/undo/undo-provider";
 
+import { parseMailboxAddress } from "./address";
 import { describeSendOutcome } from "./send-outcome";
 
 type SendReply =
@@ -26,11 +27,29 @@ export interface HeldSend {
   readonly expectRestore?: () => () => void;
   /** Where the saved draft is if sending fails, for the failure toast. */
   readonly keptIn: string;
+  /** Everyone it goes to, To, Cc and Bcc, so the toast can name them. */
+  readonly recipients: readonly string[];
   /** Puts the message in front of the user again: after Undo, or a failure. */
   readonly restore?: () => void;
   /** Answers once the message has gone out, or was taken back. */
   readonly send: () => Promise<SendReply>;
+  readonly subject: string;
 }
+
+const recipientName = (recipient: string): string => {
+  const { email, name } = parseMailboxAddress(recipient);
+  return name ?? email;
+};
+
+/** Who a held message goes to, as its toast's caption says it. */
+export const describeSendingTo = (recipients: readonly string[]): string => {
+  const [first] = recipients;
+  if (first === undefined) {
+    return "Sending…";
+  }
+  const others = recipients.length - 1;
+  return `Sending to ${recipientName(first)}${others > 0 ? ` +${others}` : ""}`;
+};
 
 const settle = async (send: () => Promise<SendReply>): Promise<SendReply> => {
   try {
@@ -52,8 +71,10 @@ export const toUndoSendOffer = (held: HeldSend): UndoOffer => {
   const reply = settle(held.send);
 
   return {
+    // Stays under the outcome's title too, so "Message sent" says which.
+    description: held.subject.trim() || "No subject",
     durationMs: held.delayMs,
-    message: "Sending…",
+    message: describeSendingTo(held.recipients),
     outcome: reply.then((answer): UndoOutcome => {
       if (!answer.ok) {
         // The composer is gone by now, so this toast stays until dismissed.

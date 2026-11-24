@@ -1,5 +1,6 @@
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { createElement } from "react";
+import { afterEach, vi } from "vitest";
 
 declare global {
   var __UI_SDK_STRICT__: boolean | undefined;
@@ -32,5 +33,19 @@ document.head.append(
     textContent: "[popover] { display: block !important }",
   })
 );
+
+// NumberFlow's element is an HTMLElement only in a browser build, which
+// Vitest does not resolve, so jsdom gets the text it would show.
+vi.mock("@number-flow/react", () => ({
+  default: ({
+    prefix = "",
+    suffix = "",
+    value,
+  }: {
+    readonly prefix?: string;
+    readonly suffix?: string;
+    readonly value: number;
+  }) => createElement("span", null, `${prefix}${value}${suffix}`),
+}));
 
 afterEach(cleanup);

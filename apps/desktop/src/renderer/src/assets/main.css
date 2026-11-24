@@ -3,6 +3,7 @@
 @import "tailwindcss";
 @import "./utilities.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -48,6 +49,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 }
 
 :root {
@@ -187,6 +189,16 @@
   syntax: "<percentage>";
   inherits: true;
   initial-value: 0%;
+}
+
+/* A toast's countdown bar, filling from the left. */
+@keyframes toast-countdown {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .app-titlebar {

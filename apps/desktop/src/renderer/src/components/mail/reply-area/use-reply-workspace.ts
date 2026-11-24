@@ -207,7 +207,9 @@ export const useReplyWorkspace = ({
           };
         },
         keptIn: "Your reply is back in the conversation.",
+        recipients: [...request.to, ...request.cc, ...request.bcc],
         send: () => mailApi.sendThreadMessage({ ...request, draftId }),
+        subject: currentDraft.subject,
       })
     );
     onSent();

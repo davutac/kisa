@@ -518,7 +518,9 @@ export const useNewMessageWorkspace = ({
         restore: () => {
           restoreComposeDraft(draft);
         },
+        recipients: [...request.to, ...request.cc, ...request.bcc],
         send: () => mailApi.sendMessage({ ...request, draftId: draft.id }),
+        subject: request.subject,
       })
     );
     onOpenChange(false);
