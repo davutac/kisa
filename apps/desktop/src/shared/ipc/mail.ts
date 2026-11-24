@@ -268,6 +268,12 @@ export const MailThreadMessageSendRequest = Schema.Struct({
     text: Schema.String,
   }),
   cc: Schema.Array(Schema.NonEmptyString),
+  /**
+   * The saved draft this message comes from. With it, main holds the message
+   * for the Undo send delay, keeps the draft out of sight meanwhile, and
+   * deletes it once the server has the message.
+   */
+  draftId: Schema.optional(Schema.NonEmptyString),
   messageId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
   to: Schema.Array(Schema.NonEmptyString),
@@ -327,10 +333,27 @@ export const MailMessageSendRequest = Schema.Struct({
     text: Schema.String,
   }),
   cc: Schema.Array(Schema.NonEmptyString),
+  /** See `MailThreadMessageSendRequest.draftId`. */
+  draftId: Schema.optional(Schema.NonEmptyString),
   subject: MailOutgoingSubject,
   to: Schema.Array(Schema.NonEmptyString),
 });
 export type MailMessageSendRequest = typeof MailMessageSendRequest.Type;
+
+/** Takes back a message still waiting out its Undo send delay. */
+export const MailSendCancelRequest = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  draftId: Schema.NonEmptyString,
+});
+export type MailSendCancelRequest = typeof MailSendCancelRequest.Type;
+
+/**
+ * `canceled` when Undo came in time and the draft is back where it was;
+ * `too-late` when the message has already gone to the server, or its draft
+ * was replaced meanwhile, so it is sent as it is.
+ */
+export const MailSendCancelOutcome = Schema.Literals(["canceled", "too-late"]);
+export type MailSendCancelOutcome = typeof MailSendCancelOutcome.Type;
 
 export const MailDraftKind = Schema.Literals([
   "forward",
@@ -653,10 +676,23 @@ export const MailSendOutcome = Schema.Struct({
 });
 export type MailSendOutcome = typeof MailSendOutcome.Type;
 
-export const MailThreadMessageSendReply = IpcReply(MailSendOutcome);
+/** A send that went out, or one Undo took back while it waited. */
+export const MailSendResult = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("sent"),
+    refusedRecipients: Schema.Array(Schema.String),
+  }),
+  Schema.Struct({ kind: Schema.Literal("canceled") }),
+]);
+export type MailSendResult = typeof MailSendResult.Type;
+
+export const MailSendCancelReply = IpcReply(MailSendCancelOutcome);
+export type MailSendCancelReply = typeof MailSendCancelReply.Type;
+
+export const MailThreadMessageSendReply = IpcReply(MailSendResult);
 export type MailThreadMessageSendReply = typeof MailThreadMessageSendReply.Type;
 
-export const MailMessageSendReply = IpcReply(MailSendOutcome);
+export const MailMessageSendReply = IpcReply(MailSendResult);
 export type MailMessageSendReply = typeof MailMessageSendReply.Type;
 
 export const MailOutgoingAttachmentPrepareReply = IpcReply(

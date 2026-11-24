@@ -14,8 +14,11 @@ export interface ReplyDraftPersistence {
   readonly observe: (change: MailDraftChanged) => void;
   /** This window's own discard failed, so the draft is still there. */
   readonly reopen: () => void;
-  /** The save that follows the user's edits while the composer is open. */
-  readonly save: (draft: MailDraftInput) => Promise<void>;
+  /**
+   * The save that follows the user's edits while the composer is open.
+   * Whether the draft is stored as given, as sending with Undo needs.
+   */
+  readonly save: (draft: MailDraftInput) => Promise<boolean>;
   /** The composer closed: keep what was written, or drop an untouched draft. */
   readonly settle: (draft: MailDraftInput, isEmpty: boolean) => Promise<void>;
 }
@@ -89,18 +92,22 @@ export const createReplyDraftPersistence = ({
     }
   };
 
-  const save = async (draft: MailDraftInput): Promise<void> => {
+  const save = async (draft: MailDraftInput): Promise<boolean> => {
     const key = contentKey(draft);
-    if (finalized || removedElsewhere || key === stored) {
-      return;
+    if (finalized || removedElsewhere) {
+      return false;
+    }
+    if (key === stored) {
+      return true;
     }
     ownWrites.push(key);
     if (await run(() => api.saveDraft(draft))) {
       stored = key;
       writtenElsewhere = false;
-    } else {
-      ownWrites = ownWrites.filter((write) => write !== key);
+      return true;
     }
+    ownWrites = ownWrites.filter((write) => write !== key);
+    return false;
   };
 
   const discard = async (draft: MailDraftInput): Promise<void> => {

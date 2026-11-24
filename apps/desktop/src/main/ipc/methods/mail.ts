@@ -29,6 +29,7 @@ import {
   MAIL_SAVE_DRAFT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL,
+  MAIL_CANCEL_SEND_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
@@ -57,6 +58,8 @@ import {
   MailLabelUpdateRequest,
   MailMessageSendReply,
   MailMessageSendRequest,
+  MailSendCancelReply,
+  MailSendCancelRequest,
   MailOutgoingAttachmentPrepareReply,
   MailOutgoingAttachmentPrepareRequest,
   MailOutgoingAttachmentSelectionReply,
@@ -99,6 +102,7 @@ import {
 import { getMailEngineSyncStatus } from "../../mail/engine/mail-engine";
 import {
   bulkMutateThreads,
+  cancelSendFromRequest,
   changeThreadReadState,
   createAccountLabelFromRequest,
   deleteAccountLabelFromRequest,
@@ -483,6 +487,25 @@ export const sendNew = makeIpcMethod({
         ),
   payload: MailMessageSendRequest,
   result: MailMessageSendReply,
+});
+
+export const cancelSend = makeIpcMethod({
+  channel: MAIL_CANCEL_SEND_CHANNEL,
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Could not identify this window",
+          ok: false as const,
+        })
+      : toIpcReply(
+          cancelSendFromRequest(
+            request,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
+          "Could not undo sending"
+        ),
+  payload: MailSendCancelRequest,
+  result: MailSendCancelReply,
 });
 
 export const sendThread = makeIpcMethod({

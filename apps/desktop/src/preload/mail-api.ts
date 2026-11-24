@@ -21,6 +21,7 @@ import {
   MAIL_LOAD_OUTGOING_INLINE_IMAGE_PREVIEW_CHANNEL,
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
+  MAIL_CANCEL_SEND_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
   MAIL_REPORT_THREAD_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
@@ -86,6 +87,7 @@ export const mailApi: Pick<
   | "searchMail"
   | "saveAttachment"
   | "saveMailDraft"
+  | "cancelSend"
   | "sendMessage"
   | "sendThreadMessage"
   | "setThreadLabel"
@@ -177,6 +179,8 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_SAVE_DRAFT_CHANNEL, request),
   searchMail: (request) =>
     ipcRenderer.invoke(MAIL_SEARCH_THREADS_CHANNEL, request),
+  cancelSend: (request) =>
+    ipcRenderer.invoke(MAIL_CANCEL_SEND_CHANNEL, request),
   sendMessage: (request) =>
     ipcRenderer.invoke(MAIL_SEND_MESSAGE_CHANNEL, request),
   sendThreadMessage: (request) =>

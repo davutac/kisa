@@ -2,7 +2,7 @@
 
 Kisa can schedule new emails for local delivery. Scheduling is not a Gmail-hosted draft or a cloud job: Gmail exposes immediate message sending but no send-at operation. Kisa therefore sends due work only while the desktop process is running and able to reach Gmail. Work that becomes overdue while the device is asleep, offline, or Kisa is closed catches up on the next startup, wake, or connectivity opportunity.
 
-Replies, reply-all messages, and forwards remain immediate-only.
+Replies, reply-all messages, and forwards cannot be scheduled. Undo send's few seconds of waiting is not scheduling: main holds the message in memory, never in `scheduled_messages`, and the worker and its Send now never wait (see [Undo send](undo.md#undo-send)).
 
 ## Ownership and persistence
 

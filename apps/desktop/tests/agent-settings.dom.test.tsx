@@ -721,7 +721,7 @@ describe("searching settings", () => {
     }
 
     expect({ count: targets.length, missed }).toStrictEqual({
-      count: 28,
+      count: 29,
       missed: [],
     });
   });

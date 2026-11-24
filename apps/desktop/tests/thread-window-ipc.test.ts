@@ -32,6 +32,7 @@ vi.mock(import("../src/main/settings/app-settings"), () => ({
     inlineImageRetentionDays: 90,
     openThreadsInNewWindows: false,
     runInBackground: false,
+    undoSendSeconds: 10,
   }),
   writeAppSettings: vi.fn<() => void>(),
 }));

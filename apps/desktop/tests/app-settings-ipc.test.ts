@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
     inlineImageRetentionDays: 90,
     openThreadsInNewWindows: false,
     runInBackground: true,
+    undoSendSeconds: 10,
   })),
   getMainWindow: vi.fn<() => BrowserWindow | undefined>(),
   setBackgroundTray:

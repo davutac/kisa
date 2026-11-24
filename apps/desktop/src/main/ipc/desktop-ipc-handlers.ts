@@ -56,6 +56,7 @@ import {
   saveAttachment,
   saveAttachmentPreview,
   saveDraft,
+  cancelSend,
   sendNew,
   sendThread,
   setLabel,
@@ -153,6 +154,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(searchThreads);
   yield* ipc.handle(sendNew);
   yield* ipc.handle(sendThread);
+  yield* ipc.handle(cancelSend);
   yield* ipc.handle(listSenders);
   yield* ipc.handle(bulkMutate);
   yield* ipc.handle(setLabel);

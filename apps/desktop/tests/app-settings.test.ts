@@ -89,7 +89,8 @@ describe("app settings", () => {
       inlineImageRetentionDays: null,
       openThreadsInNewWindows: true,
       runInBackground: false,
-    };
+      undoSendSeconds: 0,
+    } as const;
     writeAppSettings(settings);
 
     expect(getCurrentAppSettings()).toStrictEqual(settings);
@@ -164,6 +165,29 @@ describe("app settings", () => {
       inlineImageRetentionDays: 90,
       openThreadsInNewWindows: true,
       runInBackground: false,
+      undoSendSeconds: 10,
+    });
+  });
+
+  it("keeps a settings file's values from before Undo send", () => {
+    fileState.files.set(
+      settingsPath,
+      JSON.stringify({
+        animationsEnabled: true,
+        inlineImageRetentionDays: 30,
+        openThreadsInNewWindows: false,
+        runInBackground: true,
+      })
+    );
+
+    hydrateAppSettings();
+
+    expect(getCurrentAppSettings()).toStrictEqual({
+      animationsEnabled: true,
+      inlineImageRetentionDays: 30,
+      openThreadsInNewWindows: false,
+      runInBackground: true,
+      undoSendSeconds: 10,
     });
   });
 

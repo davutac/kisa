@@ -231,12 +231,20 @@ describe(getRuntimeCapabilities, () => {
       }),
     selectDatabaseImportFile: () =>
       Promise.resolve({ data: { fileName: "app.sqlite" }, ok: true as const }),
+    cancelSend: () =>
+      Promise.resolve({ data: "canceled" as const, ok: true as const }),
     sendMessage: () =>
-      Promise.resolve({ data: { refusedRecipients: [] }, ok: true as const }),
+      Promise.resolve({
+        data: { kind: "sent" as const, refusedRecipients: [] },
+        ok: true as const,
+      }),
     sendScheduledMailNow: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
     sendThreadMessage: () =>
-      Promise.resolve({ data: { refusedRecipients: [] }, ok: true as const }),
+      Promise.resolve({
+        data: { kind: "sent" as const, refusedRecipients: [] },
+        ok: true as const,
+      }),
     setAppSettings: (request) =>
       Promise.resolve({
         data: request,
@@ -352,6 +360,7 @@ describe(getRuntimeCapabilities, () => {
         saveAttachment: desktopBridge.saveAttachment,
         saveDraft: desktopBridge.saveMailDraft,
         search: desktopBridge.searchMail,
+        cancelSend: desktopBridge.cancelSend,
         sendMessage: desktopBridge.sendMessage,
         sendThreadMessage: desktopBridge.sendThreadMessage,
         setThreadLabel: desktopBridge.setThreadLabel,

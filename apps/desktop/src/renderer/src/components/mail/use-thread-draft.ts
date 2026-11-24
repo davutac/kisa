@@ -6,6 +6,7 @@ import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { createThreadMailDraft } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
+import { takeReplyDraft, undoneDrafts } from "@/mail/undo-send";
 import type { MailApi } from "@/platform/desktop";
 import { getMailApi } from "@/platform/desktop";
 import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
@@ -92,6 +93,23 @@ export const useThreadDraft = ({
     isComposerOpenRef.current = isComposerOpen;
   }, [isComposerOpen]);
 
+  // Undo took a sent reply back: its composer opens again, whether Undo is
+  // noted before or after the draft comes back.
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+  useEffect(
+    () =>
+      undoneDrafts.subscribe(() => {
+        const { current } = draftRef;
+        if (current !== null && takeReplyDraft(current.id)) {
+          setIsComposerOpen(true);
+        }
+      }),
+    []
+  );
+
   const applyFetch = useCallback((fetched: ThreadDraftFetch): void => {
     if (!isActiveRef.current) {
       return;
@@ -134,6 +152,9 @@ export const useThreadDraft = ({
         setDraft((current) =>
           adoptSavedDraft(current, change.draft, isComposerOpenRef.current)
         );
+        if (takeReplyDraft(change.draft.id)) {
+          setIsComposerOpen(true);
+        }
       }
     });
 

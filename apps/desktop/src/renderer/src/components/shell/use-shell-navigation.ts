@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { useAppCommand } from "@/hotkeys";
+import { undoneDrafts } from "@/mail/undo-send";
 import { useLeaveMissingLabelPlace } from "@/mail/use-label-places";
 import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 import type { MailboxNavigation } from "@/mail/use-mailbox-navigation";
@@ -95,6 +96,28 @@ export const useShellNavigation = (): ShellNavigation => {
 
     void navigate({ to: nextPath });
   };
+
+  // Undo send took a new email back: its page opens to take it up, and
+  // closing it returns to wherever the user is by then. The latest toggle
+  // and path are read when it happens, not when the email was sent.
+  const latestRef = useRef({ currentPath, toggleWorkspace });
+  useEffect(() => {
+    latestRef.current = { currentPath, toggleWorkspace };
+  });
+  useEffect(
+    () =>
+      undoneDrafts.subscribe((state, previous) => {
+        const latest = latestRef.current;
+        if (
+          state.compose !== undefined &&
+          previous.compose === undefined &&
+          latest.currentPath !== "/compose"
+        ) {
+          latest.toggleWorkspace("/compose");
+        }
+      }),
+    []
+  );
 
   const selectMailbox = (target: MailboxTarget): void => {
     const next = resolveMailboxSelection(view, target);

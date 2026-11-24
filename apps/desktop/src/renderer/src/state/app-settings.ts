@@ -4,7 +4,11 @@ import { createStore } from "zustand/vanilla";
 
 import type { AppSettingsApi } from "@/platform/desktop";
 import { DEFAULT_APP_SETTINGS } from "@/shared/ipc/app";
-import type { AppSettings, InlineImageRetentionDays } from "@/shared/ipc/app";
+import type {
+  AppSettings,
+  InlineImageRetentionDays,
+  UndoSendSeconds,
+} from "@/shared/ipc/app";
 
 export interface UseAppSettings extends AppSettings {
   readonly setAnimationsEnabled: (enabled: boolean) => void;
@@ -13,6 +17,7 @@ export interface UseAppSettings extends AppSettings {
   ) => void;
   readonly setOpenThreadsInNewWindows: (enabled: boolean) => void;
   readonly setRunInBackground: (enabled: boolean) => void;
+  readonly setUndoSendSeconds: (seconds: UndoSendSeconds) => void;
 }
 
 const appSettingsStore = createStore<AppSettings>()(() => DEFAULT_APP_SETTINGS);
@@ -81,6 +86,9 @@ export const useAppSettings = (
     },
     setRunInBackground: (runInBackground) => {
       update({ runInBackground });
+    },
+    setUndoSendSeconds: (undoSendSeconds) => {
+      update({ undoSendSeconds });
     },
   };
 };

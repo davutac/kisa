@@ -13,6 +13,15 @@ export type InlineImageRetentionDays = typeof InlineImageRetentionDays.Type;
 
 export const DEFAULT_INLINE_IMAGE_RETENTION_DAYS = 90;
 
+/**
+ * How long a sent message waits before it leaves, so Undo can take it back;
+ * `0` sends at once.
+ */
+export const UndoSendSeconds = Schema.Literals([0, 5, 10, 20, 30]);
+export type UndoSendSeconds = typeof UndoSendSeconds.Type;
+
+export const DEFAULT_UNDO_SEND_SECONDS = 10;
+
 export const AppSettings = Schema.Struct({
   /** Whether renderer motion and CSS transitions are enabled. */
   animationsEnabled: Schema.Boolean,
@@ -26,6 +35,10 @@ export const AppSettings = Schema.Struct({
   openThreadsInNewWindows: Schema.Boolean,
   /** Whether closing the main window keeps Kisa running in the tray. */
   runInBackground: Schema.Boolean,
+  // Settings files written before this setting existed keep their values.
+  undoSendSeconds: UndoSendSeconds.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_UNDO_SEND_SECONDS))
+  ),
 });
 export type AppSettings = typeof AppSettings.Type;
 
@@ -35,6 +48,7 @@ export const DEFAULT_APP_SETTINGS = {
   inlineImageRetentionDays: DEFAULT_INLINE_IMAGE_RETENTION_DAYS,
   openThreadsInNewWindows: false,
   runInBackground: true,
+  undoSendSeconds: DEFAULT_UNDO_SEND_SECONDS,
 } as const satisfies AppSettings;
 
 export const LoginItemSettings = Schema.Struct({

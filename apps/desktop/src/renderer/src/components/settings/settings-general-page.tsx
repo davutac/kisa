@@ -18,6 +18,7 @@ import { useLoginItemSettings } from "@/state/login-item-settings";
 
 import { toSettingsTarget } from "./settings-search";
 import { SearchableSettingsRow } from "./settings-search-target";
+import SettingsUndoSendRow from "./settings-undo-send-row";
 import SettingsUpdateRow from "./settings-update-row";
 
 const SettingsGeneralPage = () => {
@@ -172,6 +173,19 @@ const SettingsGeneralPage = () => {
                 />
               </SettingsRowActions>
             </SearchableSettingsRow>
+          </SettingsRows>
+        </SettingsSection>
+      )}
+
+      {appSettings === undefined ? null : (
+        <SettingsSection aria-labelledby="sending-settings-title">
+          <SettingsSectionHeader>
+            <SettingsSectionTitle id="sending-settings-title">
+              Sending
+            </SettingsSectionTitle>
+          </SettingsSectionHeader>
+          <SettingsRows>
+            <SettingsUndoSendRow appSettingsApi={appSettings} />
           </SettingsRows>
         </SettingsSection>
       )}

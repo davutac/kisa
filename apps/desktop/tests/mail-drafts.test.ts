@@ -13,10 +13,12 @@ import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { Effect, Option, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { cancelHeldSend, holdSend } from "../src/main/mail/held-sends";
 import {
   discardMailDraft,
   listStashedDrafts,
   loadThreadDraft,
+  republishDraft,
   saveMailDraft,
 } from "../src/main/mail/mail-drafts";
 import { outgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-attachment-authorizations";
@@ -163,6 +165,61 @@ describe("mail drafts", () => {
         expect.objectContaining({ id: "assigned-draft" }),
       ])
     );
+  });
+
+  it("keeps a draft out of sight and untouched while its message is held for Undo", async () => {
+    const accountId = "person@example.com";
+    await Effect.runPromise(saveMailDraft({ ...newDraft, accountId }, 7));
+    await Effect.runPromise(saveMailDraft(replyDraft, 7));
+    const drafts = ["new-draft", "reply-draft"].map((draftId) => ({
+      accountId,
+      draftId,
+    }));
+    for (const draft of drafts) {
+      Effect.runFork(holdSend(draft, 7, 60_000, Effect.void));
+    }
+    const look = Effect.gen(function* lookAtDrafts() {
+      const listed = yield* listStashedDrafts({ accountIds: [accountId] }, 7);
+      const reply = yield* loadThreadDraft(accountId, "thread-1", 7);
+      return { listed: listed.map((draft) => draft.id), reply: reply?.id };
+    });
+
+    const whileHeld = await Effect.runPromise(
+      Effect.gen(function* touchHeldDrafts() {
+        const discard = yield* Effect.flip(
+          discardMailDraft({ accountId, draftId: "new-draft" })
+        );
+        const save = yield* Effect.flip(
+          saveMailDraft({ ...replyDraft, subject: "Edited" }, 7)
+        );
+        const seen = yield* look;
+        return { ...seen, discard: discard.message, save: save.message };
+      })
+    );
+    await Effect.runPromise(
+      Effect.all(drafts.map((draft) => cancelHeldSend(draft, 7)))
+    );
+    rendererEvents.payloads.length = 0;
+    await Effect.runPromise(republishDraft(accountId, "reply-draft"));
+    const afterwards = await Effect.runPromise(look);
+
+    expect({
+      afterwards,
+      republished: emittedChanges().map((change) =>
+        change.kind === "upsert" ? change.draft.id : change.kind
+      ),
+      whileHeld,
+    }).toStrictEqual({
+      afterwards: { listed: ["new-draft"], reply: "reply-draft" },
+      // Once for each window.
+      republished: ["reply-draft", "reply-draft"],
+      whileHeld: {
+        discard: "This message is being sent; undo it to make changes",
+        listed: [],
+        reply: undefined,
+        save: "This message is being sent; undo it to make changes",
+      },
+    });
   });
 
   it("persists the automatic signature metadata with its editable body", async () => {

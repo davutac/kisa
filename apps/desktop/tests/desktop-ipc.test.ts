@@ -14,8 +14,10 @@ import {
 import {
   AI_CATEGORIZE_THREAD_CHANNEL,
   MAIL_CREATE_LABEL_CHANNEL,
+  MAIL_CANCEL_SEND_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
   MAIL_REPORT_THREAD_SPAM_CHANNEL,
+  MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
   MAIL_UPDATE_LABEL_CHANNEL,
 } from "../src/shared/ipc/channels";
@@ -26,6 +28,10 @@ import {
   MailLabelDeleteRequest,
   MailLabelUpdateReply,
   MailLabelUpdateRequest,
+  MailMessageSendReply,
+  MailMessageSendRequest,
+  MailSendCancelReply,
+  MailSendCancelRequest,
   MailThreadLabelRequest,
   MailThreadMutationReply,
   MailThreadRequest,
@@ -190,6 +196,58 @@ describe(DesktopIpc.DesktopIpc, () => {
         expect(
           (yield* Effect.exit(method.handler({ ...request, accountId: "" })))
             ._tag
+        ).toBe("Failure");
+      })
+  );
+
+  it.effect(
+    "carries a held send's draft, its Undo, and a taken-back answer",
+    () =>
+      Effect.gen(function* validatesUndoSend() {
+        const send = DesktopIpc.makeIpcMethod({
+          channel: MAIL_SEND_MESSAGE_CHANNEL,
+          handler: () =>
+            Effect.succeed({
+              data: { kind: "canceled" as const },
+              ok: true as const,
+            }),
+          payload: MailMessageSendRequest,
+          result: MailMessageSendReply,
+        });
+        const cancel = DesktopIpc.makeIpcMethod({
+          channel: MAIL_CANCEL_SEND_CHANNEL,
+          handler: () =>
+            Effect.succeed({ data: "too-late" as const, ok: true as const }),
+          payload: MailSendCancelRequest,
+          result: MailSendCancelReply,
+        });
+        const message = {
+          accountId: "person@example.com",
+          attachments: [],
+          bcc: [],
+          body: { html: "<p>Hi</p>", text: "Hi" },
+          cc: [],
+          draftId: "draft-1",
+          subject: "Lunch",
+          to: ["friend@example.com"],
+        };
+
+        expect({
+          canceled: yield* send.handler(message),
+          cancelChannel: cancel.channel,
+          tooLate: yield* cancel.handler({
+            accountId: "person@example.com",
+            draftId: "draft-1",
+          }),
+        }).toStrictEqual({
+          cancelChannel: "desktop:mail:cancel-send",
+          canceled: { data: { kind: "canceled" }, ok: true },
+          tooLate: { data: "too-late", ok: true },
+        });
+        expect(
+          (yield* Effect.exit(
+            cancel.handler({ accountId: "person@example.com", draftId: "" })
+          ))._tag
         ).toBe("Failure");
       })
   );

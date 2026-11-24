@@ -18,6 +18,7 @@ import { stopDatabaseImport } from "./database-import";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailEngine } from "./mail/engine/mail-engine";
+import { releaseHeldSends } from "./mail/held-sends";
 import { stopScheduledMail } from "./mail/scheduled-mail";
 import {
   flushAppSettings,
@@ -122,8 +123,14 @@ const shutdown = createShutdown({
   // waits for an interrupted send's recovery write; the database closes last.
   // An import still copying is stopped here; one already staged just waits
   // for the next start.
+  // Held messages go out before anything that could stop them: the user
+  // sent them, so quitting must not leave them for the next start.
   stages: [
-    [stopThreadCategorization, stopDatabaseImport],
+    [
+      stopThreadCategorization,
+      stopDatabaseImport,
+      () => Effect.runPromise(releaseHeldSends()),
+    ],
     [stopScheduledMail],
     [stopMailEngine],
     [

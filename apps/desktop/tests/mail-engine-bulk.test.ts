@@ -19,6 +19,11 @@ const state = vi.hoisted(() => ({
   partitioned: [] as string[][],
 }));
 
+// Sending reaches drafts and settings, which need Electron; bulk actions
+// use neither.
+vi.mock("../src/main/mail/mail-drafts", () => ({}));
+vi.mock("../src/main/settings/app-settings", () => ({}));
+
 vi.mock("../src/main/mail/engine/mail-send", () => ({
   sendNewMessage: vi.fn<() => never>(),
   sendThreadMessage: vi.fn<() => never>(),

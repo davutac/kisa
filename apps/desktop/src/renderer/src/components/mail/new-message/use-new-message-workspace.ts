@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useStore } from "zustand";
 
 import { useConfirm } from "@/components/confirm-dialog";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
@@ -24,6 +25,12 @@ import {
   updateMailDraftBody,
 } from "@/mail/mail-draft";
 import { describeSendOutcome } from "@/mail/send-outcome";
+import {
+  restoreComposeDraft,
+  takeComposeDraft,
+  toUndoSendOffer,
+  undoneDrafts,
+} from "@/mail/undo-send";
 import { getMailApi } from "@/platform/desktop";
 import {
   appendEmailSignatureBody,
@@ -36,8 +43,10 @@ import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 import type { ScheduledMailEditSession } from "@/shared/ipc/scheduled-mail";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
 import { useAllAccountSettings } from "@/state/account-settings";
+import { getAppSettingsState } from "@/state/app-settings";
 import { useComposerTemplates } from "@/state/composer-templates";
 import { applyComposerTemplate } from "@/templates/apply-composer-template";
+import { useOfferUndo } from "@/undo/undo-provider";
 
 import {
   runQueuedDraftOperation,
@@ -107,6 +116,7 @@ export const useNewMessageWorkspace = ({
     replaceAttachments,
   } = outgoingAttachments;
   const { persistDraft, popDraft } = useDraftPersistence(mailApi);
+  const offerUndo = useOfferUndo();
   const focus = useComposerFocus();
   const cleanup = useNewMessageCleanHistory({ focus, isOpen });
   const selectedAccountId = accounts.some(({ email }) => email === accountId)
@@ -454,6 +464,66 @@ export const useNewMessageWorkspace = ({
     });
   };
 
+  // Undo took a sent email back: it opens here again, or waits in Stash
+  // while something else is being written.
+  const undoneCompose = useStore(undoneDrafts, (state) => state.compose);
+  useEffect(() => {
+    if (undoneCompose === undefined || isBusy || scheduled.isEdit) {
+      return;
+    }
+    const undone = takeComposeDraft();
+    if (undone === undefined) {
+      return;
+    }
+    if (isNewMailDraftEmpty(currentDraftRef.current)) {
+      switchDraft(toOptimisticStash(undone));
+      return;
+    }
+    updateStashes((current) => upsertStash(current, toOptimisticStash(undone)));
+    toast.info("Sending undone. The email is in Stash.");
+  });
+
+  /**
+   * With Undo send on, the email is kept in Stash first, out of sight while
+   * main holds it, so Undo, a failure or a crash leaves it there; main
+   * removes it once the server has the message. The page closes at once.
+   */
+  const sendWithUndo = async (
+    request: Parameters<NonNullable<typeof mailApi>["sendMessage"]>[0],
+    delayMs: number
+  ): Promise<void> => {
+    if (mailApi === undefined) {
+      return;
+    }
+    const draft = currentDraft;
+    let isKept = false;
+    enqueueDraftOperation(async () => {
+      isKept = await persistDraft(draft);
+    });
+    await draftOperationQueueRef.current;
+    if (!isKept) {
+      return;
+    }
+    offerUndo(
+      toUndoSendOffer({
+        cancel: () =>
+          mailApi.cancelSend({
+            accountId: request.accountId,
+            draftId: draft.id,
+          }),
+        delayMs,
+        keptIn: "It is in Stash.",
+        // The shell opens the page to take it back up, from wherever the
+        // user is by then.
+        restore: () => {
+          restoreComposeDraft(draft);
+        },
+        send: () => mailApi.sendMessage({ ...request, draftId: draft.id }),
+      })
+    );
+    onOpenChange(false);
+  };
+
   const send = async (): Promise<void> => {
     if (!(canSend && mailApi)) {
       return;
@@ -472,7 +542,7 @@ export const useNewMessageWorkspace = ({
           if (preparedAttachments === undefined) {
             return;
           }
-          const reply = await mailApi.sendMessage({
+          const request = {
             accountId: selectedAccountId,
             attachments: preparedAttachments,
             bcc: recipients.bcc,
@@ -480,9 +550,18 @@ export const useNewMessageWorkspace = ({
             cc: recipients.cc,
             subject,
             to: recipients.to,
-          });
+          };
+          const delayMs = getAppSettingsState().undoSendSeconds * 1000;
+          if (delayMs > 0) {
+            await sendWithUndo(request, delayMs);
+            return;
+          }
+          const reply = await mailApi.sendMessage(request);
           if (!reply.ok) {
             toast.error(reply.error);
+            return;
+          }
+          if (reply.data.kind === "canceled") {
             return;
           }
           enqueueDraftOperation(async () => {

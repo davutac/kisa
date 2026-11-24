@@ -56,6 +56,8 @@ import type {
   MailDraftReply,
   MailMessageSendReply,
   MailMessageSendRequest,
+  MailSendCancelReply,
+  MailSendCancelRequest,
   MailOutgoingAttachmentPrepareReply,
   MailOutgoingAttachmentPrepareRequest,
   MailOutgoingAttachmentSelectionReply,
@@ -315,6 +317,8 @@ export interface DesktopBridge {
   selectDatabaseImportFile: (
     request: DatabaseImportFileSelectionRequest
   ) => Promise<DatabaseImportFileSelectionReply>;
+  /** Undo for a message waiting out the Undo send delay. */
+  cancelSend: (request: MailSendCancelRequest) => Promise<MailSendCancelReply>;
   sendMessage: (
     request: MailMessageSendRequest
   ) => Promise<MailMessageSendReply>;

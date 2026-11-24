@@ -13,22 +13,30 @@ import type { ThreadActions } from "../src/renderer/src/mail/use-thread-actions"
 import type { AiApi, MailApi } from "../src/renderer/src/platform/desktop";
 import { AccountsProvider } from "../src/renderer/src/state/accounts";
 import { AiProviderStateProvider } from "../src/renderer/src/state/ai-provider-state";
+import { hydrateAppSettingsState } from "../src/renderer/src/state/app-settings";
 import { LabelsProvider } from "../src/renderer/src/state/labels";
+import { UndoProvider } from "../src/renderer/src/undo/undo-provider";
+import { DEFAULT_APP_SETTINGS } from "../src/shared/ipc/app";
 import type {
   MailDraft,
+  MailDraftChanged,
   MailThread,
   ThreadMessage,
 } from "../src/shared/ipc/mail";
 
 interface ThreadFakes {
+  readonly cancelSend: Mock<MailApi["cancelSend"]>;
   readonly discardDraft: Mock<MailApi["discardDraft"]>;
+  readonly draftListeners: Set<(change: MailDraftChanged) => void>;
   savedDraft: MailDraft | null;
   readonly sendThreadMessage: Mock<MailApi["sendThreadMessage"]>;
   thread: MailThread;
 }
 
 const fakes = vi.hoisted((): ThreadFakes => ({
+  cancelSend: vi.fn<MailApi["cancelSend"]>(),
   discardDraft: vi.fn<MailApi["discardDraft"]>(),
+  draftListeners: new Set(),
   savedDraft: null,
   sendThreadMessage: vi.fn<MailApi["sendThreadMessage"]>(),
   thread: {
@@ -69,6 +77,7 @@ vi.mock(import("@/components/mail/ai-composer-button"), () => ({
 
 vi.mock(import("@/platform/desktop"), async (importOriginal) => {
   const api = withFallback<MailApi>({
+    cancelSend: fakes.cancelSend,
     discardDraft: fakes.discardDraft,
     listLabels: () =>
       Promise.resolve({
@@ -83,6 +92,12 @@ vi.mock(import("@/platform/desktop"), async (importOriginal) => {
       }),
     loadThreadDraft: () =>
       Promise.resolve({ data: fakes.savedDraft, ok: true as const }),
+    onDraftChanged: (listener) => {
+      fakes.draftListeners.add(listener);
+      return () => {
+        fakes.draftListeners.delete(listener);
+      };
+    },
     prepareOutgoingAttachments: () =>
       Promise.resolve({ data: [], ok: true as const }),
     sendThreadMessage: fakes.sendThreadMessage,
@@ -227,12 +242,14 @@ const renderThread = (
           <AppHotkeysProvider>
             {withThreadLayer ? <ThreadLayer /> : null}
             <ConfirmDialogProvider>
-              <MailThreadView
-                accountId={ME}
-                actions={actions}
-                onClose={onClose}
-                threadId="t1"
-              />
+              <UndoProvider>
+                <MailThreadView
+                  accountId={ME}
+                  actions={actions}
+                  onClose={onClose}
+                  threadId="t1"
+                />
+              </UndoProvider>
             </ConfirmDialogProvider>
           </AppHotkeysProvider>
         </AiProviderStateProvider>
@@ -277,9 +294,11 @@ const savedReply: MailDraft = {
 
 describe("the open conversation, for an agent", () => {
   beforeEach(() => {
+    // These send at once; the Undo send test turns the delay on itself.
+    hydrateAppSettingsState({ ...DEFAULT_APP_SETTINGS, undoSendSeconds: 0 });
     fakes.savedDraft = null;
     fakes.sendThreadMessage.mockResolvedValue({
-      data: { refusedRecipients: [] },
+      data: { kind: "sent", refusedRecipients: [] },
       ok: true,
     });
     fakes.discardDraft.mockResolvedValue({ data: undefined, ok: true });
@@ -609,6 +628,51 @@ describe("the open conversation, for an agent", () => {
     }).toStrictEqual({
       ok: true,
       sent: [["reply", "m1", ["ana@example.com"]]],
+    });
+  });
+
+  it("holds a sent reply for Undo, and Undo opens it again", async () => {
+    hydrateAppSettingsState({ ...DEFAULT_APP_SETTINGS, undoSendSeconds: 10 });
+    fakes.savedDraft = savedReply;
+    const held =
+      Promise.withResolvers<
+        Awaited<ReturnType<MailApi["sendThreadMessage"]>>
+      >();
+    fakes.sendThreadMessage.mockReturnValue(held.promise);
+    fakes.cancelSend.mockImplementation(() => {
+      // Main puts the draft back before both calls answer.
+      for (const listener of fakes.draftListeners) {
+        listener({ draft: savedReply, kind: "upsert" });
+      }
+      held.resolve({ data: { kind: "canceled" }, ok: true });
+      return Promise.resolve({ data: "canceled", ok: true });
+    });
+    const user = userEvent.setup();
+    renderThread(undefined, { withThreadLayer: true });
+    await act(settle);
+
+    approve = true;
+    await agent.act({ steps: [{ action: "press", ref: "Send" }] });
+    await act(settle);
+    const whileHeld = {
+      composerOpen: screen.queryByRole("button", { name: /^Send/u }) !== null,
+      discarded: fakes.discardDraft.mock.calls.length,
+      sentFrom: fakes.sendThreadMessage.mock.calls.map(
+        ([request]) => request.draftId
+      ),
+    };
+    // Mod is Control off Apple platforms, as in jsdom.
+    await user.keyboard("{Control>}z{/Control}");
+    await act(settle);
+
+    expect({
+      canceled: fakes.cancelSend.mock.calls,
+      reopened: screen.queryByRole("button", { name: /^Send/u }) !== null,
+      whileHeld,
+    }).toStrictEqual({
+      canceled: [[{ accountId: ME, draftId: "draft-1" }]],
+      reopened: true,
+      whileHeld: { composerOpen: false, discarded: 0, sentFrom: ["draft-1"] },
     });
   });
 

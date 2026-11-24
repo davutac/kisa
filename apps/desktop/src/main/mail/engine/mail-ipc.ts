@@ -8,7 +8,9 @@ import { Effect, Exit } from "effect";
 import type {
   MailMessageSendRequest,
   MailThreadMessageSendRequest,
+  MailSendCancelRequest,
   MailSendOutcome,
+  MailSendResult,
   MailBulkThreadMutationOperation,
   MailBulkThreadMutationRequest,
   MailBulkThreadMutationResult,
@@ -26,11 +28,15 @@ import type {
   MailThreadReadStateRequest,
   MailThreadRequest,
 } from "../../../shared/ipc/mail";
+import { getCurrentAppSettings } from "../../settings/app-settings";
+import { cancelHeldSend, holdSend } from "../held-sends";
+import { discardMailDraft, hasDraft, republishDraft } from "../mail-drafts";
 import {
   OutgoingAttachmentAuthorizationError,
   outgoingAttachmentAuthorizations,
 } from "../outgoing-attachment-authorizations";
 import { MailDatabase } from "./mail-database";
+import type { EngineServices } from "./mail-engine";
 import {
   MailEngineError,
   applyThreadActions,
@@ -353,20 +359,97 @@ const consumeAttachments = (
 const toOutcome = (result: { readonly refused: readonly string[] }) =>
   ({ refusedRecipients: [...result.refused] }) satisfies MailSendOutcome;
 
+const toSent = (result: { readonly refused: readonly string[] }) =>
+  ({ kind: "sent", ...toOutcome(result) }) satisfies MailSendResult;
+
+/**
+ * Sends a message, holding it first for the Undo send delay when it comes
+ * from a saved draft. The draft outlives the hold: it is deleted only once
+ * the server has the message, so Undo or a failure leaves it as it was, and
+ * every window is shown it again. Main deletes it, not the window, which may
+ * be gone by then; a newer reply that replaced it is a different draft.
+ */
+const deliverFromDraft = Effect.fn("MailIpc.deliverFromDraft")(
+  function* deliverFromDraft<E>(
+    accountId: string,
+    draftId: string | undefined,
+    ownerWebContentsId: number,
+    send: Effect.Effect<
+      { readonly refused: readonly string[] },
+      E,
+      EngineServices
+    >
+  ) {
+    if (draftId === undefined) {
+      return toSent(yield* inAccountEngine(accountId, send));
+    }
+
+    const draft = { accountId, draftId };
+    // Sent. A draft left behind would invite sending it twice, but it cannot
+    // make the send fail.
+    const removeDraft = () =>
+      discardMailDraft(draft).pipe(
+        Effect.catch(() =>
+          Effect.logWarning("Message sent, but its draft was not removed")
+        )
+      );
+    const held = yield* inAccountEngine(
+      accountId,
+      holdSend(
+        draft,
+        ownerWebContentsId,
+        getCurrentAppSettings().undoSendSeconds * 1000,
+        send,
+        removeDraft
+      )
+    ).pipe(
+      Effect.tapError(() =>
+        republishDraft(accountId, draftId).pipe(Effect.ignore)
+      )
+    );
+    if (held.kind === "canceled") {
+      yield* republishDraft(accountId, draftId).pipe(Effect.ignore);
+      return { kind: "canceled" } satisfies MailSendResult;
+    }
+    return toSent(held.value);
+  }
+);
+
+/**
+ * Undo for a message waiting out its delay. A draft a newer reply has
+ * replaced is not taken back: the message goes as it was, so nothing is
+ * lost.
+ */
+export const cancelSendFromRequest = Effect.fn("MailIpc.cancelSend")(
+  function* cancelSendFromRequest(
+    request: MailSendCancelRequest,
+    ownerWebContentsId: number
+  ) {
+    if (!(yield* hasDraft(request.accountId, request.draftId))) {
+      return "too-late" as const;
+    }
+    return yield* cancelHeldSend(request, ownerWebContentsId);
+  }
+);
+
 export const sendNewMessageFromRequest = Effect.fn("MailIpc.sendNewMessage")(
   function* sendNewMessageFromRequest(
     request: MailMessageSendRequest,
     ownerWebContentsId: number
   ) {
+    const { draftId, ...message } = request;
+    // Read now: the window's attachment permissions expire, and the window
+    // may close while the message waits.
     const attachments = yield* consumeAttachments(
       ownerWebContentsId,
-      request.attachments
+      message.attachments
     );
-    const result = yield* inAccountEngine(
-      request.accountId,
-      sendNewMessage({ ...request, attachments })
+    return yield* deliverFromDraft(
+      message.accountId,
+      draftId,
+      ownerWebContentsId,
+      sendNewMessage({ ...message, attachments })
     );
-    return toOutcome(result);
   }
 );
 
@@ -376,13 +459,15 @@ export const sendThreadMessageFromRequest = Effect.fn(
   request: MailThreadMessageSendRequest,
   ownerWebContentsId: number
 ) {
+  const { draftId, ...message } = request;
   const attachments = yield* consumeAttachments(
     ownerWebContentsId,
-    request.attachments
+    message.attachments
   );
-  const result = yield* inAccountEngine(
-    request.accountId,
-    sendThreadMessage({ ...request, attachments })
+  return yield* deliverFromDraft(
+    message.accountId,
+    draftId,
+    ownerWebContentsId,
+    sendThreadMessage({ ...message, attachments })
   );
-  return toOutcome(result);
 });

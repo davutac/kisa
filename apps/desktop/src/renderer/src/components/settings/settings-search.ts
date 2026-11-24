@@ -28,6 +28,7 @@ export type SettingsTargetKey =
   | "system-labels"
   | "theme"
   | "thread-windows"
+  | "undo-send"
   | "updates";
 
 /** Unique across pages, so two accounts' signatures are two targets. */
@@ -138,6 +139,12 @@ const PAGE_SETTINGS = {
       key: "thread-windows",
       terms: "conversations pop out separate",
       title: "Always open threads in new windows",
+    },
+    {
+      isAvailable: ({ hasAppSettings }) => hasAppSettings,
+      key: "undo-send",
+      terms: "sending delay cancel take back recall unsend mistake",
+      title: "Undo send",
     },
   ],
 } as const satisfies Record<

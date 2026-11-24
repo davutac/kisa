@@ -36,6 +36,7 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 - **Mailbox-scale performance.** Local caching, full-text search, virtualized lists, and resumable indexing keep large mailboxes responsive.
 - **Recoverable spam.** A dedicated Spam mailbox surfaces newly classified mail without adding notifications or Inbox noise. **Report spam** moves a conversation there, with Undo, and leaves your own replies in Sent; **Not spam** returns false positives to Inbox.
 - **Keyboard-first workflow.** Switch accounts, search, compose, and navigate without the mouse.
+- **Undo send.** A sent message waits a few seconds, 10 by default and set in Settings, so you can take it back; quitting Kisa sends it at once.
 - **Privacy by default.** App passwords and Microsoft sign-ins are sealed in the main process and never reach the mail window, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
 - **Built for multiple accounts.** Caches, indexes, sync state, and mutations stay account-scoped, with an All Accounts view across them.
 

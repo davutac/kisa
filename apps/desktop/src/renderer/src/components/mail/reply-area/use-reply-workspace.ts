@@ -15,10 +15,21 @@ import {
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
 import { describeSendOutcome } from "@/mail/send-outcome";
+import {
+  restoreReplyDraft,
+  takeReplyDraft,
+  toUndoSendOffer,
+} from "@/mail/undo-send";
 import { getAiApi, getMailApi } from "@/platform/desktop";
 import { appendEmailSignatureHtml } from "@/shared/email-signature";
 import type { AiModelSelection } from "@/shared/ipc/ai";
-import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type {
+  MailDraftInput,
+  MailThreadMessageSendRequest,
+  ThreadMessage,
+} from "@/shared/ipc/mail";
+import { getAppSettingsState } from "@/state/app-settings";
+import { useOfferUndo } from "@/undo/undo-provider";
 
 import { createReplyDraftPersistence } from "./reply-draft-persistence";
 import { useReplyCleanHistory } from "./use-reply-clean-history";
@@ -51,6 +62,7 @@ export const useReplyWorkspace = ({
   const aiApi = useMemo(() => getAiApi(), []);
   const aiModel = useAiModelSelection();
   const mailApi = useMemo(() => getMailApi(), []);
+  const offerUndo = useOfferUndo();
   const outgoingAttachments = useOutgoingAttachments(
     mailApi,
     draft.attachments,
@@ -164,6 +176,43 @@ export const useReplyWorkspace = ({
     };
   }, [initialRecipients, persistence]);
 
+  /**
+   * With Undo send on, the reply's draft is saved as it stands and kept, out
+   * of sight, while main holds the message; Undo or a failure brings it back
+   * to the conversation, and main removes it once the server has the
+   * message. The composer closes at once.
+   */
+  const sendWithUndo = async (
+    request: MailThreadMessageSendRequest,
+    delayMs: number
+  ): Promise<void> => {
+    if (mailApi === undefined || persistence === undefined) {
+      return;
+    }
+    if (!(await persistence.save(currentDraft))) {
+      return;
+    }
+    persistence.finalize();
+    const draftId = currentDraft.id;
+    offerUndo(
+      toUndoSendOffer({
+        cancel: () => mailApi.cancelSend({ accountId, draftId }),
+        delayMs,
+        // Marked before Undo asks main, which puts the draft back before it
+        // answers: the conversation opens it again as it arrives.
+        expectRestore: () => {
+          restoreReplyDraft(draftId);
+          return () => {
+            takeReplyDraft(draftId);
+          };
+        },
+        keptIn: "Your reply is back in the conversation.",
+        send: () => mailApi.sendThreadMessage({ ...request, draftId }),
+      })
+    );
+    onSent();
+  };
+
   const send = async (): Promise<void> => {
     if (mailApi === undefined || isBusy) {
       return;
@@ -178,7 +227,7 @@ export const useReplyWorkspace = ({
           if (preparedAttachments === undefined) {
             return;
           }
-          const reply = await mailApi.sendThreadMessage({
+          const request = {
             accountId,
             action,
             attachments: preparedAttachments,
@@ -188,9 +237,18 @@ export const useReplyWorkspace = ({
             messageId: message.id,
             threadId,
             to: recipients.to,
-          });
+          };
+          const delayMs = getAppSettingsState().undoSendSeconds * 1000;
+          if (delayMs > 0 && persistence !== undefined) {
+            await sendWithUndo(request, delayMs);
+            return;
+          }
+          const reply = await mailApi.sendThreadMessage(request);
           if (!reply.ok) {
             toast.error(reply.error);
+            return;
+          }
+          if (reply.data.kind === "canceled") {
             return;
           }
           persistence?.finalize();

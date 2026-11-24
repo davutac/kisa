@@ -80,6 +80,7 @@ export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
 export const MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL =
   "desktop:mail:authorize-outgoing-attachments";
 export const MAIL_SEND_MESSAGE_CHANNEL = "desktop:mail:send-message";
+export const MAIL_CANCEL_SEND_CHANNEL = "desktop:mail:cancel-send";
 export const MAIL_SEND_THREAD_MESSAGE_CHANNEL =
   "desktop:mail:send-thread-message";
 export const MAIL_SET_THREAD_LABEL_CHANNEL = "desktop:mail:set-thread-label";

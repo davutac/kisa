@@ -79,6 +79,7 @@ export interface MailApi {
   search: DesktopBridge["searchMail"];
   saveAttachment: DesktopBridge["saveAttachment"];
   saveDraft: DesktopBridge["saveMailDraft"];
+  cancelSend: DesktopBridge["cancelSend"];
   sendMessage: DesktopBridge["sendMessage"];
   sendThreadMessage: DesktopBridge["sendThreadMessage"];
   setThreadLabel: DesktopBridge["setThreadLabel"];
@@ -237,6 +238,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       saveAttachment: bridge.saveAttachment,
       saveDraft: bridge.saveMailDraft,
       search: bridge.searchMail,
+      cancelSend: bridge.cancelSend,
       sendMessage: bridge.sendMessage,
       sendThreadMessage: bridge.sendThreadMessage,
       setThreadLabel: bridge.setThreadLabel,

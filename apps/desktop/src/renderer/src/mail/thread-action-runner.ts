@@ -125,10 +125,11 @@ export const fromBulkReply = async (
   }
 };
 
+/** A thread action never ends as `done`: its toast only changes on failure. */
 const toUndoOutcome = (
   outcome: ThreadActionOutcome,
   failureMessage: string
-): UndoOutcome => {
+): Exclude<UndoOutcome, { readonly kind: "done" }> => {
   if (outcome.kind === "failed") {
     return outcome;
   }

@@ -15,6 +15,15 @@ const UNDO_DURATION_MS = 8000;
 /** What the server made of an action whose Undo is already on offer. */
 export type UndoOutcome =
   | { readonly kind: "confirmed" }
+  /**
+   * It has run its course, as a sent message has: Undo no longer applies,
+   * and the toast says how it ended.
+   */
+  | {
+      readonly kind: "done";
+      readonly message: string;
+      readonly tone: "success" | "warning";
+    }
   /** Some of it went through; Undo reverses that part. */
   | {
       readonly description: string;
@@ -23,12 +32,21 @@ export type UndoOutcome =
     }
   /** Nothing went through, so there is nothing to undo. */
   | {
+      /** What the user can do about it, such as open what was not sent. */
+      readonly action?: {
+        readonly label: string;
+        readonly onAction: () => void;
+      };
       readonly description?: string;
       readonly kind: "failed";
       readonly message: string;
+      /** Stays until dismissed, for a failure nothing else on screen shows. */
+      readonly stays?: boolean;
     };
 
 export interface UndoOffer {
+  /** How long Undo is on offer, when the action sets its own deadline. */
+  readonly durationMs?: number;
   readonly message: string;
   readonly outcome: Promise<UndoOutcome>;
   /** Waits for `outcome` itself, so it only reverses what went through. */
@@ -115,9 +133,10 @@ export const UndoProvider = ({
           void runUndo(order);
         },
       };
+      const duration = offer.durationMs ?? UNDO_DURATION_MS;
       const toastId = toast.success(offer.message, {
         action: undoAction,
-        duration: UNDO_DURATION_MS,
+        duration,
         onDismiss: () => clear(order),
       });
 
@@ -133,18 +152,36 @@ export const UndoProvider = ({
 
         const isOnOffer = activeRef.current?.order === order;
 
+        // Said even after the offer ended, so a late Undo learns how it went.
+        if (outcome.kind === "done") {
+          if (isOnOffer) {
+            clear(order);
+          }
+          toast[outcome.tone](outcome.message, {
+            id: isOnOffer ? toastId : undefined,
+          });
+          return;
+        }
+
         if (outcome.kind === "failed" && isOnOffer) {
           clear(order);
         }
 
         const keepsUndo = outcome.kind === "partial" && isOnOffer;
+        const action = outcome.kind === "failed" ? outcome.action : undefined;
+        let toastDuration: number | undefined;
+        if (outcome.kind === "failed" && outcome.stays === true) {
+          toastDuration = Infinity;
+        } else if (keepsUndo) {
+          toastDuration = duration;
+        }
 
         // Amends the toast in place while it is still on offer. An update keeps
         // an omitted action and falls back to the default duration.
         toast.error(outcome.message, {
-          action: keepsUndo ? undoAction : undefined,
+          action: action ?? (keepsUndo ? undoAction : undefined),
           description: outcome.description,
-          duration: keepsUndo ? UNDO_DURATION_MS : undefined,
+          duration: toastDuration,
           id: isOnOffer ? toastId : undefined,
         });
       };
