@@ -258,6 +258,7 @@ describe(getRuntimeCapabilities, () => {
       Promise.resolve({ data: { labels: [] }, ok: true as const }),
     trashThread: () => Promise.resolve({ data: undefined, ok: true as const }),
     trustImageSender: () => Promise.resolve({ data: [], ok: true as const }),
+    updateAccountName: () => Promise.resolve({ data: [], ok: true as const }),
     updateAccountSettings: () =>
       Promise.resolve({ data: [], ok: true as const }),
     updateAiSettings: () =>
@@ -292,6 +293,7 @@ describe(getRuntimeCapabilities, () => {
         openAccountSetup: desktopBridge.openAccountSetup,
         openAccountSignIn: desktopBridge.openAccountSignIn,
         reorderAccounts: desktopBridge.reorderAccounts,
+        updateAccountName: desktopBridge.updateAccountName,
       },
       ai: {
         categorizeThread: desktopBridge.categorizeThread,

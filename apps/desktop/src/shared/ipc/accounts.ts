@@ -1,6 +1,14 @@
 import * as Schema from "effect/Schema";
 
+import { MAX_DISPLAY_NAME_LENGTH } from "../mail-account-presets";
 import { IpcReply } from "./reply";
+
+/** The sender name outgoing mail carries; control characters would break the header. */
+export const DisplayName = Schema.String.check(
+  Schema.isMaxLength(MAX_DISPLAY_NAME_LENGTH),
+  // oxlint-disable-next-line no-control-regex -- Control characters are what this rejects.
+  Schema.isPattern(/^[^\p{Cc}]*$/u)
+);
 
 /**
  * Whose mail service an account is on, for display. `imap` is any server
@@ -35,6 +43,13 @@ export const AccountSignInRequest = Schema.Struct({
   email: Schema.NonEmptyString,
 });
 export type AccountSignInRequest = typeof AccountSignInRequest.Type;
+
+/** A new sender name for a connected account; blank sends with the bare address. */
+export const AccountNameUpdateRequest = Schema.Struct({
+  email: Schema.NonEmptyString,
+  name: DisplayName,
+});
+export type AccountNameUpdateRequest = typeof AccountNameUpdateRequest.Type;
 
 export const AccountReorderRequest = Schema.Struct({
   emails: Schema.Array(Schema.NonEmptyString),

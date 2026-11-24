@@ -13,6 +13,7 @@ import type { Account } from "@/shared/ipc/accounts";
 import SettingsAccountCategorizationRow from "./settings-account-categorization-row";
 import SettingsAccountDisconnectRow from "./settings-account-disconnect-row";
 import SettingsAccountLabelsRow from "./settings-account-labels-row";
+import SettingsAccountNameRow from "./settings-account-name-row";
 import SettingsAccountNotificationsRow from "./settings-account-notifications-row";
 import SettingsAccountReindexRow from "./settings-account-reindex-row";
 import SettingsAccountSignatureRow from "./settings-account-signature-row";
@@ -60,29 +61,32 @@ const SettingsAccountPage = ({
         </div>
       </div>
 
-      {settingsApi === undefined ? null : (
-        <SettingsSection aria-labelledby={`${idPrefix}-mail-title`}>
-          <SettingsSectionHeader>
-            <SettingsSectionTitle id={`${idPrefix}-mail-title`}>
-              Mail
-            </SettingsSectionTitle>
-          </SettingsSectionHeader>
-          <SettingsRows>
-            <SettingsAccountNotificationsRow
-              account={account}
-              settingsApi={settingsApi}
-            />
-            <SettingsAccountSignatureRow
-              account={account}
-              settingsApi={settingsApi}
-            />
-            <SettingsAccountCategorizationRow
-              account={account}
-              settingsApi={settingsApi}
-            />
-          </SettingsRows>
-        </SettingsSection>
-      )}
+      <SettingsSection aria-labelledby={`${idPrefix}-mail-title`}>
+        <SettingsSectionHeader>
+          <SettingsSectionTitle id={`${idPrefix}-mail-title`}>
+            Mail
+          </SettingsSectionTitle>
+        </SettingsSectionHeader>
+        <SettingsRows>
+          <SettingsAccountNameRow account={account} accountsApi={accountsApi} />
+          {settingsApi === undefined ? null : (
+            <>
+              <SettingsAccountSignatureRow
+                account={account}
+                settingsApi={settingsApi}
+              />
+              <SettingsAccountNotificationsRow
+                account={account}
+                settingsApi={settingsApi}
+              />
+              <SettingsAccountCategorizationRow
+                account={account}
+                settingsApi={settingsApi}
+              />
+            </>
+          )}
+        </SettingsRows>
+      </SettingsSection>
 
       {mailApi === undefined && settingsApi === undefined ? null : (
         <SettingsSection aria-labelledby={`${idPrefix}-labels-title`}>

@@ -2,6 +2,7 @@ import type { UpdateStatus } from "../update-status";
 import type { AccountSetupOpenReply } from "./account-setup";
 import type {
   AccountDisconnectRequest,
+  AccountNameUpdateRequest,
   AccountReorderReply,
   AccountReorderRequest,
   AccountSignInRequest,
@@ -334,6 +335,10 @@ export interface DesktopBridge {
   trustImageSender: (
     request: MailTrustedImageSenderRequest
   ) => Promise<MailTrustedImageSendersReply>;
+  /** Sets an account's sender name and replies with every account. */
+  updateAccountName: (
+    request: AccountNameUpdateRequest
+  ) => Promise<AccountsReply>;
   updateAccountSettings: (
     request: AccountSettingsUpdateRequest
   ) => Promise<AccountSettingsReply>;

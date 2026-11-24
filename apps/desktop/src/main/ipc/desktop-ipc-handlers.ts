@@ -14,6 +14,7 @@ import {
   openAccountSetup,
   openAccountSignIn,
   reorderAccounts,
+  updateAccountName,
 } from "./methods/accounts";
 import {
   categorizeMailThread,
@@ -113,6 +114,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(updateAppSettings);
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);
+  yield* ipc.handle(updateAccountName);
   yield* ipc.handle(disconnectAccount);
   yield* ipc.handle(openAccountSetup);
   yield* ipc.handle(openAccountSignIn);

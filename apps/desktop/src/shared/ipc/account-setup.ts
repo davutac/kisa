@@ -5,9 +5,9 @@ import {
   isMailDomain,
   isMailHost,
   isMailPort,
-  MAX_DISPLAY_NAME_LENGTH,
   MAX_PASSWORD_LENGTH,
 } from "../mail-account-presets";
+import { DisplayName } from "./accounts";
 import { IpcReply } from "./reply";
 
 const MailAddress = Schema.String.check(
@@ -26,13 +26,6 @@ const AppPassword = Schema.RedactedFromValue(
     Schema.isPattern(/^[^\0\r\n]+$/u)
   ),
   { disallowEncode: true, label: "app password" }
-);
-
-/** The sender name outgoing mail carries; control characters would break the header. */
-const DisplayName = Schema.String.check(
-  Schema.isMaxLength(MAX_DISPLAY_NAME_LENGTH),
-  // oxlint-disable-next-line no-control-regex -- Control characters are what this rejects.
-  Schema.isPattern(/^[^\p{Cc}]*$/u)
 );
 
 const MailServer = Schema.Struct({

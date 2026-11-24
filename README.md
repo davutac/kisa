@@ -27,7 +27,7 @@ Every account connects in Kisa's **Add account** window. Most sign in with an ap
 - **Outlook** (`outlook.com`, `hotmail.com`, `live.com`, `msn.com` and their country domains): choose **Sign in with Microsoft** and finish in your browser. Outlook.com has IMAP off by default: turn it on under **Settings › Mail › Forwarding and IMAP** first. A Microsoft 365 work or school address on its own domain uses **Sign in with Microsoft instead**; your organization may need to allow Kisa, or have sending from mail apps turned off.
 - **Any other address**: create an app password with your provider, then enter its IMAP and SMTP servers. Kisa offers TLS and STARTTLS only.
 
-The optional Name is the sender name your outgoing mail carries. Disconnecting an account deletes its sign-in and everything Kisa cached for it on this device; revoke the app password, or Kisa's access to your Microsoft account, in your provider's settings if you no longer want it to work.
+The optional Name is the sender name your outgoing mail carries; change it any time under **Settings**, on the account's page. Disconnecting an account deletes its sign-in and everything Kisa cached for it on this device; revoke the app password, or Kisa's access to your Microsoft account, in your provider's settings if you no longer want it to work.
 
 ## Why Kisa
 

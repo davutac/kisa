@@ -98,3 +98,39 @@ export const reorderAccounts = Effect.fn("reorderAccounts")(
     }
   }
 );
+
+/**
+ * Sets the sender name an account's mail goes out with, which sending reads
+ * each time, so the next message carries it. A blank name clears it. Every
+ * window hears the new list, as after a connect or disconnect.
+ */
+export const updateAccountName = Effect.fn("updateAccountName")(
+  function* updateAccountName(email: string, name: string) {
+    const trimmed = name.trim();
+    const updated = yield* withDatabaseClient((database) =>
+      database
+        .update(mailAccounts)
+        .set({
+          displayName: trimmed.length === 0 ? null : trimmed,
+          updatedAt: Date.now(),
+        })
+        .where(eq(mailAccounts.email, email))
+        .returning({ email: mailAccounts.email })
+        .all()
+    ).pipe(
+      Effect.mapError(
+        () => new AccountsError({ message: "Could not save the name" })
+      )
+    );
+
+    if (updated.length === 0) {
+      return yield* new AccountsError({
+        message: "That account is no longer connected",
+      });
+    }
+
+    const accounts = yield* listAccounts();
+    notifyAccountsChanged({ data: accounts, ok: true });
+    return accounts;
+  }
+);

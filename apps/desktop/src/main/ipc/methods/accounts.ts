@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import { AccountSetupOpenReply } from "../../../shared/ipc/account-setup";
 import {
   AccountDisconnectRequest,
+  AccountNameUpdateRequest,
   AccountReorderReply,
   AccountReorderRequest,
   AccountSignInRequest,
@@ -14,6 +15,7 @@ import {
   ACCOUNTS_OPEN_SETUP_CHANNEL,
   ACCOUNTS_OPEN_SIGN_IN_CHANNEL,
   ACCOUNTS_REORDER_CHANNEL,
+  ACCOUNTS_UPDATE_NAME_CHANNEL,
 } from "../../../shared/ipc/channels";
 import {
   openAccountSetupWindow,
@@ -22,6 +24,7 @@ import {
 import {
   listAccounts as loadAccounts,
   reorderAccounts as saveAccountOrder,
+  updateAccountName as saveAccountName,
 } from "../../auth/accounts";
 import { disconnectAccount as removeAccount } from "../../auth/disconnect-account";
 import { makeIpcMethod } from "../desktop-ipc";
@@ -54,6 +57,17 @@ export const reorderAccounts = makeIpcMethod({
     ),
   payload: AccountReorderRequest,
   result: AccountReorderReply,
+});
+
+export const updateAccountName = makeIpcMethod({
+  channel: ACCOUNTS_UPDATE_NAME_CHANNEL,
+  handler: (request) =>
+    toIpcReply(
+      saveAccountName(request.email, request.name),
+      "Could not save the name"
+    ),
+  payload: AccountNameUpdateRequest,
+  result: AccountsReply,
 });
 
 export const openAccountSetup = makeIpcMethod({

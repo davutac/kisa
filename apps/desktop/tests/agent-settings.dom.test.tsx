@@ -3,10 +3,19 @@ import { userEvent } from "@testing-library/user-event";
 import { setPlatform, settle } from "@ui-sdk/core/testing";
 import { createAgent } from "@ui-sdk/react/agent";
 import type { ReactNode } from "react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import type { Mock } from "vitest";
 
 import { ConfirmDialogProvider } from "../src/renderer/src/components/confirm-dialog";
+import { ACCOUNT_NAME_SAVE_DELAY_MS } from "../src/renderer/src/components/settings/settings-account-name-row";
 import SettingsDialog from "../src/renderer/src/components/settings/settings-dialog";
 import { getSettingsPageLabel } from "../src/renderer/src/components/settings/settings-pages";
 import { buildSettingsSearchIndex } from "../src/renderer/src/components/settings/settings-search";
@@ -36,11 +45,13 @@ import type { Account } from "../src/shared/ipc/accounts";
 interface SettingsFakes {
   readonly disconnectAccount: Mock<AccountsApi["disconnectAccount"]>;
   readonly syncLabels: Mock<MailApi["syncLabels"]>;
+  readonly updateAccountName: Mock<AccountsApi["updateAccountName"]>;
 }
 
 const fakes = vi.hoisted((): SettingsFakes => ({
   disconnectAccount: vi.fn<AccountsApi["disconnectAccount"]>(),
   syncLabels: vi.fn<MailApi["syncLabels"]>(),
+  updateAccountName: vi.fn<AccountsApi["updateAccountName"]>(),
 }));
 
 // What the test doesn't answer replies like an unreachable main process,
@@ -62,6 +73,7 @@ const { withFallback } = vi.hoisted(() => ({
 vi.mock(import("@/platform/desktop"), async (importOriginal) => {
   const accounts = withFallback<AccountsApi>({
     disconnectAccount: fakes.disconnectAccount,
+    updateAccountName: fakes.updateAccountName,
   });
   const ai = withFallback<AiApi>({
     getSettings: () =>
@@ -308,6 +320,7 @@ describe("settings, for an agent", () => {
       { expected: ["Keep images from opened emails, 90 days"], page: "data" },
       ...ACCOUNTS.map(({ email }) => ({
         expected: [
+          `Sender name for ${email}`,
           `New email notifications ${email}`,
           `Edit email signature for ${email}`,
           `Create label for ${email}`,
@@ -708,7 +721,7 @@ describe("searching settings", () => {
     }
 
     expect({ count: targets.length, missed }).toStrictEqual({
-      count: 26,
+      count: 28,
       missed: [],
     });
   });
@@ -753,5 +766,140 @@ describe("searching settings", () => {
     await user.keyboard("/");
 
     expect(document.activeElement === cancel).toBeTruthy();
+  });
+});
+
+const nameField = (email: string): HTMLInputElement =>
+  screen.getByRole<HTMLInputElement>("textbox", {
+    name: `Sender name for ${email}`,
+  });
+
+const savedNames = (): readonly string[] =>
+  fakes.updateAccountName.mock.calls.map(([{ name }]) => name);
+
+describe("an account's sender name", () => {
+  beforeAll(stubMatchMedia);
+
+  beforeEach(() => {
+    fakes.updateAccountName.mockResolvedValue({ data: ACCOUNTS, ok: true });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    document.body.replaceChildren();
+  });
+
+  it("saves once typing pauses, not on every key", async () => {
+    const user = userEvent.setup();
+    await renderSettings();
+    await showPage("account:ana@example.com");
+
+    await user.type(nameField("ana@example.com"), "Ana Lima");
+    const whileTyping = savedNames();
+    // Faking setTimeout would also stop React's scheduler in jsdom, so this
+    // waits out the real pause.
+    await vi.waitFor(
+      () => {
+        expect(savedNames()).toHaveLength(1);
+      },
+      { timeout: ACCOUNT_NAME_SAVE_DELAY_MS * 4 }
+    );
+
+    expect({
+      afterPause: fakes.updateAccountName.mock.calls,
+      whileTyping,
+    }).toStrictEqual({
+      afterPause: [[{ email: "ana@example.com", name: "Ana Lima" }]],
+      whileTyping: [],
+    });
+  });
+
+  it("saves at once when the field loses focus, turning a pasted tab into a space", async () => {
+    const user = userEvent.setup();
+    await renderSettings();
+    await showPage("account:ana@example.com");
+
+    await user.click(nameField("ana@example.com"));
+    await user.paste("Ana\tLima");
+    await user.click(screen.getByRole("tab", { name: "General" }));
+    await act(settle);
+
+    expect(fakes.updateAccountName.mock.calls).toStrictEqual([
+      [{ email: "ana@example.com", name: "Ana Lima" }],
+    ]);
+  });
+
+  it("keeps a name typed just before Settings closes", async () => {
+    const user = userEvent.setup();
+    const { controller } = await renderSettings();
+    await showPage("account:bo@example.com");
+
+    await user.type(nameField("bo@example.com"), "Bo");
+    await user.keyboard("{Escape}");
+    await act(settle);
+
+    expect({
+      names: savedNames(),
+      open: controller.isOpen(),
+    }).toStrictEqual({ names: ["Bo"], open: false });
+  });
+
+  it("takes a name changed in another window, unless it is being edited", async () => {
+    const user = userEvent.setup();
+    const controller = createDialogController();
+    const { view } = await renderSettings(controller);
+    await showPage("account:ana@example.com");
+    const showAccounts = async (displayName: string): Promise<void> => {
+      view.rerender(
+        <Providers
+          accounts={[{ ...ACCOUNTS[0], displayName }, ...ACCOUNTS.slice(1)]}
+        >
+          <SettingsDialog controller={controller} />
+        </Providers>
+      );
+      await act(settle);
+    };
+
+    await user.type(nameField("ana@example.com"), "Ana Lima");
+    // Another window renames the account while this one is still typing.
+    await showAccounts("Ana L.");
+    const whileEditing = nameField("ana@example.com").value;
+    await user.tab();
+    await act(settle);
+    // Main tells every window of the save, then of a later rename elsewhere.
+    await showAccounts("Ana Lima");
+    await showAccounts("Ana Lindqvist");
+
+    expect({
+      names: savedNames(),
+      shown: nameField("ana@example.com").value,
+      whileEditing,
+    }).toStrictEqual({
+      names: ["Ana Lima"],
+      shown: "Ana Lindqvist",
+      whileEditing: "Ana Lima",
+    });
+  });
+
+  it("lets an agent change it, saved when Settings closes", async () => {
+    await renderSettings();
+    await showPage("account:bo@example.com");
+
+    const result = await agent.act({
+      steps: [
+        {
+          action: "setValue",
+          args: ["Bo Brand"],
+          ref: "Sender name for bo@example.com",
+        },
+        { action: "press", ref: "Close settings" },
+      ],
+    });
+    await act(settle);
+
+    expect({ names: savedNames(), ok: result.ok }).toStrictEqual({
+      names: ["Bo Brand"],
+      ok: true,
+    });
   });
 });

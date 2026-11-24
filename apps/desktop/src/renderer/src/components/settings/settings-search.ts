@@ -18,6 +18,7 @@ export type SettingsTargetKey =
   | "labels"
   | "launch-at-login"
   | "mail-sync"
+  | "name"
   | "notifications"
   | "provider"
   | "recovery-key"
@@ -146,16 +147,21 @@ const PAGE_SETTINGS = {
 
 const ACCOUNT_SETTINGS: readonly SettingDefinition[] = [
   {
-    isAvailable: ({ hasSettings }) => hasSettings,
-    key: "notifications",
-    terms: "mail alerts notify",
-    title: "New email notifications",
+    key: "name",
+    terms: "mail display from rename sender",
+    title: "Sender name",
   },
   {
     isAvailable: ({ hasSettings }) => hasSettings,
     key: "signature",
     terms: "mail sign-off footer",
     title: "Email signature",
+  },
+  {
+    isAvailable: ({ hasSettings }) => hasSettings,
+    key: "notifications",
+    terms: "mail alerts notify",
+    title: "New email notifications",
   },
   {
     isAvailable: ({ hasSettings }) => hasSettings,

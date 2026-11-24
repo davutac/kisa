@@ -42,6 +42,7 @@ export interface AccountsApi {
   openAccountSetup: DesktopBridge["openAccountSetup"];
   openAccountSignIn: DesktopBridge["openAccountSignIn"];
   reorderAccounts: DesktopBridge["reorderAccounts"];
+  updateAccountName: DesktopBridge["updateAccountName"];
 }
 
 export interface MailApi {
@@ -182,6 +183,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       openAccountSetup: bridge.openAccountSetup,
       openAccountSignIn: bridge.openAccountSignIn,
       reorderAccounts: bridge.reorderAccounts,
+      updateAccountName: bridge.updateAccountName,
     },
     ai: {
       categorizeThread: bridge.categorizeThread,
