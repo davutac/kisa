@@ -144,6 +144,38 @@ describe(findEmailAddressSuggestions, () => {
     ).toStrictEqual([]);
   });
 
+  it("matches loosely, ranking closer matches first and keeping order within each", () => {
+    const candidates = [
+      { address: "dana.t@example.com" },
+      { address: "ida@example.com" },
+      { address: "ines@example.com", name: "Dario Toma" },
+      { address: "da@example.com" },
+      { address: "bob.da@example.com" },
+      { address: "dax@example.com" },
+      { address: "bob@example.com" },
+    ];
+
+    expect(
+      findEmailAddressSuggestions("da", candidates).map(
+        ({ address }) => address
+      )
+    ).toStrictEqual([
+      // A prefix of the address or the name, then a word inside one, then
+      // anywhere, then only the letters in order.
+      "dana.t@example.com",
+      "ines@example.com",
+      "da@example.com",
+      "dax@example.com",
+      "bob.da@example.com",
+      "ida@example.com",
+    ]);
+    expect(
+      findEmailAddressSuggestions("dt@", candidates).map(
+        ({ address }) => address
+      )
+    ).toStrictEqual(["dana.t@example.com"]);
+  });
+
   it("keeps the list short", () => {
     const candidates = Array.from({ length: 12 }, (_, index) => ({
       address: `t${index}@example.com`,

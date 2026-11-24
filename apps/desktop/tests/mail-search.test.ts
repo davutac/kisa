@@ -55,6 +55,11 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
 };
 const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
 
+const emptyAccountAddresses = (query: string, limit: number) =>
+  listCachedCorrespondents(["empty@example.com"], query, limit)?.senders.map(
+    ({ address }) => address
+  );
+
 describe("mail search", () => {
   beforeAll(() => {
     applyDatabaseMigrations(
@@ -375,6 +380,32 @@ describe("mail search", () => {
     expect(
       listCachedCorrespondents(["one@example.com"], "new@", 10)
     ).toBeUndefined();
+  });
+
+  it("matches letters in order and ranks the closest match before the limit", async () => {
+    await loadCachedCorrespondentsRemote(remoteDatabase, ["empty@example.com"]);
+
+    rememberCorrespondentMessages("empty@example.com", [
+      {
+        bcc: [],
+        cc: [],
+        from: { address: "dana.t@example.com" },
+        to: [
+          { address: "dt@example.com" },
+          { address: "ines@example.com", name: "Dario Toma" },
+          { address: "nobody@example.com" },
+        ],
+      },
+    ]);
+    expect({
+      initials: emptyAccountAddresses("DT", 10),
+      limited: emptyAccountAddresses("dt@", 1),
+      scattered: emptyAccountAddresses("dt@", 10),
+    }).toStrictEqual({
+      initials: ["dt@example.com", "dana.t@example.com", "ines@example.com"],
+      limited: ["dt@example.com"],
+      scattered: ["dt@example.com", "dana.t@example.com"],
+    });
   });
 
   it("keeps the in-memory snapshot bounded per account", async () => {

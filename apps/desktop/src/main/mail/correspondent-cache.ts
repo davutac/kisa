@@ -2,6 +2,11 @@ import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
+import {
+  isAddressMatch,
+  rankAddressMatches,
+  toAddressQuery,
+} from "../../shared/address-match";
 import type {
   MailSenderSuggestion,
   MailSenderSuggestions,
@@ -170,7 +175,7 @@ export const listCachedCorrespondents = (
     return { senders: [] };
   }
 
-  const needle = query?.trim().toLowerCase() ?? "";
+  const needle = toAddressQuery(query ?? "");
   const merged = new Map<string, MailSenderSuggestion>();
 
   for (const accountId of new Set(accountIds)) {
@@ -181,7 +186,7 @@ export const listCachedCorrespondents = (
     }
 
     for (const [key, suggestion] of account) {
-      if (needle.length > 0 && !key.includes(needle)) {
+      if (needle.length > 0 && !isAddressMatch(needle, suggestion)) {
         continue;
       }
 
@@ -205,8 +210,12 @@ export const listCachedCorrespondents = (
     }
   }
 
+  const byCount = [...merged.values()].toSorted(compareSuggestions);
   return {
-    senders: [...merged.values()].toSorted(compareSuggestions).slice(0, limit),
+    senders: (needle.length === 0
+      ? byCount
+      : rankAddressMatches(needle, byCount)
+    ).slice(0, limit),
   };
 };
 

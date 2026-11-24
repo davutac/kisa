@@ -1,4 +1,4 @@
-import { XIcon } from "lucide-react";
+import { ArrowRightIcon, XIcon } from "lucide-react";
 import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { useState } from "react";
 import { flushSync } from "react-dom";
@@ -18,6 +18,7 @@ import {
   ComboboxValue,
   createComboboxController,
 } from "@/components/ui/combobox";
+import { Kbd } from "@/components/ui/kbd";
 import { useInstanceValue } from "@/hooks/use-instance-value";
 import { cn } from "@/lib/utils";
 import {
@@ -45,13 +46,21 @@ interface EmailAddressInputProps {
 
 const NO_SUGGESTED_ADDRESSES: readonly string[] = [];
 const SEPARATOR_KEYS = new Set([",", ";", " "]);
-// Closing the list would empty what was typed; a blur commits it instead.
-const KEEPS_DRAFT = new Set([
-  "escape-key",
-  "focus-out",
-  "outside-press",
-  "window-blur",
-]);
+
+/**
+ * A suggestion matches loosely, so `ann@corp.com` may highlight
+ * `joann@corp.com`. Once the draft is a whole address with a domain, Enter
+ * and Tab keep it unless the highlight merely completes it.
+ */
+const keepsTypedAddress = (draft: string, highlighted: string): boolean => {
+  const [typed, ...rest] = parseEmailAddressList(draft);
+  return (
+    typed === draft &&
+    rest.length === 0 &&
+    typed.slice(typed.indexOf("@")).includes(".") &&
+    !highlighted.toLowerCase().startsWith(draft.toLowerCase())
+  );
+};
 
 const EmailAddressInput = ({
   actions,
@@ -71,10 +80,14 @@ const EmailAddressInput = ({
   const [draft, setDraft] = useState("");
   const [isInvalid, setIsInvalid] = useState(false);
   const [isListWanted, setIsListWanted] = useState(false);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  // The last answer stays, narrowed to the new draft below, until the next
+  // one arrives, so the hint doesn't blink and Tab never finds a gap.
   const indexedSuggestions = useAddressSuggestions(
     accountId.length === 0 ? [] : [accountId],
     "correspondent",
-    accountId.length === 0 || draft.length === 0 ? undefined : draft
+    accountId.length === 0 || draft.length === 0 ? undefined : draft,
+    { whileLoading: "previous" }
   );
   const suggestions = findEmailAddressSuggestions(
     draft,
@@ -84,6 +97,14 @@ const EmailAddressInput = ({
     ],
     [accountId, ...value]
   );
+  const isListOpen = isListWanted && suggestions.length > 0;
+  // What Tab takes: the highlighted suggestion, shown after the draft. A
+  // whole typed address it doesn't complete has none, so Tab leaves the
+  // field and adds what was typed, as Enter does.
+  const hinted =
+    !isListOpen || highlighted === null || keepsTypedAddress(draft, highlighted)
+      ? undefined
+      : suggestions.find(({ address }) => address === highlighted);
 
   const add = (addresses: readonly string[]) => {
     onChange(mergeUniqueEmailAddresses(value, addresses));
@@ -110,11 +131,9 @@ const EmailAddressInput = ({
   // Enter chooses a highlighted suggestion through the combobox; without one
   // it commits the typed text and must never submit the surrounding form.
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    const highlighted = combobox.getHighlighted();
-
-    if (event.key === "Tab" && highlighted !== null && !event.shiftKey) {
+    if (event.key === "Tab" && hinted !== undefined && !event.shiftKey) {
       event.preventDefault();
-      add([highlighted]);
+      add([hinted.address]);
       return;
     }
 
@@ -123,12 +142,16 @@ const EmailAddressInput = ({
       return;
     }
 
+    const current = combobox.getHighlighted();
+    const chosen =
+      current === null || keepsTypedAddress(draft, current) ? null : current;
+
     if (event.altKey || event.ctrlKey || event.metaKey) {
       // A chord like Mod+Enter adds what Enter would, emptying the field first
       // so the combobox's own Enter keeps nothing and `@/hotkeys` can send.
       flushSync(() => {
-        if (isEnter && highlighted !== null) {
-          add([highlighted]);
+        if (isEnter && chosen !== null) {
+          add([chosen]);
         } else {
           commit(draft);
         }
@@ -136,7 +159,7 @@ const EmailAddressInput = ({
       return;
     }
 
-    if (!isEnter || highlighted === null) {
+    if (!isEnter || chosen === null) {
       event.preventDefault();
       commit(draft);
     }
@@ -150,13 +173,18 @@ const EmailAddressInput = ({
       )}
       id={id}
     >
+      {/* `keepQuery` leaves the draft to this field: it empties only once
+          an address is added. Otherwise the combobox would empty it whenever
+          the list closes, including when the draft stops matching anyone. */}
       <Combobox
         allowCustomValue
         autoHighlight
         controller={combobox}
         disabled={disabled}
         filter={false}
+        keepQuery
         multiple
+        onHighlight={setHighlighted}
         onOpenChange={(open, details) => {
           // Typing asks before its suggestions load; anything else opens now.
           if (
@@ -168,11 +196,12 @@ const EmailAddressInput = ({
             return;
           }
           setIsListWanted(open);
-        }}
-        onQueryChange={(query, details) => {
-          if (KEEPS_DRAFT.has(details.reason)) {
-            return;
+          // The combobox drops its highlight on close without reporting it.
+          if (!open) {
+            setHighlighted(null);
           }
+        }}
+        onQueryChange={(query) => {
           setDraft(query);
           setIsInvalid(false);
         }}
@@ -197,7 +226,7 @@ const EmailAddressInput = ({
           label: address,
           value: address,
         }))}
-        open={isListWanted && suggestions.length > 0}
+        open={isListOpen}
         query={draft}
         value={[...value]}
       >
@@ -221,7 +250,11 @@ const EmailAddressInput = ({
             aria-describedby={isInvalid ? `${id}-error` : undefined}
             aria-invalid={isInvalid || undefined}
             autoFocus={autoFocus}
-            className="min-w-32 flex-1"
+            className={
+              hinted === undefined
+                ? "min-w-32 flex-1"
+                : "field-sizing-content w-auto min-w-1 flex-none"
+            }
             inputMode="email"
             onBlur={() => {
               setIsListWanted(false);
@@ -231,6 +264,20 @@ const EmailAddressInput = ({
             onKeyDown={handleKeyDown}
             ref={inputRef}
           />
+          {hinted === undefined ? null : (
+            // The list already names the option for assistive technology.
+            <span
+              aria-hidden="true"
+              className="text-muted-foreground pointer-events-none flex min-w-0 flex-1 items-center gap-1.5 text-sm select-none"
+              data-slot="recipient-hint"
+            >
+              <span className="flex min-w-0 items-center gap-1.5 opacity-60">
+                <ArrowRightIcon className="size-3 shrink-0" />
+                <span className="truncate">{hinted.address}</span>
+              </span>
+              <Kbd className="shrink-0">Tab</Kbd>
+            </span>
+          )}
         </ComboboxChips>
         <ComboboxContent>
           <ComboboxList>

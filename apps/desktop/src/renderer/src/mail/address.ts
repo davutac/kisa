@@ -1,3 +1,5 @@
+import { rankAddressMatches, toAddressQuery } from "@/shared/address-match";
+
 // A local part only starts where a run of local-part characters starts. Every
 // later position in the same run reaches the same `@`, so trying them all would
 // rescan a long run once per character on the renderer thread.
@@ -75,8 +77,9 @@ export interface EmailAddressSuggestion {
   name?: string;
 }
 
-// An exact match comes first, so Enter on a complete address keeps it rather
-// than a longer suggestion.
+// Ranked as main ranks correspondents, so the conversation's own addresses
+// and indexed ones interleave by how well they match; an exact one comes
+// first, and within a tier the given order holds.
 export const findEmailAddressSuggestions = (
   draft: string,
   candidates: readonly EmailAddressSuggestion[],
@@ -87,26 +90,19 @@ export const findEmailAddressSuggestions = (
     return [];
   }
 
-  const prefix = draft.toLowerCase();
   const seen = new Set(excluded.map((address) => address.toLowerCase()));
-  const matches = candidates.filter(({ address }) => {
+  const unique = candidates.filter(({ address }) => {
     const normalizedAddress = address.toLowerCase();
 
-    if (seen.has(normalizedAddress) || !normalizedAddress.startsWith(prefix)) {
+    if (seen.has(normalizedAddress)) {
       return false;
     }
 
     seen.add(normalizedAddress);
     return true;
   });
-  const exact = matches.filter(
-    ({ address }) => address.toLowerCase() === prefix
-  );
 
-  return [
-    ...exact,
-    ...matches.filter(({ address }) => address.toLowerCase() !== prefix),
-  ].slice(0, limit);
+  return rankAddressMatches(toAddressQuery(draft), unique).slice(0, limit);
 };
 
 export interface MailboxAddress {

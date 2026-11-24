@@ -186,22 +186,29 @@ export const useMailSearch = (
 
 interface LoadedSenders {
   key: string;
+  scope: string;
   senders: readonly MailSenderSuggestion[];
 }
 
-const NO_SENDERS: LoadedSenders = { key: "", senders: [] };
+const NO_SENDERS: LoadedSenders = { key: "", scope: "", senders: [] };
 
 /**
  * Addresses to complete a `from:` or `to:` pill with, drawn from the mail
  * already indexed rather than from a contacts API.
+ *
+ * `whileLoading: "previous"` keeps the last answer for the same accounts and
+ * role until the next one arrives, for a caller that narrows it to the new
+ * search itself; otherwise nothing shows while a search loads.
  */
 export const useAddressSuggestions = (
   accountIds: readonly string[],
   role: MailAddressRole | undefined,
-  search: string | undefined
+  search: string | undefined,
+  { whileLoading = "empty" }: { whileLoading?: "empty" | "previous" } = {}
 ): readonly MailSenderSuggestion[] => {
   const mailApi = getMailApi();
   const [loaded, setLoaded] = useState<LoadedSenders>(NO_SENDERS);
+  const scope = JSON.stringify([accountIds, role ?? ""]);
   const requestKey = JSON.stringify([accountIds, role ?? "", search ?? ""]);
   const listSenders = useEffectEvent(() =>
     role === undefined || search === undefined
@@ -230,6 +237,7 @@ export const useAddressSuggestions = (
         if (isActive && reply !== undefined) {
           setLoaded({
             key: requestKey,
+            scope,
             senders: reply.ok ? reply.data.senders : [],
           });
         }
@@ -240,9 +248,15 @@ export const useAddressSuggestions = (
       isActive = false;
       window.clearTimeout(timeout);
     };
-  }, [mailApi, requestKey, role, search]);
+  }, [mailApi, requestKey, role, scope, search]);
 
-  return role === undefined || search === undefined || loaded.key !== requestKey
-    ? []
-    : loaded.senders;
+  if (role === undefined || search === undefined) {
+    return [];
+  }
+  if (loaded.key === requestKey) {
+    return loaded.senders;
+  }
+  return whileLoading === "previous" && loaded.scope === scope
+    ? loaded.senders
+    : [];
 };
