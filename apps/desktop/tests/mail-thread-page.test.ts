@@ -66,11 +66,27 @@ describe("label places", () => {
       `${ONE}:archived`,
       `${ONE}:sent`,
     ]);
-    // The Inbox itself still leaves archived mail out.
+    // The Inbox itself leaves archived mail out, and mail only in Sent.
     await expect(listIds("inbox")).resolves.toStrictEqual([
       `${ONE}:unlabelled`,
       `${ONE}:inbox`,
-      `${ONE}:sent`,
+    ]);
+  });
+
+  it("lists starred conversations wherever they are, outside Spam and Trash", async () => {
+    insertThread(ONE, "inbox", ["INBOX", "STARRED"], 5000);
+    insertThread(TWO, "archived", ["STARRED"], 4000);
+    insertThread(ONE, "plain", ["INBOX"], 3000);
+    insertThread(ONE, "spam", ["SPAM", "STARRED"], 2000);
+    // A user label named like the system one is not a star.
+    insertThread(ONE, "named", ["u:STARRED"], 1000);
+
+    await expect(listIds("starred")).resolves.toStrictEqual([
+      `${ONE}:inbox`,
+      `${TWO}:archived`,
+    ]);
+    await expect(listIds("starred", [TWO])).resolves.toStrictEqual([
+      `${TWO}:archived`,
     ]);
   });
 

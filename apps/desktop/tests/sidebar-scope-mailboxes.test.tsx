@@ -66,6 +66,16 @@ describe(SidebarScopeMailboxes, () => {
     expect(markup).not.toContain("Inbox");
   });
 
+  it("opens Starred from a row of its own, without a shortcut", () => {
+    const markup = renderScope("one@example.com", "one@example.com", {
+      mailbox: "starred",
+    });
+    const starred = getButtonTag(markup, "Starred, one@example.com");
+
+    expect(starred).toContain('aria-current="page"');
+    expect(starred).not.toContain("aria-keyshortcuts");
+  });
+
   it("leaves the shortcuts to the current scope's rows", () => {
     const markup = renderScope("two@example.com", "two@example.com");
 

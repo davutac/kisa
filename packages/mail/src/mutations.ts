@@ -378,7 +378,11 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
   }
 );
 
-/** Generic archive and unarchive move copies between Inbox and Archive. */
+/**
+ * Generic archive and unarchive move copies between Inbox and Archive. Only
+ * Archive's copies come back: a conversation filed only in a folder or Sent
+ * has none, and saying so beats reporting a move that never happened.
+ */
 const setFolderInbox = Effect.fn("MailMutations.setFolderInbox")(
   function* setFolderInbox(context: ActionContext, applied: boolean) {
     if (!applied) {
@@ -392,13 +396,16 @@ const setFolderInbox = Effect.fn("MailMutations.setFolderInbox")(
       );
     }
 
-    return yield* moveCopies(
-      context,
-      context.locations.filter(
-        (location) => roleOf(context, location.mailboxPath) === "archive"
-      ),
-      INBOX_PATH
+    const archived = context.locations.filter(
+      (location) => roleOf(context, location.mailboxPath) === "archive"
     );
+    if (archived.length === 0) {
+      return yield* new MailProtocolError({
+        accountId: context.scope.accountId,
+        message: "Only archived mail can be moved to the Inbox",
+      });
+    }
+    return yield* moveCopies(context, archived, INBOX_PATH);
   }
 );
 
@@ -448,17 +455,33 @@ const trash = Effect.fn("MailMutations.trash")(function* trash(
   );
 });
 
+/**
+ * The user's own copies: what they sent and their drafts. Spam is a verdict
+ * on other people's mail, so these stay in Sent and Drafts, and "Not spam"
+ * never moves them into the Inbox.
+ */
+const isOwnCopy = (location: ThreadLocation): boolean =>
+  location.labelIds.includes(SystemLabel.sent) ||
+  location.labelIds.includes(SystemLabel.draft);
+
 const moveToSpam = Effect.fn("MailMutations.moveToSpam")(function* moveToSpam(
   context: ActionContext
 ) {
   const destination = yield* requireMailbox(context, "junk", "Spam");
-  return yield* moveCopies(
-    context,
-    context.locations.filter(
-      (location) => roleOf(context, location.mailboxPath) !== "junk"
-    ),
-    destination.path
+  const outside = context.locations.filter(
+    (location) => roleOf(context, location.mailboxPath) !== "junk"
   );
+  if (outside.length === 0) {
+    return NO_THREAD_CHANGES;
+  }
+  const received = outside.filter((location) => !isOwnCopy(location));
+  if (received.length === 0) {
+    return yield* new MailProtocolError({
+      accountId: context.scope.accountId,
+      message: "Only your own messages are in this conversation",
+    });
+  }
+  return yield* moveCopies(context, received, destination.path);
 });
 
 /** Out of Spam or Trash and back into the Inbox. */

@@ -95,7 +95,7 @@ describe(replaceFirstPage, () => {
 });
 
 describe(filterThreadsByScope, () => {
-  it("shows Inbox and Sent conversations in Inbox while preserving unread scope", () => {
+  it("shows only Inbox conversations in Inbox, so archiving takes one off, while preserving unread scope", () => {
     const unread = makeThread("one@example.com", "unread", 300, {
       isUnread: true,
     });
@@ -114,14 +114,26 @@ describe(filterThreadsByScope, () => {
     const sentTrash = makeThread("one@example.com", "sent-trash", 325, {
       labels: ["SENT", "TRASH"],
     });
+    const archived = makeThread("one@example.com", "archived", 250, {
+      isUnread: true,
+      labels: ["SENT", "STARRED"],
+    });
+    const all = [
+      unread,
+      read,
+      sent,
+      sentTrash,
+      archived,
+      trashed,
+      otherAccount,
+    ];
 
+    expect(filterThreadsByScope(all, ["one@example.com"], true)).toStrictEqual([
+      unread,
+    ]);
     expect(
-      filterThreadsByScope(
-        [unread, read, sent, sentTrash, trashed, otherAccount],
-        ["one@example.com"],
-        true
-      )
-    ).toStrictEqual([unread, sent]);
+      filterThreadsByScope(all, ["one@example.com"], false, "starred")
+    ).toStrictEqual([archived]);
     expect(
       filterThreadsByScope(
         [unread, read, sent, sentTrash, trashed, otherAccount],

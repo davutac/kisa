@@ -9,10 +9,12 @@ The renderer owns only the short-lived opportunity to Undo. The mail server and 
 | Action                     | Inverse                               |
 | -------------------------- | ------------------------------------- |
 | Add or remove a user label | Restore the previous label membership |
+| Archive                    | Add the conversation back to Inbox    |
 | Move to Trash              | Remove Trash and restore Inbox        |
+| Report spam                | Move the conversation back to Inbox   |
 | Mark as not spam           | Move the conversation back to Spam    |
 
-Single and bulk interaction paths use the same renderer module. Bulk label changes omit conversations already in the requested state, making the inverse exact for mixed selections. If part of a bulk request fails, Undo reverses only the conversations main reports as successfully changed.
+Single and bulk interaction paths use the same renderer module. Bulk label changes omit conversations already in the requested state, making the inverse exact for mixed selections; bulk Archive likewise sends only the selected conversations in the Inbox, so its Undo returns nothing that was not there. Report spam's Undo, like Not spam, puts what it moved into the Inbox even if the conversation was archived before; the user's own sent mail and drafts never move to Spam, so they stay in Sent and Drafts throughout. If part of a bulk request fails, Undo reverses only the conversations main reports as successfully changed.
 
 ## Actions without Undo
 
@@ -21,6 +23,6 @@ Single and bulk interaction paths use the same renderer module. Bulk label chang
 - Disconnecting an account remains behind confirmation because credentials and all account-scoped local data are removed.
 - Sending is not reversible after Gmail accepts it.
 - Draft cleanup keeps its existing version history, which is a deeper and more useful recovery model than a single toast action.
-- Marking conversations read or unread remains directly reversible with the same control and does not create an Undo opportunity.
+- Marking conversations read or unread, starring them, and moving an archived conversation back to the Inbox remain directly reversible with the same control (Archive is Move to Inbox's reverse) and do not create an Undo opportunity.
 
 Bulk Move to Trash no longer asks for confirmation because it has a provider and cache inverse. Existing confirmations remain for destructive actions without an inverse.

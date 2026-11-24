@@ -23,6 +23,12 @@ export interface ThreadActionTarget {
   threadId: string;
 }
 
+export interface ThreadStarTarget {
+  readonly accountId: string;
+  readonly isStarred: boolean;
+  readonly threadId: string;
+}
+
 export interface ThreadLabelChange {
   readonly applied: boolean;
   readonly labelId: string;
@@ -33,7 +39,11 @@ export interface ThreadLabelChange {
 type OnLeave = () => void;
 
 export interface ThreadActions {
+  archive: (thread: MailThreadRequest, onLeave?: OnLeave) => void;
+  /** Only conversations in the Inbox, so Undo returns only what left it. */
+  bulkArchive: (threads: readonly MailThreadRequest[]) => void;
   bulkDeleteForever: (threads: readonly MailThreadRequest[]) => void;
+  bulkReportSpam: (threads: readonly MailThreadRequest[]) => void;
   bulkSetLabel: (
     threads: readonly MailThreadRequest[],
     label: ThreadLabelChange
@@ -42,11 +52,19 @@ export interface ThreadActions {
     threads: readonly MailThreadRequest[],
     isUnread: boolean
   ) => void;
+  bulkSetStarred: (
+    threads: readonly MailThreadRequest[],
+    isStarred: boolean
+  ) => void;
   bulkTrash: (threads: readonly MailThreadRequest[]) => void;
   deleteForever: (thread: MailThreadRequest, onLeave?: OnLeave) => void;
+  /** Archive's way back, for a conversation that left the Inbox. */
+  moveToInbox: (thread: MailThreadRequest) => void;
   notSpam: (thread: MailThreadRequest, onLeave?: OnLeave) => void;
+  reportSpam: (thread: MailThreadRequest, onLeave?: OnLeave) => void;
   setLabel: (thread: MailThreadRequest, label: ThreadLabelChange) => void;
   toggleRead: (thread: ThreadActionTarget) => void;
+  toggleStar: (thread: ThreadStarTarget) => void;
   trash: (thread: MailThreadRequest, onLeave?: OnLeave) => void;
 }
 
@@ -58,14 +76,21 @@ interface ThreadActionsOptions {
 const doNothing = (): void => undefined;
 
 const NO_THREAD_ACTIONS: ThreadActions = {
+  archive: doNothing,
+  bulkArchive: doNothing,
   bulkDeleteForever: doNothing,
+  bulkReportSpam: doNothing,
   bulkSetLabel: doNothing,
   bulkSetReadState: doNothing,
+  bulkSetStarred: doNothing,
   bulkTrash: doNothing,
   deleteForever: doNothing,
+  moveToInbox: doNothing,
   notSpam: doNothing,
+  reportSpam: doNothing,
   setLabel: doNothing,
   toggleRead: doNothing,
+  toggleStar: doNothing,
   trash: doNothing,
 };
 
@@ -82,6 +107,14 @@ const toLabelChange = (label: ThreadLabelChange, applied: boolean) =>
     labelId: label.labelId,
     labelName: label.labelName,
   }) as const;
+
+// Archive and Star are system labels, which conversations list by their id:
+// leaving the Inbox is losing `INBOX`, and a star is `STARRED`.
+const INBOX = "INBOX";
+const STARRED = "STARRED";
+
+const toSystemLabelChange = (labelId: string, applied: boolean) =>
+  toLabelChange({ applied, labelId, labelName: labelId }, applied);
 
 /**
  * All mouse and keyboard thread actions enter through this hook. Each shows
@@ -143,12 +176,67 @@ export const useThreadActions = ({
       run({ ...plan, send: () => send(request), threads: [request] });
     };
 
+    const setSystemLabel = (
+      request: MailThreadRequest,
+      labelId: string,
+      applied: boolean,
+      failureMessage: string
+    ) =>
+      fromThreadReply(
+        request,
+        () => mailApi.setThreadLabel({ ...request, applied, labelId }),
+        failureMessage
+      );
+
     return {
+      archive: (thread, onLeave) => {
+        const failureMessage = "Could not archive email";
+
+        runOne(
+          thread,
+          {
+            change: toSystemLabelChange(INBOX, false),
+            failureMessage,
+            message: "Archived conversation",
+            onLeave,
+            undo: {
+              change: toSystemLabelChange(INBOX, true),
+              failureMessage: "Could not move the conversation to the inbox",
+              undoneMessage: "Moved conversation back to the inbox",
+            },
+          },
+          (request) => setSystemLabel(request, INBOX, false, failureMessage)
+        );
+      },
+      bulkArchive: (threads) => {
+        runBulk(threads, {
+          change: toSystemLabelChange(INBOX, false),
+          failureMessage: "Some conversations were not archived",
+          message: "Archived conversations",
+          undo: {
+            change: toSystemLabelChange(INBOX, true),
+            failureMessage: "Could not move the conversations to the inbox",
+            undoneMessage: "Moved conversations back to the inbox",
+          },
+        });
+      },
       bulkDeleteForever: (threads) => {
         runBulk(threads, {
           change: { kind: "deleteForever" },
           failureMessage: "Some conversations were not deleted",
           message: "Conversations permanently deleted",
+        });
+      },
+      bulkReportSpam: (threads) => {
+        runBulk(threads, {
+          change: { kind: "moveToSpam" },
+          failureMessage: "Some conversations were not reported as spam",
+          message: "Reported conversations as spam",
+          undo: {
+            change: { kind: "moveToInbox" },
+            failureMessage: "Could not restore the conversations",
+            undoneMessage: "Restored conversations to the inbox",
+          },
         });
       },
       bulkSetLabel: (threads, label) => {
@@ -174,6 +262,15 @@ export const useThreadActions = ({
           message: isUnread
             ? "Marked conversations as unread"
             : "Marked conversations as read",
+        });
+      },
+      bulkSetStarred: (threads, isStarred) => {
+        runBulk(threads, {
+          change: toSystemLabelChange(STARRED, isStarred),
+          failureMessage: "Some conversations were not updated",
+          message: isStarred
+            ? "Starred conversations"
+            : "Removed stars from conversations",
         });
       },
       bulkTrash: (threads) => {
@@ -207,6 +304,19 @@ export const useThreadActions = ({
             )
         );
       },
+      moveToInbox: (thread) => {
+        const failureMessage = "Could not move email to the inbox";
+
+        runOne(
+          thread,
+          {
+            change: toSystemLabelChange(INBOX, true),
+            failureMessage,
+            message: "Moved conversation to the inbox",
+          },
+          (request) => setSystemLabel(request, INBOX, true, failureMessage)
+        );
+      },
       notSpam: (thread, onLeave) => {
         const failureMessage = "Could not mark email as not spam";
 
@@ -227,6 +337,30 @@ export const useThreadActions = ({
             fromThreadReply(
               request,
               () => mailApi.markThreadNotSpam(request),
+              failureMessage
+            )
+        );
+      },
+      reportSpam: (thread, onLeave) => {
+        const failureMessage = "Could not report email as spam";
+
+        runOne(
+          thread,
+          {
+            change: { kind: "moveToSpam" },
+            failureMessage,
+            message: "Reported conversation as spam",
+            onLeave,
+            undo: {
+              change: { kind: "moveToInbox" },
+              failureMessage: "Could not restore the conversation",
+              undoneMessage: "Restored conversation to the inbox",
+            },
+          },
+          (request) =>
+            fromThreadReply(
+              request,
+              () => mailApi.reportThreadSpam(request),
               failureMessage
             )
         );
@@ -278,6 +412,21 @@ export const useThreadActions = ({
               () => mailApi.setThreadReadState({ ...request, isUnread }),
               failureMessage
             )
+        );
+      },
+      toggleStar: (thread) => {
+        const isStarred = !thread.isStarred;
+        const failureMessage = "Could not update email";
+
+        runOne(
+          thread,
+          {
+            change: toSystemLabelChange(STARRED, isStarred),
+            failureMessage,
+            message: isStarred ? "Starred" : "Removed star",
+          },
+          (request) =>
+            setSystemLabel(request, STARRED, isStarred, failureMessage)
         );
       },
       trash: (thread, onLeave) => {

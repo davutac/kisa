@@ -10,6 +10,7 @@ import {
   hasInboxLabel,
   hasSentLabel,
   hasSpamLabel,
+  hasStarredLabel,
   hasTrashLabel,
 } from "./label";
 import { threadHasMailboxLabel } from "./mailbox-labels";
@@ -81,10 +82,14 @@ const toMailboxMatcher = (
     return (labels) =>
       hasSentLabel(labels) && !hasSpamLabel(labels) && !hasTrashLabel(labels);
   }
+  if (mailbox === "starred") {
+    return (labels) =>
+      hasStarredLabel(labels) &&
+      !hasSpamLabel(labels) &&
+      !hasTrashLabel(labels);
+  }
   return (labels) =>
-    (hasInboxLabel(labels) || hasSentLabel(labels)) &&
-    !hasSpamLabel(labels) &&
-    !hasTrashLabel(labels);
+    hasInboxLabel(labels) && !hasSpamLabel(labels) && !hasTrashLabel(labels);
 };
 
 export const filterThreadsByScope = (

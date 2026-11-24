@@ -238,6 +238,9 @@ export interface DesktopBridge {
   markThreadNotSpam: (
     request: MailThreadRequest
   ) => Promise<MailThreadMutationReply>;
+  reportThreadSpam: (
+    request: MailThreadRequest
+  ) => Promise<MailThreadMutationReply>;
   /** Opens the Add account window, or focuses it. */
   openAccountSetup: () => Promise<AccountSetupOpenReply>;
   /** Opens the setup window to sign a connected account in again. */

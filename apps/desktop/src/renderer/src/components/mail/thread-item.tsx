@@ -1,4 +1,4 @@
-import { MessagesSquareIcon, SendIcon } from "lucide-react";
+import { MessagesSquareIcon, SendIcon, StarIcon } from "lucide-react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { memo, useState } from "react";
 
@@ -24,7 +24,7 @@ import type { Calendar } from "@/hooks/use-calendar";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
-import { hasSentLabel } from "@/mail/label";
+import { hasSentLabel, hasStarredLabel } from "@/mail/label";
 import { formatMailDate } from "@/mail/mail-date";
 import { getThreadSelectionKey } from "@/mail/thread-selection";
 import {
@@ -43,10 +43,12 @@ interface MailThreadItemProps {
   isSelected?: boolean;
   /** The listed mailbox's own system label, which every row would repeat. */
   mailboxLabel?: string;
+  onArchive?: (thread: MailThreadSummary) => void;
   onDeleteForever?: (thread: MailThreadSummary) => void;
   onNotSpam?: (thread: MailThreadSummary) => void;
   onToggleRead?: (thread: MailThreadSummary) => void;
   onToggleSelection: (thread: MailThreadSummary) => void;
+  onToggleStar?: (thread: MailThreadSummary) => void;
   onTrash?: (thread: MailThreadSummary) => void;
   showAccount?: boolean;
   thread: MailThreadSummary;
@@ -65,6 +67,7 @@ const getThreadRowLabel = (
     showAccount ? `in ${thread.accountId}` : undefined,
     formatMailDate(thread.latestAt, calendar, "detailed"),
     thread.isUnread ? "unread" : undefined,
+    hasStarredLabel(thread.labels) ? "starred" : undefined,
     thread.messageCount > 1 ? `${thread.messageCount} messages` : undefined,
     hasSentLabel(thread.labels) ? "sent" : undefined,
   ]
@@ -85,6 +88,40 @@ const bindThreadAction = (
   thread: MailThreadSummary
 ): (() => void) | undefined =>
   action === undefined ? undefined : () => action(thread);
+
+type ThreadRowActions = Pick<
+  MailThreadItemProps,
+  | "onArchive"
+  | "onDeleteForever"
+  | "onNotSpam"
+  | "onToggleRead"
+  | "onToggleStar"
+  | "onTrash"
+>;
+
+/** The row's quick actions, bound to it, and how far the row slides aside. */
+const bindQuickActions = (
+  actions: ThreadRowActions,
+  thread: MailThreadSummary
+) => {
+  const bound = {
+    onArchive: bindThreadAction(actions.onArchive, thread),
+    onDeleteForever: bindThreadAction(actions.onDeleteForever, thread),
+    onNotSpam: bindThreadAction(actions.onNotSpam, thread),
+    onToggleRead: bindThreadAction(actions.onToggleRead, thread),
+    onToggleStar: bindThreadAction(actions.onToggleStar, thread),
+    onTrash: bindThreadAction(actions.onTrash, thread),
+  };
+
+  return {
+    bound,
+    width: getMailThreadQuickActionsWidth({
+      hasArchive: bound.onArchive !== undefined,
+      hasDestructive: (bound.onDeleteForever ?? bound.onTrash) !== undefined,
+      hasSecondary: (bound.onNotSpam ?? bound.onToggleStar) !== undefined,
+    }),
+  };
+};
 
 const getThreadItemRevealState = (
   hasCheckedThreads: boolean,
@@ -195,6 +232,15 @@ const ThreadSenderHeader = ({
           {senderMailbox.email}
         </span>
       </ItemTitle>
+      {hasStarredLabel(thread.labels) && mailboxLabel !== "STARRED" ? (
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground inline-flex shrink-0"
+          title="Starred"
+        >
+          <StarIcon className="size-3.5 fill-current stroke-[1.8]" />
+        </span>
+      ) : null}
       {hasSentLabel(thread.labels) && mailboxLabel !== "SENT" ? (
         <span
           aria-hidden="true"
@@ -227,14 +273,11 @@ const MailThreadItem = ({
   isChecked = false,
   isSelected = false,
   mailboxLabel,
-  onDeleteForever,
-  onNotSpam,
-  onToggleRead,
   onToggleSelection,
-  onTrash,
   showAccount = false,
   thread,
   top,
+  ...rowActions
 }: MailThreadItemProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const calendar = useCalendar();
@@ -252,12 +295,9 @@ const MailThreadItem = ({
   );
   const hiddenAttachmentCount =
     thread.attachments.length - visibleAttachments.length;
-  const handleNotSpam = bindThreadAction(onNotSpam, thread);
-  const hasDestructiveAction =
-    onDeleteForever !== undefined || onTrash !== undefined;
-  const quickActionsWidth = getMailThreadQuickActionsWidth(
-    handleNotSpam !== undefined,
-    hasDestructiveAction
+  const { bound: quickActions, width: quickActionsWidth } = bindQuickActions(
+    rowActions,
+    thread
   );
 
   return (
@@ -400,13 +440,11 @@ const MailThreadItem = ({
         <MailThreadQuickActions
           hotkeysEnabled={isSelected}
           isRevealed={areQuickActionsRevealed}
+          isStarred={hasStarredLabel(thread.labels)}
           isUnread={thread.isUnread}
           name={getThreadControlName(thread, showAccount)}
           subject={thread.subject}
-          onDeleteForever={bindThreadAction(onDeleteForever, thread)}
-          onNotSpam={handleNotSpam}
-          onToggleRead={bindThreadAction(onToggleRead, thread)}
-          onTrash={bindThreadAction(onTrash, thread)}
+          {...quickActions}
         />
       </m.div>
     </MailListRow>

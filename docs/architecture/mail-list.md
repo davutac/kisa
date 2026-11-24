@@ -13,8 +13,10 @@ section  (the scroller, named after the place: "Inbox", "Search results", "Sched
         ├── gridcell  the conversation
         │   ├── button  the open control, named by the row's label, aria-current while it has mailbox focus
         │   └── checkbox  "Select <subject>", in the mailbox only
-        └── gridcell  the quick actions, Kisa Buttons named for their row
+        └── gridcell  the quick actions, Kisa Buttons and the Star toggle, named for their row
 ```
+
+The quick actions stand behind the row in up to two columns of two: Mark as read or unread with Star (Not spam instead in Spam), then Archive, for a conversation in the Inbox, with Trash or Delete forever. Two actions share one column, and an action alone in its column fills it; the row slides aside by one 48-pixel step per column.
 
 Rows are positioned absolutely, so `aria-rowcount` and `aria-rowindex` say where a rendered row sits in the whole list. Scheduled reports `-1` while more pages may load. A trailing note, such as "Fetching the next chapter…" or a failed page with Try again, sits after the grid rather than in it.
 
@@ -53,7 +55,7 @@ Rows fade in and out and the rows below slide into place with Motion: `AnimatePr
 
 ## Agents
 
-The list is one component in the agent bridge, named after its place. Its actions are `open` and, in the mailbox, `toggle`; both take a row's key or its subject, and the bridge refuses a subject two rows share. An agent's `open` always opens. Each row's controls carry the row's name ("Select Lunch", "Mark Lunch as unread", "Trash Lunch"), with the account added when the view mixes accounts. Trash, in a row and in the selection bar, carries `data-agent-confirm`; Delete forever asks through `useConfirm`, whose confirming button carries it instead.
+The list is one component in the agent bridge, named after its place. Its actions are `open` and, in the mailbox, `toggle`; both take a row's key or its subject, and the bridge refuses a subject two rows share. An agent's `open` always opens. Each row's controls carry the row's name ("Select Lunch", "Mark Lunch as unread", "Star Lunch", "Archive Lunch", "Trash Lunch"), with the account added when the view mixes accounts. Trash, in a row and in the selection bar, and Report spam, in the selection bar and a conversation's titlebar, carry `data-agent-confirm`; Delete forever asks through `useConfirm`, whose confirming button carries it instead.
 
 ## Tests
 

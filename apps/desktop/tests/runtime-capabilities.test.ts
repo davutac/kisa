@@ -179,6 +179,8 @@ describe(getRuntimeCapabilities, () => {
     loadThreadDraft: () => Promise.resolve({ data: null, ok: true as const }),
     markThreadNotSpam: () =>
       Promise.resolve({ data: undefined, ok: true as const }),
+    reportThreadSpam: () =>
+      Promise.resolve({ data: undefined, ok: true as const }),
     onAccountSettingsChanged: () => () => {},
     onAccountsChanged: () => () => {},
     onAppClosing: () => () => {},
@@ -336,6 +338,7 @@ describe(getRuntimeCapabilities, () => {
         loadThread: desktopBridge.loadThread,
         loadThreadDraft: desktopBridge.loadThreadDraft,
         markThreadNotSpam: desktopBridge.markThreadNotSpam,
+        reportThreadSpam: desktopBridge.reportThreadSpam,
         onDraftChanged: desktopBridge.onMailDraftChanged,
         onIndexProgressChanged: desktopBridge.onMailIndexProgressChanged,
         onLabelCatalogChanged: desktopBridge.onMailLabelCatalogChanged,

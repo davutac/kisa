@@ -158,10 +158,11 @@ A change is applied to the server first, then to the cache, so the cache never s
 | --- | --- | --- |
 | Read, unread | `\Seen` on every copy | Same |
 | Star | `\Flagged` on every copy | Same |
-| Archive, move to Inbox | Remove or add `\Inbox` in `X-GM-LABELS` on the All Mail copy | Move Inbox copies to the Archive folder, or back |
+| Archive, move to Inbox | Remove or add `\Inbox` in `X-GM-LABELS` on the All Mail copy | Move Inbox copies to the Archive folder, or back. A conversation with no copy in Archive (one filed only in a folder or Sent) is refused rather than reported moved |
 | User label | Add or remove the label in `X-GM-LABELS` on the All Mail copy | Copy into the folder. On removal, delete the folder's copy if a live copy remains elsewhere; otherwise move it to Archive |
 | Important | `\Important` on the All Mail copy | Not available |
-| Trash, spam | Move every copy to `\Trash` or `\Junk` | Same |
+| Trash | Move every copy to `\Trash` | Same |
+| Spam | Move every copy but the user's own to `\Junk`: copies labelled Sent or Draft stay, so a reply never leaves Sent and Not spam never files it in the Inbox. A conversation of only the user's own mail is refused | Same |
 | Not spam, restore | Move copies out of `\Junk` or `\Trash` into `INBOX`, which Gmail files in All Mail | Same, into `INBOX` |
 | Delete forever | Expunge the copies in `\Junk` or `\Trash`; copies elsewhere stay | Same |
 
@@ -214,7 +215,7 @@ Every thread-list update also closes notifications for conversations that are no
 
 ## Search
 
-Search reads only the local cache: FTS over subject, sender address and body text, plus `from:`, `to:`, `subject:`, `is:`, `label:` and `has:attachment` filters answered from cached columns. Mail whose body has not downloaded is found by its subject, sender and other metadata only. Planned: for mail without a cached body, search the server too (`X-GM-RAW` on Gmail, `SEARCH TEXT` elsewhere) and fetch matching messages that are not cached at foreground priority.
+Search reads only the local cache: FTS over subject, sender address and body text, plus `from:`, `to:`, `subject:`, `is:`, `label:` and `has:attachment` filters answered from cached columns. `is:starred` and `label:starred` match the `STARRED` system id, never a user label of that name, and `label:starred`, the Starred place's scope, leaves Spam and Trash out as the place does. The search bar takes `is:starred` as typed; `is:unread`, `is:read` and `label:` stay free text there, since the Unread toggle and the places own them, and reach main only as the view's scope. Mail whose body has not downloaded is found by its subject, sender and other metadata only. Planned: for mail without a cached body, search the server too (`X-GM-RAW` on Gmail, `SEARCH TEXT` elsewhere) and fetch matching messages that are not cached at foreground priority.
 
 ## Security
 

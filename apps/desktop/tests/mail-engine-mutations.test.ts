@@ -7,7 +7,7 @@ import { bodyStep, skeletonStep, syncAccount } from "@repo/mail/sync";
 import type { SyncScope } from "@repo/mail/sync";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { FakeImapServer } from "./fixtures/fake-imap-server";
+import { FakeImapServer, envelope } from "./fixtures/fake-imap-server";
 import {
   ALL_MAIL,
   GMAIL_MAILBOXES,
@@ -147,6 +147,27 @@ describe("thread actions with the Gmail dialect", () => {
     expect(locationPaths("630")).toStrictEqual([ALL_MAIL]);
   });
 
+  it("reports spam without moving the user's own reply", async () => {
+    insertAccount("gmail");
+    const server = new FakeImapServer(GMAIL_MAILBOXES, undefined, ALL_MAIL);
+    server.deliver(ALL_MAIL, gmailMessage("800", "800"));
+    server.deliver(
+      ALL_MAIL,
+      gmailMessage("801", "800", { gmailLabels: ["\\Sent"] })
+    );
+    const scope = scopeFor(server, gmailDialect);
+    await syncFully(scope);
+
+    await act(scope, "800", { kind: "moveToSpam" });
+    expect(locationPaths("800")).toStrictEqual([SPAM]);
+    expect(locationPaths("801")).toStrictEqual([ALL_MAIL]);
+    expect(threadRow("800")).toMatchObject({ is_in_spam: 1 });
+
+    await act(scope, "800", { kind: "moveToInbox" });
+    expect(locationPaths("800")).toStrictEqual([ALL_MAIL]);
+    expect(threadRow("800")).toMatchObject({ is_in_inbox: 1, is_in_spam: 0 });
+  });
+
   it("deletes forever only what is in Spam or Trash", async () => {
     const { scope, server } = await syncGmail("640");
 
@@ -281,6 +302,76 @@ describe("thread actions with the generic dialect", () => {
 
     expect(server.calls).not.toContain("expunge Receipts");
     expect(locationPaths(messageId)).toStrictEqual(["Archive", "Archive"]);
+  });
+
+  it("moves only Archive's copies back to the Inbox", async () => {
+    const { scope, server } = await syncIcloud([{ id: "g", path: "Receipts" }]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("g");
+
+    await expect(
+      act(scope, threadId, label(SystemLabel.inbox, true))
+    ).rejects.toMatchObject({ _tag: "MailProtocolError" });
+    expect(
+      server.calls.filter((call) => call.startsWith("move"))
+    ).toStrictEqual([]);
+    expect(locationPaths(messageId)).toStrictEqual(["Receipts"]);
+  });
+
+  it("reports spam but leaves the user's reply in Sent, then brings it back", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+    server.deliver("INBOX", genericMessage("h"));
+    server.deliver(
+      "Sent Messages",
+      genericMessage("i", {
+        envelope: envelope({
+          inReplyTo: "<h@example.com>",
+          messageId: "<i@example.com>",
+          subject: "i",
+        }),
+        headers: { references: "<h@example.com>" },
+      })
+    );
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+    const received = genericIds("h");
+    const reply = genericIds("i");
+    const copies = () => ({
+      received: locationPaths(received.message_id),
+      reply: locationPaths(reply.message_id),
+    });
+    expect(reply.thread_id).toBe(received.thread_id);
+
+    await act(scope, received.thread_id, { kind: "moveToSpam" });
+    expect(copies()).toStrictEqual({
+      received: ["Junk"],
+      reply: ["Sent Messages"],
+    });
+    expect(threadRow(received.thread_id)).toMatchObject({
+      is_in_inbox: 0,
+      is_in_spam: 1,
+    });
+
+    await act(scope, received.thread_id, { kind: "moveToInbox" });
+    expect(copies()).toStrictEqual({
+      received: ["INBOX"],
+      reply: ["Sent Messages"],
+    });
+  });
+
+  it("refuses to report a conversation of only the user's own mail", async () => {
+    const { scope, server } = await syncIcloud([
+      { id: "j", path: "Sent Messages" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("j");
+
+    await expect(
+      act(scope, threadId, { kind: "moveToSpam" })
+    ).rejects.toMatchObject({ _tag: "MailProtocolError" });
+    expect(
+      server.calls.filter((call) => call.startsWith("move"))
+    ).toStrictEqual([]);
+    expect(locationPaths(messageId)).toStrictEqual(["Sent Messages"]);
   });
 
   it("trashes every copy into Deleted Messages", async () => {

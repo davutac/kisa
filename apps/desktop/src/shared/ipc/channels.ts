@@ -74,6 +74,8 @@ export const MAIL_GET_SPAM_STATUS_CHANNEL = "desktop:mail:get-spam-status";
 export const MAIL_GET_UNREAD_LABELS_CHANNEL = "desktop:mail:get-unread-labels";
 export const MAIL_MARK_THREAD_NOT_SPAM_CHANNEL =
   "desktop:mail:mark-thread-not-spam";
+export const MAIL_REPORT_THREAD_SPAM_CHANNEL =
+  "desktop:mail:report-thread-spam";
 export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
 export const MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL =
   "desktop:mail:authorize-outgoing-attachments";

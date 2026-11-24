@@ -161,7 +161,10 @@ const message = (
   to,
 });
 
-const threadIn = (labels: readonly string[]): MailThread => ({
+const threadIn = (
+  labels: readonly string[],
+  messageLabels: readonly (readonly string[])[] = [[], ["SENT"], []]
+): MailThread => ({
   accountId: ME,
   awaitsServer: false,
   labels,
@@ -169,19 +172,33 @@ const threadIn = (labels: readonly string[]): MailThread => ({
     message("m1", "Ana Lopez <ana@example.com>", ME, Date.UTC(2026, 10, 15)),
     message("m2", `Me <${ME}>`, "ana@example.com", Date.UTC(2026, 10, 16)),
     message("m3", "Ana Lopez <ana@example.com>", ME, Date.UTC(2026, 10, 17)),
-  ],
+  ].map((entry, index) => ({
+    ...entry,
+    labelIds: messageLabels[index] ?? [],
+  })),
   subject: "Quarterly report",
   threadId: "t1",
 });
 
+const onClose = vi.fn<() => void>();
 const actions = {
-  onClose: vi.fn<() => void>(),
-  onDeleteForever: vi.fn<ThreadActions["deleteForever"]>(),
-  onNotSpam: vi.fn<ThreadActions["notSpam"]>(),
-  onSetLabel: vi.fn<ThreadActions["setLabel"]>(),
-  onToggleRead: vi.fn<ThreadActions["toggleRead"]>(),
-  onTrash: vi.fn<ThreadActions["trash"]>(),
-};
+  archive: vi.fn<ThreadActions["archive"]>(),
+  bulkArchive: vi.fn<ThreadActions["bulkArchive"]>(),
+  bulkDeleteForever: vi.fn<ThreadActions["bulkDeleteForever"]>(),
+  bulkReportSpam: vi.fn<ThreadActions["bulkReportSpam"]>(),
+  bulkSetLabel: vi.fn<ThreadActions["bulkSetLabel"]>(),
+  bulkSetReadState: vi.fn<ThreadActions["bulkSetReadState"]>(),
+  bulkSetStarred: vi.fn<ThreadActions["bulkSetStarred"]>(),
+  bulkTrash: vi.fn<ThreadActions["bulkTrash"]>(),
+  deleteForever: vi.fn<ThreadActions["deleteForever"]>(),
+  moveToInbox: vi.fn<ThreadActions["moveToInbox"]>(),
+  notSpam: vi.fn<ThreadActions["notSpam"]>(),
+  reportSpam: vi.fn<ThreadActions["reportSpam"]>(),
+  setLabel: vi.fn<ThreadActions["setLabel"]>(),
+  toggleRead: vi.fn<ThreadActions["toggleRead"]>(),
+  toggleStar: vi.fn<ThreadActions["toggleStar"]>(),
+  trash: vi.fn<ThreadActions["trash"]>(),
+} satisfies ThreadActions;
 
 // The route that opens a conversation registers its hotkey layer.
 const ThreadLayer = () => {
@@ -191,9 +208,15 @@ const ThreadLayer = () => {
 
 const renderThread = (
   labels: readonly string[] = ["INBOX", "Travel"],
-  { withThreadLayer = false } = {}
+  {
+    messageLabels,
+    withThreadLayer = false,
+  }: {
+    readonly messageLabels?: readonly (readonly string[])[];
+    readonly withThreadLayer?: boolean;
+  } = {}
 ) => {
-  fakes.thread = threadIn(labels);
+  fakes.thread = threadIn(labels, messageLabels);
   render(
     <AccountsProvider
       accounts={[{ email: ME, provider: "gmail" }]}
@@ -204,7 +227,12 @@ const renderThread = (
           <AppHotkeysProvider>
             {withThreadLayer ? <ThreadLayer /> : null}
             <ConfirmDialogProvider>
-              <MailThreadView accountId={ME} threadId="t1" {...actions} />
+              <MailThreadView
+                accountId={ME}
+                actions={actions}
+                onClose={onClose}
+                threadId="t1"
+              />
             </ConfirmDialogProvider>
           </AppHotkeysProvider>
         </AiProviderStateProvider>
@@ -292,7 +320,10 @@ describe("the open conversation, for an agent", () => {
     expect(labels).toStrictEqual(
       expect.arrayContaining([
         "Back to inbox",
+        "Archive",
+        "Star",
         "Mark as unread",
+        "Report spam",
         "Move to trash",
         "Manage labels",
         "Categorize with AI",
@@ -318,12 +349,12 @@ describe("the open conversation, for an agent", () => {
           name: firstFromAna.replace("Expand", "Collapse"),
         })
         .getAttribute("aria-expanded"),
-      labels: actions.onSetLabel.mock.calls.map(([, change]) => [
+      labels: actions.setLabel.mock.calls.map(([, change]) => [
         change.labelName,
         change.applied,
       ]),
       ok: result.ok,
-      read: actions.onToggleRead.mock.calls,
+      read: actions.toggleRead.mock.calls,
     }).toStrictEqual({
       expanded: "true",
       labels: [
@@ -391,18 +422,113 @@ describe("the open conversation, for an agent", () => {
     const refused = await agent.act(trash);
     expect({
       ok: refused.ok,
-      trashed: actions.onTrash.mock.calls.length,
+      trashed: actions.trash.mock.calls.length,
     }).toStrictEqual({ ok: false, trashed: 0 });
 
     approve = true;
     const allowed = await agent.act(trash);
     expect({
       ok: allowed.ok,
-      trashed: actions.onTrash.mock.calls.map(([thread]) => thread),
+      trashed: actions.trash.mock.calls.map(([thread]) => thread),
     }).toStrictEqual({
       ok: true,
       trashed: [{ accountId: ME, threadId: "t1" }],
     });
+  });
+
+  it("archives and stars from the header, and leaves as it archives", async () => {
+    renderThread();
+    await act(settle);
+
+    const result = await agent.act({
+      steps: [
+        { action: "setPressed", args: [true], ref: "Star" },
+        { action: "press", ref: "Archive" },
+      ],
+    });
+    expect({
+      archived: actions.archive.mock.calls.map(([thread, leave]) => [
+        thread,
+        leave === onClose,
+      ]),
+      ok: result.ok,
+      starred: actions.toggleStar.mock.calls.map(([thread]) => thread),
+    }).toStrictEqual({
+      archived: [[{ accountId: ME, threadId: "t1" }, true]],
+      ok: true,
+      starred: [{ accountId: ME, isStarred: false, threadId: "t1" }],
+    });
+  });
+
+  it("reports spam only once a person agrees", async () => {
+    renderThread();
+    await act(settle);
+    expect(
+      screen.getByRole("button", { name: "Report spam" }).dataset.agentConfirm
+    ).toBe("Moves “Quarterly report” to Spam");
+
+    const report = { steps: [{ action: "press", ref: "Report spam" }] };
+    const refused = await agent.act(report);
+    approve = true;
+    const allowed = await agent.act(report);
+
+    expect({
+      allowed: allowed.ok,
+      refused: refused.ok,
+      reported: actions.reportSpam.mock.calls.map(([thread, leave]) => [
+        thread,
+        leave === onClose,
+      ]),
+    }).toStrictEqual({
+      allowed: true,
+      refused: false,
+      reported: [[{ accountId: ME, threadId: "t1" }, true]],
+    });
+  });
+
+  it("offers Move to Inbox, on E too, once a received message left the Inbox", async () => {
+    const user = userEvent.setup();
+    renderThread(["Travel", "SENT"], { withThreadLayer: true });
+    await act(settle);
+
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+    await user.keyboard("e");
+    await agent.act({ steps: [{ action: "press", ref: "Move to Inbox" }] });
+
+    expect(actions.moveToInbox.mock.calls).toStrictEqual([
+      [{ accountId: ME, threadId: "t1" }],
+      [{ accountId: ME, threadId: "t1" }],
+    ]);
+  });
+
+  it("offers neither Move to Inbox nor Report spam on the user's own mail", async () => {
+    renderThread(["SENT"], { messageLabels: [["SENT"], ["SENT"], ["SENT"]] });
+    await act(settle);
+
+    const labels = new Set(onPage().map((entry) => entry.label));
+    expect({
+      archive: labels.has("Archive"),
+      moveToInbox: labels.has("Move to Inbox"),
+      reportSpam: labels.has("Report spam"),
+      star: labels.has("Star"),
+    }).toStrictEqual({
+      archive: false,
+      moveToInbox: false,
+      reportSpam: false,
+      star: true,
+    });
+  });
+
+  it("offers no Archive, Star or Report spam in Spam", async () => {
+    renderThread(["SPAM"]);
+    await act(settle);
+
+    const labels = new Set(onPage().map((entry) => entry.label));
+    expect(
+      ["Archive", "Move to Inbox", "Star", "Report spam"].filter((label) =>
+        labels.has(label)
+      )
+    ).toStrictEqual([]);
   });
 
   it("asks once before deleting a conversation in Trash forever", async () => {
@@ -426,7 +552,7 @@ describe("the open conversation, for an agent", () => {
     const refused = await agent.act(remove);
     await act(settle);
     expect({
-      deleted: actions.onDeleteForever.mock.calls.length,
+      deleted: actions.deleteForever.mock.calls.length,
       ok: refused.ok,
     }).toStrictEqual({ deleted: 0, ok: false });
 
@@ -436,7 +562,7 @@ describe("the open conversation, for an agent", () => {
     await act(settle);
     expect({
       asked: asked.length,
-      deleted: actions.onDeleteForever.mock.calls.map(([thread]) => thread),
+      deleted: actions.deleteForever.mock.calls.map(([thread]) => thread),
       ok: allowed.ok,
     }).toStrictEqual({
       asked: 1,

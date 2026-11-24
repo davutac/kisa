@@ -1,4 +1,4 @@
-import { SendIcon, ShieldAlertIcon, Trash2Icon } from "lucide-react";
+import { SendIcon, ShieldAlertIcon, StarIcon, Trash2Icon } from "lucide-react";
 
 import type { HotkeyCommandId } from "@/hotkeys";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
@@ -12,7 +12,8 @@ import type { SidebarRowProps } from "./sidebar-row";
 import SidebarScopeLabels from "./sidebar-scope-labels";
 
 interface ScopeMailbox {
-  readonly command: HotkeyCommandId;
+  /** Starred has no shortcut; All accounts finds it with `is:starred`. */
+  readonly command?: HotkeyCommandId;
   readonly icon: typeof SendIcon;
   readonly label: string;
   readonly mailbox: Mailbox;
@@ -20,6 +21,7 @@ interface ScopeMailbox {
 
 // No Inbox row: the account row itself opens the scope's Inbox.
 const SCOPE_MAILBOXES: readonly ScopeMailbox[] = [
+  { icon: StarIcon, label: "Starred", mailbox: "starred" },
   { command: "app.toggleSent", icon: SendIcon, label: "Sent", mailbox: "sent" },
   {
     command: "app.toggleSpam",
@@ -68,7 +70,7 @@ interface SidebarScopeMailboxesProps {
 }
 
 /**
- * Sent, Spam, Trash, and the labels of one account, under the account row
+ * Starred, Sent, Spam, Trash, and the labels of one account, under the account row
  * that opens its Inbox. The mailbox shortcuts act on the current scope, so
  * their hints sit only on that account's rows.
  */

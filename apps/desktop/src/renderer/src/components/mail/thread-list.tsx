@@ -5,6 +5,7 @@ import {
   SearchIcon,
   SendIcon,
   ShieldAlertIcon,
+  StarIcon,
   TagIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -30,7 +31,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
-import { getMailboxSystemLabel } from "@/mail/label";
+import { getMailboxSystemLabel, hasStarredLabel } from "@/mail/label";
 import { isLabelPlace } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";
 import {
@@ -38,6 +39,12 @@ import {
   shouldLoadNextPage,
 } from "@/mail/mailbox-threads-load";
 import type { ThreadListPlaceholder } from "@/mail/mailbox-threads-load";
+import {
+  canArchiveThread,
+  canReportThreadSpam,
+  canStarThread,
+  getBulkStarTarget,
+} from "@/mail/thread-action-availability";
 import {
   getBulkThreadDestructiveAction,
   getThreadDestructiveAction,
@@ -130,6 +137,9 @@ const getThreadListPresentation = (
   }
   if (mailbox === "trash") {
     return { emptyIcon: <Trash2Icon />, label: "Trash", mailboxLabel };
+  }
+  if (mailbox === "starred") {
+    return { emptyIcon: <StarIcon />, label: "Starred", mailboxLabel };
   }
   return { emptyIcon: <InboxIcon />, label: "Inbox", mailboxLabel };
 };
@@ -245,6 +255,106 @@ const conversationCount = (count: number): string =>
 
 const selectedMessage = (count: number): string =>
   count === 0 ? "Selection cleared" : `${conversationCount(count)} selected`;
+
+/**
+ * Archive, Star and Report spam for the focused conversation or the checked
+ * ones, through their shortcuts, and the same actions for the selection bar.
+ * A selection acts on the conversations each applies to: Archive on those in
+ * the Inbox, so Undo returns only what left it.
+ */
+const useMailboxThreadCommands = ({
+  actions,
+  bulkDestructiveAction,
+  checkedThreads,
+  selectedThread,
+}: {
+  readonly actions: ThreadActions;
+  readonly bulkDestructiveAction: ReturnType<
+    typeof getBulkThreadDestructiveAction
+  >;
+  readonly checkedThreads: readonly MailThreadSummary[];
+  readonly selectedThread: MailThreadSummary | undefined;
+}) => {
+  const toggleStar = useCallback(
+    (thread: MailThreadSummary): void => {
+      actions.toggleStar({
+        accountId: thread.accountId,
+        isStarred: hasStarredLabel(thread.labels),
+        threadId: thread.threadId,
+      });
+    },
+    [actions]
+  );
+  const isChecking = checkedThreads.length > 0;
+  const archivable = checkedThreads.filter((thread) =>
+    canArchiveThread(thread.labels)
+  );
+  const starrable = checkedThreads.filter((thread) =>
+    canStarThread(thread.labels)
+  );
+  const canReportChecked = bulkDestructiveAction === "trash";
+  /** Whether a command has a target: the selection, or the focused row. */
+  const hasTarget = (
+    hasCheckedTarget: boolean,
+    appliesTo: (labels: readonly string[]) => boolean
+  ): boolean =>
+    isChecking
+      ? hasCheckedTarget
+      : selectedThread !== undefined && appliesTo(selectedThread.labels);
+  const archiveChecked = (): void => {
+    actions.bulkArchive(archivable);
+  };
+  const toggleCheckedStar = (): void => {
+    actions.bulkSetStarred(starrable, getBulkStarTarget(starrable));
+  };
+  const reportCheckedSpam = (): void => {
+    actions.bulkReportSpam(checkedThreads);
+  };
+
+  useAppCommand(
+    "mailbox.archiveThread",
+    () => {
+      if (isChecking) {
+        archiveChecked();
+      } else if (selectedThread !== undefined) {
+        actions.archive(selectedThread);
+      }
+    },
+    { enabled: hasTarget(archivable.length > 0, canArchiveThread) }
+  );
+  useAppCommand(
+    "mailbox.toggleThreadStar",
+    () => {
+      if (isChecking) {
+        toggleCheckedStar();
+      } else if (selectedThread !== undefined) {
+        toggleStar(selectedThread);
+      }
+    },
+    { enabled: hasTarget(starrable.length > 0, canStarThread) }
+  );
+  useAppCommand(
+    "mailbox.reportSpam",
+    () => {
+      if (isChecking) {
+        reportCheckedSpam();
+      } else if (selectedThread !== undefined) {
+        actions.reportSpam(selectedThread);
+      }
+    },
+    { enabled: hasTarget(canReportChecked, canReportThreadSpam) }
+  );
+
+  return {
+    selectionBar: {
+      isStarred: !getBulkStarTarget(starrable),
+      onArchive: archivable.length === 0 ? undefined : archiveChecked,
+      onReportSpam: canReportChecked ? reportCheckedSpam : undefined,
+      onToggleStar: starrable.length === 0 ? undefined : toggleCheckedStar,
+    },
+    toggleStar,
+  };
+};
 
 const MailThreadList = ({
   actions,
@@ -386,6 +496,13 @@ const MailThreadList = ({
   const requestBulkTrash = useCallback((): void => {
     actions.bulkTrash(checkedThreads);
   }, [actions, checkedThreads]);
+  const { selectionBar, toggleStar: handleToggleStar } =
+    useMailboxThreadCommands({
+      actions,
+      bulkDestructiveAction,
+      checkedThreads,
+      selectedThread,
+    });
   useHotkeyLayer("mailbox", true);
   useAppCommand(
     "mailbox.nextThread",
@@ -563,9 +680,17 @@ const MailThreadList = ({
                     handleDeleteForever,
                     actions.trash
                   )}
+                  onArchive={
+                    canArchiveThread(thread.labels)
+                      ? actions.archive
+                      : undefined
+                  }
                   onNotSpam={mailbox === "spam" ? actions.notSpam : undefined}
                   onToggleRead={handleToggleRead}
                   onToggleSelection={handleToggleSelection}
+                  onToggleStar={
+                    canStarThread(thread.labels) ? handleToggleStar : undefined
+                  }
                   showAccount={showAccount}
                   top={row.start}
                   thread={thread}
@@ -579,6 +704,7 @@ const MailThreadList = ({
         {checkedThreads.length === 0 ? null : (
           <ThreadSelectionBar
             actions={actions}
+            {...selectionBar}
             key="thread-selection-bar"
             onClear={clearCheckedThreads}
             onDeleteForever={

@@ -1,6 +1,7 @@
 import {
   getSearchFilterLabel,
   SEARCH_FILTER_FIELDS,
+  TYPED_SEARCH_STATES,
 } from "@/mail/search-query";
 import type {
   FilterDraft,
@@ -33,11 +34,18 @@ interface CompletionInputs {
   typedWord: string;
 }
 
-const ATTACHMENT_FILTER_VALUES = ["attachment"] as const;
+/** The values a field takes from a short list rather than free text. */
+const FILTER_VALUES = {
+  has: ["attachment"],
+  is: TYPED_SEARCH_STATES,
+} as const satisfies Partial<
+  Record<(typeof SEARCH_FILTER_FIELDS)[number], readonly string[]>
+>;
 
 const FILTER_EXAMPLES = {
   from: "person@example.com",
   has: "attachment",
+  is: "starred",
   subject: "invoice",
   to: "person@example.com",
 } satisfies Record<(typeof SEARCH_FILTER_FIELDS)[number], string>;
@@ -123,17 +131,18 @@ export const getMailSearchCompletions = ({
   if (draft.field === "from" || draft.field === "to") {
     return toAddressItems(draft.field, senders, typedValue, onSelectFilter);
   }
-  if (draft.field === "has") {
-    const matches = ATTACHMENT_FILTER_VALUES.filter((value) =>
+  if (draft.field === "has" || draft.field === "is") {
+    const { field } = draft;
+    const matches = FILTER_VALUES[field].filter((value) =>
       value.startsWith(typedValue.toLowerCase())
     );
     return {
       empty: "No search options match that value.",
       heading: getSearchFilterLabel(draft.field),
       items: matches.map((value) => ({
-        field: draft.field,
-        label: `${draft.field}:${value}`,
-        onSelect: () => onSelectFilter({ field: draft.field, value }),
+        field,
+        label: `${field}:${value}`,
+        onSelect: () => onSelectFilter({ field, value }),
         value: `value:${value}`,
       })),
     };

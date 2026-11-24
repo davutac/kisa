@@ -75,6 +75,18 @@ function getEmptyState(
     };
   }
 
+  if (mailbox === "starred") {
+    return unreadOnly
+      ? {
+          message: "Every starred conversation has been read.",
+          title: "Nothing unread here",
+        }
+      : {
+          message: "Star a conversation to keep it here.",
+          title: "No starred conversations",
+        };
+  }
+
   return {
     message: unreadOnly
       ? "Nothing unread. The tiny red badge has been defeated."
@@ -92,6 +104,9 @@ function getThreadCloseLabel(mailbox: MailboxPlace): string | undefined {
   }
   if (mailbox === "sent") {
     return "Back to sent";
+  }
+  if (mailbox === "starred") {
+    return "Back to starred";
   }
   return mailbox === "trash" ? "Back to trash" : undefined;
 }
@@ -254,7 +269,6 @@ function HomeRoute() {
     threads,
   } = mailboxThreads;
   const threadActions = useThreadActions();
-  const { deleteForever, notSpam, setLabel, toggleRead, trash } = threadActions;
   const indexProgress = useMailIndexProgress();
   const emptyState = getEmptyState(mailbox, showUnread);
   const indexingMessage =
@@ -334,15 +348,11 @@ function HomeRoute() {
         <div className="bg-background absolute inset-0 z-10 overflow-x-hidden overflow-y-auto">
           <MailThreadView
             accountId={openThread.accountId}
+            actions={threadActions}
             closeLabel={getThreadCloseLabel(mailbox)}
             key={`${openThread.accountId}:${openThread.threadId}`}
             onClose={closeThread}
-            onDeleteForever={deleteForever}
             onPopOut={windowApi === undefined ? undefined : popOutThread}
-            onNotSpam={notSpam}
-            onSetLabel={setLabel}
-            onToggleRead={toggleRead}
-            onTrash={trash}
             threadId={openThread.threadId}
             titlebar={OpenThreadTitlebar}
           />

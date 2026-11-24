@@ -21,13 +21,25 @@ describe(getMailSearchCompletions, () => {
   it("keeps filter options visible for ordinary free text", () => {
     expect(
       getCompletions({ typedWord: "invoice" }).items.map(({ value }) => value)
-    ).toStrictEqual(["field:from", "field:to", "field:subject", "field:has"]);
+    ).toStrictEqual([
+      "field:from",
+      "field:to",
+      "field:subject",
+      "field:has",
+      "field:is",
+    ]);
   });
 
   it("does not offer label as a search operator", () => {
     expect(
       getCompletions({ typedWord: "la" }).items.map(({ value }) => value)
-    ).toStrictEqual(["field:from", "field:to", "field:subject", "field:has"]);
+    ).toStrictEqual([
+      "field:from",
+      "field:to",
+      "field:subject",
+      "field:has",
+      "field:is",
+    ]);
   });
 
   it("tags each option with the filter it adds, which picks its icon", () => {
@@ -55,9 +67,18 @@ describe(getMailSearchCompletions, () => {
       asTyped: ["to"],
       attachment: ["has"],
       draft: ["subject"],
-      empty: ["from", "to", "subject", "has"],
+      empty: ["from", "to", "subject", "has", "is"],
       sender: ["from", "from"],
     });
+  });
+
+  it("offers only a star for is:, since read state has its own toggle", () => {
+    expect(
+      getCompletions({
+        draft: { field: "is", value: "" },
+        typedWord: "is:",
+      }).items.map(({ label }) => label)
+    ).toStrictEqual(["is:starred"]);
   });
 
   it("keeps an empty option state for an unmatched operator value", () => {

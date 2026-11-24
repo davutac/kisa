@@ -51,6 +51,7 @@ import {
   openAttachmentPreview,
   markThreadNotSpam,
   prepareOutgoingAttachments,
+  reportThreadSpam,
   searchThreads,
   saveAttachment,
   saveAttachmentPreview,
@@ -159,6 +160,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(trash);
   yield* ipc.handle(deleteForever);
   yield* ipc.handle(markThreadNotSpam);
+  yield* ipc.handle(reportThreadSpam);
   yield* ipc.handle(listImageSenders);
   yield* ipc.handle(trustImages);
   yield* ipc.handle(listScheduledMailPage);

@@ -1,15 +1,20 @@
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   ArrowLeftIcon,
   InboxIcon,
   MailIcon,
   MailOpenIcon,
+  ShieldAlertIcon,
   SquareArrowOutUpRightIcon,
+  StarIcon,
   Trash2Icon,
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
 import MailDate from "@/components/mail/mail-date";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -75,12 +80,19 @@ interface MailThreadActionsProps {
   /** Sizes the date to its surroundings: the titlebar or the header card. */
   dateClassName?: string;
   isSpam: boolean;
+  isStarred: boolean;
   isUnread: boolean;
   latestAt?: number;
+  /** In the Inbox; Move to Inbox takes its place once the conversation left. */
+  onArchive?: () => void;
   onDeleteForever?: () => void;
+  onMoveToInbox?: () => void;
   onNotSpam: () => void;
   onPopOut?: () => void;
+  onReportSpam?: () => void;
   onToggleRead: () => void;
+  /** Absent in Spam and Trash. */
+  onToggleStar?: () => void;
   onTrash?: () => void;
   subject: string;
 }
@@ -94,12 +106,17 @@ interface MailThreadActionsProps {
 export const MailThreadActions = ({
   dateClassName,
   isSpam,
+  isStarred,
   isUnread,
   latestAt,
+  onArchive,
   onDeleteForever,
+  onMoveToInbox,
   onNotSpam,
   onPopOut,
+  onReportSpam,
   onToggleRead,
+  onToggleStar,
   onTrash,
   subject,
 }: MailThreadActionsProps) => {
@@ -110,10 +127,12 @@ export const MailThreadActions = ({
     onDeleteForever === undefined ? trashDisplay.label : "Delete forever";
   const destructiveAction = onDeleteForever ?? onTrash;
   const trimmedSubject = subject.trim();
+  const conversation =
+    trimmedSubject === "" ? "this conversation" : `“${trimmedSubject}”`;
   // Delete forever asks through useConfirm, whose confirming button is marked.
   const trashConfirmation =
     onDeleteForever === undefined
-      ? `Moves ${trimmedSubject === "" ? "this conversation" : `“${trimmedSubject}”`} to Trash`
+      ? `Moves ${conversation} to Trash`
       : undefined;
 
   return (
@@ -133,6 +152,47 @@ export const MailThreadActions = ({
             <InboxIcon />
           </MailThreadHeaderAction>
         ) : null}
+        {onArchive === undefined ? null : (
+          <MailThreadHeaderAction
+            command="thread.archiveThread"
+            label="Archive"
+            onClick={onArchive}
+          >
+            <ArchiveIcon />
+          </MailThreadHeaderAction>
+        )}
+        {onMoveToInbox === undefined ? null : (
+          <MailThreadHeaderAction
+            command="thread.archiveThread"
+            label="Move to Inbox"
+            onClick={onMoveToInbox}
+          >
+            <ArchiveRestoreIcon />
+          </MailThreadHeaderAction>
+        )}
+        {onToggleStar === undefined ? null : (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Toggle
+                  aria-keyshortcuts={getHotkeyAriaLabel(
+                    "thread.toggleThreadStar"
+                  )}
+                  aria-label="Star"
+                  onPressedChange={onToggleStar}
+                  pressed={isStarred}
+                  pressedVariant="ghost"
+                >
+                  <StarIcon className="group-data-pressed/button:fill-current" />
+                </Toggle>
+              }
+            />
+            <TooltipContent className="flex items-center gap-2" side="bottom">
+              {isStarred ? "Remove star" : "Star"}
+              <HotkeyHint command="thread.toggleThreadStar" />
+            </TooltipContent>
+          </Tooltip>
+        )}
         <MailThreadHeaderAction
           command="thread.toggleThreadRead"
           label={toggleReadLabel}
@@ -140,6 +200,16 @@ export const MailThreadActions = ({
         >
           {isUnread ? <MailOpenIcon /> : <MailIcon />}
         </MailThreadHeaderAction>
+        {onReportSpam === undefined ? null : (
+          <MailThreadHeaderAction
+            command="thread.reportSpam"
+            confirm={`Moves ${conversation} to Spam`}
+            label="Report spam"
+            onClick={onReportSpam}
+          >
+            <ShieldAlertIcon />
+          </MailThreadHeaderAction>
+        )}
         {destructiveAction === undefined ? null : (
           <MailThreadHeaderAction
             className={quietDestructiveClassName}
@@ -171,10 +241,14 @@ export const MailThreadActions = ({
 };
 
 interface MailThreadCommandsProps {
+  onArchive?: () => void;
   onClose: () => void;
   onDeleteForever?: () => void;
+  onMoveToInbox?: () => void;
   onPopOut?: () => void;
+  onReportSpam?: () => void;
   onToggleRead: () => void;
+  onToggleStar?: () => void;
   onTrash?: () => void;
 }
 
@@ -183,15 +257,31 @@ interface MailThreadCommandsProps {
  * rather than by its buttons, so they hold however the buttons are placed.
  */
 export const MailThreadCommands = ({
+  onArchive,
   onClose,
   onDeleteForever,
+  onMoveToInbox,
   onPopOut,
+  onReportSpam,
   onToggleRead,
+  onToggleStar,
   onTrash,
 }: MailThreadCommandsProps) => {
   const destructiveAction = onDeleteForever ?? onTrash;
+  // E archives a conversation in the Inbox and brings an archived one back,
+  // as its button does.
+  const inboxAction = onArchive ?? onMoveToInbox;
 
   useAppCommand("thread.close", onClose);
+  useAppCommand("thread.archiveThread", () => inboxAction?.(), {
+    enabled: inboxAction !== undefined,
+  });
+  useAppCommand("thread.toggleThreadStar", () => onToggleStar?.(), {
+    enabled: onToggleStar !== undefined,
+  });
+  useAppCommand("thread.reportSpam", () => onReportSpam?.(), {
+    enabled: onReportSpam !== undefined,
+  });
   useAppCommand("thread.toggleThreadRead", onToggleRead);
   useAppCommand("thread.trashThread", () => destructiveAction?.(), {
     enabled: destructiveAction !== undefined,

@@ -131,6 +131,10 @@ export const deleteThreadForever = (request: MailThreadRequest) =>
 export const markThreadNotSpam = (request: MailThreadRequest) =>
   actOnThread(request, { kind: "moveToInbox" });
 
+/** Into Spam: every copy but the user's own sent mail and drafts. */
+export const reportThreadSpam = (request: MailThreadRequest) =>
+  actOnThread(request, { kind: "moveToSpam" });
+
 const toThreadAction = (
   operation: MailBulkThreadMutationOperation
 ): ThreadAction => {

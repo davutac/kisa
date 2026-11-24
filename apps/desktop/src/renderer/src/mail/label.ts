@@ -100,6 +100,9 @@ export const hasSentLabel = (labels: readonly string[]): boolean =>
 export const hasSpamLabel = (labels: readonly string[]): boolean =>
   labels.includes("SPAM");
 
+export const hasStarredLabel = (labels: readonly string[]): boolean =>
+  labels.includes("STARRED");
+
 export const hasTrashLabel = (labels: readonly string[]): boolean =>
   labels.includes("TRASH");
 

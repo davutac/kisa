@@ -11,6 +11,7 @@ import {
   removeFilterDraft,
   removeSearchFilterAt,
   SEARCH_FILTER_FIELDS,
+  toLiveMailSearchQuery,
 } from "../src/renderer/src/mail/search-query";
 
 const EMPTY_SEARCH_QUERY = { filters: [], text: "" } as const;
@@ -22,7 +23,29 @@ describe("search filter fields", () => {
       "to",
       "subject",
       "has",
+      "is",
     ]);
+    expect(extractSearchFilters("is:read ")).toStrictEqual({
+      draft: "is:read ",
+      filters: [],
+    });
+  });
+
+  it("searches a half-typed star live, but never read state", () => {
+    expect({
+      starred: toLiveMailSearchQuery({ filters: [], text: "is:starred" }),
+      unread: toLiveMailSearchQuery({ filters: [], text: "is:unread" }),
+    }).toStrictEqual({
+      starred: { filters: [{ field: "is", value: "starred" }], text: "" },
+      unread: { filters: [], text: "" },
+    });
+  });
+
+  it("takes a typed star, which no control owns", () => {
+    expect(extractSearchFilters("is:Starred invoice")).toStrictEqual({
+      draft: "invoice",
+      filters: [{ field: "is", value: "Starred" }],
+    });
   });
 });
 

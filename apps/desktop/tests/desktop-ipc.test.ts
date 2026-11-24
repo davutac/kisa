@@ -15,6 +15,7 @@ import {
   AI_CATEGORIZE_THREAD_CHANNEL,
   MAIL_CREATE_LABEL_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
+  MAIL_REPORT_THREAD_SPAM_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
   MAIL_UPDATE_LABEL_CHANNEL,
 } from "../src/shared/ipc/channels";
@@ -27,6 +28,7 @@ import {
   MailLabelUpdateRequest,
   MailThreadLabelRequest,
   MailThreadMutationReply,
+  MailThreadRequest,
 } from "../src/shared/ipc/mail";
 
 const createIpcMain = () => {
@@ -154,6 +156,42 @@ describe(DesktopIpc.DesktopIpc, () => {
         (yield* Effect.exit(method.handler({ ...request, labelId: "" })))._tag
       ).toBe("Failure");
     })
+  );
+
+  it.effect(
+    "validates the report spam boundary and passes its refusal on",
+    () =>
+      Effect.gen(function* validatesReportSpam() {
+        const requests: unknown[] = [];
+        const method = DesktopIpc.makeIpcMethod({
+          channel: MAIL_REPORT_THREAD_SPAM_CHANNEL,
+          handler: (request) =>
+            Effect.sync(() => {
+              requests.push(request);
+              return {
+                error: "Only your own messages are in this conversation",
+                ok: false as const,
+              };
+            }),
+          payload: MailThreadRequest,
+          result: MailThreadMutationReply,
+        });
+        const request = {
+          accountId: "person@example.com",
+          threadId: "thread-1",
+        };
+
+        expect(method.channel).toBe("desktop:mail:report-thread-spam");
+        expect(yield* method.handler(request)).toStrictEqual({
+          error: "Only your own messages are in this conversation",
+          ok: false,
+        });
+        expect(requests).toStrictEqual([request]);
+        expect(
+          (yield* Effect.exit(method.handler({ ...request, accountId: "" })))
+            ._tag
+        ).toBe("Failure");
+      })
   );
 
   it.effect("validates the manual categorization boundary", () =>

@@ -66,6 +66,7 @@ export interface MailApi {
   loadThread: DesktopBridge["loadThread"];
   loadThreadDraft: DesktopBridge["loadThreadDraft"];
   markThreadNotSpam: DesktopBridge["markThreadNotSpam"];
+  reportThreadSpam: DesktopBridge["reportThreadSpam"];
   onDraftChanged: DesktopBridge["onMailDraftChanged"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onLabelCatalogChanged: DesktopBridge["onMailLabelCatalogChanged"];
@@ -223,6 +224,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       loadThread: bridge.loadThread,
       loadThreadDraft: bridge.loadThreadDraft,
       markThreadNotSpam: bridge.markThreadNotSpam,
+      reportThreadSpam: bridge.reportThreadSpam,
       onDraftChanged: bridge.onMailDraftChanged,
       onIndexProgressChanged: bridge.onMailIndexProgressChanged,
       onLabelCatalogChanged: bridge.onMailLabelCatalogChanged,

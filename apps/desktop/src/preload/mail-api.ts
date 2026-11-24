@@ -22,6 +22,7 @@ import {
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
+  MAIL_REPORT_THREAD_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
   MAIL_REINDEX_CHANNEL,
@@ -72,6 +73,7 @@ export const mailApi: Pick<
   | "loadThread"
   | "loadThreadDraft"
   | "markThreadNotSpam"
+  | "reportThreadSpam"
   | "openAttachmentPreview"
   | "prepareOutgoingAttachments"
   | "reindexMail"
@@ -138,6 +140,8 @@ export const mailApi: Pick<
     ipcRenderer.invoke(MAIL_LOAD_THREAD_DRAFT_CHANNEL, request),
   markThreadNotSpam: (request) =>
     ipcRenderer.invoke(MAIL_MARK_THREAD_NOT_SPAM_CHANNEL, request),
+  reportThreadSpam: (request) =>
+    ipcRenderer.invoke(MAIL_REPORT_THREAD_SPAM_CHANNEL, request),
   onMailDraftChanged: (listener) =>
     subscribe(MAIL_DRAFT_CHANGED_CHANNEL, MailDraftChanged, listener),
   onMailIndexProgressChanged: (listener) =>

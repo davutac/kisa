@@ -34,9 +34,23 @@ export const SEARCH_FILTER_FIELDS = [
   "to",
   "subject",
   "has",
+  "is",
 ] as const satisfies readonly SearchFilterField[];
 
 const FILTER_FIELDS = new Set<string>(SEARCH_FILTER_FIELDS);
+
+/**
+ * The states `is:` takes when typed. Read state belongs to the Unread toggle
+ * and a label to its place, so `is:unread` and `label:` stay free text; no
+ * control owns a star, so `is:starred` finds starred mail in any scope.
+ */
+export const TYPED_SEARCH_STATES = ["starred"] as const;
+
+const TYPED_STATES = new Set<string>(TYPED_SEARCH_STATES);
+
+const isTypedFilter = (field: string, value: string): boolean =>
+  FILTER_FIELDS.has(field) &&
+  (field !== "is" || TYPED_STATES.has(value.toLowerCase()));
 
 interface RawToken {
   /** Index just past the token, so a caller can tell "typed" from "finished". */
@@ -88,7 +102,7 @@ const toFilter = (token: string): SearchFilter | undefined => {
 
   const field = token.slice(0, separatorIndex).toLowerCase();
   const value = token.slice(separatorIndex + 1).trim();
-  return FILTER_FIELDS.has(field) && value.length > 0
+  return isTypedFilter(field, value) && value.length > 0
     ? { field: field as SearchFilterField, value }
     : undefined;
 };
@@ -263,12 +277,18 @@ export const removeFilterDraft = (draft: string): string => {
   return rest.length === 0 ? "" : `${rest.join(" ")} `;
 };
 
+/** The operator being typed as a filter, once its value is one it takes. */
 export const toMailSearchDraftFilter = (
   draft: FilterDraft | undefined
-): SearchFilter | undefined =>
-  draft === undefined || draft.value.trim().length === 0
+): SearchFilter | undefined => {
+  const value = draft?.value.trim() ?? "";
+
+  return draft === undefined ||
+    value.length === 0 ||
+    !isTypedFilter(draft.field, value)
     ? undefined
-    : { field: draft.field, value: draft.value.trim() };
+    : { field: draft.field, value };
+};
 
 export const toLiveMailSearchQuery = (query: SearchQuery): SearchQuery => {
   const draft = parseFilterDraft(query.text);

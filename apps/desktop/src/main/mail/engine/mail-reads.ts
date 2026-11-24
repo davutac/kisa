@@ -90,7 +90,9 @@ export const toThreadSummary = (row: ThreadRow): MailThreadSummary => ({
  * carrying it outside Spam and Trash, as Gmail's label view does, so mail
  * archived under a label is still there. SQLite folds both sides of the id,
  * so the match ignores ASCII case, as the label catalog does, and a label
- * with other capitals still matches itself.
+ * with other capitals still matches itself. Starred is listed the same way,
+ * by its system id. The Inbox lists only the Inbox, so archiving a
+ * conversation always takes it off the list.
  */
 const mailboxCondition = (mailbox: MailboxPlace) => {
   if (isMailboxLabelPlace(mailbox)) {
@@ -116,8 +118,18 @@ const mailboxCondition = (mailbox: MailboxPlace) => {
       eq(mailThreads.isInTrash, false)
     );
   }
+  if (mailbox === "starred") {
+    return and(
+      eq(mailThreads.isInSpam, false),
+      eq(mailThreads.isInTrash, false),
+      sql`EXISTS (
+        SELECT 1 FROM json_each(${mailThreads.labelIds}) AS thread_label
+        WHERE thread_label.value = ${SystemLabel.starred}
+      )`
+    );
+  }
   return and(
-    or(eq(mailThreads.isInInbox, true), eq(mailThreads.isInSent, true)),
+    eq(mailThreads.isInInbox, true),
     eq(mailThreads.isInSpam, false),
     eq(mailThreads.isInTrash, false)
   );

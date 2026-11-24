@@ -13,6 +13,7 @@ const MAILBOX_NAMES = {
   inbox: "Inbox",
   sent: "Sent",
   spam: "Spam",
+  starred: "Starred",
   trash: "Trash",
 } as const satisfies Record<Mailbox, string>;
 

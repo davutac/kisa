@@ -139,21 +139,32 @@ interface MailboxHandle {
 
 // Actions that do what the app's optimistic actions do to the list: a
 // trashed conversation leaves it at once.
-const fakeActions = (list: { readonly current: MailboxHandle | null }) => ({
-  bulkDeleteForever: vi.fn<ThreadActions["bulkDeleteForever"]>(),
-  bulkSetLabel: vi.fn<ThreadActions["bulkSetLabel"]>(),
-  bulkSetReadState: vi.fn<ThreadActions["bulkSetReadState"]>(),
-  bulkTrash: vi.fn<ThreadActions["bulkTrash"]>((threads) => {
+const fakeActions = (list: { readonly current: MailboxHandle | null }) => {
+  const remove = (threads: readonly ThreadRef[]): void => {
     list.current?.remove(threads);
-  }),
-  deleteForever: vi.fn<ThreadActions["deleteForever"]>(),
-  notSpam: vi.fn<ThreadActions["notSpam"]>(),
-  setLabel: vi.fn<ThreadActions["setLabel"]>(),
-  toggleRead: vi.fn<ThreadActions["toggleRead"]>(),
-  trash: vi.fn<ThreadActions["trash"]>((target) => {
-    list.current?.remove([target]);
-  }),
-});
+  };
+
+  return {
+    archive: vi.fn<ThreadActions["archive"]>((target) => remove([target])),
+    bulkArchive: vi.fn<ThreadActions["bulkArchive"]>(remove),
+    bulkDeleteForever: vi.fn<ThreadActions["bulkDeleteForever"]>(),
+    bulkReportSpam: vi.fn<ThreadActions["bulkReportSpam"]>(remove),
+    bulkSetLabel: vi.fn<ThreadActions["bulkSetLabel"]>(),
+    bulkSetReadState: vi.fn<ThreadActions["bulkSetReadState"]>(),
+    bulkSetStarred: vi.fn<ThreadActions["bulkSetStarred"]>(),
+    bulkTrash: vi.fn<ThreadActions["bulkTrash"]>(remove),
+    deleteForever: vi.fn<ThreadActions["deleteForever"]>(),
+    moveToInbox: vi.fn<ThreadActions["moveToInbox"]>(),
+    notSpam: vi.fn<ThreadActions["notSpam"]>(),
+    reportSpam: vi.fn<ThreadActions["reportSpam"]>((target) =>
+      remove([target])
+    ),
+    setLabel: vi.fn<ThreadActions["setLabel"]>(),
+    toggleRead: vi.fn<ThreadActions["toggleRead"]>(),
+    toggleStar: vi.fn<ThreadActions["toggleStar"]>(),
+    trash: vi.fn<ThreadActions["trash"]>((target) => remove([target])),
+  } satisfies ThreadActions;
+};
 
 const Providers = ({
   animated = false,
@@ -528,6 +539,37 @@ describe("mail lists", () => {
       });
     });
 
+    it("archives, stars and reports the focused conversation", async () => {
+      const { actions } = await renderMailbox();
+      await press("j");
+      await press("l", { metaKey: true, shiftKey: true });
+      await press("e");
+      await press("j", { metaKey: true, shiftKey: true });
+
+      expect({
+        archived: actions.archive.mock.calls.map(([target]) => target),
+        reported: actions.reportSpam.mock.calls.map(([target]) => target),
+        starred: actions.toggleStar.mock.calls,
+      }).toStrictEqual({
+        archived: [INBOX[0]],
+        // Archiving moved focus on to the row that took its place.
+        reported: [INBOX[1]],
+        starred: [
+          [{ accountId: "ana@example.com", isStarred: false, threadId: "t1" }],
+        ],
+      });
+    });
+
+    it("leaves E to conversations in the Inbox", async () => {
+      const { actions } = await renderMailbox([
+        thread("ana@example.com", "sent", "Sent", { labels: ["SENT"] }),
+      ]);
+      await press("j");
+      await press("e");
+
+      expect(actions.archive).not.toHaveBeenCalled();
+    });
+
     it("moves mailbox focus to the row that takes the trashed one's place", async () => {
       const { actions } = await renderMailbox();
       await press("j", {}, 2);
@@ -575,11 +617,8 @@ describe("mail lists", () => {
       await press("j");
       const visited: (string | null)[] = [];
       for (const key of [
-        "ArrowRight",
-        "ArrowRight",
-        "ArrowRight",
-        "ArrowLeft",
-        "ArrowLeft",
+        ...Array.from({ length: 5 }, () => "ArrowRight" as const),
+        ...Array.from({ length: 4 }, () => "ArrowLeft" as const),
       ]) {
         // oxlint-disable-next-line eslint/no-await-in-loop -- Each press finishes before the next.
         await press(key);
@@ -587,8 +626,12 @@ describe("mail lists", () => {
       }
       expect(visited).toStrictEqual([
         "Mark Alpha as unread",
+        "Star Alpha",
+        "Archive Alpha",
         "Trash Alpha",
         "Trash Alpha",
+        "Archive Alpha",
+        "Star Alpha",
         "Mark Alpha as unread",
         expect.stringMatching(/^Alpha,/u),
       ]);
@@ -845,9 +888,12 @@ describe("mail lists", () => {
       await act(settle);
       const described = [
         ["Clear conversation selection", /^Clear selection/u],
+        ["Archive selected conversations", /^Archive/u],
         ["Mark selected conversations as read", /^Mark as read$/u],
         ["Mark selected conversations as unread", /^Mark as unread$/u],
+        ["Star selected conversations", /^Star/u],
         ["Add or remove labels", /^Labels/u],
+        ["Report selected conversations as spam", /^Report spam/u],
         ["Move selected conversations to trash", /^Move to trash$/u],
       ] as const;
       expect(
@@ -892,6 +938,75 @@ describe("mail lists", () => {
         count: 5,
         nativelyDisabled: 0,
       });
+    });
+
+    it("archives, stars and reports only the conversations each applies to", async () => {
+      const starred = thread("ana@example.com", "s1", "Starred", {
+        labels: ["INBOX", "STARRED"],
+      });
+      const sent = thread("ana@example.com", "s2", "Sent", {
+        labels: ["SENT"],
+      });
+      const { actions } = await renderMailbox([starred, sent]);
+      await press("j");
+      await press("x");
+      await press("j");
+      await press("x");
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Star selected conversations" })
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: "Archive selected conversations" })
+      );
+      await act(settle);
+      expect({
+        archived: actions.bulkArchive.mock.calls,
+        starred: actions.bulkSetStarred.mock.calls,
+      }).toStrictEqual({
+        // Only the one in the Inbox, so Undo returns only what left it.
+        archived: [[[starred]]],
+        starred: [[[starred, sent], true]],
+      });
+    });
+
+    it("removes the stars once every selected conversation has one", async () => {
+      const { actions } = await renderMailbox([
+        thread("ana@example.com", "s1", "One", {
+          labels: ["INBOX", "STARRED"],
+        }),
+        thread("ana@example.com", "s2", "Two", { labels: ["STARRED"] }),
+      ]);
+      await press("j");
+      await press("x");
+      await press("j");
+      await press("x");
+      await press("l", { metaKey: true, shiftKey: true });
+
+      expect(
+        actions.bulkSetStarred.mock.calls.map(([, starred]) => starred)
+      ).toStrictEqual([false]);
+      expect(
+        screen.getByRole("button", {
+          name: "Remove stars from selected conversations",
+        })
+      ).toBeTruthy();
+    });
+
+    it("offers neither Archive, Star nor Report spam for conversations in Trash", async () => {
+      await renderMailbox([
+        thread("ana@example.com", "trashed", "Old", { labels: ["TRASH"] }),
+      ]);
+      await press("j");
+      await press("x");
+
+      expect(
+        [
+          "Archive selected conversations",
+          "Star selected conversations",
+          "Report selected conversations as spam",
+        ].filter((name) => screen.queryByRole("button", { name }) !== null)
+      ).toStrictEqual([]);
     });
 
     it("opens its label menu with Mod+L", async () => {
@@ -1090,7 +1205,12 @@ describe("mail lists", () => {
           "Inbox",
           "Select Lunch in ana@example.com",
           "Mark Lunch in ana@example.com as unread",
+          "Star Lunch in ana@example.com",
+          "Archive Lunch in ana@example.com",
           "Trash Lunch in ana@example.com",
+          "Archive selected conversations",
+          "Star selected conversations",
+          "Report selected conversations as spam",
           "Move selected conversations to trash",
         ].filter((label) => labels.includes(label)).length,
         unnamed: onPage()
@@ -1098,7 +1218,7 @@ describe("mail lists", () => {
           .map((entry) => `${entry.component} ${entry.ref}`),
       }).toStrictEqual({
         duplicates: [],
-        listed: 5,
+        listed: 10,
         rowTrash: "Moves “Lunch” to Trash",
         unnamed: [],
       });

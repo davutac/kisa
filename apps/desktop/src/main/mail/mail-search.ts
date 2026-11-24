@@ -1,5 +1,6 @@
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { mailThreads } from "@repo/database/schemas";
+import { SystemLabel } from "@repo/mail/ids";
 import type { SQL } from "drizzle-orm";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Effect, Schema } from "effect";
@@ -102,6 +103,11 @@ const toMessageConditions = (
       : [];
   });
 
+const IS_STARRED = sql`EXISTS (
+  SELECT 1 FROM json_each(t.label_ids) AS thread_label
+  WHERE thread_label.value = ${SystemLabel.starred}
+)`;
+
 /** Filters the cached thread row already answers, so no message scan is needed. */
 const toThreadConditions = (
   filters: readonly MailSearchFilter[]
@@ -112,6 +118,10 @@ const toThreadConditions = (
 
       if (value === "unread") {
         return [sql`t.is_unread = 1`];
+      }
+
+      if (value === "starred") {
+        return [IS_STARRED];
       }
 
       return value === "read" ? [sql`t.is_unread = 0`] : [];
@@ -138,6 +148,11 @@ const toThreadConditions = (
           sql`t.is_in_spam = 0`,
           sql`t.is_in_trash = 0`,
         ];
+      }
+
+      // As the Starred place lists it, so a label named "starred" is not it.
+      if (value === "starred") {
+        return [IS_STARRED, sql`t.is_in_spam = 0`, sql`t.is_in_trash = 0`];
       }
 
       return [

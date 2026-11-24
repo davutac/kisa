@@ -425,7 +425,13 @@ export const MailThreadCursor = Schema.Struct({
 });
 export type MailThreadCursor = typeof MailThreadCursor.Type;
 
-export const Mailbox = Schema.Literals(["inbox", "sent", "spam", "trash"]);
+export const Mailbox = Schema.Literals([
+  "inbox",
+  "sent",
+  "spam",
+  "starred",
+  "trash",
+]);
 export type Mailbox = typeof Mailbox.Type;
 
 /**

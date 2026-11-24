@@ -81,6 +81,72 @@ describe(projectThreadSummaries, () => {
     ).toStrictEqual([{ ...trashed, labels: ["TRASH"] }]);
   });
 
+  it("takes an archived conversation off the Inbox, even one with a reply in Sent", () => {
+    const archived = makeThread("a@example.com", "1", {
+      labels: ["INBOX", "SENT"],
+    });
+    const projected = projectThreadSummaries(
+      [archived],
+      pendingOf([
+        [
+          "a@example.com:1",
+          [
+            {
+              applied: false,
+              kind: "setLabel",
+              labelId: "INBOX",
+              labelName: "INBOX",
+            },
+          ],
+        ],
+      ])
+    );
+
+    expect(
+      filterThreadsByScope(projected, ["a@example.com"], false, "inbox")
+    ).toStrictEqual([]);
+    expect(
+      filterThreadsByScope(projected, ["a@example.com"], false, "sent")
+    ).toStrictEqual([{ ...archived, labels: ["SENT"] }]);
+  });
+
+  it("lists a conversation as starred, and moves a reported one into Spam", () => {
+    const starred = makeThread("a@example.com", "1");
+    const reported = makeThread("a@example.com", "2");
+    const projected = projectThreadSummaries(
+      [starred, reported],
+      pendingOf([
+        [
+          "a@example.com:1",
+          [
+            {
+              applied: true,
+              kind: "setLabel",
+              labelId: "STARRED",
+              labelName: "STARRED",
+            },
+          ],
+        ],
+        ["a@example.com:2", [{ kind: "moveToSpam" }]],
+      ])
+    );
+
+    expect({
+      inbox: filterThreadsByScope(projected, ["a@example.com"], false),
+      spam: filterThreadsByScope(projected, ["a@example.com"], false, "spam"),
+      starred: filterThreadsByScope(
+        projected,
+        ["a@example.com"],
+        false,
+        "starred"
+      ),
+    }).toStrictEqual({
+      inbox: [{ ...starred, labels: ["INBOX", "STARRED"] }],
+      spam: [{ ...reported, labels: ["SPAM"] }],
+      starred: [{ ...starred, labels: ["INBOX", "STARRED"] }],
+    });
+  });
+
   it("brings a conversation out of Spam or Trash back to the Inbox", () => {
     const spam = makeThread("a@example.com", "1", { labels: ["SPAM"] });
     const [projected] = projectThreadSummaries(

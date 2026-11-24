@@ -228,6 +228,45 @@ describe("mail search", () => {
     }
   });
 
+  it("finds starred mail by its system id, and the Starred place's scope leaves Trash out", async () => {
+    const insert = connection.prepare(
+      `INSERT INTO mail_threads (
+        account_id, attachments, from_address, has_attachments, is_in_inbox,
+        is_in_sent, is_in_spam, is_in_trash, is_unread, label_ids, latest_at,
+        latest_message_id, message_count, snippet, subject, thread_id,
+        updated_at
+      ) VALUES ('one@example.com', '[]', 'star@example.com', 0, 0, 0, 0,
+        ?, 0, ?, ?, 'latest', 1, '', 'Starred', ?, 4)`
+    );
+    insert.run(0, '["STARRED"]', 7, "starred-thread");
+    insert.run(1, '["STARRED","TRASH"]', 6, "trashed-star");
+    insert.run(0, '["u:starred"]', 5, "folder-star");
+
+    try {
+      const search = async (field: "is" | "label") => {
+        const results = await runIndexedThreadSearchRemote(remoteDatabase, {
+          accountIds: ["one@example.com"],
+          filters: [{ field, value: "starred" }],
+        });
+        return results.threads.map(({ threadId }) => threadId);
+      };
+
+      expect({
+        is: await search("is"),
+        label: await search("label"),
+      }).toStrictEqual({
+        is: ["starred-thread", "trashed-star"],
+        label: ["starred-thread"],
+      });
+    } finally {
+      connection
+        .prepare(
+          "DELETE FROM mail_threads WHERE thread_id IN ('starred-thread', 'trashed-star', 'folder-star')"
+        )
+        .run();
+    }
+  });
+
   it("returns snippets as stored, without HTML escaping", async () => {
     const important = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],

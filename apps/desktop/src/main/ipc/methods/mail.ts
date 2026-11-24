@@ -22,6 +22,7 @@ import {
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
+  MAIL_REPORT_THREAD_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
@@ -109,6 +110,7 @@ import {
   markThreadNotSpam as recoverThreadFromSpam,
   openThread,
   refreshLabelCatalog,
+  reportThreadSpam as moveThreadToSpam,
   sendNewMessageFromRequest,
   sendThreadMessageFromRequest,
   setThreadLabel,
@@ -528,6 +530,14 @@ export const markThreadNotSpam = makeIpcMethod({
       recoverThreadFromSpam(request),
       "Could not mark email as not spam"
     ),
+  payload: MailThreadRequest,
+  result: MailThreadMutationReply,
+});
+
+export const reportThreadSpam = makeIpcMethod({
+  channel: MAIL_REPORT_THREAD_SPAM_CHANNEL,
+  handler: (request) =>
+    toIpcReply(moveThreadToSpam(request), "Could not report email as spam"),
   payload: MailThreadRequest,
   result: MailThreadMutationReply,
 });
