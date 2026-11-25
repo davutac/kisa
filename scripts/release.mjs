@@ -14,11 +14,15 @@ const APP_PACKAGE_PATH = path.join(
   "package.json"
 );
 
+// bun.lock records each workspace package's version, so a release changes it
+// along with the manifest.
+const LOCKFILE_PATH = path.join(import.meta.dirname, "..", "bun.lock");
+
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
 
 const USAGE =
-  "Usage: pnpm release [major|minor|patch|x.y.z] [--dry-run] [--no-push] [--skip-check]";
+  "Usage: bun run release [major|minor|patch|x.y.z] [--dry-run] [--no-push] [--skip-check]";
 
 const writeLine = (message = "") => {
   process.stdout.write(`${message}\n`);
@@ -189,11 +193,16 @@ if (isDryRun) {
   writeAppPackageVersion(nextVersion);
 }
 
+run("bun", ["install", "--lockfile-only"], {
+  dryRun: isDryRun,
+  inherit: true,
+});
+
 if (shouldCheck) {
-  run("pnpm", ["run", "check"], { dryRun: isDryRun, inherit: true });
+  run("bun", ["run", "check"], { dryRun: isDryRun, inherit: true });
 }
 
-run("git", ["add", APP_PACKAGE_PATH], { dryRun: isDryRun });
+run("git", ["add", APP_PACKAGE_PATH, LOCKFILE_PATH], { dryRun: isDryRun });
 
 run("git", ["commit", "-m", `Release ${tagName}`], {
   dryRun: isDryRun,

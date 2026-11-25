@@ -180,6 +180,6 @@ Hotkeys have no automated tests: Kisa's suite covers the mail engine, not the re
 Run the desktop checks with:
 
 ```sh
-pnpm --dir apps/desktop test
-pnpm --dir apps/desktop typecheck
+bun run --cwd apps/desktop test
+bun run --cwd apps/desktop typecheck
 ```

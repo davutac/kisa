@@ -5,11 +5,11 @@ name = "kisa"
 [setup]
 script = '''
 cp "$CODEX_SOURCE_TREE_PATH/apps/desktop/.env.local" "$CODEX_WORKTREE_PATH/apps/desktop/"
-pnpm i'''
+bun install'''
 
 [[actions]]
 name = "Run"
 icon = "run"
 command = '''
-pnpm i
-pnpm dev'''
+bun install
+bun run dev'''

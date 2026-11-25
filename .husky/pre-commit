@@ -1,5 +1,5 @@
 #!/bin/sh
-pnpm test
+bun run test
 # ultracite
 # Check if there are any staged files
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
@@ -10,7 +10,7 @@ fi
 
 # Run formatter, capturing the exit code so we can still re-stage and report
 FORMAT_EXIT_CODE=0
-pnpm exec ultracite fix --disable-nested-config || FORMAT_EXIT_CODE=$?
+bun x ultracite fix --disable-nested-config || FORMAT_EXIT_CODE=$?
 
 # Re-stage files that were already staged
 echo "$STAGED_FILES" | while IFS= read -r file; do

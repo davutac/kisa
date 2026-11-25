@@ -1,0 +1,44 @@
+# Bun is Kisa's package manager and script runner. The tools themselves
+# (Electron, electron-vite, Vitest, tsc) still run on Node.js.
+
+[install]
+# Each package sees only the dependencies it declares, so an undeclared import
+# fails here instead of in the packaged app.
+linker = "isolated"
+
+# Supply-chain guard: only resolve versions published at least a day ago.
+minimumReleaseAge = 86400
+
+# Packages Kisa upgrades on release day. Bun matches exact names only, with no
+# globs, so a new package in one of these scopes has to be added here.
+minimumReleaseAgeExcludes = [
+  "@effect/tsgo",
+  "@effect/tsgo-darwin-arm64",
+  "@effect/tsgo-darwin-x64",
+  "@effect/tsgo-linux-arm",
+  "@effect/tsgo-linux-arm64",
+  "@effect/tsgo-linux-x64",
+  "@effect/tsgo-win32-arm64",
+  "@effect/tsgo-win32-x64",
+  "@effect/vitest",
+  "@tanstack/history",
+  "@tanstack/react-router",
+  "@tanstack/react-store",
+  "@tanstack/router-core",
+  "@tanstack/router-generator",
+  "@tanstack/router-plugin",
+  "@tanstack/router-utils",
+  "@tanstack/store",
+  "@tanstack/virtual-file-routes",
+  "@turbo/darwin-64",
+  "@turbo/darwin-arm64",
+  "@turbo/linux-64",
+  "@turbo/linux-arm64",
+  "@turbo/windows-64",
+  "@turbo/windows-arm64",
+  "@ui-sdk/core",
+  "@ui-sdk/react",
+  "effect",
+  "turbo",
+  "ultracite",
+]

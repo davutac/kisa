@@ -40,7 +40,7 @@ These are strong defaults, not a substitute for the developer's explicit directi
 
 ## Sharp Edges
 
-1. **Do not damage live mail data.** `pnpm --dir apps/desktop dev` uses Electron's real `app.getPath("userData")`; the database is `<userData>/database/mail.dev.sqlite` (`mail.sqlite` when packaged); the older `app.sqlite` and `app.dev.sqlite` files from before the mail engine are left untouched. Never delete, reset, migrate by hand, or open that database read-write outside Kisa. Tests must use temporary databases. Do not connect or disconnect accounts, send mail, trash mail, or change read state in a real account unless the developer explicitly asks.
+1. **Do not damage live mail data.** `bun run --cwd apps/desktop dev` uses Electron's real `app.getPath("userData")`; the database is `<userData>/database/mail.dev.sqlite` (`mail.sqlite` when packaged); the older `app.sqlite` and `app.dev.sqlite` files from before the mail engine are left untouched. Never delete, reset, migrate by hand, or open that database read-write outside Kisa. Tests must use temporary databases. Do not connect or disconnect accounts, send mail, trash mail, or change read state in a real account unless the developer explicitly asks.
 2. **Do not expose secrets or message content.** Never print, commit, fixture, screenshot, or paste real app passwords, OAuth codes or tokens, encrypted credential blobs, private email bodies, or the contents of local app data. Redact boundary errors and logs.
 3. **Do not kill by pattern.** Never use `pkill -f` or a name/path match that can select unrelated Electron, Vite, Codex, or worker processes. Stop only a PID captured from a process you started, or a verified listener owning the exact port you started.
 4. **Do not mutate external infrastructure casually.** `deploy`, the release helper, tags, pushes, GitHub releases, and changes to a real mail account require an explicit request.
@@ -60,7 +60,7 @@ The common Kisa defect is a change that works in one view or account but leaves 
 
 ## Repository Shape
 
-Kisa is a pnpm/Turborepo workspace:
+Kisa is a Bun/Turborepo workspace:
 
 - `apps/desktop` - Electron main, preload, database utility process, and React renderer.
 - `packages/database` - Drizzle/SQLite schemas, clients, runtime, and migrations.
@@ -69,7 +69,7 @@ Kisa is a pnpm/Turborepo workspace:
 - `docs/research` - dated research and rationale, not necessarily current product behavior.
 - `repos` - vendored read-only reference repositories.
 
-Workspace packages are only `apps/*` and `packages/*`. Use `pnpm-lock.yaml` as the sole application dependency lockfile.
+Workspace packages are only `apps/*` and `packages/*`. Dependency versions live in the catalog of the root `package.json`; use `bun.lock` as the sole application dependency lockfile.
 
 ## Vendored Repositories
 
@@ -79,16 +79,18 @@ Workspace packages are only `apps/*` and `packages/*`. Use `pnpm-lock.yaml` as t
 
 ## Commands
 
-- Install: `pnpm install`; CI uses `pnpm install --frozen-lockfile`.
-- Develop all persistent tasks: `pnpm dev`.
-- Develop only Electron: `pnpm --dir apps/desktop dev`.
-- Typecheck: `pnpm typecheck`; a narrower example is `pnpm --dir apps/desktop typecheck`.
-- Focused desktop test: `pnpm --dir apps/desktop exec vitest run tests/<name>.test.ts`.
-- Focused mail package test: `pnpm --dir packages/mail exec vitest run tests/<name>.test.ts`.
-- Full verification: `pnpm check`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-- Apply Ultracite fixes: `pnpm fix`.
-- Generate a database migration after schema changes: `pnpm --dir packages/database generate`.
-- Package: `pnpm build:mac`, `pnpm build:win`, `pnpm build:linux`, or `pnpm build:unpack`.
+Bun is the package manager and script runner; the tools it starts (Electron, electron-vite, Vitest, `tsc`) still run on Node.js. Always write `bun run <script>`: bare `bun test`, `bun build`, and `bun check` are Bun's own test runner, bundler, and typechecker, not Kisa's scripts.
+
+- Install: `bun install`; CI uses `bun install --frozen-lockfile`.
+- Develop all persistent tasks: `bun run dev`.
+- Develop only Electron: `bun run --cwd apps/desktop dev`.
+- Typecheck: `bun run typecheck`; a narrower example is `bun run --cwd apps/desktop typecheck`.
+- Focused desktop test: `bun run --cwd apps/desktop vitest run tests/<name>.test.ts`.
+- Focused mail package test: `bun run --cwd packages/mail vitest run tests/<name>.test.ts`.
+- Full verification: `bun run check`, `bun run typecheck`, `bun run test`, and `bun run build`.
+- Apply Ultracite fixes: `bun run fix`.
+- Generate a database migration after schema changes: `bun run --cwd packages/database generate`.
+- Package: `bun run build:mac`, `bun run build:win`, `bun run build:linux`, or `bun run build:unpack`.
 
 Start with the smallest proof that exercises the changed behavior, then widen verification in proportion to risk. Do not use a real mail account, browser automation, or the running desktop app as a test fixture without explicit permission. Pre-commit runs the repository tests and Ultracite, and may restage formatted staged files.
 
@@ -163,8 +165,9 @@ The main process owns privileged capabilities, including account sign-in and sea
 ## Tooling, Documentation, and Releases
 
 - Ultracite config lives in `oxlint.config.ts` and `oxfmt.config.ts`. `routeTree.gen.ts`, Drizzle snapshots, and `repos` are intentionally excluded.
+- Never run `bun update --latest`: it rewrites every catalog entry, including the exact pins for `@effect/tsgo`, TypeScript, Oxlint, `oxlint-tsgolint`, and Astro's TypeScript 6, which must move together as the README describes. Use a plain `bun update` or edit catalog entries.
 - Keep architecture docs aligned with implementation. `docs/research` preserves dated investigation; do not silently rewrite historical facts to describe a later design.
 - macOS packages are signed and notarized when credentials are present; Windows and Linux artifacts are unsigned. See `docs/releasing/macos-signing.md`.
 - Never create a pull request, deploy, tag, publish, or run a release unless the developer explicitly asks.
-- `pnpm release [major|minor|patch|x.y.z]` requires a clean tree, updates only `apps/desktop/package.json`, runs `pnpm check` unless `--skip-check`, commits `Release vX.Y.Z`, tags it, and pushes unless `--no-push` is supplied.
+- `bun run release [major|minor|patch|x.y.z]` requires a clean tree, updates only `apps/desktop/package.json` and the version `bun.lock` records for it, runs `bun run check` unless `--skip-check`, commits `Release vX.Y.Z`, tags it, and pushes unless `--no-push` is supplied.
 - Keep commits focused and written in plain language. UI changes should include before/after evidence when a pull request is requested; animation or timing changes are better demonstrated with a short recording.

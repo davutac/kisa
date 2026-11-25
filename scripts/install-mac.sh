@@ -99,11 +99,11 @@ fi
 
 cd "$REPOSITORY_ROOT"
 printf 'Building Kisa...\n'
-pnpm build
+bun run build
 # electron-builder runs outside turbo so packaging and signing always happen
 # fresh: turbo's cache key ignores the keychain and APPLE_* credentials.
 printf 'Packaging and signing Kisa...\n'
-pnpm --dir "$DESKTOP_DIRECTORY" build:mac --publish never
+bun run --cwd "$DESKTOP_DIRECTORY" build:mac --publish never
 
 [ -d "$BUILT_APP" ] || fail "expected app bundle at $BUILT_APP."
 

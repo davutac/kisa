@@ -50,7 +50,7 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 | Routing and state | [TanStack Router](https://github.com/TanStack/router), [Zustand](https://github.com/pmndrs/zustand) |
 | Local data | [better-sqlite3-multiple-ciphers](https://github.com/m4heshd/better-sqlite3-multiple-ciphers), [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm), FTS5 |
 | Mail transport | IMAP with [ImapFlow](https://github.com/postalsys/imapflow), SMTP with [Nodemailer](https://github.com/nodemailer/nodemailer) |
-| Tooling | [pnpm](https://github.com/pnpm/pnpm), [Turborepo](https://github.com/vercel/turborepo), [Vite](https://github.com/vitejs/vite), [Vitest](https://github.com/vitest-dev/vitest), [Ultracite](https://github.com/haydenbleasel/ultracite) |
+| Tooling | [Bun](https://github.com/oven-sh/bun), [Turborepo](https://github.com/vercel/turborepo), [Vite](https://github.com/vitejs/vite), [Vitest](https://github.com/vitest-dev/vitest), [Ultracite](https://github.com/haydenbleasel/ultracite) |
 
 ## Architecture
 
@@ -79,23 +79,25 @@ See the [desktop architecture](docs/architecture/desktop.md) and the [mail engin
 
 ## Run from source
 
-pnpm 12.21.0 is pinned through `packageManager`.
+Bun 1.4.5 is pinned through `packageManager`. It installs dependencies and runs scripts; Electron, Vite, Vitest, and the compiler still run on Node.js, so both must be installed (CI uses Node.js 24). Run scripts as `bun run <script>`: bare `bun test`, `bun build`, and `bun check` are Bun's own test runner, bundler, and typechecker, not Kisa's scripts.
 
-Dependency versions live in `pnpm-workspace.yaml`. Effect and `@effect/vitest` use the same stable v4 release (currently 4.1.5) with Vitest 5. Astro's checker uses the separate TypeScript 6 catalog because it requires the JavaScript compiler API. Upgrade `@effect/tsgo`, TypeScript, Oxlint, and `oxlint-tsgolint` together after checking the matching patch artifacts.
+`bunfig.toml` keeps installs isolated, so each package sees only the dependencies it declares, and holds back any version published less than a day ago. The packages Kisa upgrades on release day are exempt and listed there by exact name, because Bun matches no globs. Install scripts run only for the packages in `trustedDependencies`.
 
-The verified compiler and lint toolchain is `@effect/tsgo` 0.73.2, TypeScript 7.0.2, Oxlint 1.94.0, `oxlint-tsgolint` 7.0.2007, and Ultracite 8.3.1. `effect-tsgo patch` in that release accepts `oxlint-tsgolint` only up to 7.0.2007, so `update.ignoreDeps` keeps this cohort out of `pnpm update --latest`. Each tsconfig allows only the unstable Effect modules its code uses (`effect/rpc`, `effect/workers`, and `@effect/vitest`), so any other unstable API still fails the typecheck. Ultracite 8 adds React Compiler diagnostics; the [desktop architecture](docs/architecture/desktop.md#renderer-organization-and-routing) describes the renderer patterns they require. The migration added line-level suppressions, each with its reason, for intentional effect triggers, TanStack Virtual, the store-once idiom, and one buffer synchronized from other windows. `no-redeclare` is off because schema values share names with their `typeof X.Type` aliases.
+Dependency versions live in the `workspaces.catalog` of the root `package.json`. Effect and `@effect/vitest` use the same stable v4 release (currently 4.1.5) with Vitest 5. Astro's checker uses the separate TypeScript 6 catalog because it requires the JavaScript compiler API. Upgrade `@effect/tsgo`, TypeScript, Oxlint, and `oxlint-tsgolint` together after checking the matching patch artifacts.
+
+The verified compiler and lint toolchain is `@effect/tsgo` 0.73.2, TypeScript 7.0.2, Oxlint 1.94.0, `oxlint-tsgolint` 7.0.2007, and Ultracite 8.3.1. `effect-tsgo patch` in that release accepts `oxlint-tsgolint` only up to 7.0.2007. Bun cannot exclude packages from an update: a plain `bun update` stays inside the catalog's ranges and leaves these exact pins alone, but `bun update --latest` rewrites every catalog entry, including this cohort and Astro's TypeScript 6. Do not run it; move other packages with a plain `bun update` or by editing their catalog entries. Each tsconfig allows only the unstable Effect modules its code uses (`effect/rpc`, `effect/workers`, and `@effect/vitest`), so any other unstable API still fails the typecheck. Ultracite 8 adds React Compiler diagnostics; the [desktop architecture](docs/architecture/desktop.md#renderer-organization-and-routing) describes the renderer patterns they require. The migration added line-level suppressions, each with its reason, for intentional effect triggers, TanStack Virtual, the store-once idiom, and one buffer synchronized from other windows. `no-redeclare` is off because schema values share names with their `typeof X.Type` aliases.
 
 OpenCode uses the 2.3.2 client and requires an OpenCode 2.2 or later service. Scoped overrides keep its Effect peer and schema/protocol dependencies on the workspace Effect catalog. See [AI writing](docs/architecture/ai-writing.md) for provider lifecycle and isolation details.
 
 ```bash
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 To run only the desktop:
 
 ```bash
-pnpm --dir apps/desktop dev
+bun run --cwd apps/desktop dev
 ```
 
 Outlook accounts need Kisa's Microsoft Entra client ID at build time: copy `apps/desktop/.env.example` to `apps/desktop/.env.local` and fill in `MAIN_VITE_MICROSOFT_CLIENT_ID`, or set it in the shell. Without it, everything else works and Microsoft sign-in is not offered. Release builds take it from the `MICROSOFT_CLIENT_ID` secret of the GitHub `Prod` environment.
@@ -104,33 +106,33 @@ Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, s
 
 Running from source needs no provider setup: accounts connect with an app password as described in [Add an account](#add-an-account).
 
-Auto-update is off when running from source. To see the sidebar's update button go through its states anyway, start with `KISA_SIMULATE_UPDATE=1 pnpm --dir apps/desktop dev`: a pretend update to 99.0.0 appears a few seconds after launch and can be downloaded and "installed" without contacting the update server or changing the app.
+Auto-update is off when running from source. To see the sidebar's update button go through its states anyway, start with `KISA_SIMULATE_UPDATE=1 bun run --cwd apps/desktop dev`: a pretend update to 99.0.0 appears a few seconds after launch and can be downloaded and "installed" without contacting the update server or changing the app.
 
 ## Verification
 
 Run all checks with:
 
 ```bash
-pnpm check
-pnpm typecheck
-pnpm test
-pnpm build
+bun run check
+bun run typecheck
+bun run test
+bun run build
 ```
 
 ## Packaging and releases
 
-Build packages with `pnpm build:mac`, `pnpm build:win`, or `pnpm build:linux`. `pnpm build:unpack` creates an unpacked app.
+Build packages with `bun run build:mac`, `bun run build:win`, or `bun run build:linux`. `bun run build:unpack` creates an unpacked app.
 
 To build a signed production app and install it in `/Applications` on this Mac, run `scripts/install-mac.sh` (add `--notarize` to require notarization). See [macOS signing](docs/releasing/macos-signing.md#installing-a-signed-build-on-this-mac).
 
 Release by exact version or bump type:
 
 ```bash
-pnpm release patch
-pnpm release 0.1.0
+bun run release patch
+bun run release 0.1.0
 ```
 
-The helper requires a clean tree, runs checks, updates `apps/desktop/package.json`, commits, tags, and pushes unless `--no-push` is supplied.
+The helper requires a clean tree, runs checks, updates `apps/desktop/package.json` and the version `bun.lock` records for it, commits, tags, and pushes unless `--no-push` is supplied.
 
 ## Inspiration
 
