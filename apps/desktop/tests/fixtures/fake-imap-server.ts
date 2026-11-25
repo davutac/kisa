@@ -218,6 +218,11 @@ export class FakeImapServer {
   onRead: ((path: string) => void) | undefined;
   /** Called on each STATUS, before it is answered. */
   onStatus: ((path: string) => void) | undefined;
+  /**
+   * Mailboxes the server keeps and leaves out of its list, as Gmail does
+   * with one the user hid from mail apps ("Show in IMAP").
+   */
+  readonly unlisted = new Set<string>();
   /** The mailbox of every STATUS, in order. */
   readonly statuses: string[] = [];
   /** The mailbox of every wait a client began (IDLE). */
@@ -690,7 +695,9 @@ export class FakeImapServer {
           return searchMailbox(mailbox, search).length > 0;
         }),
       listMailboxes: Effect.sync(() =>
-        [...this.mailboxes.values()].map((mailbox) => mailbox.info)
+        [...this.mailboxes.values()]
+          .filter((mailbox) => !this.unlisted.has(mailbox.info.path))
+          .map((mailbox) => mailbox.info)
       ),
       move: (path, uidValidity, uids, destination) =>
         changing(

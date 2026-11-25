@@ -593,6 +593,7 @@ export type MailSenderSuggestions = typeof MailSenderSuggestions.Type;
 export const MailIndexStatus = Schema.Literals([
   "complete",
   "failed",
+  "hidden",
   "idle",
   "paused",
   "running",

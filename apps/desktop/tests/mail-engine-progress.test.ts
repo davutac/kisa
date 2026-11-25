@@ -58,6 +58,26 @@ describe("index progress for the renderer", () => {
     expect(Schema.is(MailIndexProgressList)(payloads[0])).toBeTruthy();
   });
 
+  // The worker overrides the counted status with the account's trouble, and
+  // the preload decodes what main sends: a status it does not know would
+  // drop the whole list.
+  it("sends an account whose mail is hidden in a shape the preload decodes", () => {
+    const hidden = {
+      ...toMailIndexProgress("person@example.com", {
+        estimatedMessages: 10,
+        oldestIndexedAt: 5,
+        pendingBodies: 0,
+        totalMessages: 10,
+        unfinishedMailboxes: 0,
+      }),
+      status: "hidden",
+    };
+
+    expect(
+      Schema.is(MailIndexProgressList)({ accounts: [hidden] })
+    ).toBeTruthy();
+  });
+
   it("counts a body given up on as done, so the index can complete", () => {
     const counts = {
       estimatedMessages: 10,

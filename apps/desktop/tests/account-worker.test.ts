@@ -131,6 +131,7 @@ type Harness = Effect.Success<ReturnType<typeof createHarness>>;
 const done = { kind: "done", moreWork: false } as const;
 const failed = { kind: "failed" } as const;
 const refused = { kind: "sign-in-refused" } as const;
+const hidden = { kind: "mail-hidden" } as const;
 
 /** A worker whose first cycle has ended this way, in the wait that follows. */
 const afterFirstCycle = Effect.fnUntraced(function* afterFirstCycle(
@@ -613,6 +614,48 @@ describe("the index status an account worker reports", () => {
       })
   );
 
+  // The server answers; the user has to change a setting at their provider.
+  // Reported as unreachable, it would send them to check their connection.
+  it.effect(
+    "reports hidden mail from the first cycle, through every retry, until a sync pass works",
+    () =>
+      Effect.gen(function* keepsHidden() {
+        const harness = yield* createHarness();
+        let running = yield* Queue.take(harness.cycles);
+        yield* running.finish(hidden);
+        yield* harness.phase("retrying");
+        expect(harness.worker.indexStatus()).toBe("hidden");
+
+        // Past the step at which a failing server is called unreachable.
+        for (const delay of RETRY_DELAYS_MS) {
+          yield* TestClock.adjust(delay);
+          running = yield* Queue.take(harness.cycles);
+          yield* running.finish(hidden);
+          yield* harness.phase("retrying");
+          expect(harness.worker.indexStatus()).toBe("hidden");
+        }
+
+        yield* TestClock.adjust(RETRY_DELAYS_MS[3]);
+        running = yield* Queue.take(harness.cycles);
+        running.syncPassEnded(true);
+        expect(harness.worker.indexStatus()).toBeUndefined();
+      })
+  );
+
+  it.effect(
+    "tries an account with hidden mail again as soon as it is asked",
+    () =>
+      Effect.gen(function* asked() {
+        const harness = yield* afterFirstCycle(hidden);
+        yield* harness.phase("retrying");
+
+        harness.worker.requestSync("user");
+
+        yield* Queue.take(harness.cycles);
+        expect(harness.started.cycles).toBe(2);
+      })
+  );
+
   // The server is reachable; what fails comes after the catch-up pass.
   it.effect(
     "backs off without reporting failure while each cycle still catches up",
@@ -635,6 +678,16 @@ describe("the index status an account worker reports", () => {
 });
 
 describe(toCycleOutcome, () => {
+  // The server answers; only a setting at the provider brings the mail back.
+  it("tells hidden mail from a server that cannot be reached", () => {
+    expect(
+      toCycleOutcome(Exit.fail({ _tag: "MailHiddenError" }))
+    ).toStrictEqual({ kind: "mail-hidden" });
+    expect(
+      toCycleOutcome(Exit.fail({ _tag: "MailConnectionError" }))
+    ).toStrictEqual({ kind: "failed", retryAfterMs: undefined });
+  });
+
   it("tells a refused sign-in, a missing account and a server delay apart", () => {
     expect(toCycleOutcome(Exit.succeed({ moreWork: true }))).toStrictEqual({
       kind: "done",

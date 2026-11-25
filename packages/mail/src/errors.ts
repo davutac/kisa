@@ -49,6 +49,19 @@ export class MailboxMissingError extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("MailboxMissingError", { accountId: AccountId, path: Schema.String }) {}
 
+/**
+ * The server lists none of the mailboxes the account's mail is read from, so
+ * nothing of it can be synced: a Gmail account whose All Mail the user has
+ * hidden from mail apps. Nothing is wrong with the connection, and the mail
+ * already cached is still the account's mail, so this is neither a transport
+ * failure nor a mailbox that is gone. `message` says what the user can
+ * change, in fixed words.
+ */
+export class MailHiddenError extends Schema.TaggedError<
+  MailHiddenError,
+  { readonly brand: unique symbol }
+>()("MailHiddenError", { accountId: AccountId, message: Schema.String }) {}
+
 /** The server refused the message or every recipient: nothing was sent. */
 export class MailSendRejectedError extends Schema.TaggedError<
   MailSendRejectedError,

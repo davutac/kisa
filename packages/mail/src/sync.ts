@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import type { Dialect, MessageIdentity, UserLabel } from "./dialects";
+import { MailHiddenError } from "./errors";
 import type { MailStoreError, MailTransportError } from "./errors";
 import { getHeaderValue, parseHeaderBlock, parseMessageIds } from "./headers";
 import type {
@@ -128,7 +129,7 @@ export interface SyncScope {
   readonly session: ImapSession;
 }
 
-export type SyncError = MailStoreError | MailTransportError;
+export type SyncError = MailHiddenError | MailStoreError | MailTransportError;
 
 export const NO_THREAD_CHANGES: ThreadChanges = { changed: [], removed: [] };
 
@@ -434,6 +435,10 @@ export const startRelabel = Effect.fn("MailSync.startRelabel")(
  * labels differ from the cached ones, as when another client added, renamed
  * or deleted a folder, so the label catalog can be announced again.
  *
+ * A list the dialect cannot read the account's mail from is not saved: see
+ * `Dialect.unreadable`. The cache stays as it is, and the failure says what
+ * the user can change.
+ *
  * Gmail does not report a label renamed or deleted elsewhere as a change to
  * its messages. A label gone from the list is taken off cached copies at
  * once; when labels also appeared, as a rename looks, the synced mailboxes'
@@ -445,6 +450,16 @@ export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
     const store = yield* MailEngineStore;
     const cached = yield* store.getMailboxes(scope.accountId);
     const listed = yield* scope.session.listMailboxes;
+    // Before anything is saved: a list without the mailbox the account's
+    // mail is read from says the mail is hidden, not gone. Saved, it would
+    // drop that mailbox with every copy cached from it.
+    const hidden = scope.dialect.unreadable?.(listed);
+    if (hidden !== undefined) {
+      return yield* new MailHiddenError({
+        accountId: scope.accountId,
+        message: hidden,
+      });
+    }
     const synced = new Set(
       scope.dialect.syncedMailboxes(listed).map((mailbox) => mailbox.path)
     );

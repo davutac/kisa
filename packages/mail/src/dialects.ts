@@ -38,6 +38,15 @@ export interface Dialect {
   readonly syncedMailboxes: (
     mailboxes: readonly ImapMailbox[]
   ) => readonly ImapMailbox[];
+  /**
+   * Why the account's mail cannot be read from the mailboxes its server
+   * lists, in fixed words for the user, or `undefined` when it can. Left out
+   * by a dialect that reads every folder: no one folder's absence hides its
+   * account.
+   */
+  readonly unreadable?: (
+    mailboxes: readonly ImapMailbox[]
+  ) => string | undefined;
   readonly userLabels: (
     mailboxes: readonly ImapMailbox[]
   ) => readonly UserLabel[];
@@ -110,6 +119,17 @@ const gmailSystemContainer = (
   return separator > 0 ? allMail.path.slice(0, separator) : undefined;
 };
 
+/**
+ * Said when a Gmail account lists no All Mail, the one mailbox its mail is
+ * read from. Gmail lets a user leave a label out of what mail apps see
+ * ("Show in IMAP", under Labels in its settings), and guides for other mail
+ * apps recommend it for All Mail. The words start from what Kisa sees and
+ * name the setting as the remedy: that Gmail drops a hidden All Mail from
+ * its list is how the setting is documented, and has not been tried here.
+ */
+export const GMAIL_ALL_MAIL_HIDDEN =
+  "Gmail is not showing All Mail to Kisa, and that is where this account's mail is read from. In Gmail's settings, open Labels and turn on \"Show in IMAP\" for All Mail.";
+
 export const gmailDialect: Dialect = {
   identify: (message) =>
     message.gmailMessageId !== undefined &&
@@ -155,6 +175,10 @@ export const gmailDialect: Dialect = {
     mailboxes.filter(
       (mailbox) => isSelectable(mailbox) && GMAIL_SYNCED_ROLES.has(mailbox.role)
     ),
+  unreadable: (mailboxes) =>
+    mailboxes.some((mailbox) => mailbox.role === "all" && isSelectable(mailbox))
+      ? undefined
+      : GMAIL_ALL_MAIL_HIDDEN,
   userLabels: (mailboxes) => {
     const container = gmailSystemContainer(mailboxes);
 

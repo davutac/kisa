@@ -120,6 +120,34 @@ describe("the Gmail dialect", () => {
   });
 });
 
+// Gmail lets a user hide All Mail from mail apps ("Show in IMAP", under
+// Labels in its settings). The dialect reads the account's mail from there
+// alone, so without it the account would sync Spam and Trash and look done.
+describe("an account whose mail the dialect cannot read", () => {
+  const withoutAllMail = GMAIL_MAILBOXES.filter(
+    (box) => box !== GMAIL_ALL_MAIL
+  );
+
+  it("is a Gmail account that lists no All Mail", () => {
+    expect(gmailDialect.unreadable?.(GMAIL_MAILBOXES)).toBeUndefined();
+    expect(gmailDialect.unreadable?.(withoutAllMail)).toMatch(/All Mail/u);
+  });
+
+  it("is a Gmail account whose All Mail cannot be opened", () => {
+    expect(
+      gmailDialect.unreadable?.([
+        ...withoutAllMail,
+        { ...GMAIL_ALL_MAIL, selectable: false },
+      ])
+    ).toMatch(/All Mail/u);
+  });
+
+  it("is never an account outside Gmail, which reads every folder", () => {
+    expect(genericDialect.unreadable?.(withoutAllMail)).toBeUndefined();
+    expect(genericDialect.unreadable?.([])).toBeUndefined();
+  });
+});
+
 describe("the generic dialect", () => {
   const ICLOUD_MAILBOXES = [
     mailbox("INBOX"),

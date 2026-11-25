@@ -32,6 +32,7 @@ import type {
   FakeSmtpServer,
 } from "./fixtures/fake-smtp-server";
 import {
+  ALL_MAIL,
   GMAIL_MAILBOXES,
   ICLOUD_MAILBOXES,
   TestDatabase,
@@ -95,7 +96,20 @@ const accountRows = () =>
  * How the fake IMAP server answers a sign-in: "accept" as a server without
  * Gmail's extensions, "gmail" as one that advertises them.
  */
-type ImapBehaviour = "accept" | "gmail" | "refuse" | "unreachable";
+type ImapBehaviour =
+  | "accept"
+  | "gmail"
+  | "gmail-hiding-all-mail"
+  | "refuse"
+  | "unreachable";
+
+const gmailServer = (behaviour: ImapBehaviour): FakeImapServer => {
+  const server = new FakeImapServer(GMAIL_MAILBOXES);
+  if (behaviour === "gmail-hiding-all-mail") {
+    server.unlisted.add(ALL_MAIL);
+  }
+  return server;
+};
 
 let smtp: FakeSmtpServer | undefined;
 let imapRequests: ImapConnectRequest[] = [];
@@ -126,8 +140,8 @@ const layers = (imap: ImapBehaviour, smtpServer: FakeSmtpServer) =>
               );
             }
             return Effect.succeed(
-              imap === "gmail"
-                ? new FakeImapServer(GMAIL_MAILBOXES).session()
+              imap === "gmail" || imap === "gmail-hiding-all-mail"
+                ? gmailServer(imap).session()
                 : new FakeImapServer(ICLOUD_MAILBOXES, [
                     "CONDSTORE",
                     "IDLE",
@@ -452,6 +466,22 @@ describe("adding an app password account", () => {
       decryptPasswordCredentials(row?.credentials ?? Buffer.alloc(0))
     );
     expect(Redacted.value(stored)).toBe("abcdefghijklmnop");
+  });
+
+  // Connected that way, the account would sync Spam and Trash alone and
+  // report itself complete, with none of its mail.
+  it("refuses a Gmail account that hides All Mail from mail apps, and says how to show it", async () => {
+    const exit = await addAccount(
+      { email: "me@gmail.com", password: PASSWORD },
+      { imap: "gmail-hiding-all-mail" }
+    );
+
+    expect(failureMessage(exit)).toBe(
+      PASSWORD_ACCOUNT_MESSAGES.gmailAllMailHidden
+    );
+    expect(failureMessage(exit)).toMatch(/Show in IMAP/u);
+    expect(accountRows()).toStrictEqual([]);
+    expect(connected).toStrictEqual([]);
   });
 
   it("treats a hand-entered server that advertises Gmail's extensions as Gmail", async () => {
@@ -818,6 +848,22 @@ describe("signing an app password account in again", () => {
   });
 
   // The cache was built for the old kind of server, so it cannot carry over.
+  // The account then says in Settings what to change at Gmail. Refusing the
+  // password here would leave it with two things wrong instead of one.
+  it("takes a new password for a Gmail account that hides All Mail", async () => {
+    await addAccount(
+      { email: "me@gmail.com", password: PASSWORD },
+      { imap: "gmail" }
+    );
+
+    const exit = await signInAgain("me@gmail.com", NEW_PASSWORD, {
+      imap: "gmail-hiding-all-mail",
+    });
+
+    expect(exit).toStrictEqual(Exit.succeed("me@gmail.com"));
+    await expect(storedPassword("me@gmail.com")).resolves.toBe(NEW_PASSWORD);
+  });
+
   it("refuses a server that now answers as Gmail, and keeps the old sign-in", async () => {
     await addAccount({
       email: "me@example.org",

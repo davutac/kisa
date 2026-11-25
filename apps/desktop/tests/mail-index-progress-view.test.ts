@@ -7,7 +7,7 @@ import {
 } from "../src/shared/mail-index-progress";
 
 describe("mail index progress view", () => {
-  it("reports running, paused, and failed lifecycle states safely", () => {
+  it("reports running, paused, failed and hidden lifecycle states safely", () => {
     expect(toMailIndexDescription({ status: "running" })).toBe(
       "Downloading and indexing your mail…"
     );
@@ -16,6 +16,9 @@ describe("mail index progress view", () => {
     );
     expect(toMailIndexDescription({ status: "failed" })).toBe(
       "Kisa cannot reach this account's mail server and keeps trying. Select Sync now to try again now."
+    );
+    expect(toMailIndexDescription({ status: "hidden" })).toBe(
+      'Gmail is not showing All Mail to Kisa, so this account cannot sync. In Gmail\'s settings, open Labels and turn on "Show in IMAP" for All Mail. Kisa keeps checking, or select Sync now.'
     );
     expect(toMailIndexDescription({ status: "complete" })).toBe(
       "Kisa keeps this account's mail downloaded, searchable, and up to date on its own."

@@ -29,6 +29,11 @@ export type AccountCycleOutcome =
   | { readonly kind: "account-missing" }
   | { readonly kind: "done"; readonly moreWork: boolean }
   | { readonly kind: "failed"; readonly retryAfterMs?: number }
+  /**
+   * The server answers, and lists none of the mailboxes the account's mail
+   * is read from: only a setting at the provider brings it back.
+   */
+  | { readonly kind: "mail-hidden" }
   | { readonly kind: "sign-in-refused" };
 
 /**
@@ -71,9 +76,10 @@ interface AccountWorkerOptions<R> {
 export interface AccountWorker<R = never> {
   /**
    * The index status this account's trouble overrides: `paused` while it
-   * needs a new sign-in, `failed` while its server cannot be reached.
+   * needs a new sign-in, `failed` while its server cannot be reached, and
+   * `hidden` while the server keeps its mail from mail apps.
    */
-  readonly indexStatus: () => "failed" | "paused" | undefined;
+  readonly indexStatus: () => "failed" | "hidden" | "paused" | undefined;
   readonly phase: () => AccountWorkerPhase;
   readonly requestSync: (source: SyncRequestSource) => void;
   /**
@@ -102,6 +108,9 @@ export const toCycleOutcome = (
   const failure = Result.isSuccess(found) ? found.success : undefined;
   if (failure?._tag === "MailAuthError") {
     return { kind: "sign-in-refused" };
+  }
+  if (failure?._tag === "MailHiddenError") {
+    return { kind: "mail-hidden" };
   }
   // The engine raises this for an account that is no longer connected.
   if (failure?._tag === "MailEngineError") {
@@ -135,7 +144,7 @@ export const createAccountWorker = <R = never>({
   // Every view of indexing reads anything but `running` as not indexing, so
   // trouble that cleared for each retry would blink them, and so would
   // reporting each passing failure: `unreachable` waits for the last step.
-  let trouble: "sign-in" | "unreachable" | undefined;
+  let trouble: "hidden" | "sign-in" | "unreachable" | undefined;
   let caughtUpThisCycle = false;
   /** What ends the wait now running; a sync request completes it. */
   let waking: Deferred.Deferred<void> | undefined;
@@ -177,10 +186,16 @@ export const createAccountWorker = <R = never>({
     }
 
     failures += 1;
-    if (!caughtUpThisCycle && failures >= retryDelaysMs.length) {
+    if (outcome.kind === "mail-hidden") {
+      // Known at once, and retried like any failure: the loop finds the mail
+      // again by itself once the user has shown it. Never called unreachable
+      // however long it lasts, which would send them to check a connection
+      // that works.
+      trouble = "hidden";
+    } else if (!caughtUpThisCycle && failures >= retryDelaysMs.length) {
       trouble = "unreachable";
     }
-    if (outcome.retryAfterMs !== undefined) {
+    if (outcome.kind === "failed" && outcome.retryAfterMs !== undefined) {
       return {
         attempt: failures,
         kind: "retrying",
@@ -319,6 +334,9 @@ export const createAccountWorker = <R = never>({
     indexStatus: () => {
       if (trouble === "sign-in") {
         return "paused";
+      }
+      if (trouble === "hidden") {
+        return "hidden";
       }
       return trouble === "unreachable" ? "failed" : undefined;
     },

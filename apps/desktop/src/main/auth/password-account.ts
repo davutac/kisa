@@ -1,4 +1,5 @@
 import { mailAccounts } from "@repo/database/schemas";
+import { GMAIL_ALL_MAIL_HIDDEN, dialects } from "@repo/mail/dialects";
 import type { DialectKind } from "@repo/mail/dialects";
 import type { MailTransportError } from "@repo/mail/errors";
 import { AccountId } from "@repo/mail/ids";
@@ -30,6 +31,7 @@ import { encryptPasswordCredentials } from "./password-credentials";
  */
 export const PASSWORD_ACCOUNT_MESSAGES = {
   alreadyConnected: "This account is already connected.",
+  gmailAllMailHidden: `${GMAIL_ALL_MAIL_HIDDEN} Then try again.`,
   gmailPasswordRefused:
     "Gmail refused the password. Use an app password, not your Google Account password.",
   gmailUnexpected: "Gmail did not respond as expected. Try again later.",
@@ -219,6 +221,8 @@ const GMAIL_CAPABILITY = "X-GM-EXT-1";
  * Signs in over IMAP and lists the mailboxes, as the first sync would. The
  * server decides the dialect: Gmail's labels and thread ids are read only
  * where it advertises them, which also covers Google Workspace domains.
+ * `hidden` is why that dialect could not read the account's mail from the
+ * mailboxes listed, when it could not.
  */
 const verifyIncoming = Effect.fn("verifyIncomingSignIn")(
   function* verifyIncoming(plan: AccountPlan, auth: ImapAuth) {
@@ -230,10 +234,11 @@ const verifyIncoming = Effect.fn("verifyIncomingSignIn")(
           auth,
           server: plan.imap,
         });
-        yield* session.listMailboxes;
-        return session.capabilities.has(GMAIL_CAPABILITY)
-          ? ("gmail" satisfies DialectKind)
-          : ("generic" satisfies DialectKind);
+        const listed = yield* session.listMailboxes;
+        const dialect: DialectKind = session.capabilities.has(GMAIL_CAPABILITY)
+          ? "gmail"
+          : "generic";
+        return { dialect, hidden: dialects[dialect].unreadable?.(listed) };
       })
     ).pipe(Effect.mapError((error) => toSetupError(plan, "incoming", error)));
   }
@@ -292,7 +297,12 @@ export const verifyPasswordAccount = Effect.fn("verifyPasswordAccount")(
 
     const password = toSignInPassword(plan, request.password);
     const auth: ImapAuth = { kind: "password", password, user: plan.username };
-    const dialect = yield* verifyIncoming(plan, auth);
+    const { dialect, hidden } = yield* verifyIncoming(plan, auth);
+    if (hidden !== undefined) {
+      // Connected like this, the account would sync Spam and Trash alone
+      // and report itself complete, with none of its mail.
+      return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.gmailAllMailHidden);
+    }
     yield* verifyOutgoing(plan, auth);
 
     const credentials = yield* encryptPasswordCredentials(password).pipe(
@@ -462,7 +472,9 @@ export const verifyPasswordSignInAgain = Effect.fn("verifyPasswordSignInAgain")(
       password: signInPassword,
       user: plan.username,
     };
-    const dialect = yield* verifyIncoming(plan, auth);
+    // Hidden mail does not stand in the way of a new password: the account
+    // then says in Settings what to change, with one thing wrong, not two.
+    const { dialect } = yield* verifyIncoming(plan, auth);
     yield* verifyOutgoing(plan, auth);
     if (dialect !== stored.dialect) {
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.serverChanged);
