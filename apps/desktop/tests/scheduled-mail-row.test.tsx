@@ -43,15 +43,15 @@ const renderRow = ({ selected = false }: { selected?: boolean }): string =>
   );
 
 describe("scheduled mail row surface", () => {
-  it("uses the mailbox thread row surface with a one-pixel separator", () => {
+  it("uses the mailbox thread row's edge-to-edge surface with a hairline divider", () => {
     const markup = renderRow({});
     const listItem = markup.match(/<div[^>]*role="row"[^>]*>/u)?.[0];
     const rowSurface = markup.match(
-      /<div[^>]*class="[^"]*bg-background[^"]*rounded-md[^"]*"[^>]*>/u
+      /<div[^>]*class="[^"]*bg-background relative z-10"[^>]*>/u
     )?.[0];
     const article = markup.match(/<article[^>]*>/u)?.[0];
 
-    expect(listItem).toContain("pb-px");
+    expect(listItem).toContain("border-b");
     expect(rowSurface).toBeDefined();
     expect(article).toContain("data-[active=true]:bg-muted/60");
     expect(article).not.toContain("bg-card");

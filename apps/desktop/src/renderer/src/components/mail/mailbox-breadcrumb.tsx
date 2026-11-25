@@ -67,9 +67,9 @@ const MailboxBreadcrumb = ({
   return (
     <TitlebarSlot>
       {/* Beside the sidebar the titlebar starts at the column's edge, so the
-          crumbs take the list's and row's insets to line up with the rows'
-          text; with the sidebar hidden they follow the shell's buttons. */}
-      <Breadcrumb className="flex min-w-0 flex-1 items-center pl-4 in-data-[titlebar-inset=trailing]:pl-8">
+          crumbs take the row's inset to line up with the rows' text; with the
+          sidebar hidden they follow the shell's buttons. */}
+      <Breadcrumb className="flex min-w-0 flex-1 items-center in-data-[titlebar-inset=trailing]:pl-4">
         <BreadcrumbList className="min-w-0 flex-nowrap text-[13px]">
           <BreadcrumbItem className="min-w-0">
             <Button

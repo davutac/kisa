@@ -7,7 +7,7 @@ The mailbox thread list, search results, and the Scheduled list are one Kisa pri
 The list is a WAI-ARIA grid, after the Authoring Practices' data grid: read only, one row per conversation. A listbox doesn't fit, because its options can't hold controls, and each row holds a checkbox and quick actions. A grid also tells a screen reader to pass single letters such as J, K and X through to the app, which a list of buttons does not, and it carries each row's checked state as `aria-selected`.
 
 ```text
-section  (the scroller, named after the place: "Inbox", "Search results", "Scheduled emails")
+section  (the scroller and a ui-sdk scroll area's viewport, named after the place: "Inbox", "Search results", "Scheduled emails")
 └── grid  aria-rowcount, aria-multiselectable in the mailbox
     └── row  aria-rowindex, aria-selected when checked
         ├── gridcell  the conversation
@@ -17,6 +17,12 @@ section  (the scroller, named after the place: "Inbox", "Search results", "Sched
 ```
 
 The quick actions stand behind the row in up to two columns of two: Mark as read or unread with Star (Not spam instead in Spam), then Archive, for a conversation in the Inbox, with Trash or Delete forever. Two actions share one column, and an action alone in its column fills it; the row slides aside by one 48-pixel step per column.
+
+The scroller renders as the viewport of a `ScrollArea` from `@/components/ui/scroll-area`, so its scrollbar floats over the rows' trailing edge, macOS-style, and shows while the list scrolls, rather than taking a lane that would stop the edge-to-edge rows short. The bridge also lists that scroll area under the list's name, with no actions; naming the list still reaches the list.
+
+In a list ordered newest first, the mailbox and searches without words, the first conversation of each day carries that day's heading ("Today", "Yesterday", a weekday for the week behind us, then a date), from `mail/thread-day-headings.ts`. The heading sits inside the row, above its cell, so rows stay the grid's only items and keys, focus and painting are untouched; it is `aria-hidden`, since a row holds only cells and its label already says the date. Only rendered rows compare their day with the row before them, so a long list costs nothing more. Results ranked by relevance get no headings.
+
+The day in view is pinned at the top of the list. Rows are positioned absolutely, so a heading inside one can't stick past its own row; instead `PinnedDayHeading` (`components/mail/day-heading.tsx`) sits sticky in the scroller before the grid, taking no room, and on every scroll reads the rendered rows' `data-day`, `top` and height through `getPinnedDayHeading`. It shows the day of the first row still in view and moves up as the next day's heading arrives, so the two meet edge to edge; it moves itself, and React renders only when the day changes. It finds the scroller from where it sits, since the list's ref attaches after its first layout effect. A band draws its own top line a pixel above its row, over the row before's divider, which would vanish against the band's tint; the pinned band hides that line above the list, which therefore has no top fade.
 
 Rows are positioned absolutely, so `aria-rowcount` and `aria-rowindex` say where a rendered row sits in the whole list. Scheduled reports `-1` while more pages may load. A trailing note, such as "Fetching the next chapter…" or a failed page with Try again, sits after the grid rather than in it.
 

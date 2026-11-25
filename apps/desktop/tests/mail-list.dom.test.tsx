@@ -26,7 +26,9 @@ import { ConfirmDialogProvider } from "../src/renderer/src/components/confirm-di
 import MailThreadList from "../src/renderer/src/components/mail/thread-list";
 import type { MailThreadListProps } from "../src/renderer/src/components/mail/thread-list";
 import { Toaster } from "../src/renderer/src/components/ui/toast";
+import { calendarStore } from "../src/renderer/src/hooks/use-calendar";
 import { AppHotkeysProvider } from "../src/renderer/src/hotkeys";
+import { formatMailDayHeading } from "../src/renderer/src/mail/mail-date";
 import type { ThreadActions } from "../src/renderer/src/mail/use-thread-actions";
 import type { ScheduledMailApi } from "../src/renderer/src/platform/desktop";
 import { Route as ScheduledRouteDefinition } from "../src/renderer/src/routes/scheduled/route";
@@ -415,10 +417,28 @@ const twoRowsAtMost = (renders: Record<string, number>): boolean =>
 let approve = false;
 const agent = createAgent({ allow: (step) => !step.confirm || approve });
 
+const pinnedDay = (): string | null | undefined =>
+  region("Inbox").querySelector(':scope > * > [aria-hidden="true"]')
+    ?.textContent;
+
+const dayHeadings = (): string[] =>
+  [...document.querySelectorAll('[role="row"] > [aria-hidden="true"]')].map(
+    (element) => element.textContent ?? ""
+  );
+const dayHeading = (timestamp: number): string =>
+  formatMailDayHeading(timestamp, calendarStore.getSnapshot());
+
+// The list's scroller is also a scroll area, which the bridge lists under
+// the list's name with nothing to do; acting by that name still reaches the list.
 const onPage = () =>
   agent
     .snapshot()
-    .filter((entry) => !entry.offPage && entry.component !== "more");
+    .filter(
+      (entry) =>
+        !entry.offPage &&
+        entry.component !== "more" &&
+        !(entry.component === "scroll-area" && entry.actions.length === 0)
+    );
 
 describe("mail lists", () => {
   beforeAll(() => {
@@ -1199,6 +1219,54 @@ describe("mail lists", () => {
         rows: Object.keys(down).length + Object.keys(up).length <= 4,
         up: twoRowsAtMost(up),
       }).toStrictEqual({ down: true, rows: true, up: true });
+    });
+  });
+
+  describe("day headings", () => {
+    const monday = new Date(2026, 0, 5, 9).getTime();
+    const sunday = new Date(2026, 0, 4, 18).getTime();
+
+    it("heads the first conversation of each day, hidden from screen readers", async () => {
+      await renderMailbox([
+        thread("ana@example.com", "a", "Alpha", { latestAt: monday }),
+        thread("ana@example.com", "b", "Bravo", { latestAt: monday - 1 }),
+        thread("ana@example.com", "c", "Charlie", { latestAt: sunday }),
+      ]);
+      expect({
+        headings: dayHeadings(),
+        label: openControl("Alpha").getAttribute("aria-label"),
+      }).toStrictEqual({
+        headings: [dayHeading(monday), dayHeading(sunday)],
+        label: expect.not.stringContaining(dayHeading(monday)),
+      });
+    });
+
+    it("pins the day in view, and the next day once it reaches the top", async () => {
+      await renderMailbox([
+        thread("ana@example.com", "a", "Alpha", { latestAt: monday }),
+        thread("ana@example.com", "b", "Bravo", { latestAt: monday - 1 }),
+        thread("ana@example.com", "c", "Charlie", { latestAt: sunday }),
+      ]);
+      const before = pinnedDay();
+      act(() => {
+        region("Inbox").scrollTop = topOf("Charlie");
+        region("Inbox").dispatchEvent(new Event("scroll"));
+      });
+      expect([before, pinnedDay()]).toStrictEqual([
+        dayHeading(monday),
+        dayHeading(sunday),
+      ]);
+    });
+
+    it("heads nothing in results ranked by relevance", async () => {
+      await renderMailbox(
+        [
+          thread("ana@example.com", "c", "Charlie", { latestAt: sunday }),
+          thread("ana@example.com", "a", "Alpha", { latestAt: monday }),
+        ],
+        { searchResults: true }
+      );
+      expect(dayHeadings()).toStrictEqual([]);
     });
   });
 

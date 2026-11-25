@@ -103,7 +103,7 @@ const ScheduledMailQuickAction = ({
     // Like mailbox thread actions, this stays parked behind the opaque row.
     // `inert` keeps its covered button out of the focus order.
     <MailListActions
-      className="bg-card absolute inset-y-0 right-0 z-0 grid w-15 grid-cols-[60px] grid-rows-2 overflow-hidden rounded-r-md"
+      className="bg-card absolute inset-y-0 right-0 z-0 grid w-15 grid-cols-[60px] grid-rows-2 overflow-hidden"
       inert={!isRevealed}
       render={
         <m.div
@@ -281,7 +281,7 @@ const ScheduledMailRow = ({
     // A row fading out after main canceled or discarded it is inert, so a
     // second press can't ask again.
     <MailListRow
-      className="absolute left-0 w-full pb-px"
+      className="border-border/60 absolute left-0 w-full border-b"
       inert={!isPresent}
       render={
         <m.div
@@ -314,7 +314,7 @@ const ScheduledMailRow = ({
         }}
       >
         <MailListCell
-          className="bg-background relative z-10 rounded-md"
+          className="bg-background relative z-10"
           render={
             <m.div
               animate={{
@@ -329,7 +329,7 @@ const ScheduledMailRow = ({
         >
           <Item
             className={cn(
-              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3",
+              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 rounded-none border-0 px-4 py-3",
               item.deliveryState === "attention" &&
                 !(selected || isHovered) &&
                 "bg-[color-mix(in_oklch,var(--card)_95%,var(--destructive))]"
@@ -341,7 +341,7 @@ const ScheduledMailRow = ({
             <MailListOpen
               aria-disabled={!canOpen}
               aria-label={`Edit scheduled email: ${subject}, from ${item.accountId}, to ${recipientLabel}, ${deliverySummary}`}
-              className="absolute inset-0 rounded-md text-left outline-none"
+              className="absolute inset-0 text-left outline-none"
             />
             <ScheduledMailDetails
               deliveryNotice={deliveryNotice}

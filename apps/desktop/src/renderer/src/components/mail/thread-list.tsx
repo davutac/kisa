@@ -1,4 +1,5 @@
 import { createController } from "@ui-sdk/core";
+import type { VirtualItem } from "@ui-sdk/core";
 import {
   CircleAlertIcon,
   InboxIcon,
@@ -13,6 +14,7 @@ import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { PinnedDayHeading } from "@/components/mail/day-heading";
 import {
   getBulkDeleteForeverConfirmation,
   getDeleteForeverConfirmation,
@@ -29,9 +31,13 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { useCalendar } from "@/hooks/use-calendar";
+import type { Calendar } from "@/hooks/use-calendar";
 import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
+import { cn } from "@/lib/utils";
 import { getMailboxSystemLabel, hasStarredLabel } from "@/mail/label";
+import { formatMailDayHeading } from "@/mail/mail-date";
 import { isLabelPlace } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";
 import {
@@ -45,6 +51,7 @@ import {
   canStarThread,
   getBulkStarTarget,
 } from "@/mail/thread-action-availability";
+import { isFirstOfDay, isNewestFirst } from "@/mail/thread-day-headings";
 import {
   getBulkThreadDestructiveAction,
   getThreadDestructiveAction,
@@ -87,6 +94,33 @@ export interface MailThreadListProps {
   showAccount?: boolean;
   threads: readonly MailThreadSummary[];
 }
+
+const renderPinnedDayHeading = (rows: readonly VirtualItem[]) => (
+  <PinnedDayHeading revision={rows} />
+);
+
+// The pinned heading marks the top edge of a grouped list, so only its
+// bottom fades.
+const getScrollerClassName = (isGroupedByDay: boolean) =>
+  cn(
+    "scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden! outline-none",
+    isGroupedByDay && "[--scroll-fade-t-size:0px]"
+  );
+
+const getPinnedDayHeading = (isGroupedByDay: boolean, threadCount: number) =>
+  isGroupedByDay && threadCount > 0 ? renderPinnedDayHeading : undefined;
+
+/** A rendered row's day, and whether it opens that day, in a grouped list. */
+const getRowDay = (
+  threads: readonly MailThreadSummary[],
+  index: number,
+  thread: MailThreadSummary,
+  calendar: Calendar
+) => ({
+  day: formatMailDayHeading(thread.latestAt, calendar),
+  isFirstOfDay:
+    threads[index] === thread && isFirstOfDay(threads, index, calendar),
+});
 
 const getRowDestructiveActions = (
   thread: MailThreadSummary,
@@ -400,6 +434,8 @@ const MailThreadList = ({
     [threads]
   );
   const checkedKeys = useMemo(() => [...checkedThreadIds], [checkedThreadIds]);
+  const calendar = useCalendar();
+  const isGroupedByDay = useMemo(() => isNewestFirst(threads), [threads]);
   // The trailing row can be a paging trigger or a passive note. Auto-load still
   // keys off `hasNextPage`, so a note cannot start a paging loop.
   // A failure with rows on screen is reported after them; without rows the
@@ -647,7 +683,7 @@ const MailThreadList = ({
         }
         checkable
         checked={checkedKeys}
-        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 outline-none"
+        className={getScrollerClassName(isGroupedByDay)}
         controller={list}
         current={selectedThreadKey}
         estimate={88}
@@ -661,6 +697,7 @@ const MailThreadList = ({
         onRowsRendered={(rows) => {
           setLastRenderedIndex(rows.at(-1)?.index);
         }}
+        pinned={getPinnedDayHeading(isGroupedByDay, threads.length)}
         ref={scrollElementRef}
         rowCount={threads.length}
         selectedMessage={selectedMessage}
@@ -674,6 +711,9 @@ const MailThreadList = ({
 
               return thread === undefined ? null : (
                 <MailThreadItem
+                  {...(isGroupedByDay
+                    ? getRowDay(threads, row.index, thread, calendar)
+                    : undefined)}
                   hasCheckedThreads={checkedThreadIds.size > 0}
                   isChecked={checkedThreadIds.has(row.key)}
                   isSelected={row.key === selectedThreadKey}

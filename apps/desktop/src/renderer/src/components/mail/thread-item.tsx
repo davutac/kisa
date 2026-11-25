@@ -4,6 +4,7 @@ import { memo, useState } from "react";
 
 import AccountChip from "@/components/accounts/account-chip";
 import MailAttachmentList from "@/components/mail/attachment-list";
+import { DayHeading } from "@/components/mail/day-heading";
 import MailLabelBadges from "@/components/mail/label-badges";
 import MailDate from "@/components/mail/mail-date";
 import MailThreadQuickActions, {
@@ -38,8 +39,12 @@ import type { MailThreadSummary } from "@/shared/ipc/mail";
 const VISIBLE_ATTACHMENT_COUNT = 3;
 
 interface MailThreadItemProps {
+  /** The row's day heading, in a list grouped by day. */
+  day?: string;
   hasCheckedThreads?: boolean;
   isChecked?: boolean;
+  /** Draws the day heading over the first row of each day. */
+  isFirstOfDay?: boolean;
   isSelected?: boolean;
   /** The listed mailbox's own system label, which every row would repeat. */
   mailboxLabel?: string;
@@ -268,9 +273,47 @@ const ThreadSenderHeader = ({
   );
 };
 
+const ThreadAttachments = ({ thread }: { thread: MailThreadSummary }) => {
+  if (thread.attachments.length === 0) {
+    return null;
+  }
+
+  const visibleAttachments = thread.attachments.slice(
+    0,
+    VISIBLE_ATTACHMENT_COUNT
+  );
+  const hiddenAttachmentCount =
+    thread.attachments.length - visibleAttachments.length;
+
+  return (
+    <div
+      aria-label="Attachments"
+      className="flex flex-wrap items-center gap-1.5 pt-1"
+    >
+      <MailAttachmentList
+        accountId={thread.accountId}
+        attachments={visibleAttachments}
+      />
+      {hiddenAttachmentCount > 0 ? (
+        <Badge
+          className="bg-muted text-muted-foreground shrink-0"
+          variant="secondary"
+        >
+          <span aria-hidden="true">+{hiddenAttachmentCount}</span>
+          <span className="sr-only">
+            {hiddenAttachmentCount} more attachments
+          </span>
+        </Badge>
+      ) : null}
+    </div>
+  );
+};
+
 const MailThreadItem = ({
+  day,
   hasCheckedThreads = false,
   isChecked = false,
+  isFirstOfDay = false,
   isSelected = false,
   mailboxLabel,
   onToggleSelection,
@@ -289,12 +332,6 @@ const MailThreadItem = ({
     isHovered
   );
   const revealTransition = shouldReduceMotion ? NO_MOTION : easeInOut(0.26);
-  const visibleAttachments = thread.attachments.slice(
-    0,
-    VISIBLE_ATTACHMENT_COUNT
-  );
-  const hiddenAttachmentCount =
-    thread.attachments.length - visibleAttachments.length;
   const { bound: quickActions, width: quickActionsWidth } = bindQuickActions(
     rowActions,
     thread
@@ -302,7 +339,7 @@ const MailThreadItem = ({
 
   return (
     <MailListRow
-      className="absolute left-0 w-full pb-px"
+      className="border-border/60 absolute left-0 w-full border-b"
       render={
         <m.div
           animate={shouldReduceMotion ? undefined : { opacity: 1 }}
@@ -320,9 +357,11 @@ const MailThreadItem = ({
           }}
         />
       }
+      data-day={day}
       style={{ top }}
       value={getThreadSelectionKey(thread)}
     >
+      {day !== undefined && isFirstOfDay ? <DayHeading day={day} /> : null}
       <m.div
         className="relative"
         initial={false}
@@ -335,7 +374,7 @@ const MailThreadItem = ({
       >
         {/* Opaque, so the row hides the panel edge it overlaps. */}
         <MailListCell
-          className="bg-background relative z-10 rounded-md"
+          className="bg-background relative z-10"
           render={
             <m.div
               animate={{
@@ -347,17 +386,14 @@ const MailThreadItem = ({
           }
         >
           <Item
-            className={cn(
-              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3",
-              thread.isUnread && "bg-muted/30"
-            )}
+            className="data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 rounded-none border-0 px-4 py-3"
             data-active={isActive}
             data-checked={isChecked}
             data-selected={isSelected}
           >
             <MailListOpen
               aria-label={getThreadRowLabel(thread, calendar, showAccount)}
-              className="absolute inset-0 z-0 rounded-md text-left outline-none"
+              className="absolute inset-0 z-0 text-left outline-none"
             />
             <ItemContent className="pointer-events-none relative z-10 min-w-0 gap-1">
               <ThreadSenderHeader
@@ -395,28 +431,7 @@ const MailThreadItem = ({
               <ItemDescription className="line-clamp-1 text-sm">
                 {thread.snippet}
               </ItemDescription>
-              {thread.attachments.length === 0 ? null : (
-                <div
-                  aria-label="Attachments"
-                  className="flex flex-wrap items-center gap-1.5 pt-1"
-                >
-                  <MailAttachmentList
-                    accountId={thread.accountId}
-                    attachments={visibleAttachments}
-                  />
-                  {hiddenAttachmentCount > 0 ? (
-                    <Badge
-                      className="bg-muted text-muted-foreground shrink-0"
-                      variant="secondary"
-                    >
-                      <span aria-hidden="true">+{hiddenAttachmentCount}</span>
-                      <span className="sr-only">
-                        {hiddenAttachmentCount} more attachments
-                      </span>
-                    </Badge>
-                  ) : null}
-                </div>
-              )}
+              <ThreadAttachments thread={thread} />
             </ItemContent>
             <ItemActions className="pointer-events-none relative z-10 gap-1.5 self-start pt-0.5">
               {thread.isUnread ? (

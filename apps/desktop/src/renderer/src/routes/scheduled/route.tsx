@@ -162,7 +162,7 @@ function ScheduledRoute() {
               </Empty>
             ) : null
           }
-          className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4 outline-none"
+          className="relative min-h-0 flex-1 overflow-x-hidden! pb-4 outline-none"
           controller={list}
           current={selectedKey}
           estimate={105}

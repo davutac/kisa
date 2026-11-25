@@ -57,8 +57,7 @@ const quickActionsVariants = {
 
 const quickActionClassName =
   "h-auto w-full min-w-0 rounded-none text-muted-foreground";
-// The first column sits under the row's rounded edge, so its icons start
-// past it.
+// The first column reaches under the row's edge, so its icons start past it.
 const overlappingQuickActionClassName = `${quickActionClassName} pl-3`;
 
 /** The keys a revealed row's action answers to, only while the row has focus. */
@@ -227,7 +226,7 @@ const MailThreadQuickActions = ({
     // round, and `inert` keeps the covered buttons out of the focus order.
     <MailListActions
       className={cn(
-        "bg-card absolute inset-y-0 right-0 z-0 grid grid-flow-col overflow-hidden rounded-r-md",
+        "bg-card absolute inset-y-0 right-0 z-0 grid grid-flow-col overflow-hidden",
         columnClassNames.grid
       )}
       inert={!isRevealed}
