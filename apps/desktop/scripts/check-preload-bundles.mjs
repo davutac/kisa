@@ -1,15 +1,13 @@
-import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const preloadDirectory = path.resolve("out/preload");
+// Entries run in Electron's sandboxed preload environment, whose restricted
+// CommonJS loader cannot resolve bundler-created sibling chunks.
 const entries = ["account-setup.cjs", "attachment-preview.cjs", "index.cjs"];
 const relativeRequirePattern = /require\(["']\./u;
 
 for (const entry of entries) {
-  // Entries run in Electron's sandboxed preload environment, whose restricted
-  // CommonJS loader cannot resolve bundler-created sibling chunks.
-  // eslint-disable-next-line no-await-in-loop
-  const source = await readFile(path.join(preloadDirectory, entry), "utf-8");
+  const source = readFileSync(path.resolve("out/preload", entry), "utf-8");
 
   if (relativeRequirePattern.test(source)) {
     throw new Error(

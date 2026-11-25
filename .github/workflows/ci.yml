@@ -53,10 +53,4 @@ jobs:
         run: bun run check
 
       - name: Run tests
-        shell: bash
-        run: |
-          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
-            bun run test
-          else
-            echo "No test script configured; skipping tests."
-          fi
+        run: bun run test
