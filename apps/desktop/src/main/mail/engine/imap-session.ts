@@ -753,8 +753,9 @@ export const makeSession = (
     path: string,
     uidValidity: bigint,
     uids: readonly number[],
-    // Resolves `false` when the server refused the command.
-    operation: (range: string) => Promise<boolean>
+    // Resolves `false` when the server refused the command. imapflow resolves
+    // `undefined` for a command it had no reason to send, which is no refusal.
+    operation: (range: string) => Promise<boolean | undefined>
   ): Effect.Effect<void, MailTransportError> => {
     const range = toUidSet(uids);
 
@@ -764,7 +765,7 @@ export const makeSession = (
           path,
           uidValidity,
           async () => {
-            if (!(await operation(range))) {
+            if ((await operation(range)) === false) {
               refuseCommand();
             }
           },

@@ -179,8 +179,8 @@ vi.mock(import("../src/main/electron/shell"), () => ({
 vi.mock(import("../src/main/auth/accounts"), async () => {
   const { Effect: MockEffect } = await import("effect");
 
-  // SAFETY: the accounts are only encoded into the reply these tests compare,
-  // so this one stands in for the stored list without its services.
+  // SAFETY: the setup window only passes the listed accounts, in a reply, to
+  // the mocked `notifyAccountsChanged`, where these tests compare them.
   return {
     listAccounts: (() =>
       MockEffect.succeed([{ email: "name@icloud.com" }])) as never,
