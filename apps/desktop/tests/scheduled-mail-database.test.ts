@@ -12,8 +12,8 @@ import {
   openDatabaseConnection,
 } from "../../../packages/database/src/client";
 import type {
-  DatabaseRemoteCallback,
   RemoteDatabaseClient,
+  RemoteDatabaseExecute,
 } from "../../../packages/database/src/remote-client";
 import { createRemoteDatabaseClient } from "../../../packages/database/src/remote-client";
 import type { withDatabaseClient } from "../src/main/database-query";
@@ -66,23 +66,16 @@ const insertScheduled = (
 const toRemoteDatabase = (
   connection: ReturnType<typeof openDatabaseConnection>
 ): RemoteDatabaseClient => {
-  const execute: DatabaseRemoteCallback = (query, parameters, method) => {
-    const statement = connection.prepare(query);
+  const execute: RemoteDatabaseExecute = (query, parameters, method) => {
+    const statement = connection.prepare<unknown[], unknown[]>(query);
 
     if (method === "run") {
       statement.run(...parameters);
 
-      return Promise.resolve({ rows: [] });
+      return Promise.resolve([]);
     }
 
-    const dataStatement = statement.raw(true);
-
-    const rows =
-      method === "get"
-        ? dataStatement.get(...parameters)
-        : dataStatement.all(...parameters);
-
-    return Promise.resolve({ rows: Array.isArray(rows) ? rows : [] });
+    return Promise.resolve(statement.raw(true).all(...parameters));
   };
 
   return createRemoteDatabaseClient(execute);

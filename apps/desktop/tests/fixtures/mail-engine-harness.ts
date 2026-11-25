@@ -8,7 +8,7 @@ import {
   createDatabaseClient,
   openDatabaseConnection,
 } from "@repo/database/client";
-import type { DatabaseRemoteCallback } from "@repo/database/remote-client";
+import type { RemoteDatabaseExecute } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import type { Dialect } from "@repo/mail/dialects";
 import { MailStoreError } from "@repo/mail/errors";
@@ -32,31 +32,20 @@ applyDatabaseMigrations(
   )
 );
 
-const executeRemoteQuery: DatabaseRemoteCallback = (
+const executeRemoteQuery: RemoteDatabaseExecute = (
   query,
   parameters,
   method
 ) => {
-  const statement = connection.prepare(query);
+  const statement = connection.prepare<unknown[], unknown[]>(query);
 
   if (method === "run") {
     statement.run(...parameters);
 
-    return Promise.resolve({ rows: [] });
+    return Promise.resolve([]);
   }
 
-  const dataStatement = statement.raw(true);
-
-  if (method === "get") {
-    // SAFETY: `raw(true)` makes `get` return the selected row as the array of
-    // its column values, which is what the proxy driver takes as a `get`'s
-    // `rows`.
-    return Promise.resolve({
-      rows: dataStatement.get(...parameters) as never[],
-    });
-  }
-
-  return Promise.resolve({ rows: dataStatement.all(...parameters) });
+  return Promise.resolve(statement.raw(true).all(...parameters));
 };
 
 export const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);

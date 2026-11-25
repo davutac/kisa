@@ -46,15 +46,9 @@ export const createDatabaseProcessClient = (
     const context = yield* Effect.context<R>();
     const runPromise = Effect.runPromiseWith(context);
 
-    const database = createRemoteDatabaseClient(async (sql, params, method) => {
-      if (method === "get") {
-        throw new TypeError("Remote database get queries are unsupported");
-      }
-
-      const rows = await runPromise(execute({ method, params, sql }));
-
-      return { rows: restoreBuffers(rows) };
-    });
+    const database = createRemoteDatabaseClient(async (sql, params, method) =>
+      restoreBuffers(await runPromise(execute({ method, params, sql })))
+    );
 
     return yield* semaphore.withPermits(1)(run(database));
   });

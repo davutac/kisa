@@ -3,7 +3,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { openDatabaseConnection } from "@repo/database/client";
 import { eq, sql } from "drizzle-orm";
-import { integer, sqliteTable } from "drizzle-orm/sqlite-core";
+import { blob, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { Deferred, Effect, Exit, Fiber, Schema } from "effect";
 
 import { createDatabaseProcessClient } from "../src/main/database-process/client";
@@ -16,6 +16,13 @@ import { makeDatabaseExecutor } from "../src/utility/database-process/database-e
 
 const examples = sqliteTable("examples", {
   id: integer("id"),
+});
+
+/** One column of each kind the schema decodes: bytes, a boolean, and JSON. */
+const decoded = sqliteTable("decoded", {
+  bytes: blob("bytes", { mode: "buffer" }),
+  isUnread: integer("is_unread", { mode: "boolean" }),
+  labelIds: text("label_ids", { mode: "json" }).$type<string[]>(),
 });
 
 const makeTestClient = Effect.fn("makeTestClient")(function* makeTestClient() {
@@ -70,6 +77,56 @@ describe(createDatabaseProcessClient, () => {
         );
 
         expect(rows).toStrictEqual([[1, "Kisa", Buffer.from([1, 2, 3])]]);
+      })
+    )
+  );
+
+  it.effect("decodes each column kind as the database owner returned it", () =>
+    Effect.scoped(
+      Effect.gen(function* decodesColumns() {
+        const client = yield* makeTestClient();
+
+        const rows = yield* client.use((database) =>
+          Effect.tryPromise(async () => {
+            await database.run(
+              sql.raw(
+                "CREATE TABLE decoded (bytes BLOB, is_unread INTEGER, label_ids TEXT)"
+              )
+            );
+            await database.insert(decoded).values({
+              bytes: Buffer.from([1, 2]),
+              isUnread: true,
+              labelIds: ["inbox"],
+            });
+
+            return database.select().from(decoded).all();
+          })
+        );
+
+        expect(rows).toStrictEqual([
+          { bytes: Buffer.from([1, 2]), isUnread: true, labelIds: ["inbox"] },
+        ]);
+      })
+    )
+  );
+
+  it.effect("rejects raw queries that ask for rows as objects", () =>
+    Effect.scoped(
+      Effect.gen(function* rejectsObjectRows() {
+        const client = yield* makeTestClient();
+
+        yield* client.use((database) =>
+          Effect.promise(async () => {
+            await expect(
+              database.all(sql`SELECT 1 AS one`)
+            ).rejects.toMatchObject({
+              cause: {
+                message:
+                  "Remote database queries cannot return rows as objects",
+              },
+            });
+          })
+        );
       })
     )
   );
@@ -189,7 +246,7 @@ describe(makeDatabaseExecutor, () => {
           );
 
           const rows = yield* executor.execute({
-            method: "values",
+            method: "all",
             params,
             sql: `SELECT count(*) FROM (SELECT 1 WHERE 0 NOT IN (${params.map(() => "?").join(", ")}))`,
           });

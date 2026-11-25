@@ -57,5 +57,6 @@
   },
   "[tailwindcss]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
-  }
+  },
+  "js/ts.tsdk.path": "node_modules/typescript"
 }
