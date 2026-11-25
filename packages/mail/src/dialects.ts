@@ -230,6 +230,15 @@ const normalizeFolderName = (mailbox: ImapMailbox): string =>
     ? mailbox.path.split(mailbox.delimiter).join("/")
     : mailbox.path;
 
+/**
+ * Mailboxes a server marks `\All` or `\Flagged`. RFC 6154 expects both to
+ * be views of mail that lives in other mailboxes, so the generic dialect
+ * does not read them: what such a view shows is no second copy, and counting
+ * it as one would let a label's removal delete the only copy there is. The
+ * marks come from the server alone, never from a folder's name.
+ */
+const VIEW_ROLES: ReadonlySet<MailboxRole> = new Set(["all", "flagged"]);
+
 export const genericDialect: Dialect = {
   identify: (message) => {
     if (message.envelope === undefined) {
@@ -260,7 +269,10 @@ export const genericDialect: Dialect = {
     internalDate: true,
     size: true,
   },
-  syncedMailboxes: (mailboxes) => mailboxes.filter(isSelectable),
+  syncedMailboxes: (mailboxes) =>
+    mailboxes.filter(
+      (mailbox) => isSelectable(mailbox) && !VIEW_ROLES.has(mailbox.role)
+    ),
   userLabels: (mailboxes) =>
     mailboxes
       .filter((mailbox) => mailbox.role === "none" && isSelectable(mailbox))

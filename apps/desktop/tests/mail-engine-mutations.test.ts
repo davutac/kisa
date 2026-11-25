@@ -397,6 +397,28 @@ describe("thread actions with the generic dialect", () => {
     expect(locationPaths(filed.message_id)).toStrictEqual(["Archive"]);
   });
 
+  // A server's "All" is a view: what it shows of the message is the folder's
+  // own copy. Counted as another copy, it would let the label's removal
+  // delete the only one there is.
+  it("archives a folder's only copy though the server's All view shows it too", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(
+      [...ICLOUD_MAILBOXES, { path: "virtual/All", specialUse: "\\All" }],
+      ["IDLE"]
+    );
+    server.deliver("Receipts", genericMessage("viewed"));
+    server.deliver("virtual/All", genericMessage("viewed"));
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+    const { message_id: messageId, thread_id: threadId } = genericIds("viewed");
+
+    await act(scope, threadId, label(userLabelId("Receipts"), false));
+
+    expect(server.calls).toContain("move Receipts -> Archive");
+    expect(server.calls).not.toContain("expunge Receipts");
+    expect(locationPaths(messageId)).toStrictEqual(["Archive"]);
+  });
+
   it("archives a folder's copy when the only other copy is in Trash", async () => {
     const { scope, server } = await syncIcloud([
       { id: "e", path: "Receipts" },

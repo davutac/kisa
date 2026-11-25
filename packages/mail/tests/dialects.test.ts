@@ -131,6 +131,25 @@ describe("the generic dialect", () => {
     mailbox("Parent", undefined, { selectable: false }),
   ];
 
+  // RFC 6154 expects both to be views: the mail they show lives in other
+  // folders, so a copy read there would stand in for one that is not there.
+  it("leaves a server's views of mail kept elsewhere unsynced", () => {
+    const withViews = [
+      ...ICLOUD_MAILBOXES,
+      mailbox("virtual/All", "\\All"),
+      mailbox("virtual/Flagged", "\\Flagged"),
+    ];
+
+    expect(
+      genericDialect.syncedMailboxes(withViews).map((box) => box.path)
+    ).toStrictEqual(
+      genericDialect.syncedMailboxes(ICLOUD_MAILBOXES).map((box) => box.path)
+    );
+    expect(genericDialect.userLabels(withViews)).toStrictEqual(
+      genericDialect.userLabels(ICLOUD_MAILBOXES)
+    );
+  });
+
   it("syncs every selectable folder and turns plain folders into labels", () => {
     expect(genericDialect.syncedMailboxes(ICLOUD_MAILBOXES)).toHaveLength(6);
     expect(genericDialect.userLabels(ICLOUD_MAILBOXES)).toStrictEqual([
