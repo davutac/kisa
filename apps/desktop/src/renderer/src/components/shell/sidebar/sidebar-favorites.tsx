@@ -16,7 +16,7 @@ import SidebarFavoriteToggle, {
   favoriteToggleRowClassName,
 } from "./sidebar-favorite-toggle";
 import { writeFavoriteLabels } from "./sidebar-preferences";
-import { SidebarRow, SidebarUnreadDot } from "./sidebar-row";
+import { SidebarCountBadge, SidebarRow, withUnreadCount } from "./sidebar-row";
 
 interface SidebarFavoritesProps {
   readonly onSelect: (target: MailboxTarget) => void;
@@ -29,7 +29,7 @@ interface SidebarFavoritesProps {
  * place, as the row it came from does. A favorite of a disconnected account,
  * or one whose label its account no longer has, is not shown; nothing shows
  * until there is a favorite. A favorite whose place has unread conversations
- * shows the unread dot, as its label row does.
+ * shows their count, as its label row does.
  */
 const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
   const accounts = useAccounts();
@@ -51,7 +51,7 @@ const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
       accountIds.includes(accountId) &&
       !isMailboxLabelMissing(label, [accountId], catalogs, statuses)
   );
-  const unreadLabels = useUnreadLabels([
+  const { labels: unreadLabels } = useUnreadLabels([
     ...new Set(visible.map(({ accountId }) => accountId)),
   ]);
 
@@ -77,15 +77,19 @@ const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
             other.accountId !== favorite.accountId &&
             normalizeMailboxLabelName(other.label) === key
         );
-        const isUnread = unreadLabels.has(
-          toUnreadLabelKey(favorite.accountId, favorite.label)
-        );
+        const unreadCount =
+          unreadLabels.get(
+            toUnreadLabelKey(favorite.accountId, favorite.label)
+          ) ?? 0;
 
         return (
           <li key={`${favorite.accountId}\u0000${key}`}>
             <SidebarFavoriteToggle favorite={favorite}>
               <SidebarRow
-                ariaLabel={`${favorite.label}, ${favorite.accountId}${isUnread ? ", unread messages" : ""}`}
+                ariaLabel={withUnreadCount(
+                  `${favorite.label}, ${favorite.accountId}`,
+                  unreadCount
+                )}
                 className={favoriteToggleRowClassName}
                 icon={
                   <TagIcon
@@ -103,14 +107,14 @@ const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
                   <span className="opacity-70">{favorite.accountId}</span>
                 }
                 trailing={
-                  isNameShared || isUnread ? (
+                  isNameShared || unreadCount > 0 ? (
                     <>
                       {isNameShared ? (
                         <span className="text-muted-foreground max-w-20 shrink-0 truncate text-[11px]">
                           {favorite.accountId}
                         </span>
                       ) : null}
-                      {isUnread ? <SidebarUnreadDot /> : null}
+                      <SidebarCountBadge count={unreadCount} />
                     </>
                   ) : undefined
                 }

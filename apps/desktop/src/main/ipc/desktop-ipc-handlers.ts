@@ -36,7 +36,7 @@ import {
   deleteLabel,
   deleteForever,
   discardDraft,
-  getSpamStatus,
+  getUnreadCounts,
   getSyncStatus,
   getUnreadLabels,
   loadAttachmentPreview,
@@ -131,7 +131,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(getSyncStatus);
   yield* ipc.handle(getIndexProgress);
   yield* ipc.handle(reindexMail);
-  yield* ipc.handle(getSpamStatus);
+  yield* ipc.handle(getUnreadCounts);
   yield* ipc.handle(getUnreadLabels);
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);

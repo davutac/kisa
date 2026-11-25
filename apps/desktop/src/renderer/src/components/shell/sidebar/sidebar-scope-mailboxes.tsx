@@ -2,12 +2,12 @@ import { SendIcon, ShieldAlertIcon, StarIcon, Trash2Icon } from "lucide-react";
 
 import type { HotkeyCommandId } from "@/hotkeys";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
-import { useHasUnreadSpam } from "@/mail/use-spam-status";
+import { useUnreadCounts } from "@/mail/use-unread-counts";
 import type { Mailbox } from "@/shared/ipc/mail";
 
 import { isMailboxCurrent } from "../shell-navigation";
 import type { MailboxTarget, MailboxView } from "../shell-navigation";
-import { SidebarRow, SidebarUnreadDot } from "./sidebar-row";
+import { SidebarCountBadge, SidebarRow, withUnreadCount } from "./sidebar-row";
 import type { SidebarRowProps } from "./sidebar-row";
 import SidebarScopeLabels from "./sidebar-scope-labels";
 
@@ -37,19 +37,18 @@ const SCOPE_MAILBOXES: readonly ScopeMailbox[] = [
   },
 ];
 
-/** Spam marks unread spam in the scope it opens. */
+/** Spam counts unread spam in the scope it opens. */
 const SidebarSpamRow = ({
   accountIds,
   ...props
 }: SidebarRowProps & { readonly accountIds: readonly string[] }) => {
-  const hasUnreadSpam = useHasUnreadSpam(accountIds);
-  const ariaLabel = props.ariaLabel ?? props.label;
+  const { spam } = useUnreadCounts(accountIds);
 
   return (
     <SidebarRow
       {...props}
-      ariaLabel={hasUnreadSpam ? `${ariaLabel}, unread messages` : ariaLabel}
-      trailing={hasUnreadSpam ? <SidebarUnreadDot /> : undefined}
+      ariaLabel={withUnreadCount(props.ariaLabel ?? props.label, spam)}
+      trailing={spam === 0 ? undefined : <SidebarCountBadge count={spam} />}
     />
   );
 };
@@ -63,7 +62,7 @@ interface SidebarScopeMailboxesProps {
   readonly labels: readonly MailboxLabelItem[];
   readonly onLabelsExpandedChange: (expanded: boolean) => void;
   readonly onSelect: (target: MailboxTarget) => void;
-  /** The accounts the scope covers, for its unread Spam state. */
+  /** The accounts the scope covers, for its unread Spam count. */
   readonly scopeAccountIds: readonly string[];
   readonly scopeLabel: string;
   readonly view: MailboxView;

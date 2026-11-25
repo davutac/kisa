@@ -21,7 +21,7 @@ import type {
   MailLabelInputColor,
   MailLabelSummary,
   MailLabelUpdateRequest,
-  MailSpamStatusRequest,
+  MailUnreadCountsRequest,
   MailUnreadLabelsRequest,
   MailThreadLabelRequest,
   MailThreadLoadRequest,
@@ -51,7 +51,7 @@ import {
   setThreadReadState,
 } from "./mail-engine";
 import {
-  readHasUnreadSpam,
+  readUnreadCounts,
   readLabelCatalog,
   readThreadPage,
   readUnreadLabels,
@@ -92,10 +92,10 @@ export const refreshLabelCatalog = (request: MailLabelCatalogRequest) =>
     requestMailSync(request.accountId);
   }).pipe(Effect.andThen(listLabelCatalog(request)));
 
-export const loadSpamStatus = (request: MailSpamStatusRequest) =>
-  readDatabase("Could not check spam", async (database) => ({
-    hasUnreadSpam: await readHasUnreadSpam(database, request.accountIds),
-  }));
+export const loadUnreadCounts = (request: MailUnreadCountsRequest) =>
+  readDatabase("Could not count unread email", (database) =>
+    readUnreadCounts(database, request.accountIds)
+  );
 
 export const loadUnreadLabels = (request: MailUnreadLabelsRequest) =>
   readDatabase("Could not check labels", (database) =>

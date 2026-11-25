@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readUnreadLabels } from "../src/main/mail/engine/mail-reads";
 import {
-  hasUnreadLabel,
+  readUnreadCounts,
+  readUnreadLabels,
+} from "../src/main/mail/engine/mail-reads";
+import {
+  toUnreadLabelCounts,
   toUnreadLabelKey,
-  toUnreadLabelKeys,
 } from "../src/renderer/src/mail/use-unread-labels";
 import {
   connection,
@@ -43,50 +45,58 @@ const insertThread = (
     );
 };
 
-const readKeys = async (
-  accountIds: readonly string[] = [ONE, TWO]
-): Promise<readonly string[]> =>
-  [
-    ...toUnreadLabelKeys(await readUnreadLabels(remoteDatabase, accountIds)),
-  ].toSorted();
+const readCounts = async (accountIds: readonly string[] = [ONE, TWO]) =>
+  toUnreadLabelCounts(await readUnreadLabels(remoteDatabase, accountIds));
+
+const readLabels = async (
+  accountIds?: readonly string[]
+): Promise<Record<string, number>> => {
+  const { labels } = await readCounts(accountIds);
+  return Object.fromEntries(labels);
+};
 
 describe("unread labels", () => {
   beforeEach(() => {
     resetDatabase();
   });
 
-  it("lists a label with an unread conversation, in or out of the Inbox", async () => {
+  it("counts a label's unread conversations, in or out of the Inbox", async () => {
     insertThread(ONE, ["INBOX", "u:Work"], true);
+    insertThread(ONE, ["u:Work"], true);
     insertThread(ONE, ["u:Archive"], true);
     insertThread(ONE, ["INBOX", "u:Read"], false);
 
-    await expect(readKeys()).resolves.toStrictEqual([
-      toUnreadLabelKey(ONE, "Archive"),
-      toUnreadLabelKey(ONE, "Work"),
-    ]);
+    await expect(readLabels()).resolves.toStrictEqual({
+      [toUnreadLabelKey(ONE, "Archive")]: 1,
+      [toUnreadLabelKey(ONE, "Work")]: 2,
+    });
   });
 
   it("leaves out unread mail in Spam and Trash, as the label place does", async () => {
     insertThread(ONE, ["SPAM", "u:Work"], true);
     insertThread(ONE, ["TRASH", "u:Work"], true);
 
-    await expect(readKeys()).resolves.toStrictEqual([]);
+    const counts = await readCounts();
+
+    expect(Object.fromEntries(counts.labels)).toStrictEqual({});
+    expect(Object.fromEntries(counts.accounts)).toStrictEqual({});
   });
 
-  it("lists user labels only, each nested path on its own", async () => {
+  it("counts user labels only, each nested path on its own", async () => {
     insertThread(ONE, ["INBOX", "IMPORTANT", "UNREAD", "u:Bills/Steuer"], true);
 
-    await expect(readKeys()).resolves.toStrictEqual([
-      toUnreadLabelKey(ONE, "Bills/Steuer"),
-    ]);
+    await expect(readLabels()).resolves.toStrictEqual({
+      [toUnreadLabelKey(ONE, "Bills/Steuer")]: 1,
+    });
   });
 
-  it("folds case as the catalog does, beyond ASCII", async () => {
+  it("folds case as the catalog does, beyond ASCII, adding up what folds together", async () => {
     insertThread(ONE, ["u:Prüfung"], true);
+    insertThread(ONE, ["u:PRÜFUNG"], true);
 
-    const keys = await readKeys();
-
-    expect(keys).toStrictEqual([toUnreadLabelKey(ONE, "PRÜFUNG")]);
+    await expect(readLabels()).resolves.toStrictEqual({
+      [toUnreadLabelKey(ONE, "prüfung")]: 2,
+    });
   });
 
   it("keeps each account's labels apart, and reads only the accounts asked", async () => {
@@ -94,31 +104,74 @@ describe("unread labels", () => {
     insertThread(TWO, ["u:Shared"], false);
     insertThread(TWO, ["u:Other"], true);
 
-    await expect(readKeys()).resolves.toStrictEqual(
-      [
-        toUnreadLabelKey(ONE, "Shared"),
-        toUnreadLabelKey(TWO, "Other"),
-      ].toSorted()
-    );
-    await expect(readKeys([TWO])).resolves.toStrictEqual([
-      toUnreadLabelKey(TWO, "Other"),
-    ]);
-    await expect(readKeys([])).resolves.toStrictEqual([]);
+    await expect(readLabels()).resolves.toStrictEqual({
+      [toUnreadLabelKey(ONE, "Shared")]: 1,
+      [toUnreadLabelKey(TWO, "Other")]: 1,
+    });
+    await expect(readLabels([TWO])).resolves.toStrictEqual({
+      [toUnreadLabelKey(TWO, "Other")]: 1,
+    });
+    await expect(readLabels([])).resolves.toStrictEqual({});
+  });
+
+  it("counts a conversation once per account for the collapsed Labels row", async () => {
+    insertThread(ONE, ["INBOX", "u:Work", "u:Bills"], true);
+    insertThread(ONE, ["u:Work"], true);
+    insertThread(ONE, ["INBOX"], true);
+    insertThread(TWO, ["u:Work"], true);
+
+    const counts = await readCounts();
+
+    expect(counts.labels.get(toUnreadLabelKey(ONE, "Work"))).toBe(2);
+    expect(counts.labels.get(toUnreadLabelKey(ONE, "Bills"))).toBe(1);
+    expect(Object.fromEntries(counts.accounts)).toStrictEqual({
+      [ONE]: 2,
+      [TWO]: 1,
+    });
   });
 });
 
-describe("the collapsed Labels row", () => {
-  it("is unread when any of its account's own labels is", () => {
-    const unread = new Set([toUnreadLabelKey(ONE, "Bills/Steuer")]);
+describe("unread counts", () => {
+  beforeEach(() => {
+    resetDatabase();
+  });
 
-    expect(
-      hasUnreadLabel(unread, ONE, [
-        { name: "Amazon" },
-        { name: "bills/steuer" },
-      ])
-    ).toBeTruthy();
-    expect(hasUnreadLabel(unread, ONE, [{ name: "Amazon" }])).toBeFalsy();
-    // Another account's unread label of the same name does not count.
-    expect(hasUnreadLabel(unread, TWO, [{ name: "Bills/Steuer" }])).toBeFalsy();
+  it("counts unread Inbox conversations as the Unread filter lists them", async () => {
+    insertThread(ONE, ["INBOX"], true);
+    insertThread(ONE, ["INBOX"], true);
+    insertThread(ONE, ["INBOX"], false);
+    insertThread(ONE, ["u:Archive"], true);
+    insertThread(ONE, ["INBOX", "TRASH"], true);
+
+    await expect(
+      readUnreadCounts(remoteDatabase, [ONE])
+    ).resolves.toStrictEqual({ inbox: 2, spam: 0 });
+  });
+
+  it("counts unread Spam on its own", async () => {
+    insertThread(ONE, ["SPAM"], true);
+    insertThread(ONE, ["SPAM"], false);
+    insertThread(ONE, ["INBOX", "SPAM"], true);
+
+    await expect(
+      readUnreadCounts(remoteDatabase, [ONE])
+    ).resolves.toStrictEqual({ inbox: 0, spam: 2 });
+  });
+
+  it("counts only the accounts asked, together for a combined scope", async () => {
+    insertThread(ONE, ["INBOX"], true);
+    insertThread(TWO, ["INBOX"], true);
+    insertThread(TWO, ["SPAM"], true);
+
+    await expect(
+      readUnreadCounts(remoteDatabase, [ONE])
+    ).resolves.toStrictEqual({ inbox: 1, spam: 0 });
+    await expect(
+      readUnreadCounts(remoteDatabase, [ONE, TWO])
+    ).resolves.toStrictEqual({ inbox: 2, spam: 1 });
+    await expect(readUnreadCounts(remoteDatabase, [])).resolves.toStrictEqual({
+      inbox: 0,
+      spam: 0,
+    });
   });
 });

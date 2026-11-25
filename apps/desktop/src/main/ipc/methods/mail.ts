@@ -10,7 +10,7 @@ import {
   MAIL_UPDATE_LABEL_CHANNEL,
   MAIL_DELETE_THREAD_FOREVER_CHANNEL,
   MAIL_BULK_MUTATE_THREADS_CHANNEL,
-  MAIL_GET_SPAM_STATUS_CHANNEL,
+  MAIL_GET_UNREAD_COUNTS_CHANNEL,
   MAIL_GET_UNREAD_LABELS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
@@ -70,8 +70,8 @@ import {
   MailSearchResultsReply,
   MailSenderSuggestionRequest,
   MailSenderSuggestionsReply,
-  MailSpamStatusReply,
-  MailSpamStatusRequest,
+  MailUnreadCountsReply,
+  MailUnreadCountsRequest,
   MailSyncStatus,
   MailUnreadLabelsReply,
   MailUnreadLabelsRequest,
@@ -109,7 +109,7 @@ import {
   deleteThreadForever,
   listCachedThreadPage,
   listLabelCatalog,
-  loadSpamStatus,
+  loadUnreadCounts,
   loadUnreadLabels,
   markThreadNotSpam as recoverThreadFromSpam,
   openThread,
@@ -290,12 +290,12 @@ export const getSyncStatus = makeIpcMethod({
   result: MailSyncStatus,
 });
 
-export const getSpamStatus = makeIpcMethod({
-  channel: MAIL_GET_SPAM_STATUS_CHANNEL,
+export const getUnreadCounts = makeIpcMethod({
+  channel: MAIL_GET_UNREAD_COUNTS_CHANNEL,
   handler: (request) =>
-    toIpcReply(loadSpamStatus(request), "Could not check spam"),
-  payload: MailSpamStatusRequest,
-  result: MailSpamStatusReply,
+    toIpcReply(loadUnreadCounts(request), "Could not count unread email"),
+  payload: MailUnreadCountsRequest,
+  result: MailUnreadCountsReply,
 });
 
 export const getUnreadLabels = makeIpcMethod({

@@ -3,7 +3,12 @@ import { gunzipSync } from "node:zlib";
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { mailLabels, mailMessages, mailThreads } from "@repo/database/schemas";
 import type { StoredMailAttachment } from "@repo/database/schemas";
-import { SystemLabel, userLabelId, userLabelPath } from "@repo/mail/ids";
+import {
+  SystemLabel,
+  USER_LABEL_PREFIX,
+  userLabelId,
+  userLabelPath,
+} from "@repo/mail/ids";
 import { listedMessages } from "@repo/mail/listing";
 import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 
@@ -15,6 +20,7 @@ import type {
   MailboxPlace,
   ThreadMessage,
   MailThreadSummary,
+  MailUnreadCounts,
   MailUnreadLabels,
 } from "../../../shared/ipc/mail";
 import { isMailboxLabelPlace } from "../../../shared/ipc/mail";
@@ -385,49 +391,61 @@ export const readLabelCatalog = async (
   };
 };
 
-export const readHasUnreadSpam = async (
+const toAccountList = (accountIds: readonly string[]) =>
+  sql.join(
+    [...new Set(accountIds)].map((accountId) => sql`${accountId}`),
+    sql`, `
+  );
+
+/**
+ * Unread conversations in the accounts' Inbox, as the Unread filter lists
+ * it, and in their Spam. The Inbox count reads `mail_threads_unread_idx`,
+ * which holds only unread conversations outside Spam and Trash; Spam is
+ * bounded by the server's own retention.
+ */
+export const readUnreadCounts = async (
   database: RemoteDatabaseClient,
   accountIds: readonly string[]
-): Promise<boolean> => {
+): Promise<MailUnreadCounts> => {
   if (accountIds.length === 0) {
-    return false;
+    return { inbox: 0, spam: 0 };
   }
 
-  const [row] = await database
-    .select({ threadId: mailThreads.threadId })
-    .from(mailThreads)
-    .where(
-      and(
-        inArray(mailThreads.accountId, [...new Set(accountIds)]),
-        eq(mailThreads.isInSpam, true),
-        eq(mailThreads.isUnread, true)
-      )
-    )
-    .limit(1)
-    .all();
-  return row !== undefined;
+  const accounts = toAccountList(accountIds);
+  const [row] = await database.values<[number, number]>(sql`
+    SELECT
+      (SELECT count(*) FROM ${mailThreads} INDEXED BY mail_threads_unread_idx
+        WHERE ${mailThreads.accountId} IN (${accounts})
+          AND ${mailThreads.isInInbox} = 1
+          AND ${mailThreads.isUnread} = 1
+          AND ${mailThreads.isInSpam} = 0
+          AND ${mailThreads.isInTrash} = 0),
+      (SELECT count(*) FROM ${mailThreads}
+        WHERE ${mailThreads.accountId} IN (${accounts})
+          AND ${mailThreads.isInSpam} = 1
+          AND ${mailThreads.isUnread} = 1)
+  `);
+  return { inbox: row?.[0] ?? 0, spam: row?.[1] ?? 0 };
 };
 
 /**
- * The user labels with an unread conversation on their label place, the
- * condition `mailboxCondition` lists a label by: outside Spam and Trash,
- * whether or not in the Inbox. Paths keep the case the thread carries; the
- * renderer folds them as the catalog does.
+ * Unread conversations on each user label's place, the condition
+ * `mailboxCondition` lists a label by: outside Spam and Trash, whether or not
+ * in the Inbox. Paths keep the case the thread carries; the renderer folds
+ * them as the catalog does. Each account's total counts a conversation once
+ * however many of its labels it carries, for the row that stands for them all.
  */
 export const readUnreadLabels = async (
   database: RemoteDatabaseClient,
   accountIds: readonly string[]
 ): Promise<MailUnreadLabels> => {
   if (accountIds.length === 0) {
-    return { labels: [] };
+    return { accounts: [], labels: [] };
   }
 
-  const accounts = sql.join(
-    [...new Set(accountIds)].map((accountId) => sql`${accountId}`),
-    sql`, `
-  );
-  const rows = await database.values<[string, string]>(sql`
-    SELECT DISTINCT t.account_id, thread_label.value
+  const accounts = toAccountList(accountIds);
+  const labelRows = await database.values<[string, string, number]>(sql`
+    SELECT t.account_id, thread_label.value, count(DISTINCT t.thread_id)
     FROM mail_threads t
     JOIN json_each(t.label_ids) AS thread_label
     WHERE t.account_id IN (${accounts})
@@ -435,14 +453,31 @@ export const readUnreadLabels = async (
       AND t.is_in_spam = 0
       AND t.is_in_trash = 0
       AND thread_label.type = 'text'
+    GROUP BY t.account_id, thread_label.value
+  `);
+  const accountRows = await database.values<[string, number]>(sql`
+    SELECT t.account_id, count(*)
+    FROM mail_threads t
+    WHERE t.account_id IN (${accounts})
+      AND t.is_unread = 1
+      AND t.is_in_spam = 0
+      AND t.is_in_trash = 0
+      AND EXISTS (
+        SELECT 1 FROM json_each(t.label_ids) AS thread_label
+        WHERE thread_label.type = 'text'
+          AND substr(thread_label.value, 1, ${USER_LABEL_PREFIX.length}) = ${USER_LABEL_PREFIX}
+          AND length(thread_label.value) > ${USER_LABEL_PREFIX.length}
+      )
+    GROUP BY t.account_id
   `);
 
   return {
-    labels: rows.flatMap(([accountId, labelId]) => {
+    accounts: accountRows.map(([accountId, count]) => ({ accountId, count })),
+    labels: labelRows.flatMap(([accountId, labelId, count]) => {
       const label = userLabelPath(labelId);
       return label === undefined || label.length === 0
         ? []
-        : [{ accountId, label }];
+        : [{ accountId, count, label }];
     }),
   };
 };

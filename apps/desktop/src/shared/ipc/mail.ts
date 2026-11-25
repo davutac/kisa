@@ -489,28 +489,42 @@ export const MailCachedThreadPageRequest = Schema.Struct({
 export type MailCachedThreadPageRequest =
   typeof MailCachedThreadPageRequest.Type;
 
-export const MailSpamStatusRequest = Schema.Struct({
+export const MailUnreadCountsRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
 });
-export type MailSpamStatusRequest = typeof MailSpamStatusRequest.Type;
+export type MailUnreadCountsRequest = typeof MailUnreadCountsRequest.Type;
 
 export const MailReindexRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
 export type MailReindexRequest = typeof MailReindexRequest.Type;
 
-export const MailSpamStatus = Schema.Struct({ hasUnreadSpam: Schema.Boolean });
-export type MailSpamStatus = typeof MailSpamStatus.Type;
+/** Unread conversations in a scope's Inbox and in its Spam. */
+export const MailUnreadCounts = Schema.Struct({
+  inbox: Schema.Int,
+  spam: Schema.Int,
+});
+export type MailUnreadCounts = typeof MailUnreadCounts.Type;
 
 export const MailUnreadLabelsRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
 });
 export type MailUnreadLabelsRequest = typeof MailUnreadLabelsRequest.Type;
 
-/** Each account's user labels whose label place has unread conversations. */
+/**
+ * Unread conversations on each account's user label places, and, per
+ * account, those carrying any user label, each counted once.
+ */
 export const MailUnreadLabels = Schema.Struct({
+  accounts: Schema.Array(
+    Schema.Struct({ accountId: Schema.String, count: Schema.Int })
+  ),
   labels: Schema.Array(
-    Schema.Struct({ accountId: Schema.String, label: Schema.String })
+    Schema.Struct({
+      accountId: Schema.String,
+      count: Schema.Int,
+      label: Schema.String,
+    })
   ),
 });
 export type MailUnreadLabels = typeof MailUnreadLabels.Type;
@@ -669,8 +683,8 @@ export const MailBulkThreadMutationReply = IpcReply(
 export type MailBulkThreadMutationReply =
   typeof MailBulkThreadMutationReply.Type;
 
-export const MailSpamStatusReply = IpcReply(MailSpamStatus);
-export type MailSpamStatusReply = typeof MailSpamStatusReply.Type;
+export const MailUnreadCountsReply = IpcReply(MailUnreadCounts);
+export type MailUnreadCountsReply = typeof MailUnreadCountsReply.Type;
 
 export const MailUnreadLabelsReply = IpcReply(MailUnreadLabels);
 export type MailUnreadLabelsReply = typeof MailUnreadLabelsReply.Type;

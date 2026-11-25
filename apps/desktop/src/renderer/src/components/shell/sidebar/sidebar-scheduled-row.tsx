@@ -1,6 +1,6 @@
 import { CalendarClockIcon } from "lucide-react";
 
-import { SidebarRow } from "./sidebar-row";
+import { SidebarCountBadge, SidebarRow } from "./sidebar-row";
 
 const formatAttentionLabel = (attentionCount: number): string =>
   attentionCount === 0
@@ -30,12 +30,7 @@ const SidebarScheduledRow = ({
     }
     trailing={
       attentionCount === 0 ? undefined : (
-        <span
-          aria-hidden="true"
-          className="bg-destructive text-destructive-foreground min-w-4 shrink-0 rounded-full px-1 text-center text-[10px] leading-4 font-medium tabular-nums"
-        >
-          {attentionCount > 99 ? "99+" : attentionCount}
-        </span>
+        <SidebarCountBadge count={attentionCount} tone="attention" />
       )
     }
   />

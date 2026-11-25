@@ -70,7 +70,7 @@ export const MAIL_LIST_SENDERS_CHANNEL = "desktop:mail:list-senders";
 export const MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL =
   "desktop:mail:list-trusted-image-senders";
 export const MAIL_LOAD_THREAD_CHANNEL = "desktop:mail:load-thread";
-export const MAIL_GET_SPAM_STATUS_CHANNEL = "desktop:mail:get-spam-status";
+export const MAIL_GET_UNREAD_COUNTS_CHANNEL = "desktop:mail:get-unread-counts";
 export const MAIL_GET_UNREAD_LABELS_CHANNEL = "desktop:mail:get-unread-labels";
 export const MAIL_MARK_THREAD_NOT_SPAM_CHANNEL =
   "desktop:mail:mark-thread-not-spam";

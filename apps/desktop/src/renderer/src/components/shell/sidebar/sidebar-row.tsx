@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   CollapsiblePanel,
@@ -133,12 +134,39 @@ export const SidebarRow = ({
   );
 };
 
-export const SidebarUnreadDot = ({ className }: { className?: string }) => (
-  <span
-    aria-hidden="true"
-    className={cn("bg-destructive size-1.5 shrink-0 rounded-full", className)}
-  />
-);
+/**
+ * A count at a row's trailing edge: unread conversations in a secondary
+ * badge, or scheduled mail that needs attention in a red one. Nothing shows
+ * for zero. It is hidden from assistive technology, so the row's `ariaLabel`
+ * states the exact number, which the badge caps at 99+.
+ */
+export const SidebarCountBadge = ({
+  count,
+  tone = "unread",
+}: {
+  readonly count: number;
+  readonly tone?: "attention" | "unread";
+}) =>
+  count === 0 ? null : (
+    <Badge
+      aria-hidden="true"
+      // The secondary fill is the hovered and current row's own color, so a
+      // tint of the row's text keeps the badge visible on any row.
+      className={cn(
+        "h-4 min-w-4 px-1 text-[10px] tabular-nums",
+        tone === "attention"
+          ? "bg-destructive text-destructive-foreground"
+          : "bg-sidebar-foreground/10 text-sidebar-foreground/80"
+      )}
+      variant="secondary"
+    >
+      {count > 99 ? "99+" : count}
+    </Badge>
+  );
+
+/** A row's accessible name with its unread count, when it has one. */
+export const withUnreadCount = (label: string, count: number): string =>
+  count === 0 ? label : `${label}, ${count} unread`;
 
 /** The chevron a disclosing row shows; the row itself opens and closes. */
 export const SidebarDisclosureIndicator = ({

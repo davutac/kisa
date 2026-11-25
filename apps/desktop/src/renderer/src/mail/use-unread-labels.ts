@@ -1,93 +1,58 @@
-import { useEffect, useState } from "react";
-
-import { getThreadListChangeAccountId } from "@/mail/mailbox-model";
-import { getMailApi } from "@/platform/desktop";
+import type { MailApi } from "@/platform/desktop";
 import type { MailUnreadLabels } from "@/shared/ipc/mail";
 
-import { createCoalescedRead } from "./coalesced-read";
 import { normalizeMailboxLabelName } from "./mailbox-labels";
+import { useScopeRead } from "./use-scope-read";
 
-const EMPTY: ReadonlySet<string> = new Set();
-const BURST_READ_GAP_MS = 500;
+export interface UnreadLabelCounts {
+  /** Per account, unread conversations carrying any user label, once each. */
+  readonly accounts: ReadonlyMap<string, number>;
+  /** Unread conversations on each label's place, by `toUnreadLabelKey`. */
+  readonly labels: ReadonlyMap<string, number>;
+}
+
+const NONE: UnreadLabelCounts = { accounts: new Map(), labels: new Map() };
 
 /** One account's label, folded as the label catalog folds names. */
 export const toUnreadLabelKey = (accountId: string, label: string): string =>
   `${accountId}\u0000${normalizeMailboxLabelName(label)}`;
 
-export const toUnreadLabelKeys = ({
+/**
+ * Paths that fold to one key are one label to the catalog, and its place
+ * lists both, so their counts add up.
+ */
+export const toUnreadLabelCounts = ({
+  accounts,
   labels,
-}: MailUnreadLabels): ReadonlySet<string> =>
-  new Set(
-    labels.map(({ accountId, label }) => toUnreadLabelKey(accountId, label))
-  );
+}: MailUnreadLabels): UnreadLabelCounts => {
+  const byLabel = new Map<string, number>();
 
-/** Whether any of an account's labels has unread conversations on its place. */
-export const hasUnreadLabel = (
-  unreadLabels: ReadonlySet<string>,
-  accountId: string,
-  labels: readonly { readonly name: string }[]
-): boolean =>
-  labels.some(({ name }) =>
-    unreadLabels.has(toUnreadLabelKey(accountId, name))
-  );
+  for (const { accountId, count, label } of labels) {
+    const key = toUnreadLabelKey(accountId, label);
+    byLabel.set(key, (byLabel.get(key) ?? 0) + count);
+  }
+
+  return {
+    accounts: new Map(
+      accounts.map(({ accountId, count }) => [accountId, count])
+    ),
+    labels: byLabel,
+  };
+};
+
+const readUnreadLabelCounts = async (
+  mailApi: MailApi,
+  accountIds: readonly string[]
+): Promise<UnreadLabelCounts | undefined> => {
+  const reply = await mailApi.getUnreadLabels({ accountIds });
+  return reply.ok ? toUnreadLabelCounts(reply.data) : undefined;
+};
 
 /**
- * The labels with unread conversations on their label place, for the given
- * accounts, as `toUnreadLabelKey` keys. Refreshed by the thread event stream
- * of those accounts; no request is made for an empty scope.
+ * Unread conversations on the given accounts' label places. The read walks
+ * every unread conversation's labels, so a burst of thread events costs one
+ * more read rather than one each.
  */
 export const useUnreadLabels = (
   accountIds: readonly string[]
-): ReadonlySet<string> => {
-  const scopeKey = accountIds.join("\u0000");
-  const [status, setStatus] = useState({ keys: EMPTY, scopeKey });
-
-  useEffect(() => {
-    const mailApi = getMailApi();
-
-    if (mailApi === undefined || scopeKey === "") {
-      return;
-    }
-
-    // The scope key, not the caller's array, drives the effect, so a caller
-    // building a new array on every render does not request again each time.
-    const scopeAccountIds = scopeKey.split("\u0000");
-    // The read walks every unread conversation's labels, and the background
-    // index sends thread events after each step: a burst costs one more
-    // read, spaced from the last.
-    const reader = createCoalescedRead({
-      apply: (unread: MailUnreadLabels) => {
-        setStatus({ keys: toUnreadLabelKeys(unread), scopeKey });
-      },
-      pause: () => {
-        const { promise, resolve } = Promise.withResolvers<undefined>();
-        setTimeout(resolve, BURST_READ_GAP_MS);
-        return promise;
-      },
-      read: async () => {
-        const reply = await mailApi.getUnreadLabels({
-          accountIds: scopeAccountIds,
-        });
-        return reply.ok ? reply.data : undefined;
-      },
-    });
-    const unsubscribe = mailApi.onThreadListUpdated(({ changes }) => {
-      if (
-        changes.some((change) =>
-          scopeAccountIds.includes(getThreadListChangeAccountId(change))
-        )
-      ) {
-        reader.request();
-      }
-    });
-
-    reader.request();
-
-    return () => {
-      reader.stop();
-      unsubscribe();
-    };
-  }, [scopeKey]);
-
-  return status.scopeKey === scopeKey ? status.keys : EMPTY;
-};
+): UnreadLabelCounts => useScopeRead(accountIds, NONE, readUnreadLabelCounts);

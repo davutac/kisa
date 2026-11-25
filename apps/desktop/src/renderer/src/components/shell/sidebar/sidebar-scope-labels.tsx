@@ -4,11 +4,7 @@ import { Collapsible } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toMailboxLabelRows } from "@/mail/mailbox-labels";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
-import {
-  hasUnreadLabel,
-  toUnreadLabelKey,
-  useUnreadLabels,
-} from "@/mail/use-unread-labels";
+import { toUnreadLabelKey, useUnreadLabels } from "@/mail/use-unread-labels";
 
 import { isLabelsRowCurrent, isMailboxCurrent } from "../shell-navigation";
 import type { MailboxTarget, MailboxView } from "../shell-navigation";
@@ -20,7 +16,8 @@ import {
   SidebarDisclosureIndicator,
   SidebarDisclosurePanel,
   SidebarRow,
-  SidebarUnreadDot,
+  SidebarCountBadge,
+  withUnreadCount,
 } from "./sidebar-row";
 
 // Static classes, so Tailwind sees each one. Labels sit one step in from the
@@ -53,7 +50,7 @@ interface SidebarScopeLabelListProps {
   readonly labels: readonly MailboxLabelItem[];
   readonly onSelect: (target: MailboxTarget) => void;
   readonly scopeLabel: string;
-  readonly unreadLabels: ReadonlySet<string>;
+  readonly unreadLabels: ReadonlyMap<string, number>;
   readonly view: MailboxView;
 }
 
@@ -70,13 +67,17 @@ const SidebarScopeLabelList = ({
   <>
     {toMailboxLabelRows(labels).map(({ depth, item, name }) => {
       const target = { accountId, mailbox: { label: item.name } };
-      const isUnread = unreadLabels.has(toUnreadLabelKey(accountId, item.name));
+      const unreadCount =
+        unreadLabels.get(toUnreadLabelKey(accountId, item.name)) ?? 0;
 
       return (
         <li key={item.key}>
           <SidebarFavoriteToggle favorite={{ accountId, label: item.name }}>
             <SidebarRow
-              ariaLabel={`${item.name}, ${scopeLabel}${isUnread ? ", unread messages" : ""}`}
+              ariaLabel={withUnreadCount(
+                `${item.name}, ${scopeLabel}`,
+                unreadCount
+              )}
               className={cn(
                 getLabelDepthClass(depth),
                 favoriteToggleRowClassName
@@ -98,7 +99,11 @@ const SidebarScopeLabelList = ({
                   <span className="opacity-70">{item.name}</span>
                 )
               }
-              trailing={isUnread ? <SidebarUnreadDot /> : undefined}
+              trailing={
+                unreadCount === 0 ? undefined : (
+                  <SidebarCountBadge count={unreadCount} />
+                )
+              }
             />
           </SidebarFavoriteToggle>
         </li>
@@ -113,9 +118,9 @@ const SidebarScopeLabelList = ({
  * is a place like Sent: choosing it lists every conversation with it outside
  * Spam and Trash, and choosing it again returns to the account's Inbox.
  * Labels nest by their `/`-separated paths. An account without labels shows
- * no row. A label with unread conversations on its place shows the unread
- * dot, as Spam does, and while the labels are hidden the Labels row shows
- * it for any of them. A label row's star adds it to the favorites, and the
+ * no row. A label with unread conversations on its place shows their count,
+ * as Spam does, and while the labels are hidden the Labels row shows how many
+ * unread conversations carry any of them. A label row's star adds it to the favorites, and the
  * rows leave the current state to a favorite that shows their place.
  */
 const SidebarScopeLabels = ({
@@ -128,11 +133,13 @@ const SidebarScopeLabels = ({
   view,
 }: SidebarScopeLabelsProps) => {
   const isHeldByFavorite = useIsHeldByFavorite(view);
-  const unreadLabels = useUnreadLabels(labels.length === 0 ? [] : [accountId]);
-  // Open, each label carries its own dot; closed, the Labels row carries one
-  // for them all, since none of them is in sight.
-  const isUnreadHidden =
-    !isExpanded && hasUnreadLabel(unreadLabels, accountId, labels);
+  const unread = useUnreadLabels(labels.length === 0 ? [] : [accountId]);
+  // Open, each label carries its own count; closed, the Labels row carries
+  // one for them all, since none of them is in sight. It counts each
+  // conversation once, however many of the labels it carries.
+  const hiddenUnreadCount = isExpanded
+    ? 0
+    : (unread.accounts.get(accountId) ?? 0);
 
   if (labels.length === 0) {
     return null;
@@ -145,7 +152,7 @@ const SidebarScopeLabels = ({
       render={<li />}
     >
       <SidebarRow
-        ariaLabel={`Labels, ${scopeLabel}${isUnreadHidden ? ", unread messages" : ""}`}
+        ariaLabel={withUnreadCount(`Labels, ${scopeLabel}`, hiddenUnreadCount)}
         className="pl-7"
         disclosure
         icon={<TagsIcon />}
@@ -155,7 +162,7 @@ const SidebarScopeLabels = ({
         label="Labels"
         trailing={
           <>
-            {isUnreadHidden ? <SidebarUnreadDot /> : null}
+            <SidebarCountBadge count={hiddenUnreadCount} />
             <SidebarDisclosureIndicator isExpanded={isExpanded} />
           </>
         }
@@ -168,7 +175,7 @@ const SidebarScopeLabels = ({
             labels={labels}
             onSelect={onSelect}
             scopeLabel={scopeLabel}
-            unreadLabels={unreadLabels}
+            unreadLabels={unread.labels}
             view={view}
           />
         </ul>

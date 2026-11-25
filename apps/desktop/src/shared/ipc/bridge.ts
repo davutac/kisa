@@ -69,8 +69,8 @@ import type {
   MailSearchResultsReply,
   MailSenderSuggestionRequest,
   MailSenderSuggestionsReply,
-  MailSpamStatusReply,
-  MailSpamStatusRequest,
+  MailUnreadCountsReply,
+  MailUnreadCountsRequest,
   MailSyncStatus,
   MailUnreadLabelsReply,
   MailUnreadLabelsRequest,
@@ -199,9 +199,9 @@ export interface DesktopBridge {
   getLoginItemSettings: () => Promise<LoginItemSettingsReply>;
   getAiSettings: () => Promise<AiSettingsReply>;
   getMailSyncStatus: () => Promise<MailSyncStatus>;
-  getSpamStatus: (
-    request: MailSpamStatusRequest
-  ) => Promise<MailSpamStatusReply>;
+  getUnreadCounts: (
+    request: MailUnreadCountsRequest
+  ) => Promise<MailUnreadCountsReply>;
   getUnreadLabels: (
     request: MailUnreadLabelsRequest
   ) => Promise<MailUnreadLabelsReply>;

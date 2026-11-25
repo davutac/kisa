@@ -9,9 +9,9 @@ import { Spinner } from "@/components/ui/spinner";
 import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import type { MailboxLabelItem } from "@/mail/mailbox-labels";
-import { useHasUnreadMail } from "@/mail/use-has-unread-mail";
 import { useAccountIndexProgress } from "@/mail/use-mail-index-progress";
 import { useIsAccountSyncing } from "@/mail/use-mail-sync-state";
+import { useUnreadCounts } from "@/mail/use-unread-counts";
 import {
   SortableListHandle,
   SortableListItem,
@@ -30,7 +30,8 @@ import {
   SidebarDisclosureIndicator,
   SidebarDisclosurePanel,
   SidebarRow,
-  SidebarUnreadDot,
+  SidebarCountBadge,
+  withUnreadCount,
 } from "./sidebar-row";
 import { SidebarScopeMailboxes } from "./sidebar-scope-mailboxes";
 
@@ -133,7 +134,7 @@ const SidebarAccountRow = ({
 }: SidebarAccountRowProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const mailboxesId = useId();
-  const hasUnreadMail = useHasUnreadMail(account.email);
+  const { inbox: unreadCount } = useUnreadCounts([account.email]);
   const isHeldByFavorite = useIsHeldByFavorite(view);
   const openThreadId = useOpenThreadId();
   const isSyncing = useIsAccountSyncing(account.email);
@@ -215,7 +216,10 @@ const SidebarAccountRow = ({
         </SortableListHandle>
         <SidebarRow
           ariaBusy={isSyncing || isIndexing}
-          ariaLabel={`${account.email}${needsSignIn ? ", cannot sign in" : ""}${hasUnreadMail ? ", unread email" : ""}`}
+          ariaLabel={withUnreadCount(
+            `${account.email}${needsSignIn ? ", cannot sign in" : ""}`,
+            unreadCount
+          )}
           className="peer-hover/handle:bg-sidebar-accent peer-hover/handle:text-sidebar-accent-foreground"
           command={command}
           icon={<span aria-hidden="true" className="size-4 shrink-0" />}
@@ -246,7 +250,7 @@ const SidebarAccountRow = ({
           }
           trailing={
             <>
-              {hasUnreadMail ? <SidebarUnreadDot /> : null}
+              <SidebarCountBadge count={unreadCount} />
               <SidebarDisclosureIndicator isExpanded={isExpanded} />
             </>
           }

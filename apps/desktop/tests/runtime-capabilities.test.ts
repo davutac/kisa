@@ -133,10 +133,13 @@ describe(getRuntimeCapabilities, () => {
         data: { count: 0, hasScheduledMail: false },
         ok: true as const,
       }),
-    getSpamStatus: () =>
-      Promise.resolve({ data: { hasUnreadSpam: false }, ok: true as const }),
+    getUnreadCounts: () =>
+      Promise.resolve({ data: { inbox: 0, spam: 0 }, ok: true as const }),
     getUnreadLabels: () =>
-      Promise.resolve({ data: { labels: [] }, ok: true as const }),
+      Promise.resolve({
+        data: { accounts: [], labels: [] },
+        ok: true as const,
+      }),
     getUpdateStatus: () => Promise.resolve({ state: "idle" as const }),
     getVersions: () => versions,
     importDatabase: () =>
@@ -151,7 +154,10 @@ describe(getRuntimeCapabilities, () => {
     listComposerTemplates: () =>
       Promise.resolve({ data: [], ok: true as const }),
     listLabels: () =>
-      Promise.resolve({ data: { labels: [] }, ok: true as const }),
+      Promise.resolve({
+        data: { accounts: [], labels: [] },
+        ok: true as const,
+      }),
     listSenders: () =>
       Promise.resolve({ data: { senders: [] }, ok: true as const }),
     listScheduledMailPage: () =>
@@ -266,7 +272,10 @@ describe(getRuntimeCapabilities, () => {
         ok: true as const,
       }),
     syncLabels: () =>
-      Promise.resolve({ data: { labels: [] }, ok: true as const }),
+      Promise.resolve({
+        data: { accounts: [], labels: [] },
+        ok: true as const,
+      }),
     trashThread: () => Promise.resolve({ data: undefined, ok: true as const }),
     trustImageSender: () => Promise.resolve({ data: [], ok: true as const }),
     updateAccountName: () => Promise.resolve({ data: [], ok: true as const }),
@@ -334,7 +343,7 @@ describe(getRuntimeCapabilities, () => {
         deleteThreadForever: desktopBridge.deleteThreadForever,
         discardDraft: desktopBridge.discardMailDraft,
         getIndexProgress: desktopBridge.getMailIndexProgress,
-        getSpamStatus: desktopBridge.getSpamStatus,
+        getUnreadCounts: desktopBridge.getUnreadCounts,
         getSyncStatus: desktopBridge.getMailSyncStatus,
         getUnreadLabels: desktopBridge.getUnreadLabels,
         listCachedThreadPage: desktopBridge.listCachedThreadPage,

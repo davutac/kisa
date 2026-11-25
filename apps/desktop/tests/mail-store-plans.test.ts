@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MailDatabase } from "../src/main/mail/engine/mail-database";
 import {
+  readUnreadCounts,
   readUnreadInboxCount,
   readUnreadLabels,
 } from "../src/main/mail/engine/mail-reads";
@@ -232,6 +233,17 @@ describe("the list's counts and sender search", () => {
     expect(plans).toStrictEqual([
       "SCAN mail_threads USING INDEX mail_threads_unread_idx",
     ]);
+  });
+
+  it("counts an account's unread Inbox mail from the unread index", async () => {
+    const plans = await plansDuring(() =>
+      readUnreadCounts(remote, [accountId])
+    );
+
+    expect(plans.join("\n")).toContain(
+      "SEARCH mail_threads USING INDEX mail_threads_unread_idx (account_id=? AND is_in_inbox=?)"
+    );
+    expect(plans.filter(readsWholeAccount)).toStrictEqual([]);
   });
 
   it("finds labels with unread mail from the unread index", async () => {

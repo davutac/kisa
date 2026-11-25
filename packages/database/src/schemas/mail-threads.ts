@@ -73,8 +73,8 @@ export const mailThreads = sqliteTable(
       table.accountId,
       table.threadId
     ),
-    // Unread conversations outside Spam and Trash, which the unread count and
-    // the labels' unread dots read on every change to the list. SQLite uses
+    // Unread conversations outside Spam and Trash, which the unread counts
+    // and the labels' counts read on every change to the list. SQLite uses
     // it only for a query that states these conditions as literals.
     index("mail_threads_unread_idx")
       .on(table.accountId, table.isInInbox)

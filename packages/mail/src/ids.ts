@@ -46,7 +46,7 @@ export const isSystemLabelId = (labelId: string): boolean =>
  * User labels are prefixed so a Gmail label or folder can never be mistaken
  * for a system label, whatever the user named it.
  */
-const USER_LABEL_PREFIX = "u:";
+export const USER_LABEL_PREFIX = "u:";
 
 export const userLabelId = (path: string): LabelId =>
   LabelId.make(`${USER_LABEL_PREFIX}${path}`);
