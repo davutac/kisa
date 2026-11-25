@@ -20,10 +20,6 @@ import { getMainWindow } from "../window/create-window";
 import { installNativeContextMenu } from "../window/native-context-menu";
 import { listAccounts, notifyAccountsChanged } from "./accounts";
 import {
-  findHostedMailProvider,
-  MailExchangeLookupLive,
-} from "./mail-domain-lookup";
-import {
   decodeMicrosoftAccountRequest,
   MICROSOFT_ACCOUNT_MESSAGES,
   MicrosoftAccountError,
@@ -454,28 +450,6 @@ export const startMicrosoftAccountSetup = Effect.fn(
     current.window.close();
   }
 });
-
-/**
- * Says who hosts a domain's mail, for the setup window alone: the window
- * asks before it decides whether to show server fields. The answer is a
- * fixed provider or `null`, never anything DNS returned.
- */
-export const lookupAccountSetupDomain = Effect.fn("lookupAccountSetupDomain")(
-  function* lookupAccountSetupDomain(
-    senderId: number | undefined,
-    domain: string
-  ) {
-    if (sessionFor(senderId) === undefined) {
-      return yield* new PasswordAccountError({
-        message: "Account setup is no longer open",
-      });
-    }
-    const provider = yield* findHostedMailProvider(domain).pipe(
-      Effect.provide(MailExchangeLookupLive)
-    );
-    return provider ?? null;
-  }
-);
 
 /** Stops a Microsoft sign-in in progress, when the request came from the window. */
 export const cancelMicrosoftAccountSetup = (

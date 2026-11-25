@@ -2,19 +2,18 @@ import type {
   MicrosoftAccountSetupRequest,
   PasswordAccountSetupInput,
 } from "@/shared/ipc/account-setup";
+import type { AccountProvider } from "@/shared/ipc/accounts";
 import {
   findMailAccountPreset,
-  HOSTED_MAIL_PRESETS,
   isMailAddress,
   isMailHost,
   isMailPort,
   isMicrosoftConsumerAddress,
   isMicrosoftMailHost,
+  MAIL_ACCOUNT_PRESETS,
   MAX_DISPLAY_NAME_LENGTH,
-  toAddressDomain,
 } from "@/shared/mail-account-presets";
 import type {
-  HostedMailProvider,
   MailAccountPreset,
   MailAccountServers,
   MailServerSecurity,
@@ -30,32 +29,19 @@ export interface ServerFields {
   readonly security: MailServerSecurity;
 }
 
-/** What main answered about one domain: who hosts its mail, if Kisa knows. */
-export interface DomainLookup {
-  readonly domain: string;
-  readonly provider: HostedMailProvider | undefined;
-}
+/**
+ * The provider the user picked on the window's first step. `imap` is any
+ * other provider, whose servers the user types.
+ */
+export type SetupProvider = AccountProvider;
 
 export interface AccountSetupForm {
-  /**
-   * The last domain main looked up. An answer for another domain than the
-   * address's is stale and counts as none, so a late reply cannot decide.
-   */
-  readonly domainLookup: DomainLookup | undefined;
   readonly email: string;
   readonly imap: ServerFields;
   /** The sender name outgoing mail carries; optional. */
   readonly name: string;
-  /**
-   * The user asked to sign in with Microsoft for an address Kisa cannot tell
-   * is Microsoft's, such as a Microsoft 365 work address on its own domain.
-   */
-  readonly prefersMicrosoft: boolean;
-  /**
-   * The user asked to enter servers for a domain whose mail Google hosts,
-   * for a mailbox that lives elsewhere.
-   */
-  readonly prefersServers: boolean;
+  /** `undefined` until the user picks a provider, which the window asks first. */
+  readonly provider: SetupProvider | undefined;
   readonly smtp: ServerFields;
 }
 
@@ -67,187 +53,63 @@ const DEFAULT_PORTS = {
 } as const satisfies Record<ServerSide, Record<MailServerSecurity, string>>;
 
 export const INITIAL_ACCOUNT_SETUP_FORM: AccountSetupForm = {
-  domainLookup: undefined,
   email: "",
   imap: { host: "", port: DEFAULT_PORTS.imap.tls, security: "tls" },
   name: "",
-  prefersMicrosoft: false,
-  prefersServers: false,
+  provider: undefined,
   smtp: { host: "", port: DEFAULT_PORTS.smtp.starttls, security: "starttls" },
 };
 
 export type AccountSetupMode =
-  /** Not a complete address yet; nothing beyond the address is decided. */
-  | { readonly kind: "address" }
-  /** Main is still saying who hosts the address's domain. */
-  | { readonly kind: "lookup" }
+  /** Other: servers typed by hand. */
+  | { readonly kind: "manual" }
   /**
-   * Servers entered by hand. `hosted` is the preset the user set aside for
-   * them, which they can go back to.
+   * Outlook: sign in through Microsoft in the browser, with no password or
+   * servers. `via` says whether the address is an Outlook.com-family one,
+   * which has IMAP off by default, or any other, such as Microsoft 365.
    */
-  | { readonly hosted?: MailAccountPreset; readonly kind: "manual" }
+  | { readonly kind: "microsoft"; readonly via: "address" | "provider" }
   /**
-   * Sign in through Microsoft in the browser, with no password or servers.
-   * `via` says what decided it: an Outlook.com-family address, the user's
-   * choice, or a typed Microsoft server, which takes no passwords at all.
-   */
-  | {
-      readonly kind: "microsoft";
-      readonly via: "address" | "choice" | "server";
-    }
-  /**
-   * A known provider's servers. `via` says what decided it: the address's
-   * own domain, or a custom domain whose mail the provider hosts.
+   * Gmail or Apple: the provider's own servers. `via` says whether the
+   * address is on the provider's own domain, whose servers main applies
+   * itself, or a custom domain the user picked the provider for.
    */
   | {
       readonly kind: "preset";
       readonly preset: MailAccountPreset;
-      readonly via: "address" | "domain";
+      readonly via: "address" | "provider";
     };
 
-/** Who main said hosts the address's domain, once it has said. */
-const findDomainLookup = (
-  form: AccountSetupForm,
-  address: string
-): DomainLookup | undefined =>
-  form.domainLookup !== undefined &&
-  form.domainLookup.domain === toAddressDomain(address)
-    ? form.domainLookup
-    : undefined;
-
 /**
- * The domain to ask main about, or `undefined` when the form can decide
- * without it: an incomplete address, a preset, one of Microsoft's own
- * domains, or a domain already answered.
- */
-export const findDomainToLookUp = (
-  form: AccountSetupForm
-): string | undefined => {
-  const address = form.email.trim();
-  if (
-    !isMailAddress(address) ||
-    isMicrosoftConsumerAddress(address) ||
-    findMailAccountPreset(address) !== undefined ||
-    findDomainLookup(form, address) !== undefined
-  ) {
-    return undefined;
-  }
-  return toAddressDomain(address);
-};
-
-/** Records main's answer for a domain, replacing any earlier one. */
-export const withDomainLookup = (
-  form: AccountSetupForm,
-  lookup: DomainLookup
-): AccountSetupForm => ({ ...form, domainLookup: lookup });
-
-/**
- * What the form asks for. The address decides first: a preset or one of
- * Microsoft's own domains cannot be overridden. For any other address the
- * user's choice or a Microsoft server decides, even while the address is
- * being edited, so the form does not flicker back to a password. Then who
- * hosts the domain decides, once main has said, unless the user chose to
- * enter servers.
+ * What the form asks for, decided by the provider alone so the form keeps
+ * its shape while the address is typed. An address of another provider is
+ * a problem for `findProviderMismatch`, not a change of form.
  */
 export const getAccountSetupMode = (
-  form: AccountSetupForm
+  provider: SetupProvider,
+  email: string
 ): AccountSetupMode => {
-  const address = form.email.trim();
+  if (provider === "imap") {
+    return { kind: "manual" };
+  }
+  const address = email.trim();
   const isAddress = isMailAddress(address);
-
-  if (isAddress && isMicrosoftConsumerAddress(address)) {
-    return { kind: "microsoft", via: "address" };
+  if (provider === "outlook") {
+    return {
+      kind: "microsoft",
+      via:
+        isAddress && isMicrosoftConsumerAddress(address)
+          ? "address"
+          : "provider",
+    };
   }
-
-  const preset = isAddress ? findMailAccountPreset(address) : undefined;
-  if (preset !== undefined) {
-    return { kind: "preset", preset, via: "address" };
-  }
-  if (form.prefersMicrosoft) {
-    return { kind: "microsoft", via: "choice" };
-  }
-  if (isMicrosoftMailHost(form.imap.host)) {
-    return { kind: "microsoft", via: "server" };
-  }
-  if (!isAddress) {
-    return { kind: "address" };
-  }
-
-  const lookup = findDomainLookup(form, address);
-  const hosted =
-    lookup?.provider === undefined
-      ? undefined
-      : HOSTED_MAIL_PRESETS[lookup.provider];
-  if (form.prefersServers) {
-    return hosted === undefined
-      ? { kind: "manual" }
-      : { hosted, kind: "manual" };
-  }
-  if (lookup === undefined) {
-    return { kind: "lookup" };
-  }
-  return hosted === undefined
-    ? { kind: "manual" }
-    : { kind: "preset", preset: hosted, via: "domain" };
+  const preset = MAIL_ACCOUNT_PRESETS[provider];
+  const isOwnAddress =
+    isAddress && findMailAccountPreset(address)?.provider === provider;
+  return { kind: "preset", preset, via: isOwnAddress ? "address" : "provider" };
 };
 
 export type SignInMethod = "microsoft" | "password";
-
-/**
- * What the switch under the address changes to: a way to sign in, or, for a
- * domain whose mail a known provider hosts, servers typed by hand (`servers`)
- * or that provider's again (`hosted`).
- */
-export type SetupSwitch = SignInMethod | "hosted" | "servers";
-
-/**
- * What the form can switch to from this mode, if anything. A domain a known
- * provider hosts can switch to typed servers and back. Any other typed
- * address may switch to Microsoft when this build can sign in there; a mode
- * the user or a server chose can always switch back. An Outlook.com-family
- * address cannot, since Microsoft refuses passwords for it.
- */
-export const findSignInSwitch = (
-  mode: AccountSetupMode,
-  canSignInWithMicrosoft: boolean
-): SetupSwitch | undefined => {
-  if (mode.kind === "preset") {
-    return mode.via === "domain" ? "servers" : undefined;
-  }
-  if (mode.kind === "manual") {
-    if (mode.hosted !== undefined) {
-      return "hosted";
-    }
-    return canSignInWithMicrosoft ? "microsoft" : undefined;
-  }
-  if (mode.kind === "microsoft" && mode.via !== "address") {
-    return "password";
-  }
-  return undefined;
-};
-
-/**
- * Applies the switch under the address. Back to a password also clears a
- * Microsoft server, which would otherwise keep the form on Microsoft.
- */
-export const withSignInMethod = (
-  form: AccountSetupForm,
-  method: SetupSwitch
-): AccountSetupForm => {
-  if (method === "hosted" || method === "servers") {
-    return { ...form, prefersServers: method === "servers" };
-  }
-  if (method === "microsoft") {
-    return { ...form, prefersMicrosoft: true };
-  }
-  return {
-    ...form,
-    imap: isMicrosoftMailHost(form.imap.host)
-      ? { ...form.imap, host: "" }
-      : form.imap,
-    prefersMicrosoft: false,
-  };
-};
 
 /**
  * Switching security moves a port that still holds the old default to the
@@ -307,6 +169,60 @@ const checkServer = (
   return undefined;
 };
 
+/** What the setup window calls each provider, on its first step. */
+export const SETUP_PROVIDER_NAMES = {
+  gmail: "Gmail",
+  icloud: "Apple",
+  imap: "Other",
+  outlook: "Outlook",
+} as const satisfies Record<SetupProvider, string>;
+
+const ADDRESS_NAMES = {
+  gmail: "a Gmail",
+  icloud: "an iCloud",
+  outlook: "a Microsoft",
+} as const satisfies Record<Exclude<SetupProvider, "imap">, string>;
+
+/** Which named provider an address belongs to by its domain alone. */
+const findAddressProvider = (
+  address: string
+): Exclude<SetupProvider, "imap"> | undefined => {
+  const preset = findMailAccountPreset(address);
+  if (preset !== undefined) {
+    return preset.provider;
+  }
+  return isMicrosoftConsumerAddress(address) ? "outlook" : undefined;
+};
+
+/**
+ * An address the picked provider cannot sign in. Main takes a preset
+ * address's own servers whatever the window sends, so a Gmail address under
+ * Apple or Other would quietly sign in to Google; it is refused here
+ * instead, naming the provider to pick. Apple takes only its own domains,
+ * the only ones Kisa has checked against Apple's servers; an iCloud+ custom
+ * domain goes through Other, where its servers are typed and checked.
+ */
+const findProviderMismatch = (
+  provider: SetupProvider,
+  address: string
+): AccountSetupProblem | undefined => {
+  const owner = findAddressProvider(address);
+  if (owner !== undefined && owner !== provider) {
+    return {
+      field: "email",
+      message: `This is ${ADDRESS_NAMES[owner]} address. Go back and choose ${SETUP_PROVIDER_NAMES[owner]}.`,
+    };
+  }
+  if (provider === "icloud" && owner === undefined) {
+    return {
+      field: "email",
+      message:
+        "Enter an iCloud address, such as name@icloud.com. For another domain, go back and choose Other.",
+    };
+  }
+  return undefined;
+};
+
 // Control characters would break the From header main writes the name into.
 const CONTROL_CHARACTER = /\p{Cc}/u;
 
@@ -328,39 +244,50 @@ const checkName = (name: string): AccountSetupProblem | undefined => {
   return undefined;
 };
 
+/** Other's servers, then whether they are Microsoft's, which take no passwords. */
+const checkServers = (
+  form: AccountSetupForm
+): AccountSetupProblem | undefined => {
+  const problem =
+    checkServer("imap", form.imap) ?? checkServer("smtp", form.smtp);
+  if (problem !== undefined) {
+    return problem;
+  }
+  return isMicrosoftMailHost(form.imap.host)
+    ? {
+        field: "imapHost",
+        message:
+          "Microsoft’s servers take no passwords. Go back and choose Outlook.",
+      }
+    : undefined;
+};
+
 /** The first thing to fix before the form can be sent, in reading order. */
 export const findAccountSetupProblem = (
   form: AccountSetupForm,
+  provider: SetupProvider,
   hasPassword: boolean
 ): AccountSetupProblem | undefined => {
   const nameProblem = checkName(form.name);
   if (nameProblem !== undefined) {
     return nameProblem;
   }
-  if (!isMailAddress(form.email.trim())) {
+  const address = form.email.trim();
+  if (!isMailAddress(address)) {
     return { field: "email", message: "Enter your email address." };
   }
-
-  const mode = getAccountSetupMode(form);
-
-  // Microsoft takes the password in the browser; this window asks for none.
-  if (mode.kind === "microsoft") {
-    return undefined;
+  const mismatch = findProviderMismatch(provider, address);
+  if (mismatch !== undefined) {
+    return mismatch;
   }
-  // Sending now would leave main to guess the servers; the answer is near.
-  if (mode.kind === "lookup") {
-    return {
-      field: "email",
-      message: "Still finding your mail provider’s settings.",
-    };
+  // Microsoft takes the password in the browser; this window asks for none.
+  if (provider === "outlook") {
+    return undefined;
   }
   if (!hasPassword) {
     return { field: "password", message: "Enter the app password." };
   }
-  if (mode.kind === "manual") {
-    return checkServer("imap", form.imap) ?? checkServer("smtp", form.smtp);
-  }
-  return undefined;
+  return provider === "imap" ? checkServers(form) : undefined;
 };
 
 const toServer = ({ host, port, security }: ServerFields) => ({
@@ -370,18 +297,20 @@ const toServer = ({ host, port, security }: ServerFields) => ({
 });
 
 /**
- * The server settings to send: the trimmed manual fields, or a hosted
- * domain's provider's, which main checks as if they were typed. None for an
- * address's own preset or Microsoft, whose settings main applies itself.
+ * The server settings to send: Other's typed ones, trimmed, or the picked
+ * provider's for a custom domain, which main checks as if they were typed.
+ * None for an address's own preset or Microsoft, whose settings main
+ * applies itself.
  */
 export const toAccountServers = (
-  form: AccountSetupForm
+  form: AccountSetupForm,
+  provider: SetupProvider
 ): MailAccountServers | undefined => {
-  const mode = getAccountSetupMode(form);
+  const mode = getAccountSetupMode(provider, form.email);
   if (mode.kind === "manual") {
     return { imap: toServer(form.imap), smtp: toServer(form.smtp) };
   }
-  if (mode.kind === "preset" && mode.via === "domain") {
+  if (mode.kind === "preset" && mode.via === "provider") {
     return { imap: mode.preset.imap, smtp: mode.preset.smtp };
   }
   return undefined;
@@ -430,16 +359,20 @@ export const readSignInAgain = (
 };
 
 /**
- * The form for signing in again: the address is the account's, and an
- * account on its own domain that signs in with Microsoft says so, since its
- * address alone would ask for a password.
+ * The form for signing in again: the address is the account's, and it
+ * skips the providers. How the account signs in picks one: Microsoft is
+ * Outlook, and a password account is its address's preset, for the
+ * preset's password wording, or Other, whose servers the page never shows.
  */
 export const createSignInAgainForm = (
   target: SignInAgainTarget
 ): AccountSetupForm => ({
   ...INITIAL_ACCOUNT_SETUP_FORM,
   email: target.email,
-  prefersMicrosoft: target.method === "microsoft",
+  provider:
+    target.method === "microsoft"
+      ? "outlook"
+      : (findMailAccountPreset(target.email)?.provider ?? "imap"),
 });
 
 /**
@@ -457,22 +390,13 @@ export const findSignInAgainProblem = (
 /** What the form still needs before it can be sent, for either kind of page. */
 export const findSetupProblem = (
   form: AccountSetupForm,
+  provider: SetupProvider,
   hasPassword: boolean,
   target: SignInAgainTarget | undefined
 ): AccountSetupProblem | undefined =>
   target === undefined
-    ? findAccountSetupProblem(form, hasPassword)
+    ? findAccountSetupProblem(form, provider, hasPassword)
     : findSignInAgainProblem(target, hasPassword);
-
-/** Signing in again offers no other way to sign in than the account's own. */
-export const findSetupSignInSwitch = (
-  mode: AccountSetupMode,
-  canSignInWithMicrosoft: boolean,
-  target: SignInAgainTarget | undefined
-): SetupSwitch | undefined =>
-  target === undefined
-    ? findSignInSwitch(mode, canSignInWithMicrosoft)
-    : undefined;
 
 /**
  * The password sign-in to send. Signing in again it carries the account's
@@ -480,6 +404,7 @@ export const findSetupSignInSwitch = (
  */
 export const toPasswordSubmission = (
   form: AccountSetupForm,
+  provider: SetupProvider,
   password: string,
   target: SignInAgainTarget | undefined
 ): PasswordAccountSetupInput =>
@@ -488,7 +413,7 @@ export const toPasswordSubmission = (
         email: form.email.trim(),
         name: toAccountName(form),
         password,
-        servers: toAccountServers(form),
+        servers: toAccountServers(form, provider),
       }
     : { email: target.email, password };
 

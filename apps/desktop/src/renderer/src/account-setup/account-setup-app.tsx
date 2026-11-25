@@ -1,8 +1,9 @@
 import { useShortcut } from "@ui-sdk/react/shortcuts";
+import { ChevronLeftIcon, ChevronRightIcon, MailIcon } from "lucide-react";
 import { useRef, useState } from "react";
-import type { FormEvent, RefObject } from "react";
-import { flushSync } from "react-dom";
+import type { FormEvent, ReactNode, RefObject } from "react";
 
+import AccountProviderIcon from "@/components/accounts/account-provider-icon";
 import { WindowTitlebar } from "@/components/shell/window-titlebar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,6 @@ import type {
 import {
   MAX_DISPLAY_NAME_LENGTH,
   OUTLOOK_IMAP_HELP_URL,
-  toAddressDomain,
 } from "@/shared/mail-account-presets";
 import type {
   MailAccountPreset,
@@ -45,16 +45,14 @@ import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import {
   createSignInAgainForm,
-  findDomainToLookUp,
   findSetupProblem,
-  findSetupSignInSwitch,
   getAccountSetupMode,
   INITIAL_ACCOUNT_SETUP_FORM,
   readSignInAgain,
+  SETUP_PROVIDER_NAMES,
   toMicrosoftSubmission,
   toPasswordSubmission,
   withServerSecurity,
-  withSignInMethod,
 } from "./account-setup-form";
 import type {
   AccountSetupField,
@@ -62,10 +60,9 @@ import type {
   AccountSetupMode,
   ServerFields,
   ServerSide,
-  SetupSwitch,
+  SetupProvider,
   SignInMethod,
 } from "./account-setup-form";
-import { useDomainLookup } from "./use-domain-lookup";
 
 const FIELD_IDS = {
   email: "account-email",
@@ -83,12 +80,26 @@ const PROBLEM_ID = "account-setup-problem";
 const alertClassName =
   "mt-4 transition-[opacity,translate] duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-opacity";
 
+// A step eases in from the side it comes from: the form from the end, as
+// the next step, and the providers from the start, going back.
+const STEP_ENTER_CLASS_NAMES = {
+  back: "transition-[opacity,translate] duration-150 starting:-translate-x-2 starting:opacity-0 motion-reduce:transition-opacity",
+  forward:
+    "transition-[opacity,translate] duration-150 starting:translate-x-2 starting:opacity-0 motion-reduce:transition-opacity",
+} as const;
+
 const DESCRIPTIONS = {
-  address: "Sign in with an app password from your mail provider.",
-  lookup: "Sign in with an app password from your mail provider.",
   manual:
-    "Enter your mail provider's server settings. Kisa checks them before saving.",
+    "Sign in with an app password and your mail provider's server settings. Kisa checks them before saving.",
   microsoft: "Kisa signs in to Outlook through Microsoft, in your browser.",
+} as const satisfies Record<
+  Exclude<AccountSetupMode["kind"], "preset">,
+  string
+>;
+
+const TITLES = {
+  manual: "Add IMAP account",
+  microsoft: "Add Outlook account",
 } as const satisfies Record<
   Exclude<AccountSetupMode["kind"], "preset">,
   string
@@ -98,15 +109,9 @@ const titleFor = (mode: AccountSetupMode): string => {
   if (SIGN_IN_AGAIN !== undefined) {
     return "Sign in again";
   }
-  if (mode.kind === "preset") {
-    return `Add ${mode.preset.title} account`;
-  }
-  if (mode.kind === "microsoft") {
-    return mode.via === "address"
-      ? "Add Outlook account"
-      : "Add Microsoft account";
-  }
-  return "Add account";
+  return mode.kind === "preset"
+    ? `Add ${mode.preset.title} account`
+    : TITLES[mode.kind];
 };
 
 const SUBMIT_LABELS = {
@@ -119,26 +124,8 @@ const PENDING_LABELS = {
   password: "Signing in…",
 } as const satisfies Record<SignInMethod, string>;
 
-const SIGN_IN_SWITCH_LABELS = {
-  microsoft: "Sign in with Microsoft instead",
-  password: "Use a password instead",
-  servers: "Enter server settings instead",
-} as const satisfies Record<Exclude<SetupSwitch, "hosted">, string>;
-
-/** The switch's label; going back to a hosting provider names it. */
-const switchLabel = (target: SetupSwitch, mode: AccountSetupMode): string => {
-  if (target !== "hosted") {
-    return SIGN_IN_SWITCH_LABELS[target];
-  }
-  return mode.kind === "manual" && mode.hosted !== undefined
-    ? `Use ${mode.hosted.title} settings instead`
-    : "Use your provider’s settings instead";
-};
-
 interface PresetCopy {
   readonly description: string;
-  /** Who runs the provider, for a custom domain whose mail they host. */
-  readonly host: string;
   /** Says which password not to use, before the link to make the right one. */
   readonly hint: string;
   readonly linkText: string;
@@ -149,14 +136,12 @@ interface PresetCopy {
 const PRESET_COPY = {
   gmail: {
     description: "Kisa signs in to Gmail with an app password.",
-    host: "Google",
     hint: "Your Google password won’t work, and app passwords need 2-Step Verification.",
     linkText: "Create an app password",
     passwordLabel: "App password",
   },
   icloud: {
     description: "Kisa signs in to iCloud Mail with an app-specific password.",
-    host: "Apple",
     hint: "Your Apple Account password won’t work.",
     linkText: "Create an app-specific password",
     passwordLabel: "App-specific password",
@@ -319,51 +304,18 @@ const PasswordField = ({
   );
 };
 
-interface AddressNotesProps {
-  readonly isLocked: boolean;
-  readonly mode: AccountSetupMode;
-  readonly onSwitch: (method: SetupSwitch) => void;
-  readonly signInSwitch: SetupSwitch | undefined;
-}
-
-/**
- * What goes under the address: Outlook.com's IMAP hint, and the switch
- * between a password and Microsoft. The switch is one button in one place
- * for both directions, so it keeps focus when it switches.
- */
-const AddressNotes = ({
-  isLocked,
-  mode,
-  onSwitch,
-  signInSwitch,
-}: AddressNotesProps) =>
-  // Signing in again, the address is fixed and so is how it signs in.
-  SIGN_IN_AGAIN === undefined ? (
-    <>
-      {mode.kind === "microsoft" && mode.via === "address" ? (
-        <FieldDescription>
-          Kisa needs IMAP, which Outlook.com has off by default.{" "}
-          <a href={OUTLOOK_IMAP_HELP_URL} rel="noreferrer" target="_blank">
-            Turn on IMAP
-          </a>
-        </FieldDescription>
-      ) : null}
-      {signInSwitch === undefined ? null : (
-        <FieldDescription>
-          <Button
-            className="hover:text-primary h-auto rounded-sm border-0 p-0 text-[length:inherit] leading-[inherit] font-normal text-inherit underline active:not-aria-[haspopup]:translate-y-0"
-            disabled={isLocked}
-            onClick={() => {
-              onSwitch(signInSwitch);
-            }}
-            type="button"
-            variant="link"
-          >
-            {switchLabel(signInSwitch, mode)}
-          </Button>
-        </FieldDescription>
-      )}
-    </>
+/** Outlook.com's IMAP hint under the address, which Microsoft 365 needs not. */
+const AddressNotes = ({ mode }: { readonly mode: AccountSetupMode }) =>
+  // Signing in again, the account already reached its mailbox.
+  SIGN_IN_AGAIN === undefined &&
+  mode.kind === "microsoft" &&
+  mode.via === "address" ? (
+    <FieldDescription>
+      Kisa needs IMAP, which Outlook.com has off by default.{" "}
+      <a href={OUTLOOK_IMAP_HELP_URL} rel="noreferrer" target="_blank">
+        Turn on IMAP
+      </a>
+    </FieldDescription>
   ) : null;
 
 interface SubmitButtonProps {
@@ -376,6 +328,7 @@ const SubmitButton = ({ isDisabled, method, pending }: SubmitButtonProps) => (
   <Button
     aria-disabled={pending !== undefined}
     disabled={isDisabled}
+    size="lg"
     type="submit"
   >
     {pending === undefined ? (
@@ -426,6 +379,77 @@ const NameField = ({
     </Field>
   ) : null;
 
+/** The providers in the order the first step lists them, Other last. */
+const PROVIDER_OPTIONS = [
+  { description: "Gmail and Google Workspace", provider: "gmail" },
+  { description: "iCloud Mail", provider: "icloud" },
+  {
+    description: "Outlook.com, Hotmail and Microsoft 365",
+    provider: "outlook",
+  },
+  { description: "Any other provider with IMAP", provider: "imap" },
+] as const satisfies readonly {
+  readonly description: string;
+  readonly provider: SetupProvider;
+}[];
+
+interface ProviderPickerProps {
+  /** The option that takes focus: the one the user came back from, or the first. */
+  readonly focused: SetupProvider;
+  readonly onPick: (provider: SetupProvider) => void;
+}
+
+/**
+ * The window's first step. Picking a provider goes straight to its form,
+ * so each option is a button rather than a choice to confirm.
+ */
+const ProviderPicker = ({ focused, onPick }: ProviderPickerProps) => (
+  <div className="flex flex-col gap-2">
+    {PROVIDER_OPTIONS.map(({ description, provider }) => {
+      const isUnavailable =
+        provider === "outlook" && !CAN_SIGN_IN_WITH_MICROSOFT;
+      return (
+        <Button
+          // The window opens to pick a provider; focus starts on one.
+          // oxlint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus={provider === focused}
+          className="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left whitespace-normal"
+          disabled={isUnavailable}
+          focusableWhenDisabled
+          key={provider}
+          onClick={() => {
+            onPick(provider);
+          }}
+          variant="outline"
+        >
+          {provider === "imap" ? (
+            <MailIcon
+              aria-hidden="true"
+              className="text-muted-foreground size-5"
+            />
+          ) : (
+            <AccountProviderIcon className="size-5" provider={provider} />
+          )}
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-foreground text-sm font-medium">
+              {SETUP_PROVIDER_NAMES[provider]}
+            </span>{" "}
+            <span className="text-muted-foreground font-normal">
+              {isUnavailable
+                ? "This build of Kisa can’t sign in to Microsoft accounts."
+                : description}
+            </span>
+          </span>
+          <ChevronRightIcon
+            aria-hidden="true"
+            className="text-muted-foreground"
+          />
+        </Button>
+      );
+    })}
+  </div>
+);
+
 const focusField = (field: AccountSetupField): void => {
   document.querySelector<HTMLElement>(`#${FIELD_IDS[field]}`)?.focus();
 };
@@ -451,10 +475,6 @@ const CAN_SIGN_IN_WITH_MICROSOFT =
  */
 const SIGN_IN_AGAIN = readSignInAgain(window.location.search);
 
-/** Signing in again keeps the account's servers, so nothing is looked up. */
-const findDomainToAsk = (form: AccountSetupForm): string | undefined =>
-  SIGN_IN_AGAIN === undefined ? findDomainToLookUp(form) : undefined;
-
 const SIGN_IN_AGAIN_DESCRIPTIONS = {
   microsoft: (email: string) =>
     `Sign in to ${email} with Microsoft, in your browser. Kisa keeps the account's mail.`,
@@ -462,21 +482,15 @@ const SIGN_IN_AGAIN_DESCRIPTIONS = {
     `Enter a new app password for ${email}. Kisa keeps the account's mail and settings.`,
 } as const satisfies Record<SignInMethod, (email: string) => string>;
 
-const describeMode = (mode: AccountSetupMode, email: string): string => {
+const describeMode = (mode: AccountSetupMode): string => {
   if (SIGN_IN_AGAIN !== undefined) {
     return SIGN_IN_AGAIN_DESCRIPTIONS[SIGN_IN_AGAIN.method](
       SIGN_IN_AGAIN.email
     );
   }
-  if (mode.kind !== "preset") {
-    return DESCRIPTIONS[mode.kind];
-  }
-  const copy = PRESET_COPY[mode.preset.provider];
-  const domain = toAddressDomain(email.trim());
-  // Says why a custom domain gets a provider's settings without asking.
-  return mode.via === "domain" && domain !== undefined
-    ? `${copy.host} hosts mail for ${domain}. ${copy.description}`
-    : copy.description;
+  return mode.kind === "preset"
+    ? PRESET_COPY[mode.preset.provider].description
+    : DESCRIPTIONS[mode.kind];
 };
 
 /**
@@ -496,6 +510,9 @@ const AccountSetupApp = () => {
   const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
   const [pendingSignIn, setPendingSignIn] = useState<SignInMethod>();
   const [error, setError] = useState<string>();
+  // The provider the user went back from, which the first step focuses and
+  // which says that step was reached by going back.
+  const [returnedFrom, setReturnedFrom] = useState<SetupProvider>();
   // Whether the user stopped the sign-in that is waiting on the browser.
   const wasCancelledRef = useRef(false);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -510,40 +527,38 @@ const AccountSetupApp = () => {
     { allowInInput: true }
   );
 
-  useDomainLookup(bridge, findDomainToAsk(form), setForm);
+  // Changing step unmounts the password input and every message about it.
+  const changeProvider = (provider: SetupProvider | undefined): void => {
+    setError(undefined);
+    setHasPassword(false);
+    setHasTriedSubmit(false);
+    setForm({ ...form, provider });
+  };
 
-  const mode = getAccountSetupMode(form);
+  const { provider } = form;
+  if (provider === undefined) {
+    return (
+      <ProviderStep
+        onCancel={() => {
+          void bridge?.close();
+        }}
+        onPick={changeProvider}
+        returnedFrom={returnedFrom}
+      />
+    );
+  }
+
+  const mode = getAccountSetupMode(provider, form.email);
   const isMicrosoft = mode.kind === "microsoft";
   const isMicrosoftUnavailable = isMicrosoft && !CAN_SIGN_IN_WITH_MICROSOFT;
   const isSubmitting = pendingSignIn !== undefined;
-  const signInSwitch = findSetupSignInSwitch(
-    mode,
-    CAN_SIGN_IN_WITH_MICROSOFT,
-    SIGN_IN_AGAIN
-  );
-  const problem = findSetupProblem(form, hasPassword, SIGN_IN_AGAIN);
+  const problem = findSetupProblem(form, provider, hasPassword, SIGN_IN_AGAIN);
   const visibleProblem = hasTriedSubmit ? problem : undefined;
   const invalidField = visibleProblem?.field;
 
   const updateForm = (next: AccountSetupForm): void => {
     setError(undefined);
-    // Microsoft mode unmounts the password input; it comes back empty.
-    if (getAccountSetupMode(next).kind === "microsoft") {
-      setHasPassword(false);
-    }
     setForm(next);
-  };
-
-  // A Microsoft server typed into the host field, or the switch itself, can
-  // remove the focused control. Focus then lands on the address, from which
-  // Enter signs in, rather than nowhere.
-  const updateFormKeepingFocus = (next: AccountSetupForm): void => {
-    flushSync(() => {
-      updateForm(next);
-    });
-    if (document.activeElement === document.body) {
-      focusField("email");
-    }
   };
 
   const signIn = async (
@@ -593,7 +608,9 @@ const AccountSetupApp = () => {
     }
     const password = passwordRef.current?.value ?? "";
     await signIn("password", () =>
-      bridge.submit(toPasswordSubmission(form, password, SIGN_IN_AGAIN))
+      bridge.submit(
+        toPasswordSubmission(form, provider, password, SIGN_IN_AGAIN)
+      )
     );
   };
 
@@ -601,19 +618,7 @@ const AccountSetupApp = () => {
     invalidField === field ? PROBLEM_ID : undefined;
 
   return (
-    <main
-      className="bg-background grid h-svh overflow-hidden"
-      style={{
-        gridTemplateRows: IS_SHEET
-          ? "minmax(0, 1fr)"
-          : `${TITLEBAR_HEIGHT}px minmax(0, 1fr)`,
-      }}
-    >
-      {IS_SHEET ? null : (
-        // The drag strip behind the window controls; the heading names it.
-        <WindowTitlebar as="div" />
-      )}
-
+    <SetupWindow>
       <form
         aria-busy={isSubmitting}
         className="flex min-h-0 flex-col"
@@ -624,14 +629,14 @@ const AccountSetupApp = () => {
           className={`min-h-0 flex-1 overflow-y-auto px-6 pb-4 ${
             // A sheet has no title strip above, so it pads like its sides.
             IS_SHEET ? "pt-6" : "pt-2"
-          }`}
+          } ${SIGN_IN_AGAIN === undefined ? STEP_ENTER_CLASS_NAMES.forward : ""}`}
         >
           <header className="mb-5">
             <h1 className="font-heading text-base font-medium">
               {titleFor(mode)}
             </h1>
             <p className="text-muted-foreground mt-1 text-xs/relaxed">
-              {describeMode(mode, form.email)}
+              {describeMode(mode)}
             </p>
           </header>
 
@@ -667,14 +672,7 @@ const AccountSetupApp = () => {
                   type="email"
                   value={form.email}
                 />
-                <AddressNotes
-                  isLocked={isSubmitting}
-                  mode={mode}
-                  onSwitch={(method) => {
-                    updateFormKeepingFocus(withSignInMethod(form, method));
-                  }}
-                  signInSwitch={signInSwitch}
-                />
+                <AddressNotes mode={mode} />
               </Field>
 
               {isMicrosoft ? null : (
@@ -697,9 +695,7 @@ const AccountSetupApp = () => {
                     fields={form.imap}
                     invalidField={invalidField}
                     isLocked={isSubmitting}
-                    onChange={(imap) =>
-                      updateFormKeepingFocus({ ...form, imap })
-                    }
+                    onChange={(imap) => updateForm({ ...form, imap })}
                     side="imap"
                   />
                   <ServerFieldset
@@ -742,6 +738,23 @@ const AccountSetupApp = () => {
         </div>
 
         <footer className="border-border flex justify-end gap-2 border-t px-6 py-3">
+          {SIGN_IN_AGAIN === undefined ? (
+            // Signing in again has no providers to go back to.
+            <Button
+              className="mr-auto"
+              disabled={isSubmitting}
+              onClick={() => {
+                setReturnedFrom(provider);
+                changeProvider(undefined);
+              }}
+              size="lg"
+              type="button"
+              variant="ghost"
+            >
+              <ChevronLeftIcon data-icon="inline-start" />
+              Back
+            </Button>
+          ) : null}
           <Button
             onClick={() => {
               // While Microsoft waits on the browser, Cancel stops only the
@@ -753,6 +766,7 @@ const AccountSetupApp = () => {
                 void bridge?.close();
               }
             }}
+            size="lg"
             type="button"
             variant="secondary"
           >
@@ -765,8 +779,66 @@ const AccountSetupApp = () => {
           />
         </footer>
       </form>
-    </main>
+    </SetupWindow>
   );
 };
+
+interface ProviderStepProps {
+  readonly onCancel: () => void;
+  readonly onPick: (provider: SetupProvider) => void;
+  /** The provider the user went back from, if they did. */
+  readonly returnedFrom: SetupProvider | undefined;
+}
+
+/** The first step: which provider the account is on. */
+const ProviderStep = ({
+  onCancel,
+  onPick,
+  returnedFrom,
+}: ProviderStepProps) => (
+  <SetupWindow>
+    <div className="flex min-h-0 flex-col">
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto px-6 pb-4 ${
+          IS_SHEET ? "pt-6" : "pt-2"
+        } ${returnedFrom === undefined ? "" : STEP_ENTER_CLASS_NAMES.back}`}
+      >
+        <header className="mb-5">
+          <h1 className="font-heading text-base font-medium">Add account</h1>
+          <p className="text-muted-foreground mt-1 text-xs/relaxed">
+            Choose your mail provider.
+          </p>
+        </header>
+        <ProviderPicker
+          focused={returnedFrom ?? PROVIDER_OPTIONS[0].provider}
+          onPick={onPick}
+        />
+      </div>
+      <footer className="border-border flex justify-end gap-2 border-t px-6 py-3">
+        <Button onClick={onCancel} size="lg" type="button" variant="secondary">
+          Cancel
+        </Button>
+      </footer>
+    </div>
+  </SetupWindow>
+);
+
+/** The window's frame around either step: the title strip, then the step. */
+const SetupWindow = ({ children }: { readonly children: ReactNode }) => (
+  <main
+    className="bg-background grid h-svh overflow-hidden"
+    style={{
+      gridTemplateRows: IS_SHEET
+        ? "minmax(0, 1fr)"
+        : `${TITLEBAR_HEIGHT}px minmax(0, 1fr)`,
+    }}
+  >
+    {IS_SHEET ? null : (
+      // The drag strip behind the window controls; the heading names it.
+      <WindowTitlebar as="div" />
+    )}
+    {children}
+  </main>
+);
 
 export default AccountSetupApp;

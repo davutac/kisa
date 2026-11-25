@@ -1,10 +1,10 @@
 /**
- * Server settings for the accounts Kisa connects, all of which sign in with
- * an app password. Presets are keyed by the address's domain and need no
- * network lookup. Any other domain is looked up once by main: one whose mail
- * Google hosts (a Google Workspace domain) uses the Gmail preset, and the
- * rest are set up by hand. Shared by main, which decides, and the setup
- * window, which only uses them to choose which fields to show.
+ * Server settings for the accounts Kisa connects. Presets are keyed by the
+ * address's domain and need no network lookup; the setup window also uses
+ * one for a custom domain when the user picks its provider by name, such as
+ * Gmail for Google Workspace. Any other server is typed by hand. Shared by
+ * main, which decides, and the setup window, which only uses them to choose
+ * which fields to show.
  */
 
 import type { AccountProvider } from "./ipc/accounts";
@@ -56,21 +56,17 @@ const PRESETS_BY_DOMAIN: ReadonlyMap<string, MailAccountPreset> = new Map([
   ["me.com", ICLOUD_PRESET],
 ]);
 
-/**
- * Who hosts a custom domain's mail, as its MX records tell main. Only Google
- * is told apart: its servers take the full address and an app password, as
- * for `gmail.com`.
- */
-export type HostedMailProvider = "gmail";
-
-/** The preset a domain hosted by `provider` signs in with. */
-export const HOSTED_MAIL_PRESETS = {
+/** Every preset, by its provider, for a provider the user picked by name. */
+export const MAIL_ACCOUNT_PRESETS = {
   gmail: GMAIL_PRESET,
-} as const satisfies Record<HostedMailProvider, MailAccountPreset>;
+  icloud: ICLOUD_PRESET,
+} as const satisfies Record<MailAccountPreset["provider"], MailAccountPreset>;
 
 /** Every page a preset links to. */
 export const APP_PASSWORD_URLS: ReadonlySet<string> = new Set(
-  [GMAIL_PRESET, ICLOUD_PRESET].map(({ appPasswordUrl }) => appPasswordUrl)
+  Object.values(MAIL_ACCOUNT_PRESETS).map(
+    ({ appPasswordUrl }) => appPasswordUrl
+  )
 );
 
 /**
@@ -160,8 +156,6 @@ export const toAccountProvider = ({
  * other cannot claim, so the check stays linear in its input.
  */
 const ADDRESS_PATTERN = /^[^\s@"<>]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/iu;
-/** The domain half of `ADDRESS_PATTERN`. */
-const DOMAIN_PATTERN = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/iu;
 /** A DNS name or IPv4 address. */
 const HOST_PATTERN = /^[a-z0-9-]+(?:\.[a-z0-9-]+)*$/iu;
 
@@ -172,10 +166,6 @@ export const MAX_DISPLAY_NAME_LENGTH = 128;
 
 export const isMailAddress = (address: string): boolean =>
   address.length <= MAX_ADDRESS_LENGTH && ADDRESS_PATTERN.test(address);
-
-/** A domain an address could have, such as `example.org`. */
-export const isMailDomain = (domain: string): boolean =>
-  domain.length <= MAX_HOST_LENGTH && DOMAIN_PATTERN.test(domain);
 
 export const isMailHost = (host: string): boolean =>
   host.length <= MAX_HOST_LENGTH && HOST_PATTERN.test(host);
