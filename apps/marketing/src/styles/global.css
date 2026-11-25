@@ -21,6 +21,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -50,6 +55,11 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
 }
 
 .dark {
@@ -71,6 +81,11 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --sidebar: oklch(18.22% 0.00002 271.152);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 5%);
 }
 
 @layer base {
@@ -156,6 +171,31 @@
   box-shadow:
     0 1px 0 color-mix(in oklab, var(--foreground) 7%, transparent),
     0 28px 70px -32px color-mix(in oklab, var(--foreground) 42%, transparent);
+}
+
+/* The foreground's color would glow on dark, so the shadow there is black. */
+.dark .app-shadow {
+  box-shadow:
+    0 12px 28px -12px oklch(0 0 0 / 70%),
+    0 36px 80px -24px oklch(0 0 0 / 85%);
+}
+
+/*
+ * The hero's app preview mirrors the desktop renderer, whose dark dividers
+ * are fainter than this site's; scoped so the page's own borders keep theirs.
+ */
+.dark .app-preview {
+  --border: oklch(1 0 0 / 5%);
+}
+
+/* The mailbox's scroll fade: more mail continues below the frame. */
+.app-preview-list {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 2.5rem),
+    transparent
+  );
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
 }
 
 .ai-action-surface {

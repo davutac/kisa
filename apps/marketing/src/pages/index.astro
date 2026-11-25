@@ -1,9 +1,11 @@
 ---
 import {
   ArchiveRestoreIcon,
+  ArrowLeftIcon,
   ArrowRightIcon,
   BoldIcon,
   CheckIcon,
+  ChevronRightIcon,
   CodeIcon,
   DatabaseIcon,
   DownloadIcon,
@@ -14,11 +16,15 @@ import {
   ItalicIcon,
   KeyboardIcon,
   LinkIcon,
+  ListFilterIcon,
   ListIcon,
   ListOrderedIcon,
-  MailIcon,
   MessageSquarePlusIcon,
+  MessagesSquareIcon,
   MinusIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PaperclipIcon,
   PlusIcon,
   QuoteIcon,
   Redo2Icon,
@@ -29,11 +35,13 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   SquarePenIcon,
+  StarIcon,
   StrikethroughIcon,
+  TagIcon,
+  TagsIcon,
   Trash2Icon,
   UnderlineIcon,
   Undo2Icon,
-  UserRoundIcon,
   XIcon,
 } from "lucide-react";
 
@@ -107,75 +115,143 @@ const historyComposerTools = [
   { icon: Redo2Icon, label: "Redo" },
 ];
 
-const mailboxLabels = [
-  {
-    background: "#3c78d8",
-    name: "Design",
-    selected: true,
-    text: "#ffffff",
-  },
-  { background: "#8e63ce", name: "Personal", text: "#ffffff" },
-  { background: "#a479e2", name: "Photos", text: "#ffffff" },
-  { background: "#eaa041", name: "Updates", text: "#3c1f00" },
-  { background: "#0b8043", name: "Work", text: "#ffffff" },
+// The hero preview mirrors the desktop app's main window: the sidebar beside
+// one account's Inbox. Its numbers agree with each other, as they would in the
+// app: the account's unread count is the unread rows listed, and a label's
+// count is the unread rows carrying it.
+const previewAccount = "davut@example.com";
+
+const sidebarAccounts = [
+  { email: previewAccount, expanded: true, provider: "gmail", unread: 2 },
+  { email: "hello@example.org", provider: "apple", unread: 1 },
+  { email: "work@example.net", provider: "outlook", unread: 0 },
 ];
 
-const threads = [
+const sidebarMailboxes = [
+  { icon: StarIcon, name: "Starred" },
+  { icon: SendIcon, name: "Sent" },
+  { icon: ShieldAlertIcon, name: "Spam" },
+  { icon: Trash2Icon, name: "Trash" },
+];
+
+const mailboxLabels = [
+  { background: "#3c78d8", name: "Design", text: "#ffffff", unread: 1 },
+  { background: "#8e63ce", name: "Personal", text: "#ffffff", unread: 0 },
+  { background: "#a479e2", name: "Photos", text: "#ffffff", unread: 0 },
+  { background: "#eaa041", name: "Updates", text: "#3c1f00", unread: 0 },
+  { background: "#0b8043", name: "Work", text: "#ffffff", unread: 1 },
+];
+
+const labelColors = new Map(mailboxLabels.map((label) => [label.name, label]));
+
+interface PreviewThread {
+  attachments?: { filename: string; kind: "download" | "preview"; type: string }[];
+  email: string;
+  labels?: string[];
+  messageCount?: number;
+  preview: string;
+  sender: string;
+  starred?: boolean;
+  subject: string;
+  time: string;
+  unread: boolean;
+}
+
+const threadDays: { day: string; threads: PreviewThread[] }[] = [
   {
-    attachments: [
-      { filename: "design-notes.pdf", kind: "preview", type: "PDF" },
-      { filename: "handoff.zip", kind: "download", type: "ZIP" },
+    day: "Today",
+    threads: [
+      {
+        attachments: [
+          { filename: "design-notes.pdf", kind: "preview", type: "PDF" },
+          { filename: "handoff.zip", kind: "download", type: "ZIP" },
+        ],
+        email: "maya@example.com",
+        labels: ["Design", "Work"],
+        messageCount: 3,
+        preview: "The calm direction feels right. One thought…",
+        sender: "Maya Chen",
+        subject: "Design review",
+        time: "10:42",
+        unread: true,
+      },
+      {
+        email: "alex@example.com",
+        preview: "Saturday morning works perfectly for us.",
+        sender: "Alex Morgan",
+        subject: "Weekend plans",
+        time: "09:18",
+        unread: true,
+      },
     ],
-    email: "maya@example.com",
-    labels: ["Work", "Design"],
-    preview: "The calm direction feels right. One thought…",
-    sender: "Maya Chen",
-    subject: "Design review",
-    time: "10:42",
-    unread: true,
   },
   {
-    email: "alex@example.com",
-    labels: ["Personal"],
-    preview: "Saturday morning works perfectly for us.",
-    sender: "Alex Morgan",
-    subject: "Weekend plans",
-    time: "09:18",
-    unread: true,
-  },
-  {
-    email: "notifications@linear.app",
-    labels: ["Updates"],
-    preview: "12 issues completed across 3 projects.",
-    sender: "Linear",
-    subject: "Your weekly digest",
-    time: "Mon",
-    unread: false,
-  },
-  {
-    attachments: [
-      { filename: "berlin-01.jpg", kind: "preview", type: "JPG" },
-      { filename: "berlin-02.jpg", kind: "preview", type: "JPG" },
-      { filename: "berlin-03.jpg", kind: "preview", type: "JPG" },
-      { filename: "weekend-map.pdf", kind: "preview", type: "PDF" },
+    day: "Yesterday",
+    threads: [
+      {
+        email: "notifications@linear.app",
+        labels: ["Updates"],
+        preview: "12 issues completed across 3 projects.",
+        sender: "Linear",
+        subject: "Your weekly digest",
+        time: "Yesterday",
+        unread: false,
+      },
     ],
-    email: "nora@example.com",
-    labels: ["Photos"],
-    preview: "Finally sorted these. Thought you'd like them.",
-    sender: "Nora Patel",
-    subject: "Photos from Berlin",
-    time: "Sun",
-    unread: false,
   },
   {
-    email: "hello@raycast.com",
-    preview: "A calmer command bar and a few small refinements.",
-    sender: "Raycast",
-    subject: "What's new this week",
-    time: "Fri",
-    unread: false,
+    day: "Sunday",
+    threads: [
+      {
+        attachments: [
+          { filename: "berlin-01.jpg", kind: "preview", type: "JPG" },
+          { filename: "berlin-02.jpg", kind: "preview", type: "JPG" },
+          { filename: "berlin-03.jpg", kind: "preview", type: "JPG" },
+          { filename: "weekend-map.pdf", kind: "preview", type: "PDF" },
+        ],
+        email: "nora@example.com",
+        labels: ["Personal", "Photos"],
+        preview: "Finally sorted these. Thought you'd like them.",
+        sender: "Nora Patel",
+        starred: true,
+        subject: "Photos from Berlin",
+        time: "Sun",
+        unread: false,
+      },
+    ],
+  },
+  {
+    day: "Friday",
+    threads: [
+      {
+        email: "hello@raycast.com",
+        preview: "A calmer command bar and a few small refinements.",
+        sender: "Raycast",
+        subject: "What's new this week",
+        time: "Fri",
+        unread: false,
+      },
+      {
+        attachments: [{ filename: "invoice-october.pdf", kind: "preview", type: "PDF" }],
+        email: "sam@example.com",
+        messageCount: 2,
+        preview: "Attached is the invoice for last month. Thanks again!",
+        sender: "Sam Rivera",
+        subject: "Invoice for October",
+        time: "Fri",
+        unread: false,
+      },
+    ],
   },
 ];
+
+// Shared by the preview's static stand-ins for the app's ghost icon buttons.
+const previewIconButton = "grid shrink-0 place-items-center rounded-md text-muted-foreground";
+const sidebarRow =
+  "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] text-sidebar-foreground/75";
+const sidebarRowCurrent = "bg-sidebar-accent font-medium text-sidebar-accent-foreground";
+const sidebarCount =
+  "inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-sidebar-foreground/10 px-1 text-[10px] font-medium tabular-nums text-sidebar-foreground/80";
 ---
 
 <BaseLayout
@@ -249,137 +325,241 @@ const threads = [
 
         <p class="reveal reveal-delay mt-5 flex items-center gap-2 text-xs text-muted-foreground">
           <CheckIcon className="size-3.5" />
-          Works with Google accounts · Open source
+          Works with Gmail, iCloud, and Outlook · Open source
         </p>
       </section>
 
       <section class="mx-auto max-w-6xl px-3 pb-24 sm:px-8 sm:pb-32" aria-label="Kisa desktop app preview">
         <div class="app-shadow overflow-hidden rounded-2xl border bg-background ring-1 ring-foreground/5">
-          <div class="relative flex h-11 items-center justify-between gap-2 bg-background px-3 sm:ps-21">
-            <div class="absolute start-4 flex gap-1.5 max-sm:hidden" aria-hidden="true">
-              <span class="size-2.5 rounded-full bg-foreground/15"></span>
-              <span class="size-2.5 rounded-full bg-foreground/15"></span>
-              <span class="size-2.5 rounded-full bg-foreground/15"></span>
-            </div>
-
-            <div class="flex items-center gap-2 sm:gap-3">
-              <span class="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground shadow-xs">
-                <SquarePenIcon className="size-3.5" />
-              </span>
-              <span class="flex items-center gap-1">
-                <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
-                  <HouseIcon className="size-3.5" />
+          <div class="app-preview flex h-140 select-none sm:h-160">
+            <div class="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+              <div class="relative flex h-10.5 shrink-0 items-center gap-1 pe-2 ps-20">
+                <div class="absolute start-4.5 flex gap-2" aria-hidden="true">
+                  <span class="size-3 rounded-full bg-foreground/15"></span>
+                  <span class="size-3 rounded-full bg-foreground/15"></span>
+                  <span class="size-3 rounded-full bg-foreground/15"></span>
+                </div>
+                <span class:list={[previewIconButton, "size-7"]} title="Hide sidebar">
+                  <PanelLeftCloseIcon className="size-4 stroke-[1.8]" />
                 </span>
-                <span class="flex h-7 items-center rounded-md bg-secondary text-[10px] font-medium sm:pe-2.5">
-                  <span class="grid size-7 place-items-center rounded-md bg-muted">
-                    <UserRoundIcon className="size-3.5" />
+                <span class="shrink-0 px-1 text-[13px] font-semibold whitespace-nowrap">Kisa</span>
+                <span class="flex items-center">
+                  <span class:list={[previewIconButton, "size-7"]} title="Go back">
+                    <ArrowLeftIcon className="size-4 stroke-[1.8]" />
                   </span>
-                  <span class="hidden ps-1.5 sm:block">davut@example.com</span>
+                  <span class:list={[previewIconButton, "size-7 opacity-50"]} title="Go forward">
+                    <ArrowRightIcon className="size-4 stroke-[1.8]" />
+                  </span>
                 </span>
-                <span class="grid size-7 place-items-center rounded-md text-muted-foreground">
-                  <PlusIcon className="size-3.5" />
-                </span>
-              </span>
-            </div>
+              </div>
 
-            <div class="flex items-center gap-2 sm:gap-3">
-              <span class="flex items-center gap-1">
-                <span class="grid size-7 place-items-center rounded-md bg-secondary" title="Search mail (⌘ K)">
-                  <SearchIcon className="size-3.5" />
+              <div class="flex h-8 shrink-0 items-center gap-1 px-2 mt-1 mb-2">
+                <span class="flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-[13px] text-muted-foreground" title="Search mail (⌘ K)">
+                  <SearchIcon className="size-4 shrink-0 stroke-[1.8]" />
+                  <span class="min-w-0 flex-1 truncate">Search all mail</span>
                 </span>
-                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Unread (U)">
-                  <MailIcon className="size-3.5" />
+                <span class:list={[previewIconButton, "size-8"]} title="Toggle unread filter (U)">
+                  <ListFilterIcon className="size-4 stroke-[1.8]" />
                 </span>
-                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Spam (S)">
-                  <ShieldAlertIcon className="size-3.5" />
+                <span class:list={[previewIconButton, "size-8"]} title="New email (⌘ N)">
+                  <SquarePenIcon className="size-4 stroke-[1.8]" />
                 </span>
-              </span>
-              <span class="flex items-center gap-1">
-                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Templates (⌘ ⇧ T)">
-                  <FilesIcon className="size-3.5" />
-                </span>
-                <span class="grid size-7 place-items-center rounded-md text-muted-foreground" title="Settings (⌘ ,)">
-                  <SettingsIcon className="size-3.5" />
-                </span>
-              </span>
-            </div>
-          </div>
+              </div>
 
-          <div class="flex h-10 items-center overflow-hidden px-3 sm:px-4" aria-label="Example mailbox label filters">
-            <span class="grid size-6 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground" title="Clear label filters (⌘ ⇧ L)">
-              <XIcon className="size-3" />
-            </span>
-            <div class="flex min-w-0 flex-1 snap-x snap-proximity items-center gap-1 overflow-x-auto overscroll-x-contain pe-8 ps-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {mailboxLabels.map((label) => (
-                <span
-                  class="flex h-6 shrink-0 snap-center items-center rounded-md px-2 text-xs font-medium whitespace-nowrap"
-                  style={`background-color: ${label.selected ? label.background : `color-mix(in oklch, ${label.background} 5%, transparent)`}; color: ${label.selected ? label.text : "var(--foreground)"};`}
-                >
-                  {label.name}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <section class="min-h-120 bg-background px-3 pb-3 sm:px-4 sm:pb-4" aria-label="Example Kisa inbox">
-            <ol class="relative space-y-px">
-              {threads.map((thread) => (
-                <li
-                  class:list={[
-                    "relative grid min-h-20 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 rounded-md px-4 py-3",
-                    thread.unread ? "bg-muted/30" : "opacity-60",
-                  ]}
-                >
-                  <div class="min-w-0 space-y-1">
-                    <div class="flex min-w-0 items-center gap-1.5 text-xs">
-                      <span class="truncate font-medium">{thread.sender}</span>
-                      <span class="truncate text-muted-foreground">{thread.email}</span>
-                      {thread.labels?.map((label) => (
-                        <span class="h-4 max-w-28 shrink-0 truncate rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                    <p class:list={["truncate text-sm", thread.unread ? "font-semibold" : "font-medium text-foreground/90"]}>
-                      {thread.subject}
-                    </p>
-                    <p class="truncate text-sm text-muted-foreground">{thread.preview}</p>
-                    {thread.attachments === undefined ? null : (
-                      <div class="flex flex-wrap items-center gap-1.5 pt-1">
-                        {thread.attachments.slice(0, 3).map((attachment) => {
-                          const AttachmentIcon = attachment.kind === "preview" ? EyeIcon : DownloadIcon;
-
-                          return (
-                            <span class="flex h-6 max-w-56 items-center gap-1.5 rounded-md bg-muted px-2 text-[10px] font-medium text-muted-foreground">
-                              <AttachmentIcon className="size-2.5 shrink-0" />
-                              <span class="min-w-0 truncate">{attachment.filename}</span>
-                              <span class="shrink-0 border-s border-border/80 ps-2 text-[9px] font-semibold tracking-wide text-foreground/50">
-                                {attachment.type}
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2">
+                <ul class="flex flex-col gap-0.5">
+                  <li>
+                    <span class={sidebarRow}>
+                      <HouseIcon className="size-4 shrink-0" />
+                      <span class="min-w-0 flex-1 truncate">All accounts</span>
+                    </span>
+                  </li>
+                  {sidebarAccounts.map((account) => (
+                    <li>
+                      <span class:list={[sidebarRow, account.email === previewAccount && sidebarRowCurrent]}>
+                        <img
+                          alt=""
+                          class:list={["size-4 shrink-0 object-contain", account.provider === "apple" && "dark:invert"]}
+                          height="16"
+                          src={`/providers/${account.provider}.svg`}
+                          width="16"
+                        />
+                        <span class="min-w-0 flex-1 truncate">{account.email}</span>
+                        {account.unread > 0 ? <span class={sidebarCount}>{account.unread}</span> : null}
+                        <ChevronRightIcon
+                          className={cn("size-3.5 shrink-0 text-muted-foreground", account.expanded && "rotate-90")}
+                        />
+                      </span>
+                      {account.expanded ? (
+                        <ul class="flex flex-col gap-0.5 py-0.5">
+                          {sidebarMailboxes.map(({ icon: Icon, name }) => (
+                            <li>
+                              <span class:list={[sidebarRow, "ps-7"]}>
+                                <Icon className="size-4 shrink-0" />
+                                <span class="min-w-0 flex-1 truncate">{name}</span>
                               </span>
+                            </li>
+                          ))}
+                          <li>
+                            <span class:list={[sidebarRow, "ps-7"]}>
+                              <TagsIcon className="size-4 shrink-0" />
+                              <span class="min-w-0 flex-1 truncate">Labels</span>
+                              <ChevronRightIcon className="size-3.5 shrink-0 rotate-90 text-muted-foreground" />
                             </span>
-                          );
-                        })}
-                        {thread.attachments.length > 3 ? (
-                          <span class="flex h-5 items-center rounded-full bg-muted px-2 text-[10px] font-medium text-muted-foreground">
-                            +{thread.attachments.length - 3}
-                          </span>
-                        ) : null}
-                      </div>
-                    )}
+                            <ul class="flex flex-col gap-0.5 pt-0.5">
+                              {mailboxLabels.map((label) => (
+                                <li>
+                                  <span class:list={[sidebarRow, "ps-10.5"]}>
+                                    <TagIcon className="size-4 shrink-0" style={{ color: label.background }} />
+                                    <span class="min-w-0 flex-1 truncate">{label.name}</span>
+                                    {label.unread > 0 ? <span class={sidebarCount}>{label.unread}</span> : null}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        </ul>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div class="flex shrink-0 items-center gap-1 px-2 pb-2 pt-1">
+                <span class:list={[previewIconButton, "size-8"]} title="Settings (⌘ ,)">
+                  <SettingsIcon className="size-4 stroke-[1.8]" />
+                </span>
+                <span class:list={[previewIconButton, "size-8"]} title="Templates (⌘ ⇧ T)">
+                  <FilesIcon className="size-4 stroke-[1.8]" />
+                </span>
+                <span class:list={[previewIconButton, "ms-auto size-8"]} title="Add account">
+                  <PlusIcon className="size-4 stroke-[1.8]" />
+                </span>
+              </div>
+            </div>
+
+            <div class="flex min-w-0 flex-1 flex-col">
+              {/* Below md the sidebar is hidden, as when it is collapsed in the app:
+                  its toggle, history, and New email move into this titlebar. */}
+              <div class="relative flex h-10.5 shrink-0 items-center gap-2 bg-background pe-2 ps-2 sm:ps-20 md:ps-0">
+                <div class="absolute start-4.5 hidden gap-2 sm:flex md:hidden" aria-hidden="true">
+                  <span class="size-3 rounded-full bg-foreground/15"></span>
+                  <span class="size-3 rounded-full bg-foreground/15"></span>
+                  <span class="size-3 rounded-full bg-foreground/15"></span>
+                </div>
+                <div class="flex shrink-0 items-center gap-1 md:hidden">
+                  <span class:list={[previewIconButton, "size-7"]} title="Show sidebar">
+                    <PanelLeftOpenIcon className="size-4 stroke-[1.8]" />
+                  </span>
+                  <span class:list={[previewIconButton, "size-7"]} title="Go back">
+                    <ArrowLeftIcon className="size-4 stroke-[1.8]" />
+                  </span>
+                  <span class:list={[previewIconButton, "size-7 opacity-50"]} title="Go forward">
+                    <ArrowRightIcon className="size-4 stroke-[1.8]" />
+                  </span>
+                  <span class="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground" title="New email (⌘ N)">
+                    <SquarePenIcon className="size-4 stroke-[1.8]" />
+                  </span>
+                </div>
+                <ol class="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-muted-foreground md:ps-4">
+                  <li class="min-w-0 truncate">{previewAccount}</li>
+                  <li class="shrink-0" aria-hidden="true">
+                    <ChevronRightIcon className="size-3.5" />
+                  </li>
+                  <li class="shrink-0 font-medium text-foreground">Inbox</li>
+                </ol>
+              </div>
+
+              <div class="app-preview-list min-h-0 flex-1 overflow-hidden">
+                {threadDays.map(({ day, threads }) => (
+                  <div>
+                    <div class="-mt-px flex h-8 items-center border-y border-border/60 bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))] px-4 text-xs font-medium text-muted-foreground">
+                      {day}
+                    </div>
+                    <ol>
+                      {threads.map((thread) => (
+                        <li class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-b border-border/60 px-4 py-3">
+                          <div class="flex min-w-0 flex-col gap-1">
+                            <div class="flex min-w-0 flex-wrap items-center gap-2">
+                              <span class="flex max-w-full min-w-0 items-center gap-1.5 text-xs leading-snug font-medium">
+                                <span class:list={["min-w-0 truncate", thread.unread ? "font-semibold text-foreground" : "font-normal text-foreground/80"]}>
+                                  {thread.sender}
+                                </span>
+                                <span class="min-w-0 truncate text-muted-foreground">{thread.email}</span>
+                              </span>
+                              {thread.starred ? (
+                                <span class="inline-flex shrink-0 text-muted-foreground" title="Starred">
+                                  <StarIcon className="size-3.5 fill-current stroke-[1.8]" />
+                                </span>
+                              ) : null}
+                              {thread.labels?.map((label) => {
+                                const color = labelColors.get(label);
+
+                                return (
+                                  <span
+                                    class="inline-flex h-4 max-w-28 shrink-0 items-center rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground"
+                                    style={color === undefined ? undefined : { backgroundColor: color.background, color: color.text }}
+                                  >
+                                    <span class="min-w-0 truncate">{label}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <div class="flex min-w-0 items-center gap-1.5">
+                              <p class:list={["min-w-0 truncate text-sm leading-snug", thread.unread ? "font-semibold text-foreground" : "text-foreground/80"]}>
+                                {thread.subject}
+                              </p>
+                              {thread.messageCount === undefined ? null : (
+                                <span class="inline-flex shrink-0 items-center gap-1 text-xs tabular-nums text-muted-foreground" title={`${thread.messageCount} messages`}>
+                                  <MessagesSquareIcon className="size-3" />
+                                  {thread.messageCount}
+                                </span>
+                              )}
+                            </div>
+                            <p class="truncate text-sm text-muted-foreground">{thread.preview}</p>
+                            {thread.attachments === undefined ? null : (
+                              <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                                {thread.attachments.slice(0, 3).map((attachment) => {
+                                  const AttachmentIcon = attachment.kind === "preview" ? EyeIcon : DownloadIcon;
+
+                                  return (
+                                    <span class="flex h-6 max-w-56 items-center gap-1 rounded-md bg-muted pe-2 ps-1.5 text-xs font-medium text-muted-foreground">
+                                      <AttachmentIcon className="size-2.5 shrink-0" />
+                                      <span class="min-w-0 truncate">{attachment.filename}</span>
+                                      <span class="shrink-0 border-s border-border/80 ps-2 text-[0.625rem] font-semibold tracking-wide text-foreground/50">
+                                        {attachment.type}
+                                      </span>
+                                    </span>
+                                  );
+                                })}
+                                {thread.attachments.length > 3 ? (
+                                  <span class="flex h-5 items-center rounded-full bg-muted px-2 text-[0.625rem] font-medium text-muted-foreground">
+                                    +{thread.attachments.length - 3}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+                          <div class="flex items-center gap-1.5 pt-0.5">
+                            {thread.unread ? <span class="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true"></span> : null}
+                            <time class:list={["shrink-0 whitespace-nowrap text-xs tabular-nums", thread.unread ? "font-medium text-foreground" : "text-muted-foreground"]}>
+                              {thread.time}
+                            </time>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
                   </div>
-                  <time class:list={["pt-0.5 text-xs", thread.unread ? "font-medium text-foreground" : "text-muted-foreground"]}>
-                    {thread.time}
-                  </time>
-                </li>
-              ))}
-            </ol>
-          </section>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       <section class="border-y bg-card/70" id="ai">
         <div class="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 sm:px-8 sm:py-24 lg:grid-cols-[0.85fr_1.15fr]">
-          <div>
+          <div class="min-w-0">
             <h2 class="max-w-lg text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
               Write the reply. Keep your voice.
             </h2>
@@ -403,7 +583,7 @@ const threads = [
             </ul>
           </div>
 
-          <div class="relative mt-7 lg:mt-0">
+          <div class="relative mt-7 min-w-0 lg:mt-0">
             <ul aria-label="Supported AI providers" class="absolute -top-7 right-6 z-20 flex items-center gap-2">
               <li class="grid size-14 place-items-center rounded-xl bg-secondary shadow-lg" title="Codex">
                 <img alt="" class="size-7 dark:invert" height="28" src="/codex-mark.svg" width="28" />
@@ -421,10 +601,10 @@ const threads = [
 
             <div class="app-shadow overflow-hidden rounded-2xl border bg-background ring-1 ring-foreground/5" aria-label="Example Kisa AI reply composer">
               <div class="flex flex-col gap-px bg-background">
-              <div class="flex min-w-0 items-center gap-1.5 bg-card px-4 py-2 text-xs text-muted-foreground">
+              <div class="flex min-w-0 items-center gap-1.5 bg-card px-4 py-2 text-xs text-muted-foreground max-sm:pe-54">
                 <span class="truncate">Replying to Maya Chen</span>
                 <span aria-hidden="true">·</span>
-                <span class="shrink-0">just now</span>
+                <span class="shrink-0 tabular-nums">10:42</span>
               </div>
 
               <div class="flex min-h-9 items-center bg-card px-4">
@@ -481,21 +661,24 @@ const threads = [
                         </span>
                       </div>
                     </div>
+                    <span class="grid size-7 shrink-0 place-items-center rounded-md" title="Attach files">
+                      <PaperclipIcon className="size-3.5" />
+                    </span>
                   </div>
                 </div>
               </div>
 
                 <div class="flex h-12 items-stretch gap-px bg-background">
-                  <span class="flex min-w-0 flex-1 items-center justify-center gap-1 bg-secondary px-4 text-base font-medium">
+                  <span class="grid size-12 shrink-0 place-items-center bg-secondary" title="Discard draft">
+                    <Trash2Icon className="size-4" />
+                  </span>
+                  <span class="flex min-w-0 flex-1 items-center justify-center gap-1 bg-primary px-4 text-sm font-medium text-primary-foreground">
                     <SendIcon className="size-4" />
                     Send
                     <span class="ms-2 inline-flex items-center gap-0.5" aria-hidden="true">
-                      <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded-lg bg-muted px-1 text-[0.625rem] font-medium text-muted-foreground">⌘</kbd>
-                      <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded-lg bg-muted px-1 text-[0.625rem] font-medium text-muted-foreground">↵</kbd>
+                      <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded-lg bg-primary-foreground/15 px-1 font-sans text-[0.625rem] font-medium text-primary-foreground/70">⌘</kbd>
+                      <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded-lg bg-primary-foreground/15 px-1 font-sans text-[0.625rem] font-medium text-primary-foreground/70">↵</kbd>
                     </span>
-                  </span>
-                  <span class="grid size-12 place-items-center bg-secondary">
-                    <Trash2Icon className="size-4" />
                   </span>
                 </div>
               </div>
@@ -605,7 +788,7 @@ const threads = [
           </div>
         </div>
         <p class="max-w-3xl text-center text-[11px] leading-5">
-          Kisa is an independent project and is not affiliated with, endorsed by, or sponsored by Google.
+          Kisa is an independent project and is not affiliated with, endorsed by, or sponsored by Google, Apple, or Microsoft.
         </p>
       </div>
     </footer>
