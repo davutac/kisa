@@ -455,8 +455,12 @@ export const expungeExactly = async (
   }
   const keptRange = toUidSet(kept);
   const flagOptions = { silent: true, uid: true };
-  if (keptRange.length > 0) {
-    await client.messageFlagsRemove(keptRange, ["\\Deleted"], flagOptions);
+  if (
+    keptRange.length > 0 &&
+    !(await client.messageFlagsRemove(keptRange, ["\\Deleted"], flagOptions))
+  ) {
+    // Still marked, they would go with the expunge: nothing is expunged.
+    return false;
   }
   try {
     return await client.messageDelete(range, { uid: true });
@@ -868,7 +872,15 @@ export const makeSession = (
           unseen: true,
         });
 
-        if (status === false || status.uidValidity === undefined) {
+        // An answer without the count, the next UID or the UIDVALIDITY is
+        // no answer. Read as an empty mailbox it would let a folder be
+        // deleted as empty, and as a first UID it would be saved as progress.
+        if (
+          status === false ||
+          status.messages === undefined ||
+          status.uidNext === undefined ||
+          status.uidValidity === undefined
+        ) {
           // imapflow answers `false` for a STATUS the server refused and for
           // one whose connection was lost before the answer came. Only the
           // first says anything about the mailbox: a pass goes on without a
@@ -878,10 +890,13 @@ export const makeSession = (
         }
 
         return {
-          highestModseq: status.highestModseq,
-          messages: status.messages ?? 0,
+          // RFC 7162: a server with CONDSTORE answers 0 for a mailbox that
+          // keeps no mod-sequences. That is none, not one that never rises.
+          highestModseq:
+            status.highestModseq === 0n ? undefined : status.highestModseq,
+          messages: status.messages,
           path,
-          uidNext: status.uidNext ?? 1,
+          uidNext: status.uidNext,
           uidValidity: status.uidValidity,
           unseen: status.unseen,
         };

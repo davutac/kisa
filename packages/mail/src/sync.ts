@@ -1216,11 +1216,20 @@ export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
 
         for (const member of members) {
           const sections = sectionsByUid.get(member.uid);
-          if (parts.length > 0 && sections === undefined) {
-            // Described, but its text never came back. Marked failed so the
-            // background queue moves past it rather than asking again at its
-            // head forever; opening the conversation tries it again. Had it
-            // been deleted meanwhile, the next sync removes it either way.
+          if (
+            member.plan.bodies.length > 0 &&
+            !member.plan.bodies.some(
+              (part) => sections?.get(part.section) !== undefined
+            )
+          ) {
+            // Described, but none of its text came back: saved as it is, a
+            // blank body would pass for the message for good. Marked failed
+            // so the background queue moves past it rather than asking again
+            // at its head forever; opening the conversation tries it again.
+            // Had it been deleted meanwhile, the next sync removes it either
+            // way. A message some of whose parts came back keeps those: a
+            // server that cannot serve one part would otherwise leave the
+            // message with no text at all.
             bodies.push({
               failed: true,
               headers: member.headers,

@@ -66,6 +66,44 @@ describe("a STATUS the adapter got no answer to", () => {
     ).resolves.toBe("MailboxMissingError");
   });
 
+  // Read as an empty mailbox or a first UID, a missing count would let a
+  // folder be deleted as empty, and a missing next UID be saved as progress.
+  it.each([
+    { answer: { path: PATH, uidNext: 4, uidValidity: 7n }, missing: "count" },
+    {
+      answer: { messages: 3, path: PATH, uidValidity: 7n },
+      missing: "next UID",
+    },
+  ])(
+    "is a mailbox that will not open when the answer has no $missing",
+    async ({ answer }) => {
+      await expect(ending(() => Promise.resolve(answer))).resolves.toBe(
+        "MailboxMissingError"
+      );
+    }
+  );
+
+  // RFC 7162: a server with CONDSTORE answers 0 for a mailbox that keeps no
+  // mod-sequences. Taken as a mod-sequence it never rises, and the flags of
+  // that mailbox would never be read again.
+  it("reads a mod-sequence of 0 as a mailbox that keeps none", async () => {
+    const session = sessionWith(
+      () =>
+        Promise.resolve({
+          highestModseq: 0n,
+          messages: 3,
+          path: PATH,
+          uidNext: 4,
+          uidValidity: 7n,
+        }),
+      true
+    );
+
+    const state = await Effect.runPromise(session.status(PATH));
+
+    expect(state.highestModseq).toBeUndefined();
+  });
+
   it("is the mailbox's state when the server answered", async () => {
     const session = sessionWith(
       () =>

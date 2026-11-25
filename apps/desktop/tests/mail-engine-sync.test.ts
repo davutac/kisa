@@ -454,6 +454,65 @@ describe("mail engine with the generic dialect", () => {
     ).toStrictEqual({ body_state: "ready", body_text: "copied body" });
   });
 
+  // The server describes the message and answers the fetch of its text with
+  // none of it. Saved as downloaded, the message would be blank for good.
+  it("marks a body failed when the server returns none of its parts", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+    server.deliver(
+      "INBOX",
+      genericMessage("hollow", {
+        sections: {},
+        structure: { size: 10, type: "text/plain" },
+      })
+    );
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+
+    await run(bodyStep(scope));
+
+    expect(
+      connection
+        .prepare(
+          "SELECT body_state FROM mail_messages WHERE subject = 'hollow'"
+        )
+        .get()
+    ).toStrictEqual({ body_state: "failed" });
+  });
+
+  // A server that cannot serve one part of a message must not cost it the
+  // parts it can.
+  it("keeps the parts the server did return when another is missing", async () => {
+    insertAccount("generic");
+    const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+    server.deliver(
+      "INBOX",
+      genericMessage("halved", {
+        // The structure describes two parts; the server holds one.
+        sections: { "1": "first part" },
+        structure: {
+          childNodes: [
+            { part: "1", size: 10, type: "text/plain" },
+            { part: "2", size: 10, type: "text/plain" },
+          ],
+          type: "multipart/mixed",
+        },
+      })
+    );
+    const scope = scopeFor(server, genericDialect);
+    await syncFully(scope);
+
+    await run(bodyStep(scope));
+
+    expect(
+      connection
+        .prepare(
+          "SELECT body_state, body_text FROM mail_messages WHERE subject = 'halved'"
+        )
+        .get()
+    ).toStrictEqual({ body_state: "ready", body_text: "first part" });
+  });
+
   // Opening the conversation tries it again; the background queue moves on,
   // so older bodies behind it still download.
   it("marks a body failed when the server will not return its text", async () => {

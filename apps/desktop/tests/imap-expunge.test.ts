@@ -81,6 +81,25 @@ describe("removing exactly the chosen messages", () => {
     expect(calls).toStrictEqual(["unmark 3", "delete 2", "mark 3"]);
   });
 
+  // A plain EXPUNGE takes everything still marked. If the server did not
+  // take the mark off the other program's mail, that mail would go too.
+  it("expunges nothing when the other program's mail could not be unmarked", async () => {
+    const { calls, client, state } = mailbox({ 2: [], 3: ["\\Deleted"] });
+    const refusing = {
+      ...client,
+      messageFlagsRemove: (range: string) => {
+        calls.push(`unmark ${range}`);
+        return Promise.resolve(false);
+      },
+    };
+
+    await expect(
+      expungeExactly(refusing as never, "2", false)
+    ).resolves.toBeFalsy();
+    expect([...state.keys()]).toStrictEqual([2, 3]);
+    expect(calls).toStrictEqual(["unmark 3"]);
+  });
+
   it("marks the other program's mail again when the expunge fails", async () => {
     const { client, state } = mailbox({ 2: [], 3: ["\\Deleted"] });
     const failing = {
