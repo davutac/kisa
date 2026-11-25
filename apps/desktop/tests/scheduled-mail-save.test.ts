@@ -149,6 +149,7 @@ const {
   cancelScheduledMailToStash,
   discardScheduledMail,
   finishScheduledMailEdit,
+  listScheduledMailPage,
   sendScheduledMailNow,
   startScheduledMail,
   stopScheduledMail,
@@ -1182,6 +1183,25 @@ describe("scheduled mail delivery status", () => {
       attemptId: null,
       attentionReason: "outcome-unknown",
       status: "attention",
+    });
+  });
+});
+
+// The cursor comes back from the renderer, so it is decoded before any row is
+// read with it.
+describe("scheduled mail page cursor", () => {
+  it.each([
+    ["text that is not JSON", "not json"],
+    ["JSON of another shape", JSON.stringify({ draftId: 7 })],
+  ])("refuses %s", async (_name, text) => {
+    const cursor = Buffer.from(text, "utf-8").toString("base64url");
+
+    await expect(
+      Effect.runPromise(
+        listScheduledMailPage({ accountIds: [accountId], cursor })
+      )
+    ).rejects.toMatchObject({
+      message: "The scheduled email page cursor is invalid",
     });
   });
 });
