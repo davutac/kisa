@@ -48,6 +48,7 @@ catalog:
   astro: 7.4.13
   babel-plugin-react-compiler: ^1.0.0
   better-sqlite3: npm:better-sqlite3-multiple-ciphers@13.2.0
+  cf: 1.0.0-rc.5
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   date-fns: ^4.4.0
@@ -78,7 +79,7 @@ catalog:
   ultracite: 8.3.1
   vite: ^8.3.8
   vitest: ^5.1.1
-  wrangler: ^4.166.0
+  wrangler: ^4.168.0
   zod: ^4.6.7
   zustand: ^5.1.0
 

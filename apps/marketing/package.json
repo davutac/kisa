@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "astro build",
-    "deploy": "pnpm run build && wrangler deploy",
+    "deploy": "pnpm run build && cf deploy dist",
     "dev": "astro dev",
-    "preview": "pnpm run build && wrangler dev",
+    "preview": "pnpm run build && astro preview",
     "typecheck": "astro check"
   },
   "dependencies": {
@@ -28,6 +28,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "astro": "catalog:",
+    "cf": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:astro",
     "wrangler": "catalog:"
