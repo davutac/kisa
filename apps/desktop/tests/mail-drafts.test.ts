@@ -25,6 +25,8 @@ import { outgoingAttachmentAuthorizations } from "../src/main/mail/outgoing-atta
 import { MailDraftChanged } from "../src/shared/ipc/mail";
 import { insertGmailAccount } from "./fixtures/mail-accounts";
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const rendererEvents = vi.hoisted(() => ({
   owners: [
     {
@@ -40,6 +42,7 @@ const rendererEvents = vi.hoisted(() => ({
 }));
 
 const connection = openDatabaseConnection(":memory:");
+
 applyDatabaseMigrations(
   createDatabaseClient(connection),
   fileURLToPath(new URL("../../../packages/database/drizzle", import.meta.url))
@@ -54,12 +57,15 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
 
   if (method === "run") {
     statement.run(...parameters);
+
     return Promise.resolve({ rows: [] });
   }
 
   const dataStatement = statement.raw(true);
+
   if (method === "get") {
     const row = dataStatement.get(...parameters);
+
     return Promise.resolve({ rows: Array.isArray(row) ? row : [] });
   }
 
@@ -71,6 +77,7 @@ const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
 vi.mock(import("../src/main/database-query"), async () => {
   const { DatabaseError } = await import("@repo/database/runtime");
   const { Effect: EffectModule } = await import("effect");
+
   const useTestDatabase = <A>(
     run: (database: RemoteDatabaseClient) => Promise<A>
   ) =>
@@ -121,6 +128,7 @@ const replyDraft = {
 };
 
 const decodeMailDraftChanged = Schema.decodeUnknownOption(MailDraftChanged);
+
 const emittedChanges = (): MailDraftChanged[] =>
   rendererEvents.payloads.flatMap((payload) =>
     Option.match(decodeMailDraftChanged(payload), {
@@ -139,6 +147,7 @@ describe("mail drafts", () => {
 
   it("stores and lists assigned and unassigned new-email stashes", async () => {
     const unassigned = await Effect.runPromise(saveMailDraft(newDraft, 7));
+
     const assigned = await Effect.runPromise(
       saveMailDraft(
         {
@@ -171,16 +180,20 @@ describe("mail drafts", () => {
     const accountId = "person@example.com";
     await Effect.runPromise(saveMailDraft({ ...newDraft, accountId }, 7));
     await Effect.runPromise(saveMailDraft(replyDraft, 7));
+
     const drafts = ["new-draft", "reply-draft"].map((draftId) => ({
       accountId,
       draftId,
     }));
+
     for (const draft of drafts) {
       Effect.runFork(holdSend(draft, 7, 60_000, Effect.void));
     }
+
     const look = Effect.gen(function* lookAtDrafts() {
       const listed = yield* listStashedDrafts({ accountIds: [accountId] }, 7);
       const reply = yield* loadThreadDraft(accountId, "thread-1", 7);
+
       return { listed: listed.map((draft) => draft.id), reply: reply?.id };
     });
 
@@ -189,13 +202,17 @@ describe("mail drafts", () => {
         const discard = yield* Effect.flip(
           discardMailDraft({ accountId, draftId: "new-draft" })
         );
+
         const save = yield* Effect.flip(
           saveMailDraft({ ...replyDraft, subject: "Edited" }, 7)
         );
+
         const seen = yield* look;
+
         return { ...seen, discard: discard.message, save: save.message };
       })
     );
+
     await Effect.runPromise(
       Effect.forEach(drafts, (draft) => cancelHeldSend(draft, 7), {
         discard: true,
@@ -229,6 +246,7 @@ describe("mail drafts", () => {
       accountId: "person@example.com",
       body: { html: "<p>Best,<br>Davut</p>", text: "Best,\nDavut" },
     };
+
     await Effect.runPromise(
       saveMailDraft(
         {
@@ -310,6 +328,7 @@ describe("mail drafts", () => {
       accountId: "person@example.com",
       id: "scheduled-draft",
     };
+
     await Effect.runPromise(saveMailDraft(scheduledDraft, 7));
     connection
       .prepare(
@@ -357,6 +376,7 @@ describe("mail drafts", () => {
           size: 5,
         },
       ]);
+
     if (attachment === undefined) {
       throw new Error("Expected an authorized attachment");
     }
@@ -364,22 +384,28 @@ describe("mail drafts", () => {
     await Effect.runPromise(
       saveMailDraft({ ...newDraft, attachments: [attachment] }, 7)
     );
+
     const upserts = emittedChanges().filter(
       (change) => change.kind === "upsert"
     );
+
     expect(upserts).toHaveLength(2);
     const [sourceUpsert, otherWindowUpsert] = upserts;
+
     if (
       sourceUpsert?.kind !== "upsert" ||
       otherWindowUpsert?.kind !== "upsert"
     ) {
       throw new Error("Expected one attachment upsert per window");
     }
+
     const [sourceAttachment] = sourceUpsert.draft.attachments;
     const [otherWindowAttachment] = otherWindowUpsert.draft.attachments;
+
     if (sourceAttachment === undefined || otherWindowAttachment === undefined) {
       throw new Error("Expected each upsert to include the attachment");
     }
+
     expect(sourceAttachment.referenceId).not.toBe(
       otherWindowAttachment.referenceId
     );

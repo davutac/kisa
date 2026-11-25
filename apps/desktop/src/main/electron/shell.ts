@@ -20,5 +20,6 @@ export const openExternalUrl = (rawUrl: string): boolean => {
   }
 
   void shell.openExternal(url);
+
   return true;
 };

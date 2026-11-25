@@ -45,6 +45,7 @@ import type {
 const MAX_LITERAL_BYTES = 64 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 96 * 1024 * 1024;
 const CONNECTION_TIMEOUT_MS = 30_000;
+
 /**
  * How long before an access token expires its connection starts looking for
  * a free moment to close. Exchange Online answers the first command after
@@ -88,6 +89,7 @@ const ImapFailure = Schema.Struct({
   throttleReset: Schema.optional(Schema.Finite),
   tlsFailed: Schema.optional(Schema.Boolean),
 });
+
 const decodeImapFailure = Schema.decodeUnknownOption(ImapFailure);
 
 /**
@@ -101,6 +103,7 @@ export const toTransportError = <Failure>(
   path?: string
 ): MailTransportError => {
   const failure = Option.getOrElse(decodeImapFailure(error), () => ({}));
+
   const {
     authenticationFailed,
     code = "",
@@ -163,6 +166,7 @@ export const toUidSet = (uids: readonly number[]): string => {
   const sorted = [
     ...new Set(uids.filter((uid) => Number.isSafeInteger(uid) && uid > 0)),
   ].toSorted((left, right) => left - right);
+
   const ranges: string[] = [];
   let [start] = sorted;
   let previous = start;
@@ -172,9 +176,11 @@ export const toUidSet = (uids: readonly number[]): string => {
       previous = uid;
       continue;
     }
+
     if (start !== undefined && previous !== undefined) {
       ranges.push(start === previous ? `${start}` : `${start}:${previous}`);
     }
+
     start = uid;
     previous = uid;
   }
@@ -189,15 +195,18 @@ export const toUidSet = (uids: readonly number[]): string => {
 const toSelectionRange = (selection: UidSelection): string | undefined => {
   if (selection.kind === "uids") {
     const set = toUidSet(selection.uids);
+
     return set.length === 0 ? undefined : set;
   }
 
   const from = Math.max(1, Math.trunc(selection.from));
+
   if (selection.to === undefined) {
     return `${from}:*`;
   }
 
   const to = Math.trunc(selection.to);
+
   return to < from ? undefined : `${from}:${to}`;
 };
 
@@ -208,21 +217,27 @@ const toSearchObject = (search: MailboxSearch): SearchObject => {
     case "all": {
       return { all: true };
     }
+
     case "gmailMessage": {
       return { emailId: search.messageId };
     }
+
     case "gmailRaw": {
       return { gmraw: search.query };
     }
+
     case "gmailThread": {
       return { threadId: search.threadId };
     }
+
     case "header": {
       return { header: { [search.name]: search.value } };
     }
+
     case "text": {
       return { text: search.text };
     }
+
     case "uidRange": {
       return { uid: `${Math.max(1, search.from)}:${Math.max(1, search.to)}` };
     }
@@ -235,6 +250,7 @@ const toHeaderQuery = (
   if (headers === undefined || headers === true) {
     return headers;
   }
+
   return [...headers];
 };
 
@@ -258,7 +274,9 @@ const toEpochMs = (value: Date | string | undefined): number | undefined => {
   if (value === undefined) {
     return undefined;
   }
+
   const time = (value instanceof Date ? value : new Date(value)).getTime();
+
   return Number.isFinite(time) ? time : undefined;
 };
 
@@ -335,6 +353,7 @@ export const toMailbox = (
 ): ImapMailbox => {
   const flags = [...entry.flags];
   const lowerFlags = new Set(flags.map((flag) => flag.toLowerCase()));
+
   const trusted =
     !hasSpecialUse || entry.specialUseSource !== "name"
       ? entry.specialUse
@@ -377,20 +396,24 @@ export const toMailboxes = (
   if (hasSpecialUse) {
     return entries.map((entry) => toMailbox(entry, true));
   }
+
   const attributes = entries.map((entry) =>
     [...entry.flags].find((flag) => ROLE_ATTRIBUTES.has(flag.toLowerCase()))
   );
+
   const claimed = new Set(
     attributes.flatMap((flag) =>
       flag === undefined ? [] : [flag.toLowerCase()]
     )
   );
+
   return entries.map((entry, index) => {
     const named =
       entry.specialUse !== undefined &&
       claimed.has(entry.specialUse.toLowerCase())
         ? undefined
         : entry.specialUse;
+
     return toMailbox(
       { ...entry, specialUse: attributes[index] ?? named },
       false
@@ -445,16 +468,20 @@ export const expungeExactly = async (
   if (hasUidPlus) {
     return client.messageDelete(range, { uid: true });
   }
+
   const kept = await client.search(
     { deleted: true, not: { uid: range } },
     { uid: true }
   );
+
   if (kept === false || kept === undefined) {
     // Without knowing what else would go, nothing is expunged.
     return false;
   }
+
   const keptRange = toUidSet(kept);
   const flagOptions = { silent: true, uid: true };
+
   if (
     keptRange.length > 0 &&
     !(await client.messageFlagsRemove(keptRange, ["\\Deleted"], flagOptions))
@@ -462,6 +489,7 @@ export const expungeExactly = async (
     // Still marked, they would go with the expunge: nothing is expunged.
     return false;
   }
+
   try {
     return await client.messageDelete(range, { uid: true });
   } finally {
@@ -473,6 +501,7 @@ export const expungeExactly = async (
 
 /** What imapflow emits for the selected mailbox while a connection idles. */
 const MAILBOX_EVENTS = ["exists", "expunge", "flags"] as const;
+
 type MailboxEvent = (typeof MAILBOX_EVENTS)[number];
 
 /** What comes with a mailbox event; only `exists` carries the counts. */
@@ -494,11 +523,11 @@ export interface IdleClient {
   readonly off: (
     event: MailboxEvent,
     listener: (data: MailboxEventData) => void
-  ) => unknown;
+  ) => void;
   readonly on: (
     event: MailboxEvent,
     listener: (data: MailboxEventData) => void
-  ) => unknown;
+  ) => void;
   readonly usable: boolean;
 }
 
@@ -586,9 +615,11 @@ export const watchMailbox = Effect.fn("ImapSession.watchMailbox")(
             }
           },
         }));
+
         for (const { event, listener } of listeners) {
           client.on(event, listener);
         }
+
         return listeners;
       }),
       (listeners) =>
@@ -604,14 +635,17 @@ export const watchMailbox = Effect.fn("ImapSession.watchMailbox")(
     const idling = Effect.gen(function* idleUntilGivenUp() {
       for (let run = 0; run < idleRunsFor(options.maxMs); run += 1) {
         const ran = yield* attempt(() => client.idle());
+
         if (!client.usable) {
           return yield* connectionLost(accountId);
         }
+
         if (ran === false) {
           // The server would not run IDLE.
           break;
         }
       }
+
       return yield* Effect.never;
     });
 
@@ -632,6 +666,7 @@ export const watchMailbox = Effect.fn("ImapSession.watchMailbox")(
         orElse: () => Effect.fail(connectionLost(accountId)),
       })
     );
+
     return outcome;
   },
   Effect.scoped
@@ -692,13 +727,16 @@ export const makeSession = (
     run(path, async () => {
       const readOnly = mode === "read";
       const lock = await client.getMailboxLock(path, { readOnly });
+
       try {
         if (uidValidity !== undefined && selectedValidity() !== uidValidity) {
           await client.mailboxOpen(path, { readOnly });
+
           if (selectedValidity() !== uidValidity) {
             refuseMailbox();
           }
         }
+
         return await operation();
       } finally {
         lock.release();
@@ -715,16 +753,18 @@ export const makeSession = (
     path: string,
     uidValidity: bigint,
     uids: readonly number[],
-    operation: (range: string) => Promise<unknown>
+    // Resolves `false` when the server refused the command.
+    operation: (range: string) => Promise<boolean>
   ): Effect.Effect<void, MailTransportError> => {
     const range = toUidSet(uids);
+
     return range.length === 0
       ? Effect.void
       : withMailbox(
           path,
           uidValidity,
           async () => {
-            if ((await operation(range)) === false) {
+            if (!(await operation(range))) {
               refuseCommand();
             }
           },
@@ -738,15 +778,20 @@ export const makeSession = (
         const appended = await client.append(path, Buffer.from(message), [
           ...flags,
         ]);
+
         if (appended === false) {
           refuseCommand();
         }
       }),
     capabilities,
     copy: (path, uidValidity, uids, destination) =>
-      onMessages(path, uidValidity, uids, (range) =>
-        client.messageCopy(range, destination, { uid: true })
-      ),
+      onMessages(path, uidValidity, uids, async (range) => {
+        const copied = await client.messageCopy(range, destination, {
+          uid: true,
+        });
+
+        return copied !== false;
+      }),
     createMailbox: (path) =>
       run(path, async () => {
         await client.mailboxCreate(path);
@@ -768,12 +813,14 @@ export const makeSession = (
 
       return withMailbox(path, uidValidity, async () => {
         const messages: FetchedMessage[] = [];
+
         for await (const message of client.fetch(range, toFetchQuery(fields), {
           changedSince: options?.changedSince,
           uid: true,
         })) {
           messages.push(toFetchedMessage(message, fields));
         }
+
         return messages;
       });
     },
@@ -784,6 +831,7 @@ export const makeSession = (
           { bodyParts: [{ key: section, maxLength: maxBytes }], uid: true },
           { uid: true }
         );
+
         return message === false ? undefined : message.bodyParts?.get(section);
       }),
     hasMessage: (path, search) =>
@@ -799,18 +847,25 @@ export const makeSession = (
     listMailboxes: run(undefined, async () => {
       // A full listing: `listOnly` returns before imapflow assigns roles.
       const entries = await client.list();
+
       return toMailboxes(entries, capabilities.has("SPECIAL-USE"));
     }),
     move: (path, uidValidity, uids, destination) =>
       onMessages(path, uidValidity, uids, async (range) => {
         if (capabilities.has("MOVE")) {
-          return client.messageMove(range, destination, { uid: true });
+          const moved = await client.messageMove(range, destination, {
+            uid: true,
+          });
+
+          return moved !== false;
         }
+
         // COPY, then remove exactly the originals; the source is left alone
         // when the copy was refused, so nothing is lost.
         const copied = await client.messageCopy(range, destination, {
           uid: true,
         });
+
         return copied === false
           ? false
           : expungeExactly(client, range, capabilities.has("UIDPLUS"));
@@ -841,6 +896,7 @@ export const makeSession = (
         uidValidity,
         async () => {
           const options = { silent: true, uid: true };
+
           const changed =
             operation === "add"
               ? await client.messageFlagsAdd(range, [...flags], options)
@@ -858,6 +914,7 @@ export const makeSession = (
     setGmailLabels: (path, uidValidity, uids, operation, labels) =>
       onMessages(path, uidValidity, uids, (range) => {
         const options = { silent: true, uid: true, useLabels: true };
+
         return operation === "add"
           ? client.messageFlagsAdd(range, [...labels], options)
           : client.messageFlagsRemove(range, [...labels], options);
@@ -916,6 +973,7 @@ const openClient = (request: ImapConnectRequest) =>
         // Deliberately ignored; see above.
       });
       await client.connect();
+
       return client;
     },
   });

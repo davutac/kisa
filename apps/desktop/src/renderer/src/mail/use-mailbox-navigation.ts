@@ -39,16 +39,19 @@ export const useMailboxNavigation = (): MailboxNavigation => {
       void navigate({ to: "/" });
     }
   };
+
   const retainScope = (accountId: string | null): void => {
     retainMailboxThreadsSnapshotsForAccounts(
       accountId === null ? accounts.map(({ email }) => email) : [accountId]
     );
   };
+
   const isShowingInbox = (accountId: string | null): boolean =>
     isMailboxRoute &&
     selectedAccountId === accountId &&
     mailbox === "inbox" &&
     openThreadId === null;
+
   // Opening the Inbox a conversation is open over goes back to it, as Escape
   // does: the list keeps its filter, selection, and scroll.
   const isReadingOverInbox = (accountId: string | null): boolean =>
@@ -56,9 +59,11 @@ export const useMailboxNavigation = (): MailboxNavigation => {
     selectedAccountId === accountId &&
     mailbox === "inbox" &&
     openThreadId !== null;
+
   const selectAccountScope = (accountId: string | null): void => {
     if (isMailSearchActive) {
       selectAccount(accountId);
+
       return;
     }
 
@@ -69,10 +74,13 @@ export const useMailboxNavigation = (): MailboxNavigation => {
     openAccount: (accountEmail) => {
       if (isReadingOverInbox(accountEmail)) {
         closeThread();
+
         return;
       }
+
       if (!isMailSearchActive && isShowingInbox(accountEmail)) {
         requestMailboxReload();
+
         return;
       }
 
@@ -83,10 +91,13 @@ export const useMailboxNavigation = (): MailboxNavigation => {
     openAllAccounts: () => {
       if (isReadingOverInbox(null)) {
         closeThread();
+
         return;
       }
+
       if (!isMailSearchActive && isShowingInbox(null)) {
         requestMailboxReload();
+
         return;
       }
 

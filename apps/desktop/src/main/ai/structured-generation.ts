@@ -20,16 +20,20 @@ export const generateStructuredText = Effect.fn("generateStructuredText")(
       model: input.model.model,
       reasoning: input.model.reasoning,
     };
+
     switch (input.model.provider) {
       case "codex": {
         return yield* generateWithCodex(generationInput);
       }
+
       case "claude": {
         return yield* generateWithClaude(generationInput);
       }
+
       case "opencode": {
         return yield* generateWithOpenCode(generationInput);
       }
+
       default: {
         return yield* providerFailure("codex", "Unsupported AI provider");
       }

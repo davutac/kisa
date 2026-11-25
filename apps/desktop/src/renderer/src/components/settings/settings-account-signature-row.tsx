@@ -32,17 +32,21 @@ const SettingsAccountSignatureRow = ({
         accountId: account.email,
         emailSignature: signature,
       });
+
       if (!reply.ok) {
         toast.error(reply.error);
+
         return false;
       }
 
       toast.success("Signature saved");
+
       return true;
     } catch {
       toast.error("Could not save the signature", {
         description: "Please try again.",
       });
+
       return false;
     }
   };

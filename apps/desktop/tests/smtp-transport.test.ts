@@ -25,6 +25,7 @@ const send = async (
   auth: ImapAuth = passwordAuth
 ) => {
   server = await startFakeSmtpServer(behaviour);
+
   return Effect.runPromiseExit(
     sendOverSmtp(
       {
@@ -88,6 +89,7 @@ describe("SMTP sending", () => {
       kind: "oauth",
       user: "person@example.com",
     });
+
     const [authentication = ""] = server?.authentications ?? [];
     const [method, token = ""] = authentication.split(" ").slice(1);
 

@@ -42,17 +42,23 @@ const MailMessageParticipants = ({
   const senderMailbox = parseMailboxAddress(message.from);
   const senderEmail = senderMailbox.email;
   const recipientEmails = extractEmailAddresses(message.to);
+
   const recipients =
     recipientEmails.length === 0 ? [fallbackRecipient] : recipientEmails;
+
   const ccEmails = extractEmailAddresses(message.cc);
   const bccEmails = extractEmailAddresses(message.bcc);
+
   const senderAccount = accounts.find(
     ({ email }) => email.toLowerCase() === senderEmail.toLowerCase()
   );
+
   const senderImageUrl = message.senderBrand?.imageDataUrl;
   const senderName = senderMailbox.name ?? senderAccount?.displayName;
+
   const fallbackText =
     (senderName ?? senderEmail).trim().charAt(0).toUpperCase() || "?";
+
   const senderTitle =
     senderName === undefined ? senderEmail : `${senderName} <${senderEmail}>`;
 

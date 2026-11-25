@@ -41,6 +41,7 @@ const SettingsAccountCategorizationRow = ({
             accountId: account.email,
             categorizationEnabled: checked,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
           }

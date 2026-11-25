@@ -2,6 +2,7 @@ import { isLabelPlace, isSameMailboxPlace } from "@/mail/mailbox-place";
 import type { MailboxPlace } from "@/mail/mailbox-place";
 
 export type ShellViewPath = "/" | "/compose" | "/scheduled" | "/templates";
+
 export type WorkspacePath = Exclude<ShellViewPath, "/">;
 
 export interface WorkspaceToggleInput {

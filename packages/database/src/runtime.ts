@@ -17,6 +17,7 @@ export const DatabaseErrorReason = Schema.Literals([
   "open",
   "query",
 ]);
+
 export type DatabaseErrorReason = typeof DatabaseErrorReason.Type;
 
 const formatErrorCause = (cause: unknown): string =>
@@ -44,6 +45,7 @@ export class DatabaseError extends Schema.TaggedError<
     }
 
     const causeMessage = formatErrorCause(args.cause);
+
     return new DatabaseError({
       cause: args.cause,
       causeMessage,
@@ -95,8 +97,10 @@ export const createDatabaseRuntime = (
     ((directoryPath: string): void => {
       mkdirSync(directoryPath, { recursive: true });
     });
+
   const openConnection =
     adapters.openConnection ?? openEncryptedDatabaseConnection;
+
   const createClient = adapters.createClient ?? createDatabaseClient;
   const applyMigrations = adapters.applyMigrations ?? applyDatabaseMigrations;
 
@@ -140,10 +144,12 @@ export const createDatabaseRuntime = (
         DatabaseError.new({ cause, reason: "create-directory" }),
       try: () => createDirectory(path.dirname(paths.databasePath)),
     });
+
     const connection = yield* Effect.try({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
       try: () => openConnection(paths.databasePath, paths.encryptionKey),
     });
+
     const client = yield* Effect.try({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
       try: () => createClient(connection),

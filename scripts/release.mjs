@@ -13,8 +13,10 @@ const APP_PACKAGE_PATH = path.join(
   "desktop",
   "package.json"
 );
+
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
+
 const USAGE =
   "Usage: pnpm release [major|minor|patch|x.y.z] [--dry-run] [--no-push] [--skip-check]";
 
@@ -30,6 +32,7 @@ const fail = (message) => {
 const run = (command, args, options = {}) => {
   if (options.dryRun === true) {
     writeLine(`$ ${[command, ...args].join(" ")}`);
+
     return "";
   }
 
@@ -144,6 +147,7 @@ const promptForRelease = async () => {
     const answer = await readline.question(
       "New version or bump (major/minor/patch): "
     );
+
     return answer.trim();
   } finally {
     readline.close();
@@ -157,6 +161,7 @@ const shouldPush = !args.includes("--no-push");
 const shouldCheck = !args.includes("--skip-check");
 
 const currentVersion = readAppPackage().version;
+
 writeLine(`Current version: ${currentVersion}`);
 
 const release = bump ?? (await promptForRelease());
@@ -189,10 +194,12 @@ if (shouldCheck) {
 }
 
 run("git", ["add", APP_PACKAGE_PATH], { dryRun: isDryRun });
+
 run("git", ["commit", "-m", `Release ${tagName}`], {
   dryRun: isDryRun,
   inherit: true,
 });
+
 run("git", ["tag", tagName], { dryRun: isDryRun });
 
 if (shouldPush) {

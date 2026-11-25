@@ -123,12 +123,16 @@ export const MailThreadActions = ({
   const toggleReadLabel = isUnread ? "Mark as read" : "Mark as unread";
   const popOutDisplay = getHotkeyDisplay("thread.popout");
   const trashDisplay = getHotkeyDisplay("thread.trashThread");
+
   const destructiveLabel =
     onDeleteForever === undefined ? trashDisplay.label : "Delete forever";
+
   const destructiveAction = onDeleteForever ?? onTrash;
   const trimmedSubject = subject.trim();
+
   const conversation =
     trimmedSubject === "" ? "this conversation" : `“${trimmedSubject}”`;
+
   // Delete forever asks through useConfirm, whose confirming button is marked.
   const trashConfirmation =
     onDeleteForever === undefined

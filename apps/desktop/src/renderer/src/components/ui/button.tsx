@@ -68,6 +68,7 @@ const PopupTriggerButton = ({
   ...props
 }: Omit<ButtonProps, "size" | "variant">) => {
   const isFocusable = disabled && focusableWhenDisabled;
+
   return renderElement(
     "button",
     mergeProps(props, {
@@ -90,11 +91,14 @@ const Button = ({
 }: ButtonProps) => {
   const classes = cn(buttonVariants({ variant, size, className }));
   const popup = props["aria-haspopup"];
+
   if (popup !== undefined && popup !== false && popup !== "false") {
     return <PopupTriggerButton className={classes} {...props} />;
   }
+
   return <ButtonPrimitive className={classes} {...props} />;
 };
 
 export { aiSurfaceClassName, Button, buttonVariants };
+
 export type { ButtonProps };

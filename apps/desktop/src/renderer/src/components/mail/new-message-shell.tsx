@@ -23,6 +23,7 @@ const isComposerDropTarget = (target: EventTarget | null): boolean =>
 const useComposerFileDrop = (onFiles: (files: FileList) => void) => {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const fileDragDepthRef = useRef(0);
+
   const resetFileDrag = (): void => {
     fileDragDepthRef.current = 0;
     setIsDraggingFiles(false);
@@ -34,10 +35,13 @@ const useComposerFileDrop = (onFiles: (files: FileList) => void) => {
         if (!event.dataTransfer.types.includes("Files")) {
           return;
         }
+
         if (isComposerDropTarget(event.target)) {
           resetFileDrag();
+
           return;
         }
+
         event.stopPropagation();
         resetFileDrag();
       },
@@ -45,10 +49,13 @@ const useComposerFileDrop = (onFiles: (files: FileList) => void) => {
         if (!event.dataTransfer.types.includes("Files")) {
           return;
         }
+
         if (isComposerDropTarget(event.target)) {
           resetFileDrag();
+
           return;
         }
+
         event.preventDefault();
         event.stopPropagation();
         fileDragDepthRef.current += 1;
@@ -58,12 +65,16 @@ const useComposerFileDrop = (onFiles: (files: FileList) => void) => {
         if (!event.dataTransfer.types.includes("Files")) {
           return;
         }
+
         if (isComposerDropTarget(event.target)) {
           resetFileDrag();
+
           return;
         }
+
         event.stopPropagation();
         fileDragDepthRef.current = Math.max(fileDragDepthRef.current - 1, 0);
+
         if (fileDragDepthRef.current === 0) {
           setIsDraggingFiles(false);
         }
@@ -71,8 +82,10 @@ const useComposerFileDrop = (onFiles: (files: FileList) => void) => {
       onDragOverCapture: (event: DragEvent) => {
         if (isComposerDropTarget(event.target)) {
           resetFileDrag();
+
           return;
         }
+
         if (event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
           event.stopPropagation();
@@ -83,10 +96,13 @@ const useComposerFileDrop = (onFiles: (files: FileList) => void) => {
         if (!event.dataTransfer.types.includes("Files")) {
           return;
         }
+
         if (isComposerDropTarget(event.target)) {
           resetFileDrag();
+
           return;
         }
+
         event.preventDefault();
         event.stopPropagation();
         resetFileDrag();

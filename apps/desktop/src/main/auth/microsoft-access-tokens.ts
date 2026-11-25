@@ -93,6 +93,7 @@ export const getMicrosoftAccessToken = Effect.fn("getMicrosoftAccessToken")(
     refreshToken: Redacted.Redacted<string>
   ): Effect.fn.Return<MicrosoftAccessToken, MicrosoftSignInError> {
     let renewal = renewals.get(accountId);
+
     if (renewal === undefined) {
       renewal = Semaphore.makeUnsafe(1);
       renewals.set(accountId, renewal);
@@ -102,11 +103,13 @@ export const getMicrosoftAccessToken = Effect.fn("getMicrosoftAccessToken")(
       Effect.gen(function* renew() {
         // Another connection may have renewed while this one waited.
         const current = usable(accountId);
+
         if (current !== undefined) {
           return current;
         }
 
         const environment = getMicrosoftOAuthEnvironment();
+
         if (environment === undefined) {
           return yield* new MicrosoftSignInError({ kind: "local" });
         }

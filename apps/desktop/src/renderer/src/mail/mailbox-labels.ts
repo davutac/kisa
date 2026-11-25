@@ -45,11 +45,13 @@ export const createMailboxLabelItems = (
       }
 
       const key = normalizeMailboxLabelName(label.name);
+
       if (key.length === 0) {
         continue;
       }
 
       const existing = items.get(key);
+
       if (existing === undefined) {
         items.set(key, {
           accountIds: [catalog.accountId],
@@ -64,6 +66,7 @@ export const createMailboxLabelItems = (
       if (!existing.accountIds.includes(catalog.accountId)) {
         existing.accountIds.push(catalog.accountId);
       }
+
       if (!colorsMatch(existing.color, label.color)) {
         existing.hasConflictingColor = true;
       }
@@ -88,6 +91,7 @@ export const getScopeLabelItems = (
   createMailboxLabelItems(
     accountIds.flatMap((accountId) => {
       const labels = catalogs.get(accountId);
+
       return labels === undefined ? [] : [{ accountId, labels }];
     })
   );
@@ -111,6 +115,7 @@ export const toMailboxLabelRows = (
   items: readonly MailboxLabelItem[]
 ): readonly MailboxLabelRow[] => {
   const itemsByKey = new Map(items.map((item) => [item.key, item]));
+
   const childrenByParent = new Map<
     string | null,
     { readonly item: MailboxLabelItem; readonly name: string }[]
@@ -142,6 +147,7 @@ export const toMailboxLabelRows = (
   }
 
   const rows: MailboxLabelRow[] = [];
+
   const visit = (parentKey: string | null, depth: number): void => {
     const children = (childrenByParent.get(parentKey) ?? []).toSorted(
       (left, right) => compareLabelDisplayNames(left.name, right.name)
@@ -154,6 +160,7 @@ export const toMailboxLabelRows = (
   };
 
   visit(null, 0);
+
   return rows;
 };
 

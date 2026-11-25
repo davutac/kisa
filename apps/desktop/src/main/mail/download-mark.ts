@@ -42,6 +42,7 @@ export const markAsDownloaded = Effect.fn("markAsDownloaded")(
             filePath,
           ]),
       });
+
       return;
     }
 

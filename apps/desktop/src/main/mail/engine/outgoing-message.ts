@@ -55,6 +55,7 @@ export interface ComposedMessage {
 
 const CRLF = "\r\n";
 const BASE64_LINE = 76;
+
 /**
  * UTF-8 bytes per encoded word: 52 base64 characters, 64 with its markers,
  * so a word after `Subject: ` still fits the 76 characters RFC 2047 allows.
@@ -85,12 +86,15 @@ const encodeWords = (text: string): string => {
 
   for (const character of text) {
     const bytes = [...Buffer.from(character, "utf-8")];
+
     if (current.length + bytes.length > ENCODED_WORD_BYTES) {
       words.push(Buffer.from(current).toString("base64"));
       current = [];
     }
+
     current.push(...bytes);
   }
+
   if (current.length > 0 || words.length === 0) {
     words.push(Buffer.from(current).toString("base64"));
   }
@@ -100,6 +104,7 @@ const encodeWords = (text: string): string => {
 
 const headerText = (value: string): string => {
   const cleaned = cleanText(value);
+
   return PLAIN_ASCII.test(cleaned) && cleaned.length <= MAX_PLAIN_HEADER
     ? cleaned
     : encodeWords(cleaned);
@@ -107,6 +112,7 @@ const headerText = (value: string): string => {
 
 const formatPhrase = (name: string): string => {
   const cleaned = cleanText(name);
+
   return PLAIN_ASCII.test(cleaned) && cleaned.length <= MAX_PLAIN_HEADER
     ? `"${cleaned.replaceAll(/["\\]/gu, String.raw`\$&`)}"`
     : encodeWords(cleaned);
@@ -114,10 +120,13 @@ const formatPhrase = (name: string): string => {
 
 const formatAddress = ({ address, name }: OutgoingAddress): string => {
   const phrase = name === undefined ? "" : cleanText(name);
+
   if (phrase.length === 0) {
     return address;
   }
+
   const formatted = formatPhrase(phrase);
+
   // An encoded name fills its line, so the address goes on the next one.
   return formatted.startsWith("=?")
     ? `${formatted}${CRLF} <${address}>`
@@ -138,9 +147,11 @@ const messageIdToken = (id: string): string | undefined =>
 const foldBase64 = (bytes: Uint8Array): string => {
   const encoded = Buffer.from(bytes).toString("base64");
   const lines: string[] = [];
+
   for (let start = 0; start < encoded.length; start += BASE64_LINE) {
     lines.push(encoded.slice(start, start + BASE64_LINE));
   }
+
   return lines.join(CRLF);
 };
 
@@ -151,28 +162,34 @@ const formatDate = (date: Date): string =>
 /** `name="value"` for ASCII, RFC 2231 `name*=UTF-8''…` otherwise. */
 const parameter = (name: string, value: string): string => {
   const cleaned = cleanText(value).replaceAll(/[/\\]/gu, "_");
+
   if (PLAIN_ASCII.test(cleaned)) {
     return `${name}="${cleaned.replaceAll(/["\\]/gu, "_")}"`;
   }
+
   const encoded = [...Buffer.from(cleaned, "utf-8")]
     .map((byte) => {
       const character = String.fromCodePoint(byte);
+
       return byte < 0x80 && PARAMETER_SAFE.test(character)
         ? character
         : `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
     })
     .join("");
+
   return `${name}*=UTF-8''${encoded}`;
 };
 
 const safeMediaType = (mediaType: string): string => {
   const cleaned = cleanText(mediaType).toLowerCase();
+
   return MEDIA_TYPE.test(cleaned) ? cleaned : "application/octet-stream";
 };
 
 /** A content id as written, without brackets, if it is safe in a header. */
 const safeContentId = (contentId: string | undefined): string | undefined => {
   const cleaned = contentId?.trim().replaceAll(/^<|>$/gu, "");
+
   return cleaned !== undefined && CONTENT_ID.test(cleaned)
     ? cleaned
     : undefined;
@@ -224,6 +241,7 @@ const contentPart = (message: OutgoingMessage, seed: string): string => {
 
   for (const attachment of message.attachments) {
     const contentId = safeContentId(attachment.contentId);
+
     if (
       contentId !== undefined &&
       referenced.has(normalizeContentId(contentId))
@@ -271,6 +289,7 @@ const headerLines = (
       (message.references ?? []).flatMap((id) => messageIdToken(id) ?? [])
     ),
   ];
+
   const inReplyTo =
     message.inReplyTo === undefined
       ? undefined
@@ -295,12 +314,14 @@ const headerLines = (
 /** A new Message-ID at the sender's domain, without angle brackets. */
 export const newMessageId = (fromAddress: string): string => {
   const domain = fromAddress.slice(fromAddress.lastIndexOf("@") + 1);
+
   return `${randomUUID()}@${MESSAGE_ID.test(domain) ? domain : "kisa.invalid"}`;
 };
 
 export const composeMessage = (message: OutgoingMessage): ComposedMessage => {
   const seed = randomUUID().replaceAll("-", "");
   const content = contentPart(message, seed);
+
   const build = (withBcc: boolean): Uint8Array =>
     Buffer.from(
       `${[...headerLines(message, withBcc), content].join(CRLF)}${CRLF}`,
@@ -348,9 +369,11 @@ const textToHtml = (value: string): string =>
 
 const quotedContent = (quoted: QuotedMessage): OutgoingBody => {
   const { html, text } = quoted.body;
+
   if (html !== undefined && html.length > 0) {
     return { html, text: text ?? toIndexText(html) };
   }
+
   return { html: `<div>${textToHtml(text ?? "")}</div>`, text: text ?? "" };
 };
 
@@ -365,6 +388,7 @@ export const replyBody = (
 ): OutgoingBody => {
   const original = quotedContent(quoted);
   const attribution = `On ${ATTRIBUTION_DATE.format(quoted.sentAt)}, ${quoted.from} wrote:`;
+
   const quotedText = original.text
     .split(/\r?\n/gu)
     .map((line) => `> ${line}`)
@@ -381,6 +405,7 @@ export const forwardBody = (
   quoted: QuotedMessage
 ): OutgoingBody => {
   const original = quotedContent(quoted);
+
   const headers = [
     "---------- Forwarded message ---------",
     `From: ${quoted.from}`,

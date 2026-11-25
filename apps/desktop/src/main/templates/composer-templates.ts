@@ -56,6 +56,7 @@ export const notifyComposerTemplatesChanged = Effect.fn(
   "notifyComposerTemplatesChanged"
 )(function* notifyComposerTemplatesChanged() {
   const templates = yield* listComposerTemplates();
+
   for (const template of templates) {
     sendRendererEvent(
       COMPOSER_TEMPLATE_CHANGED_CHANNEL,
@@ -68,13 +69,16 @@ export const notifyComposerTemplatesChanged = Effect.fn(
 export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
   function* saveComposerTemplate(input: ComposerTemplateInput) {
     const name = input.name.trim();
+
     if (name.length === 0) {
       return yield* new ComposerTemplateError({
         message: "Template name is required",
       });
     }
+
     for (const value of [input.subject, input.body.text]) {
       const validation = validateTemplateText(value);
+
       if (!validation.ok) {
         return yield* new ComposerTemplateError({
           message: validation.message,
@@ -83,6 +87,7 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
     }
 
     const updatedAt = yield* Clock.currentTimeMillis;
+
     const saved = yield* withDatabaseClient((database) =>
       database.transaction(async (transaction) => {
         if (input.accountId !== null) {
@@ -90,6 +95,7 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
             columns: { accountId: true },
             where: { accountId: input.accountId },
           });
+
           if (account === undefined) {
             throw new Error("Template account is not connected");
           }
@@ -98,6 +104,7 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
         const existing = await transaction.query.composerTemplates.findFirst({
           where: { id: input.id },
         });
+
         const [duplicate] = await transaction
           .select({ id: composerTemplates.id })
           .from(composerTemplates)
@@ -109,9 +116,11 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
           )
           .limit(1)
           .all();
+
         if (duplicate !== undefined) {
           throw new Error("Template name already exists");
         }
+
         const values: typeof composerTemplates.$inferInsert = {
           accountEmail: input.accountId,
           bcc: input.bcc,
@@ -161,6 +170,7 @@ export const saveComposerTemplate = Effect.fn("saveComposerTemplate")(
       ComposerTemplateChanged,
       { kind: "upsert", template: saved }
     );
+
     return saved;
   }
 );
@@ -172,12 +182,14 @@ export const deleteComposerTemplate = Effect.fn("deleteComposerTemplate")(
         const existing = await transaction.query.composerTemplates.findFirst({
           where: { id: request.templateId },
         });
+
         if (existing !== undefined) {
           await transaction
             .delete(composerTemplates)
             .where(eq(composerTemplates.id, request.templateId))
             .run();
         }
+
         return existing !== undefined;
       })
     ).pipe(

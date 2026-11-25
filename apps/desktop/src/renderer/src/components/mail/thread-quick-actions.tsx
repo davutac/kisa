@@ -57,6 +57,7 @@ const quickActionsVariants = {
 
 const quickActionClassName =
   "h-auto w-full min-w-0 rounded-none text-muted-foreground";
+
 // The first column reaches under the row's edge, so its icons start past it.
 const overlappingQuickActionClassName = `${quickActionClassName} pl-3`;
 
@@ -106,6 +107,7 @@ const getDestructiveCopy = (
   subject: string
 ) => {
   const trimmedSubject = subject.trim();
+
   const conversation =
     trimmedSubject === "" ? "this conversation" : `“${trimmedSubject}”`;
 
@@ -154,6 +156,7 @@ const QuickActionSecondary = ({
       </Button>
     );
   }
+
   if (onToggleStar === undefined) {
     return null;
   }
@@ -208,11 +211,13 @@ const MailThreadQuickActions = ({
 }: MailThreadQuickActionsProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const destructiveAction = onDeleteForever ?? onTrash;
+
   const destructive = getDestructiveCopy(
     onDeleteForever !== undefined,
     name,
     subject
   );
+
   const columnClassNames = getColumnClassNames(
     getQuickActionColumns({
       hasArchive: onArchive !== undefined,

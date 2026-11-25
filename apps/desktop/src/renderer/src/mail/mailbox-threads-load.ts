@@ -52,9 +52,11 @@ export const getThreadListPlaceholder = ({
   if (threadCount > 0) {
     return undefined;
   }
+
   if (isInitialLoading) {
     return "loading";
   }
+
   return hasLoadError ? "failed" : "empty";
 };
 

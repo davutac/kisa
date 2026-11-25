@@ -51,13 +51,16 @@ export const PasswordAccountSetupRequest = Schema.Struct({
     Schema.Struct({ imap: MailServer, smtp: MailServer })
   ),
 });
+
 export type PasswordAccountSetupRequest =
   typeof PasswordAccountSetupRequest.Type;
+
 /** The request as the setup window writes it, before main decodes it. */
 export type PasswordAccountSetupInput =
   typeof PasswordAccountSetupRequest.Encoded;
 
 export const PasswordAccountSetupReply = IpcReply(Schema.Void);
+
 export type PasswordAccountSetupReply = typeof PasswordAccountSetupReply.Type;
 
 /**
@@ -70,13 +73,16 @@ export const MicrosoftAccountSetupRequest = Schema.Struct({
   /** Optional; blank means mail goes out with the bare address. */
   name: Schema.optional(DisplayName),
 });
+
 export type MicrosoftAccountSetupRequest =
   typeof MicrosoftAccountSetupRequest.Type;
 
 export const MicrosoftAccountSetupReply = IpcReply(Schema.Void);
+
 export type MicrosoftAccountSetupReply = typeof MicrosoftAccountSetupReply.Type;
 
 export const AccountSetupOpenReply = IpcReply(Schema.Void);
+
 export type AccountSetupOpenReply = typeof AccountSetupOpenReply.Type;
 
 /** The only capabilities the Add account window's preload exposes. */

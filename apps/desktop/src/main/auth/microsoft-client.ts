@@ -21,6 +21,7 @@ export const toMicrosoftClientId = (
   configured: string | undefined
 ): string | undefined => {
   const clientId = configured?.trim() ?? "";
+
   return CLIENT_ID_PATTERN.test(clientId) ? clientId : undefined;
 };
 

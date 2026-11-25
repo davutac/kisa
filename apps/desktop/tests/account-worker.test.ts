@@ -61,9 +61,11 @@ const createHarness = Effect.fnUntraced(function* createHarness(
   const base = {
     onPhaseChange: (phase: AccountWorkerPhase) => {
       phases.push(phase);
+
       if (phase.kind === "stopped") {
         ending.push("stopped");
       }
+
       Queue.offerUnsafe(phaseChanges, phase);
     },
     pollIntervalMs: POLL_MS,
@@ -78,9 +80,11 @@ const createHarness = Effect.fnUntraced(function* createHarness(
         finish: (value) => Effect.asVoid(Deferred.succeed(outcome, value)),
         syncPassEnded: cycle.syncPassEnded,
       });
+
       return yield* Deferred.await(outcome);
     }),
   };
+
   const watch = Effect.fnUntraced(
     function* watch(stop: Deferred.Deferred<void>) {
       const outcome = yield* Deferred.make<AccountWatchOutcome, string>();
@@ -90,6 +94,7 @@ const createHarness = Effect.fnUntraced(function* createHarness(
         finish: (value) => Effect.asVoid(Deferred.succeed(outcome, value)),
         stop,
       });
+
       return yield* Deferred.await(outcome);
     },
     Effect.onInterrupt(() =>
@@ -104,6 +109,7 @@ const createHarness = Effect.fnUntraced(function* createHarness(
       ? { ...base, watch, watchSpacingMs: WATCH_SPACING_MS }
       : base
   );
+
   const fiber = yield* Effect.forkScoped(worker.run);
 
   return {
@@ -114,6 +120,7 @@ const createHarness = Effect.fnUntraced(function* createHarness(
     phase: Effect.fnUntraced(function* phase(kind: AccountWorkerPhase["kind"]) {
       for (;;) {
         const changed = yield* Queue.take(phaseChanges);
+
         if (changed.kind === kind) {
           return changed;
         }
@@ -141,6 +148,7 @@ const afterFirstCycle = Effect.fnUntraced(function* afterFirstCycle(
   const harness = yield* createHarness(options);
   const first = yield* Queue.take(harness.cycles);
   yield* first.finish(outcome);
+
   return harness;
 });
 
@@ -177,6 +185,7 @@ describe(createAccountWorker, () => {
           kind: "done",
           moreWork: true,
         });
+
         const second = yield* Queue.take(harness.cycles);
 
         yield* second.finish(done);
@@ -273,6 +282,7 @@ describe(createAccountWorker, () => {
           kind: "failed",
           retryAfterMs: 90_000,
         });
+
         yield* harness.phase("retrying");
 
         harness.worker.requestSync("automatic");
@@ -545,6 +555,7 @@ const failUntilLastStep = Effect.fnUntraced(function* failUntilLastStep(
   caughtUp: boolean
 ) {
   let running = first;
+
   for (const delay of RETRY_DELAYS_MS) {
     running.syncPassEnded(caughtUp);
     yield* running.finish(failed);
@@ -552,6 +563,7 @@ const failUntilLastStep = Effect.fnUntraced(function* failUntilLastStep(
     yield* TestClock.adjust(delay);
     running = yield* Queue.take(harness.cycles);
   }
+
   return running;
 });
 
@@ -560,6 +572,7 @@ describe("the index status an account worker reports", () => {
     Effect.gen(function* lastStep() {
       const harness = yield* createHarness();
       let running = yield* Queue.take(harness.cycles);
+
       for (const delay of RETRY_DELAYS_MS.slice(0, 2)) {
         yield* running.finish(failed);
         yield* harness.phase("retrying");

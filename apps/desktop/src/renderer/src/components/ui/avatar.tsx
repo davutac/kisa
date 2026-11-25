@@ -9,6 +9,7 @@ import type { RenderProp } from "@ui-sdk/react/primitive";
 import { cn } from "@/lib/utils";
 
 type ClassNameProps<Props> = Omit<Props, "className"> & { className?: string };
+
 type LayoutProps<Tag extends keyof React.JSX.IntrinsicElements> =
   React.ComponentProps<Tag> & {
     render?: RenderProp;

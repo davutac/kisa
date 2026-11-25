@@ -43,14 +43,18 @@ let statements: Statement[] = [];
 const execute: DatabaseRemoteCallback = (sql, params, method) => {
   statements.push({ params, sql });
   const statement = connection.prepare(sql);
+
   if (method === "run") {
     statement.run(...params);
+
     return Promise.resolve({ rows: [] });
   }
+
   return Promise.resolve({ rows: statement.raw(true).all(...params) });
 };
 
 const remote = createRemoteDatabaseClient(execute);
+
 const Store = MailEngineStoreLive.pipe(
   Layer.provide(
     Layer.succeed(
@@ -67,18 +71,21 @@ const Store = MailEngineStoreLive.pipe(
 );
 
 /** The plan of every statement `run` sends, one line per step. */
-const plansDuring = async (
-  run: () => Promise<unknown>
+const plansDuring = async <Outcome>(
+  run: () => Promise<Outcome>
 ): Promise<readonly string[]> => {
   statements = [];
   await run();
+
   return statements
     .filter(({ sql }) => /^\s*(?:with|select|update|delete)\b/iu.test(sql))
     .flatMap(({ params, sql }) =>
       connection
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .prepare<unknown[], { readonly detail: string }>(
+          `EXPLAIN QUERY PLAN ${sql}`
+        )
         .all(...params)
-        .map((row) => (row as { readonly detail: string }).detail)
+        .map((row) => row.detail)
     );
 };
 

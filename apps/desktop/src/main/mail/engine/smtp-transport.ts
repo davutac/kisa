@@ -60,6 +60,7 @@ const AUTH_CODES: ReadonlySet<string> = new Set([
   "ENOAUTH",
   "EOAUTH2",
 ]);
+
 const LOCAL_REFUSALS: ReadonlySet<string> = new Set(["EENVELOPE", "EMESSAGE"]);
 
 /**
@@ -79,6 +80,7 @@ export const toSendError = (
       message: "The mail server refused the account's sign-in",
     });
   }
+
   if (failure.responseCode !== undefined && failure.responseCode >= 500) {
     return new MailSendRejectedError({
       accountId,
@@ -88,12 +90,14 @@ export const toSendError = (
           : "The mail server refused this message",
     });
   }
+
   if (failure.responseCode !== undefined && failure.responseCode >= 400) {
     return new MailThrottledError({
       accountId,
       message: "The mail server can't take the message right now",
     });
   }
+
   if (handedOver) {
     return new MailSendUnknownError({
       accountId,
@@ -101,12 +105,14 @@ export const toSendError = (
         "The connection dropped while sending, so the message may have been delivered. Check Sent before sending it again.",
     });
   }
+
   if (failure.code !== undefined && LOCAL_REFUSALS.has(failure.code)) {
     return new MailProtocolError({
       accountId,
       message: "This message can't be sent as written",
     });
   }
+
   return new MailConnectionError({
     accountId,
     message: "Could not reach the mail server",
@@ -119,6 +125,7 @@ const SmtpFailureFields = Schema.Struct({
   command: Schema.optional(Schema.String),
   responseCode: Schema.optional(Schema.Finite),
 });
+
 const decodeFailure = Schema.decodeUnknownOption(SmtpFailureFields);
 
 const toFailure = <Failure>(error: Failure): SmtpFailure =>
@@ -173,6 +180,7 @@ export const sendOverSmtp = (
         if (settled) {
           return;
         }
+
         settled = true;
         connection.close();
         resume(
@@ -189,21 +197,27 @@ export const sendOverSmtp = (
       connection.connect((connectError) => {
         if (connectError !== undefined) {
           fail(connectError);
+
           return;
         }
+
         connection.login(toLogin(request.auth), (loginError) => {
           if (loginError !== null) {
             fail(loginError);
+
             return;
           }
+
           connection.send(
             { from: request.envelope.from, to: [...request.envelope.to] },
             message,
             (sendError, info) => {
               if (sendError !== null) {
                 fail(sendError);
+
                 return;
               }
+
               settled = true;
               connection.quit();
               resume(Effect.succeed({ refused: info?.rejected ?? [] }));
@@ -245,6 +259,7 @@ export const verifyOverSmtp = (
         if (settled) {
           return;
         }
+
         settled = true;
         connection.close();
         resume(
@@ -259,13 +274,17 @@ export const verifyOverSmtp = (
       connection.connect((connectError) => {
         if (connectError !== undefined) {
           fail(connectError);
+
           return;
         }
+
         connection.login(toLogin(request.auth), (loginError) => {
           if (loginError !== null) {
             fail(loginError);
+
             return;
           }
+
           settled = true;
           connection.quit();
           resume(Effect.void);

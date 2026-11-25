@@ -64,12 +64,15 @@ const getDeliveryState = (
   if (schedule.status === "attention") {
     return "attention";
   }
+
   if (schedule.status === "preparing" || schedule.status === "sending") {
     return "sending";
   }
+
   if (schedule.attemptCount > 0 || schedule.rateLimitStartedAt !== null) {
     return "retrying";
   }
+
   return "scheduled";
 };
 
@@ -77,6 +80,7 @@ export const toScheduledMailSummary = (
   row: ScheduledMailSummaryRow
 ): ScheduledMailSummary => {
   const { draft, schedule } = row;
+
   let summary: ScheduledMailSummary = {
     accountId: draft.accountEmail ?? "",
     attachments: draft.attachments.map(({ filename, mediaType }) => ({
@@ -91,11 +95,14 @@ export const toScheduledMailSummary = (
     scheduledAt: schedule.scheduledAt,
     subject: truncateSubject(draft.subject),
   };
+
   if (schedule.attentionReason !== null) {
     summary = { ...summary, attentionReason: schedule.attentionReason };
   }
+
   if (schedule.nextAttemptAt !== null) {
     summary = { ...summary, nextAttemptAt: schedule.nextAttemptAt };
   }
+
   return summary;
 };

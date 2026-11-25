@@ -16,6 +16,7 @@ const matchErrorField = (pattern: RegExp, value: string): string | undefined =>
 const describeCommandError = (stderr: string) => {
   const markerIndex = stderr.indexOf(STRUCTURED_ERROR_MARKER);
   const diagnostic = markerIndex === -1 ? "" : stderr.slice(markerIndex);
+
   return {
     code: matchErrorField(ERROR_CODE, diagnostic) ?? "[not reported]",
     message: matchErrorField(ERROR_MESSAGE, diagnostic) ?? "[not reported]",

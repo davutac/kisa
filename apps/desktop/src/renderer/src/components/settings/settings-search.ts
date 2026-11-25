@@ -218,10 +218,12 @@ export const buildSettingsSearchIndex = (
     const account = availability.accounts.find(
       ({ email }) => toAccountSettingsPage(email) === page
     );
+
     const settings =
       page === "ai" || page === "data" || page === "general"
         ? PAGE_SETTINGS[page]
         : ACCOUNT_SETTINGS;
+
     const pageItem: SettingsSearchItem = {
       id: page,
       page,
@@ -242,6 +244,7 @@ export const buildSettingsSearchIndex = (
         )
         .map((setting) => {
           const target = toSettingsTarget(page, setting.key);
+
           return {
             id: target,
             page,
@@ -284,6 +287,7 @@ export const searchSettings = (
       }
 
       let rank = 0;
+
       if (title === phrase) {
         rank = 3;
       } else if (title.startsWith(phrase)) {

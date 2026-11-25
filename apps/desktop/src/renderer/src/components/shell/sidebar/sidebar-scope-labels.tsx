@@ -67,6 +67,7 @@ const SidebarScopeLabelList = ({
   <>
     {toMailboxLabelRows(labels).map(({ depth, item, name }) => {
       const target = { accountId, mailbox: { label: item.name } };
+
       const unreadCount =
         unreadLabels.get(toUnreadLabelKey(accountId, item.name)) ?? 0;
 
@@ -134,6 +135,7 @@ const SidebarScopeLabels = ({
 }: SidebarScopeLabelsProps) => {
   const isHeldByFavorite = useIsHeldByFavorite(view);
   const unread = useUnreadLabels(labels.length === 0 ? [] : [accountId]);
+
   // Open, each label carries its own count; closed, the Labels row carries
   // one for them all, since none of them is in sight. It counts each
   // conversation once, however many of the labels it carries.

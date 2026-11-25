@@ -51,6 +51,7 @@ export const disconnectAccount = Effect.fn("disconnectAccount")(
     // Prevent another poll or index run from starting, then wait until
     // every already-authorized writer has stopped before deleting local data.
     cancelThreadCategorization(email);
+
     return yield* Effect.acquireUseRelease(
       accountMailWorkSupervisor.suspend(email),
       () =>
@@ -79,7 +80,9 @@ export const disconnectAccount = Effect.fn("disconnectAccount")(
           const accounts = yield* listAccounts().pipe(
             Effect.mapError(toDisconnectError)
           );
+
           notifyAccountsChanged({ data: accounts, ok: true });
+
           return accounts;
         }),
       () =>

@@ -13,6 +13,7 @@ export const MailAttachmentSummary = Schema.Struct({
   partId: Schema.optional(Schema.String),
   size: Schema.Finite,
 });
+
 export type MailAttachmentSummary = typeof MailAttachmentSummary.Type;
 
 export const MailAttachmentRequest = Schema.Struct({
@@ -21,12 +22,14 @@ export const MailAttachmentRequest = Schema.Struct({
   messageId: Schema.NonEmptyString,
   partId: Schema.optional(Schema.String),
 });
+
 export type MailAttachmentRequest = typeof MailAttachmentRequest.Type;
 
 export const MailAttachmentSaveOutcome = Schema.Literals([
   "cancelled",
   "saved",
 ]);
+
 export type MailAttachmentSaveOutcome = typeof MailAttachmentSaveOutcome.Type;
 
 export const MailAttachmentPreview = Schema.Struct({
@@ -35,6 +38,7 @@ export const MailAttachmentPreview = Schema.Struct({
   kind: Schema.Literals(["image", "pdf"]),
   mediaType: Schema.NonEmptyString,
 });
+
 export type MailAttachmentPreview = typeof MailAttachmentPreview.Type;
 
 export const MailThreadSummary = Schema.Struct({
@@ -55,12 +59,14 @@ export const MailThreadSummary = Schema.Struct({
   subject: Schema.String,
   threadId: Schema.String,
 });
+
 export type MailThreadSummary = typeof MailThreadSummary.Type;
 
 export const MessageBody = Schema.Struct({
   html: Schema.optional(Schema.String),
   text: Schema.optional(Schema.String),
 });
+
 export type MessageBody = typeof MessageBody.Type;
 
 export const MailSenderBrand = Schema.Struct({
@@ -68,6 +74,7 @@ export const MailSenderBrand = Schema.Struct({
   imageDataUrl: Schema.String,
   source: Schema.Literal("bimi"),
 });
+
 export type MailSenderBrand = typeof MailSenderBrand.Type;
 
 export const ThreadMessage = Schema.Struct({
@@ -87,6 +94,7 @@ export const ThreadMessage = Schema.Struct({
   subject: Schema.String,
   to: Schema.optional(Schema.String),
 });
+
 export type ThreadMessage = typeof ThreadMessage.Type;
 
 export const MailThread = Schema.Struct({
@@ -103,18 +111,21 @@ export const MailThread = Schema.Struct({
   subject: Schema.String,
   threadId: Schema.String,
 });
+
 export type MailThread = typeof MailThread.Type;
 
 export const MailLabelColor = Schema.Struct({
   background: Schema.String,
   text: Schema.String,
 });
+
 export type MailLabelColor = typeof MailLabelColor.Type;
 
 /** A label's background as `#rrggbb`; main derives its text colour. */
 export const MailLabelInputColor = Schema.String.check(
   Schema.isPattern(LABEL_COLOR_PATTERN)
 );
+
 export type MailLabelInputColor = typeof MailLabelInputColor.Type;
 
 export const MailLabelSummary = Schema.Struct({
@@ -125,22 +136,26 @@ export const MailLabelSummary = Schema.Struct({
   /** The label's kind: "system" for built-in labels, "user" for the rest. */
   type: Schema.optional(Schema.String),
 });
+
 export type MailLabelSummary = typeof MailLabelSummary.Type;
 
 export const MailLabelCatalog = Schema.Struct({
   labels: Schema.Array(MailLabelSummary),
   syncedAt: Schema.optional(Schema.Finite),
 });
+
 export type MailLabelCatalog = typeof MailLabelCatalog.Type;
 
 export const MailLabelCatalogChanged = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
+
 export type MailLabelCatalogChanged = typeof MailLabelCatalogChanged.Type;
 
 export const MailLabelCatalogRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
+
 export type MailLabelCatalogRequest = typeof MailLabelCatalogRequest.Type;
 
 export const MailLabelCreateRequest = Schema.Struct({
@@ -148,12 +163,14 @@ export const MailLabelCreateRequest = Schema.Struct({
   color: Schema.optional(MailLabelInputColor),
   name: Schema.NonEmptyString,
 });
+
 export type MailLabelCreateRequest = typeof MailLabelCreateRequest.Type;
 
 export const MailLabelDeleteRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   labelId: Schema.NonEmptyString,
 });
+
 export type MailLabelDeleteRequest = typeof MailLabelDeleteRequest.Type;
 
 export const MailLabelUpdateRequest = Schema.Struct({
@@ -162,12 +179,14 @@ export const MailLabelUpdateRequest = Schema.Struct({
   labelId: Schema.NonEmptyString,
   name: Schema.NonEmptyString,
 });
+
 export type MailLabelUpdateRequest = typeof MailLabelUpdateRequest.Type;
 
 export const MailThreadRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
 });
+
 export type MailThreadRequest = typeof MailThreadRequest.Type;
 
 export const MailThreadLoadRequest = Schema.Struct({
@@ -179,6 +198,7 @@ export const MailThreadLoadRequest = Schema.Struct({
   cachedOnly: Schema.optional(Schema.Boolean),
   threadId: Schema.NonEmptyString,
 });
+
 export type MailThreadLoadRequest = typeof MailThreadLoadRequest.Type;
 
 export const MailThreadListChange = Schema.Union([
@@ -189,12 +209,14 @@ export const MailThreadListChange = Schema.Union([
     threadId: Schema.String,
   }),
 ]);
+
 export type MailThreadListChange = typeof MailThreadListChange.Type;
 
 /** Ordered cached-list changes produced by one completed mail operation. */
 export const MailThreadListUpdated = Schema.Struct({
   changes: Schema.Array(MailThreadListChange),
 });
+
 export type MailThreadListUpdated = typeof MailThreadListUpdated.Type;
 
 export const MailThreadLabelRequest = Schema.Struct({
@@ -203,6 +225,7 @@ export const MailThreadLabelRequest = Schema.Struct({
   labelId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
 });
+
 export type MailThreadLabelRequest = typeof MailThreadLabelRequest.Type;
 
 export const MailThreadReadStateRequest = Schema.Struct({
@@ -211,6 +234,7 @@ export const MailThreadReadStateRequest = Schema.Struct({
   isUnread: Schema.Boolean,
   threadId: Schema.NonEmptyString,
 });
+
 export type MailThreadReadStateRequest = typeof MailThreadReadStateRequest.Type;
 
 export const MailBulkThreadMutationOperation = Schema.Union([
@@ -228,6 +252,7 @@ export const MailBulkThreadMutationOperation = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("moveToSpam") }),
   Schema.Struct({ kind: Schema.Literal("deleteForever") }),
 ]);
+
 export type MailBulkThreadMutationOperation =
   typeof MailBulkThreadMutationOperation.Type;
 
@@ -235,6 +260,7 @@ export const MailBulkThreadMutationRequest = Schema.Struct({
   operation: MailBulkThreadMutationOperation,
   threads: Schema.Array(MailThreadRequest),
 });
+
 export type MailBulkThreadMutationRequest =
   typeof MailBulkThreadMutationRequest.Type;
 
@@ -242,12 +268,14 @@ export const MailBulkThreadMutationResult = Schema.Struct({
   failed: Schema.Array(MailThreadRequest),
   succeeded: Schema.Array(MailThreadRequest),
 });
+
 export type MailBulkThreadMutationResult =
   typeof MailBulkThreadMutationResult.Type;
 
 export const MailOutgoingAttachmentCapability = Schema.Struct({
   capability: Schema.NonEmptyString,
 });
+
 export type MailOutgoingAttachmentCapability =
   typeof MailOutgoingAttachmentCapability.Type;
 
@@ -263,6 +291,7 @@ export const MailThreadMessageAction = Schema.Literals([
   "reply",
   "reply-all",
 ]);
+
 export type MailThreadMessageAction = typeof MailThreadMessageAction.Type;
 
 export const MailThreadMessageSendRequest = Schema.Struct({
@@ -285,6 +314,7 @@ export const MailThreadMessageSendRequest = Schema.Struct({
   threadId: Schema.NonEmptyString,
   to: Schema.Array(Schema.NonEmptyString),
 });
+
 export type MailThreadMessageSendRequest =
   typeof MailThreadMessageSendRequest.Type;
 
@@ -304,6 +334,7 @@ export const MailOutgoingAttachmentPrepareRequest = Schema.Struct({
     })
   ).check(Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT)),
 });
+
 export type MailOutgoingAttachmentPrepareRequest =
   typeof MailOutgoingAttachmentPrepareRequest.Type;
 
@@ -315,12 +346,14 @@ export const MailOutgoingAttachmentSelectionRequest = Schema.Struct({
     })
   ).check(Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT)),
 });
+
 export type MailOutgoingAttachmentSelectionRequest =
   typeof MailOutgoingAttachmentSelectionRequest.Type;
 
 export const MailOutgoingInlineImagePreviewRequest = Schema.Struct({
   referenceId: Schema.NonEmptyString,
 });
+
 export type MailOutgoingInlineImagePreviewRequest =
   typeof MailOutgoingInlineImagePreviewRequest.Type;
 
@@ -328,6 +361,7 @@ export const MailOutgoingInlineImagePreview = Schema.Struct({
   bytes: Schema.Uint8Array,
   mediaType: Schema.NonEmptyString,
 });
+
 export type MailOutgoingInlineImagePreview =
   typeof MailOutgoingInlineImagePreview.Type;
 
@@ -345,6 +379,7 @@ export const MailMessageSendRequest = Schema.Struct({
   subject: MailOutgoingSubject,
   to: Schema.Array(Schema.NonEmptyString),
 });
+
 export type MailMessageSendRequest = typeof MailMessageSendRequest.Type;
 
 /** Takes back a message still waiting out its Undo send delay. */
@@ -352,6 +387,7 @@ export const MailSendCancelRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   draftId: Schema.NonEmptyString,
 });
+
 export type MailSendCancelRequest = typeof MailSendCancelRequest.Type;
 
 /**
@@ -360,6 +396,7 @@ export type MailSendCancelRequest = typeof MailSendCancelRequest.Type;
  * was replaced meanwhile, so it is sent as it is.
  */
 export const MailSendCancelOutcome = Schema.Literals(["canceled", "too-late"]);
+
 export type MailSendCancelOutcome = typeof MailSendCancelOutcome.Type;
 
 export const MailDraftKind = Schema.Literals([
@@ -368,6 +405,7 @@ export const MailDraftKind = Schema.Literals([
   "reply",
   "reply-all",
 ]);
+
 export type MailDraftKind = typeof MailDraftKind.Type;
 
 export const MailDraftAttachment = Schema.Struct({
@@ -378,12 +416,14 @@ export const MailDraftAttachment = Schema.Struct({
   referenceId: Schema.NonEmptyString,
   size: Schema.Finite,
 });
+
 export type MailDraftAttachment = typeof MailDraftAttachment.Type;
 
 export const MailDraftSignature = Schema.Struct({
   accountId: Schema.NonEmptyString,
   body: EmailSignatureBody,
 });
+
 export type MailDraftSignature = typeof MailDraftSignature.Type;
 
 export const MailDraftInput = Schema.Struct({
@@ -402,6 +442,7 @@ export const MailDraftInput = Schema.Struct({
   threadId: Schema.optional(Schema.NonEmptyString),
   to: Schema.Array(Schema.NonEmptyString),
 });
+
 export type MailDraftInput = typeof MailDraftInput.Type;
 
 export const MailDraft = Schema.Struct({
@@ -409,11 +450,13 @@ export const MailDraft = Schema.Struct({
   createdAt: Schema.Finite,
   updatedAt: Schema.Finite,
 });
+
 export type MailDraft = typeof MailDraft.Type;
 
 export const MailDraftListRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
 });
+
 export type MailDraftListRequest = typeof MailDraftListRequest.Type;
 
 export const MailDraftDiscardRequest = Schema.Struct({
@@ -421,6 +464,7 @@ export const MailDraftDiscardRequest = Schema.Struct({
   draftId: Schema.NonEmptyString,
   preserveAttachments: Schema.optional(Schema.Boolean),
 });
+
 export type MailDraftDiscardRequest = typeof MailDraftDiscardRequest.Type;
 
 export const MailDraftChanged = Schema.Union([
@@ -432,6 +476,7 @@ export const MailDraftChanged = Schema.Union([
     threadId: Schema.optional(Schema.NonEmptyString),
   }),
 ]);
+
 export type MailDraftChanged = typeof MailDraftChanged.Type;
 
 /** A sender whose remote images the account has agreed to load. */
@@ -439,12 +484,14 @@ export const MailTrustedImageSender = Schema.Struct({
   accountId: Schema.String,
   senderEmail: Schema.String,
 });
+
 export type MailTrustedImageSender = typeof MailTrustedImageSender.Type;
 
 export const MailTrustedImageSenderRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   senderEmail: Schema.NonEmptyString,
 });
+
 export type MailTrustedImageSenderRequest =
   typeof MailTrustedImageSenderRequest.Type;
 
@@ -453,6 +500,7 @@ export const MailThreadCursor = Schema.Struct({
   latestAt: Schema.Int,
   threadId: Schema.NonEmptyString,
 });
+
 export type MailThreadCursor = typeof MailThreadCursor.Type;
 
 export const Mailbox = Schema.Literals([
@@ -462,6 +510,7 @@ export const Mailbox = Schema.Literals([
   "starred",
   "trash",
 ]);
+
 export type Mailbox = typeof Mailbox.Type;
 
 /**
@@ -472,12 +521,14 @@ export type Mailbox = typeof Mailbox.Type;
 export const MailboxLabelPlace = Schema.Struct({
   label: Schema.NonEmptyString,
 });
+
 export type MailboxLabelPlace = typeof MailboxLabelPlace.Type;
 
 export const isMailboxLabelPlace = Schema.is(MailboxLabelPlace);
 
 /** What a mailbox list shows: a system mailbox or one user label. */
 export const MailboxPlace = Schema.Union([Mailbox, MailboxLabelPlace]);
+
 export type MailboxPlace = typeof MailboxPlace.Type;
 
 export const MailCachedThreadPageRequest = Schema.Struct({
@@ -486,17 +537,20 @@ export const MailCachedThreadPageRequest = Schema.Struct({
   mailbox: Schema.optional(MailboxPlace),
   unreadOnly: Schema.optional(Schema.Boolean),
 });
+
 export type MailCachedThreadPageRequest =
   typeof MailCachedThreadPageRequest.Type;
 
 export const MailUnreadCountsRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
 });
+
 export type MailUnreadCountsRequest = typeof MailUnreadCountsRequest.Type;
 
 export const MailReindexRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
 });
+
 export type MailReindexRequest = typeof MailReindexRequest.Type;
 
 /** Unread conversations in a scope's Inbox and in its Spam. */
@@ -504,11 +558,13 @@ export const MailUnreadCounts = Schema.Struct({
   inbox: Schema.Int,
   spam: Schema.Int,
 });
+
 export type MailUnreadCounts = typeof MailUnreadCounts.Type;
 
 export const MailUnreadLabelsRequest = Schema.Struct({
   accountIds: Schema.Array(Schema.NonEmptyString),
 });
+
 export type MailUnreadLabelsRequest = typeof MailUnreadLabelsRequest.Type;
 
 /**
@@ -527,17 +583,20 @@ export const MailUnreadLabels = Schema.Struct({
     })
   ),
 });
+
 export type MailUnreadLabels = typeof MailUnreadLabels.Type;
 
 export const MailCachedThreadPage = Schema.Struct({
   nextCursor: Schema.optional(MailThreadCursor),
   threads: Schema.Array(MailThreadSummary),
 });
+
 export type MailCachedThreadPage = typeof MailCachedThreadPage.Type;
 
 export const MailSyncStatus = Schema.Struct({
   accountIds: Schema.Array(Schema.String),
 });
+
 export type MailSyncStatus = typeof MailSyncStatus.Type;
 
 /**
@@ -552,12 +611,14 @@ export const MailSearchFilterField = Schema.Literals([
   "subject",
   "to",
 ]);
+
 export type MailSearchFilterField = typeof MailSearchFilterField.Type;
 
 export const MailSearchFilter = Schema.Struct({
   field: MailSearchFilterField,
   value: Schema.NonEmptyString,
 });
+
 export type MailSearchFilter = typeof MailSearchFilter.Type;
 
 export const MailSearchRequest = Schema.Struct({
@@ -566,6 +627,7 @@ export const MailSearchRequest = Schema.Struct({
   limit: Schema.optional(Schema.Int),
   text: Schema.optional(Schema.String),
 });
+
 export type MailSearchRequest = typeof MailSearchRequest.Type;
 
 export const MailSearchResults = Schema.Struct({
@@ -573,6 +635,7 @@ export const MailSearchResults = Schema.Struct({
   hasMore: Schema.Boolean,
   threads: Schema.Array(MailThreadSummary),
 });
+
 export type MailSearchResults = typeof MailSearchResults.Type;
 
 export const MailSenderSuggestion = Schema.Struct({
@@ -580,6 +643,7 @@ export const MailSenderSuggestion = Schema.Struct({
   messageCount: Schema.Int,
   name: Schema.optional(Schema.String),
 });
+
 export type MailSenderSuggestion = typeof MailSenderSuggestion.Type;
 
 /** Which side of a message to draw addresses from, or both for composing. */
@@ -588,6 +652,7 @@ export const MailAddressRole = Schema.Literals([
   "recipient",
   "sender",
 ]);
+
 export type MailAddressRole = typeof MailAddressRole.Type;
 
 export const MailSenderSuggestionRequest = Schema.Struct({
@@ -596,12 +661,14 @@ export const MailSenderSuggestionRequest = Schema.Struct({
   query: Schema.optional(Schema.String),
   role: Schema.optional(MailAddressRole),
 });
+
 export type MailSenderSuggestionRequest =
   typeof MailSenderSuggestionRequest.Type;
 
 export const MailSenderSuggestions = Schema.Struct({
   senders: Schema.Array(MailSenderSuggestion),
 });
+
 export type MailSenderSuggestions = typeof MailSenderSuggestions.Type;
 
 export const MailIndexStatus = Schema.Literals([
@@ -612,6 +679,7 @@ export const MailIndexStatus = Schema.Literals([
   "paused",
   "running",
 ]);
+
 export type MailIndexStatus = typeof MailIndexStatus.Type;
 
 /**
@@ -631,71 +699,94 @@ export const MailIndexProgress = Schema.Struct({
   oldestIndexedAt: Schema.optional(Schema.Int),
   status: MailIndexStatus,
 });
+
 export type MailIndexProgress = typeof MailIndexProgress.Type;
 
 export const MailIndexProgressList = Schema.Struct({
   accounts: Schema.Array(MailIndexProgress),
 });
+
 export type MailIndexProgressList = typeof MailIndexProgressList.Type;
 
 export const MailLabelCatalogReply = IpcReply(MailLabelCatalog);
+
 export type MailLabelCatalogReply = typeof MailLabelCatalogReply.Type;
 
 export const MailLabelCreateReply = IpcReply(MailLabelSummary);
+
 export type MailLabelCreateReply = typeof MailLabelCreateReply.Type;
 
 export const MailLabelDeleteReply = IpcReply(Schema.Void);
+
 export type MailLabelDeleteReply = typeof MailLabelDeleteReply.Type;
 
 export const MailLabelUpdateReply = IpcReply(MailLabelSummary);
+
 export type MailLabelUpdateReply = typeof MailLabelUpdateReply.Type;
 
 export const MailCachedThreadPageReply = IpcReply(MailCachedThreadPage);
+
 export type MailCachedThreadPageReply = typeof MailCachedThreadPageReply.Type;
 
 export const MailThreadReply = IpcReply(MailThread);
+
 export type MailThreadReply = typeof MailThreadReply.Type;
+
 export const MailAttachmentActionReply = IpcReply(Schema.Void);
+
 export type MailAttachmentActionReply = typeof MailAttachmentActionReply.Type;
+
 export const MailAttachmentSaveReply = IpcReply(MailAttachmentSaveOutcome);
+
 export type MailAttachmentSaveReply = typeof MailAttachmentSaveReply.Type;
+
 export const MailAttachmentPreviewReply = IpcReply(MailAttachmentPreview);
+
 export type MailAttachmentPreviewReply = typeof MailAttachmentPreviewReply.Type;
 
 export const MailSearchResultsReply = IpcReply(MailSearchResults);
+
 export type MailSearchResultsReply = typeof MailSearchResultsReply.Type;
 
 export const MailSenderSuggestionsReply = IpcReply(MailSenderSuggestions);
+
 export type MailSenderSuggestionsReply = typeof MailSenderSuggestionsReply.Type;
 
 export const MailTrustedImageSendersReply = IpcReply(
   Schema.Array(MailTrustedImageSender)
 );
+
 export type MailTrustedImageSendersReply =
   typeof MailTrustedImageSendersReply.Type;
 
 export const MailThreadMutationReply = IpcReply(Schema.Void);
+
 export type MailThreadMutationReply = typeof MailThreadMutationReply.Type;
 
 export const MailBulkThreadMutationReply = IpcReply(
   MailBulkThreadMutationResult
 );
+
 export type MailBulkThreadMutationReply =
   typeof MailBulkThreadMutationReply.Type;
 
 export const MailUnreadCountsReply = IpcReply(MailUnreadCounts);
+
 export type MailUnreadCountsReply = typeof MailUnreadCountsReply.Type;
 
 export const MailUnreadLabelsReply = IpcReply(MailUnreadLabels);
+
 export type MailUnreadLabelsReply = typeof MailUnreadLabelsReply.Type;
 
 export const MailReindexReply = IpcReply(Schema.Void);
+
 export type MailReindexReply = typeof MailReindexReply.Type;
 
 /** A sent message; the server may have refused some recipients. */
 export const MailSendOutcome = Schema.Struct({
   refusedRecipients: Schema.Array(Schema.String),
 });
+
 export type MailSendOutcome = typeof MailSendOutcome.Type;
 
 /** A send that went out, or one Undo took back while it waited. */
@@ -706,38 +797,54 @@ export const MailSendResult = Schema.Union([
   }),
   Schema.Struct({ kind: Schema.Literal("canceled") }),
 ]);
+
 export type MailSendResult = typeof MailSendResult.Type;
 
 export const MailSendCancelReply = IpcReply(MailSendCancelOutcome);
+
 export type MailSendCancelReply = typeof MailSendCancelReply.Type;
 
 export const MailThreadMessageSendReply = IpcReply(MailSendResult);
+
 export type MailThreadMessageSendReply = typeof MailThreadMessageSendReply.Type;
 
 export const MailMessageSendReply = IpcReply(MailSendResult);
+
 export type MailMessageSendReply = typeof MailMessageSendReply.Type;
 
 export const MailOutgoingAttachmentPrepareReply = IpcReply(
   Schema.Array(MailOutgoingAttachmentCapability)
 );
+
 export type MailOutgoingAttachmentPrepareReply =
   typeof MailOutgoingAttachmentPrepareReply.Type;
 
 export const MailOutgoingAttachmentSelectionReply = IpcReply(
   Schema.Array(MailDraftAttachment)
 );
+
 export type MailOutgoingAttachmentSelectionReply =
   typeof MailOutgoingAttachmentSelectionReply.Type;
+
 export const MailOutgoingInlineImagePreviewReply = IpcReply(
   MailOutgoingInlineImagePreview
 );
+
 export type MailOutgoingInlineImagePreviewReply =
   typeof MailOutgoingInlineImagePreviewReply.Type;
+
 export const MailDraftReply = IpcReply(MailDraft);
+
 export type MailDraftReply = typeof MailDraftReply.Type;
+
 export const MailDraftListReply = IpcReply(Schema.Array(MailDraft));
+
 export type MailDraftListReply = typeof MailDraftListReply.Type;
+
 export const MailDraftLoadReply = IpcReply(Schema.NullOr(MailDraft));
+
 export type MailDraftLoadReply = typeof MailDraftLoadReply.Type;
+
 export const MailDraftDiscardReply = IpcReply(Schema.Void);
+
 export type MailDraftDiscardReply = typeof MailDraftDiscardReply.Type;

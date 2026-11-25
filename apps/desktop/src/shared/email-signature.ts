@@ -11,6 +11,7 @@ export const EmailSignatureBody = Schema.Struct({
     Schema.isMaxLength(MAX_EMAIL_SIGNATURE_TEXT_LENGTH)
   ),
 });
+
 export type EmailSignatureBody = typeof EmailSignatureBody.Type;
 
 export const EMPTY_EMAIL_SIGNATURE_BODY = {
@@ -23,6 +24,7 @@ export const normalizeEmailSignature = (
 ): EmailSignatureBody => {
   const text = value.text.replaceAll(/\r\n?/gu, "\n");
   const html = value.html.trim();
+
   if (text.trim().length === 0 || html.length === 0) {
     return EMPTY_EMAIL_SIGNATURE_BODY;
   }
@@ -34,6 +36,7 @@ export const createEmailSignatureBody = (
   configuredSignature: EmailSignatureBody
 ): EmailSignatureBody | undefined => {
   const signature = normalizeEmailSignature(configuredSignature);
+
   return signature.text.length === 0 ? undefined : signature;
 };
 
@@ -55,11 +58,13 @@ export const removeEmailSignature = (
   }
 
   const htmlPrefix = body.html.trimEnd().slice(0, -signature.html.length);
+
   const htmlWithoutSignature = (
     htmlPrefix.endsWith("<p></p>")
       ? htmlPrefix.slice(0, -"<p></p>".length)
       : htmlPrefix
   ).trimEnd();
+
   const textWithoutSignature = body.text
     .trimEnd()
     .slice(0, -signature.text.length)

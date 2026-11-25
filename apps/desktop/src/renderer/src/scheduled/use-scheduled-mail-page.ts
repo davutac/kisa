@@ -24,8 +24,10 @@ interface ScheduledMailPageState {
 export const useScheduledMailPage = (accountIds: readonly string[]) => {
   const api = useMemo(() => getScheduledMailApi(), []);
   const scopeKey = getScheduledMailScopeKey(accountIds);
+
   const createStartingResult = (): ScheduledMailPageState => {
     const snapshot = getScheduledMailSnapshot(scopeKey);
+
     return snapshot === undefined
       ? {
           isInitialLoading: api !== undefined,
@@ -39,8 +41,10 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
           isLoadingMore: false,
         };
   };
+
   const [result, setResult] =
     useState<ScheduledMailPageState>(createStartingResult);
+
   const [scopeKeyInState, setScopeKeyInState] = useState(scopeKey);
   const loadMoreInFlightRef = useRef(false);
   const requestRevisionRef = useRef(0);
@@ -65,8 +69,10 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
           items: [],
           scopeKey,
         });
+
         return;
       }
+
       const revision = requestRevisionRef.current + 1;
       requestRevisionRef.current = revision;
       setResult((current) =>
@@ -78,11 +84,14 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
             }
           : current
       );
+
       try {
         const reply = await api.listPage({ accountIds });
+
         if (requestRevisionRef.current !== revision) {
           return;
         }
+
         if (!reply.ok) {
           setResult((current) =>
             current.scopeKey === scopeKey
@@ -93,14 +102,17 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
                 }
               : current
           );
+
           return;
         }
+
         const snapshot = {
           accountIds,
           items: reply.data.items,
           nextCursor: reply.data.nextCursor,
           scopeKey,
         };
+
         setScheduledMailSnapshot(snapshot);
         setResult({
           ...snapshot,
@@ -132,6 +144,7 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
         void loadFirstPage(showLoading);
       }
     });
+
     return () => {
       active = false;
     };
@@ -141,9 +154,12 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
     if (api === undefined) {
       return;
     }
+
     const scope = new Set(accountIds);
+
     return api.onChanged((change) => {
       invalidateScheduledMailSnapshotsForAccount(change.accountId);
+
       if (scope.has(change.accountId)) {
         void loadFirstPage(false);
       }
@@ -162,6 +178,7 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
     ) {
       return;
     }
+
     const revision = requestRevisionRef.current;
     loadMoreInFlightRef.current = true;
     setResult((current) =>
@@ -176,35 +193,44 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
             accountIds,
             cursor: visibleNextCursor,
           });
+
           if (requestRevisionRef.current !== revision) {
             return;
           }
+
           if (!reply.ok) {
             setResult((current) =>
               current.scopeKey === scopeKey
                 ? { ...current, error: reply.error }
                 : current
             );
+
             return;
           }
+
           const { current } = resultRef;
+
           if (current.scopeKey !== scopeKey) {
             return;
           }
+
           const byKey = new Map(
             current.items.map(
               (item) => [getScheduledMailKey(item), item] as const
             )
           );
+
           for (const item of reply.data.items) {
             byKey.set(getScheduledMailKey(item), item);
           }
+
           const next: ScheduledMailPageState = {
             ...current,
             error: undefined,
             items: [...byKey.values()],
             nextCursor: reply.data.nextCursor,
           };
+
           setScheduledMailSnapshot({
             accountIds,
             items: next.items,
@@ -240,15 +266,18 @@ export const useScheduledMailPage = (accountIds: readonly string[]) => {
   const removeOptimistically = (item: ScheduledMailSummary): void => {
     const key = getScheduledMailKey(item);
     const { current } = resultRef;
+
     if (current.scopeKey !== scopeKey) {
       return;
     }
+
     const next: ScheduledMailPageState = {
       ...current,
       items: current.items.filter(
         (candidate) => getScheduledMailKey(candidate) !== key
       ),
     };
+
     setScheduledMailSnapshot({
       accountIds,
       items: next.items,

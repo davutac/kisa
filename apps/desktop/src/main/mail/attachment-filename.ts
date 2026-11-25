@@ -7,6 +7,7 @@ import path from "node:path";
 
 const WINDOWS_RESERVED_FILENAME =
   /^(?:aux|com[1-9]|con|lpt[1-9]|nul|prn)(?:\.|$)/iu;
+
 const UNSAFE_FILENAME_CHARACTERS = /[\p{Cc}‪-‮⁦-⁩]/gu;
 const WINDOWS_INVALID_FILENAME_CHARACTERS = /[<>:"|?*]/gu;
 
@@ -14,12 +15,14 @@ export const sanitizeAttachmentFilename = (filename: string): string => {
   const leaf = path.posix.basename(
     filename.normalize("NFKC").replaceAll("\\", "/")
   );
+
   const cleaned = leaf
     .replaceAll(UNSAFE_FILENAME_CHARACTERS, "")
     .replaceAll(WINDOWS_INVALID_FILENAME_CHARACTERS, "")
     .trim()
     .replaceAll(/[. ]+$/gu, "")
     .slice(0, 180);
+
   const usable = cleaned.length === 0 ? "attachment" : cleaned;
 
   return WINDOWS_RESERVED_FILENAME.test(usable) ? `_${usable}` : usable;

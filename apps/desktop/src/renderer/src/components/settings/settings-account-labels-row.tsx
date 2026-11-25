@@ -58,6 +58,7 @@ const SettingsAccountLabelsRow = ({
 
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
 
@@ -92,6 +93,7 @@ const SettingsAccountLabelsRow = ({
 
           if (!syncReply.ok) {
             toast.error(syncReply.error);
+
             return;
           }
 
@@ -103,10 +105,12 @@ const SettingsAccountLabelsRow = ({
 
           if (refreshedLabel === undefined) {
             toast.error(`“${label.name}” no longer exists`);
+
             return;
           }
 
           const threadCount = refreshedLabel.threadCount ?? 0;
+
           const confirmed = await confirm({
             confirmLabel: "Delete label",
             confirmVariant: "destructive",
@@ -132,6 +136,7 @@ const SettingsAccountLabelsRow = ({
 
           if (!deleteReply.ok) {
             toast.error(deleteReply.error);
+
             return;
           }
 
@@ -141,6 +146,7 @@ const SettingsAccountLabelsRow = ({
               (candidate) => candidate.id !== refreshedLabel.id
             ),
           };
+
           updateLabelCatalog(accountId, next);
           toast.success(`Deleted “${refreshedLabel.name}”`);
         } catch {

@@ -10,16 +10,21 @@ export const useThreadMessageNavigation = (
   messages: readonly ThreadMessage[]
 ) => {
   const messageHeaderRefs = useRef(new Map<string, HTMLButtonElement>());
+
   const expandedMessageId = useThreadConversationStore(
     (state) => state.expandedMessageId
   );
+
   const selectedMessageId = useThreadConversationStore(
     (state) => state.selectedMessageId
   );
+
   const openMessage = useThreadConversationStore((state) => state.openMessage);
+
   const reconcileMessages = useThreadConversationStore(
     (state) => state.reconcileMessages
   );
+
   const messageIds = useMemo(
     () => messages.map((message) => message.id),
     [messages]
@@ -39,6 +44,7 @@ export const useThreadMessageNavigation = (
     (messageId: string, header: HTMLButtonElement | null): void => {
       if (header === null) {
         messageHeaderRefs.current.delete(messageId);
+
         return;
       }
 
@@ -53,6 +59,7 @@ export const useThreadMessageNavigation = (
       requestAnimationFrame(() => {
         const header = messageHeaderRefs.current.get(messageId);
         const article = header?.closest("article");
+
         if (header === undefined || article === undefined || article === null) {
           return;
         }

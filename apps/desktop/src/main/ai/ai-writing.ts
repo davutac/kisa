@@ -31,6 +31,7 @@ const loadGenerationSettings = Effect.fn("loadAiGenerationSettings")(
   ) {
     const settings = yield* getAiSettings();
     const model = yield* requireAiModelSelection(settings, requestModel);
+
     const instructions =
       operation === "reply"
         ? {
@@ -45,6 +46,7 @@ const loadGenerationSettings = Effect.fn("loadAiGenerationSettings")(
               DEFAULT_AI_DRAFT_CLEANUP_USER_INSTRUCTIONS,
             systemPrompt: AI_DRAFT_CLEANUP_SYSTEM_INSTRUCTIONS,
           };
+
     return {
       ...instructions,
       model,
@@ -57,6 +59,7 @@ const loadAiRuntimeContext = Effect.fn("loadAiRuntimeContext")(
     const now = yield* DateTime.nowInCurrentZone.pipe(
       Effect.provide(DateTime.layerCurrentZoneLocal)
     );
+
     return {
       currentDate: DateTime.formatIsoDate(now),
       deviceTimeZone: DateTime.zoneToString(now.zone),
@@ -79,6 +82,7 @@ export const generateAiReply = Effect.fn("generateAiReply")(
       ],
       { concurrency: "unbounded" }
     );
+
     const generated = yield* generateStructuredText({
       model: generation.model,
       outputSchema: AiReply,
@@ -105,6 +109,7 @@ export const cleanupAiDraft = Effect.fn("cleanupAiDraft")(
       ],
       { concurrency: "unbounded" }
     );
+
     const generated = yield* generateStructuredText({
       model: generation.model,
       outputSchema: AiCleanupGeneration,

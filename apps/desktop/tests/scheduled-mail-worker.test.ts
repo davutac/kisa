@@ -33,6 +33,7 @@ interface FakeClock {
 const makeFakeClock = (): FakeClock => {
   let now = 1000;
   const scheduledDelays: number[] = [];
+
   return {
     advance: (milliseconds) => {
       now += milliseconds;
@@ -42,6 +43,7 @@ const makeFakeClock = (): FakeClock => {
     },
     schedule: (_run, delayMs) => {
       scheduledDelays.push(delayMs);
+
       return { cancel: vi.fn<() => void>() };
     },
     scheduledDelays,
@@ -72,6 +74,7 @@ class FakeStore implements ScheduledMailWorkerStore {
     attemptId: string
   ): Promise<ClaimedScheduledMail | undefined> {
     await Promise.resolve();
+
     if (
       this.status !== "scheduled" ||
       this.nextAttemptAt === undefined ||
@@ -79,10 +82,12 @@ class FakeStore implements ScheduledMailWorkerStore {
     ) {
       return;
     }
+
     this.claimCount += 1;
     this.status = "preparing";
     this.attemptId = attemptId;
     this.nextAttemptAt = undefined;
+
     return {
       ...this.key,
       attachments: this.attachments,
@@ -124,10 +129,12 @@ class FakeStore implements ScheduledMailWorkerStore {
     ) {
       return Promise.resolve(false);
     }
+
     this.status = "attention";
     this.attemptId = undefined;
     this.attentionReason = reason;
     this.nextAttemptAt = undefined;
+
     return Promise.resolve(true);
   }
 
@@ -142,8 +149,10 @@ class FakeStore implements ScheduledMailWorkerStore {
     ) {
       return Promise.resolve(false);
     }
+
     this.status = "sent";
     this.attemptId = undefined;
+
     return Promise.resolve(true);
   }
 
@@ -155,9 +164,11 @@ class FakeStore implements ScheduledMailWorkerStore {
     if (this.status !== "preparing" || attemptId !== this.attemptId) {
       return Promise.resolve(false);
     }
+
     this.status = "sending";
     this.attemptCount += 1;
     this.lastAttemptAt = now;
+
     return Promise.resolve(true);
   }
 
@@ -170,9 +181,11 @@ class FakeStore implements ScheduledMailWorkerStore {
     if (this.status !== "preparing" || attemptId !== this.attemptId) {
       return Promise.resolve(false);
     }
+
     this.status = "scheduled";
     this.attemptId = undefined;
     this.nextAttemptAt = nextAttemptAt;
+
     return Promise.resolve(true);
   }
 
@@ -182,6 +195,7 @@ class FakeStore implements ScheduledMailWorkerStore {
       this.attemptId = undefined;
       this.nextAttemptAt = 1000;
     }
+
     return Promise.resolve();
   }
 
@@ -194,10 +208,12 @@ class FakeStore implements ScheduledMailWorkerStore {
     if (this.status !== "sending" || item.attemptId !== this.attemptId) {
       return Promise.resolve(false);
     }
+
     this.status = "scheduled";
     this.attemptId = undefined;
     this.nextAttemptAt = nextAttemptAt;
     this.rateLimitStartedAt = rateLimitStartedAt;
+
     return Promise.resolve(true);
   }
 }
@@ -217,15 +233,18 @@ const makeHarness = (
 ): WorkerHarness => {
   const clock = makeFakeClock();
   const notifications: ScheduledMailNotification[] = [];
+
   const deliver = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
     Promise.resolve({ ok: true })
   );
+
   const dependencies: ScheduledMailWorkerDependencies = {
     deliver,
     isOnline: () => true,
     loadAttachments: () => Promise.resolve([]),
     notify: (notification) => {
       notifications.push(notification);
+
       return Promise.resolve();
     },
     now: () => clock.now,
@@ -236,6 +255,7 @@ const makeHarness = (
     withKeyLock: (_key, run) => run(),
     ...overrides,
   };
+
   return {
     clock,
     deliver,
@@ -291,13 +311,17 @@ describe(ScheduledMailWorker, () => {
     let claimCallCount = 0;
     store.claimDue = async (now, attemptId) => {
       claimCallCount += 1;
+
       if (claimCallCount === 1) {
         firstClaimStarted.resolve(true);
         await releaseFirstClaim.promise;
+
         return;
       }
+
       return claimDue(now, attemptId);
     };
+
     const harness = makeHarness(store);
 
     const start = Effect.runPromise(harness.worker.start());
@@ -332,12 +356,14 @@ describe(ScheduledMailWorker, () => {
 
   it("honors Retry-After and stops after the attempt at the 24-hour rate-limit boundary", async () => {
     const store = new FakeStore();
+
     const rateLimited = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
       Promise.resolve({
         error: { kind: "rate-limited", retryAfterMs: 5 * 60_000 },
         ok: false,
       })
     );
+
     const harness = makeHarness(store, { deliver: rateLimited });
 
     await Effect.runPromise(harness.worker.start());
@@ -382,15 +408,19 @@ describe(ScheduledMailWorker, () => {
   // the server has had time to file it.
   it("looks in sent mail before reporting an unknown send outcome", async () => {
     const store = new FakeStore();
+
     const deliver = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
       Promise.resolve({ error: { kind: "outcome-unknown" }, ok: false })
     );
+
     const reconcile = vi.fn<ScheduledMailWorkerDependencies["reconcile"]>(() =>
       Promise.resolve({ kind: "found" })
     );
+
     const harness = makeHarness(store, { deliver, reconcile });
 
     await Effect.runPromise(harness.worker.start());
+
     const beforeLookup = {
       lookups: reconcile.mock.calls.length,
       notifications: [...harness.notifications],
@@ -416,9 +446,11 @@ describe(ScheduledMailWorker, () => {
   it("never retries an unknown send outcome", async () => {
     const store = new FakeStore();
     const unknown: ScheduledMailDeliveryFailure = { kind: "outcome-unknown" };
+
     const deliver = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
       Promise.resolve({ error: unknown, ok: false })
     );
+
     const harness = makeHarness(store, { deliver });
 
     await Effect.runPromise(harness.worker.start());
@@ -453,9 +485,11 @@ describe(ScheduledMailWorker, () => {
     "reconciles a stale sending row to $expectedStatus with its stable Message-ID",
     async ({ expectedReason, expectedStatus, reconciliation }) => {
       const store = new FakeStore("sending");
+
       const reconcile = vi.fn<ScheduledMailWorkerDependencies["reconcile"]>(
         () => Promise.resolve(reconciliation)
       );
+
       const harness = makeHarness(store, { reconcile });
 
       await Effect.runPromise(harness.worker.start());
@@ -476,6 +510,7 @@ describe(ScheduledMailWorker, () => {
     const notificationStarted = Promise.withResolvers<true>();
     const releaseNotification = Promise.withResolvers<true>();
     let supervisedWorkCompleted = false;
+
     const harness = makeHarness(store, {
       notify: async () => {
         notificationStarted.resolve(true);
@@ -504,12 +539,14 @@ describe(ScheduledMailWorker, () => {
 
   it("defers a failed reconciliation lookup without changing durable outcome", async () => {
     const store = new FakeStore("sending");
+
     const reconcile = vi.fn<ScheduledMailWorkerDependencies["reconcile"]>(() =>
       Promise.resolve({
         kind: "defer",
         retryAfterMs: 5 * 60_000,
       })
     );
+
     const harness = makeHarness(store, { reconcile });
 
     await Effect.runPromise(harness.worker.start());
@@ -528,13 +565,16 @@ describe(ScheduledMailWorker, () => {
     const originalClaimDue = store.claimDue.bind(store);
     store.claimDue = async (now, attemptId) => {
       const item = await originalClaimDue(now, attemptId);
+
       return item === undefined
         ? undefined
         : { ...item, isMessageValid: false };
     };
+
     const loadAttachments = vi.fn<
       ScheduledMailWorkerDependencies["loadAttachments"]
     >(() => Promise.resolve([]));
+
     const harness = makeHarness(store, { loadAttachments });
 
     await Effect.runPromise(harness.worker.start());
@@ -564,6 +604,7 @@ describe(ScheduledMailWorker, () => {
       size: 10_000_000,
       storage: "app-owned" as const,
     }));
+
     const harness = makeHarness(store, {
       loadAttachments: loadScheduledAttachments,
     });
@@ -588,6 +629,7 @@ describe(ScheduledMailWorker, () => {
     "moves %s preparation failures to attention without sending",
     async (reason) => {
       const store = new FakeStore();
+
       const harness = makeHarness(store, {
         loadAttachments: () =>
           Promise.reject(scheduledMailAttachmentError(reason)),
@@ -607,6 +649,7 @@ describe(ScheduledMailWorker, () => {
 
   it("releases a claim when account suspension skips the supervised work", async () => {
     const store = new FakeStore();
+
     const harness = makeHarness(store, {
       runAccountWork: () => Promise.resolve(),
     });
@@ -624,9 +667,11 @@ describe(ScheduledMailWorker, () => {
 
   it("defers stale-send reconciliation while offline", async () => {
     const store = new FakeStore("sending");
+
     const reconcile = vi.fn<ScheduledMailWorkerDependencies["reconcile"]>(() =>
       Promise.resolve({ kind: "missing" })
     );
+
     const harness = makeHarness(store, {
       isOnline: () => false,
       reconcile,
@@ -644,9 +689,11 @@ describe(ScheduledMailWorker, () => {
     const store = new FakeStore();
     const loading = Promise.withResolvers<readonly OutgoingAttachment[]>();
     const started = Promise.withResolvers<null>();
+
     const harness = makeHarness(store, {
       loadAttachments: () => {
         started.resolve(null);
+
         return loading.promise;
       },
     });
@@ -665,10 +712,12 @@ describe(ScheduledMailWorker, () => {
   it("leaves an interrupted dispatch for the sent-mail lookup and never restarts it", async () => {
     const store = new FakeStore();
     const started = Promise.withResolvers<null>();
+
     const outcome =
       Promise.withResolvers<
         Awaited<ReturnType<ScheduledMailWorkerDependencies["deliver"]>>
       >();
+
     const deliver = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(
       (_item, _attachments, signal) => {
         started.resolve(null);
@@ -681,9 +730,11 @@ describe(ScheduledMailWorker, () => {
             }),
           { once: true }
         );
+
         return outcome.promise;
       }
     );
+
     const harness = makeHarness(store, { deliver });
 
     const start = Effect.runPromise(harness.worker.start());

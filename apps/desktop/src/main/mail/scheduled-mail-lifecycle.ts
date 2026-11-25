@@ -75,6 +75,7 @@ export const createScheduledMailLifecycle = (
   let removeResumeListener: (() => void) | undefined;
   /** Where resume and recovery run: the context `start` was first run in. */
   let context: Context.Context<never> | undefined;
+
   /** The startup run in progress, which every caller of `start` shares. */
   let running:
     | {
@@ -82,6 +83,7 @@ export const createScheduledMailLifecycle = (
         readonly token: object;
       }
     | undefined;
+
   /** The later attempt armed after a run gave up. */
   let recovery: Fiber.Fiber<void> | undefined;
 
@@ -90,10 +92,12 @@ export const createScheduledMailLifecycle = (
       yield* step(options.releaseStaleNotificationClaims);
       notificationClaimsReleased = true;
     }
+
     if (!workerStarted) {
       yield* step(options.startWorker);
       workerStarted = true;
     }
+
     if (!notificationsDrained) {
       yield* step(options.dispatchPendingNotifications);
       notificationsDrained = true;
@@ -103,6 +107,7 @@ export const createScheduledMailLifecycle = (
   const cancelRecovery = Effect.suspend(() => {
     const pending = recovery;
     recovery = undefined;
+
     return pending === undefined ? Effect.void : Fiber.interrupt(pending);
   });
 
@@ -114,12 +119,14 @@ export const createScheduledMailLifecycle = (
     ) {
       return Effect.void;
     }
+
     return Effect.forkDetach(
       Effect.sleep(EXHAUSTED_RETRY_DELAY).pipe(
         Effect.andThen(
           Effect.suspend(() => {
             // Cleared first, so starting does not interrupt this fiber.
             recovery = undefined;
+
             return beginRun;
           })
         ),
@@ -140,12 +147,15 @@ export const createScheduledMailLifecycle = (
     if (running !== undefined) {
       return running.fiber;
     }
+
     yield* cancelRecovery;
+
     if (!workerStarted) {
       notificationClaimsReleased = false;
     }
 
     const token = {};
+
     // Detached, so a caller that stops waiting does not end the run. A
     // forked fiber starts on a later tick, after `running` names it.
     const fiber = yield* Effect.forkDetach(
@@ -155,7 +165,9 @@ export const createScheduledMailLifecycle = (
             if (running?.token !== token) {
               return Effect.void;
             }
+
             running = undefined;
+
             return Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
               ? armRecovery
               : Effect.void;
@@ -163,7 +175,9 @@ export const createScheduledMailLifecycle = (
         )
       )
     );
+
     running = { fiber, token };
+
     return fiber;
   });
 
@@ -171,9 +185,11 @@ export const createScheduledMailLifecycle = (
     if (!active || context === undefined) {
       return;
     }
+
     if (workerStarted) {
       options.wakeWorker();
     }
+
     if (!workerStarted || !notificationsDrained) {
       Effect.runForkWith(context)(beginRun);
     }
@@ -185,10 +201,13 @@ export const createScheduledMailLifecycle = (
       context = yield* Effect.context<never>();
       removeResumeListener = options.listenForResume(handleResume);
     }
+
     if (notificationsDrained) {
       return;
     }
+
     const exit = yield* Fiber.await(yield* beginRun);
+
     if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) {
       return yield* exit;
     }
@@ -198,15 +217,18 @@ export const createScheduledMailLifecycle = (
     if (!active) {
       return;
     }
+
     active = false;
     removeResumeListener?.();
     removeResumeListener = undefined;
     yield* cancelRecovery;
     const pending = running;
     running = undefined;
+
     if (pending !== undefined) {
       yield* Fiber.interrupt(pending.fiber);
     }
+
     yield* options.stopWorker.pipe(Effect.mapError(lifecycleError));
 
     notificationClaimsReleased = false;

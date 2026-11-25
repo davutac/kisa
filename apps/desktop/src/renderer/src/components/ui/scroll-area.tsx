@@ -55,6 +55,7 @@ const ScrollAreaThumb = ({
 );
 
 export { ScrollArea, ScrollAreaScrollbar, ScrollAreaThumb };
+
 export {
   ScrollAreaContent,
   ScrollAreaViewport,

@@ -11,8 +11,9 @@ import {
 } from "../src/main/mail/engine/imap-session";
 
 /** An imapflow client whose LOGOUT answers when `logout` says so. */
-const client = (logout: () => Promise<unknown>, usable = true) => {
+const client = (logout: () => Promise<void>, usable = true) => {
   const calls: string[] = [];
+
   return {
     calls,
     client: {
@@ -44,13 +45,14 @@ describe("closing an IMAP connection", () => {
     Effect.gen(function* silentServer() {
       // The server never answers.
       const { calls, client: silent } = client(
-        () => Promise.withResolvers<null>().promise
+        () => Promise.withResolvers<undefined>().promise
       );
 
       // Releases run uninterruptibly, as a session scope's close does.
       const closing = yield* Effect.forkChild(
         Effect.uninterruptible(closeClient(silent))
       );
+
       yield* TestClock.adjust(LOGOUT_TIMEOUT_MS);
       yield* Fiber.join(closing);
 

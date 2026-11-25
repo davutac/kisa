@@ -39,10 +39,13 @@ const SettingsAccountDisconnectRow = ({
           const reply = await accountsApi.disconnectAccount({
             email: account.email,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
+
           toast.success(`Disconnected ${account.email}`, {
             description: "Its downloaded mail was deleted from this device.",
           });

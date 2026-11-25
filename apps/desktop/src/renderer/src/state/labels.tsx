@@ -65,6 +65,7 @@ const withLabelCatalog = (
   catalog: MailLabelCatalog
 ): ReadonlyMap<string, LabelCatalogState> => {
   const entry = [accountId, toLabelCatalogState(catalog)] as const;
+
   return new Map([...catalogs, entry]);
 };
 
@@ -78,9 +79,11 @@ export const LabelsProvider = ({
   const [catalogs, setCatalogs] = useState<
     ReadonlyMap<string, LabelCatalogState>
   >(new Map());
+
   const [statuses, setStatuses] = useState<
     ReadonlyMap<string, LabelCatalogLoadStatus>
   >(new Map());
+
   const attemptedLabels = useRef(new Set<string>());
   const loadsInFlight = useRef(new Map<string, Promise<void>>());
 
@@ -156,6 +159,7 @@ export const LabelsProvider = ({
       })();
 
       loadsInFlight.current.set(accountId, load);
+
       return load;
     },
     [updateCatalog]
@@ -184,8 +188,10 @@ export const LabelsProvider = ({
   const ensureLabels = useCallback(
     (accountId: string, labels: readonly string[]): void => {
       const knownNames = catalogs.get(accountId)?.names;
+
       const missing = labels.filter((label) => {
         const key = `${accountId}\0${label}`;
+
         return (
           !(knownNames?.has(label) ?? false) &&
           !attemptedLabels.current.has(key)
@@ -207,9 +213,11 @@ export const LabelsProvider = ({
 
   const value = useMemo(() => {
     const connectedAccountIds = new Set(accountIds);
+
     const connectedCatalogs = new Map(
       [...catalogs].filter(([accountId]) => connectedAccountIds.has(accountId))
     );
+
     const connectedStatuses = new Map(
       [...statuses].filter(([accountId]) => connectedAccountIds.has(accountId))
     );

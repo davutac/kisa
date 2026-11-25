@@ -65,15 +65,18 @@ export const useShellNavigation = (): ShellNavigation => {
   const { setUnreadFilter, showUnread } = useUnreadFilter();
   const accounts = useAccounts();
   const canCompose = getMailApi() !== undefined && accounts.length > 0;
+
   const previousPathsRef = useRef<Record<WorkspacePath, ShellViewPath | null>>({
     "/compose": null,
     "/scheduled": null,
     "/templates": null,
   });
+
   const currentPath = toShellViewPath(pathname);
   const view: MailboxView = { currentPath, mailbox, selectedAccountId };
   const history = useShellHistory(view, hasScheduledMail);
   useLeaveMissingLabelPlace();
+
   const showScheduled = shouldShowScheduled(
     currentPath === "/scheduled",
     hasScheduledMail
@@ -108,6 +111,7 @@ export const useShellNavigation = (): ShellNavigation => {
     () =>
       undoneDrafts.subscribe((state, previous) => {
         const latest = latestRef.current;
+
         if (
           state.compose !== undefined &&
           previous.compose === undefined &&
@@ -123,6 +127,7 @@ export const useShellNavigation = (): ShellNavigation => {
     const next = resolveMailboxSelection(view, target);
     openMailbox(next.accountId, next.mailbox);
   };
+
   // The mailbox shortcuts act on the current scope, exactly like choosing
   // that scope's row in the sidebar.
   const toggleMailbox = (target: Mailbox): void => {

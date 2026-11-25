@@ -45,6 +45,7 @@ const TemplatesSidebar = ({
   }, [selectedTemplateId, templates]);
 
   let content;
+
   if (isLoading) {
     content = (
       <p className="text-muted-foreground flex items-center gap-2 px-2.5 py-2 text-[13px]">
@@ -96,6 +97,7 @@ const TemplatesSidebar = ({
         </li>
       );
     });
+
     content = (
       <ul
         aria-keyshortcuts={`${getHotkeyAriaLabel("templates.next")} ${getHotkeyAriaLabel("templates.previous")}`}

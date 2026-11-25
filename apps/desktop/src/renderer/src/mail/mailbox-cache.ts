@@ -56,6 +56,7 @@ export const updateMailboxThreadsSnapshots = (
 ): void => {
   for (const [key, snapshot] of mailboxSnapshots) {
     const accountIds = getSnapshotAccountIds(snapshot);
+
     const relevantChanges = changes.filter((change) =>
       accountIds.includes(getThreadListChangeAccountId(change))
     );
@@ -82,6 +83,7 @@ export const retainMailboxThreadsSnapshotsForAccounts = (
 
   for (const [key, snapshot] of mailboxSnapshots) {
     const snapshotAccountIds = getSnapshotAccountIds(snapshot);
+
     const matchesAccounts =
       snapshotAccountIds.length === retainedAccountIds.size &&
       snapshotAccountIds.every((accountId) =>

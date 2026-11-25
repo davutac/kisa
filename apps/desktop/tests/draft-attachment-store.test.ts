@@ -24,7 +24,9 @@ const makeTemporaryDirectory = async (): Promise<string> => {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "kisa-draft-attachment-store-")
   );
+
   temporaryDirectories.push(directory);
+
   return directory;
 };
 
@@ -38,13 +40,16 @@ const authorizeAttachment = async (
 }> => {
   const filePath = path.join(directory, `${id}.txt`);
   await writeFile(filePath, contents);
+
   const [record] = await authorizeOutgoingAttachmentFiles(
     [{ mediaType: "text/plain", path: filePath }],
     () => id
   );
+
   if (record === undefined) {
     throw new Error("Expected an authorized attachment");
   }
+
   return { filePath, record };
 };
 
@@ -60,20 +65,25 @@ describe("draft attachment store", () => {
   it("copies an attachment into private app storage and survives source deletion", async () => {
     const directory = await makeTemporaryDirectory();
     const userDataPath = path.join(directory, "user-data");
+
     const source = await authorizeAttachment(
       directory,
       "attachment-1",
       "hello"
     );
+
     const store = makeDraftAttachmentStore(userDataPath);
 
     const adoption = await Effect.runPromise(
       store.adopt("draft-1", [source.record])
     );
+
     const [owned] = adoption.attachments;
+
     if (owned === undefined) {
       throw new Error("Expected a copied attachment");
     }
+
     expect(owned.storage).toBe("app-owned");
     const directoryStats = await stat(path.dirname(owned.path));
     const fileStats = await stat(owned.path);
@@ -114,14 +124,18 @@ describe("draft attachment store", () => {
     const first = await authorizeAttachment(directory, "first", "first");
     const second = await authorizeAttachment(directory, "second", "second");
     const store = makeDraftAttachmentStore(path.join(directory, "user-data"));
+
     const retained = await Effect.runPromise(
       store.adopt("draft-3", [first.record])
     );
+
     const orphaned = await Effect.runPromise(
       store.adopt("draft-4", [second.record])
     );
+
     const [retainedAttachment] = retained.attachments;
     const [orphanedAttachment] = orphaned.attachments;
+
     if (retainedAttachment === undefined || orphanedAttachment === undefined) {
       throw new Error("Expected copied attachments");
     }

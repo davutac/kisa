@@ -40,15 +40,18 @@ export const useSettingsSearchTarget = <Element extends HTMLElement>(
   const { highlighted, onLeave, onReach, target } = use(
     SettingsSearchTargetContext
   );
+
   const ref = useRef<Element>(null);
   const isTarget = target === id;
   const isHighlighted = highlighted === id;
 
   useEffect(() => {
     const element = ref.current;
+
     if (!isTarget || element === null) {
       return;
     }
+
     element.scrollIntoView({
       behavior: prefersInstantScroll() ? "instant" : "smooth",
       block: "center",
@@ -71,6 +74,7 @@ export const SearchableSettingsRow = ({
   ...props
 }: SettingsRowProps & { readonly target: string }) => {
   const targetProps = useSettingsSearchTarget<HTMLDivElement>(target);
+
   return <SettingsRow {...props} {...targetProps} />;
 };
 
@@ -80,5 +84,6 @@ export const SearchableSettingsSection = ({
   ...props
 }: SettingsSectionProps & { readonly target: string }) => {
   const targetProps = useSettingsSearchTarget<HTMLElement>(target);
+
   return <SettingsSection {...props} {...targetProps} />;
 };

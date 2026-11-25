@@ -9,6 +9,8 @@ import type {
 } from "../../../packages/database/src/client";
 import { createDatabaseRuntime } from "../../../packages/database/src/runtime";
 
+// SAFETY: the runtime only ever calls `close` on a connection; opening,
+// encrypting and migrating are the injected functions' work.
 const createConnection = (close: () => void): DatabaseConnection =>
   ({ close }) as DatabaseConnection;
 
@@ -21,9 +23,12 @@ describe(createDatabaseRuntime, () => {
       let openCount = 0;
       let openedWithKey = Buffer.alloc(0);
       let migrateCount = 0;
+      // SAFETY: the runtime passes the client to the injected migration and
+      // returns it, without reading it.
       const client = {} as DatabaseClient;
       const connection = createConnection(() => {});
       const encryptionKey = Buffer.alloc(32, 7);
+
       const runtime = createDatabaseRuntime(
         {
           databasePath: "/app-data/example/app.sqlite",
@@ -43,6 +48,7 @@ describe(createDatabaseRuntime, () => {
           openConnection: (_databasePath, key) => {
             openCount += 1;
             openedWithKey = Buffer.from(key);
+
             return connection;
           },
         }
@@ -80,6 +86,7 @@ describe(createDatabaseRuntime, () => {
   it.effect("closes the opened connection when migration fails", () =>
     Effect.gen(function* handlesMigrationFailure() {
       let didClose = false;
+
       const runtime = createDatabaseRuntime(
         {
           databasePath: "/app-data/example/app.sqlite",
@@ -90,6 +97,8 @@ describe(createDatabaseRuntime, () => {
           applyMigrations: () => {
             throw new Error("bad migration");
           },
+          // SAFETY: the runtime only passes the client to the injected
+          // migration, which throws here before reading it.
           createClient: () => ({}) as DatabaseClient,
           createDirectory: () => {},
           openConnection: () =>
@@ -117,6 +126,7 @@ describe(createDatabaseRuntime, () => {
   it.effect("closes the opened connection when client creation fails", () =>
     Effect.gen(function* handlesClientCreationFailure() {
       let didClose = false;
+
       const runtime = createDatabaseRuntime(
         {
           databasePath: "/app-data/example/app.sqlite",

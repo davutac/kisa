@@ -73,11 +73,13 @@ const TEXT_BODY_TYPES: ReadonlySet<string> = new Set([
 
 const normalizeType = (type: string): string => {
   const normalized = type.trim().toLowerCase();
+
   return normalized.includes("/") ? normalized : "application/octet-stream";
 };
 
 const isControlCharacter = (character: string): boolean => {
   const code = character.codePointAt(0) ?? 0;
+
   return code < 0x20 || code === 0x7f;
 };
 
@@ -90,6 +92,7 @@ const cleanFilename = (value: string | undefined, maxLength: number): string =>
 
 const cleanContentId = (value: string | undefined): string | undefined => {
   const cleaned = value?.trim().replaceAll(/^<|>$/gu, "");
+
   return cleaned === undefined || cleaned.length === 0 ? undefined : cleaned;
 };
 
@@ -97,6 +100,7 @@ const toDisposition = (
   value: string | undefined
 ): MessagePart["disposition"] => {
   const disposition = value?.trim().toLowerCase();
+
   return disposition === "attachment" || disposition === "inline"
     ? disposition
     : undefined;
@@ -148,12 +152,15 @@ const planLeaf = (
     node.dispositionParameters?.filename ?? node.parameters?.name,
     limits.maxFilenameLength
   );
+
   const disposition = toDisposition(node.disposition);
   const size = Math.max(0, Math.trunc(node.size ?? 0));
+
   const isTextCandidate =
     TEXT_BODY_TYPES.has(mimeType) &&
     filename.length === 0 &&
     disposition !== "attachment";
+
   const fits =
     isTextCandidate &&
     size <= limits.maxTextPartBytes &&
@@ -196,8 +203,10 @@ export const planMessageStructure = (
   ): MessagePart | undefined => {
     if (budget.partCount >= limits.maxParts) {
       budget.truncated = true;
+
       return;
     }
+
     budget.partCount += 1;
 
     const mimeType = normalizeType(node.type);
@@ -211,11 +220,13 @@ export const planMessageStructure = (
 
     if (depth >= limits.maxDepth) {
       budget.truncated = true;
+
       return { filename: "", kind: "container", mimeType, section, size: 0 };
     }
 
     const parts = (node.childNodes ?? []).flatMap((child) => {
       const visited = visit(child, depth + 1, false);
+
       return visited === undefined ? [] : [visited];
     });
 
@@ -236,6 +247,7 @@ export const planMessageStructure = (
     section: "",
     size: 0,
   };
+
   const leaves = collectLeaves(root);
 
   return {

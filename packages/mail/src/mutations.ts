@@ -66,15 +66,18 @@ const groupByMailbox = (
     string,
     { readonly path: string; readonly uidValidity: bigint; uids: number[] }
   >();
+
   for (const { mailboxPath, uid, uidValidity } of locations) {
     const key = `${uidValidity} ${mailboxPath}`;
     const group = groups.get(key);
+
     if (group === undefined) {
       groups.set(key, { path: mailboxPath, uidValidity, uids: [uid] });
     } else {
       group.uids.push(uid);
     }
   }
+
   return [...groups.values()];
 };
 
@@ -95,6 +98,7 @@ export const refreshMailboxes = Effect.fn("MailMutations.refreshMailboxes")(
   function* refreshMailboxes(scope: SyncScope, paths: readonly string[]) {
     const store = yield* MailEngineStore;
     const wanted = new Set(paths);
+
     const records = (yield* store.getMailboxes(scope.accountId)).filter(
       (record) =>
         record.synced &&
@@ -103,6 +107,7 @@ export const refreshMailboxes = Effect.fn("MailMutations.refreshMailboxes")(
           // through All Mail.
           (scope.dialect.kind === "gmail" && record.role === "all"))
     );
+
     const results: ThreadChanges[] = [];
 
     // A mailbox that fails takes the result with it, while the ones before
@@ -137,6 +142,7 @@ const requireMailbox = (
   name: string
 ) => {
   const mailbox = mailboxWithRole(context, role);
+
   return mailbox === undefined
     ? Effect.fail(
         new MailProtocolError({
@@ -187,6 +193,7 @@ const rememberTaken = Effect.fn("MailMutations.rememberTaken")(
     if (context.scope.dialect.kind !== "generic") {
       return;
     }
+
     const store = yield* MailEngineStore;
     yield* store.rememberCopyOrigins(
       context.scope.accountId,
@@ -211,6 +218,7 @@ const labelMailbox = (
   const label = context.scope.dialect
     .userLabels(context.mailboxes.map(toImapMailbox))
     .find((candidate) => candidate.id === labelId);
+
   return label === undefined
     ? undefined
     : context.mailboxes.find((mailbox) => mailbox.path === label.path);
@@ -235,9 +243,11 @@ const storeOnCopies = Effect.fn("MailMutations.storeOnCopies")(
       const mailbox = context.mailboxes.find(
         (candidate) => candidate.path === path
       );
+
       if (mailbox === undefined) {
         continue;
       }
+
       if (change.flag !== undefined) {
         yield* context.scope.session.setFlags(
           path,
@@ -247,6 +257,7 @@ const storeOnCopies = Effect.fn("MailMutations.storeOnCopies")(
           [change.flag.name]
         );
       }
+
       if (change.gmailLabel !== undefined) {
         yield* context.scope.session.setGmailLabels(
           path,
@@ -256,13 +267,16 @@ const storeOnCopies = Effect.fn("MailMutations.storeOnCopies")(
           [change.gmailLabel.name]
         );
       }
+
       const reread = yield* rereadCopies(
         context.scope,
         toImapMailbox(mailbox),
         uidValidity,
         uids
       );
+
       results.push(reread.changes);
+
       if (!reread.complete) {
         // A copy the server did not return has left the mailbox, and reading
         // the mailbox is what finds out which.
@@ -284,16 +298,20 @@ const moveCopiesTo = Effect.fn("MailMutations.moveCopiesTo")(
     byDestination: ReadonlyMap<string, readonly ThreadLocation[]>
   ) {
     const touched = new Set<string>();
+
     for (const [destination, targets] of byDestination) {
       const sources = groupByMailbox(
         targets.filter((location) => location.mailboxPath !== destination)
       );
+
       for (const { path, uidValidity, uids } of sources) {
         yield* context.scope.session.move(path, uidValidity, uids, destination);
         touched.add(path);
       }
+
       touched.add(destination);
     }
+
     return yield* refreshMailboxes(context.scope, [...touched]);
   }
 );
@@ -356,11 +374,13 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
 
     if (applied) {
       const firstCopies = new Map<string, ThreadLocation>();
+
       const filed = new Set(
         context.locations
           .filter((location) => location.mailboxPath === folder.path)
           .map((location) => location.messageId)
       );
+
       // A copy in Trash or Spam is never the one filed: that would bring a
       // discarded message back, in a conversation that has other mail.
       for (const location of context.locations) {
@@ -372,11 +392,13 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
           firstCopies.set(location.messageId, location);
         }
       }
+
       for (const { path, uidValidity, uids } of groupByMailbox([
         ...firstCopies.values(),
       ])) {
         yield* context.scope.session.copy(path, uidValidity, uids, folder.path);
       }
+
       return yield* refreshMailboxes(context.scope, [folder.path]);
     }
 
@@ -385,9 +407,11 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
     const caughtUp = yield* refreshMailboxes(context.scope, [
       ...new Set(context.locations.map((location) => location.mailboxPath)),
     ]);
+
     const locations = yield* store.threadLocations(context.scope.accountId, [
       ...new Set(context.locations.map((location) => location.threadId)),
     ]);
+
     const kept = new Set(
       locations
         .filter(
@@ -397,15 +421,19 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
         )
         .map((location) => location.messageId)
     );
+
     const inFolder = locations.filter(
       (location) => location.mailboxPath === folder.path
     );
+
     const redundant = inFolder.filter((location) =>
       kept.has(location.messageId)
     );
+
     const onlyCopies = inFolder.filter(
       (location) => !kept.has(location.messageId)
     );
+
     const archive =
       onlyCopies.length === 0
         ? undefined
@@ -414,6 +442,7 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
     for (const { path, uidValidity, uids } of groupByMailbox(redundant)) {
       yield* context.scope.session.expunge(path, uidValidity, uids);
     }
+
     if (archive !== undefined) {
       for (const { path, uidValidity, uids } of groupByMailbox(onlyCopies)) {
         yield* context.scope.session.move(
@@ -444,6 +473,7 @@ const setFolderInbox = Effect.fn("MailMutations.setFolderInbox")(
   function* setFolderInbox(context: ActionContext, applied: boolean) {
     if (!applied) {
       const archive = yield* requireMailbox(context, "archive", "Archive");
+
       return yield* moveCopies(
         context,
         context.locations.filter(
@@ -456,12 +486,14 @@ const setFolderInbox = Effect.fn("MailMutations.setFolderInbox")(
     const archived = context.locations.filter(
       (location) => roleOf(context, location.mailboxPath) === "archive"
     );
+
     if (archived.length === 0) {
       return yield* new MailProtocolError({
         accountId: context.scope.accountId,
         message: "Only archived mail can be moved to the Inbox",
       });
     }
+
     return yield* moveCopies(context, archived, INBOX_PATH);
   }
 );
@@ -475,9 +507,11 @@ const setLabel = (
 
   if (userLabelPath(labelId) !== undefined) {
     const mailbox = labelMailbox(context, labelId);
+
     if (mailbox === undefined) {
       return Effect.fail(labelNotAvailable(context));
     }
+
     return isGmail
       ? setGmailLabel(context, labelId, mailbox.path, applied)
       : setFolderLabel(context, mailbox, applied);
@@ -486,16 +520,21 @@ const setLabel = (
   if (labelId === SystemLabel.starred) {
     return setStar(context, applied);
   }
+
   if (labelId === SystemLabel.unread) {
     return setRead(context, !applied);
   }
+
   const gmailLabel = GMAIL_LABEL_NAMES.get(labelId);
+
   if (isGmail && gmailLabel !== undefined) {
     return setGmailLabel(context, labelId, gmailLabel, applied);
   }
+
   if (!isGmail && labelId === SystemLabel.inbox) {
     return setFolderInbox(context, applied);
   }
+
   return Effect.fail(labelNotAvailable(context));
 };
 
@@ -503,10 +542,13 @@ const trash = Effect.fn("MailMutations.trash")(function* trash(
   context: ActionContext
 ) {
   const destination = yield* requireMailbox(context, "trash", "Trash");
+
   const targets = context.locations.filter(
     (location) => roleOf(context, location.mailboxPath) !== "trash"
   );
+
   yield* rememberTaken(context, targets, destination.path);
+
   return yield* moveCopies(context, targets, destination.path);
 });
 
@@ -514,20 +556,26 @@ const moveToSpam = Effect.fn("MailMutations.moveToSpam")(function* moveToSpam(
   context: ActionContext
 ) {
   const destination = yield* requireMailbox(context, "junk", "Spam");
+
   const outside = context.locations.filter(
     (location) => roleOf(context, location.mailboxPath) !== "junk"
   );
+
   if (outside.length === 0) {
     return NO_THREAD_CHANGES;
   }
+
   const received = outside.filter((location) => !isOwnCopy(location));
+
   if (received.length === 0) {
     return yield* new MailProtocolError({
       accountId: context.scope.accountId,
       message: "Only your own messages are in this conversation",
     });
   }
+
   yield* rememberTaken(context, received, destination.path);
+
   return yield* moveCopies(context, received, destination.path);
 });
 
@@ -553,21 +601,25 @@ const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
     const discarded = context.locations.filter((location) =>
       isDiscarded(context, location.mailboxPath)
     );
+
     if (context.scope.dialect.kind === "gmail") {
       return yield* moveCopies(context, discarded, INBOX_PATH);
     }
 
     const store = yield* MailEngineStore;
     const copiesOf = new Map<MessageId, ThreadLocation[]>();
+
     for (const location of discarded) {
       copiesOf.set(location.messageId, [
         ...(copiesOf.get(location.messageId) ?? []),
         location,
       ]);
     }
+
     const messageIds = [...copiesOf.keys()];
     const taken = yield* store.copyOrigins(context.scope.accountId, messageIds);
     const byDestination = new Map<string, ThreadLocation[]>();
+
     const restore = (location: ThreadLocation, destination: string): void => {
       byDestination.set(destination, [
         ...(byDestination.get(destination) ?? []),
@@ -577,17 +629,22 @@ const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
 
     for (const [messageId, copies] of copiesOf) {
       const remembered = taken.get(messageId);
+
       const held = copies
         .filter((copy) => copy.mailboxPath === remembered?.heldIn)
         .toSorted((left, right) => right.uid - left.uid);
+
       if (remembered === undefined || held.length === 0) {
         for (const copy of copies) {
           restore(copy, INBOX_PATH);
         }
+
         continue;
       }
+
       for (const [index, origin] of remembered.origins.entries()) {
         const copy = held[index];
+
         if (copy !== undefined) {
           restore(copy, isRestorable(context, origin) ? origin : INBOX_PATH);
         }
@@ -596,6 +653,7 @@ const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
 
     const changes = yield* moveCopiesTo(context, byDestination);
     yield* store.forgetCopyOrigins(context.scope.accountId, messageIds);
+
     return changes;
   }
 );
@@ -609,6 +667,7 @@ const deleteForever = Effect.fn("MailMutations.deleteForever")(
     const discarded = context.locations.filter((location) =>
       isDiscarded(context, location.mailboxPath)
     );
+
     if (discarded.length === 0) {
       return yield* new MailProtocolError({
         accountId: context.scope.accountId,
@@ -619,18 +678,22 @@ const deleteForever = Effect.fn("MailMutations.deleteForever")(
 
     const store = yield* MailEngineStore;
     const groups = groupByMailbox(discarded);
+
     for (const { path, uidValidity, uids } of groups) {
       yield* context.scope.session.expunge(path, uidValidity, uids);
     }
+
     const refreshed = yield* refreshMailboxes(context.scope, [
       ...new Set(groups.map((group) => group.path)),
     ]);
+
     // The expunged messages are gone for good, even while a skeleton walk
     // keeps the general clean-up waiting.
     const deleted = yield* store.removeMessagesWithoutCopies(
       context.scope.accountId,
       [...new Set(discarded.map((location) => location.messageId))]
     );
+
     return mergeThreadChanges(refreshed, deleted);
   }
 );
@@ -649,6 +712,7 @@ export const applyThreadAction = Effect.fn("MailMutations.applyThreadAction")(
     action: ThreadAction
   ) {
     const store = yield* MailEngineStore;
+
     const context: ActionContext = {
       locations: yield* store.threadLocations(scope.accountId, threadIds),
       mailboxes: yield* store.getMailboxes(scope.accountId),
@@ -663,21 +727,27 @@ export const applyThreadAction = Effect.fn("MailMutations.applyThreadAction")(
       case "deleteForever": {
         return yield* deleteForever(context);
       }
+
       case "moveToInbox": {
         return yield* moveToInbox(context);
       }
+
       case "moveToSpam": {
         return yield* moveToSpam(context);
       }
+
       case "setLabel": {
         return yield* setLabel(context, action.labelId, action.applied);
       }
+
       case "setRead": {
         return yield* setRead(context, action.read);
       }
+
       case "trash": {
         return yield* trash(context);
       }
+
       default: {
         return action satisfies never;
       }
@@ -701,11 +771,13 @@ export const partitionReportableThreads = Effect.fn(
   const store = yield* MailEngineStore;
   const locations = yield* store.threadLocations(accountId, threadIds);
   const cached = new Set(locations.map((location) => location.threadId));
+
   const received = new Set(
     locations
       .filter((location) => !isOwnCopy(location))
       .map((location) => location.threadId)
   );
+
   const isOwnOnly = (threadId: ThreadId): boolean =>
     cached.has(threadId) && !received.has(threadId);
 

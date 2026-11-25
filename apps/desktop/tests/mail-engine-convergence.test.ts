@@ -56,6 +56,7 @@ import {
   run,
   scopeFor,
 } from "./fixtures/mail-engine-harness";
+import { stringList } from "./fixtures/rows";
 
 /** Sequences per server, and what happens in each. */
 const SEEDS = 10;
@@ -114,8 +115,10 @@ type Random = (bound: number) => number;
 
 const makeRandom = (seed: number): Random => {
   let state = seed;
+
   return (bound) => {
     state = (state * 48_271) % 2_147_483_647;
+
     return state % bound;
   };
 };
@@ -148,6 +151,7 @@ const serverCopies = (
   server: FakeImapServer
 ): readonly Copy[] => {
   const held = server.snapshot(profile.dialect.skeletonFields);
+
   const read = new Set(
     profile.dialect
       .syncedMailboxes(held.map(({ mailbox }) => mailbox))
@@ -159,6 +163,7 @@ const serverCopies = (
       ? messages.flatMap((message) => {
           const identity = profile.dialect.identify(message);
           const labelIds = profile.dialect.locationLabels(message, mailbox);
+
           return identity === undefined
             ? []
             : [
@@ -179,10 +184,14 @@ const serverCopies = (
 };
 
 const cachedCopies = (): readonly Copy[] =>
-  (
-    connection
-      .prepare(
-        `SELECT l.mailbox_path AS path, l.uid AS uid,
+  connection
+    .prepare<
+      unknown[],
+      Omit<Copy, "labelIds"> & {
+        readonly labels: string;
+      }
+    >(
+      `SELECT l.mailbox_path AS path, l.uid AS uid,
                 l.uid_validity AS uidValidity, l.flags AS flags,
                 l.label_ids AS labels, l.message_id AS messageId,
                 m.thread_id AS threadId
@@ -191,28 +200,29 @@ const cachedCopies = (): readonly Copy[] =>
            ON m.account_id = l.account_id AND m.message_id = l.message_id
          WHERE l.account_id = ?
          ORDER BY l.mailbox_path, l.uid`
-      )
-      .all(accountId) as (Omit<Copy, "labelIds"> & {
-      readonly labels: string;
-    })[]
-  ).map((row) => {
-    const labelIds = JSON.parse(row.labels) as string[];
-    return {
-      ...row,
-      flags: listed(JSON.parse(row.flags) as string[]),
-      labelIds,
-      labels: listed(labelIds),
-    };
-  });
+    )
+    .all(accountId)
+    .map((row) => {
+      const labelIds = stringList(row.labels);
+
+      return {
+        ...row,
+        flags: listed(stringList(row.flags)),
+        labelIds,
+        labels: listed(labelIds),
+      };
+    });
 
 const serverMailboxes = (
   profile: Profile,
   server: FakeImapServer
 ): readonly string[] => {
   const mailboxes = server.snapshot({}).map(({ mailbox }) => mailbox);
+
   const read = new Set(
     profile.dialect.syncedMailboxes(mailboxes).map((mailbox) => mailbox.path)
   );
+
   return mailboxes.map(
     (mailbox) =>
       `mailbox ${mailbox.path} (${read.has(mailbox.path) ? "read" : "listed"})`
@@ -220,15 +230,14 @@ const serverMailboxes = (
 };
 
 const cachedMailboxNames = (): readonly string[] =>
-  (
-    connection
-      .prepare(
-        "SELECT path, synced FROM mail_mailboxes WHERE account_id = ? ORDER BY path"
-      )
-      .all(accountId) as { readonly path: string; readonly synced: number }[]
-  ).map(
-    (row) => `mailbox ${row.path} (${row.synced === 1 ? "read" : "listed"})`
-  );
+  connection
+    .prepare<unknown[], { readonly path: string; readonly synced: number }>(
+      "SELECT path, synced FROM mail_mailboxes WHERE account_id = ? ORDER BY path"
+    )
+    .all(accountId)
+    .map(
+      (row) => `mailbox ${row.path} (${row.synced === 1 ? "read" : "listed"})`
+    );
 
 /** What one side has and the other does not, a line each. */
 const differences = (
@@ -237,13 +246,10 @@ const differences = (
 ): readonly string[] => {
   const onServer = new Set(server);
   const inCache = new Set(cache);
+
   return [
-    ...server
-      .filter((line) => !inCache.has(line))
-      .map((line) => `server: ${line}`),
-    ...cache
-      .filter((line) => !onServer.has(line))
-      .map((line) => `cache:  ${line}`),
+    ...server.flatMap((line) => (inCache.has(line) ? [] : [`server: ${line}`])),
+    ...cache.flatMap((line) => (onServer.has(line) ? [] : [`cache:  ${line}`])),
   ];
 };
 
@@ -284,9 +290,11 @@ const writtenAgainstServer = (
   const onServer = new Map(
     serverCopies(profile, server).map((copy) => [placeOf(copy), copy])
   );
+
   const written = [...cachedCopiesOf(threadId)].flatMap(([place, copy]) => {
     const was = before.get(place);
     const held = onServer.get(place);
+
     return (was !== undefined && describeCopy(was) === describeCopy(copy)) ||
       held === undefined
       ? []
@@ -312,12 +320,12 @@ interface MessageRow {
 
 const cachedMessages = (): readonly MessageRow[] =>
   connection
-    .prepare(
+    .prepare<unknown[], MessageRow>(
       `SELECT message_id AS messageId, thread_id AS threadId,
               label_ids AS labels, is_unread AS isUnread
        FROM mail_messages WHERE account_id = ? ORDER BY message_id`
     )
-    .all(accountId) as MessageRow[];
+    .all(accountId);
 
 /** A message's labels are those of the copies it is listed by, and it has a copy. */
 const messageRowDifferences = (
@@ -325,22 +333,28 @@ const messageRowDifferences = (
   messages: readonly MessageRow[]
 ): readonly string[] => {
   const known = new Set(messages.map((message) => message.messageId));
+
   const fromRows = messages.map((message) => {
-    const labels = JSON.parse(message.labels) as string[];
+    const labels = stringList(message.labels);
+
     return `message ${message.messageId}: labels [${listed(labels)}], ${message.isUnread === 1 ? "unread" : "read"}`;
   });
+
   const fromCopies = messages.map((message) => {
     const own = copies.filter((copy) => copy.messageId === message.messageId);
     const labels = labelsOfCopies(own);
+
     return own.length === 0
       ? `message ${message.messageId}: no copy`
       : `message ${message.messageId}: labels [${listed(labels)}], ${labels.includes(SystemLabel.unread) ? "unread" : "read"}`;
   });
 
   return [
-    ...copies
-      .filter((copy) => !known.has(copy.messageId))
-      .map((copy) => `copy without a message: ${describeCopy(copy)}`),
+    ...copies.flatMap((copy) =>
+      known.has(copy.messageId)
+        ? []
+        : [`copy without a message: ${describeCopy(copy)}`]
+    ),
     ...differences(fromCopies, fromRows).map((line) =>
       line.replace("server:", "copies:").replace("cache: ", "row:   ")
     ),
@@ -382,14 +396,17 @@ const threadRowDifferences = (
   messages: readonly MessageRow[]
 ): readonly string[] => {
   const byThread = new Map<string, { readonly labelIds: string[] }[]>();
+
   for (const message of messages) {
     byThread.set(message.threadId, [
       ...(byThread.get(message.threadId) ?? []),
-      { labelIds: JSON.parse(message.labels) as string[] },
+      { labelIds: [...stringList(message.labels)] },
     ]);
   }
+
   const fromMessages = [...byThread].map(([threadId, ofThread]) => {
     const group = listedMessages(ofThread);
+
     return describeThread({
       ...conversationPlaces(ofThread),
       count: group.length,
@@ -400,28 +417,28 @@ const threadRowDifferences = (
       threadId,
     });
   });
-  const fromRows = (
-    connection
-      .prepare(
-        `SELECT thread_id AS threadId, message_count AS messageCount,
+
+  const fromRows = connection
+    .prepare<unknown[], ThreadRow>(
+      `SELECT thread_id AS threadId, message_count AS messageCount,
                 is_in_inbox AS isInInbox, is_in_sent AS isInSent,
                 is_in_spam AS isInSpam, is_in_trash AS isInTrash,
                 is_unread AS isUnread, label_ids AS labels
          FROM mail_threads WHERE account_id = ? ORDER BY thread_id`
-      )
-      .all(accountId) as ThreadRow[]
-  ).map((row) =>
-    describeThread({
-      count: row.messageCount,
-      isInInbox: row.isInInbox === 1,
-      isInSent: row.isInSent === 1,
-      isInSpam: row.isInSpam === 1,
-      isInTrash: row.isInTrash === 1,
-      isUnread: row.isUnread === 1,
-      labels: JSON.parse(row.labels) as string[],
-      threadId: row.threadId,
-    })
-  );
+    )
+    .all(accountId)
+    .map((row) =>
+      describeThread({
+        count: row.messageCount,
+        isInInbox: row.isInInbox === 1,
+        isInSent: row.isInSent === 1,
+        isInSpam: row.isInSpam === 1,
+        isInTrash: row.isInTrash === 1,
+        isUnread: row.isUnread === 1,
+        labels: stringList(row.labels),
+        threadId: row.threadId,
+      })
+    );
 
   return differences(fromMessages, fromRows).map((line) =>
     line.replace("server:", "messages:").replace("cache: ", "row:     ")
@@ -431,6 +448,7 @@ const threadRowDifferences = (
 /** Where the cache's own rows disagree with each other. */
 const withinCache = (): readonly string[] => {
   const messages = cachedMessages();
+
   return [
     ...messageRowDifferences(cachedCopies(), messages),
     ...threadRowDifferences(messages),
@@ -462,28 +480,37 @@ const makeWorld = (
   random: Random
 ) => {
   let made = 0;
+
   const serial = (): number => {
     made += 1;
+
     return made;
   };
+
   const isGmail = profile.dialect.kind === "gmail";
   const held = () => server.snapshot({ flags: true, gmail: true });
   const mailboxes = () => held().map(({ mailbox }) => mailbox);
+
   /** The mailboxes mail lives in, as the dialect reads them. */
   const stores = (): readonly string[] =>
     profile.dialect.syncedMailboxes(mailboxes()).map((mailbox) => mailbox.path);
+
   const folders = (): readonly string[] =>
     profile.dialect.userLabels(mailboxes()).map((label) => label.path);
+
   const copies = (): readonly HeldCopy[] => {
     const read = new Set(stores());
+
     return held().flatMap(({ mailbox, messages }) =>
       read.has(mailbox.path)
         ? messages.map((message) => ({ message, path: mailbox.path }))
         : []
     );
   };
+
   const holds = (path: string, uid: number): boolean =>
     copies().some((copy) => copy.path === path && copy.message.uid === uid);
+
   const someFlags = (): readonly string[] =>
     ["\\Seen", "\\Flagged"].filter(
       (_, index) => random(index === 0 ? 2 : 4) === 0
@@ -494,16 +521,19 @@ const makeWorld = (
     const thread = 500 + random(Math.ceil(made / 2));
     const spam = mailboxes().find((mailbox) => mailbox.role === "junk")?.path;
     const path = spam !== undefined && random(8) === 0 ? spam : ALL_MAIL;
+
     const labels =
       path === ALL_MAIL
         ? ["\\Inbox", "\\Important", ...folders()].filter((_, index) =>
             index === 0 ? random(4) !== 0 : random(4) === 0
           )
         : [];
+
     const message = gmailMessage(String(id), String(thread), {
       flags: someFlags(),
       gmailLabels: labels,
     });
+
     return {
       apply: () => {
         server.deliver(path, message);
@@ -517,6 +547,7 @@ const makeWorld = (
     const path = pick(random, ["INBOX", "INBOX", "INBOX", ...stores()]);
     const parent = id > 1 && random(3) === 0 ? 1 + random(id - 1) : undefined;
     const flags = someFlags();
+
     const message =
       parent === undefined
         ? genericMessage(`m${id}`, { flags })
@@ -524,6 +555,7 @@ const makeWorld = (
             flags,
             headers: { references: `<m${parent}@example.com>` },
           });
+
     return {
       apply: () => {
         if (path !== undefined && stores().includes(path)) {
@@ -539,12 +571,15 @@ const makeWorld = (
   /** What another client can do to one copy. */
   const changesTo = ({ message, path }: HeldCopy): readonly Op[] => {
     const { uid } = message;
+
     const destination = pick(
       random,
       stores().filter((other) => other !== path)
     );
+
     const flag = random(2) === 0 ? "\\Seen" : "\\Flagged";
     const label = pick(random, ["\\Inbox", "\\Important", ...folders()]);
+
     const ops: Op[] = [
       {
         apply: () => {
@@ -564,6 +599,7 @@ const makeWorld = (
         describe: `elsewhere: ${path} #${uid} moved to ${destination}`,
       });
     }
+
     if (destination !== undefined && !isGmail) {
       ops.push({
         apply: () => {
@@ -574,6 +610,7 @@ const makeWorld = (
         describe: `elsewhere: ${path} #${uid} copied to ${destination}`,
       });
     }
+
     // Gmail keeps a message in All Mail until it is trashed.
     if (!isGmail || path !== ALL_MAIL) {
       ops.push({
@@ -583,6 +620,7 @@ const makeWorld = (
         describe: `elsewhere: ${path} #${uid} deleted for good`,
       });
     }
+
     if (isGmail && path === ALL_MAIL && label !== undefined) {
       ops.push({
         apply: () => {
@@ -603,6 +641,7 @@ const makeWorld = (
   const folderChanges = (): readonly Op[] => {
     const name = `${isGmail ? "Label" : "Folder"} ${serial()}`;
     const existing = pick(random, folders());
+
     const ops: Op[] = [
       {
         apply: () => {
@@ -639,6 +678,7 @@ const makeWorld = (
   /** A mailbox rebuilt by its server: every copy under a new UID. */
   const rebuild = (): Op => {
     const path = pick(random, stores());
+
     return {
       apply: () => {
         if (path !== undefined && stores().includes(path)) {
@@ -656,9 +696,11 @@ const makeWorld = (
     if (roll < 6 || copy === undefined) {
       return arrive();
     }
+
     if (roll < 17) {
       return pick(random, changesTo(copy)) ?? arrive();
     }
+
     return roll < 19 ? (pick(random, folderChanges()) ?? arrive()) : rebuild();
   };
 
@@ -678,6 +720,7 @@ const makeWorld = (
         )
       )
     );
+
     return target === undefined || random(3) === 0
       ? external()
       : (pick(random, changesTo(target)) ?? external());
@@ -734,18 +777,18 @@ const cachedMailboxes = () =>
   run(
     Effect.gen(function* readMailboxes() {
       const store = yield* MailEngineStore;
+
       return yield* store.getMailboxes(accountId);
     })
   );
 
 const cachedThreadIds = (): readonly string[] =>
-  (
-    connection
-      .prepare(
-        "SELECT thread_id AS threadId FROM mail_threads WHERE account_id = ? ORDER BY thread_id"
-      )
-      .all(accountId) as { readonly threadId: string }[]
-  ).map((row) => row.threadId);
+  connection
+    .prepare<unknown[], { readonly threadId: string }>(
+      "SELECT thread_id AS threadId FROM mail_threads WHERE account_id = ? ORDER BY thread_id"
+    )
+    .all(accountId)
+    .map((row) => row.threadId);
 
 const threadActions = (labels: readonly LabelId[]): readonly ThreadAction[] => [
   { kind: "setRead", read: true },
@@ -777,18 +820,22 @@ const chooseAction = async (
 
   if (roll === 0) {
     const name = `Made ${serial()}`;
+
     return {
       describe: `create label ${name}`,
       effect: createLabel(scope, name),
     };
   }
+
   if (roll === 1 && label !== undefined) {
     const name = `Named ${serial()}`;
+
     return {
       describe: `rename label ${label.name} to ${name}`,
       effect: renameLabel(scope, label.id, name),
     };
   }
+
   if (roll === 2 && label !== undefined) {
     return {
       describe: `delete label ${label.name}`,
@@ -798,6 +845,7 @@ const chooseAction = async (
 
   const threadId = pick(random, cachedThreadIds());
   const action = pick(random, threadActions(labels.map((entry) => entry.id)));
+
   return threadId === undefined || action === undefined
     ? undefined
     : {
@@ -816,6 +864,7 @@ const toEnd = <E, R>(step: Effect.Effect<unknown, E, R>) =>
         return;
       }
     }
+
     return yield* Effect.die(new Error("a walk did not finish"));
   });
 
@@ -859,17 +908,22 @@ const exploreSeed = async (
   const random = makeRandom(seed);
   const server = profile.server();
   const scope = scopeFor(server, profile.dialect);
+
   const passScope: SyncScope = {
     ...scope,
     drift: repair ? makeDriftMemory() : undefined,
   };
+
   const world = makeWorld(profile, server, random);
   const steps: string[] = [];
+
   const count = (what: string): void => {
     found.counts.set(what, (found.counts.get(what) ?? 0) + 1);
   };
+
   const where = (): string =>
     `${profile.name}, seed ${seed}, after step ${steps.length} (${steps.at(-1) ?? "start"})`;
+
   const report = (into: string[], lines: readonly string[]): boolean => {
     if (lines.length > 0) {
       into.push(
@@ -880,8 +934,10 @@ const exploreSeed = async (
         ].join("\n")
       );
     }
+
     return lines.length > 0;
   };
+
   const noteEnding = (ending: string): void => {
     if (!EXPECTED_ENDINGS.has(ending)) {
       report(found.failures, [`ended with ${ending}`]);
@@ -892,29 +948,38 @@ const exploreSeed = async (
   const checkedPass = async (): Promise<boolean> => {
     steps.push("pass");
     const ending = await attempt(fullPass(passScope));
+
     if (ending !== "done") {
       return report(found.failures, [
         `an undisturbed pass ended with ${ending}`,
       ]);
     }
+
     count("passes checked");
     const differs = report(found.afterPass, againstServer(profile, server));
+
     return report(found.withinCache, withinCache()) || differs;
   };
 
   const act = async (): Promise<void> => {
     const action = await chooseAction(scope, random, world.serial);
+
     if (action === undefined) {
       steps.push("Kisa: nothing cached to act on");
+
       return;
     }
+
     const { threadId } = action;
+
     const before =
       action.stores === true && threadId !== undefined
         ? cachedCopiesOf(threadId)
         : undefined;
+
     const variant = random(10);
     let disturbance = "";
+
     const meanwhile = () =>
       world.meanwhile(
         cachedCopies().filter((copy) => copy.threadId === threadId)
@@ -933,6 +998,7 @@ const exploreSeed = async (
         server.loseAnswer = undefined;
         disturbance = ", and the answer is lost";
         count("answers lost");
+
         return true;
       };
     } else if (variant >= 7 && variant < 9) {
@@ -949,6 +1015,7 @@ const exploreSeed = async (
         server.dropFetch = undefined;
         disturbance = ", and the read after it is dropped";
         count("reads dropped mid-action");
+
         return true;
       };
     }
@@ -964,9 +1031,11 @@ const exploreSeed = async (
 
     if (ending === "done" && before !== undefined && threadId !== undefined) {
       const cached = writtenAgainstServer(profile, server, threadId, before);
+
       if (cached.written > 0) {
         count("flag and label changes compared");
       }
+
       report(found.afterStore, cached.differences);
     }
   };
@@ -974,18 +1043,22 @@ const exploreSeed = async (
   /** One mailbox brought up to date, as a report from the server causes. */
   const refresh = async (): Promise<void> => {
     const mailboxes = await cachedMailboxes();
+
     const record = pick(
       random,
       mailboxes.filter((mailbox) => mailbox.synced)
     );
+
     if (record === undefined) {
       return;
     }
+
     const ending = await attempt(
       syncMailbox(scope, toImapMailbox(record), record, {
         rereadFlags: "newest",
       })
     );
+
     steps.push(`Kisa: refresh ${record.path} -> ${ending}`);
     noteEnding(ending);
   };
@@ -993,6 +1066,7 @@ const exploreSeed = async (
   /** A pass that other clients change mail under, or that is cut short. */
   const disturbedPass = async (kind: "changing" | "cut short") => {
     steps.push(`pass, ${kind}`);
+
     if (kind === "changing") {
       server.onRead = () => {
         if (random(4) === 0) {
@@ -1004,6 +1078,7 @@ const exploreSeed = async (
     } else {
       server.dropFetch = () => random(3) === 0;
     }
+
     const ending = await attempt(fullPass(passScope));
     server.onRead = undefined;
     server.dropFetch = undefined;
@@ -1013,15 +1088,18 @@ const exploreSeed = async (
   };
 
   const arrivals = 3 + random(8);
+
   for (let index = 0; index < arrivals; index += 1) {
     world.arrive().apply();
   }
+
   if (await checkedPass()) {
     return;
   }
 
   for (let step = 0; step < STEPS; step += 1) {
     const roll = random(10);
+
     if (roll < 4) {
       const change = world.external();
       steps.push(change.describe);
@@ -1035,6 +1113,7 @@ const exploreSeed = async (
     }
 
     const then = step === STEPS - 1 ? 0 : random(20);
+
     if (then < 6) {
       // oxlint-disable-next-line eslint/no-await-in-loop -- One step after another.
       if (await checkedPass()) {
@@ -1052,6 +1131,7 @@ const explorations = new Map<string, Promise<Findings>>();
 /** Every sequence for one server, run once however many tests read it. */
 const explore = (profile: Profile, repair: boolean): Promise<Findings> => {
   const key = `${profile.name} ${repair}`;
+
   const started =
     explorations.get(key) ??
     (async () => {
@@ -1062,13 +1142,17 @@ const explore = (profile: Profile, repair: boolean): Promise<Findings> => {
         failures: [],
         withinCache: [],
       };
+
       for (let seed = 1; seed <= SEEDS; seed += 1) {
         // oxlint-disable-next-line eslint/no-await-in-loop -- The sequences share one database.
         await exploreSeed(profile, seed, repair, found);
       }
+
       return found;
     })();
+
   explorations.set(key, started);
+
   return started;
 };
 
@@ -1125,10 +1209,12 @@ const freshAccount = (profile: Profile) => {
   const server = profile.server();
   const scope = scopeFor(server, profile.dialect);
   const path = profile.dialect.kind === "gmail" ? ALL_MAIL : "INBOX";
+
   const mail = (id: number) =>
     profile.dialect.kind === "gmail"
       ? gmailMessage(String(1000 + id), String(500 + id))
       : genericMessage(`m${id}`);
+
   return { mail, path, scope, server };
 };
 
@@ -1137,6 +1223,7 @@ const syncedAccount = async (profile: Profile) => {
   const account = freshAccount(profile);
   account.server.deliver(account.path, account.mail(1));
   await run(fullPass(account.scope));
+
   return account;
 };
 
@@ -1150,6 +1237,7 @@ const unwalkedAccount = async (profile: Profile) => {
   await run(syncAccount(account.scope));
   account.server.deliver(account.path, account.mail(2));
   await run(syncAccount(account.scope));
+
   return account;
 };
 
@@ -1171,6 +1259,7 @@ const cachedWithoutProgress = async (
   server.dropFetch = (_path, selection) => selection.kind === "range";
   const cutShort = await attempt(syncAccount(scope));
   server.dropFetch = undefined;
+
   return { cached: cachedUids(path), cutShort, uids };
 };
 
@@ -1183,10 +1272,12 @@ const cachedWithoutProgress = async (
 describe.each(PROFILES)("a pass cut short on $name", (profile) => {
   it("leaves no copy behind of mail that left before the next pass", async () => {
     const account = await syncedAccount(profile);
+
     const { cached, cutShort, uids } = await cachedWithoutProgress(
       account,
       [2, 3]
     );
+
     const [left = 0] = uids;
     account.server.expunge(account.path, left);
 
@@ -1199,10 +1290,12 @@ describe.each(PROFILES)("a pass cut short on $name", (profile) => {
 
   it("leaves none behind in a mailbox whose older mail is not cached yet", async () => {
     const account = await unwalkedAccount(profile);
+
     const { cached, cutShort, uids } = await cachedWithoutProgress(
       account,
       [3, 4]
     );
+
     const [left = 0, stayed = 0] = uids;
     account.server.expunge(account.path, left);
 
@@ -1229,12 +1322,14 @@ describe.each(PROFILES)(
         server.beforeCommand = undefined;
         server.setFlags(path, 1, ["\\Seen", "\\Flagged"]);
       };
+
       await run(
         applyThreadAction(scope, [ThreadId.make(threadId)], {
           kind: "setRead",
           read: false,
         })
       );
+
       return { scope, server };
     };
 
@@ -1280,13 +1375,12 @@ const REBUILT_CHANGES: readonly {
 ];
 
 const bodyStates = (): readonly string[] =>
-  (
-    connection
-      .prepare(
-        "SELECT body_state AS state FROM mail_messages WHERE account_id = ? ORDER BY message_id"
-      )
-      .all(accountId) as { readonly state: string }[]
-  ).map((row) => row.state);
+  connection
+    .prepare<unknown[], { readonly state: string }>(
+      "SELECT body_state AS state FROM mail_messages WHERE account_id = ? ORDER BY message_id"
+    )
+    .all(accountId)
+    .map((row) => row.state);
 
 describe.each(PROFILES)(
   "a mailbox on $name rebuilt since it was cached",
@@ -1300,6 +1394,7 @@ describe.each(PROFILES)(
       const { mail, path, scope, server } = await syncedAccount(profile);
       server.deliver(path, mail(2));
       await run(fullPass(scope));
+
       if (trashed) {
         await run(
           applyThreadAction(
@@ -1310,15 +1405,20 @@ describe.each(PROFILES)(
         );
         await run(fullPass(scope));
       }
+
       const mailboxes = await cachedMailboxes();
+
       const where = trashed
         ? (mailboxes.find((mailbox) => mailbox.role === "trash")?.path ?? "")
         : path;
+
       const first = cachedCopies().find(
         (copy) => copy.path === where && copy.uid === 1
       )?.threadId;
+
       server.expunge(where, 1);
       server.resetUidValidity(where);
+
       return {
         first: ThreadId.make(first ?? ""),
         held: serverCopies(profile, server).map(describeCopy),

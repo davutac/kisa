@@ -20,9 +20,11 @@ import {
   resolveImapAuth,
 } from "../src/main/mail/engine/account-credentials";
 import { connection, resetDatabase } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 const seal = (value: string): Buffer =>
   Buffer.from(Buffer.from(value, "utf-8").toReversed());
+
 const unseal = (value: Buffer): string =>
   Buffer.from(value.toReversed()).toString("utf-8");
 
@@ -47,6 +49,7 @@ vi.mock("electron", () => ({
 vi.mock("../src/main/database", async () => {
   const { remoteDatabase } = await import("./fixtures/mail-engine-harness");
   const { Effect: MockEffect } = await import("effect");
+
   return {
     withDatabaseClient: <A>(
       run: (database: typeof remoteDatabase) => Promise<A>
@@ -54,9 +57,12 @@ vi.mock("../src/main/database", async () => {
   };
 });
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const oauth = vi.hoisted(() => ({
   environment: undefined as MicrosoftOAuthEnvironment | undefined,
 }));
+
 vi.mock("../src/main/auth/microsoft-client", () => ({
   getMicrosoftOAuthEnvironment: () => oauth.environment,
 }));
@@ -149,6 +155,7 @@ describe("resolving a Microsoft account's sign-in", () => {
     smtp: { host: "smtp-mail.outlook.com", port: 587, security: "starttls" },
     username: "Person@Outlook.com",
   };
+
   let renewals: URLSearchParams[] = [];
 
   /** Microsoft's token endpoint, answering each renewal in turn. */
@@ -162,15 +169,18 @@ describe("resolving a Microsoft account's sign-in", () => {
         renewals.push(new URLSearchParams(String(init.body)));
         const reply = replies[Math.min(next, replies.length - 1)];
         next += 1;
+
         return Promise.resolve(reply?.() ?? Response.error());
       },
       openBrowser: () => Promise.reject(new Error("no browser in a renewal")),
     };
   };
+
   const insertOutlookAccount = async (refreshToken: string): Promise<void> => {
     const credentials = await Effect.runPromise(
       sealMicrosoftRefreshToken(Redacted.make(refreshToken))
     );
+
     connection
       .prepare(
         `INSERT INTO mail_accounts (account_id, created_at, credentials,
@@ -185,14 +195,19 @@ describe("resolving a Microsoft account's sign-in", () => {
 
   const storedRefreshToken = async (): Promise<string | undefined> => {
     const row = connection
-      .prepare("SELECT credentials FROM mail_accounts WHERE account_id = ?")
-      .get(outlook.accountId) as { credentials: Buffer } | undefined;
+      .prepare<unknown[], { credentials: Buffer }>(
+        "SELECT credentials FROM mail_accounts WHERE account_id = ?"
+      )
+      .get(outlook.accountId);
+
     if (row === undefined) {
       return undefined;
     }
+
     const opened = await Effect.runPromise(
       openSealedCredentials(row.credentials)
     );
+
     return opened.kind === "microsoft-oauth"
       ? Redacted.value(opened.refreshToken)
       : opened.kind;
@@ -200,6 +215,7 @@ describe("resolving a Microsoft account's sign-in", () => {
 
   const accessTokenOf = (auth: Awaited<ReturnType<typeof resolve>>) =>
     auth.kind === "oauth" ? Redacted.value(auth.accessToken) : auth.kind;
+
   const resolve = () => Effect.runPromise(resolveImapAuth(outlook));
 
   beforeEach(() => {
@@ -272,10 +288,16 @@ describe("resolving a Microsoft account's sign-in", () => {
     await resolve();
 
     await expect(storedRefreshToken()).resolves.toBe("refresh-2");
+
     // The access token itself is never written down.
-    const row = connection
-      .prepare("SELECT credentials FROM mail_accounts")
-      .get() as { credentials: Buffer };
+    const row = found(
+      connection
+        .prepare<unknown[], { credentials: Buffer }>(
+          "SELECT credentials FROM mail_accounts"
+        )
+        .get()
+    );
+
     expect(unseal(row.credentials)).not.toContain("access-1");
   });
 
@@ -283,6 +305,7 @@ describe("resolving a Microsoft account's sign-in", () => {
     await insertOutlookAccount("refresh-1");
     answerWith(() => {
       connection.prepare("DELETE FROM mail_accounts").run();
+
       return Response.json({
         access_token: "access-1",
         refresh_token: "refresh-2",

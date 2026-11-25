@@ -37,15 +37,18 @@ vi.mock("electron", () => ({
 vi.mock("../src/main/database", async () => {
   const { remoteDatabase } = await import("./fixtures/mail-engine-harness");
   const { Effect: MockEffect } = await import("effect");
+
   return {
     withDatabaseClient: <A>(
       run: (database: typeof remoteDatabase) => Promise<A>
     ) => MockEffect.promise(() => run(remoteDatabase)),
   };
 });
+
 vi.mock("../src/main/database-query", async () => {
   const { remoteDatabase } = await import("./fixtures/mail-engine-harness");
   const { Effect: MockEffect } = await import("effect");
+
   return {
     withDatabaseClient: <A>(
       run: (database: typeof remoteDatabase) => Promise<A>
@@ -56,64 +59,80 @@ vi.mock("../src/main/database-query", async () => {
 // Each store forgets its own rows; here they only record that they were asked.
 vi.mock("../src/main/mail/engine/mail-engine", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     forgetMailEngineAccount: vi.fn<() => Effect.Effect<void>>(
       () => MockEffect.void
     ),
   };
 });
+
 vi.mock("../src/main/mail/mail-drafts", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     forgetAccountDrafts: vi.fn<() => Effect.Effect<void>>(
       () => MockEffect.void
     ),
   };
 });
+
 vi.mock("../src/main/mail/scheduled-mail", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     forgetAccountScheduledMail: vi.fn<() => Effect.Effect<void>>(
       () => MockEffect.void
     ),
   };
 });
+
 vi.mock("../src/main/mail/trusted-image-senders", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     forgetTrustedImageSenders: vi.fn<() => Effect.Effect<void>>(
       () => MockEffect.void
     ),
   };
 });
+
 vi.mock("../src/main/settings/account-settings", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     forgetAccountSettings: vi.fn<() => Effect.Effect<void>>(
       () => MockEffect.void
     ),
   };
 });
+
 vi.mock("../src/main/templates/composer-templates", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     notifyComposerTemplatesChanged: vi.fn<() => Effect.Effect<void>>(
       () => MockEffect.void
     ),
   };
 });
+
 vi.mock("../src/main/mail/unread-badge", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     refreshUnreadBadge: vi.fn<() => Effect.Effect<void>>(() => MockEffect.void),
   };
 });
+
 vi.mock("../src/main/ai/thread-categorization", () => ({
   cancelThreadCategorization: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/electron/renderer-events", () => ({
   sendRendererEvent: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/window/create-window", () => ({
   getMainWindow: vi.fn<() => undefined>(),
 }));
@@ -155,6 +174,7 @@ describe("disconnecting an account", () => {
 
     expect(accountIds()).toStrictEqual([{ account_id: "person@gmail.com" }]);
     expect(fetchMock).not.toHaveBeenCalled();
+
     for (const forget of [
       forgetMailEngineAccount,
       forgetAccountScheduledMail,
@@ -164,6 +184,7 @@ describe("disconnecting an account", () => {
     ]) {
       expect(forget).toHaveBeenCalledWith("name@icloud.com");
     }
+
     expect(remaining.map(({ email }) => email)).toStrictEqual([
       "person@gmail.com",
     ]);

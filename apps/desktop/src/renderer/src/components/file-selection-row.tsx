@@ -29,6 +29,7 @@ const FileSelectionRow = ({
     disabled={disabled || isSelecting}
     onValueChange={(_files, details) => {
       const [file] = details.added;
+
       if (file !== undefined) {
         onDropFile(file);
       }

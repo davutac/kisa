@@ -173,27 +173,33 @@ const MailSearchCommandBarBody = ({
   readonly onDismiss: () => void;
 }) => {
   const { accountIds } = useMailboxAccountScope();
+
   const scope = {
     mailbox: useMailbox(),
     unreadOnly: useShowUnread(),
   };
+
   const [query, setQuery] = useState(initialQuery);
   const [selection, setSelection] = useState("");
   const filterDraft = parseFilterDraft(query.text);
   const addressRole = getMailSearchAddressRole(filterDraft?.field);
+
   const senders = useAddressSuggestions(
     accountIds,
     addressRole,
     addressRole === undefined ? undefined : (filterDraft?.value ?? "")
   );
+
   const commitFilter = (filter: SearchFilter): void => {
     setQuery(
       addSearchFilter({ ...query, text: removeFilterDraft(query.text) }, filter)
     );
   };
+
   const selectField = (field: SearchFilter["field"]): void => {
     setQuery({ ...query, text: `${removeFilterDraft(query.text)}${field}:` });
   };
+
   const completions = getMailSearchCompletions({
     draft: filterDraft,
     draftFilter: toMailSearchDraftFilter(filterDraft),
@@ -202,31 +208,38 @@ const MailSearchCommandBarBody = ({
     senders,
     typedWord: query.text.trim().toLowerCase(),
   });
+
   const canSearch = canSearchFromBar(query);
   const liveQuery = toLiveMailSearchQuery(query);
+
   const results = useMailSearch(
     accountIds,
     applyExternalMailSearchScope(liveQuery, scope),
     canSearch,
     RESULT_LIMIT
   );
+
   const sections = getMailSearchBarSections({
     canSearch,
     isDraftingFilter: filterDraft !== undefined,
     isShowingResults: onClear !== undefined,
   });
+
   const selectableValues = sections.flatMap((section) => {
     if (section === "completions") {
       return completions.items.map((item) => item.value);
     }
+
     if (section === "conversations") {
       return [
         SHOW_ALL_RESULTS_VALUE,
         ...results.threads.map(toConversationValue),
       ];
     }
+
     return [CLEAR_SEARCH_VALUE];
   });
+
   const scopeDescription = describeMailSearchScope(scope);
   const showAll = (): void => onShowAll(query);
 

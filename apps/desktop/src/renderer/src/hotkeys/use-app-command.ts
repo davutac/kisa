@@ -31,16 +31,20 @@ const registerAppCommand = (
   { layer, target }: Pick<UseAppCommandOptions, "layer" | "target">
 ): (() => void) => {
   const command = HOTKEY_COMMANDS[commandId];
+
   const unregister = command.bindings.flatMap((binding) => {
     const guards: (() => boolean)[] = [];
+
     // ui-sdk runs Mod chords in text fields whatever `allowInInput` says, so
     // an `ignore` command checks focus itself.
     if (command.input === "ignore") {
       guards.push(() => !isBindingKeptByFocus(binding));
     }
+
     if (target !== undefined) {
       guards.push(() => hasFocusIn(target.current));
     }
+
     // Only an unguarded shortcut gets ui-sdk's duplicate-key warning.
     const when =
       guards.length === 0

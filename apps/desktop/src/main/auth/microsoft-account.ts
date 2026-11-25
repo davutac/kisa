@@ -104,15 +104,19 @@ const toSignInError = (error: MicrosoftSignInError): MicrosoftAccountError => {
     case "cancelled": {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.cancelled);
     }
+
     case "local": {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.startFailed);
     }
+
     case "timeout": {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.timeout);
     }
+
     case "unavailable": {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.unreachable);
     }
+
     default: {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.refused);
     }
@@ -139,18 +143,22 @@ const toMailboxError = (
       ) {
         return failWith(MICROSOFT_ACCOUNT_MESSAGES.differentAccount);
       }
+
       return failWith(
         side === "incoming"
           ? MICROSOFT_ACCOUNT_MESSAGES.mailboxRefused
           : MICROSOFT_ACCOUNT_MESSAGES.sendingRefused
       );
     }
+
     case "MailConnectionError": {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.unreachable);
     }
+
     case "MailThrottledError": {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.throttled);
     }
+
     default: {
       return failWith(MICROSOFT_ACCOUNT_MESSAGES.unexpected);
     }
@@ -179,6 +187,7 @@ export interface VerifiedMicrosoftAccount {
 export const verifyMicrosoftAccount = Effect.fn("verifyMicrosoftAccount")(
   function* verifyMicrosoftAccount(request: MicrosoftAccountSetupRequest) {
     const environment = getMicrosoftOAuthEnvironment();
+
     if (environment === undefined) {
       return yield* failWith(MICROSOFT_ACCOUNT_MESSAGES.unavailable);
     }
@@ -189,6 +198,7 @@ export const verifyMicrosoftAccount = Effect.fn("verifyMicrosoftAccount")(
     );
 
     const database = yield* MailDatabase;
+
     const existing = yield* database
       .use("Could not load accounts", (db) =>
         db.query.mailAccounts.findFirst({
@@ -199,6 +209,7 @@ export const verifyMicrosoftAccount = Effect.fn("verifyMicrosoftAccount")(
       .pipe(
         Effect.mapError(() => failWith(MICROSOFT_ACCOUNT_MESSAGES.saveFailed))
       );
+
     if (existing !== undefined && existing.provider !== "outlook") {
       return yield* failWith(MICROSOFT_ACCOUNT_MESSAGES.alreadyConnected);
     }
@@ -206,7 +217,9 @@ export const verifyMicrosoftAccount = Effect.fn("verifyMicrosoftAccount")(
     const tokens = yield* signInWithMicrosoft(environment, plan.username).pipe(
       Effect.mapError(toSignInError)
     );
+
     const { refreshToken } = tokens;
+
     if (refreshToken === undefined) {
       return yield* failWith(MICROSOFT_ACCOUNT_MESSAGES.notKept);
     }
@@ -217,7 +230,9 @@ export const verifyMicrosoftAccount = Effect.fn("verifyMicrosoftAccount")(
       kind: "oauth",
       user: plan.username,
     };
+
     const connector = yield* ImapConnector;
+
     const dialect = yield* Effect.scoped(
       Effect.gen(function* listMailboxes() {
         const session = yield* connector.connect({
@@ -225,7 +240,9 @@ export const verifyMicrosoftAccount = Effect.fn("verifyMicrosoftAccount")(
           auth,
           server: plan.imap,
         });
+
         yield* session.listMailboxes;
+
         return session.capabilities.has(GMAIL_CAPABILITY)
           ? ("gmail" satisfies DialectKind)
           : ("generic" satisfies DialectKind);
@@ -272,6 +289,7 @@ export const saveMicrosoftAccount = Effect.fn("saveMicrosoftAccount")(
   }: VerifiedMicrosoftAccount) {
     const database = yield* MailDatabase;
     const now = Date.now();
+
     const outcome = yield* database
       .use("Could not save the account", (db) =>
         db.transaction(async (transaction) => {
@@ -286,11 +304,13 @@ export const saveMicrosoftAccount = Effect.fn("saveMicrosoftAccount")(
             if (existing.provider !== "outlook") {
               return "conflict" as const;
             }
+
             await transaction
               .update(mailAccounts)
               .set({ credentials, updatedAt: now })
               .where(eq(mailAccounts.accountId, plan.accountId))
               .run();
+
             return "replaced" as const;
           }
 
@@ -315,6 +335,7 @@ export const saveMicrosoftAccount = Effect.fn("saveMicrosoftAccount")(
               username: plan.username,
             })
             .run();
+
           return "added" as const;
         })
       )
@@ -329,6 +350,7 @@ export const saveMicrosoftAccount = Effect.fn("saveMicrosoftAccount")(
     // The token the servers have just accepted serves the first connection.
     rememberMicrosoftAccessToken(plan.accountId, tokens);
     notifyAccountConnected(plan.accountId);
+
     return plan.accountId;
   },
   Effect.uninterruptible

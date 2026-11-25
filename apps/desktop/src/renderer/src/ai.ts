@@ -45,14 +45,18 @@ export const getAiModelSelection = (
   settings: AiSettings
 ): AiModelSelection | null => {
   const { activeProvider } = settings;
+
   if (activeProvider === null) {
     return null;
   }
+
   const model = settings.providerModels[activeProvider];
   const reasoning = settings.providerReasoning[activeProvider];
+
   if (model === null) {
     return null;
   }
+
   return { model, provider: activeProvider, reasoning: reasoning ?? undefined };
 };
 
@@ -63,21 +67,27 @@ export const getAvailableAiModelSelection = (
   const status = providers.find(
     (provider) => provider.provider === selection.provider
   );
+
   const model = status?.models.find(
     (availableModel) => availableModel.id === selection.model
   );
+
   if (status?.installed !== true || model === undefined) {
     return null;
   }
+
   const reasoning = resolveAiReasoning(
     selection.reasoning,
     model.reasoningOptions
   );
+
   if (reasoning === selection.reasoning) {
     return selection;
   }
+
   if (reasoning !== null) {
     return { ...selection, reasoning };
   }
+
   return { model: selection.model, provider: selection.provider };
 };

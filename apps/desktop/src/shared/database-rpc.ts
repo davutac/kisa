@@ -38,6 +38,7 @@ const isDatabaseRow = (value: unknown): value is readonly DatabaseValue[] =>
 const sentAsIs = { toCodecJson: () => undefined } as const;
 
 export const DatabaseRow = Schema.declare(isDatabaseRow, sentAsIs);
+
 export type DatabaseRow = typeof DatabaseRow.Type;
 
 /** Database RPC reads always return row arrays; callers select at most one. */
@@ -47,6 +48,7 @@ export const DatabaseExecuteResult = Schema.declare(
     Array.isArray(value) && value.every(isDatabaseRow),
   sentAsIs
 );
+
 export type DatabaseExecuteResult = typeof DatabaseExecuteResult.Type;
 
 export const DatabaseExecutePayload = Schema.Struct({
@@ -54,6 +56,7 @@ export const DatabaseExecutePayload = Schema.Struct({
   params: DatabaseRow,
   sql: Schema.String,
 });
+
 export type DatabaseExecutePayload = typeof DatabaseExecutePayload.Type;
 
 // oxlint-disable-next-line unicorn/throw-new-error

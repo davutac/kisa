@@ -216,9 +216,6 @@ catalogs:
     '@opencode/client':
       specifier: ^2.3.2
       version: 2.3.2
-    '@oxlint/plugins':
-      specifier: ^1.94.0
-      version: 1.94.0
     '@rolldown/plugin-babel':
       specifier: ^0.3.1
       version: 0.3.1
@@ -391,9 +388,6 @@ importers:
       '@effect/tsgo':
         specifier: 'catalog:'
         version: 0.73.2
-      '@oxlint/plugins':
-        specifier: 'catalog:'
-        version: 1.94.0
       husky:
         specifier: 'catalog:'
         version: 9.1.7
@@ -2261,10 +2255,6 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
-
-  '@oxlint/plugins@1.94.0':
-    resolution: {integrity: sha512-YT6htikBOBQ00XDxZpRZLZ0anEDo7h9s4+YvjRU0/Ng/cLd0D6SZQ3tsms4g/GDer/z8UKlegC5iptEfyRXJcw==}
-    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@peculiar/asn1-schema@2.11.1':
     resolution: {integrity: sha512-jaU9OaCcbZUdyXx9hMETZB9xoNmxTGjOGFqd3cOwKFkpKnyKd9WxF3uqj4PvX4cyOMP9bSdHg5YyML2qtx/d/g==}
@@ -7699,8 +7689,6 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.94.0':
     optional: true
-
-  '@oxlint/plugins@1.94.0': {}
 
   '@peculiar/asn1-schema@2.11.1':
     dependencies:

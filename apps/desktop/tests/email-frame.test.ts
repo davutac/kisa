@@ -42,6 +42,8 @@ const prepare = (
   links: readonly ReturnType<typeof fakeLink>[],
   baseURI = APP_PAGE
 ): void => {
+  // SAFETY: prepareEmailLinks reads only `querySelectorAll` and `baseURI`
+  // from the document.
   prepareEmailLinks({
     baseURI,
     querySelectorAll: () => links,
@@ -140,6 +142,7 @@ describe(createEmailDocument, () => {
         '<iframe srcdoc="&lt;link rel=dns-prefetch href=//tracker.example&gt;"></iframe>',
       DOCUMENT_OPTIONS
     );
+
     const [, message = ""] = document.split("<body>");
 
     expect(message).not.toMatch(/<(?:link|meta|iframe)[\s/>]/iu);
@@ -151,6 +154,7 @@ describe(createEmailDocument, () => {
       '<base target="_self"><p>Hi</p>',
       DOCUMENT_OPTIONS
     );
+
     const [head = ""] = document.split("<body>");
 
     expect(head).toContain('<meta name="referrer" content="no-referrer">');
@@ -174,6 +178,7 @@ describe(prepareEmailLinks, () => {
       ping: "https://tracker.example/click",
       target: "_self",
     });
+
     const area = fakeLink({ href: "http://example.com/map" });
 
     prepare([link, area]);

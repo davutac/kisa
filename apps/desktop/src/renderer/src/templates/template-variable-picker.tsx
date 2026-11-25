@@ -28,6 +28,7 @@ import {
 } from "@/shared/template-variables";
 
 const TEMPLATE_VARIABLE_INSERTIONS = listTemplateVariableInsertions();
+
 const TEMPLATE_VARIABLE_GROUPS = [
   ...new Set(TEMPLATE_VARIABLE_INSERTIONS.map(({ group }) => group)),
 ];
@@ -56,10 +57,12 @@ export const TemplateVariableCommandItems = ({
           (insertion) => insertion.group === group
         ).map((insertion) => {
           const { description, emptyPreview, expression, label } = insertion;
+
           const resolved = resolveTemplateVariableExpression(
             expression,
             context
           );
+
           const preview = resolved.ok
             ? resolved.value || emptyPreview || "Empty value"
             : resolved.message;
@@ -120,6 +123,7 @@ export const TemplateVariablePicker = ({
       returnFocusRef.current = triggerRef.current;
       setPreviewNow(Date.now());
     }
+
     setIsOpen(nextOpen);
   };
 
@@ -134,6 +138,7 @@ export const TemplateVariablePicker = ({
         .run();
       returnFocusRef.current = editor.view.dom;
     }
+
     setIsOpen(false);
   };
 

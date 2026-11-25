@@ -30,24 +30,32 @@ import {
 vi.mock("../src/main/database", () => ({
   withDatabaseClient: vi.fn<() => never>(),
 }));
+
 vi.mock("../src/main/mail/new-mail-notifications", () => ({
   dismissInactiveThreadNotifications: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/mail/engine/mail-arrivals", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     announceArrivals: vi.fn<typeof announceArrivals>(() => MockEffect.void),
   };
 });
+
 vi.mock("../src/main/electron/renderer-events", () => ({
   sendRendererEvent: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/mail/unread-badge", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { refreshUnreadBadge: () => MockEffect.void };
 });
+
 vi.mock("../src/main/mail/engine/account-credentials", async () => {
   const { Effect: MockEffect, Redacted } = await import("effect");
+
   return {
     resolveImapAuth: () =>
       MockEffect.succeed({
@@ -75,6 +83,7 @@ const layers = (server: FakeImapServer) =>
 /** The conversations the thread list events sent to the windows upsert. */
 const listedUpserts = () => {
   const isListUpdate = Schema.is(MailThreadListUpdated);
+
   return vi
     .mocked(sendRendererEvent)
     .mock.calls.flatMap(([channel, , payload]) =>
@@ -122,10 +131,12 @@ describe("thread actions in the engine", () => {
     const server = new FakeImapServer(GMAIL_MAILBOXES);
     server.deliver(ALL_MAIL, gmailMessage("1000", "1000"));
     await syncFully(scopeFor(server, gmailDialect));
+
     // More new conversations than one event carries, all newer than it.
     for (let id = 1001; id <= 1200; id += 1) {
       server.deliver(ALL_MAIL, gmailMessage(String(id), String(id)));
     }
+
     vi.mocked(sendRendererEvent).mockClear();
 
     await Effect.runPromise(

@@ -82,13 +82,16 @@ const SettingsDialogBody = ({
     updates,
     window: windowApi,
   } = getRuntimeCapabilities();
+
   const accounts = useAccounts();
   const settingsAccounts = accountsApi === undefined ? [] : accounts;
+
   const pages = listSettingsPages({
     accountIds: settingsAccounts.map(({ email }) => email),
     hasAi: ai !== undefined,
     hasData: settings !== undefined,
   });
+
   const page = resolveSettingsPage(selectedPage, pages);
   const bodyRef = useRef<HTMLDivElement>(null);
   const search = useInstanceValue(createCommandController);
@@ -96,6 +99,7 @@ const SettingsDialogBody = ({
   const [target, setTarget] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const isSearching = query.trim().length > 0;
+
   const results = searchSettings(
     buildSettingsSearchIndex({
       accounts: settingsAccounts,
@@ -119,9 +123,11 @@ const SettingsDialogBody = ({
     setTarget(null);
     setHighlighted(reached);
   }, []);
+
   const onLeave = useCallback((left: string): void => {
     setHighlighted((current) => (current === left ? null : current));
   }, []);
+
   const searchTarget = useMemo(
     () => ({ highlighted, onLeave, onReach, target }),
     [highlighted, onLeave, onReach, target]
@@ -129,9 +135,11 @@ const SettingsDialogBody = ({
 
   const showResult = (id: string): void => {
     const result = results.find((item) => item.id === id);
+
     if (result === undefined) {
       return;
     }
+
     onSelectPage(result.page);
     setQuery("");
     setHighlighted(null);

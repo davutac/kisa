@@ -153,9 +153,9 @@ describe("scheduled mail main IPC methods", () => {
     "binds schedule and edit sessions to the invoking WebContents",
     () =>
       Effect.gen(function* verifiesOwnerBinding() {
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The method reads only the mocked sender identity.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: the method reads only the mocked sender identity.
         const sender = { id: 73 } as IpcMainInvokeEvent["sender"];
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Electron invocation events cannot be constructed outside Electron.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: Electron invocation events cannot be constructed outside Electron, and the method reads only `sender` from this one.
         const event = { sender } as IpcMainInvokeEvent;
         state.bindOwner.mockReturnValue(73);
         state.schedule.mockReturnValue(Effect.succeed(summary));
@@ -219,9 +219,9 @@ describe("scheduled mail main IPC methods", () => {
 
   it.effect("binds outcome readiness to the invoking WebContents", () =>
     Effect.gen(function* bindsOutcomeReadiness() {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The method forwards only the mocked sender identity.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: the method forwards only the mocked sender identity.
       const sender = { id: 73 } as IpcMainInvokeEvent["sender"];
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Electron invocation events cannot be constructed outside Electron.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: Electron invocation events cannot be constructed outside Electron, and the method reads only `sender` from this one.
       const event = { sender } as IpcMainInvokeEvent;
       state.outcomeReadiness.mockReturnValue(Effect.void);
 
@@ -241,6 +241,7 @@ describe("scheduled mail main IPC methods", () => {
         accountId: "other@example.com",
         draftId: "draft-1",
       };
+
       const sendRequest = { ...key, allowPossibleDuplicate: false };
       state.cancel.mockReturnValue(Effect.void);
       state.discard.mockReturnValue(Effect.void);

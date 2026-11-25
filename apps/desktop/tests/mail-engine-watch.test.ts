@@ -33,6 +33,7 @@ import {
   syncFully,
   threadRow,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 const ICLOUD_CAPABILITIES = ["CONDSTORE", "IDLE"];
 
@@ -40,6 +41,7 @@ const ICLOUD_CAPABILITIES = ["CONDSTORE", "IDLE"];
 const watching = (overrides: Partial<MailboxWatchOptions> = {}) => {
   const refreshes: ThreadChanges[] = [];
   const stopped: Deferred.Deferred<void> = Deferred.makeUnsafe();
+
   const options: MailboxWatchOptions = {
     compare: true,
     maxMs: 300_000,
@@ -51,6 +53,7 @@ const watching = (overrides: Partial<MailboxWatchOptions> = {}) => {
     stop: stopped,
     ...overrides,
   };
+
   return {
     options,
     refreshes,
@@ -63,6 +66,7 @@ const watching = (overrides: Partial<MailboxWatchOptions> = {}) => {
 const targetsOf = (scope: SyncScope) =>
   Effect.gen(function* readTargets() {
     const store = yield* MailEngineStore;
+
     return watchTargets(yield* store.getMailboxes(scope.accountId));
   });
 
@@ -70,6 +74,7 @@ const targetsOf = (scope: SyncScope) =>
 const watchInbox = (scope: SyncScope, options: MailboxWatchOptions) =>
   Effect.gen(function* inboxWait() {
     const targets = yield* targetsOf(scope);
+
     return targets === undefined
       ? ("unavailable" as const)
       : yield* watchForNews(scope, targets.primary, options);
@@ -79,31 +84,40 @@ const watchInbox = (scope: SyncScope, options: MailboxWatchOptions) =>
 const watchBeside = (scope: SyncScope, options: MailboxWatchOptions) =>
   Effect.gen(function* besideWait() {
     const extra = (yield* targetsOf(scope))?.extra;
+
     return extra === undefined
       ? ("unavailable" as const)
       : yield* watchForNews(scope, extra, options);
   });
 
 const count = (sql: string): number =>
-  (connection.prepare(sql).get(accountId) as { readonly n: number }).n;
+  found(
+    connection.prepare<unknown[], { readonly n: number }>(sql).get(accountId)
+  ).n;
+
 const unreadThreads = (): number =>
   count(
     "SELECT COUNT(*) AS n FROM mail_threads WHERE account_id = ? AND is_unread = 1"
   );
+
 const inboxCopies = (): number =>
   count(
     "SELECT COUNT(*) AS n FROM mail_message_locations WHERE account_id = ? AND mailbox_path = 'INBOX'"
   );
+
 const sentCopies = (): number =>
   count(
     "SELECT COUNT(*) AS n FROM mail_message_locations WHERE account_id = ? AND mailbox_path = 'Sent Messages'"
   );
+
 const anyThreadId = (): ThreadId =>
   ThreadId.make(
-    (
+    found(
       connection
-        .prepare("SELECT thread_id FROM mail_threads WHERE account_id = ?")
-        .get(accountId) as { readonly thread_id: string }
+        .prepare<unknown[], { readonly thread_id: string }>(
+          "SELECT thread_id FROM mail_threads WHERE account_id = ?"
+        )
+        .get(accountId)
     ).thread_id
   );
 
@@ -114,12 +128,15 @@ const syncedInbox = async (
 ) => {
   insertAccount("generic");
   const server = new FakeImapServer(mailboxes, capabilities);
+
   const uids = [
     server.deliver("INBOX", genericMessage("first")),
     server.deliver("INBOX", genericMessage("second")),
   ] as const;
+
   const scope = scopeFor(server, genericDialect);
   await syncFully(scope);
+
   return { scope, server, uids };
 };
 
@@ -130,6 +147,7 @@ const syncedGmail = async () => {
   const uid = server.deliver(ALL_MAIL, gmailMessage("200", "200"));
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
+
   return { scope, server, uid };
 };
 
@@ -219,12 +237,14 @@ describe(watchForNews, () => {
     const { options, refreshes, stop } = watching();
 
     const waiting = server.nextWatch();
+
     const outcome = run(
       watchInbox(
         { ...scope, exclusive: (effect) => turn.withPermit(effect) },
         options
       )
     );
+
     await waiting;
     const waitingAgain = server.nextWatch();
     await run(turn.withPermit(setThreadRead(scope, anyThreadId(), false)));
@@ -242,6 +262,7 @@ describe(watchForNews, () => {
       OUTLOOK_CAPABILITIES,
       OUTLOOK_MAILBOXES
     );
+
     const { options, stop } = watching();
 
     const waiting = server.nextWatch();
@@ -280,6 +301,7 @@ describe(watchForNews, () => {
 
   it("gives way at once when asked to stop while a refresh is held back", async () => {
     const { scope, server, uids } = await syncedInbox();
+
     const { options, refreshes, stop } = watching({
       refreshSpacingMs: 3_600_000,
     });
@@ -303,6 +325,7 @@ describe(watchForNews, () => {
       const { scope, server, uids } = yield* Effect.promise(() =>
         syncedInbox()
       );
+
       const { options, refreshes, stop } = watching({ refreshSpacingMs: 2000 });
 
       const waiting = server.nextWatch();
@@ -330,6 +353,7 @@ describe(watchForNews, () => {
       const { scope, server, uids } = yield* Effect.promise(() =>
         syncedInbox()
       );
+
       const { options, refreshes, stop } = watching({ refreshSpacingMs: 2000 });
 
       const waiting = server.nextWatch();
@@ -565,6 +589,7 @@ describe(watchTogether, () => {
           watchTogether(
             (halt) => {
               asked.push(halt);
+
               return Deferred.await(news);
             },
             [
@@ -574,6 +599,7 @@ describe(watchTogether, () => {
             stop
           )
         );
+
         yield* settle;
         const [halt] = asked;
         expect(halt && Deferred.isDoneUnsafe(halt)).toBeFalsy();
@@ -615,6 +641,7 @@ describe(watchTogether, () => {
           stop
         )
       );
+
       yield* settle;
       yield* Deferred.succeed(stop, undefined);
 
@@ -636,6 +663,7 @@ describe(watchTogether, () => {
           stop
         )
       );
+
       yield* settle;
       yield* Fiber.interrupt(fiber);
 

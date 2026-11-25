@@ -40,6 +40,7 @@ const claudeReasoningOptions = (
 
 const CLAUDE_EFFORTS = ["low", "medium", "high", "max"] as const;
 const CLAUDE_XHIGH_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+
 const CLAUDE_THINKING_OPTIONS: readonly AiReasoningOption[] = [
   { id: "disabled", isDefault: true, label: "Off" },
   { id: "enabled", label: "On" },
@@ -115,24 +116,33 @@ export const claudeReportedModels = (
 ): AiModel[] => {
   const known = new Set(CLAUDE_MODELS.map(({ id }) => id));
   const models: AiModel[] = [];
+
   for (const info of reported ?? []) {
     const id = info.value.trim();
+
     // `default` points at Claude Code's own default model, not a model.
     if (id === "" || id === "default") {
       continue;
     }
-    const ids = [id, info.resolvedModel ?? ""]
-      .map((value) => stripContextWindowSuffix(value).toLowerCase())
-      .filter((value) => value.length > 0);
+
+    const ids = [id, info.resolvedModel ?? ""].flatMap((value) => {
+      const normalized = stripContextWindowSuffix(value).toLowerCase();
+
+      return normalized.length > 0 ? [normalized] : [];
+    });
+
     if (ids.some((value) => known.has(value))) {
       continue;
     }
+
     for (const value of ids) {
       known.add(value);
     }
+
     const efforts = info.supportsEffort
       ? (info.supportedEffortLevels ?? [])
       : [];
+
     models.push({
       id,
       isDefault: false,
@@ -153,18 +163,22 @@ export const claudeReportedModels = (
             ],
     });
   }
+
   return models;
 };
 
 const compareVersions = (left: string, right: string): number => {
   const leftParts = left.split(".").map(Number);
   const rightParts = right.split(".").map(Number);
+
   for (let index = 0; index < 3; index += 1) {
     const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+
     if (difference !== 0) {
       return difference;
     }
   }
+
   return 0;
 };
 
@@ -173,6 +187,7 @@ export const getClaudeModelsForVersion = (
 ): readonly AiModel[] =>
   CLAUDE_MODELS.filter((model) => {
     const gate = getClaudeModelVersionGate(model.id);
+
     return (
       gate === undefined ||
       (version !== undefined &&
@@ -182,8 +197,10 @@ export const getClaudeModelsForVersion = (
 
 const getClaudeUpgradeMessage = (version: string | undefined) => {
   let message: string | undefined;
+
   for (const model of CLAUDE_MODELS) {
     const gate = getClaudeModelVersionGate(model.id);
+
     if (
       gate !== undefined &&
       (version === undefined ||
@@ -193,6 +210,7 @@ const getClaudeUpgradeMessage = (version: string | undefined) => {
       break;
     }
   }
+
   return message;
 };
 
@@ -200,6 +218,7 @@ const waitForAbortSignal = (signal: AbortSignal): Promise<void> => {
   if (signal.aborted) {
     return Promise.resolve();
   }
+
   // oxlint-disable-next-line promise/avoid-new
   return new Promise((resolve) => {
     signal.addEventListener("abort", () => resolve(), { once: true });
@@ -224,13 +243,16 @@ const probeClaudeInitialization = Effect.fn("probeClaudeInitialization")(
   function* probeClaudeInitialization() {
     const environment = yield* aiProcessEnvironment;
     const executablePath = resolveAiExecutablePath("claude", environment);
+
     if (executablePath === undefined) {
       return;
     }
+
     const effectSignal = yield* Effect.abortSignal;
     const abortController = makeAbortController();
     const abortProbe = () => abortController.abort();
     effectSignal.addEventListener("abort", abortProbe, { once: true });
+
     return yield* Effect.tryPromise(async () => {
       const probe = claudeQuery({
         options: {
@@ -255,7 +277,9 @@ const probeClaudeInitialization = Effect.fn("probeClaudeInitialization")(
           await waitForAbortSignal(abortController.signal);
         })(),
       });
+
       const initialized = await probe.initializationResult();
+
       return {
         account: initialized.account,
         models: initialized.models,
@@ -281,6 +305,7 @@ const claudeSubscriptionLabel = (
   const normalized = subscriptionType
     ?.toLowerCase()
     .replaceAll(/[\s_-]+/gu, "");
+
   const labels = {
     claudeenterprisesubscription: "Claude Enterprise Subscription",
     claudefreesubscription: "Claude Free Subscription",
@@ -297,6 +322,7 @@ const claudeSubscriptionLabel = (
     pro: "Claude Pro Subscription",
     team: "Claude Team Subscription",
   } satisfies Readonly<Record<string, string>>;
+
   return normalized === undefined ? undefined : labels[normalized];
 };
 
@@ -304,6 +330,7 @@ const claudeAuthLabel = (account: ClaudeAccountProbe): string | undefined => {
   const tokenSource = account.tokenSource
     ?.toLowerCase()
     .replaceAll(/[\s_-]+/gu, "");
+
   if (
     tokenSource === "apikey" ||
     tokenSource === "anthropicapikey" ||
@@ -311,15 +338,18 @@ const claudeAuthLabel = (account: ClaudeAccountProbe): string | undefined => {
   ) {
     return "Claude API Key";
   }
+
   if (account.apiProvider === "bedrock") {
     return "Amazon Bedrock";
   }
+
   return claudeSubscriptionLabel(account.subscriptionType);
 };
 
 export const getClaudeStatus = Effect.fn("getClaudeStatus")(
   function* getClaudeStatus() {
     const version = yield* runProbeCommand("claude", ["--version"]);
+
     if (version === undefined || version.exitCode !== 0) {
       return {
         authentication: "unknown",
@@ -332,8 +362,10 @@ export const getClaudeStatus = Effect.fn("getClaudeStatus")(
 
     const initialization = yield* probeClaudeInitialization();
     const account = initialization?.account;
+
     const authentication: AiAuthenticationStatus =
       account === undefined ? "unknown" : "authenticated";
+
     const cliVersion = parseCliVersion(`${version.stdout}\n${version.stderr}`);
 
     return {
@@ -364,6 +396,7 @@ const normalizeClaudeReasoning = (
   if (model !== undefined && !CLAUDE_MODELS.some(({ id }) => id === model)) {
     return reasoning;
   }
+
   if (
     reasoning === "xhigh" &&
     model !== "claude-fable-5-1" &&
@@ -375,9 +408,11 @@ const normalizeClaudeReasoning = (
   ) {
     return "max";
   }
+
   if (reasoning === "max" && model === "claude-sonnet-4-6") {
     return "high";
   }
+
   return reasoning;
 };
 
@@ -388,6 +423,7 @@ export const getClaudeReasoningArgs = (
   if (reasoning === undefined || reasoning === CLAUDE_DEFAULT_REASONING) {
     return [];
   }
+
   if (model === "claude-haiku-4-5") {
     if (reasoning === "enabled" || reasoning === "disabled") {
       return [
@@ -395,8 +431,10 @@ export const getClaudeReasoningArgs = (
         JSON.stringify({ alwaysThinkingEnabled: reasoning === "enabled" }),
       ];
     }
+
     return [];
   }
+
   return ["--effort", normalizeClaudeReasoning(reasoning, model)];
 };
 
@@ -405,6 +443,7 @@ export const generateWithClaude = Effect.fn("generateWithClaude")(
     input: StructuredGenerationInput<S>
   ): StructuredGenerationResult<S> {
     const directory = yield* makeTemporaryDirectory("claude");
+
     const result = yield* runAiCommand({
       args: [
         "--print",
@@ -433,17 +472,20 @@ export const generateWithClaude = Effect.fn("generateWithClaude")(
       stdin: input.userPrompt,
       timeoutMs: GENERATION_TIMEOUT_MS,
     }).pipe(Effect.mapError((error) => commandFailure("claude", error)));
+
     if (result.exitCode !== 0) {
       logDevelopmentAiCommandExit({
         exitCode: result.exitCode,
         operation: "Claude generation",
         stderr: result.stderr,
       });
+
       return yield* providerFailure(
         "claude",
         "Claude could not generate email text. Check its login and model settings"
       );
     }
+
     const envelope = yield* Schema.decodeEffect(
       Schema.fromJsonString(ClaudeOutputEnvelope)
     )(result.stdout).pipe(
@@ -451,6 +493,7 @@ export const generateWithClaude = Effect.fn("generateWithClaude")(
         providerFailure("claude", "Claude returned an invalid response")
       )
     );
+
     return yield* Schema.decodeUnknownEffect(input.outputSchema)(
       envelope.structured_output
     ).pipe(

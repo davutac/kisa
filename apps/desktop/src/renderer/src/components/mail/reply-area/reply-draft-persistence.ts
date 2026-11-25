@@ -82,31 +82,41 @@ export const createReplyDraftPersistence = ({
   ): Promise<boolean> => {
     try {
       const reply = await request();
+
       if (!reply.ok) {
         onError(reply.error);
       }
+
       return reply.ok;
     } catch {
       onError("Could not save draft");
+
       return false;
     }
   };
 
   const save = async (draft: MailDraftInput): Promise<boolean> => {
     const key = contentKey(draft);
+
     if (finalized || removedElsewhere) {
       return false;
     }
+
     if (key === stored) {
       return true;
     }
+
     ownWrites.push(key);
+
     if (await run(() => api.saveDraft(draft))) {
       stored = key;
       writtenElsewhere = false;
+
       return true;
     }
+
     ownWrites = ownWrites.filter((write) => write !== key);
+
     return false;
   };
 
@@ -128,18 +138,24 @@ export const createReplyDraftPersistence = ({
         ) {
           removedElsewhere = true;
         }
+
         return;
       }
+
       if (change.draft.id !== draftId) {
         return;
       }
+
       const key = contentKey(change.draft);
       const echo = ownWrites.indexOf(key);
+
       if (echo !== -1) {
         // Writes commit in order: earlier echoes are no longer coming.
         ownWrites = ownWrites.slice(echo + 1);
+
         return;
       }
+
       if (key !== stored) {
         writtenElsewhere = true;
       }
@@ -152,13 +168,16 @@ export const createReplyDraftPersistence = ({
       if (finalized || removedElsewhere) {
         return;
       }
+
       if (isEmpty) {
         // Empty here, but another window's copy may not be.
         if (!writtenElsewhere) {
           await discard(draft);
         }
+
         return;
       }
+
       await save(draft);
     },
   };

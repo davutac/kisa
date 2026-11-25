@@ -31,11 +31,13 @@ const toggleScope = (
   expanded: boolean
 ): ReadonlySet<string> => {
   const next = new Set(scopes);
+
   if (expanded) {
     next.add(key);
   } else {
     next.delete(key);
   }
+
   return next;
 };
 
@@ -55,11 +57,14 @@ const SidebarAccounts = ({
   const reorderAccounts = useReorderAccounts();
   const { catalogs } = useLabelCatalogSnapshot();
   const reorderHintId = useId();
+
   const [expandedScopes, setExpandedScopes] =
     useState<ReadonlySet<string>>(readExpandedScopes);
+
   const [expandedLabelScopes, setExpandedLabelScopes] = useState<
     ReadonlySet<string>
   >(readExpandedLabelScopes);
+
   const accountIds = useMemo(
     () => accounts.map(({ email }) => email),
     [accounts]
@@ -73,9 +78,11 @@ const SidebarAccounts = ({
   useEffect(() => {
     writeExpandedLabelScopes(expandedLabelScopes, accountIds);
   }, [accountIds, expandedLabelScopes]);
+
   const setScopeExpanded = (key: string, expanded: boolean): void => {
     setExpandedScopes((current) => toggleScope(current, key, expanded));
   };
+
   const setLabelsExpanded = (key: string, expanded: boolean): void => {
     setExpandedLabelScopes((current) => toggleScope(current, key, expanded));
   };
@@ -84,6 +91,7 @@ const SidebarAccounts = ({
     const byEmail = new Map(
       accounts.map((account) => [account.email, account])
     );
+
     void reorderAccounts(order.flatMap((email) => byEmail.get(email) ?? []));
   };
 
@@ -113,6 +121,7 @@ const SidebarAccounts = ({
               // never by where a move in progress has put the account.
               const index = accountIds.indexOf(email);
               const account = accounts[index];
+
               return account === undefined ? null : (
                 <SidebarAccountRow
                   account={account}

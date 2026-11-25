@@ -24,6 +24,7 @@ import { envelope } from "./fake-imap-server";
 import type { FakeImapServer, FakeMessageInput } from "./fake-imap-server";
 
 export const connection = openDatabaseConnection(":memory:");
+
 applyDatabaseMigrations(
   createDatabaseClient(connection),
   fileURLToPath(
@@ -40,11 +41,16 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
 
   if (method === "run") {
     statement.run(...parameters);
+
     return Promise.resolve({ rows: [] });
   }
 
   const dataStatement = statement.raw(true);
+
   if (method === "get") {
+    // SAFETY: `raw(true)` makes `get` return the selected row as the array of
+    // its column values, which is what the proxy driver takes as a `get`'s
+    // `rows`.
     return Promise.resolve({
       rows: dataStatement.get(...parameters) as never[],
     });
@@ -104,12 +110,14 @@ export const scopeFor = (
 /** One complete pass plus every skeleton step, as a first connect does. */
 export const syncFully = async (scope: SyncScope): Promise<void> => {
   await run(syncAccount(scope));
+
   for (let step = 0; step < 100; step += 1) {
     // oxlint-disable-next-line eslint/no-await-in-loop
     if ((await run(skeletonStep(scope))) === undefined) {
       return;
     }
   }
+
   throw new Error("skeleton did not finish");
 };
 
@@ -143,22 +151,22 @@ export interface MessageRow {
 
 export const threadRow = (threadId: string) =>
   connection
-    .prepare(
+    .prepare<unknown[], ThreadRow>(
       `SELECT thread_id, message_count, is_in_inbox, is_in_sent, is_in_spam,
               is_in_trash, is_unread, label_ids, subject, snippet,
               has_attachments, from_address
        FROM mail_threads WHERE account_id = ? AND thread_id = ?`
     )
-    .get(accountId, threadId) as ThreadRow | undefined;
+    .get(accountId, threadId);
 
 export const messageRow = (messageId: string) =>
   connection
-    .prepare(
+    .prepare<unknown[], MessageRow>(
       `SELECT message_id, thread_id, body_state, label_ids, is_unread, snippet,
               body_html, body_text, sender_authenticated, attachments
        FROM mail_messages WHERE account_id = ? AND message_id = ?`
     )
-    .get(accountId, messageId) as MessageRow | undefined;
+    .get(accountId, messageId);
 
 export const resetDatabase = (): void => {
   for (const table of [

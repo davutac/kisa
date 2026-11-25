@@ -124,6 +124,7 @@ const MailThreadContent = ({
   const isStarred = hasStarredLabel(thread.labels);
   const canDeleteForever = isSpam || isTrash;
   const isUnread = thread.labels.includes("UNREAD");
+
   const handleToggleRead = useCallback((): void => {
     threadActions.toggleRead({
       accountId,
@@ -131,9 +132,11 @@ const MailThreadContent = ({
       threadId,
     } satisfies ThreadActionTarget);
   }, [accountId, isUnread, threadActions, threadId]);
+
   const handleTrash = useCallback((): void => {
     threadActions.trash({ accountId, threadId }, onClose);
   }, [accountId, onClose, threadActions, threadId]);
+
   const requestDeleteForever = useCallback(async (): Promise<void> => {
     const confirmed = await confirm(
       getDeleteForeverConfirmation(thread.subject)
@@ -143,24 +146,31 @@ const MailThreadContent = ({
       threadActions.deleteForever({ accountId, threadId }, onClose);
     }
   }, [accountId, confirm, onClose, thread.subject, threadActions, threadId]);
+
   const handleDeleteForever = useCallback((): void => {
     void requestDeleteForever();
   }, [requestDeleteForever]);
+
   const handleNotSpam = useCallback((): void => {
     threadActions.notSpam({ accountId, threadId }, onClose);
   }, [accountId, onClose, threadActions, threadId]);
+
   const handleArchive = useCallback((): void => {
     threadActions.archive({ accountId, threadId }, onClose);
   }, [accountId, onClose, threadActions, threadId]);
+
   const handleMoveToInbox = useCallback((): void => {
     threadActions.moveToInbox({ accountId, threadId });
   }, [accountId, threadActions, threadId]);
+
   const handleToggleStar = useCallback((): void => {
     threadActions.toggleStar({ accountId, isStarred, threadId });
   }, [accountId, isStarred, threadActions, threadId]);
+
   const handleReportSpam = useCallback((): void => {
     threadActions.reportSpam({ accountId, threadId }, onClose);
   }, [accountId, onClose, threadActions, threadId]);
+
   const handlePopOut = useCallback((): void => {
     if (onPopOut === undefined) {
       return;
@@ -168,12 +178,16 @@ const MailThreadContent = ({
 
     void onPopOut({ accountId, threadId });
   }, [accountId, onPopOut, threadId]);
+
   const latestMessage = thread.messages.at(-1);
+
   const onDeleteThreadForever = canDeleteForever
     ? handleDeleteForever
     : undefined;
+
   const onTrashThread = canDeleteForever ? undefined : handleTrash;
   const onPopOutThread = onPopOut === undefined ? undefined : handlePopOut;
+
   // Each applies only where it can change something; the commands follow the
   // buttons, so a key never acts on what its button doesn't offer.
   const commands = {
@@ -191,6 +205,7 @@ const MailThreadContent = ({
     onToggleStar: canStarThread(thread.places) ? handleToggleStar : undefined,
     onTrash: onTrashThread,
   };
+
   const actions = {
     ...commands,
     isSpam,
@@ -200,6 +215,7 @@ const MailThreadContent = ({
     onNotSpam: handleNotSpam,
     subject: thread.subject,
   };
+
   const labels = (
     <ThreadLabels
       accountId={accountId}

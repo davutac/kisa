@@ -23,6 +23,7 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
   month: "long",
   year: "numeric",
 });
+
 const NUMBER_FORMAT = new Intl.NumberFormat();
 
 const formatIndexedMessages = (entry: MailIndexProgress): string =>

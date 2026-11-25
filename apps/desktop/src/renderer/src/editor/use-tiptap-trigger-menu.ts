@@ -29,6 +29,7 @@ export const useTiptapTriggerMenu = (
 ) => {
   const controller = useInstanceValue(createTriggerMenuController);
   const dismissedRef = useRef<DismissedMatch | null>(null);
+
   const adapter = useMemo(
     () =>
       editor === null ? undefined : createTiptapTextAdapter(editor, options),
@@ -48,26 +49,32 @@ export const useTiptapTriggerMenu = (
             if (event.key !== "Escape" || !controller.isOpen()) {
               return false;
             }
+
             const match = controller.getMatch();
             dismissedRef.current =
               match === null
                 ? null
                 : { start: match.start, trigger: match.trigger };
             controller.setOpen(false, { event, reason: "escape-key" });
+
             return true;
           },
         },
       })
     );
+
     const followDismissed = ({ transaction }: { transaction: Transaction }) => {
       const dismissed = dismissedRef.current;
+
       if (dismissed === null || !transaction.docChanged) {
         return;
       }
+
       const { deleted, pos } = transaction.mapping.mapResult(
         dismissed.start,
         1
       );
+
       const end = pos + dismissed.trigger.length;
       dismissedRef.current =
         deleted ||
@@ -76,10 +83,12 @@ export const useTiptapTriggerMenu = (
           ? null
           : { ...dismissed, start: pos };
     };
+
     editor.on("transaction", followDismissed);
 
     return () => {
       editor.off("transaction", followDismissed);
+
       if (!editor.isDestroyed) {
         editor.unregisterPlugin(ESCAPE_PLUGIN_KEY);
       }
@@ -90,11 +99,15 @@ export const useTiptapTriggerMenu = (
     if (!open) {
       return;
     }
+
     if (details.reason === "shortcut") {
       dismissedRef.current = null;
+
       return;
     }
+
     const dismissed = dismissedRef.current;
+
     if (
       dismissed !== null &&
       controller.getMatch()?.start === dismissed.start

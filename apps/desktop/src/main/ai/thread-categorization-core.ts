@@ -35,6 +35,7 @@ export const validateCategorizationLabelIds = Effect.fnUntraced(
     }
 
     const availableIds = new Set(availableLabels.map((label) => label.id));
+
     if (generatedLabelIds.some((labelId) => !availableIds.has(labelId))) {
       return yield* categorizationError(
         "The AI categorization response contained an unknown label id"
@@ -66,6 +67,7 @@ export const createThreadCategorizationQueue = (
 ): ThreadCategorizationQueue => {
   let pending: ThreadCategorizationItem[] = [];
   const keys = new Set<string>();
+
   let active:
     | {
         readonly completion: Promise<null>;
@@ -73,6 +75,7 @@ export const createThreadCategorizationQueue = (
         readonly item: ThreadCategorizationItem;
       }
     | undefined;
+
   let stopped = false;
 
   const drain = (): void => {
@@ -81,6 +84,7 @@ export const createThreadCategorizationQueue = (
     }
 
     const item = pending.shift();
+
     if (item === undefined) {
       return;
     }
@@ -100,6 +104,7 @@ export const createThreadCategorizationQueue = (
         drain();
       }
     };
+
     void run();
   };
 
@@ -111,17 +116,21 @@ export const createThreadCategorizationQueue = (
     for (const threadId of threadIds) {
       const item = { accountId, threadId };
       const key = itemKey(item);
+
       if (keys.has(key)) {
         continue;
       }
+
       keys.add(key);
       pending.push(item);
     }
+
     drain();
   };
 
   const cancelAccount = (accountId: string): void => {
     pending = pending.filter((item) => item.accountId !== accountId);
+
     if (active?.item.accountId === accountId) {
       active.controller.abort();
     }

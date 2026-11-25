@@ -102,6 +102,7 @@ export const prepareBody = async (
   const attachments = (body.structure?.attachments ?? []).map(
     toStoredAttachment
   );
+
   const bodyText =
     body.html === undefined ? (body.text ?? "") : toIndexText(body.html);
 

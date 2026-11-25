@@ -29,6 +29,7 @@ const SettingsGeneralPage = () => {
     versions,
     window: windowApi,
   } = getRuntimeCapabilities();
+
   const {
     animationsEnabled,
     openThreadsInNewWindows,
@@ -37,6 +38,7 @@ const SettingsGeneralPage = () => {
     setOpenThreadsInNewWindows,
     setRunInBackground,
   } = useAppSettings(appSettings);
+
   const { settings: loginItemSettings, setOpenAtLogin } =
     useLoginItemSettings(loginItemSettingsApi);
 

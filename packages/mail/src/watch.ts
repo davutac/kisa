@@ -62,9 +62,11 @@ export const watchTargets = (
   const inbox = mailboxes.find(
     (mailbox) => mailbox.role === "inbox" && mailbox.selectable
   );
+
   if (inbox === undefined) {
     return undefined;
   }
+
   const synced = (role: MailboxRecord["role"]): MailboxRecord | undefined =>
     mailboxes.find(
       (mailbox) => mailbox.role === role && mailbox.synced && mailbox.selectable
@@ -72,6 +74,7 @@ export const watchTargets = (
 
   if (inbox.synced) {
     const sent = synced("sent");
+
     return {
       extra:
         sent === undefined
@@ -82,6 +85,7 @@ export const watchTargets = (
   }
 
   const all = synced("all");
+
   return {
     extra:
       all === undefined
@@ -121,6 +125,7 @@ const hasNewMail = (state: MailboxState, cached: MailboxRecord): boolean =>
 const refreshMailbox = Effect.fn("MailWatch.refreshMailbox")(
   function* refreshMailbox(scope: SyncScope, path: string) {
     const store = yield* MailEngineStore;
+
     const cached = (yield* store.getMailboxes(scope.accountId)).find(
       (mailbox) => mailbox.path === path
     );
@@ -146,12 +151,15 @@ const answerTo = (
   if (report === "quiet") {
     return "quiet";
   }
+
   if (target.arrivals === "pass" && report !== "changed") {
     return report;
   }
+
   if (hasCache) {
     return "refresh";
   }
+
   // Nothing here to refresh: a pass reads the account instead.
   return target.arrivals === "pass" ? "arrived" : "unavailable";
 };
@@ -166,11 +174,13 @@ const paceRefresh = Effect.fnUntraced(function* paceRefresh(
   stop: Deferred.Deferred<void>
 ) {
   const pause = refreshedAt + spacingMs - (yield* Clock.currentTimeMillis);
+
   if (pause > 0) {
     yield* Deferred.await(stop).pipe(
       Effect.timeoutOrElse({ duration: pause, orElse: () => Effect.void })
     );
   }
+
   return !(yield* Deferred.isDone(stop));
 });
 
@@ -202,38 +212,47 @@ export const watchForNews = Effect.fn("MailWatch.watchForNews")(
     MailEngineStore | R
   > {
     const { session } = scope;
+
     if (!session.capabilities.has("IDLE")) {
       return "unavailable";
     }
 
     const store = yield* MailEngineStore;
+
     const exclusive =
       scope.exclusive ??
       (<A, E, R2>(effect: Effect.Effect<A, E, R2>) => effect);
+
     const deadline = (yield* Clock.currentTimeMillis) + options.maxMs;
     let { compare } = options;
     let refreshedAt = Number.NEGATIVE_INFINITY;
 
     for (;;) {
       const mailboxes = yield* store.getMailboxes(scope.accountId);
+
       const watched = mailboxes.find(
         (mailbox) => mailbox.path === target.path && mailbox.selectable
       );
+
       if (watched === undefined) {
         return "unavailable";
       }
+
       const cached = mailboxes.find(
         (mailbox) => mailbox.path === target.cachedPath && mailbox.synced
       );
 
       const remaining = deadline - (yield* Clock.currentTimeMillis);
+
       if (remaining <= 0 || (yield* Deferred.isDone(options.stop))) {
         return "quiet";
       }
+
       const isAhead =
         compare &&
         cached !== undefined &&
         hasNewMail(yield* session.status(cached.path), cached);
+
       compare = true;
 
       const report = isAhead
@@ -242,10 +261,13 @@ export const watchForNews = Effect.fn("MailWatch.watchForNews")(
             maxMs: remaining,
             stop: options.stop,
           });
+
       const answer = answerTo(target, report, cached !== undefined);
+
       if (answer !== "refresh" || cached === undefined) {
         return answer === "refresh" ? "unavailable" : answer;
       }
+
       if (
         !(yield* paceRefresh(
           refreshedAt,
@@ -259,6 +281,7 @@ export const watchForNews = Effect.fn("MailWatch.watchForNews")(
       const changes = yield* exclusive(refreshMailbox(scope, cached.path));
       refreshedAt = yield* Clock.currentTimeMillis;
       yield* options.refreshed(changes);
+
       if (target.arrivals === "pass" && (changes.arrived?.length ?? 0) > 0) {
         // The refresh was the first to see new mail, and cached it.
         return "arrived";

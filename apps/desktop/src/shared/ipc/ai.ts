@@ -4,6 +4,7 @@ import { MAX_SUBJECT_LENGTH } from "../mail-subject";
 import { IpcReply } from "./reply";
 
 export const AiProvider = Schema.Literals(["codex", "claude", "opencode"]);
+
 export type AiProvider = typeof AiProvider.Type;
 
 export const AiModelSelection = Schema.Struct({
@@ -11,6 +12,7 @@ export const AiModelSelection = Schema.Struct({
   provider: AiProvider,
   reasoning: Schema.optional(Schema.NonEmptyString),
 });
+
 export type AiModelSelection = typeof AiModelSelection.Type;
 
 export const AiProviderModels = Schema.Struct({
@@ -18,6 +20,7 @@ export const AiProviderModels = Schema.Struct({
   codex: Schema.NonEmptyString,
   opencode: Schema.NullOr(Schema.NonEmptyString),
 });
+
 export type AiProviderModels = typeof AiProviderModels.Type;
 
 export const DEFAULT_AI_PROVIDER_MODELS = {
@@ -31,6 +34,7 @@ export const AiProviderReasoning = Schema.Struct({
   codex: Schema.NullOr(Schema.NonEmptyString),
   opencode: Schema.NullOr(Schema.NonEmptyString),
 });
+
 export type AiProviderReasoning = typeof AiProviderReasoning.Type;
 
 export const DEFAULT_AI_PROVIDER_REASONING = {
@@ -45,6 +49,7 @@ export const AiReasoningOption = Schema.Struct({
   isDefault: Schema.optional(Schema.Boolean),
   label: Schema.optional(Schema.NonEmptyString),
 });
+
 export type AiReasoningOption = typeof AiReasoningOption.Type;
 
 export const AiModel = Schema.Struct({
@@ -54,6 +59,7 @@ export const AiModel = Schema.Struct({
   optionLabel: Schema.optional(Schema.NonEmptyString),
   reasoningOptions: Schema.Array(AiReasoningOption),
 });
+
 export type AiModel = typeof AiModel.Type;
 
 export const AiAuthenticationStatus = Schema.Literals([
@@ -61,6 +67,7 @@ export const AiAuthenticationStatus = Schema.Literals([
   "unauthenticated",
   "unknown",
 ]);
+
 export type AiAuthenticationStatus = typeof AiAuthenticationStatus.Type;
 
 export const AiProviderStatus = Schema.Struct({
@@ -74,11 +81,13 @@ export const AiProviderStatus = Schema.Struct({
   provider: AiProvider,
   version: Schema.optional(Schema.String),
 });
+
 export type AiProviderStatus = typeof AiProviderStatus.Type;
 
 export const AiProviderStatusListReply = IpcReply(
   Schema.Array(AiProviderStatus)
 );
+
 export type AiProviderStatusListReply = typeof AiProviderStatusListReply.Type;
 
 export const MAX_AI_INSTRUCTIONS_LENGTH = 10_000;
@@ -96,12 +105,15 @@ export const AiSettings = Schema.Struct({
   providerReasoning: AiProviderReasoning,
   replyUserInstructions: AiInstructions,
 });
+
 export type AiSettings = typeof AiSettings.Type;
 
 export const AiSettingsUpdateRequest = AiSettings;
+
 export type AiSettingsUpdateRequest = typeof AiSettingsUpdateRequest.Type;
 
 export const AiSettingsReply = IpcReply(AiSettings);
+
 export type AiSettingsReply = typeof AiSettingsReply.Type;
 
 const OperationInstructions = Schema.optional(
@@ -114,27 +126,33 @@ export const AiReplyRequest = Schema.Struct({
   model: Schema.optional(AiModelSelection),
   threadId: Schema.NonEmptyString,
 });
+
 export type AiReplyRequest = typeof AiReplyRequest.Type;
 
 export const AiReply = Schema.Struct({ body: Schema.String });
+
 export type AiReply = typeof AiReply.Type;
 
 export const AiReplyGenerationReply = IpcReply(AiReply);
+
 export type AiReplyGenerationReply = typeof AiReplyGenerationReply.Type;
 
 export const AiThreadCategorizationRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
 });
+
 export type AiThreadCategorizationRequest =
   typeof AiThreadCategorizationRequest.Type;
 
 export const AiThreadCategorization = Schema.Struct({
   labelIds: Schema.Array(Schema.NonEmptyString),
 });
+
 export type AiThreadCategorization = typeof AiThreadCategorization.Type;
 
 export const AiThreadCategorizationReply = IpcReply(AiThreadCategorization);
+
 export type AiThreadCategorizationReply =
   typeof AiThreadCategorizationReply.Type;
 
@@ -144,13 +162,16 @@ export const AiCleanupDraftRequest = Schema.Struct({
   model: Schema.optional(AiModelSelection),
   subject: Schema.String.check(Schema.isMaxLength(MAX_SUBJECT_LENGTH)),
 });
+
 export type AiCleanupDraftRequest = typeof AiCleanupDraftRequest.Type;
 
 export const AiCleanedDraft = Schema.Struct({
   body: Schema.String,
   subject: Schema.String.check(Schema.isMaxLength(MAX_SUBJECT_LENGTH)),
 });
+
 export type AiCleanedDraft = typeof AiCleanedDraft.Type;
 
 export const AiCleanupDraftReply = IpcReply(AiCleanedDraft);
+
 export type AiCleanupDraftReply = typeof AiCleanupDraftReply.Type;

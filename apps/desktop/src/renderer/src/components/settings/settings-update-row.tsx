@@ -21,6 +21,7 @@ interface SettingsUpdateRowProps {
 
 const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
   const status = useUpdateStatus(updateApi);
+
   const { checkForUpdates, downloadUpdate, installUpdate, isCheckPending } =
     useUpdateActions(updateApi);
 
@@ -60,6 +61,7 @@ const SettingsUpdateRow = ({ updateApi }: SettingsUpdateRowProps) => {
             onClick={() => {
               if (view.action === "download") {
                 void downloadUpdate();
+
                 return;
               }
 

@@ -39,21 +39,26 @@ const makeStatementCache = (connection: DatabaseConnection) => {
 
   return (sql: string) => {
     const cached = statements.get(sql);
+
     if (cached !== undefined) {
       // Map keeps insertion order; moving the entry last marks it recent.
       statements.delete(sql);
       statements.set(sql, cached);
+
       return cached;
     }
 
     const statement = prepareStatement(sql);
     statements.set(sql, statement);
+
     if (statements.size > STATEMENT_CACHE_SIZE) {
       const [oldest] = statements.keys();
+
       if (oldest !== undefined) {
         statements.delete(oldest);
       }
     }
+
     return statement;
   };
 };
@@ -74,9 +79,14 @@ export const makeDatabaseExecutor = (
 
             if (payload.method === "run") {
               statement.run(...payload.params);
+
               return [];
             }
+
             const rawStatement = statement.raw(true);
+
+            // SAFETY: `raw(true)` makes `all` return each row as the array of
+            // its column values, which is what a DatabaseRow is.
             return rawStatement.all(...payload.params) as DatabaseRow[];
           },
         });
@@ -96,6 +106,7 @@ export const layerDatabaseExecutor = (
         Effect.sync(runtime.close)
       );
       const connection = yield* runtime.getConnection;
+
       return makeDatabaseExecutor(connection);
     })
   );

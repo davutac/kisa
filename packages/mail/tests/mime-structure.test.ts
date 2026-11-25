@@ -116,9 +116,11 @@ describe(planMessageStructure, () => {
 
   it("stops at the part and depth limits", () => {
     let deep: BodyStructureNode = text("x", "text/plain");
+
     for (let depth = 0; depth < 30; depth += 1) {
       deep = { childNodes: [deep], type: "multipart/mixed" };
     }
+
     expect(planMessageStructure(deep).truncated).toBeTruthy();
 
     const wide = planMessageStructure(
@@ -130,6 +132,7 @@ describe(planMessageStructure, () => {
       },
       { ...DEFAULT_MIME_LIMITS, maxParts: 5 }
     );
+
     expect(wide.attachments).toHaveLength(4);
     expect(wide.truncated).toBeTruthy();
   });

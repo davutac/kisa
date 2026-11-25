@@ -56,9 +56,11 @@ export const getPinnedDayHeading = (
   bandHeight: number
 ): { readonly day: string; readonly offset: number } | undefined => {
   const ordered = rows.toSorted((left, right) => left.top - right.top);
+
   const currentIndex = ordered.findIndex(
     (row) => row.top + row.height > scrollTop
   );
+
   const current = ordered[currentIndex];
 
   if (current === undefined) {

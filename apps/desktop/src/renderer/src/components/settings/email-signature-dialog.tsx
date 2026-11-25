@@ -44,8 +44,10 @@ const EmailSignatureDialog = ({
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const normalizedDraft = normalizeEmailSignature(draft);
+
   const isUnchanged =
     normalizedDraft.html === value.html && normalizedDraft.text === value.text;
+
   const isTextTooLong = draft.text.length > MAX_EMAIL_SIGNATURE_TEXT_LENGTH;
   const isHtmlTooLong = draft.html.length > MAX_EMAIL_SIGNATURE_HTML_LENGTH;
   const isTooLong = isTextTooLong || isHtmlTooLong;
@@ -70,10 +72,12 @@ const EmailSignatureDialog = ({
         if (isSaving) {
           return;
         }
+
         if (open) {
           setDraft(toComposerValue(value));
           setEditorVersion((current) => current + 1);
         }
+
         setIsOpen(open);
       }}
       open={isOpen}
@@ -121,10 +125,10 @@ const EmailSignatureDialog = ({
             {MAX_EMAIL_SIGNATURE_TEXT_LENGTH.toLocaleString()}
           </span>
         </div>
-        <DialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">
+        <DialogFooter>
           <DialogClose
             disabled={isSaving}
-            render={<Button size="footer" type="button" variant="outline" />}
+            render={<Button type="button" variant="secondary" />}
           >
             Cancel
           </DialogClose>
@@ -133,7 +137,6 @@ const EmailSignatureDialog = ({
             onClick={() => {
               void save();
             }}
-            size="footer"
             type="button"
           >
             {isSaving ? "Saving…" : "Save"}

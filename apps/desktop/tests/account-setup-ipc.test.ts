@@ -35,6 +35,11 @@ import { ACCOUNT_SETUP_HELP_URLS } from "../src/shared/mail-account-presets";
 
 type Listener = (...args: unknown[]) => void;
 
+/** What a window-open handler tells Electron to do with the new window. */
+interface WindowOpenAnswer {
+  readonly action: "allow" | "deny";
+}
+
 class FakeWindow {
   closed = false;
   readonly focus = vi.fn<() => void>();
@@ -50,10 +55,10 @@ class FakeWindow {
   readonly webContents: {
     readonly handlers: Map<string, Listener[]>;
     readonly id: number;
-    openHandler?: (details: { readonly url: string }) => unknown;
+    openHandler?: (details: { readonly url: string }) => WindowOpenAnswer;
     readonly on: (event: string, listener: Listener) => void;
     readonly setWindowOpenHandler: (
-      handler: (details: { readonly url: string }) => unknown
+      handler: (details: { readonly url: string }) => WindowOpenAnswer
     ) => void;
   };
 
@@ -83,7 +88,9 @@ class FakeWindow {
     if (this.closed) {
       return;
     }
+
     this.closed = true;
+
     for (const listener of this.handlers.get("closed") ?? []) {
       listener();
     }
@@ -104,6 +111,8 @@ class FakeWindow {
   }
 }
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const mocks = vi.hoisted(() => ({
   exposed: new Map<string, AccountSetupBridge>(),
   findSignIn: vi.fn<typeof findAccountSignIn>(),
@@ -145,15 +154,20 @@ vi.mock("electron", () => ({
 
 vi.mock(import("@electron-toolkit/utils"), () => ({ is: { dev: false } }));
 
+// SAFETY: a failing call would show any BrowserWindow member the setup window
+// uses that FakeWindow lacks, so the fake stands in for the window it types.
 vi.mock(import("../src/main/window/browser-window"), () => ({
   createBrowserWindow: ((options: { readonly preload?: string }) => {
     mocks.nextWindowId += 1;
     const window = new FakeWindow(mocks.nextWindowId, options);
     mocks.windows.push(window);
+
     return window;
   }) as never,
 }));
 
+// SAFETY: `mocks.mainWindow` declares the window members the setup window
+// calls on the main window; a missing one would fail as a call of `undefined`.
 vi.mock(import("../src/main/window/create-window"), () => ({
   getMainWindow: (() => mocks.mainWindow) as never,
 }));
@@ -164,6 +178,9 @@ vi.mock(import("../src/main/electron/shell"), () => ({
 
 vi.mock(import("../src/main/auth/accounts"), async () => {
   const { Effect: MockEffect } = await import("effect");
+
+  // SAFETY: the accounts are only encoded into the reply these tests compare,
+  // so this one stands in for the stored list without its services.
   return {
     listAccounts: (() =>
       MockEffect.succeed([{ email: "name@icloud.com" }])) as never,
@@ -172,6 +189,8 @@ vi.mock(import("../src/main/auth/accounts"), async () => {
 });
 
 // Disconnecting reaches the mail engine and the database utility process.
+// SAFETY: no test here disconnects, so the stand-in only keeps the real
+// module from loading and its type is never relied on.
 vi.mock(import("../src/main/auth/disconnect-account"), () => ({
   disconnectAccount: vi.fn<() => never>() as never,
 }));
@@ -179,8 +198,10 @@ vi.mock(import("../src/main/auth/disconnect-account"), () => ({
 // The live database layer would start the database utility process.
 vi.mock(import("../src/main/mail/engine/mail-database-live"), async () => {
   const { Layer: MockLayer } = await import("effect");
+
   const { MailDatabase } =
     await import("../src/main/mail/engine/mail-database");
+
   return {
     MailDatabaseLive: MockLayer.succeed(
       MailDatabase,
@@ -222,15 +243,19 @@ const {
   signInMicrosoftAccount,
   submitPasswordAccount,
 } = await import("../src/main/ipc/methods/account-setup");
+
 const { MICROSOFT_ACCOUNT_MESSAGES } =
   await import("../src/main/auth/microsoft-account");
+
 const { openAccountSetup, openAccountSignIn } =
   await import("../src/main/ipc/methods/accounts");
+
 const { PASSWORD_ACCOUNT_MESSAGES } =
   await import("../src/main/auth/password-account");
 
 const PASSWORD = "abcd-efgh-ijkl-mnop";
 const validRequest = { email: "name@icloud.com", password: PASSWORD };
+
 const verified = {
   credentials: Buffer.from("sealed"),
   dialect: "generic" as const,
@@ -252,6 +277,7 @@ const verified = {
 /** Registers the methods as main does and returns their listeners. */
 const installMethods = async () => {
   const listeners = new Map<string, DesktopIpc.DesktopIpcHandleListener>();
+
   const ipc = DesktopIpc.make({
     handle: (channel, listener) => {
       listeners.set(channel, listener);
@@ -260,6 +286,7 @@ const installMethods = async () => {
       listeners.delete(channel);
     },
   });
+
   // The scope stays open: closing it would unregister the handlers.
   const scope = await Effect.runPromise(Scope.make());
   await Effect.runPromise(
@@ -274,6 +301,7 @@ const installMethods = async () => {
       })
     )
   );
+
   return listeners;
 };
 
@@ -289,6 +317,7 @@ const invoke = async (
   senderId: number,
   payload?: SubmitPayload
 ) =>
+  // SAFETY: the account-setup methods read only `sender.id` from the event.
   await listeners.get(channel)?.(
     { sender: { id: senderId } } as IpcMainInvokeEvent,
     payload
@@ -297,9 +326,11 @@ const invoke = async (
 const openWindow = async () => {
   await Effect.runPromise(openAccountSetup.handler(undefined));
   const window = mocks.windows.at(-1);
+
   if (window === undefined) {
     throw new Error("no setup window");
   }
+
   return window;
 };
 
@@ -311,13 +342,17 @@ const openSignInWindow = async (
   mocks.findSignIn.mockReturnValue(
     Effect.succeed({ accountId: AccountId.make(email), email, method })
   );
+
   const reply = await Effect.runPromise(
     openAccountSignIn.handler({ email: email.toUpperCase() })
   );
+
   const window = mocks.windows.at(-1);
+
   if (window === undefined) {
     throw new Error(`no sign-in window: ${JSON.stringify(reply)}`);
   }
+
   return window;
 };
 
@@ -349,6 +384,7 @@ describe("the Add account window", () => {
     for (const window of mocks.windows) {
       window.destroy();
     }
+
     mocks.windows.length = 0;
   });
 
@@ -412,9 +448,11 @@ describe("the Add account window", () => {
         action: "deny",
       });
     }
+
     expect(
       window.webContents.openHandler?.({ url: "https://example.com/" })
     ).toStrictEqual({ action: "deny" });
+
     for (const listener of window.webContents.handlers.get("will-navigate") ??
       []) {
       listener({ preventDefault }, "https://example.com/");
@@ -470,6 +508,7 @@ describe("the Add account window", () => {
         ok: false,
       });
     }
+
     expect(JSON.stringify(replies)).not.toContain(PASSWORD);
     expect(mocks.verify).not.toHaveBeenCalled();
   });
@@ -516,6 +555,7 @@ describe("the Add account window", () => {
   it("passes on a verification failure's fixed message and keeps the window open", async () => {
     const { PasswordAccountError } =
       await import("../src/main/auth/password-account");
+
     mocks.verify.mockReturnValue(
       Effect.fail(
         new PasswordAccountError({
@@ -563,13 +603,16 @@ describe("the Add account window", () => {
       window.webContents.id,
       validRequest
     );
+
     await verifying.promise;
+
     const second = await invoke(
       listeners,
       ACCOUNT_SETUP_SUBMIT_CHANNEL,
       window.webContents.id,
       validRequest
     );
+
     await invoke(listeners, ACCOUNT_SETUP_CLOSE_CHANNEL, window.webContents.id);
 
     expect(second).toStrictEqual({ error: "Already signing in", ok: false });
@@ -584,6 +627,7 @@ describe("the Add account window", () => {
 
   describe("Microsoft sign-in", () => {
     const request = { email: "person@outlook.com", name: "Person" };
+
     const verifiedMicrosoft = {
       credentials: Buffer.from("sealed"),
       dialect: "generic" as const,
@@ -610,6 +654,7 @@ describe("the Add account window", () => {
         signedInAs: "person@outlook.com",
       },
     };
+
     /** A sign-in that waits in the browser until the test lets it finish. */
     const waitingInBrowser = () => {
       const { promise, resolve } = Promise.withResolvers<undefined>();
@@ -624,6 +669,7 @@ describe("the Add account window", () => {
           )
         )
       );
+
       return {
         finish: () => resolve(undefined),
         wasInterrupted: () => interrupted,
@@ -692,6 +738,7 @@ describe("the Add account window", () => {
     it("passes on a failure's fixed message and keeps the window open", async () => {
       const { MicrosoftAccountError } =
         await import("../src/main/auth/microsoft-account");
+
       mocks.verifyMicrosoft.mockReturnValue(
         Effect.fail(
           new MicrosoftAccountError({
@@ -721,6 +768,7 @@ describe("the Add account window", () => {
       const browser = waitingInBrowser();
       const listeners = await installMethods();
       const window = await openWindow();
+
       const pending = invoke(
         listeners,
         ACCOUNT_SETUP_MICROSOFT_CHANNEL,
@@ -768,6 +816,7 @@ describe("the Add account window", () => {
       const browser = waitingInBrowser();
       const listeners = await installMethods();
       const window = await openWindow();
+
       const pending = invoke(
         listeners,
         ACCOUNT_SETUP_MICROSOFT_CHANNEL,
@@ -789,6 +838,7 @@ describe("the Add account window", () => {
       waitingInBrowser();
       const listeners = await installMethods();
       const window = await openWindow();
+
       const pending = invoke(
         listeners,
         ACCOUNT_SETUP_MICROSOFT_CHANNEL,
@@ -802,6 +852,7 @@ describe("the Add account window", () => {
         window.webContents.id,
         request
       );
+
       const password = await invoke(
         listeners,
         ACCOUNT_SETUP_SUBMIT_CHANNEL,
@@ -856,6 +907,7 @@ describe("the window that signs an account in again", () => {
     for (const window of mocks.windows) {
       window.destroy();
     }
+
     mocks.windows.length = 0;
   });
 
@@ -880,6 +932,8 @@ describe("the window that signs an account in again", () => {
     const listeners = await installMethods();
     const window = await openSignInWindow();
 
+    // SAFETY: deliberately not a SubmitPayload. It carries `servers`, which a
+    // sign-in-again request has no field for, as a renderer could send.
     const reply = await invoke(
       listeners,
       ACCOUNT_SETUP_SUBMIT_CHANNEL,
@@ -892,6 +946,7 @@ describe("the window that signs an account in again", () => {
         },
       } as never
     );
+
     const [accountId, password] = mocks.verifyAgain.mock.calls[0] ?? [];
 
     expect(reply).toStrictEqual({ data: undefined, ok: true });
@@ -925,17 +980,21 @@ describe("the window that signs an account in again", () => {
 
   it("takes no password for an account that signs in with Microsoft, and no Microsoft sign-in for one with a password", async () => {
     const listeners = await installMethods();
+
     const microsoftWindow = await openSignInWindow(
       "microsoft",
       "person@outlook.com"
     );
+
     const passwordReply = await invoke(
       listeners,
       ACCOUNT_SETUP_SUBMIT_CHANNEL,
       microsoftWindow.webContents.id,
       { email: "person@outlook.com", password: PASSWORD }
     );
+
     const passwordWindow = await openSignInWindow();
+
     const microsoftReply = await invoke(
       listeners,
       ACCOUNT_SETUP_MICROSOFT_CHANNEL,
@@ -957,8 +1016,10 @@ describe("the window that signs an account in again", () => {
 
   it("signs a Microsoft account in again only for the account it was opened for", async () => {
     const listeners = await installMethods();
+
     const { MicrosoftAccountError } =
       await import("../src/main/auth/microsoft-account");
+
     mocks.verifyMicrosoft.mockReturnValue(
       Effect.fail(new MicrosoftAccountError({ message: "stopped here" }))
     );
@@ -970,6 +1031,7 @@ describe("the window that signs an account in again", () => {
       window.webContents.id,
       { email: "someone@outlook.com" }
     );
+
     const verifiedBefore = mocks.verifyMicrosoft.mock.calls.length;
     await invoke(
       listeners,

@@ -10,6 +10,7 @@ const readUnreadCounts = async (
   accountIds: readonly string[]
 ): Promise<MailUnreadCounts | undefined> => {
   const reply = await mailApi.getUnreadCounts({ accountIds });
+
   return reply.ok ? reply.data : undefined;
 };
 

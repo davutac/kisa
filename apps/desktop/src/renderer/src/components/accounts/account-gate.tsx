@@ -40,10 +40,13 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   const [accounts, setAccounts] = useState<readonly Account[]>(
     initialState.status === "authenticated" ? initialState.accounts : []
   );
+
   const [isAuthenticated, setIsAuthenticated] = useState(
     initialState.status === "authenticated"
   );
+
   const accountOrderVersion = useRef(0);
+
   const accountIds = useMemo(
     () => accounts.map(({ email }) => email),
     [accounts]
@@ -62,6 +65,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
     accountOrderVersion.current = version;
     const previousAccounts = accounts;
     setAccounts(reorderedAccounts);
+
     const reply = await accountsApi.reorderAccounts({
       emails: reorderedAccounts.map(({ email }) => email),
     });
@@ -82,6 +86,7 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
       getAccountsApi()?.onAccountsChanged((reply) => {
         if (!reply.ok) {
           toast.error(reply.error);
+
           return;
         }
 

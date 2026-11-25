@@ -43,6 +43,7 @@ export const orderScheduledMailItems = (
   items.toSorted((left, right) => {
     const leftAttention = left.deliveryState === "attention" ? 0 : 1;
     const rightAttention = right.deliveryState === "attention" ? 0 : 1;
+
     return (
       leftAttention - rightAttention ||
       left.scheduledAt - right.scheduledAt ||
@@ -56,5 +57,6 @@ export const getScheduledRecipientSummary = (
 ): string => {
   const first = recipients[0] ?? "No recipient";
   const remaining = recipients.length - 1;
+
   return remaining > 0 ? `${first} +${remaining}` : first;
 };

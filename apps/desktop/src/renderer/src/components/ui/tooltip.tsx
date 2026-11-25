@@ -33,12 +33,15 @@ const Tooltip = ({
     if (!isOpen) {
       return;
     }
+
     const releaseEscape = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
         tooltip.close();
       }
     };
+
     document.addEventListener("keydown", releaseEscape, true);
+
     return () => document.removeEventListener("keydown", releaseEscape, true);
   }, [isOpen, tooltip]);
 
@@ -49,6 +52,7 @@ const Tooltip = ({
         delay={delay}
         onOpenChange={(open, details) => {
           onOpenChange?.(open, details);
+
           if (open) {
             setClosesAtOnce(false);
           } else if (details.reason === "trigger-press") {
@@ -58,6 +62,7 @@ const Tooltip = ({
               setClosesAtOnce(true);
             });
           }
+
           setIsOpen(open);
         }}
         {...props}

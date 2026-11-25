@@ -113,10 +113,12 @@ describe("settings IPC", () => {
       const beginReply = yield* beginImport.handler(undefined);
       const request = { kind: "database" as const, sessionId: "import-1" };
       const selectionReply = yield* selectImportFile.handler(request);
+
       const dropReply = yield* dropImportFile.handler({
         ...request,
         filePath: "/private/source.sqlite",
       });
+
       const cancelReply = yield* cancelImport.handler({
         sessionId: "import-1",
       });

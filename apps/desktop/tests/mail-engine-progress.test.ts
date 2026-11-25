@@ -20,20 +20,25 @@ import {
 vi.mock("../src/main/database", async () => {
   const { remoteDatabase } = await import("./fixtures/mail-engine-harness");
   const { Effect: MockEffect } = await import("effect");
+
   return {
     withDatabaseClient: <A>(
       run: (database: typeof remoteDatabase) => Promise<A>
     ) => MockEffect.promise(() => run(remoteDatabase)),
   };
 });
+
 vi.mock("../src/main/mail/new-mail-notifications", () => ({
   dismissInactiveThreadNotifications: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/electron/renderer-events", () => ({
   sendRendererEvent: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/mail/unread-badge", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { refreshUnreadBadge: () => MockEffect.void };
 });
 
@@ -52,6 +57,7 @@ describe("index progress for the renderer", () => {
       .mocked(sendRendererEvent)
       .mock.calls.filter(([channel]) => channel === MAIL_INDEX_PROGRESS_CHANNEL)
       .map((call) => call[2]);
+
     // The renderer replaces its whole list with each event, so a forgotten
     // account has to arrive as an empty list, not as silence.
     expect(payloads).toStrictEqual([{ accounts: [] }]);

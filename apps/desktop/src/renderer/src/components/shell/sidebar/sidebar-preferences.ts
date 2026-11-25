@@ -76,11 +76,13 @@ export const serializeExpandedScopes = (
 
 /** Sidebar widths in CSS pixels. */
 export const DEFAULT_SIDEBAR_WIDTH = 240;
+
 /**
  * A floor under the measured minimum, which is wherever the sidebar's
  * titlebar strip fits without truncating the app name.
  */
 export const MIN_SIDEBAR_WIDTH = 160;
+
 /** Leaves the content column usable at the window's 520-pixel minimum. */
 export const MAX_SIDEBAR_WIDTH = 360;
 
@@ -99,6 +101,7 @@ export const clampSidebarWidth = (
 export const parseSidebarWidth = (value: string | null): number => {
   const width =
     value === null || value.trim() === "" ? Number.NaN : Number(value);
+
   return Number.isFinite(width)
     ? clampSidebarWidth(width)
     : DEFAULT_SIDEBAR_WIDTH;
@@ -149,6 +152,7 @@ const FavoriteLabel = Schema.Struct({
   accountId: Schema.NonEmptyString,
   label: Schema.NonEmptyString,
 });
+
 export type FavoriteLabel = typeof FavoriteLabel.Type;
 
 const decodeFavoriteLabels = Schema.decodeUnknownOption(

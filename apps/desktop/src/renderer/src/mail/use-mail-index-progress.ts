@@ -42,13 +42,16 @@ export const useMailIndexState = (): MailIndexState => {
     // Owned by this subscription, so unmounting discards the measurement along
     // with the listener that feeds it.
     const samples = new Map<string, AccountSamples>();
+
     const apply = (accounts: readonly MailIndexProgress[]): void => {
       setState({ accounts, etas: advanceEtas(samples, accounts, Date.now()) });
     };
+
     const unsubscribe = mailApi.onIndexProgressChanged((progress) => {
       hasReceivedUpdate = true;
       apply(progress.accounts);
     });
+
     const loadProgress = async (): Promise<void> => {
       const progress = await mailApi.getIndexProgress();
 

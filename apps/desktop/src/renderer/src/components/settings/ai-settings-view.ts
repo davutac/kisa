@@ -44,14 +44,18 @@ const OPENCODE_PROVIDER_LABELS = {
 
 const getOpenCodeProvider = (model: string) => {
   const separator = model.indexOf("/");
+
   if (separator <= 0) {
     return { id: "", label: "Other" };
   }
+
   const provider = model.slice(0, separator);
   const knownLabel = OPENCODE_PROVIDER_LABELS[provider.toLowerCase()];
+
   if (knownLabel !== undefined) {
     return { id: provider, label: knownLabel };
   }
+
   return {
     id: provider,
     label: provider
@@ -69,15 +73,18 @@ export const groupOpenCodeModelOptions = (
     string,
     { readonly items: AiProviderModelOption[]; readonly label: string }
   >();
+
   for (const option of options) {
     const provider = getOpenCodeProvider(option.model);
     const group = groups.get(provider.id);
+
     if (group === undefined) {
       groups.set(provider.id, { items: [option], label: provider.label });
     } else {
       group.items.push(option);
     }
   }
+
   return [...groups.entries()].map(([id, group]) => ({
     id,
     items: group.items,
@@ -118,10 +125,12 @@ export const getAiProviderPresentation = (
       showHeadline: true,
     };
   }
+
   if (provider.authentication === "authenticated") {
     const detail = [provider.authLabel, provider.message]
       .filter((value): value is string => Boolean(value))
       .join(" · ");
+
     return {
       detail: provider.error ?? (detail || null),
       dotClassName: "bg-emerald-500",
@@ -131,6 +140,7 @@ export const getAiProviderPresentation = (
       showHeadline: true,
     };
   }
+
   if (provider.authentication === "unauthenticated") {
     return {
       detail: provider.error ?? "Sign in with the provider CLI to use it.",
@@ -139,6 +149,7 @@ export const getAiProviderPresentation = (
       showHeadline: true,
     };
   }
+
   if (provider.models.length > 0) {
     return {
       detail:
@@ -150,6 +161,7 @@ export const getAiProviderPresentation = (
       showHeadline: false,
     };
   }
+
   return {
     detail:
       provider.error ??

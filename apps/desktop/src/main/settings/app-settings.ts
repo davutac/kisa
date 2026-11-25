@@ -48,6 +48,7 @@ const persistAppSettings = Effect.fn("persistAppSettings")(
       try: async () => {
         const temporaryPath = `${appSettingsPath}.tmp`;
         await mkdir(app.getPath("userData"), { recursive: true });
+
         try {
           await writeFile(
             temporaryPath,

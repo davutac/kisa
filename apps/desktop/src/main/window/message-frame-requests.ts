@@ -35,6 +35,7 @@ const WITHHELD_REQUEST_HEADERS: ReadonlySet<string> = new Set([
   "cookie",
   "referer",
 ]);
+
 const WITHHELD_RESPONSE_HEADERS: ReadonlySet<string> = new Set(["set-cookie"]);
 
 // Electron's webRequest hooks answer through a callback by definition.

@@ -37,6 +37,7 @@ export const splitter = definePrimitive({
 
     const clamp = (value: number): number => {
       const { max, min } = context.store.get();
+
       return Math.round(Math.min(Math.max(min, max), Math.max(min, value)));
     };
 
@@ -46,10 +47,12 @@ export const splitter = definePrimitive({
       event?: KeyboardEvent
     ): boolean => {
       const next = clamp(value);
+
       const changed =
         event === undefined
           ? change("value", next, { reason: "imperative" })
           : change("value", next, { event, reason });
+
       if (changed) {
         commit(
           "value",
@@ -57,6 +60,7 @@ export const splitter = definePrimitive({
           event === undefined ? { reason: "imperative" } : { event, reason }
         );
       }
+
       return changed;
     };
 
@@ -65,15 +69,18 @@ export const splitter = definePrimitive({
         const { max, min, value } = context.store.get();
         const step = context.options().step ?? 1;
         const forward = isRTL(el) ? -step : step;
+
         const target = new Map([
           ["ArrowLeft", value - forward],
           ["ArrowRight", value + forward],
           ["End", max],
           ["Home", min],
         ]).get(event.key);
+
         if (target === undefined) {
           return;
         }
+
         // Home and End would otherwise scroll the page.
         event.preventDefault();
         settle(target, "step-key", event);
@@ -82,6 +89,7 @@ export const splitter = definePrimitive({
         if (event.button !== 0) {
           return;
         }
+
         event.preventDefault();
         stopDrag?.();
         const start = context.store.get().value;
@@ -93,6 +101,7 @@ export const splitter = definePrimitive({
           onEnd: (end, canceled) => {
             stopDrag = undefined;
             context.store.set({ dragging: false });
+
             if (canceled) {
               change("value", start, { event: end, reason: "drag" });
             } else if (last !== start) {
@@ -101,6 +110,7 @@ export const splitter = definePrimitive({
           },
           onMove: ({ event: move, x }) => {
             const next = clamp(start + (x - event.clientX) * direction);
+
             if (change("value", next, { event: move, reason: "drag" })) {
               last = next;
             }

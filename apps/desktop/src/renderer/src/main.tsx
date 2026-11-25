@@ -15,15 +15,18 @@ import { getRouter } from "./router";
 // in a scope active beside it stops development here instead of shipping.
 if (import.meta.env.DEV) {
   const hotkeyErrors = validateHotkeyCommands();
+
   if (hotkeyErrors.length > 0) {
     throw new Error(`Hotkey registry is invalid:\n${hotkeyErrors.join("\n")}`);
   }
 }
 
 const APP_FONT = '1rem "Geist Variable"';
+
 const history = isWebEnvironment()
   ? createBrowserHistory()
   : createHashHistory();
+
 const router = getRouter(history);
 
 const rootElement = document.querySelector("#root");

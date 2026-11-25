@@ -18,6 +18,7 @@ export const subscribeNewMailThreads = (
   listener: NewMailThreadsListener
 ): (() => void) => {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };

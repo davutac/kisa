@@ -25,5 +25,6 @@ export const updateLoginItemSettings = (
   openAtLogin: boolean
 ): LoginItemSettings => {
   app.setLoginItemSettings({ openAtLogin });
+
   return readLoginItemSettings();
 };

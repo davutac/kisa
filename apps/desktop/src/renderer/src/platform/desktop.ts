@@ -294,6 +294,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
   };
 
   capabilitiesByBridge.set(bridge, capabilities);
+
   return capabilities;
 };
 
@@ -301,6 +302,7 @@ export const getRuntimeCapabilities = (
   runtimeWindow: RuntimeWindow = getRuntimeWindow()
 ): RuntimeCapabilities => {
   const bridge = runtimeWindow.desktopBridge;
+
   const isElectron =
     runtimeWindow.navigator?.userAgent.includes("Electron/") === true;
 

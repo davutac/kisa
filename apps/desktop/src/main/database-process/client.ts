@@ -24,6 +24,7 @@ const restoreBuffer = (value: DatabaseValue): DatabaseValue => {
   if (value instanceof Uint8Array) {
     return Buffer.from(value);
   }
+
   return value;
 };
 
@@ -44,6 +45,7 @@ export const createDatabaseProcessClient = (
   ): Effect.fn.Return<A, E, R> {
     const context = yield* Effect.context<R>();
     const runPromise = Effect.runPromiseWith(context);
+
     const database = createRemoteDatabaseClient(async (sql, params, method) => {
       if (method === "get") {
         throw new TypeError("Remote database get queries are unsupported");

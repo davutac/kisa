@@ -11,6 +11,7 @@ import { DesktopIpcUnregistrationError } from "./desktop-ipc-unregistration-erro
 export type DesktopIpcHandleListener = <Payload>(
   event: IpcMainInvokeEvent,
   raw: Payload
+  // oxlint-disable-next-line anti-slop/no-unknown-returns -- Any method's encoded reply: Electron serializes it for the renderer without reading it, and preload decodes it there.
 ) => unknown | Promise<unknown>;
 
 export interface DesktopIpcMain {

@@ -40,19 +40,25 @@ export class ScheduledMailKeyedSerial {
     effect: Effect.Effect<A, E>
   ): Effect.Effect<A, E> {
     const id = getScheduledMailKeyId(key);
+
     return Effect.acquireUseRelease(
       Effect.gen(
         function* acquireKeyLock(this: ScheduledMailKeyedSerial) {
           const existing = this.#locks.get(id);
+
           if (existing !== undefined) {
             existing.users += 1;
+
             return existing;
           }
+
           const created = {
             semaphore: yield* TxSemaphore.make(1),
             users: 1,
           };
+
           this.#locks.set(id, created);
+
           return created;
         }.bind(this)
       ),
@@ -60,6 +66,7 @@ export class ScheduledMailKeyedSerial {
       (lock) =>
         Effect.sync(() => {
           lock.users -= 1;
+
           if (lock.users === 0 && this.#locks.get(id) === lock) {
             this.#locks.delete(id);
           }

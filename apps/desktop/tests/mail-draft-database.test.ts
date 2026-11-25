@@ -14,6 +14,7 @@ import {
 const migrationsFolder = fileURLToPath(
   new URL("../../../packages/database/drizzle", import.meta.url)
 );
+
 const temporaryDirectories: string[] = [];
 
 const insertDraft = (
@@ -91,6 +92,7 @@ describe("mail draft database", () => {
     connection.close();
 
     const reopened = openDatabaseConnection(databasePath);
+
     try {
       expect(
         reopened

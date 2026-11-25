@@ -74,36 +74,42 @@ const applyChange = (
     case "deleteForever": {
       return undefined;
     }
+
     case "moveToInbox": {
       return {
         ...thread,
         labels: withLabels(thread.labels, "INBOX", ["SPAM", "TRASH"]),
       };
     }
+
     case "moveToSpam": {
       return {
         ...thread,
         labels: withLabels(thread.labels, "SPAM", ["INBOX"]),
       };
     }
+
     case "setLabel": {
       return {
         ...thread,
         labels: withLabelState(thread.labels, change.labelName, change.applied),
       };
     }
+
     case "setReadState": {
       return {
         isUnread: change.isUnread,
         labels: withLabelState(thread.labels, "UNREAD", change.isUnread),
       };
     }
+
     case "trash": {
       return {
         ...thread,
         labels: withLabels(thread.labels, "TRASH", ["INBOX"]),
       };
     }
+
     default: {
       return change satisfies never;
     }
@@ -152,6 +158,7 @@ export const projectThreadSummaries = (
     ? threads
     : threads.flatMap((thread) => {
         const projected = projectThreadSummary(thread, pending);
+
         return projected === undefined ? [] : [projected];
       });
 

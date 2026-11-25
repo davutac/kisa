@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { bulkMutateThreads } from "../src/main/mail/engine/mail-ipc";
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const state = vi.hoisted(() => ({
   calls: [] as {
     accountId: string;
@@ -22,6 +24,7 @@ const state = vi.hoisted(() => ({
 // Sending reaches drafts and settings, which need Electron; bulk actions
 // use neither.
 vi.mock("../src/main/mail/mail-drafts", () => ({}));
+
 vi.mock("../src/main/settings/app-settings", () => ({}));
 
 vi.mock("../src/main/mail/engine/mail-send", () => ({
@@ -31,6 +34,7 @@ vi.mock("../src/main/mail/engine/mail-send", () => ({
 
 vi.mock("../src/main/mail/engine/mail-engine", async () => {
   const { Effect: MockEffect, Schema } = await import("effect");
+
   // oxlint-disable-next-line unicorn/throw-new-error
   class MailEngineError extends Schema.TaggedError<
     MailEngineError,
@@ -46,6 +50,7 @@ vi.mock("../src/main/mail/engine/mail-engine", async () => {
     ) =>
       MockEffect.suspend(() => {
         state.calls.push({ accountId, action, threadIds: [...threadIds] });
+
         return state.failingAccounts.has(accountId)
           ? MockEffect.fail(new MailEngineError({ message: "offline" }))
           : MockEffect.void;
@@ -54,6 +59,7 @@ vi.mock("../src/main/mail/engine/mail-engine", async () => {
     partitionReportable: (_accountId: string, threadIds: readonly string[]) =>
       MockEffect.sync(() => {
         state.partitioned.push([...threadIds]);
+
         return {
           ownOnly: threadIds.filter((id) => state.ownOnly.has(id)),
           reportable: threadIds.filter((id) => !state.ownOnly.has(id)),
@@ -78,6 +84,7 @@ describe("bulk thread actions", () => {
 
   it("changes each account in rounds and reports the ones that failed", async () => {
     state.failingAccounts.add("b@example.com");
+
     const selection = [
       ...threads("a@example.com", 300),
       ...threads("b@example.com", 2),

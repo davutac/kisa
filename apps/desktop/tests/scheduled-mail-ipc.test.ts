@@ -130,6 +130,7 @@ describe("scheduled mail IPC", () => {
       draftId: "draft-1",
       kind: "upsert" as const,
     };
+
     const outcome = {
       accountId: "person@example.com",
       draftId: "draft-1",

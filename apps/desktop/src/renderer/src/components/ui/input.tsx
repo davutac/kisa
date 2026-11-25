@@ -20,6 +20,7 @@ const Input = ({
   className?: string;
 }) => {
   const isGrouped = use(InputGroupContext);
+
   return (
     <InputPrimitive
       className={cn(

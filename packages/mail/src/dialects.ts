@@ -59,9 +59,11 @@ const flagLabels = (flags: readonly string[]): readonly LabelId[] => {
   if (!lowerFlags.has("\\seen")) {
     labels.push(SystemLabel.unread);
   }
+
   if (lowerFlags.has("\\flagged")) {
     labels.push(SystemLabel.starred);
   }
+
   if (lowerFlags.has("\\draft")) {
     labels.push(SystemLabel.draft);
   }
@@ -116,6 +118,7 @@ const gmailSystemContainer = (
   }
 
   const separator = allMail.path.lastIndexOf(allMail.delimiter);
+
   return separator > 0 ? allMail.path.slice(0, separator) : undefined;
 };
 
@@ -148,6 +151,7 @@ export const gmailDialect: Dialect = {
     for (const label of message.gmailLabels ?? []) {
       if (label.startsWith("\\")) {
         const system = GMAIL_SYSTEM_LABELS.get(label.toLowerCase());
+
         if (system !== undefined) {
           labels.push(system);
         }
@@ -241,6 +245,7 @@ const genericThreadId = (
 ): ThreadId => {
   const headers =
     message.headers === undefined ? [] : parseHeaderBlock(message.headers);
+
   const [root] = parseMessageIds(getHeaderValue(headers, "references"));
   const [parent] = parseMessageIds(message.envelope?.inReplyTo);
   const [own] = parseMessageIds(message.envelope?.messageId);
@@ -270,11 +275,13 @@ export const genericDialect: Dialect = {
     }
 
     const messageId = genericMessageId(message);
+
     return { messageId, threadId: genericThreadId(message, messageId) };
   },
   kind: "generic",
   locationLabels: (message, mailbox) => {
     const roleLabel = ROLE_LABELS.get(mailbox.role);
+
     const folderLabel =
       mailbox.role === "none"
         ? userLabelId(normalizeFolderName(mailbox))
@@ -302,6 +309,7 @@ export const genericDialect: Dialect = {
       .filter((mailbox) => mailbox.role === "none" && isSelectable(mailbox))
       .map((mailbox) => {
         const name = normalizeFolderName(mailbox);
+
         return { id: userLabelId(name), name, path: mailbox.path };
       }),
 };

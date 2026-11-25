@@ -8,5 +8,6 @@ import { useState } from "react";
 export const useInstanceValue = <T>(create: () => T): T => {
   // oxlint-disable-next-line react/hook-use-state -- The value is never replaced, so there is no setter to name.
   const [value] = useState(create);
+
   return value;
 };

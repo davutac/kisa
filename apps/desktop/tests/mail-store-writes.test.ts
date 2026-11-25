@@ -18,6 +18,7 @@ import {
   run,
   threadRow,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 /** A body whose preparation throws, as hostile content could make it. */
 const UNPREPARABLE = "unpreparable body";
@@ -26,6 +27,7 @@ vi.mock(
   import("../src/main/mail/engine/message-content"),
   async (importOriginal) => {
     const actual = await importOriginal();
+
     return {
       ...actual,
       prepareBody: (body, context) =>
@@ -111,6 +113,7 @@ describe("the mail store's bulk writes", () => {
            FROM mail_messages WHERE message_id = '1'`
         )
         .get();
+
       expect(row).toStrictEqual({
         cc_addresses: JSON.stringify(["a@example.com", "b@example.com"]),
         first_reference: null,
@@ -147,9 +150,17 @@ describe("the mail store's bulk writes", () => {
         )
       );
 
-      const direct = connection.prepare("SELECT ? AS subject").get(subject) as {
-        readonly subject: string;
-      };
+      const direct = found(
+        connection
+          .prepare<
+            unknown[],
+            {
+              readonly subject: string;
+            }
+          >("SELECT ? AS subject")
+          .get(subject)
+      );
+
       expect(messageRow("1")).toMatchObject({ thread_id: "t1" });
       expect(
         connection

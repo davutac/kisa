@@ -60,6 +60,7 @@ const buildInstructionSection = (
   instructions: string | undefined
 ): string => {
   const content = instructions?.trim();
+
   return content ? `<${name}>\n${content}\n</${name}>` : "";
 };
 

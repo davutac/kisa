@@ -25,7 +25,6 @@
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",
-    "@oxlint/plugins": "catalog:",
     "husky": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",

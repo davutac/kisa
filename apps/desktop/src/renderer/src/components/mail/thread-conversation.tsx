@@ -40,6 +40,7 @@ const MessageAccordion = ({ children }: { readonly children: ReactNode }) => {
   const expandedMessageId = useThreadConversationStore(
     (state) => state.expandedMessageId
   );
+
   const toggleMessage = useThreadConversationStore(
     (state) => state.toggleMessage
   );
@@ -51,6 +52,7 @@ const MessageAccordion = ({ children }: { readonly children: ReactNode }) => {
       collapsible
       onValueChange={(value) => {
         const messageId = value[0] ?? expandedMessageId;
+
         if (messageId !== undefined && messageId !== null) {
           toggleMessage(messageId);
         }
@@ -70,12 +72,16 @@ const MailThreadConversationContent = ({
 }: Omit<NonEmptyMailThreadConversationProps, "initialMessageId">) => {
   const replyComposerFocusRef = useRef<ComposerFocusHandle | null>(null);
   const replyAreaRef = useRef<HTMLElement>(null);
+
   const { focusSelectedMessage, registerMessageHeader, selectedMessageId } =
     useThreadMessageNavigation(messages);
+
   const selectedMessage =
     messages.find((message) => message.id === selectedMessageId) ??
     latestMessage;
+
   const isReplyAllAvailable = shouldShowReplyAll(accountId, selectedMessage);
+
   const {
     clearDraft,
     closeComposer: closeDraftComposer,
@@ -93,6 +99,7 @@ const MailThreadConversationContent = ({
     selectedMessage,
     threadId,
   });
+
   const suggestedAddresses = getThreadEmailAddresses(messages, [accountId]);
 
   useEffect(() => {
@@ -102,9 +109,11 @@ const MailThreadConversationContent = ({
 
     const frame = requestAnimationFrame(() => {
       const replyArea = replyAreaRef.current;
+
       if (replyArea !== null) {
         replyArea.scrollIntoView({ behavior: "smooth", block: "start" });
       }
+
       replyComposerFocusRef.current?.focus();
     });
 
@@ -118,6 +127,7 @@ const MailThreadConversationContent = ({
     },
     [closeDraftComposer, focusSelectedMessage]
   );
+
   useAppCommand(
     "thread.replyToMessage",
     () => {

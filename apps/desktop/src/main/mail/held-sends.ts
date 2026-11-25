@@ -62,16 +62,19 @@ export const holdSend = Effect.fn("HeldSends.holdSend")(function* holdSend<
   whenSent: (value: A) => Effect.Effect<void> = () => Effect.void
 ) {
   const key = keyOf(draft.accountId, draft.draftId);
+
   if (held.has(key)) {
     return yield* new HeldSendError({
       message: "This message is already being sent",
     });
   }
+
   const entry: HeldSend = {
     done: yield* Deferred.make<true>(),
     ownerId,
     release: yield* Deferred.make<"cancel" | "send">(),
   };
+
   held.set(key, entry);
 
   const waitThenSend = Effect.gen(function* waitThenSend() {
@@ -81,10 +84,13 @@ export const holdSend = Effect.fn("HeldSends.holdSend")(function* holdSend<
       ),
       Deferred.await(entry.release)
     );
+
     if ((yield* Deferred.await(entry.release)) === "cancel") {
       return { kind: "canceled" } satisfies HeldSendResult<A>;
     }
+
     const value = yield* send;
+
     return { kind: "sent", value } satisfies HeldSendResult<A>;
   }).pipe(
     // Interrupted too, as when the account is disconnected: the draft is no
@@ -98,9 +104,11 @@ export const holdSend = Effect.fn("HeldSends.holdSend")(function* holdSend<
 
   return yield* Effect.gen(function* holdThenSettle() {
     const result = yield* waitThenSend;
+
     if (result.kind === "sent") {
       yield* whenSent(result.value);
     }
+
     return result;
   }).pipe(Effect.ensuring(Deferred.succeed(entry.done, true)));
 });
@@ -116,18 +124,23 @@ export const cancelHeldSend = Effect.fn("HeldSends.cancelHeldSend")(
     ownerId: number
   ) {
     const entry = held.get(keyOf(draft.accountId, draft.draftId));
+
     if (entry === undefined) {
       return "too-late" as const;
     }
+
     if (entry.ownerId !== ownerId) {
       return yield* new HeldSendError({
         message: "Only the window that sent this message can undo it",
       });
     }
+
     if (!(yield* Deferred.succeed(entry.release, "cancel"))) {
       return "too-late" as const;
     }
+
     yield* Deferred.await(entry.done);
+
     return "canceled" as const;
   }
 );
@@ -139,9 +152,11 @@ export const cancelHeldSend = Effect.fn("HeldSends.cancelHeldSend")(
 export const releaseHeldSends = Effect.fn("HeldSends.releaseHeldSends")(
   function* releaseHeldSends() {
     const entries = [...held.values()];
+
     for (const entry of entries) {
       yield* Deferred.succeed(entry.release, "send");
     }
+
     yield* Effect.forEach(entries, (entry) => Deferred.await(entry.done), {
       discard: true,
     });

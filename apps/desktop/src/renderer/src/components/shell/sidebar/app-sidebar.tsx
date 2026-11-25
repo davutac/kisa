@@ -64,6 +64,7 @@ const AppSidebar = ({
   const areHotkeyHintsRevealed = useHotkeyHintsRevealed(isOpen);
   const historyButtonsRef = useRef<HTMLDivElement>(null);
   const { updates } = getRuntimeCapabilities();
+
   const {
     openAccount,
     openAllAccounts,

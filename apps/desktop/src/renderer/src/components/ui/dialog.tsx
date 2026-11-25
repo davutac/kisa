@@ -16,6 +16,7 @@ export {
   DialogClose,
   DialogTrigger,
 } from "@ui-sdk/react/dialog";
+
 export type { DialogController } from "@ui-sdk/react/dialog";
 
 type ClassNameProps<Props> = Omit<Props, "className"> & { className?: string };
@@ -77,6 +78,11 @@ const DialogHeader = ({ className, ...props }: React.ComponentProps<"div">) => (
   <div className={cn("flex flex-col gap-1", className)} {...props} />
 );
 
+// A dialog's actions sit in one row at its trailing edge, inside its padding,
+// at every window width: the window is never narrow enough to stack them, and
+// buttons flush with the dialog's edge would have their focus rings clipped.
+const dialogFooterClassName = "flex justify-end gap-2 *:min-w-16";
+
 const DialogFooter = ({
   className,
   showCloseButton = false,
@@ -85,16 +91,10 @@ const DialogFooter = ({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean;
 }) => (
-  <div
-    className={cn(
-      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-      className
-    )}
-    {...props}
-  >
+  <div className={cn(dialogFooterClassName, className)} {...props}>
     {children}
     {showCloseButton && (
-      <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+      <DialogClose render={<Button variant="secondary" />}>Close</DialogClose>
     )}
   </div>
 );
@@ -126,6 +126,7 @@ export {
   DialogContent,
   DialogDescription,
   DialogFooter,
+  dialogFooterClassName,
   DialogHeader,
   DialogOverlay,
   DialogTitle,

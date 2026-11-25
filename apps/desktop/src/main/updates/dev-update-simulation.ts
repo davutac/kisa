@@ -17,6 +17,7 @@ export const createUpdateSimulation = (
 ) => ({
   check: (): Promise<void> => {
     getLifecycle().handleUpdateAvailable(SIMULATED_VERSION);
+
     return Promise.resolve();
   },
   download: async () => {

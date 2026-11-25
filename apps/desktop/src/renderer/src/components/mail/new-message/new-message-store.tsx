@@ -118,9 +118,11 @@ export const NewMessageStoreProvider = ({
 
 const useNewMessageStoreContext = (): NewMessageStore => {
   const store = useContext(NewMessageStoreContext);
+
   if (store === null) {
     throw new Error("NewMessageStoreProvider is missing");
   }
+
   return store;
 };
 

@@ -49,6 +49,7 @@ const listIds = async (
   accountIds: readonly string[] = [ONE, TWO]
 ): Promise<readonly string[]> => {
   const page = await readThreadPage(remoteDatabase, { accountIds, mailbox });
+
   return page.threads.map(
     ({ accountId, threadId }) => `${accountId}:${threadId}`
   );
@@ -163,6 +164,7 @@ describe("label places", () => {
       accountIds: [ONE],
       mailbox: { label: "Rare" },
     });
+
     const second = await readThreadPage(remoteDatabase, {
       accountIds: [ONE],
       cursor: first.nextCursor,
@@ -200,7 +202,9 @@ describe("thread page requests", () => {
 const pagesOf = async (mailbox: MailboxPlace) => {
   const rows: { readonly places: readonly string[]; readonly id: string }[] =
     [];
+
   let cursor: MailCachedThreadPageRequest["cursor"];
+
   for (let page = 0; page < 20; page += 1) {
     // oxlint-disable-next-line eslint/no-await-in-loop -- One page after another.
     const { nextCursor, threads } = await readThreadPage(remoteDatabase, {
@@ -208,14 +212,18 @@ const pagesOf = async (mailbox: MailboxPlace) => {
       cursor,
       mailbox,
     });
+
     rows.push(
       ...threads.map(({ places, threadId }) => ({ id: threadId, places }))
     );
+
     if (nextCursor === undefined) {
       return rows;
     }
+
     cursor = nextCursor;
   }
+
   throw new Error("the pages did not end");
 };
 
@@ -295,18 +303,22 @@ describe("where a conversation is listed", () => {
 
   it("is listed by the page query in exactly the places sent with it", async () => {
     const rows = everyRow();
+
     for (const row of rows) {
       insertRow(row);
     }
 
     const differences: string[] = [];
+
     for (const place of PLACES) {
       const key = mailboxPlaceKey(place);
       // oxlint-disable-next-line eslint/no-await-in-loop -- One place after another.
       const paged = await pagesOf(place);
+
       const byRule = rows
         .filter((row) => threadPlaces(row).includes(key))
         .map((row) => row.threadId);
+
       if (
         paged
           .map((row) => row.id)
@@ -315,6 +327,7 @@ describe("where a conversation is listed", () => {
       ) {
         differences.push(`${key}: the page and the rule list different rows`);
       }
+
       differences.push(
         ...paged
           .filter((row) => !row.places.includes(key))

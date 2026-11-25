@@ -84,6 +84,7 @@ export const fromThreadReply = async (
 ): Promise<ThreadActionOutcome> => {
   try {
     const result = await reply();
+
     return result.ok
       ? { failedCount: 0, kind: "done", succeeded: [thread] }
       : { kind: "failed", message: result.error };
@@ -199,6 +200,7 @@ const reverseAction = async (
   if (!reply.ok) {
     throw new Error(reply.error);
   }
+
   if (reply.data.failed.length > 0) {
     throw new Error(
       `Could not undo for ${conversationCount(reply.data.failed.length)}`
@@ -224,9 +226,11 @@ export const runThreadAction = (
 
   const settle = ports.showPending(plan.threads, plan.change);
   let answered: ThreadActionOutcome | undefined;
+
   const outcome = plan.send().then((result) => {
     answered = result;
     settle();
+
     return result;
   });
 
@@ -247,6 +251,7 @@ export const runThreadAction = (
       plan.failureMessage,
       ports.notifySuccess(plan.message)
     );
+
     return outcome;
   }
 

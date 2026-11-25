@@ -75,6 +75,7 @@ export const loadTrustedImageSenderCheck = Effect.fn(
         })
     )
   );
+
   const senders = new Set(rows.map((row) => row.senderEmail));
 
   return (senderEmail: string): boolean =>

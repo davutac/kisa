@@ -66,16 +66,19 @@ describe(DesktopIpc.DesktopIpc, () => {
       Effect.gen(function* verifiesIpcLifecycle() {
         const { ipcMain, listeners, removedChannels } = createIpcMain();
         const ipc = DesktopIpc.make(ipcMain);
+
         const method = DesktopIpc.makeIpcMethod({
           channel: "desktop:test:double",
           handler: ({ value }, event) =>
             Effect.sync(() => {
               expect(event?.sender.id).toBe(7);
+
               return { value: value * 2 };
             }),
           payload: Schema.Struct({ value: Schema.Finite }),
           result: Schema.Struct({ value: Schema.Finite }),
         });
+
         let encodedResult: unknown;
 
         yield* Effect.scoped(
@@ -84,6 +87,7 @@ describe(DesktopIpc.DesktopIpc, () => {
             const listener = listeners.get(method.channel);
 
             expect(listener).toBeDefined();
+            // SAFETY: the method above reads only `sender.id` from the event.
             encodedResult = yield* Effect.promise(() =>
               Promise.resolve(
                 listener?.({ sender: { id: 7 } } as IpcMainInvokeEvent, {
@@ -135,16 +139,19 @@ describe(DesktopIpc.DesktopIpc, () => {
   it.effect("validates and encodes the thread label mutation boundary", () =>
     Effect.gen(function* validatesThreadLabelMutation() {
       const requests: unknown[] = [];
+
       const method = DesktopIpc.makeIpcMethod({
         channel: MAIL_SET_THREAD_LABEL_CHANNEL,
         handler: (request) =>
           Effect.sync(() => {
             requests.push(request);
+
             return { data: undefined, ok: true as const };
           }),
         payload: MailThreadLabelRequest,
         result: MailThreadMutationReply,
       });
+
       const request = {
         accountId: "person@example.com",
         applied: true,
@@ -169,11 +176,13 @@ describe(DesktopIpc.DesktopIpc, () => {
     () =>
       Effect.gen(function* validatesReportSpam() {
         const requests: unknown[] = [];
+
         const method = DesktopIpc.makeIpcMethod({
           channel: MAIL_REPORT_THREAD_SPAM_CHANNEL,
           handler: (request) =>
             Effect.sync(() => {
               requests.push(request);
+
               return {
                 error: "Only your own messages are in this conversation",
                 ok: false as const,
@@ -182,6 +191,7 @@ describe(DesktopIpc.DesktopIpc, () => {
           payload: MailThreadRequest,
           result: MailThreadMutationReply,
         });
+
         const request = {
           accountId: "person@example.com",
           threadId: "thread-1",
@@ -214,6 +224,7 @@ describe(DesktopIpc.DesktopIpc, () => {
           payload: MailMessageSendRequest,
           result: MailMessageSendReply,
         });
+
         const cancel = DesktopIpc.makeIpcMethod({
           channel: MAIL_CANCEL_SEND_CHANNEL,
           handler: () =>
@@ -221,6 +232,7 @@ describe(DesktopIpc.DesktopIpc, () => {
           payload: MailSendCancelRequest,
           result: MailSendCancelReply,
         });
+
         const message = {
           accountId: "person@example.com",
           attachments: [],
@@ -255,16 +267,19 @@ describe(DesktopIpc.DesktopIpc, () => {
   it.effect("validates the manual categorization boundary", () =>
     Effect.gen(function* validatesManualCategorization() {
       const requests: unknown[] = [];
+
       const method = DesktopIpc.makeIpcMethod({
         channel: AI_CATEGORIZE_THREAD_CHANNEL,
         handler: (request) =>
           Effect.sync(() => {
             requests.push(request);
+
             return { data: { labelIds: ["Label_1"] }, ok: true as const };
           }),
         payload: AiThreadCategorizationRequest,
         result: AiThreadCategorizationReply,
       });
+
       const request = {
         accountId: "person@example.com",
         threadId: "thread-1",
@@ -303,12 +318,14 @@ describe(DesktopIpc.DesktopIpc, () => {
         payload: MailLabelCreateRequest,
         result: MailLabelCreateReply,
       });
+
       const remove = DesktopIpc.makeIpcMethod({
         channel: MAIL_DELETE_LABEL_CHANNEL,
         handler: () => Effect.succeed({ data: undefined, ok: true as const }),
         payload: MailLabelDeleteRequest,
         result: MailLabelDeleteReply,
       });
+
       const update = DesktopIpc.makeIpcMethod({
         channel: MAIL_UPDATE_LABEL_CHANNEL,
         handler: (request) =>
@@ -366,6 +383,7 @@ describe(DesktopIpc.DesktopIpc, () => {
         },
         ok: true,
       });
+
       const invalid = yield* Effect.all([
         Effect.exit(
           create.handler({ accountId: "person@example.com", name: "" })
@@ -409,12 +427,14 @@ describe(DesktopIpc.DesktopIpc, () => {
   it.effect("preserves handler registration failures", () =>
     Effect.gen(function* preservesRegistrationFailure() {
       const cause = new Error("registration failed");
+
       const ipc = DesktopIpc.make({
         handle: () => {
           throw cause;
         },
         removeHandler: () => {},
       });
+
       const method: DesktopIpc.DesktopIpcMethod<never, never> = {
         channel: "desktop:test:failure",
         handler: () => Effect.void,

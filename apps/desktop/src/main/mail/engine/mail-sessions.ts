@@ -13,6 +13,7 @@ import { forgetAccountSignIn, resolveImapAuth } from "./account-credentials";
  * lane's wait; no pass or change runs on it.
  */
 const SESSION_LANES = ["background", "foreground", "watch"] as const;
+
 export type SessionLane = (typeof SESSION_LANES)[number];
 
 /** An unused connection is closed after this long. */
@@ -44,6 +45,7 @@ const poolFor = (accountId: string, lane: SessionLane): LanePool => {
 
   const created: LanePool = { semaphore: Semaphore.makeUnsafe(1) };
   pools.set(key, created);
+
   return created;
 };
 
@@ -55,6 +57,7 @@ const detach = (pool: LanePool): OpenSession | undefined => {
   pool.idleTimer = undefined;
   const { current } = pool;
   pool.current = undefined;
+
   return current;
 };
 
@@ -65,6 +68,7 @@ const connect = Effect.fn("MailSessions.connect")(function* connect(
 ) {
   const connector = yield* ImapConnector;
   const scope = yield* Scope.make();
+
   const session = yield* Scope.provide(scope)(
     connector.connect({
       accountId: account.accountId,
@@ -154,6 +158,7 @@ export const withAccountSession = <A, E, R>(
       } else {
         pool.idleTimer = setTimeout(() => {
           const idle = detach(pool);
+
           if (idle !== undefined) {
             void Effect.runPromiseWith(context)(closeSession(idle));
           }
@@ -178,6 +183,7 @@ export const closeAccountSessions = (accountId: string): Effect.Effect<void> =>
       const pool = pools.get(key);
       pools.delete(key);
       const open = pool === undefined ? undefined : detach(pool);
+
       return open === undefined ? Effect.void : closeSession(open);
     },
     { concurrency: "unbounded", discard: true }

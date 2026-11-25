@@ -132,8 +132,10 @@ const NewMessageStashPicker = ({
         // A disabled trigger refuses a press, not an agent's setOpen.
         if (nextOpen && disabled) {
           details.cancel();
+
           return;
         }
+
         setIsOpen(nextOpen);
       }}
       open={isOpen}
@@ -174,9 +176,11 @@ const NewMessageStashPicker = ({
                 ) {
                   return;
                 }
+
                 event.preventDefault();
                 const highlighted = command.getValue();
                 const draft = drafts.find(({ id }) => id === highlighted);
+
                 if (draft !== undefined) {
                   setIsOpen(false);
                   onDiscard(draft);

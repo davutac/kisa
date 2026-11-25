@@ -11,6 +11,7 @@ export const listAiProviderStatuses = Effect.fn("listAiProviderStatuses")(
       [getCodexStatus(), getClaudeStatus(), getOpenCodeStatus()],
       { concurrency: "unbounded" }
     );
+
     return statuses;
   }
 );

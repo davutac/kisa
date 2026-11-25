@@ -27,6 +27,7 @@ export const useMailThread = (
 ): MailThreadState => {
   const mailApi = useMemo(() => getMailApi(), []);
   const pendingChanges = usePendingThreadChanges();
+
   const [result, setResult] = useState<MailThreadResult>({
     accountId,
     state: { status: "loading" },
@@ -53,6 +54,7 @@ export const useMailThread = (
           state: { status: "ready", thread: reply.data },
           threadId,
         });
+
         return;
       }
 
@@ -81,15 +83,19 @@ export const useMailThread = (
     const load = async (): Promise<void> => {
       if (isLoading) {
         isReloadWanted = true;
+
         return;
       }
+
       isLoading = true;
+
       // Main marks an unread conversation read as it opens it; the list shows
       // that now rather than after the server has it.
       const settleRead = beginPendingThreadChange([{ accountId, threadId }], {
         isUnread: false,
         kind: "setReadState",
       });
+
       await loadOpenThread({ isShown: () => isActive, read, show });
       settleRead();
       isLoading = false;
@@ -97,6 +103,7 @@ export const useMailThread = (
       if (!isActive) {
         return;
       }
+
       if (isReloadWanted) {
         isReloadWanted = false;
         void load();
@@ -113,8 +120,10 @@ export const useMailThread = (
       if (update === undefined) {
         return;
       }
+
       if (update.kind === "reread") {
         void load();
+
         return;
       }
 

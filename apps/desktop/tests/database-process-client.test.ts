@@ -23,6 +23,7 @@ const makeTestClient = Effect.fn("makeTestClient")(function* makeTestClient() {
     Effect.sync(() => openDatabaseConnection(":memory:")),
     (databaseConnection) => Effect.sync(() => databaseConnection.close())
   );
+
   const executor = makeDatabaseExecutor(connection);
   const payloadCodec = Schema.toCodecJson(DatabaseExecutePayload);
   const resultCodec = Schema.toCodecJson(DatabaseExecuteResult);
@@ -30,11 +31,14 @@ const makeTestClient = Effect.fn("makeTestClient")(function* makeTestClient() {
   return createDatabaseProcessClient((payload) =>
     Effect.gen(function* crossesRpcCodec() {
       const encodedPayload = yield* Schema.encodeEffect(payloadCodec)(payload);
+
       const decodedPayload = yield* Schema.decodeEffect(payloadCodec)(
         structuredClone(encodedPayload)
       );
+
       const result = yield* executor.execute(decodedPayload);
       const encodedResult = yield* Schema.encodeEffect(resultCodec)(result);
+
       return yield* Schema.decodeEffect(resultCodec)(
         structuredClone(encodedResult)
       );
@@ -108,6 +112,7 @@ describe(createDatabaseProcessClient, () => {
         .pipe(Effect.forkChild);
 
       yield* Deferred.await(entered);
+
       const second = yield* client
         .use(() =>
           Effect.sync(() => {
@@ -115,6 +120,7 @@ describe(createDatabaseProcessClient, () => {
           })
         )
         .pipe(Effect.forkChild);
+
       yield* Effect.yieldNow;
 
       expect(secondEntered).toBeFalsy();
@@ -174,7 +180,9 @@ describe(makeDatabaseExecutor, () => {
             (databaseConnection) =>
               Effect.sync(() => databaseConnection.close())
           );
+
           const executor = makeDatabaseExecutor(connection);
+
           const params = Array.from(
             { length: MAX_BOUND_PARAMETERS },
             (_, index) => index

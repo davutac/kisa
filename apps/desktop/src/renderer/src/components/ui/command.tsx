@@ -48,6 +48,7 @@ const CommandInput = ({
     )}
     onKeyDown={(event) => {
       onKeyDown?.(event);
+
       if (
         onEscape !== undefined &&
         event.key === "Escape" &&

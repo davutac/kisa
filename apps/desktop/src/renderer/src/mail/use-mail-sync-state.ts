@@ -14,10 +14,12 @@ export const useSyncingAccountIds = (): readonly string[] => {
 
     let isActive = true;
     let hasReceivedUpdate = false;
+
     const unsubscribe = mailApi.onSyncStatusChanged((status) => {
       hasReceivedUpdate = true;
       setAccountIds(status.accountIds);
     });
+
     const loadStatus = async (): Promise<void> => {
       const status = await mailApi.getSyncStatus();
 

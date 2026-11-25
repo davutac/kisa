@@ -175,9 +175,11 @@ export const replaceFirstPage = (
   hasMore: boolean
 ): readonly MailThreadSummary[] => {
   const last = page.at(-1);
+
   const beyond =
     hasMore && last !== undefined
       ? current.filter((thread) => compareThreads(thread, last) > 0)
       : [];
+
   return mergeAndSortThreads(beyond, page);
 };

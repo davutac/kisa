@@ -14,6 +14,7 @@ export const useTemplateConfirmations = ({
 }: UseTemplateConfirmationsOptions) => {
   const confirm = useConfirm();
   const blockerConfirmationPendingRef = useRef(false);
+
   const blocker = useBlocker({
     enableBeforeUnload: () => isDirty,
     shouldBlockFn: () => isDirty,
@@ -37,6 +38,7 @@ export const useTemplateConfirmations = ({
       }),
     [confirm]
   );
+
   const confirmDiscard = useCallback(
     (): Promise<boolean> =>
       confirm({

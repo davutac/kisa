@@ -60,6 +60,7 @@ const SelectedDeliveryTime = ({
   if (scheduledAt === undefined) {
     return null;
   }
+
   const formatted = formatScheduledAt(scheduledAt);
 
   return (
@@ -175,8 +176,10 @@ const NewMessageFooter = ({
   const [selectedScheduledAt, setSelectedScheduledAt] = useState<
     number | undefined
   >();
+
   const scheduleMenu = useInstanceValue(createMenuController);
   const primaryActionRef = useRef<HTMLButtonElement>(null);
+
   const {
     canSchedule,
     isDirty,
@@ -187,12 +190,14 @@ const NewMessageFooter = ({
     onSchedule: handleSchedule,
     scheduledAt,
   } = scheduled;
+
   const isScheduleSelected = selectedScheduledAt !== undefined;
   const displayedScheduledAt = selectedScheduledAt ?? scheduledAt;
   const isBusy = isSending || isScheduling;
   const primaryLabel = getComposerDeliveryLabel(isEdit, selectedScheduledAt);
   const scheduleDisplay = getHotkeyDisplay("composer.schedule");
   let deliveryTimeLabel = "Selected send time";
+
   if (isEdit) {
     deliveryTimeLabel = isScheduleSelected
       ? "Selected reschedule time"
@@ -201,19 +206,23 @@ const NewMessageFooter = ({
 
   const handleSelectSchedule = (nextScheduledAt: number): void => {
     setSelectedScheduledAt(nextScheduledAt);
+
     if (isEdit) {
       handlePendingScheduleChange(true);
     }
   };
+
   const handleRemoveSchedule = (): void => {
     setSelectedScheduledAt(undefined);
     queueMicrotask(() => primaryActionRef.current?.focus());
   };
+
   const handlePrimaryAction = async (): Promise<void> => {
     const succeeded = await submitNewMessageDelivery(
       isScheduleSelected ? selectedScheduledAt : undefined,
       { schedule: handleSchedule, send: onSend }
     );
+
     if (isEdit && isScheduleSelected && succeeded === true) {
       setSelectedScheduledAt(undefined);
       handlePendingScheduleChange(false);
@@ -240,6 +249,7 @@ const NewMessageFooter = ({
   );
 
   const primaryIcon = isScheduleSelected ? <CalendarClockIcon /> : <SendIcon />;
+
   const deliveryTime = (
     <SelectedDeliveryTime
       label={deliveryTimeLabel}

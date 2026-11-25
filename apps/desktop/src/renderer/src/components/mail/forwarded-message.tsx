@@ -20,6 +20,7 @@ interface MailForwardedMessageProps {
 
 const MailForwardedMessage = ({ message }: MailForwardedMessageProps) => {
   const [expanded, setExpanded] = useState(false);
+
   const triggerLabel = expanded
     ? "Hide forwarded message"
     : "Show forwarded message";

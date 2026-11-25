@@ -181,10 +181,12 @@ const ThreadSelectionBar = ({
   const [isLabelPickerOpen, setIsLabelPickerOpen] = useState(false);
   const labelPicker = useInstanceValue(createMenuController);
   const [isPending, setIsPending] = useState(false);
+
   const labelGroups = useMemo(
     () => getBulkLabelGroups(threads, catalogs),
     [catalogs, threads]
   );
+
   const isLoadingLabels = threads.some(
     (thread) => !catalogs.has(thread.accountId)
   );
@@ -297,8 +299,10 @@ const ThreadSelectionBar = ({
           onOpenChange={(open, details) => {
             if (open && isPending) {
               details.cancel();
+
               return;
             }
+
             setIsLabelPickerOpen(open);
           }}
           open={isLabelPickerOpen}
@@ -358,6 +362,7 @@ const ThreadSelectionBar = ({
                     group.labels.map((label) => {
                       const appliedToAll =
                         label.appliedCount === group.threads.length;
+
                       const appliedToSome =
                         label.appliedCount > 0 && !appliedToAll;
 
@@ -368,6 +373,7 @@ const ThreadSelectionBar = ({
                           key={label.id}
                           onCheckedChange={() => {
                             const applied = !appliedToAll;
+
                             const changedThreads = group.threads.filter(
                               (thread) =>
                                 thread.labels.includes(label.name) !== applied

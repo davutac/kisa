@@ -25,6 +25,7 @@ import type { SearchQuery } from "./search-query";
  * network.
  */
 const SEARCH_DEBOUNCE_MS = 100;
+
 /** The rows are virtualised, so the mailbox can hold a deep result set. */
 const SEARCH_RESULT_LIMIT = 200;
 
@@ -75,6 +76,7 @@ export const toLoadedSearchResults = (
   if (reply === undefined) {
     return { ...NO_RESULTS, error: "Could not search your mail", key };
   }
+
   return reply.ok
     ? { hasMore: reply.data.hasMore, key, threads: reply.data.threads }
     : { ...NO_RESULTS, error: reply.error, key };
@@ -109,6 +111,7 @@ export const useMailSearch = (
         accountIds.includes(getThreadListChangeAccountId(change))
       )
   );
+
   const searchMail = useEffectEvent(() =>
     mailApi?.search({
       accountIds,
@@ -131,6 +134,7 @@ export const useMailSearch = (
       if (includesSelectedAccount(changes)) {
         setResults((current) => {
           const threads = updateListedThreads(current.threads, changes);
+
           return threads === current.threads
             ? current
             : { ...current, threads };
@@ -146,9 +150,11 @@ export const useMailSearch = (
     }
 
     let isActive = true;
+
     const timeout = window.setTimeout(() => {
       void (async () => {
         let reply: MailSearchResultsReply | undefined;
+
         try {
           reply = await searchMail();
         } catch {
@@ -210,6 +216,7 @@ export const useAddressSuggestions = (
   const [loaded, setLoaded] = useState<LoadedSenders>(NO_SENDERS);
   const scope = JSON.stringify([accountIds, role ?? ""]);
   const requestKey = JSON.stringify([accountIds, role ?? "", search ?? ""]);
+
   const listSenders = useEffectEvent(() =>
     role === undefined || search === undefined
       ? undefined
@@ -230,6 +237,7 @@ export const useAddressSuggestions = (
     // Compose completion is already a bounded in-memory scan in main. Search
     // roles still hit SQLite and keep the keyboard debounce.
     const debounceMs = role === "correspondent" ? 0 : SEARCH_DEBOUNCE_MS;
+
     const timeout = window.setTimeout(() => {
       void (async () => {
         const reply = await listSenders();
@@ -253,9 +261,11 @@ export const useAddressSuggestions = (
   if (role === undefined || search === undefined) {
     return [];
   }
+
   if (loaded.key === requestKey) {
     return loaded.senders;
   }
+
   return whileLoading === "previous" && loaded.scope === scope
     ? loaded.senders
     : [];

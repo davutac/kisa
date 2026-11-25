@@ -35,9 +35,11 @@ export const ID_CHUNK_SIZE = 10_000;
 
 export const chunk = <A>(items: readonly A[], size: number): readonly A[][] => {
   const chunks: A[][] = [];
+
   for (let index = 0; index < items.length; index += size) {
     chunks.push(items.slice(index, index + size));
   }
+
   return chunks;
 };
 
@@ -67,10 +69,13 @@ const toStoredValue = (
   if (value === null || value === undefined) {
     return null;
   }
+
   const stored = column.mapToDriverValue(value);
+
   if (stored instanceof Uint8Array) {
     throw new TypeError(`${column.name} holds bytes, which JSON cannot carry`);
   }
+
   // A bound string's lone surrogates become U+FFFD; through JSON, SQLite
   // would store them as invalid UTF-8. Header text a sender wrote may hold one.
   return Predicate.isString(stored) ? stored.toWellFormed() : stored;
@@ -110,6 +115,7 @@ export const updateEach = (
   }
 ): SQL => {
   const columns = [...options.match, ...options.set];
+
   const assignments = [
     ...options.set.map(
       (column, index) =>
@@ -120,6 +126,7 @@ export const updateEach = (
         sql`${sql.identifier(column.name)} = ${sql.param(value, column)}`
     ),
   ];
+
   const matches = options.match.map(
     (column, index) => sql`${column} = ${changedValue(index)}`
   );
@@ -157,14 +164,21 @@ export const insertRows = <TTable extends SQLiteTable>(
   }
 ): SQL => {
   const columns = getColumns(table);
+
   const named = Object.keys(rows[0] ?? {}).flatMap((key) => {
     const column = columns[key];
+
     return column === undefined ? [] : [[key, column] as const];
   });
+
   const targets = named.map(([, column]) => column);
-  const values = rows.map((row) =>
-    named.map(([key]): unknown => Reflect.get(row, key))
-  );
+
+  const values = rows.map((row) => {
+    const cells = new Map<string, unknown>(Object.entries(row));
+
+    return named.map(([key]) => cells.get(key));
+  });
+
   const conflict =
     upsert === undefined
       ? sql``
@@ -174,6 +188,7 @@ export const insertRows = <TTable extends SQLiteTable>(
         )}) DO UPDATE SET ${sql.join(
           upsert.set.flatMap((key) => {
             const column = columns[key];
+
             return column === undefined
               ? []
               : [
@@ -225,9 +240,11 @@ export const excludedColumns = <TTable extends SQLiteTable>(
   keys: readonly (keyof TTable["_"]["columns"] & string)[]
 ): Record<string, SQL> => {
   const columns = getColumns(table);
+
   return Object.fromEntries(
     keys.flatMap((key) => {
       const column = columns[key];
+
       return column === undefined
         ? []
         : [[key, sql`excluded.${sql.identifier(column.name)}`] as const];
@@ -249,5 +266,6 @@ export const fromBigIntText = (
   if (value === null || value === undefined || !/^\d+$/u.test(value)) {
     return undefined;
   }
+
   return BigInt(value);
 };

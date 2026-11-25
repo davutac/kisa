@@ -12,6 +12,7 @@ export const UpdateStatus = Schema.Union([
   Schema.Struct({ state: Schema.Literal("ready"), version: Schema.String }),
   Schema.Struct({ state: Schema.Literal("unsupported") }),
 ]);
+
 export type UpdateStatus = typeof UpdateStatus.Type;
 
 const MIN_PROGRESS = 0;

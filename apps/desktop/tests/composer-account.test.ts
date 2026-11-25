@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getInitialComposerAccountId } from "../src/renderer/src/mail/composer-account";
 
 const onlyAccount = [{ email: "me@example.com" }];
+
 const multipleAccounts = [
   { email: "one@example.com" },
   { email: "two@example.com" },

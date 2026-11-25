@@ -142,9 +142,11 @@ export const useThreadActions = ({
       offerUndo,
       showPending: beginPendingThreadChange,
     };
+
     const run = (plan: ThreadActionPlan): void => {
       void runThreadAction(ports, { ...plan, leaveAfterConfirmation });
     };
+
     const runBulk = (
       threads: readonly MailThreadRequest[],
       plan: Omit<ThreadActionPlan, "send" | "threads">
@@ -166,6 +168,7 @@ export const useThreadActions = ({
         threads: requests,
       });
     };
+
     const runOne = (
       thread: MailThreadRequest,
       plan: Omit<ThreadActionPlan, "send" | "threads">,

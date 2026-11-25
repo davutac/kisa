@@ -23,8 +23,10 @@ const MEDIA_TYPE_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/u;
 const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 const MediaType = Schema.String.check(Schema.isPattern(MEDIA_TYPE_PATTERN));
 const COMPOSER_INLINE_IMAGE_TAG = /<img\b(?<attributes>[^>]*)>/giu;
+
 const COMPOSER_INLINE_IMAGE_SOURCE =
   /\bsrc\s*=\s*(?:"cid:(?<doubleQuoted>[^"]+)"|'cid:(?<singleQuoted>[^']+)')/iu;
+
 const COMPOSER_INLINE_IMAGE_ALT =
   /\balt\s*=\s*(?:"(?<doubleQuoted>[^"]*)"|'(?<singleQuoted>[^']*)')/iu;
 
@@ -46,16 +48,21 @@ const StoredAuthorizedAttachment = Schema.Struct({
 const decodeStoredAttachment = Schema.decodeUnknownOption(
   StoredAuthorizedAttachment
 );
+
 const decodeStoredAttachmentArray = Schema.decodeUnknownOption(
   Schema.Array(Schema.Unknown)
 );
+
 const decodeStrictStoredAttachmentArray = Schema.decodeUnknownOption(
   Schema.Array(StoredAuthorizedAttachment)
 );
+
 const isOutgoingInlineContentId = Schema.is(MailOutgoingInlineContentId);
+
 const decodeFileSystemError = Schema.decodeUnknownOption(
   Schema.Struct({ code: Schema.optional(Schema.String) })
 );
+
 /* oxlint-disable eslint/no-bitwise -- Node open flags are bit masks. */
 const SAFE_READ_FLAGS =
   constants.O_RDONLY |
@@ -107,6 +114,7 @@ export const authorizeOutgoingAttachmentFiles = async (
   const records = await Promise.all(
     selections.map(async (selection) => {
       let file: FileHandle | undefined;
+
       try {
         if (
           selection.mediaType.length > 0 &&
@@ -114,12 +122,15 @@ export const authorizeOutgoingAttachmentFiles = async (
         ) {
           throw authorizationError("Attachment media type is invalid");
         }
+
         const canonicalPath = await realpath(selection.path);
         file = await open(canonicalPath, "r");
         const stats = await file.stat();
+
         if (!stats.isFile()) {
           throw authorizationError("Only regular files can be attached");
         }
+
         return {
           authorizationVersion: AUTHORIZATION_VERSION,
           birthtimeMs: stats.birthtimeMs,
@@ -139,6 +150,7 @@ export const authorizeOutgoingAttachmentFiles = async (
         if (error instanceof OutgoingAttachmentAuthorizationError) {
           throw error;
         }
+
         throw authorizationError("Could not authorize the selected attachment");
       } finally {
         if (file !== undefined) {
@@ -147,10 +159,13 @@ export const authorizeOutgoingAttachmentFiles = async (
       }
     })
   );
+
   const totalBytes = records.reduce((total, record) => total + record.size, 0);
+
   if (totalBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
     throw authorizationError("Attachments can total up to 25 MB");
   }
+
   return records;
 };
 
@@ -158,9 +173,11 @@ export const decodeStoredOutgoingAttachmentEntries = <Input>(
   input: Input
 ): readonly (StoredMailDraftAttachment | undefined)[] | undefined => {
   const values = decodeStoredAttachmentArray(input);
+
   if (Option.isNone(values)) {
     return;
   }
+
   return values.value.map((value) =>
     Option.getOrUndefined(decodeStoredAttachment(value))
   );
@@ -187,20 +204,25 @@ export const recoverMissingInlineContentIds = (
   attachments: readonly StoredMailDraftAttachment[]
 ): readonly StoredMailDraftAttachment[] => {
   const recovered = [...attachments];
+
   const assignedContentIds = new Set(
     attachments.flatMap(({ contentId }) =>
       contentId === undefined ? [] : [contentId]
     )
   );
+
   const assignedAttachmentIndexes = new Set<number>();
 
   for (const tag of bodyHtml.matchAll(COMPOSER_INLINE_IMAGE_TAG)) {
     const attributes = tag.groups?.attributes ?? "";
     const source = COMPOSER_INLINE_IMAGE_SOURCE.exec(attributes);
+
     const contentId =
       source?.groups?.doubleQuoted ?? source?.groups?.singleQuoted;
+
     const alt = COMPOSER_INLINE_IMAGE_ALT.exec(attributes);
     const filename = alt?.groups?.doubleQuoted ?? alt?.groups?.singleQuoted;
+
     if (
       contentId === undefined ||
       filename === undefined ||
@@ -209,6 +231,7 @@ export const recoverMissingInlineContentIds = (
     ) {
       continue;
     }
+
     const attachmentIndex = recovered.findIndex(
       (attachment, index) =>
         !assignedAttachmentIndexes.has(index) &&
@@ -217,10 +240,13 @@ export const recoverMissingInlineContentIds = (
         isSupportedOutgoingInlineImageMediaType(attachment.mediaType) &&
         attachment.size <= MAX_INLINE_IMAGE_BYTES
     );
+
     const attachment = recovered[attachmentIndex];
+
     if (attachment === undefined) {
       continue;
     }
+
     recovered[attachmentIndex] = { ...attachment, contentId };
     assignedAttachmentIndexes.add(attachmentIndex);
     assignedContentIds.add(contentId);
@@ -233,23 +259,29 @@ export const openOutgoingAttachment = async (
   record: StoredMailDraftAttachment
 ): Promise<OpenedOutgoingAttachment> => {
   let file: FileHandle;
+
   try {
     file = await open(record.path, SAFE_READ_FLAGS);
   } catch (error) {
     const fileSystemError = decodeFileSystemError(error);
+
     if (
       Option.isSome(fileSystemError) &&
       fileSystemError.value.code === "ENOENT"
     ) {
       throw error;
     }
+
     throw authorizationError(`Could not read attachment: ${record.filename}`);
   }
+
   try {
     const stats = await file.stat();
+
     if (!isSameFile(record, stats)) {
       throw authorizationError(`Could not read attachment: ${record.filename}`);
     }
+
     return { file, record, size: stats.size };
   } catch (error) {
     await closeOutgoingAttachment(file);
@@ -262,6 +294,7 @@ export const readOutgoingAttachment = async (
 ): Promise<LoadedOutgoingAttachment> => {
   const buffer = Buffer.allocUnsafe(entry.size + 1);
   let offset = 0;
+
   while (offset < buffer.byteLength) {
     // oxlint-disable-next-line no-await-in-loop -- A bounded descriptor read advances one buffer position at a time.
     const { bytesRead } = await entry.file.read(
@@ -270,17 +303,22 @@ export const readOutgoingAttachment = async (
       buffer.byteLength - offset,
       null
     );
+
     if (bytesRead === 0) {
       break;
     }
+
     offset += bytesRead;
   }
+
   const stats = await entry.file.stat();
+
   if (offset !== entry.size || !isSameFile(entry.record, stats)) {
     throw authorizationError(
       `Attachment changed while sending: ${entry.record.filename}`
     );
   }
+
   return {
     bytes: buffer.subarray(0, offset),
     contentId: entry.record.contentId,

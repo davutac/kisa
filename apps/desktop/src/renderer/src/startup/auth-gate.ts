@@ -77,6 +77,7 @@ export const createAuthGateStateResolver = (
 
     const loadTask = load();
     const token = {};
+
     const next = (async () => {
       try {
         const state = await loadTask;
@@ -93,6 +94,7 @@ export const createAuthGateStateResolver = (
         }
       }
     })();
+
     pending = next;
     pendingToken = token;
 

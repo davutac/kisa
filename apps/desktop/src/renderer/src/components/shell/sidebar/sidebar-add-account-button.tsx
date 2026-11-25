@@ -17,6 +17,7 @@ import { getRuntimeCapabilities } from "@/platform/desktop";
  */
 const SidebarAddAccountButton = () => {
   const { accounts } = getRuntimeCapabilities();
+
   if (accounts === undefined) {
     return null;
   }

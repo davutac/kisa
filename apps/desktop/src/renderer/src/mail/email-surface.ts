@@ -7,6 +7,7 @@
 
 const AUTHOR_COLOR_PATTERN =
   /<font\b|\sbgcolor\s*=|[\s;{"']color\s*:|[\s;{"']background(?:-color)?\s*:/iu;
+
 // A sender who wrote a dark-mode rule has thought about both schemes already,
 // so forcing a light canvas would override the work rather than rescue it.
 const DARK_SCHEME_PATTERN = /prefers-color-scheme\s*:\s*dark/iu;

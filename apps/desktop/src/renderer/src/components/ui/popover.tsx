@@ -21,8 +21,10 @@ const Popover = ({
     onOpenChange={(open, details) => {
       if (!open && details.reason === "window-blur") {
         details.cancel();
+
         return;
       }
+
       onOpenChange?.(open, details);
     }}
     {...props}

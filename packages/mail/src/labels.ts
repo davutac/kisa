@@ -32,6 +32,7 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 const MAX_NAME_LENGTH = 200;
+
 // oxlint-disable-next-line no-control-regex
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/u;
 
@@ -94,9 +95,11 @@ const findLabel = Effect.fn("MailLabels.findLabel")(function* findLabel(
 ) {
   const store = yield* MailEngineStore;
   const mailboxes = yield* store.getMailboxes(scope.accountId);
+
   const label = scope.dialect
     .userLabels(mailboxes.map(toImapMailbox))
     .find((candidate) => candidate.id === labelId);
+
   const mailbox =
     label === undefined
       ? undefined
@@ -118,12 +121,14 @@ export const createLabel = Effect.fn("MailLabels.createLabel")(
     if (target === undefined) {
       return yield* failWith(scope, "That label name can't be used");
     }
+
     if (pathTaken(mailboxes, target.path)) {
       return yield* failWith(scope, "A label with this name already exists");
     }
 
     yield* scope.session.createMailbox(target.path);
     const discovered = yield* discoverMailboxes(scope);
+
     // A folder is read from its first message on, so mail filed into it
     // right away is picked up by the next refresh rather than the walk.
     const started =
@@ -161,12 +166,14 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
     if (target === undefined) {
       return yield* failWith(scope, "That label name can't be used");
     }
+
     if (target.path === label.path) {
       return {
         changes: { changed: [], removed: [] },
         label: { id: label.id, name: label.name } satisfies LabelResult,
       };
     }
+
     if (pathTaken(mailboxes, target.path, label.path)) {
       return yield* failWith(scope, "A label with this name already exists");
     }
@@ -174,6 +181,7 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
     const to = { id: userLabelId(target.name), path: target.path };
     const isGmail = scope.dialect.kind === "gmail";
     yield* scope.session.renameMailbox(label.path, target.path);
+
     if (isGmail) {
       // Asked for before the cache is moved, so a rename cut short after
       // this still has its labels read.
@@ -182,6 +190,7 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
         mailboxes.filter((candidate) => candidate.synced)
       );
     }
+
     // Moved before discovery, which would otherwise drop the old mailbox's
     // copies and its colour and walk the new one from scratch.
     const renamed = yield* store.renameLabel(scope.accountId, {
@@ -189,8 +198,10 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
       from: { id: label.id, path: label.path },
       to,
     });
+
     const discovered = yield* discoverMailboxes(scope);
     const separator = mailbox.delimiter.length === 0 ? "/" : mailbox.delimiter;
+
     const read = isGmail
       ? discovered.changes
       : mergeThreadChanges(
@@ -225,6 +236,7 @@ export const deleteLabel = Effect.fn("MailLabels.deleteLabel")(
 
     if (scope.dialect.kind === "gmail") {
       yield* scope.session.deleteMailbox(label.path);
+
       // The label comes off cached mail when the server's list no longer
       // has it, which discovery reads: not because its deletion was asked.
       return (yield* discoverMailboxes(scope)).changes;
@@ -233,6 +245,7 @@ export const deleteLabel = Effect.fn("MailLabels.deleteLabel")(
     const archive = mailboxes.find(
       (mailbox) => mailbox.role === "archive" && mailbox.selectable
     );
+
     if (archive === undefined) {
       return yield* failWith(
         scope,
@@ -243,13 +256,17 @@ export const deleteLabel = Effect.fn("MailLabels.deleteLabel")(
     // The folder's mail is listed and moved under one UIDVALIDITY, the one
     // the server gives now: its UIDs are read here, not taken from the cache.
     const { uidValidity } = yield* scope.session.status(label.path);
+
     const uids = yield* scope.session.search(label.path, uidValidity, {
       kind: "all",
     });
+
     if (uids.length > 0) {
       yield* scope.session.move(label.path, uidValidity, uids, archive.path);
     }
+
     const status = yield* scope.session.status(label.path);
+
     if (status.messages > 0) {
       return yield* failWith(
         scope,
@@ -262,6 +279,7 @@ export const deleteLabel = Effect.fn("MailLabels.deleteLabel")(
     // so the messages keep their ids and bodies.
     const archived = yield* refreshMailboxes(scope, [archive.path]);
     const discovered = yield* discoverMailboxes(scope);
+
     return mergeThreadChanges(archived, discovered.changes);
   }
 );

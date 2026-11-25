@@ -8,6 +8,7 @@ import type { LoginItemSettings } from "@/shared/ipc/app";
 const loginItemSettingsStore = createStore<LoginItemSettings | null>()(
   () => null
 );
+
 let requestVersion = 0;
 
 export const getLoginItemSettingsState = (): LoginItemSettings | null =>
@@ -24,11 +25,13 @@ export const refreshLoginItemSettingsState = async (
 
   if (api === undefined) {
     publishLoginItemSettings(null);
+
     return;
   }
 
   try {
     const reply = await api.get();
+
     if (version === requestVersion) {
       publishLoginItemSettings(reply.ok ? reply.data : null);
     }
@@ -54,6 +57,7 @@ export const updateLoginItemSettingsState = async (
 
   try {
     const reply = await api.set({ openAtLogin });
+
     if (version === requestVersion) {
       publishLoginItemSettings(reply.ok ? reply.data : previous);
     }

@@ -4,28 +4,15 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { Predicate } from "effect";
 
 import { databaseRelations } from "./relations";
 
 export type DatabaseConnection = Database.Database;
+
 export type DatabaseClient = BetterSQLite3Database<typeof databaseRelations>;
 
 const SQLITE_HEADER = Buffer.from("SQLite format 3\0", "utf-8");
 const CHACHA20_KDF_ITERATIONS = 64_007;
-
-const callCipherMethod = (
-  connection: DatabaseConnection,
-  methodName: "key" | "rekey",
-  encryptionKey: Buffer
-): void => {
-  const method = Reflect.get(connection, methodName);
-  if (!Predicate.isFunction(method)) {
-    throw new TypeError("SQLite cipher support is unavailable");
-  }
-
-  Reflect.apply(method, connection, [encryptionKey]);
-};
 
 const hasPlaintextHeader = (databasePath: string): boolean => {
   if (databasePath === ":memory:") {
@@ -33,18 +20,21 @@ const hasPlaintextHeader = (databasePath: string): boolean => {
   }
 
   let file: number;
+
   try {
     file = openSync(databasePath, "r");
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return false;
     }
+
     throw error;
   }
 
   try {
     const header = Buffer.alloc(SQLITE_HEADER.byteLength);
     const bytesRead = readSync(file, header, 0, header.byteLength, 0);
+
     return (
       bytesRead === SQLITE_HEADER.byteLength && header.equals(SQLITE_HEADER)
     );
@@ -82,7 +72,7 @@ const configureEncryptedConnection = (
   encryptionKey: Buffer
 ): void => {
   configureCipher(connection);
-  callCipherMethod(connection, "key", encryptionKey);
+  connection.key(encryptionKey);
   connection.prepare("SELECT count(*) FROM sqlite_master").get();
 };
 
@@ -97,7 +87,7 @@ const encryptPlaintextDatabase = (
     connection.pragma("wal_checkpoint(TRUNCATE)");
     connection.pragma("journal_mode = DELETE");
     configureCipher(connection);
-    callCipherMethod(connection, "rekey", encryptionKey);
+    connection.rekey(encryptionKey);
   } finally {
     connection.close();
   }
@@ -142,6 +132,7 @@ export const openEncryptedDatabaseConnection = (
     try {
       configureEncryptedConnection(connection, key);
       configureWalConnection(connection);
+
       return connection;
     } catch (error) {
       connection.close();

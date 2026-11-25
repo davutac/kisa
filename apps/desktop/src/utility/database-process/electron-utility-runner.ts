@@ -14,6 +14,7 @@ export const layer: Layer.Layer<WorkerRunner.WorkerRunnerPlatform> =
     start<O = unknown, I = unknown>() {
       return Effect.gen(function* startUtilityRunner() {
         const { parentPort } = process;
+
         if (parentPort === null) {
           return yield* new WorkerError({
             reason: new WorkerSpawnError({
@@ -27,6 +28,7 @@ export const layer: Layer.Layer<WorkerRunner.WorkerRunnerPlatform> =
           message: O,
           _transfers?: readonly unknown[]
         ): void => parentPort.postMessage([1, message]);
+
         const send = (
           portId: number,
           message: O,
@@ -44,9 +46,14 @@ export const layer: Layer.Layer<WorkerRunner.WorkerRunnerPlatform> =
               const runFork = Effect.runForkWith(services);
 
               const onMessage = (event: Electron.MessageEvent): void => {
+                // SAFETY: only main's Effect worker client posts to this
+                // process's parent port, and it posts the worker protocol's
+                // PlatformMessage.
                 const message = event.data as WorkerRunner.PlatformMessage<I>;
+
                 if (message[0] === 0) {
                   const result = handler(0, message[1]);
+
                   if (Effect.isEffect(result)) {
                     const fiber = runFork(result);
                     fiber.addObserver((exit: Exit.Exit<A, E>) => {
@@ -64,6 +71,7 @@ export const layer: Layer.Layer<WorkerRunner.WorkerRunnerPlatform> =
                     });
                     trackFiber(fiber);
                   }
+
                   return;
                 }
 
@@ -79,6 +87,7 @@ export const layer: Layer.Layer<WorkerRunner.WorkerRunnerPlatform> =
               );
 
               parentPort.postMessage([0]);
+
               return yield* Deferred.await(closed);
             })
           ).pipe(

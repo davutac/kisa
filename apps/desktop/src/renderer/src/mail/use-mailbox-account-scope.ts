@@ -11,11 +11,13 @@ interface MailboxAccountScope {
 export const useMailboxAccountScope = (): MailboxAccountScope => {
   const accounts = useAccounts();
   const selectedAccountId = useSelectedAccountId();
+
   const knownAccountId = accounts.some(
     ({ email }) => email === selectedAccountId
   )
     ? selectedAccountId
     : null;
+
   const accountIds = useMemo(
     () =>
       knownAccountId === null

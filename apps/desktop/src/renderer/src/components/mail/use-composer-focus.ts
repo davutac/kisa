@@ -33,9 +33,11 @@ export const useComposerFocus = () => {
   const handlesRef = useRef(
     new Map<ComposerFocusTarget, ComposerFocusHandle>()
   );
+
   const handleRefCallbacksRef = useRef(
     new Map<ComposerFocusTarget, FocusHandleRef>()
   );
+
   const refCallbacksRef = useRef(new Map<ComposerFocusTarget, FocusRef>());
   const currentTargetRef = useRef<ComposerFocusTarget | null>(null);
   const pendingTargetRef = useRef<ComposerFocusTarget | null>(null);
@@ -44,10 +46,12 @@ export const useComposerFocus = () => {
     (target: ComposerFocusTarget, handle: ComposerFocusHandle | null): void => {
       if (handle === null) {
         handlesRef.current.delete(target);
+
         return;
       }
 
       handlesRef.current.set(target, handle);
+
       if (pendingTargetRef.current === target && canFocus(handle.element)) {
         pendingTargetRef.current = null;
         handle.focus();
@@ -59,6 +63,7 @@ export const useComposerFocus = () => {
   const refFor = useCallback(
     (target: ComposerFocusTarget): FocusRef => {
       const existing = refCallbacksRef.current.get(target);
+
       if (existing !== undefined) {
         return existing;
       }
@@ -74,7 +79,9 @@ export const useComposerFocus = () => {
               }
         );
       };
+
       refCallbacksRef.current.set(target, callback);
+
       return callback;
     },
     [registerHandle]
@@ -83,6 +90,7 @@ export const useComposerFocus = () => {
   const handleRefFor = useCallback(
     (target: ComposerFocusTarget): FocusHandleRef => {
       const existing = handleRefCallbacksRef.current.get(target);
+
       if (existing !== undefined) {
         return existing;
       }
@@ -90,7 +98,9 @@ export const useComposerFocus = () => {
       const callback: FocusHandleRef = (handle) => {
         registerHandle(target, handle);
       };
+
       handleRefCallbacksRef.current.set(target, callback);
+
       return callback;
     },
     [registerHandle]
@@ -99,6 +109,7 @@ export const useComposerFocus = () => {
   const getElement = useCallback(
     (target: ComposerFocusTarget): HTMLElement | null => {
       const element = handlesRef.current.get(target)?.element;
+
       return canFocus(element) ? element : null;
     },
     []
@@ -121,9 +132,10 @@ export const useComposerFocus = () => {
       for (const [target, { element }] of handlesRef.current) {
         if (
           element === event.target ||
-          element.contains(event.target as Node)
+          (event.target instanceof Node && element.contains(event.target))
         ) {
           currentTargetRef.current = target;
+
           return;
         }
       }
@@ -141,11 +153,13 @@ export const useComposerFocus = () => {
 
   const restorePending = useCallback((): void => {
     const target = pendingTargetRef.current;
+
     if (target === null) {
       return;
     }
 
     const handle = handlesRef.current.get(target);
+
     if (handle !== undefined && canFocus(handle.element)) {
       pendingTargetRef.current = null;
       handle.focus();
@@ -160,10 +174,13 @@ export const useComposerFocus = () => {
   const replaceContent = useCallback(
     (target: ComposerFocusTarget, content: string): boolean => {
       const replace = handlesRef.current.get(target)?.replaceContent;
+
       if (replace === undefined) {
         return false;
       }
+
       replace(content);
+
       return true;
     },
     []

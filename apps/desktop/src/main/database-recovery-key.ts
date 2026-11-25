@@ -11,6 +11,7 @@ const DatabaseRecoveryKeyFile = Schema.Struct({
   key: Schema.String,
   version: Schema.Literal(1),
 });
+
 type DatabaseRecoveryKeyFile = typeof DatabaseRecoveryKeyFile.Type;
 
 // oxlint-disable-next-line unicorn/throw-new-error
@@ -31,6 +32,7 @@ const invalidRecoveryKey = (): DatabaseRecoveryKeyError =>
 
 export const encodeDatabaseRecoveryKeyFile = (key: Uint8Array): Uint8Array => {
   let encodedKey: string;
+
   try {
     encodedKey = encodeDatabaseKey(key);
   } catch {
@@ -42,6 +44,7 @@ export const encodeDatabaseRecoveryKeyFile = (key: Uint8Array): Uint8Array => {
     key: encodedKey,
     version: 1,
   };
+
   return Buffer.from(`${JSON.stringify(recoveryKeyFile, null, 2)}\n`);
 };
 
@@ -50,6 +53,7 @@ export const decodeDatabaseRecoveryKeyFile = (contents: string): Buffer => {
     const document = Schema.decodeUnknownSync(DatabaseRecoveryKeyFile)(
       JSON.parse(contents)
     );
+
     return decodeDatabaseKey(document.key);
   } catch {
     throw invalidRecoveryKey();
@@ -104,6 +108,7 @@ const writeRecoveryKeyFile = Effect.fn("writeRecoveryKeyFile")(
       catch: exportError,
       try: async () => {
         const file = await open(filePath, "w", 0o600);
+
         try {
           await file.chmod(0o600);
           await file.writeFile(contents);
@@ -140,6 +145,7 @@ export const exportDatabaseRecoveryKey = Effect.fn("exportDatabaseRecoveryKey")(
         })
       )
     );
+
     return "saved" satisfies DatabaseRecoveryKeyExportOutcome;
   }
 );

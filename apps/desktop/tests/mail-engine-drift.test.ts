@@ -24,6 +24,7 @@ import {
   scopeFor,
   syncFully,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 const pass = (scope: SyncScope, drift: DriftMemory) =>
   run(syncAccount({ ...scope, drift }));
@@ -36,35 +37,35 @@ const rereadToEnd = async (scope: SyncScope): Promise<void> => {
       return;
     }
   }
+
   throw new Error("the reread did not finish");
 };
 
 const inboxUids = (): readonly number[] =>
-  (
-    connection
-      .prepare(
-        "SELECT uid FROM mail_message_locations WHERE account_id = ? AND mailbox_path = 'INBOX' ORDER BY uid"
-      )
-      .all(accountId) as { readonly uid: number }[]
-  ).map((row) => row.uid);
+  connection
+    .prepare<unknown[], { readonly uid: number }>(
+      "SELECT uid FROM mail_message_locations WHERE account_id = ? AND mailbox_path = 'INBOX' ORDER BY uid"
+    )
+    .all(accountId)
+    .map((row) => row.uid);
 
 const unreadThreads = (): number =>
-  (
+  found(
     connection
-      .prepare(
+      .prepare<unknown[], { readonly n: number }>(
         "SELECT COUNT(*) AS n FROM mail_threads WHERE account_id = ? AND is_unread = 1"
       )
-      .get(accountId) as { readonly n: number }
+      .get(accountId)
   ).n;
 
 /** Whether a reread of the Inbox's flags is under way. */
 const isRereading = (): boolean =>
-  (
+  found(
     connection
-      .prepare(
+      .prepare<unknown[], { readonly cursor: number | null }>(
         "SELECT label_cursor AS cursor FROM mail_mailboxes WHERE account_id = ? AND path = 'INBOX'"
       )
-      .get(accountId) as { readonly cursor: number | null }
+      .get(accountId)
   ).cursor !== null;
 
 /** A copy the cache holds and the server does not, at an unused UID. */
@@ -96,6 +97,7 @@ const syncedInbox = async (
   server.deliver("INBOX", genericMessage("second"));
   const scope = scopeFor(server, genericDialect);
   await syncFully(scope);
+
   return { drift: makeDriftMemory(), scope, server };
 };
 
@@ -104,6 +106,7 @@ describe("a pass checking the cache against the server", () => {
 
   it("asks the server nothing more while the counts agree", async () => {
     const { drift, scope, server } = await syncedInbox();
+
     const before = {
       calls: server.calls.length,
       statuses: server.statuses.length,
@@ -187,6 +190,7 @@ describe("what the check leaves alone", () => {
     server.onStatus = (path) => {
       if (path === "INBOX") {
         inboxStatuses += 1;
+
         if (inboxStatuses === 2) {
           server.deliver("INBOX", genericMessage("third"));
         }
@@ -248,9 +252,11 @@ describe("what the check leaves alone", () => {
   it("fetches a large gap over several passes, and judges the unread count only after", async () => {
     insertAccount("generic");
     const server = new FakeImapServer(ICLOUD_MAILBOXES, ["CONDSTORE", "IDLE"]);
+
     for (let index = 0; index < 620; index += 1) {
       server.deliver("INBOX", genericMessage(`m${index}`, { flags: [] }));
     }
+
     const scope = scopeFor(server, genericDialect);
     await syncFully(scope);
     const drift = makeDriftMemory();
@@ -292,6 +298,7 @@ describe("what the check leaves alone", () => {
     const stop: Deferred.Deferred<void> = Deferred.makeUnsafe();
 
     const waiting = server.nextWatch();
+
     const watching = run(
       watchForNews(
         { ...scope, drift },
@@ -305,6 +312,7 @@ describe("what the check leaves alone", () => {
         }
       )
     );
+
     await waiting;
     const waitingAgain = server.nextWatch();
     server.setFlags("INBOX", 1, []);

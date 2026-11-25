@@ -21,6 +21,7 @@ export {
   MenuSub,
   MenuTrigger,
 } from "@ui-sdk/react/menu";
+
 export type { MenuController } from "@ui-sdk/react/menu";
 
 type ClassNameProps<Props> = Omit<Props, "className"> & { className?: string };

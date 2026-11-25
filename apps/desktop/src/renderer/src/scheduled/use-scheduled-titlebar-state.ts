@@ -19,12 +19,15 @@ export const getScheduledTitlebarAccountIds = (
 
 export const useScheduledTitlebarState = (): ScheduledTitlebarState => {
   const accounts = useAccounts();
+
   const accountIds = useMemo(
     () => getScheduledTitlebarAccountIds(accounts),
     [accounts]
   );
+
   const api = useMemo(() => getScheduledMailApi(), []);
   const scopeKey = JSON.stringify(accountIds);
+
   const [result, setResult] = useState({
     scopeKey,
     state: EMPTY_STATE,
@@ -34,11 +37,14 @@ export const useScheduledTitlebarState = (): ScheduledTitlebarState => {
     if (api === undefined) {
       return;
     }
+
     let active = true;
     const accountSet = new Set(accountIds);
+
     const load = async (): Promise<void> => {
       try {
         const reply = await api.getAttentionCount({ accountIds });
+
         if (active && reply.ok) {
           setResult({
             scopeKey,
@@ -52,12 +58,15 @@ export const useScheduledTitlebarState = (): ScheduledTitlebarState => {
         // Keep the previous result. The Scheduled route owns actionable errors.
       }
     };
+
     void load();
+
     const unsubscribe = api.onChanged((change) => {
       if (accountSet.has(change.accountId)) {
         void load();
       }
     });
+
     return () => {
       active = false;
       unsubscribe();

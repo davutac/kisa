@@ -40,6 +40,7 @@ const SettingsDataPage = ({
   const handleOpenImport = workflow.openImport;
   const { discardPendingImport, restartForPendingImport } = workflow;
   const importState = workflow.importStatus?.state;
+
   const handleDiscardPendingImport = async (): Promise<void> => {
     const confirmed = await confirm({
       cancelLabel: "Keep import",
@@ -49,6 +50,7 @@ const SettingsDataPage = ({
         "Kisa keeps using the current database. The file you imported from is not changed; import it again to use it.",
       title: "Discard the waiting import?",
     });
+
     if (confirmed) {
       await discardPendingImport();
     }

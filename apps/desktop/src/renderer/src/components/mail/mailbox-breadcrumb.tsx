@@ -55,10 +55,12 @@ const MailboxBreadcrumb = ({
   const { accountIds, selectedAccountId } = useMailboxAccountScope();
   const labelItems = useScopeLabelItems(accountIds);
   const { openAccount, openAllAccounts, openMailbox } = useMailboxNavigation();
+
   const labelKeys = useMemo(
     () => new Set(labelItems.map(({ key }) => key)),
     [labelItems]
   );
+
   const scopeName = selectedAccountId ?? "All accounts";
   const crumbs = getMailboxPlaceCrumbs(mailbox, labelKeys);
   const closeDisplay = getHotkeyDisplay("thread.close");
@@ -90,6 +92,7 @@ const MailboxBreadcrumb = ({
           </BreadcrumbItem>
           {crumbs.map(({ name, place }) => {
             let crumb: ReactNode;
+
             if (place !== undefined) {
               crumb = (
                 <Button

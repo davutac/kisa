@@ -83,6 +83,7 @@ const syncTwoBodies = async (): Promise<SyncScope> => {
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
   await run(bodyStep(scope));
+
   return scope;
 };
 
@@ -90,14 +91,17 @@ const syncTwoBodies = async (): Promise<SyncScope> => {
 const syncConversation = async () => {
   insertAccount("gmail");
   const server = new FakeImapServer(GMAIL_MAILBOXES);
+
   const first = server.deliver(
     ALL_MAIL,
     gmailMessage("300", "300", { flags: [] })
   );
+
   server.deliver(ALL_MAIL, gmailMessage("301", "300"));
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
   await run(loadThreadBodies(scope, ThreadId.make("300")));
+
   return { first, scope, server };
 };
 
@@ -154,6 +158,7 @@ describe("mail engine with the Gmail dialect", () => {
   it("walks a sparse mailbox larger than one batch", async () => {
     insertAccount("gmail");
     const server = new FakeImapServer(GMAIL_MAILBOXES);
+
     for (let index = 0; index < 1300; index += 1) {
       server.deliver(
         ALL_MAIL,
@@ -213,6 +218,7 @@ describe("mail engine with the Gmail dialect", () => {
     const scope = scopeFor(server, gmailDialect);
     await syncFully(scope);
     await run(bodyStep(scope));
+
     const first = () =>
       run(fetchAttachment(scope, MessageId.make("210"), "2")).then(
         (attachment) => Buffer.from(attachment?.bytes ?? []).toString("utf-8")
@@ -336,10 +342,12 @@ describe("mail engine with the Gmail dialect", () => {
   it("reports mail found after the walk as new, never the walk or a move", async () => {
     insertAccount("gmail");
     const server = new FakeImapServer(GMAIL_MAILBOXES);
+
     const known = server.deliver(
       ALL_MAIL,
       gmailMessage("700", "700", { flags: [] })
     );
+
     const scope = scopeFor(server, gmailDialect);
     await run(syncAccount(scope));
     const walked = await run(skeletonStep(scope));
@@ -376,10 +384,12 @@ describe("mail engine with the generic dialect", () => {
   it("treats copies in two folders as one message with both labels", async () => {
     insertAccount("generic");
     const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+
     const inboxUid = server.deliver(
       "INBOX",
       genericMessage("x", { flags: [] })
     );
+
     server.deliver("Receipts", genericMessage("x"));
     server.deliver(
       "Sent Messages",
@@ -397,10 +407,11 @@ describe("mail engine with the generic dialect", () => {
     await syncFully(scope);
 
     const [message] = connection
-      .prepare(
+      .prepare<unknown[], { message_id: string; thread_id: string }>(
         "SELECT message_id, thread_id, label_ids, is_unread FROM mail_messages WHERE subject = 'x'"
       )
-      .all() as { message_id: string; thread_id: string }[];
+      .all();
+
     expect(message).toMatchObject({
       is_unread: 1,
       label_ids: JSON.stringify(["INBOX", "UNREAD", "u:Receipts"]),
@@ -545,10 +556,12 @@ describe("mail engine with the generic dialect", () => {
   it("reports nothing to do when no pending body could be downloaded", async () => {
     insertAccount("generic");
     const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+
     const uid = server.deliver(
       "INBOX",
       genericMessage("gone", plainText("gone"))
     );
+
     const scope = scopeFor(server, genericDialect);
     await syncFully(scope);
     // Deleted elsewhere before its body was fetched; the next sync removes it.

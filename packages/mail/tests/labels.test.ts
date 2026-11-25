@@ -25,6 +25,7 @@ describe("label names", () => {
     ]) {
       expect(toLabelPath(name, "/")).toBeUndefined();
     }
+
     expect(toLabelPath("v1.2", ".")).toBeUndefined();
   });
 });

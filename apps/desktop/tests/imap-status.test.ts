@@ -17,14 +17,16 @@ const accountId = AccountId.make("test@example.com");
 const PATH = "Shared/Reports";
 
 /** A client whose STATUS ends as `status` does, on a connection that is `usable` or not. */
-const sessionWith = (status: () => Promise<unknown>, usable: boolean) =>
+// SAFETY: a session's `status` reads only `capabilities`, `status` and
+// `usable` from its client.
+const sessionWith = (status: () => Promise<false | object>, usable: boolean) =>
   makeSession(accountId, {
     capabilities: new Map(),
     status,
     usable,
   } as unknown as ImapFlow);
 
-const ending = (status: () => Promise<unknown>, usable = true) =>
+const ending = (status: () => Promise<false | object>, usable = true) =>
   Effect.runPromise(
     sessionWith(status, usable)
       .status(PATH)

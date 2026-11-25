@@ -47,6 +47,7 @@ export const AppHotkeysProvider = ({
   const [registrations, setRegistrations] = useState<
     readonly LayerRegistration[]
   >([]);
+
   const activationCounterRef = useRef(0);
 
   const registerLayer = useCallback((id: string, layer: HotkeyLayer): void => {
@@ -63,6 +64,7 @@ export const AppHotkeysProvider = ({
   }, []);
 
   const topLayer = getTopHotkeyLayer(registrations);
+
   const value = useMemo<AppHotkeysContextValue>(
     () => ({
       isScopeActive: (scope) => isHotkeyScopeActive(scope, topLayer),

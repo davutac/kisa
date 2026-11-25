@@ -33,9 +33,11 @@ export const truncateTemplateSubjectPaste = (
   to: number
 ): string => {
   const selectedLength = getSourceLength(document.cut(from, to));
+
   const availableLength = Math.max(
     0,
     MAX_SUBJECT_LENGTH - getSourceLength(document) + selectedLength
   );
+
   return value.slice(0, availableLength);
 };

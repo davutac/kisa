@@ -66,6 +66,7 @@ export const getMailSearchBarSections = ({
   const conversations: MailSearchBarSection[] = canSearch
     ? ["conversations"]
     : [];
+
   const sections: MailSearchBarSection[] = isDraftingFilter
     ? ["completions", ...conversations]
     : [...conversations, "completions"];

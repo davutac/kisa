@@ -18,6 +18,7 @@ import {
 import type { MicrosoftOAuthEnvironment } from "../src/main/auth/microsoft-oauth";
 
 const CLIENT_ID = "11111111-2222-3333-4444-555555555555";
+
 const MAIL_SCOPE =
   "https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access";
 
@@ -35,6 +36,7 @@ const visit = async (url: string): Promise<number> => {
   target.hostname = "127.0.0.1";
   const response = await fetch(target);
   await response.arrayBuffer();
+
   return response.status;
 };
 
@@ -48,6 +50,7 @@ const environment = (
   reply: (call: TokenCall) => Response | Promise<Response>
 ) => {
   const calls: TokenCall[] = [];
+
   return {
     calls,
     environment: {
@@ -55,6 +58,7 @@ const environment = (
       fetch: (url, init) => {
         const call = { body: new URLSearchParams(String(init.body)), url };
         calls.push(call);
+
         return Promise.resolve(reply(call));
       },
       openBrowser: (url) => browser(new URL(url)),
@@ -78,9 +82,11 @@ const redirectOf = (
     "state",
     authorizeUrl.searchParams.get("state") ?? ""
   );
+
   for (const [name, value] of Object.entries(outcome)) {
     redirect.searchParams.set(name, value);
   }
+
   return redirect.toString();
 };
 
@@ -97,6 +103,7 @@ const refresh = (reply: () => Response | Promise<Response>) => {
     () => Promise.resolve(),
     reply
   );
+
   return {
     calls,
     run: () =>
@@ -109,6 +116,7 @@ const refresh = (reply: () => Response | Promise<Response>) => {
 describe("Microsoft browser sign-in", () => {
   it("asks for mail access with PKCE and exchanges the code it gets back", async () => {
     let authorize: URL | undefined;
+
     const { calls, environment: oauth } = environment(
       async (url) => {
         authorize = url;
@@ -122,6 +130,7 @@ describe("Microsoft browser sign-in", () => {
           refresh_token: "refresh-1",
         })
     );
+
     const before = Date.now();
 
     const tokens = await Effect.runPromise(
@@ -184,6 +193,7 @@ describe("Microsoft browser sign-in", () => {
 
   it("ignores a browser's other requests and waits for its own redirect", async () => {
     const statuses: number[] = [];
+
     const { environment: oauth } = environment(
       async (url) => {
         const base = url.searchParams.get("redirect_uri") ?? "";
@@ -211,6 +221,7 @@ describe("Microsoft browser sign-in", () => {
 
   it("stops listening once the redirect has arrived", async () => {
     let redirect = "";
+
     const { environment: oauth } = environment(
       async (url) => {
         redirect = url.searchParams.get("redirect_uri") ?? "";
@@ -250,12 +261,15 @@ describe("Microsoft browser sign-in", () => {
 
   it("closes the listener when the sign-in is cancelled while the browser is open", async () => {
     let redirect = "";
+
     const { promise: browserOpened, resolve: opened } =
       Promise.withResolvers<undefined>();
+
     const { calls, environment: oauth } = environment(
       (url) => {
         redirect = url.searchParams.get("redirect_uri") ?? "";
         opened(undefined);
+
         return Promise.resolve();
       },
       () => tokenReply({ access_token: "never" })
@@ -277,10 +291,12 @@ describe("Microsoft browser sign-in", () => {
       Effect.gen(function* timesOutSignIn() {
         let redirect = "";
         const browserOpened = Promise.withResolvers<undefined>();
+
         const { calls, environment: oauth } = environment(
           (url) => {
             redirect = url.searchParams.get("redirect_uri") ?? "";
             browserOpened.resolve(undefined);
+
             return Promise.resolve();
           },
           () => tokenReply({ access_token: "never" })
@@ -289,6 +305,7 @@ describe("Microsoft browser sign-in", () => {
         const signIn = yield* Effect.forkChild(
           signInWithMicrosoft(oauth, "a@b.example")
         );
+
         yield* Effect.promise(() => browserOpened.promise);
         yield* TestClock.adjust("10 minutes");
         const exit = yield* Fiber.await(signIn);

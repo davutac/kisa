@@ -32,6 +32,7 @@ export const useScheduledMailWorkspace = () => {
   const confirm = useConfirm();
   const accounts = useAccounts();
   const { accountIds, selectedAccountId } = useMailboxAccountScope();
+
   const {
     api,
     error,
@@ -43,23 +44,32 @@ export const useScheduledMailWorkspace = () => {
     reload,
     removeOptimistically,
   } = useScheduledMailPage(accountIds);
+
   const items = useMemo(() => orderScheduledMailItems(pageItems), [pageItems]);
   const itemKeys = useMemo(() => items.map(getScheduledMailKey), [items]);
+
   const itemsByKey = useMemo(
     () => new Map(items.map((item) => [getScheduledMailKey(item), item])),
     [items]
   );
+
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
   const selectedItem =
     selectedKey === null ? null : (itemsByKey.get(selectedKey) ?? null);
+
   const [quickActionResetRevision, setQuickActionResetRevision] = useState(0);
+
   const [editSession, setEditSession] =
     useState<ScheduledMailEditSession | null>(null);
+
   const [lastRenderedIndex, setLastRenderedIndex] = useState<number>();
   const pendingNavigation = useScheduledMailNavigation((state) => state.target);
+
   const clearPendingNavigation = useScheduledMailNavigation(
     (state) => state.clear
   );
+
   const list = useInstanceValue(() => createController<MailListController>());
   const openingKeyRef = useRef<string | null>(null);
   const previousEditSessionRef = useRef(editSession);
@@ -69,6 +79,7 @@ export const useScheduledMailWorkspace = () => {
   useLayoutEffect(() => {
     const wasEditing = previousEditSessionRef.current !== null;
     previousEditSessionRef.current = editSession;
+
     if (wasEditing && editSession === null) {
       list.focusCurrent();
     }
@@ -83,6 +94,7 @@ export const useScheduledMailWorkspace = () => {
       ) {
         return;
       }
+
       const key = getScheduledMailKey(item);
       openingKeyRef.current = key;
       await runWithCleanup(
@@ -92,10 +104,13 @@ export const useScheduledMailWorkspace = () => {
               accountId: item.accountId,
               draftId: item.draftId,
             });
+
             if (!reply.ok) {
               toast.error(reply.error);
+
               return;
             }
+
             setSelectedKey(key);
             setEditSession(reply.data);
           } catch {
@@ -114,15 +129,19 @@ export const useScheduledMailWorkspace = () => {
     if (api === undefined) {
       return;
     }
+
     try {
       const reply = await api.cancelToStash({
         accountId: item.accountId,
         draftId: item.draftId,
       });
+
       if (!reply.ok) {
         toast.error(reply.error);
+
         return;
       }
+
       // The list moves the active row, and focus, to the one taking its place.
       removeOptimistically(item);
       toast.success("Schedule canceled. Draft moved to Stash.");
@@ -137,6 +156,7 @@ export const useScheduledMailWorkspace = () => {
     if (api === undefined) {
       return;
     }
+
     const confirmed = await confirm({
       cancelLabel: "Keep scheduled",
       confirmLabel: "Discard email",
@@ -145,18 +165,23 @@ export const useScheduledMailWorkspace = () => {
         "This permanently deletes the scheduled email and its draft. This cannot be undone.",
       title: "Discard scheduled email?",
     });
+
     if (!confirmed) {
       return;
     }
+
     try {
       const reply = await api.discard({
         accountId: item.accountId,
         draftId: item.draftId,
       });
+
       if (!reply.ok) {
         toast.error(reply.error);
+
         return;
       }
+
       removeOptimistically(item);
       toast.success("Scheduled email discarded.");
     } catch {
@@ -213,6 +238,7 @@ export const useScheduledMailWorkspace = () => {
     if (api === undefined || editSession === null) {
       return;
     }
+
     return api.onChanged((change) => {
       if (shouldCloseScheduledMailEditor(change, editSession)) {
         setEditSession(null);
@@ -243,20 +269,26 @@ export const useScheduledMailWorkspace = () => {
     if (pendingNavigation === null || isInitialLoading || error !== undefined) {
       return;
     }
+
     const target = items.find(
       (item) =>
         item.accountId === pendingNavigation.accountId &&
         item.draftId === pendingNavigation.draftId
     );
+
     if (target !== undefined) {
       clearPendingNavigation();
       void openEditor(target);
+
       return;
     }
+
     if (nextCursor !== undefined && !isLoadingMore) {
       void loadMore();
+
       return;
     }
+
     if (nextCursor === undefined) {
       clearPendingNavigation();
       toast.error("That scheduled email is no longer available");
@@ -277,6 +309,7 @@ export const useScheduledMailWorkspace = () => {
     accounts,
     activate: (key: string): void => {
       const item = itemsByKey.get(key);
+
       if (item !== undefined) {
         void openEditor(item);
       }

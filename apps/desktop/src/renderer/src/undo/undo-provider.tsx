@@ -138,7 +138,9 @@ export const UndoProvider = ({
           void runUndo(order);
         },
       };
+
       const duration = offer.durationMs ?? UNDO_DURATION_MS;
+
       const toastId = toast.success(offer.message, {
         action: undoAction,
         data:
@@ -169,11 +171,13 @@ export const UndoProvider = ({
           if (isOnOffer) {
             clear(order);
           }
+
           toast[outcome.tone](outcome.message, {
             action: undefined,
             data: undefined,
             id: isOnOffer ? toastId : undefined,
           });
+
           return;
         }
 
@@ -184,6 +188,7 @@ export const UndoProvider = ({
         const keepsUndo = outcome.kind === "partial" && isOnOffer;
         const action = outcome.kind === "failed" ? outcome.action : undefined;
         let toastDuration: number | undefined;
+
         if (outcome.kind === "failed" && outcome.stays === true) {
           toastDuration = Infinity;
         } else if (keepsUndo) {

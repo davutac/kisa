@@ -80,6 +80,7 @@ export const useMailboxThreads = ({
   const mailApi = getMailApi();
   const pendingChanges = usePendingThreadChanges();
   const scopeKey = getMailboxScopeKey(accountIds, unreadOnly, mailbox);
+
   const createStartingResult = (): MailboxThreadsResult =>
     getMailboxThreadsSnapshot(scopeKey) ?? {
       cacheCursor: null,
@@ -88,8 +89,10 @@ export const useMailboxThreads = ({
       scopeKey,
       threads: [],
     };
+
   const [result, setResult] =
     useState<MailboxThreadsResult>(createStartingResult);
+
   const [scopeKeyInState, setScopeKeyInState] = useState(scopeKey);
   const cacheCursorRef = useRef<MailThreadCursor | null>(result.cacheCursor);
   const generationRef = useRef(0);
@@ -110,9 +113,11 @@ export const useMailboxThreads = ({
     const generation = generationRef.current + 1;
     const isReload = reloadRevisionRef.current !== reloadRevision;
     const liveResult = resultRef.current;
+
     const cachedResult =
       getMailboxThreadsSnapshot(scopeKey) ??
       (isReload && liveResult.scopeKey === scopeKey ? liveResult : undefined);
+
     const startingResult = cachedResult ?? {
       cacheCursor: null,
       isInitialLoading: mailApi !== undefined,
@@ -132,12 +137,14 @@ export const useMailboxThreads = ({
     }
 
     let isActive = true;
+
     const loadCachedFirstPage = async (
       merge: boolean,
       isRepeat = false
     ): Promise<void> => {
       const listEventsBefore = listEventCountRef.current;
       setResult((current) => retryMailboxLoad(current, scopeKey));
+
       const reply = await settleThreadPage(
         mailApi.listCachedThreadPage(
           createCachedThreadPageRequest(accountIds, unreadOnly, mailbox)
@@ -155,14 +162,17 @@ export const useMailboxThreads = ({
             source: "first-page",
           })
         );
+
         return;
       }
 
       const firstPageCursor = reply.data.nextCursor ?? null;
+
       const cacheCursor =
         merge && threadsRef.current.length > reply.data.threads.length
           ? cacheCursorRef.current
           : firstPageCursor;
+
       // A list event that arrived during the read may name a row this page
       // predates; dropping rows on its word could drop new mail. Such a page
       // is only merged, and read once more.
@@ -179,6 +189,7 @@ export const useMailboxThreads = ({
             threads: reply.data.threads,
           };
         }
+
         return {
           cacheCursor,
           isInitialLoading: false,
@@ -193,6 +204,7 @@ export const useMailboxThreads = ({
             : mergeAndSortThreads(current.threads, reply.data.threads),
         };
       });
+
       if (merge && !isPageCurrent && !isRepeat) {
         void loadCachedFirstPage(true, true);
       }
@@ -225,12 +237,14 @@ export const useMailboxThreads = ({
   }, [accountIds, mailApi, mailbox, reloadRevision, scopeKey, unreadOnly]);
 
   const isCurrentScope = result.scopeKey === scopeKey;
+
   const scopedThreads = filterThreadsByScope(
     result.threads,
     accountIds,
     unreadOnly,
     mailbox
   );
+
   const currentResult = {
     ...result,
     cacheCursor: isCurrentScope ? result.cacheCursor : null,
@@ -275,6 +289,7 @@ export const useMailboxThreads = ({
     );
 
     const tailThread = threadsRef.current.at(-1);
+
     const reply = await settleThreadPage(
       mailApi.listCachedThreadPage(
         createCachedThreadPageRequest(
@@ -303,6 +318,7 @@ export const useMailboxThreads = ({
           source: "next-page",
         });
       }
+
       return current.scopeKey === scopeKey
         ? {
             ...current,
@@ -312,14 +328,17 @@ export const useMailboxThreads = ({
           }
         : current;
     });
+
     return reply.ok;
   }, [accountIds, mailApi, mailbox, scopeKey, unreadOnly]);
 
   const retry = useCallback((): void => {
     if (resultRef.current.error?.source === "next-page") {
       void loadNextPage();
+
       return;
     }
+
     requestMailboxReload();
   }, [loadNextPage]);
 

@@ -46,6 +46,7 @@ const ThreadLabels = ({
   const mailApi = getMailApi();
   const upsertLabel = useUpsertLabel();
   const userLabels = listUserLabels(catalog?.labels ?? []);
+
   const userLabelsByName = new Map(
     userLabels.map((label) => [label.name, label] as const)
   );

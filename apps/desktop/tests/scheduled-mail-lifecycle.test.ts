@@ -26,8 +26,10 @@ const fakeStep = (failing: () => boolean, message: string) =>
 /** A step that fails its first `times` attempts, then succeeds. */
 const failingTimes = (times: number, message: string) => {
   let remaining = times;
+
   return fakeStep(() => {
     remaining -= 1;
+
     return remaining >= 0;
   }, message);
 };
@@ -39,19 +41,24 @@ const createLifecycleHarness = (overrides?: {
   startWorker?: ReturnType<typeof fakeStep>;
 }) => {
   let resumeListener: (() => void) | undefined;
+
   const removeResumeListener = vi.fn<() => void>(() => {
     resumeListener = undefined;
   });
+
   const dispatchPendingNotifications =
     overrides?.dispatchPendingNotifications ?? succeeding();
+
   const releaseStaleNotificationClaims = succeeding();
   const startWorker = overrides?.startWorker ?? succeeding();
   const stopWorker = succeeding();
   const wakeWorker = vi.fn<() => void>();
+
   const lifecycle = createScheduledMailLifecycle({
     dispatchPendingNotifications: Effect.suspend(dispatchPendingNotifications),
     listenForResume: (listener) => {
       resumeListener = listener;
+
       return removeResumeListener;
     },
     releaseStaleNotificationClaims: Effect.suspend(
@@ -171,6 +178,7 @@ describe("the scheduled mail lifecycle", () => {
     () =>
       Effect.gen(function* resumesAfterExhaustion() {
         let shouldFail = true;
+
         const harness = createLifecycleHarness({
           startWorker: fakeStep(() => shouldFail, "persistent failure"),
         });
@@ -178,6 +186,7 @@ describe("the scheduled mail lifecycle", () => {
         const firstStart = yield* Effect.forkChild(
           Effect.flip(harness.lifecycle.start)
         );
+
         yield* TestClock.adjust(ALL_START_RETRIES);
         const failure = yield* Fiber.join(firstStart);
 
@@ -206,6 +215,7 @@ describe("the scheduled mail lifecycle", () => {
     () =>
       Effect.gen(function* recoversLater() {
         let shouldFail = true;
+
         const harness = createLifecycleHarness({
           startWorker: fakeStep(() => shouldFail, "persistent failure"),
         });
@@ -213,6 +223,7 @@ describe("the scheduled mail lifecycle", () => {
         const firstStart = yield* Effect.forkChild(
           Effect.flip(harness.lifecycle.start)
         );
+
         yield* TestClock.adjust(ALL_START_RETRIES);
         yield* Fiber.join(firstStart);
 
@@ -239,6 +250,7 @@ describe("the scheduled mail lifecycle", () => {
       const firstStart = yield* Effect.forkChild(
         Effect.flip(harness.lifecycle.start)
       );
+
       yield* TestClock.adjust(ALL_START_RETRIES);
       yield* Fiber.join(firstStart);
 
@@ -258,6 +270,7 @@ describe("the scheduled mail lifecycle", () => {
     () =>
       Effect.gen(function* resumesNotificationDrain() {
         let shouldFail = true;
+
         const harness = createLifecycleHarness({
           dispatchPendingNotifications: fakeStep(
             () => shouldFail,
@@ -268,6 +281,7 @@ describe("the scheduled mail lifecycle", () => {
         const firstStart = yield* Effect.forkChild(
           Effect.flip(harness.lifecycle.start)
         );
+
         yield* TestClock.adjust(ALL_START_RETRIES);
         const failure = yield* Fiber.join(firstStart);
 
@@ -292,11 +306,13 @@ describe("the scheduled mail lifecycle", () => {
   it.effect("waits for a step in flight before stopping the worker", () =>
     Effect.gen(function* waitsForStepInFlight() {
       const events: string[] = [];
+
       const startWorker = vi.fn<() => Effect.Effect<void, StepFailure>>(() =>
         Effect.sleep("2 seconds").pipe(
           Effect.andThen(Effect.sync(() => events.push("worker started")))
         )
       );
+
       const harness = createLifecycleHarness({ startWorker });
       harness.stopWorker.mockReturnValue(
         Effect.sync(() => events.push("worker stopped"))

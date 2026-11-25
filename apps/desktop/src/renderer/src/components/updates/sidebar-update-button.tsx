@@ -108,8 +108,10 @@ const SidebarUpdateButton = ({
   readonly updateApi: UpdateApi;
 }) => {
   const status = useUpdateStatus(updateApi);
+
   const { checkForUpdates, downloadUpdate, installUpdate, isCheckPending } =
     useUpdateActions(updateApi);
+
   const view = getSidebarUpdateView(status, isCheckPending);
 
   if (view.kind === "hidden") {
@@ -118,6 +120,7 @@ const SidebarUpdateButton = ({
 
   const isBusy =
     view.kind === "progress" || (view.kind === "check" && view.isChecking);
+
   const hasUpdate = view.kind !== "check";
 
   const handleClick = (): void => {

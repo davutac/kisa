@@ -22,6 +22,7 @@ export const handleScheduledMailOutcome = (
     } else {
       actions.notify("error", "Scheduled email needs attention");
     }
+
     return;
   }
 
@@ -29,6 +30,7 @@ export const handleScheduledMailOutcome = (
     actions.selectInbox(outcome.accountId);
     actions.setSentMailbox();
     actions.navigate("/");
+
     return;
   }
 

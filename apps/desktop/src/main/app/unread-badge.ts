@@ -59,6 +59,7 @@ export const updateUnreadBadge = <Overlay>({
 
   if (platform === "darwin" || platform === "linux") {
     app.setBadgeCount(normalizedCount);
+
     return;
   }
 
@@ -67,6 +68,7 @@ export const updateUnreadBadge = <Overlay>({
   }
 
   const overlay = normalizedCount === 0 ? null : createOverlay(normalizedCount);
+
   const description =
     normalizedCount === 0
       ? "No unread emails"
@@ -114,8 +116,10 @@ export const createUnreadBadgeBitmap = (count: number): Buffer => {
   const label = String(
     Math.min(MAX_WINDOWS_BADGE_COUNT, Math.max(1, Math.trunc(count)))
   );
+
   const labelWidth =
     (label.length * DIGIT_WIDTH + (label.length - 1) * DIGIT_GAP) * DIGIT_SCALE;
+
   const startX = Math.floor((BADGE_SIZE - labelWidth) / 2);
   const startY = Math.floor((BADGE_SIZE - DIGIT_HEIGHT * DIGIT_SCALE) / 2);
 
@@ -135,6 +139,7 @@ export const createUnreadBadgeBitmap = (count: number): Buffer => {
         const glyphX =
           startX +
           (digitIndex * (DIGIT_WIDTH + DIGIT_GAP) + columnIndex) * DIGIT_SCALE;
+
         const glyphY = startY + rowIndex * DIGIT_SCALE;
 
         for (let offsetY = 0; offsetY < DIGIT_SCALE; offsetY += 1) {

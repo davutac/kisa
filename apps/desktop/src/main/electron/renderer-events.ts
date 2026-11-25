@@ -3,7 +3,7 @@ import { BrowserWindow } from "electron";
 
 export interface RendererEventOwner {
   readonly id: number;
-  readonly once: (event: "destroyed", listener: () => void) => unknown;
+  readonly once: (event: "destroyed", listener: () => void) => void;
 }
 
 const canReceiveEvents = (window: BrowserWindow): boolean =>
@@ -16,6 +16,7 @@ export const sendRendererEvent = <A, I>(
   targetWindow?: BrowserWindow
 ): void => {
   const encoded = Schema.encodeUnknownSync(schema)(payload);
+
   const windows =
     targetWindow === undefined ? BrowserWindow.getAllWindows() : [targetWindow];
 

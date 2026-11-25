@@ -34,24 +34,32 @@ const authorizeAttachment = async (
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "kisa-scheduled-attachment-")
   );
+
   temporaryDirectories.push(directory);
   const filePath = path.join(directory, "attachment.txt");
   await writeFile(filePath, contents);
+
   const [record] = await authorizeOutgoingAttachmentFiles(
     [{ mediaType: "text/plain", path: filePath }],
     () => "attachment-1"
   );
+
   if (record === undefined) {
     throw new Error("Expected an authorized attachment");
   }
+
   const store = makeDraftAttachmentStore(path.join(directory, "user-data"));
+
   const adoption = await Effect.runPromise(
     store.adopt("scheduled-draft", [record])
   );
+
   const [owned] = adoption.attachments;
+
   if (owned === undefined) {
     throw new Error("Expected an app-owned attachment");
   }
+
   return { filePath: owned.path, record: owned };
 };
 
@@ -104,16 +112,20 @@ describe("scheduled attachment loading", () => {
 
   it("rejects a legacy source-file authorization at delivery time", async () => {
     expect.hasAssertions();
+
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "kisa-scheduled-legacy-attachment-")
     );
+
     temporaryDirectories.push(directory);
     const sourcePath = path.join(directory, "legacy.txt");
     await writeFile(sourcePath, "legacy");
+
     const [legacy] = await authorizeOutgoingAttachmentFiles(
       [{ mediaType: "text/plain", path: sourcePath }],
       () => "legacy-attachment"
     );
+
     if (legacy === undefined) {
       throw new Error("Expected an authorized legacy attachment");
     }
@@ -151,6 +163,7 @@ describe("scheduled attachment loading", () => {
     expect.hasAssertions();
     const { record } = await authorizeAttachment();
     const halfLimit = Math.floor(MAX_OUTGOING_ATTACHMENT_BYTES / 2) + 1;
+
     const oversized = [
       {
         ...record,
@@ -178,6 +191,8 @@ describe("scheduled attachment loading", () => {
     const probe = await open(filePath, "r");
     // Node does not export the runtime FileHandle prototype. This assertion is
     // limited to the deterministic descriptor-read mutation test below.
+    // SAFETY: `probe` is a FileHandle, so its prototype carries the `read`
+    // every FileHandle inherits.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const prototype = Object.getPrototypeOf(probe) as Pick<FileHandle, "read">;
     const originalRead = prototype.read;
@@ -189,11 +204,12 @@ describe("scheduled attachment loading", () => {
         ...arguments_: unknown[]
       ) {
         // The overload is selected dynamically by the production read call.
-        // oxlint-disable-next-line typescript/no-unsafe-assignment
+        // oxlint-disable-next-line typescript/no-unsafe-assignment, anti-slop/no-reflect-apply -- `read` is overloaded and must run on this handle with whichever arguments production passed.
         const result = await Reflect.apply(originalRead, this, arguments_);
         await writeFile(filePath, "changed!");
         const changedTime = new Date(record.mtimeMs + 60_000);
         await utimes(filePath, changedTime, changedTime);
+
         // oxlint-disable-next-line typescript/no-unsafe-return
         return result;
       }

@@ -75,6 +75,7 @@ export const SidebarRow = ({
     "data-current": isCurrent ? "" : undefined,
     variant: "ghost" as const,
   };
+
   const content = (
     <>
       {icon}
@@ -96,6 +97,7 @@ export const SidebarRow = ({
       )}
     </>
   );
+
   const button = disclosure ? (
     <CollapsibleTrigger {...rowProps}>{content}</CollapsibleTrigger>
   ) : (

@@ -77,6 +77,7 @@ describe("the Gmail dialect", () => {
       gmailMessageId: "1784930285839275621",
       gmailThreadId: "1784930285839275600",
     });
+
     expect(gmailDialect.identify(fetched)).toStrictEqual({
       messageId: "1784930285839275621",
       threadId: "1784930285839275600",
@@ -189,6 +190,7 @@ describe("the generic dialect", () => {
     const dotted = mailbox("INBOX.Receipts.2024", undefined, {
       delimiter: ".",
     });
+
     expect(genericDialect.userLabels([dotted])).toStrictEqual([
       {
         id: "u:INBOX/Receipts/2024",
@@ -232,10 +234,12 @@ describe("the generic dialect", () => {
 
   it("threads a reply and its original together in either order", () => {
     const original = message({ envelope: envelope({ messageId: "<root@x>" }) });
+
     const reply = message({
       envelope: envelope({ inReplyTo: "<mid@x>", messageId: "<reply@x>" }),
       headers: Buffer.from("References: <root@x>\r\n <mid@x>\r\n\r\n"),
     });
+
     const replyWithoutReferences = message({
       envelope: envelope({ inReplyTo: "<root@x>", messageId: "<late@x>" }),
     });
@@ -254,6 +258,7 @@ describe("the generic dialect", () => {
         size: 512,
         uid,
       });
+
     const identity = genericDialect.identify(bare(1));
 
     expect(identity?.messageId).toMatch(/^h:[\da-f]{32}$/u);

@@ -56,6 +56,7 @@ const DatabaseImportManifest = Schema.Struct({
   step: Schema.optional(DatabaseImportStep),
   version: Schema.Literal(1),
 });
+
 type DatabaseImportManifest = typeof DatabaseImportManifest.Type;
 
 /**
@@ -150,10 +151,12 @@ const readManifest = async (
     if (isMissingFileError(error)) {
       return undefined;
     }
+
     throw error;
   }
 
   let manifest: DatabaseImportManifest;
+
   try {
     manifest = Schema.decodeUnknownSync(DatabaseImportManifest)(
       JSON.parse(contents)
@@ -167,6 +170,7 @@ const readManifest = async (
   // restore, so a manifest naming another import's backup is refused.
   const databasePrefix = `${path.basename(databasePath)}.import-`;
   const importId = manifest.databaseFile.slice(databasePrefix.length);
+
   if (
     path.basename(manifest.databaseFile) !== manifest.databaseFile ||
     !manifest.databaseFile.startsWith(databasePrefix) ||
@@ -182,6 +186,7 @@ const readManifest = async (
 
 const syncFile = async (filePath: string): Promise<void> => {
   const file = await open(filePath, "r+");
+
   try {
     await file.sync();
   } finally {
@@ -200,6 +205,7 @@ const copyFileIfPresent = async (
     if (isMissingFileError(error)) {
       return;
     }
+
     throw error;
   }
 };
@@ -207,11 +213,13 @@ const copyFileIfPresent = async (
 const pathExists = async (filePath: string): Promise<boolean> => {
   try {
     await stat(filePath);
+
     return true;
   } catch (error) {
     if (isMissingFileError(error)) {
       return false;
     }
+
     throw error;
   }
 };
@@ -233,15 +241,19 @@ const backUpFile = async (
   }
 
   const partial = `${destination}.partial`;
+
   try {
     await copyFile(source, partial);
   } catch (error) {
     await rm(partial, { force: true });
+
     if (isMissingFileError(error)) {
       return;
     }
+
     throw error;
   }
+
   await chmod(partial, 0o600);
   await syncFile(partial);
   await rename(partial, destination);
@@ -262,6 +274,7 @@ const removeDatabaseFiles = async (databasePath: string): Promise<void> => {
  */
 const discardPendingImport = async (databasePath: string): Promise<void> => {
   let manifest: DatabaseImportManifest | undefined;
+
   try {
     manifest = await readManifest(databasePath);
   } catch {
@@ -274,6 +287,7 @@ const discardPendingImport = async (databasePath: string): Promise<void> => {
   }
 
   await rm(getImportManifestPath(databasePath), { force: true });
+
   if (manifest === undefined) {
     return;
   }
@@ -326,6 +340,7 @@ const restartOrQuit = (isDevelopment: boolean): void => {
   if (!isDevelopment) {
     app.relaunch();
   }
+
   app.quit();
 };
 
@@ -335,6 +350,7 @@ export const getDatabaseImportStatus = Effect.fn("getDatabaseImportStatus")(
     readonly isDevelopment: boolean;
   }) {
     const restart = options.isDevelopment ? "quit" : "relaunch";
+
     if (databaseImportState?.state === "importing") {
       return { restart, state: "importing" } satisfies DatabaseImportStatus;
     }
@@ -343,6 +359,7 @@ export const getDatabaseImportStatus = Effect.fn("getDatabaseImportStatus")(
       catch: statusError,
       try: () => hasPendingImport(options.activeDatabasePath),
     });
+
     return {
       restart,
       state: isPending ? "restart-pending" : "none",
@@ -379,6 +396,7 @@ export const restartForPendingDatabaseImport = Effect.fn(
     catch: restartError,
     try: () => hasPendingImport(options.activeDatabasePath),
   });
+
   if (databaseImportState?.state === "importing" || !isPending) {
     return yield* restartError();
   }
@@ -394,6 +412,7 @@ const writeManifest = async (
 ): Promise<void> => {
   const manifestPath = getImportManifestPath(databasePath);
   const temporaryPath = `${manifestPath}.${randomUUID()}.tmp`;
+
   try {
     await writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`, {
       mode: 0o600,
@@ -426,6 +445,7 @@ const isExpectedImportFile = (
   kind: DatabaseImportFileKind
 ): boolean => {
   const extension = path.extname(filePath).toLowerCase();
+
   return kind === "database"
     ? extension === ".db" || extension === ".sqlite" || extension === ".sqlite3"
     : extension === ".kisa-key";
@@ -438,6 +458,7 @@ export const attachDatabaseImportFile = Effect.fn("attachDatabaseImportFile")(
     filePath: string
   ) {
     const session = databaseImportState;
+
     if (
       session?.state !== "selecting" ||
       session.sessionId !== sessionId ||
@@ -450,7 +471,9 @@ export const attachDatabaseImportFile = Effect.fn("attachDatabaseImportFile")(
       catch: importError,
       try: () => stat(filePath),
     });
+
     const currentSession = databaseImportState;
+
     if (
       !fileInfo.isFile() ||
       currentSession?.state !== "selecting" ||
@@ -463,6 +486,7 @@ export const attachDatabaseImportFile = Effect.fn("attachDatabaseImportFile")(
       kind === "database"
         ? { ...currentSession, databasePath: filePath }
         : { ...currentSession, recoveryKeyPath: filePath };
+
     return {
       fileName: path.basename(filePath),
     } satisfies DatabaseImportFileSelection;
@@ -480,7 +504,9 @@ export const beginDatabaseImportSelection = Effect.fn(
     sessionId: randomUUID(),
     state: "selecting",
   };
+
   databaseImportState = session;
+
   return { sessionId: session.sessionId } satisfies DatabaseImportSession;
 });
 
@@ -503,6 +529,7 @@ export const selectDatabaseImportFile = Effect.fn("selectDatabaseImportFile")(
     kind: DatabaseImportFileKind
   ) {
     const session = databaseImportState;
+
     if (session?.state !== "selecting" || session.sessionId !== sessionId) {
       return yield* importError();
     }
@@ -521,6 +548,7 @@ export const selectDatabaseImportFile = Effect.fn("selectDatabaseImportFile")(
               { extensions: ["kisa-key"], name: "Kisa recovery key" },
             ]),
     });
+
     if (selection === undefined) {
       return null;
     }
@@ -532,14 +560,17 @@ export const selectDatabaseImportFile = Effect.fn("selectDatabaseImportFile")(
 /** Rejects once the import is stopped, so a wait can end with it. */
 const stopped = (signal: AbortSignal): Promise<never> => {
   const waiting = Promise.withResolvers<never>();
+
   const reject = (): void => {
     waiting.reject(importError());
   };
+
   if (signal.aborted) {
     reject();
   } else {
     signal.addEventListener("abort", reject, { once: true });
   }
+
   return waiting.promise;
 };
 
@@ -556,6 +587,7 @@ const offerRestart = async (
   signal: AbortSignal
 ): Promise<void> => {
   let result: Electron.MessageBoxReturnValue;
+
   try {
     result = await untilStopped(
       dialog.showMessageBox({
@@ -591,9 +623,11 @@ const offerRestart = async (
  */
 export const stopDatabaseImport = async (): Promise<void> => {
   const running = databaseImportState;
+
   if (running?.state !== "importing") {
     return;
   }
+
   await Effect.runPromise(Scope.close(running.stop, Exit.void));
   await running.ended;
 };
@@ -601,6 +635,7 @@ export const stopDatabaseImport = async (): Promise<void> => {
 export const importExistingDatabase = Effect.fn("importExistingDatabase")(
   function* importExistingDatabaseEffect(options: DatabaseImportOptions) {
     const session = databaseImportState;
+
     if (
       session?.state !== "selecting" ||
       session.sessionId !== options.sessionId ||
@@ -630,12 +665,15 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
         const key = decodeDatabaseRecoveryKeyFile(
           await readFile(recoveryKeyPath, "utf-8")
         );
+
         const directory = path.dirname(options.activeDatabasePath);
         const importId = randomUUID();
+
         const stagedDatabasePath = path.join(
           directory,
           `${path.basename(options.activeDatabasePath)}.import-${importId}`
         );
+
         const stagedKeyPath = `${stagedDatabasePath}.key`;
         let isPending = false;
 
@@ -667,6 +705,7 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
           );
 
           options.onProgress("validating");
+
           // A database from before the mail engine fails here: its migration
           // history predates the baseline, so it never replaces the live one.
           try {
@@ -679,6 +718,7 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
             validationFailed = !signal.aborted;
             throw error;
           }
+
           await rm(`${stagedDatabasePath}-wal`, { force: true });
           await rm(`${stagedDatabasePath}-shm`, { force: true });
 
@@ -702,9 +742,11 @@ export const importExistingDatabase = Effect.fn("importExistingDatabase")(
           isPending = true;
           options.onProgress("ready");
           await offerRestart(options.isDevelopment, signal);
+
           return "restart-pending";
         } finally {
           key.fill(0);
+
           if (!isPending) {
             await removeDatabaseFiles(stagedDatabasePath);
             await rm(stagedKeyPath, { force: true });
@@ -733,6 +775,7 @@ const backUpActiveDatabase = async (
   await mkdir(backupDirectory, { mode: 0o700, recursive: true });
   await chmod(backupDirectory, 0o700);
   const activeKeyPath = getDatabaseKeyPath(databasePath);
+
   const files = [
     databasePath,
     activeKeyPath,
@@ -772,6 +815,7 @@ const hasStagedFiles = async (paths: ActivationPaths): Promise<boolean> => {
     pathExists(paths.stagedDatabasePath),
     pathExists(paths.stagedKeyPath),
   ]);
+
   return hasDatabase && hasKey;
 };
 
@@ -780,6 +824,7 @@ const readRecordedStep = async (
   databasePath: string
 ): Promise<DatabaseImportManifest["step"]> => {
   const manifest = await readManifest(databasePath);
+
   return manifest?.step;
 };
 
@@ -818,11 +863,13 @@ const finishActivation = async (paths: ActivationPaths): Promise<void> => {
  */
 const dropUnswappedImport = async (paths: ActivationPaths): Promise<void> => {
   await rm(getImportManifestPath(paths.databasePath), { force: true });
+
   try {
     await rm(paths.backupDirectory, { force: true, recursive: true });
   } catch {
     // The backup is redundant here; leaving it costs disk space only.
   }
+
   await sweepStagedImports(paths.databasePath);
 };
 
@@ -841,11 +888,13 @@ const restoreFromBackup = async (paths: ActivationPaths): Promise<void> => {
     `${paths.databasePath}-wal`,
     `${paths.databasePath}-shm`,
   ];
+
   for (const activeFile of activeFiles) {
     const backupFile = path.join(
       paths.backupDirectory,
       path.basename(activeFile)
     );
+
     // oxlint-disable-next-line eslint/no-await-in-loop -- The database is put back before its key, one file at a time.
     if (await pathExists(backupFile)) {
       // oxlint-disable-next-line eslint/no-await-in-loop -- As above.
@@ -854,11 +903,13 @@ const restoreFromBackup = async (paths: ActivationPaths): Promise<void> => {
   }
 
   await rm(getImportManifestPath(paths.databasePath), { force: true });
+
   try {
     await rmdir(paths.backupDirectory);
   } catch {
     // Not empty, or already gone: either way nothing more to do.
   }
+
   await sweepStagedImports(paths.databasePath);
 };
 
@@ -877,8 +928,10 @@ const activateRecordedImport = async (
   if (step === "pending") {
     if (!(await hasStagedFiles(paths))) {
       await dropUnswappedImport(paths);
+
       return "dropped";
     }
+
     try {
       await backUpActiveDatabase(paths.databasePath, paths.backupDirectory);
       await removeUnfinishedReplacements(paths.databasePath);
@@ -890,14 +943,17 @@ const activateRecordedImport = async (
       // What is on disk decides, not where this code was when it threw.
       if ((await readRecordedStep(paths.databasePath)) === "pending") {
         await dropUnswappedImport(paths);
+
         return "dropped";
       }
     }
+
     step = await readRecordedStep(paths.databasePath);
   }
 
   if (step === "swapping") {
     let isSwapped = false;
+
     if (await hasStagedFiles(paths)) {
       try {
         await swapInStagedFiles(paths);
@@ -906,8 +962,10 @@ const activateRecordedImport = async (
         isSwapped = false;
       }
     }
+
     if (isSwapped) {
       await finishActivation(paths);
+
       return "activated";
     }
 
@@ -925,9 +983,11 @@ const activateRecordedImport = async (
       ),
       readRecordedStep(paths.databasePath),
     ]);
+
     if (!(hasBackupDatabase && hasBackupKey && recorded === "swapping")) {
       throw importError();
     }
+
     await removeUnfinishedReplacements(paths.databasePath);
     await writeManifest(paths.databasePath, { ...manifest, step: "restoring" });
     step = "restoring";
@@ -936,7 +996,9 @@ const activateRecordedImport = async (
   if (step !== "restoring") {
     throw importError();
   }
+
   await restoreFromBackup(paths);
+
   return "restored";
 };
 
@@ -954,14 +1016,17 @@ const activateUnrecordedImport = async (
     if (await pathExists(paths.backupDirectory)) {
       throw importError();
     }
+
     await rm(getImportManifestPath(paths.databasePath), { force: true });
     await sweepStagedImports(paths.databasePath);
+
     return "dropped";
   }
 
   await backUpActiveDatabase(paths.databasePath, paths.backupDirectory);
   await swapInStagedFiles(paths);
   await finishActivation(paths);
+
   return "activated";
 };
 
@@ -976,6 +1041,7 @@ export const activatePendingDatabaseImport = async (
   databasePath: string
 ): Promise<DatabaseImportActivation> => {
   let manifest: DatabaseImportManifest | undefined;
+
   try {
     manifest = await readManifest(databasePath);
   } catch (error) {
@@ -984,16 +1050,21 @@ export const activatePendingDatabaseImport = async (
     if (!(error instanceof DatabaseImportError)) {
       throw error;
     }
+
     await rm(getImportManifestPath(databasePath), { force: true });
     await sweepStagedImports(databasePath);
+
     return "dropped";
   }
+
   if (manifest === undefined) {
     await sweepStagedImports(databasePath);
+
     return "none";
   }
 
   const directory = path.dirname(databasePath);
+
   const paths: ActivationPaths = {
     backupDirectory: path.join(directory, "backups", manifest.backupDirectory),
     databasePath,

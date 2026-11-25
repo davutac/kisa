@@ -21,16 +21,20 @@ const hold = (draftId: string, send: Effect.Effect<string>) =>
     const fiber = yield* Effect.forkChild(
       holdSend({ accountId, draftId }, WINDOW, DELAY_MS, send)
     );
+
     yield* Effect.yieldNow;
+
     return fiber;
   });
 
 /** A send that counts itself. */
 const counted = () => {
   let sends = 0;
+
   return {
     send: Effect.sync(() => {
       sends += 1;
+
       return "sent";
     }),
     sends: () => sends,
@@ -69,6 +73,7 @@ describe("messages held for Undo send", () => {
         { accountId, draftId: "undone" },
         WINDOW
       );
+
       const result = yield* Fiber.join(fiber);
       yield* TestClock.adjust(DELAY_MS);
 
@@ -90,6 +95,7 @@ describe("messages held for Undo send", () => {
     Effect.gen(function* undoneTooLate() {
       const reached = yield* Deferred.make<true>();
       const finish = yield* Deferred.make<true>();
+
       const fiber = yield* hold(
         "too-late",
         Deferred.succeed(reached, true).pipe(
@@ -97,6 +103,7 @@ describe("messages held for Undo send", () => {
           Effect.as("sent")
         )
       );
+
       yield* TestClock.adjust(DELAY_MS);
       yield* Deferred.await(reached);
 
@@ -104,8 +111,10 @@ describe("messages held for Undo send", () => {
         { accountId, draftId: "too-late" },
         WINDOW
       );
+
       yield* Deferred.succeed(finish, true);
       const result = yield* Fiber.join(fiber);
+
       const afterwards = yield* cancelHeldSend(
         { accountId, draftId: "too-late" },
         WINDOW
@@ -127,6 +136,7 @@ describe("messages held for Undo send", () => {
       const error = yield* Effect.flip(
         cancelHeldSend({ accountId, draftId: "other-window" }, WINDOW + 1)
       );
+
       yield* TestClock.adjust(DELAY_MS);
 
       expect({
@@ -147,6 +157,7 @@ describe("messages held for Undo send", () => {
       const error = yield* Effect.flip(
         holdSend({ accountId, draftId: "twice" }, WINDOW, DELAY_MS, send)
       );
+
       yield* TestClock.adjust(DELAY_MS);
       yield* Fiber.join(fiber);
 
@@ -161,6 +172,7 @@ describe("messages held for Undo send", () => {
     Effect.gen(function* quitting() {
       const first = counted();
       const second = counted();
+
       const fibers = [
         yield* hold("quit-1", first.send),
         yield* hold("quit-2", second.send),
@@ -189,6 +201,7 @@ describe("messages held for Undo send", () => {
   it.effect("finish what follows a send before a quit lets go", () =>
     Effect.gen(function* quitWaitsForCleanup() {
       const cleaned = yield* Deferred.make<true>();
+
       const fiber = yield* Effect.forkChild(
         holdSend(
           { accountId, draftId: "cleanup" },
@@ -198,12 +211,15 @@ describe("messages held for Undo send", () => {
           () => Deferred.await(cleaned).pipe(Effect.asVoid)
         )
       );
+
       yield* Effect.yieldNow;
 
       const quit = yield* Deferred.make<true>();
+
       const quitting = yield* Effect.forkChild(
         releaseHeldSends().pipe(Effect.andThen(Deferred.succeed(quit, true)))
       );
+
       yield* Effect.yieldNow;
       const quitBeforeCleanup = yield* Deferred.isDone(quit);
       yield* Deferred.succeed(cleaned, true);
@@ -225,10 +241,12 @@ describe("messages held for Undo send", () => {
       const fiber = yield* hold("disconnected", send);
 
       yield* Fiber.interrupt(fiber);
+
       const undo = yield* cancelHeldSend(
         { accountId, draftId: "disconnected" },
         WINDOW
       );
+
       yield* TestClock.adjust(DELAY_MS);
 
       expect({

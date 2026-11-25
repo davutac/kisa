@@ -32,17 +32,21 @@ const PROVIDERS: readonly AccountProvider[] = [
 
 /** Half the 64px tile, to turn a body's centre into the tile's corner. */
 const TILE_HALF = 32;
+
 // Tiles stay out of the top strip, where the macOS traffic lights sit, and
 // keep a little clear of the window's other edges and the sign-in block.
 const FIELD_TOP_INSET = 48;
 const FIELD_INSET = 16;
 const BLOCK_MARGIN = 12;
+
 // After a long frame (a hidden window, a busy main thread) the tiles step as
 // though only a short one passed, so they never tunnel through each other.
 const MAX_STEP_SECONDS = 1 / 30;
 const SQUISH_SECONDS = 0.45;
+
 // A press that travels less than this is a boop, not a drag.
 const DRAG_THRESHOLD = 4;
+
 // A flick's speed is the pointer's over its last stretch of movement; a
 // pointer held still that long before letting go drops the tile instead.
 const FLICK_WINDOW_MS = 80;
@@ -74,12 +78,16 @@ const flickVelocity = (samples: readonly Sample[], now: number): Point => {
   const recent = samples.filter(
     (sample) => now - sample.time <= FLICK_WINDOW_MS
   );
+
   const first = recent.at(0);
   const last = recent.at(-1);
+
   if (!first || !last || last.time === first.time) {
     return { x: 0, y: 0 };
   }
+
   const seconds = (last.time - first.time) / 1000;
+
   return {
     x: (last.x - first.x) / seconds,
     y: (last.y - first.y) / seconds,
@@ -175,6 +183,7 @@ const FloatingProviderIcons = () => {
   const bodies = useRef<Body[] | null>(null);
   const grab = useRef<Grab | null>(null);
   const [placed, setPlaced] = useState(false);
+
   const tiles = useMemo(
     () =>
       PROVIDERS.map((provider): Tile => ({
@@ -188,16 +197,19 @@ const FloatingProviderIcons = () => {
 
   useAnimationFrame((_time, delta) => {
     const box = container.current?.getBoundingClientRect();
+
     // Hidden in a narrow window: nothing to place or move until it widens.
     if (!box || box.width === 0) {
       return;
     }
+
     const field: Rect = {
       left: FIELD_INSET - box.left,
       top: FIELD_TOP_INSET - box.top,
       right: window.innerWidth - FIELD_INSET - box.left,
       bottom: window.innerHeight - FIELD_INSET - box.top,
     };
+
     const block: Rect = {
       left: -BLOCK_MARGIN,
       top: -BLOCK_MARGIN,
@@ -230,6 +242,7 @@ const FloatingProviderIcons = () => {
   /** A pointer event's position in the simulation's coordinates. */
   const pointOf = (event: ReactPointerEvent): Point | null => {
     const box = container.current?.getBoundingClientRect();
+
     return box
       ? { x: event.clientX - box.left, y: event.clientY - box.top }
       : null;
@@ -239,9 +252,11 @@ const FloatingProviderIcons = () => {
     onPress: (event) => {
       const body = bodies.current?.[index];
       const point = pointOf(event);
+
       if (!body || !point || grab.current || event.button !== 0) {
         return;
       }
+
       event.currentTarget.setPointerCapture(event.pointerId);
       grab.current = {
         index,
@@ -257,9 +272,11 @@ const FloatingProviderIcons = () => {
       const held = grab.current;
       const body = bodies.current?.[index];
       const point = pointOf(event);
+
       if (!held || held.pointerId !== event.pointerId || !body || !point) {
         return;
       }
+
       held.dragged ||=
         Math.hypot(point.x - held.start.x, point.y - held.start.y) >
         DRAG_THRESHOLD;
@@ -278,20 +295,28 @@ const FloatingProviderIcons = () => {
     onRelease: (event, cancelled) => {
       const held = grab.current;
       const body = bodies.current?.[index];
+
       if (!held || held.pointerId !== event.pointerId || !body) {
         return false;
       }
+
       grab.current = null;
+
       if (held.dragged) {
         releaseBody(body, flickVelocity(held.samples, event.timeStamp));
+
         return false;
       }
+
       releaseBody(body, { x: 0, y: 0 });
       const point = pointOf(event);
+
       if (cancelled || !point) {
         return false;
       }
+
       boopBody(body, point);
+
       return true;
     },
   });

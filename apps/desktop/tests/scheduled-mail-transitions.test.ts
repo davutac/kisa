@@ -9,6 +9,7 @@ const EDITOR_ACTIONS = [
   "edit-save",
   "edit-send-now",
 ] as const;
+
 const ROW_ACTIONS = ["row-cancel", "row-discard", "row-send-now"] as const;
 
 describe(getScheduledMailActionRefusal, () => {

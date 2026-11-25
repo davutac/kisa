@@ -44,8 +44,10 @@ export const startFakeSmtpServer = async (
   const server: Server = createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
+
     if (behaviour.dropAtGreeting === true) {
       socket.destroy();
+
       return;
     }
 
@@ -53,6 +55,7 @@ export const startFakeSmtpServer = async (
     let from = "";
     let to: string[] = [];
     let data: string[] | undefined;
+
     const reply = (line: string): void => {
       socket.write(`${line}\r\n`);
     };
@@ -61,19 +64,26 @@ export const startFakeSmtpServer = async (
       if (data !== undefined) {
         if (line !== ".") {
           data.push(line.startsWith("..") ? line.slice(1) : line);
+
           return;
         }
+
         received.push({ data: data.join("\r\n"), from, to });
         data = undefined;
+
         if (behaviour.dropAfterData === true) {
           socket.destroy();
+
           return;
         }
+
         reply(behaviour.finalReply ?? "250 2.0.0 OK");
+
         return;
       }
 
       const command = line.slice(0, 4).toUpperCase();
+
       if (command === "EHLO") {
         reply("250-localhost");
         reply("250 AUTH PLAIN LOGIN XOAUTH2");
@@ -88,6 +98,7 @@ export const startFakeSmtpServer = async (
         reply("250 2.1.0 OK");
       } else if (command === "RCPT") {
         const recipient = addressOf(line);
+
         if (behaviour.refusedRecipients?.includes(recipient) === true) {
           reply("550 5.1.1 No such user");
         } else {
@@ -109,6 +120,7 @@ export const startFakeSmtpServer = async (
     socket.on("data", (chunk) => {
       buffer += chunk.toString("utf-8");
       let end = buffer.indexOf("\r\n");
+
       while (end !== -1) {
         handle(buffer.slice(0, end));
         buffer = buffer.slice(end + 2);
@@ -126,9 +138,12 @@ export const startFakeSmtpServer = async (
       for (const socket of sockets) {
         socket.destroy();
       }
+
       server.close();
       await once(server, "close");
     },
+    // SAFETY: the server is listening on a TCP port, awaited above, and for
+    // one `address()` returns an AddressInfo.
     port: (server.address() as AddressInfo).port,
     received,
   };

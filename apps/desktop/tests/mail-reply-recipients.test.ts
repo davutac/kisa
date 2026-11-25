@@ -75,6 +75,7 @@ describe(shouldShowReplyAll, () => {
     const toMessage = messageFrom("2", "sender@example.com", {
       to: "me@example.com, teammate@example.com",
     });
+
     const ccMessage = messageFrom("3", "sender@example.com", {
       cc: "teammate@example.com",
       to: "me@example.com",
@@ -98,6 +99,7 @@ describe(shouldShowReplyAll, () => {
     const oneRecipient = messageFrom("5", "me@example.com", {
       to: "one@example.com",
     });
+
     const multipleRecipients = messageFrom("6", "me@example.com", {
       to: "one@example.com, two@example.com",
     });

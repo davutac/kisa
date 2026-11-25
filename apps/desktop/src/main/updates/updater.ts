@@ -44,6 +44,7 @@ const updateLifecycle = createUpdateLifecycle({
   checkForUpdates: async () => {
     if (simulation !== undefined) {
       await simulation.check();
+
       return;
     }
 
@@ -52,6 +53,7 @@ const updateLifecycle = createUpdateLifecycle({
   downloadUpdate: async () => {
     if (simulation !== undefined) {
       await simulation.download();
+
       return;
     }
 
@@ -61,6 +63,7 @@ const updateLifecycle = createUpdateLifecycle({
   installUpdate: () => {
     if (simulation !== undefined) {
       simulation.install();
+
       return;
     }
 

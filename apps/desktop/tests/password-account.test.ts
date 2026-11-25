@@ -6,7 +6,7 @@ import { AccountId } from "@repo/mail/ids";
 // oxlint-disable typescript/no-unsafe-type-assertion vitest/prefer-import-in-mock
 import { ImapConnector } from "@repo/mail/session";
 import type { ImapConnectRequest } from "@repo/mail/session";
-import { Cause, Effect, Exit, Layer, Redacted } from "effect";
+import { Cause, Effect, Exit, Layer, Predicate, Redacted } from "effect";
 import type * as Electron from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,6 +43,7 @@ import {
 /** Reverses the bytes: reversible, and never the plaintext itself. */
 const seal = (value: string): Buffer =>
   Buffer.from(Buffer.from(value, "utf-8").toReversed());
+
 const unseal = (value: Buffer): string =>
   Buffer.from(value.toReversed()).toString("utf-8");
 
@@ -84,13 +85,13 @@ interface AccountRow {
 
 const accountRows = () =>
   connection
-    .prepare(
+    .prepare<unknown[], AccountRow>(
       `SELECT account_id, credentials, dialect, display_name, email, imap_host,
               imap_port, imap_security, provider, smtp_host, smtp_port,
               smtp_security, username
        FROM mail_accounts ORDER BY account_id`
     )
-    .all() as AccountRow[];
+    .all();
 
 /**
  * How the fake IMAP server answers a sign-in: "accept" as a server without
@@ -105,9 +106,11 @@ type ImapBehaviour =
 
 const gmailServer = (behaviour: ImapBehaviour): FakeImapServer => {
   const server = new FakeImapServer(GMAIL_MAILBOXES);
+
   if (behaviour === "gmail-hiding-all-mail") {
     server.unlisted.add(ALL_MAIL);
   }
+
   return server;
 };
 
@@ -126,6 +129,7 @@ const layers = (imap: ImapBehaviour, smtpServer: FakeSmtpServer) =>
         connect: (request) =>
           Effect.suspend(() => {
             imapRequests.push(request);
+
             if (imap === "refuse") {
               // The shape imapflow rejects with when LOGIN fails.
               return Effect.fail(
@@ -134,11 +138,13 @@ const layers = (imap: ImapBehaviour, smtpServer: FakeSmtpServer) =>
                 })
               );
             }
+
             if (imap === "unreachable") {
               return Effect.fail(
                 toTransportError(request.accountId, { code: "ECONNREFUSED" })
               );
             }
+
             return Effect.succeed(
               imap === "gmail" || imap === "gmail-hiding-all-mail"
                 ? gmailServer(imap).session()
@@ -156,6 +162,7 @@ const layers = (imap: ImapBehaviour, smtpServer: FakeSmtpServer) =>
         // The real sign-in check, pointed at the plaintext loopback server.
         verify: (request) => {
           smtpRequests.push(request);
+
           return verifyOverSmtp(
             {
               connectionTimeout: 2000,
@@ -181,6 +188,7 @@ const addAccount = async (
   } = {}
 ) => {
   smtp = await startFakeSmtpServer(options.smtp);
+
   return Effect.runPromiseExit(
     // As the setup window runs it: decode, verify, then save.
     decodePasswordAccountRequest(input).pipe(
@@ -197,10 +205,18 @@ const exposed = (exit: Exit.Exit<unknown, unknown>): string =>
     ? `${Cause.pretty(exit.cause)}\n${JSON.stringify(Cause.squash(exit.cause))}`
     : JSON.stringify(exit.value);
 
-const failureMessage = (exit: Exit.Exit<unknown, unknown>) =>
-  Exit.isFailure(exit)
-    ? (Cause.squash(exit.cause) as { readonly message?: string }).message
+const failureMessage = (exit: Exit.Exit<unknown, unknown>) => {
+  if (!Exit.isFailure(exit)) {
+    return;
+  }
+
+  const failure = Cause.squash(exit.cause);
+
+  return Predicate.hasProperty(failure, "message") &&
+    Predicate.isString(failure.message)
+    ? failure.message
     : undefined;
+};
 
 const manualServers = {
   imap: { host: "127.0.0.1", port: 993, security: "tls" },
@@ -220,6 +236,7 @@ const signInAgain = async (
 ) => {
   await smtp?.close();
   smtp = await startFakeSmtpServer(options.smtp);
+
   return Effect.runPromiseExit(
     verifyPasswordSignInAgain(
       AccountId.make(accountId),
@@ -235,9 +252,11 @@ const storedPassword = async (accountId: string): Promise<string> => {
   const row = accountRows().find(
     (candidate) => candidate.account_id === accountId
   );
+
   const stored = await Effect.runPromise(
     decryptPasswordCredentials(row?.credentials ?? Buffer.alloc(0))
   );
+
   return Redacted.value(stored);
 };
 
@@ -306,9 +325,11 @@ describe("adding an app password account", () => {
       username: "Name@iCloud.com",
     });
     expect(row?.credentials.includes(PASSWORD)).toBeFalsy();
+
     const stored = await Effect.runPromise(
       decryptPasswordCredentials(row?.credentials ?? Buffer.alloc(0))
     );
+
     expect(Redacted.value(stored)).toBe(PASSWORD);
     expect(connected).toStrictEqual(["name@icloud.com"]);
   });
@@ -368,7 +389,9 @@ describe("adding an app password account", () => {
       { email: "me@example.org", password: PASSWORD, servers: manualServers },
       { imap: "unreachable" }
     );
+
     await smtp?.close();
+
     const outgoing = await addAccount(
       { email: "me@example.org", password: PASSWORD, servers: manualServers },
       { smtp: { dropAtGreeting: true } }
@@ -406,6 +429,7 @@ describe("adding an app password account", () => {
 
   it("refuses to save over an address connected while it was being verified", async () => {
     smtp = await startFakeSmtpServer();
+
     const verified = await Effect.runPromise(
       decodePasswordAccountRequest({
         email: "name@icloud.com",
@@ -415,6 +439,7 @@ describe("adding an app password account", () => {
         Effect.provide(layers("accept", smtp))
       )
     );
+
     // Another sign-in for the same address finished first.
     await Effect.runPromise(
       savePasswordAccount(verified).pipe(Effect.provide(TestDatabase))
@@ -462,9 +487,11 @@ describe("adding an app password account", () => {
       provider: "gmail",
       username: "Me@gmail.com",
     });
+
     const stored = await Effect.runPromise(
       decryptPasswordCredentials(row?.credentials ?? Buffer.alloc(0))
     );
+
     expect(Redacted.value(stored)).toBe("abcdefghijklmnop");
   });
 
@@ -898,12 +925,14 @@ describe("signing an app password account in again", () => {
     await addAccount({ email: "name@icloud.com", password: PASSWORD });
     await smtp?.close();
     smtp = await startFakeSmtpServer();
+
     const verified = await Effect.runPromise(
       verifyPasswordSignInAgain(
         AccountId.make("name@icloud.com"),
         Redacted.make(NEW_PASSWORD)
       ).pipe(Effect.provide(layers("accept", smtp)))
     );
+
     connection.prepare("DELETE FROM mail_accounts").run();
 
     const exit = await Effect.runPromiseExit(

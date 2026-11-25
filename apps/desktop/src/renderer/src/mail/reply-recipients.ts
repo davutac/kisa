@@ -15,6 +15,7 @@ const getAddresses = (header?: string): readonly string[] => {
   }
 
   const addresses = extractEmailAddresses(header);
+
   return addresses.length > 0 ? addresses : [parseMailboxAddress(header).email];
 };
 
@@ -25,6 +26,7 @@ const uniqueAddresses = (
   const excluded = new Set(
     excludedAddresses.map((address) => address.toLowerCase())
   );
+
   const seen = new Set<string>();
 
   return addresses.filter((address) => {
@@ -35,6 +37,7 @@ const uniqueAddresses = (
     }
 
     seen.add(normalizedAddress);
+
     return true;
   });
 };
@@ -52,9 +55,11 @@ export const getInitialReplyRecipients = (
     getAddresses(latestMessage.replyTo ?? latestMessage.from),
     [accountId]
   );
+
   const fallbackAddresses = uniqueAddresses(getAddresses(latestMessage.to), [
     accountId,
   ]);
+
   const toAddresses =
     senderAddresses.length > 0 ? senderAddresses : fallbackAddresses;
 
@@ -66,7 +71,9 @@ export const getInitialReplyRecipients = (
     accountId,
     ...toAddresses,
   ]);
+
   const replyAllToAddresses = [...toAddresses, ...originalToAddresses];
+
   const ccAddresses = uniqueAddresses(getAddresses(latestMessage.cc), [
     accountId,
     ...replyAllToAddresses,

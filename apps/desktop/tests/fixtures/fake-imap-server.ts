@@ -84,12 +84,14 @@ const toFetched = (
             .map(([name, value]) => `${name}: ${value}`)
             .join("\r\n")}\r\n\r\n`
         );
+
   const sections =
     fields.sections === undefined
       ? undefined
       : new Map(
           fields.sections.flatMap((section) => {
             const value = message.sections?.[section];
+
             return value === undefined
               ? []
               : [[section, Buffer.from(value, "latin1")] as const];
@@ -119,35 +121,44 @@ const searchMailbox = (
   search: MailboxSearch
 ): readonly number[] => {
   const messages = [...mailbox.messages.values()];
+
   const matching = messages.filter((message) => {
     switch (search.kind) {
       case "all": {
         return true;
       }
+
       case "uidRange": {
         return message.uid >= search.from && message.uid <= search.to;
       }
+
       case "gmailThread": {
         return message.gmailThreadId === search.threadId;
       }
+
       case "gmailMessage": {
         return message.gmailMessageId === search.messageId;
       }
+
       case "gmailRaw": {
         // Only the `rfc822msgid:` operator the engine uses.
         const [, wanted] = /^rfc822msgid:(?<id>\S+)$/u.exec(search.query) ?? [];
+
         return wanted !== undefined && message.envelope.messageId === wanted;
       }
+
       case "header": {
         return search.name.toLowerCase() === "message-id"
           ? message.envelope.messageId === search.value
           : message.headers?.[search.name.toLowerCase()] === search.value;
       }
+
       default: {
         return false;
       }
     }
   });
+
   return matching
     .map((message) => message.uid)
     .toSorted((left, right) => left - right);
@@ -157,8 +168,10 @@ const searchMailbox = (
 const parseAppended = (raw: string, flags: readonly string[]) => {
   const [head = ""] = raw.split("\r\n\r\n");
   const headers = new Map<string, string>();
+
   for (const line of head.replaceAll(/\r\n[ \t]/gu, " ").split("\r\n")) {
     const colon = line.indexOf(":");
+
     if (colon > 0) {
       headers.set(
         line.slice(0, colon).toLowerCase(),
@@ -166,6 +179,7 @@ const parseAppended = (raw: string, flags: readonly string[]) => {
       );
     }
   }
+
   return {
     envelope: envelope({
       from: [{ address: "test@example.com" }],
@@ -257,6 +271,7 @@ export class FakeImapServer {
   ) {
     this.capabilities = new Set(capabilities);
     this.gmailAllMail = gmailAllMail;
+
     for (const mailbox of mailboxes) {
       this.mailboxes.set(mailbox.path, {
         highestModseq: this.modseq,
@@ -277,6 +292,7 @@ export class FakeImapServer {
   private nextValidity(): bigint {
     const validity = this.validities;
     this.validities += 1000n;
+
     return validity;
   }
 
@@ -316,8 +332,10 @@ export class FakeImapServer {
       name === path || name.startsWith(`${path}/`)
         ? `${destination}${name.slice(path.length)}`
         : name;
+
     // Copied first: the loop moves entries of the map it reads.
     const before = [...this.mailboxes];
+
     for (const [name, mailbox] of before) {
       if (renamed(name) !== name) {
         this.mailboxes.delete(name);
@@ -327,14 +345,17 @@ export class FakeImapServer {
         });
       }
     }
+
     this.relabel(renamed);
   }
 
   private mailbox(path: string): FakeMailbox {
     const mailbox = this.mailboxes.get(path);
+
     if (mailbox === undefined) {
       throw new Error(`no mailbox ${path}`);
     }
+
     return mailbox;
   }
 
@@ -362,12 +383,14 @@ export class FakeImapServer {
   nextWatch(): Promise<null> {
     const started = Promise.withResolvers<null>();
     this.onWatch = () => started.resolve(null);
+
     return started.promise;
   }
 
   private nextModseq(mailbox: FakeMailbox): bigint {
     this.modseq += 1n;
     mailbox.highestModseq = this.modseq;
+
     return this.modseq;
   }
 
@@ -384,6 +407,7 @@ export class FakeImapServer {
       uid,
     });
     this.report(path, "arrived");
+
     return uid;
   }
 
@@ -395,6 +419,7 @@ export class FakeImapServer {
   setFlags(path: string, uid: number, flags: readonly string[]): void {
     const mailbox = this.mailbox(path);
     const message = mailbox.messages.get(uid);
+
     if (message !== undefined) {
       message.flags = flags;
       message.modseq = this.nextModseq(mailbox);
@@ -412,6 +437,7 @@ export class FakeImapServer {
     flags: readonly string[]
   ): void {
     const message = this.mailbox(path).messages.get(uid);
+
     if (message !== undefined) {
       message.flags = flags;
     }
@@ -420,6 +446,7 @@ export class FakeImapServer {
   setGmailLabels(path: string, uid: number, labels: readonly string[]): void {
     const mailbox = this.mailbox(path);
     const message = mailbox.messages.get(uid);
+
     if (message !== undefined) {
       message.gmailLabels = labels;
       message.modseq = this.nextModseq(mailbox);
@@ -434,19 +461,24 @@ export class FakeImapServer {
   /** Moves a copy: it leaves `from` and arrives in `to` under a new UID. */
   move(from: string, uid: number, to: string): number {
     const message = this.mailbox(from).messages.get(uid);
+
     if (message === undefined) {
       throw new Error("no such message");
     }
+
     this.expunge(from, uid);
+
     return this.deliver(to, message);
   }
 
   /** Copies a message into `to` under a new UID, as another client would. */
   copy(from: string, uid: number, to: string): number {
     const message = this.mailbox(from).messages.get(uid);
+
     if (message === undefined) {
       throw new Error("no such message");
     }
+
     return this.deliver(to, message);
   }
 
@@ -477,6 +509,7 @@ export class FakeImapServer {
         if (message.gmailLabels !== undefined) {
           message.gmailLabels = message.gmailLabels.flatMap((label) => {
             const next = change(label);
+
             return next === undefined ? [] : [next];
           });
         }
@@ -490,6 +523,7 @@ export class FakeImapServer {
     mailbox.messages.clear();
     mailbox.uidValidity += 1n;
     mailbox.uidNext = 1;
+
     for (const message of messages) {
       this.deliver(path, message);
     }
@@ -499,6 +533,7 @@ export class FakeImapServer {
     const withMailbox = <A>(path: string, run: (mailbox: FakeMailbox) => A) =>
       Effect.suspend(() => {
         const mailbox = this.mailboxes.get(path);
+
         return mailbox === undefined
           ? Effect.fail(new MailboxMissingError({ accountId, path }))
           : Effect.sync(() => run(mailbox));
@@ -517,6 +552,7 @@ export class FakeImapServer {
     ) =>
       Effect.suspend(() => {
         const mailbox = this.mailboxes.get(path);
+
         return mailbox === undefined || mailbox.uidValidity !== uidValidity
           ? Effect.fail(new MailboxMissingError({ accountId, path }))
           : Effect.sync(() => run(mailbox));
@@ -544,6 +580,7 @@ export class FakeImapServer {
       Effect.suspend(
         (): Effect.Effect<void, MailProtocolError | MailboxMissingError> => {
           this.beforeCommand?.(call);
+
           return destination !== undefined && !this.mailboxes.has(destination)
             ? Effect.fail(
                 new MailProtocolError({
@@ -578,9 +615,11 @@ export class FakeImapServer {
     ): void => {
       for (const uid of uids) {
         const message = mailbox.messages.get(uid);
+
         if (message === undefined) {
           continue;
         }
+
         if (this.gmailAllMail !== undefined && destination === "INBOX") {
           this.deliver(this.gmailAllMail, {
             ...message,
@@ -649,10 +688,12 @@ export class FakeImapServer {
                     path,
                     selection,
                   });
+
                   const uids =
                     selection.kind === "uids"
                       ? new Set(selection.uids)
                       : undefined;
+
                   return [...mailbox.messages.values()]
                     .filter((message) =>
                       uids === undefined
@@ -686,18 +727,20 @@ export class FakeImapServer {
       fetchSection: (path, uidValidity, uid, section) =>
         selected(path, uidValidity, (mailbox) => {
           const value = mailbox.messages.get(uid)?.sections?.[section];
+
           return value === undefined ? undefined : Buffer.from(value, "latin1");
         }),
       hasMessage: (path, search) =>
         withMailbox(path, (mailbox) => {
           this.onRead?.(path);
           this.calls.push(`search ${path} ${search.kind}`);
+
           return searchMailbox(mailbox, search).length > 0;
         }),
       listMailboxes: Effect.sync(() =>
-        [...this.mailboxes.values()]
-          .filter((mailbox) => !this.unlisted.has(mailbox.info.path))
-          .map((mailbox) => mailbox.info)
+        [...this.mailboxes.values()].flatMap((mailbox) =>
+          this.unlisted.has(mailbox.info.path) ? [] : [mailbox.info]
+        )
       ),
       move: (path, uidValidity, uids, destination) =>
         changing(
@@ -706,6 +749,7 @@ export class FakeImapServer {
           uidValidity,
           (mailbox) => {
             copyInto(mailbox, uids, destination);
+
             for (const uid of uids) {
               mailbox.messages.delete(uid);
             }
@@ -724,6 +768,7 @@ export class FakeImapServer {
           Effect.andThen(
             selected(path, uidValidity, (mailbox) => {
               this.calls.push(`search ${path} ${search.kind}`);
+
               return searchMailbox(mailbox, search);
             })
           )
@@ -736,6 +781,7 @@ export class FakeImapServer {
           (mailbox) => {
             for (const uid of uids) {
               const message = mailbox.messages.get(uid);
+
               if (message !== undefined) {
                 this.setFlags(
                   path,
@@ -756,6 +802,7 @@ export class FakeImapServer {
           (mailbox) => {
             for (const uid of uids) {
               const message = mailbox.messages.get(uid);
+
               if (message !== undefined) {
                 const current = message.gmailLabels ?? [];
                 this.setGmailLabels(
@@ -776,6 +823,7 @@ export class FakeImapServer {
             MailConnectionError | MailboxMissingError
           > => {
             const failure = this.failStatus?.(path);
+
             if (failure === "dropped") {
               return Effect.fail(
                 new MailConnectionError({
@@ -784,12 +832,15 @@ export class FakeImapServer {
                 })
               );
             }
+
             if (failure === "refused") {
               return Effect.fail(new MailboxMissingError({ accountId, path }));
             }
+
             return withMailbox(path, (mailbox) => {
               this.statuses.push(path);
               this.onStatus?.(path);
+
               return {
                 highestModseq: this.capabilities.has("CONDSTORE")
                   ? mailbox.highestModseq
@@ -811,6 +862,7 @@ export class FakeImapServer {
           this.calls.push(`watch ${path}`);
           this.watches.push(path);
           const reported = Deferred.makeUnsafe<WatchOutcome>();
+
           const watcher = {
             end: (outcome: WatchOutcome): void => {
               this.watchers.delete(watcher);
@@ -818,8 +870,10 @@ export class FakeImapServer {
             },
             path,
           };
+
           this.watchers.add(watcher);
           this.onWatch?.();
+
           return Deferred.await(reported).pipe(
             Effect.raceFirst(
               Deferred.await(options.stop).pipe(

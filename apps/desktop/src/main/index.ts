@@ -81,6 +81,7 @@ if (hasSingleInstanceLock) {
 
       if (window === undefined) {
         createWindow();
+
         return;
       }
 
@@ -112,6 +113,7 @@ const shutdown = createShutdown({
   },
   scheduleDeadline: (run, delayMs) => {
     const timeout = setTimeout(run, delayMs);
+
     return {
       cancel: () => {
         clearTimeout(timeout);

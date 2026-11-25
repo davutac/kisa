@@ -15,6 +15,7 @@ const createSavedFile = (): string => {
   directories.push(directory);
   const filePath = path.join(directory, "invoice.pdf");
   writeFileSync(filePath, "%PDF-1.7");
+
   return filePath;
 };
 

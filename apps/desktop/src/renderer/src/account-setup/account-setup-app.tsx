@@ -73,6 +73,7 @@ const FIELD_IDS = {
   smtpHost: "account-smtp-host",
   smtpPort: "account-smtp-port",
 } as const satisfies Record<AccountSetupField, string>;
+
 const PROBLEM_ID = "account-setup-problem";
 
 // The notices under the form ease in; the form's own problem line, which
@@ -109,6 +110,7 @@ const titleFor = (mode: AccountSetupMode): string => {
   if (SIGN_IN_AGAIN !== undefined) {
     return "Sign in again";
   }
+
   return mode.kind === "preset"
     ? `Add ${mode.preset.title} account`
     : TITLES[mode.kind];
@@ -175,6 +177,7 @@ const ServerFieldset = ({
 }: ServerFieldsetProps) => {
   const hostField = side === "imap" ? "imapHost" : "smtpHost";
   const portField = side === "imap" ? "imapPort" : "smtpPort";
+
   const describe = (field: AccountSetupField) =>
     invalidField === field ? PROBLEM_ID : undefined;
 
@@ -408,6 +411,7 @@ const ProviderPicker = ({ focused, onPick }: ProviderPickerProps) => (
     {PROVIDER_OPTIONS.map(({ description, provider }) => {
       const isUnavailable =
         provider === "outlook" && !CAN_SIGN_IN_WITH_MICROSOFT;
+
       return (
         <Button
           // The window opens to pick a provider; focus starts on one.
@@ -488,6 +492,7 @@ const describeMode = (mode: AccountSetupMode): string => {
       SIGN_IN_AGAIN.email
     );
   }
+
   return mode.kind === "preset"
     ? PRESET_COPY[mode.preset.provider].description
     : DESCRIPTIONS[mode.kind];
@@ -501,11 +506,13 @@ const describeMode = (mode: AccountSetupMode): string => {
  */
 const AccountSetupApp = () => {
   const bridge = window.accountSetup;
+
   const [form, setForm] = useState<AccountSetupForm>(() =>
     SIGN_IN_AGAIN === undefined
       ? INITIAL_ACCOUNT_SETUP_FORM
       : createSignInAgainForm(SIGN_IN_AGAIN)
   );
+
   const [hasPassword, setHasPassword] = useState(false);
   const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
   const [pendingSignIn, setPendingSignIn] = useState<SignInMethod>();
@@ -536,6 +543,7 @@ const AccountSetupApp = () => {
   };
 
   const { provider } = form;
+
   if (provider === undefined) {
     return (
       <ProviderStep
@@ -571,6 +579,7 @@ const AccountSetupApp = () => {
       async () => {
         try {
           const reply = await send();
+
           // A sign-in the user stopped themselves is not an error to report.
           if (!(reply.ok || wasCancelledRef.current)) {
             setError(reply.error);
@@ -587,14 +596,17 @@ const AccountSetupApp = () => {
 
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
+
     if (bridge === undefined || isSubmitting) {
       return;
     }
 
     setHasTriedSubmit(true);
     setError(undefined);
+
     if (problem !== undefined) {
       focusField(problem.field);
+
       return;
     }
 
@@ -604,8 +616,10 @@ const AccountSetupApp = () => {
           bridge.signInWithMicrosoft(toMicrosoftSubmission(form, SIGN_IN_AGAIN))
         );
       }
+
       return;
     }
+
     const password = passwordRef.current?.value ?? "";
     await signIn("password", () =>
       bridge.submit(

@@ -14,6 +14,7 @@ export const parseEmailAddressList = (value: string): readonly string[] => {
     .split(/[,;\n]+/u)
     .map((token) => token.trim())
     .filter((token) => token.length > 0);
+
   const addresses = tokens.map((token) => extractEmailAddresses(token));
 
   return addresses.every((matches) => matches.length === 1)
@@ -26,6 +27,7 @@ export const mergeUniqueEmailAddresses = (
   additions: readonly string[]
 ): readonly string[] => {
   const seen = new Set(current.map((address) => address.toLowerCase()));
+
   const uniqueAdditions = additions.filter((address) => {
     const normalizedAddress = address.toLowerCase();
 
@@ -34,6 +36,7 @@ export const mergeUniqueEmailAddresses = (
     }
 
     seen.add(normalizedAddress);
+
     return true;
   });
 
@@ -56,7 +59,9 @@ export const getThreadEmailAddresses = (
   const excludedAddresses = new Set(
     excluded.map((address) => address.toLowerCase())
   );
+
   const newestFirst = messages.toReversed();
+
   const addresses = newestFirst.flatMap((message) =>
     [
       message.replyTo,
@@ -91,6 +96,7 @@ export const findEmailAddressSuggestions = (
   }
 
   const seen = new Set(excluded.map((address) => address.toLowerCase()));
+
   const unique = candidates.filter(({ address }) => {
     const normalizedAddress = address.toLowerCase();
 
@@ -99,6 +105,7 @@ export const findEmailAddressSuggestions = (
     }
 
     seen.add(normalizedAddress);
+
     return true;
   });
 
@@ -118,8 +125,10 @@ export const parseMailboxAddress = (header: string): MailboxAddress => {
   }
 
   const angleBracketIndex = header.indexOf("<");
+
   const rawName =
     angleBracketIndex === -1 ? "" : header.slice(0, angleBracketIndex).trim();
+
   const name = rawName.replaceAll(/^"|"$/gu, "").trim();
 
   return name.length === 0 ? { email } : { email, name };

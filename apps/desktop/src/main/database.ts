@@ -42,6 +42,7 @@ import { exportDatabaseRecoveryKey as exportRecoveryKey } from "./database-recov
 import { sendRendererEvent } from "./electron/renderer-events";
 
 export { DatabaseError } from "@repo/database/runtime";
+
 export { beginDatabaseImportSelection as beginDatabaseImport } from "./database-import";
 
 const getMigrationsFolder = (): string => {
@@ -87,6 +88,7 @@ const databaseKeyProtector = {
   },
   encrypt: async (plaintext: string): Promise<Buffer> => {
     await requireSecureDatabaseKeyStorage();
+
     return safeStorage.encryptStringAsync(plaintext);
   },
 };
@@ -101,7 +103,9 @@ const createRuntime = (databasePath: string, databaseKey: Buffer) => {
         [databasePath, migrationsFolder],
         { serviceName: "Kisa Database", stdio: "inherit" }
       );
+
       child.postMessage({ _tag: "DatabaseUnlock", key: databaseKey });
+
       return child;
     })
   );
@@ -160,6 +164,7 @@ let unannouncedImportActivation: DatabaseImportActivation = "none";
 export const takeImportActivation = (): DatabaseImportActivation => {
   const activation = unannouncedImportActivation;
   unannouncedImportActivation = "none";
+
   return activation;
 };
 
@@ -170,13 +175,16 @@ const getDatabaseRuntime = Effect.fn("getDatabaseRuntime")(
     }
 
     const databasePath = getActiveDatabasePath();
+
     const activation = yield* Effect.tryPromise({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
       try: () => activatePendingDatabaseImport(databasePath),
     });
+
     if (activation === "dropped" || activation === "restored") {
       unannouncedImportActivation = activation;
     }
+
     const nextDatabaseKey = yield* Effect.tryPromise({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
       try: () => loadDatabaseKey(databasePath),
@@ -184,6 +192,7 @@ const getDatabaseRuntime = Effect.fn("getDatabaseRuntime")(
 
     databaseKey = nextDatabaseKey;
     databaseRuntime = createRuntime(databasePath, nextDatabaseKey);
+
     return databaseRuntime;
   }
 );
@@ -195,11 +204,13 @@ export const startDatabase = Effect.fn("startDatabase")(
     }
 
     const runtime = yield* getDatabaseRuntime();
+
     const rpc = yield* Effect.tryPromise({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
       try: async () => {
         const nextRpc = await runtime.runPromise(DatabaseRpcClient);
         await runtime.runPromise(nextRpc.DatabaseReady());
+
         return nextRpc;
       },
     });
@@ -330,6 +341,7 @@ export const closeDatabase = Effect.fn("closeDatabase")(
 
     if (runtime === null) {
       key?.fill(0);
+
       return;
     }
 

@@ -4,6 +4,7 @@ import { createContext, use } from "react";
 import type { Account } from "@/shared/ipc/accounts";
 
 const AccountsContext = createContext<readonly Account[]>([]);
+
 const ReorderAccountsContext = createContext<
   (accounts: readonly Account[]) => Promise<void>
 >(() => Promise.resolve());

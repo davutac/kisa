@@ -26,6 +26,7 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   const { authGateState } = useRouteContext({ from: "__root__" });
+
   const isThreadWindow = useRouterState({
     select: ({ location }) => location.pathname.startsWith("/thread/"),
   });

@@ -51,6 +51,7 @@ export const updateAppSettingsState = async (
 
   try {
     const reply = await appSettingsApi.set(next);
+
     if (version === updateVersion) {
       publishAppSettings(reply.ok ? reply.data : previous);
     }

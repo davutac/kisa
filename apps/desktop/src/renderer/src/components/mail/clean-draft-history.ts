@@ -25,12 +25,15 @@ interface CleanDraftHistoryChange {
 
 const getNextCleanNumber = (history: readonly CleanDraftVersion[]): number => {
   let highest = 0;
+
   for (const { id } of history) {
     const number = /^clean-(?<number>\d+)(?:-|$)/u.exec(id)?.groups?.number;
+
     if (number !== undefined) {
       highest = Math.max(highest, Number(number));
     }
   }
+
   return highest + 1;
 };
 
@@ -49,6 +52,7 @@ export const appendPendingCleanDraftVersion = (
   original: DraftVersionContent
 ): CleanDraftHistoryChange => {
   const cleanNumber = getNextCleanNumber(history);
+
   const version: CleanDraftVersion = {
     body: original.body,
     id: `clean-${cleanNumber}-${crypto.randomUUID()}`,
@@ -74,15 +78,18 @@ export const completePendingCleanDraftVersion = (
   const pending = history.find(
     ({ id, status }) => id === versionId && status === "loading"
   );
+
   if (pending === undefined) {
     return undefined;
   }
+
   const version: CleanDraftVersion = {
     ...pending,
     body: cleaned.body,
     status: "ready",
     subject: truncateSubject(cleaned.subject),
   };
+
   return {
     history: history.map((current) =>
       current.id === versionId ? version : current
@@ -99,6 +106,7 @@ export const dismissCleanDraftVersion = (
   const dismissedIndex = history.findIndex(
     ({ id }) => id === dismissedVersionId
   );
+
   if (dismissedIndex < 1) {
     return {
       history,
@@ -109,13 +117,16 @@ export const dismissCleanDraftVersion = (
 
   const nextHistory = history.filter(({ id }) => id !== dismissedVersionId);
   let precedingReadyVersion: CleanDraftVersion | null = null;
+
   for (let index = dismissedIndex - 1; index >= 0; index -= 1) {
     const candidate = nextHistory[index];
+
     if (candidate?.status === "ready") {
       precedingReadyVersion = candidate;
       break;
     }
   }
+
   const selectedVersion =
     dismissedVersionId === selectedVersionId
       ? precedingReadyVersion

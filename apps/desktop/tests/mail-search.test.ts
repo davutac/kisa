@@ -33,6 +33,7 @@ vi.mock(import("../src/main/database"), () => ({
 
 const connection = openDatabaseConnection(":memory:");
 const database = createDatabaseClient(connection);
+
 const executeRemoteQuery: DatabaseRemoteCallback = (
   query,
   parameters,
@@ -42,6 +43,7 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
 
   if (method === "run") {
     statement.run(...parameters);
+
     return Promise.resolve({ rows: [] });
   }
 
@@ -53,6 +55,7 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
 
   return Promise.resolve({ rows: statement.all(...parameters) });
 };
+
 const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
 
 const emptyAccountAddresses = (query: string, limit: number) =>
@@ -68,6 +71,7 @@ describe("mail search", () => {
         new URL("../../../packages/database/drizzle", import.meta.url)
       )
     );
+
     const insert = connection.prepare(`
       INSERT INTO mail_threads (
         account_id, attachments, from_address, has_attachments, is_in_inbox,
@@ -116,6 +120,7 @@ describe("mail search", () => {
       "spam-thread",
       3
     );
+
     const insertMessage = connection.prepare(`
       INSERT INTO mail_messages (
         account_id, bcc_addresses, cc_addresses, from_address, from_name,
@@ -190,6 +195,7 @@ describe("mail search", () => {
       accountIds: ["one@example.com"],
       filters: [{ field: "label", value: "inbox" }],
     });
+
     const important = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],
       filters: [{ field: "label", value: "important" }],
@@ -243,6 +249,7 @@ describe("mail search", () => {
       ) VALUES ('one@example.com', '[]', 'star@example.com', 0, 0, 0, 0,
         ?, 0, ?, ?, 'latest', 1, '', 'Starred', ?, 4)`
     );
+
     insert.run(0, '["STARRED"]', 7, "starred-thread");
     insert.run(1, '["STARRED","TRASH"]', 6, "trashed-star");
     insert.run(0, '["u:starred"]', 5, "folder-star");
@@ -253,6 +260,7 @@ describe("mail search", () => {
           accountIds: ["one@example.com"],
           filters: [{ field, value: "starred" }],
         });
+
         return results.threads.map(({ threadId }) => threadId);
       };
 
@@ -288,14 +296,17 @@ describe("mail search", () => {
     const defaultResults = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],
     });
+
     const spam = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],
       filters: [{ field: "label", value: "spam" }],
     });
+
     const defaultText = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],
       text: "needle",
     });
+
     const spamText = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],
       filters: [{ field: "label", value: "spam" }],
@@ -345,9 +356,11 @@ describe("mail search", () => {
 
   it("does not reload an account already in memory", async () => {
     let queryCount = 0;
+
     const countingDatabase = createRemoteDatabaseClient(
       (query, parameters, method) => {
         queryCount += 1;
+
         return executeRemoteQuery(query, parameters, method);
       }
     );

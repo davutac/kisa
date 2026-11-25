@@ -15,6 +15,8 @@ import {
 import { isHeldDraft } from "../src/main/mail/held-sends";
 import type { MailMessageSendRequest } from "../src/shared/ipc/mail";
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const state = vi.hoisted(() => ({
   drafts: new Set<string>(),
   events: [] as string[],
@@ -28,6 +30,7 @@ vi.mock("../src/main/settings/app-settings", () => ({
 
 vi.mock("../src/main/mail/mail-drafts", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     discardMailDraft: ({ draftId }: { readonly draftId: string }) =>
       MockEffect.sync(() => {
@@ -50,13 +53,16 @@ vi.mock("../src/main/mail/outgoing-attachment-authorizations", () => ({
 
 vi.mock("../src/main/mail/engine/mail-send", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   // The engine's own typed error, from its module as mocked below.
   const { MailEngineError } =
     await import("../src/main/mail/engine/mail-engine");
+
   return {
     sendNewMessage: () =>
       MockEffect.suspend(() => {
         state.events.push("send");
+
         return state.sendFails
           ? MockEffect.fail(
               new MailEngineError({ message: "Server refused the message" })
@@ -69,11 +75,13 @@ vi.mock("../src/main/mail/engine/mail-send", async () => {
 
 vi.mock("../src/main/mail/engine/mail-engine", async () => {
   const { Schema } = await import("effect");
+
   // oxlint-disable-next-line unicorn/throw-new-error
   class MailEngineError extends Schema.TaggedError<
     MailEngineError,
     { readonly brand: unique symbol }
   >()("MailEngineError", { message: Schema.String }) {}
+
   return {
     MailEngineError,
     inAccountEngine: <A>(_accountId: string, effect: A): A => effect,
@@ -105,9 +113,11 @@ const startSend = (draftId: string) =>
     const fiber = yield* Effect.forkChild(
       sendNewMessageFromRequest(request(draftId), WINDOW)
     );
+
     while (!isHeldDraft("ana@example.com", draftId)) {
       yield* Effect.yieldNow;
     }
+
     return fiber;
   });
 
@@ -146,6 +156,7 @@ describe("sending from a draft with Undo send", () => {
         { accountId: "ana@example.com", draftId: "draft-1" },
         WINDOW
       );
+
       const result = yield* Fiber.join(fiber);
       yield* TestClock.adjust(DELAY_MS);
 
@@ -190,6 +201,7 @@ describe("sending from a draft with Undo send", () => {
           { accountId: "ana@example.com", draftId: "draft-1" },
           WINDOW
         );
+
         yield* TestClock.adjust(DELAY_MS);
 
         expect({ result: yield* Fiber.join(fiber), undo }).toStrictEqual({

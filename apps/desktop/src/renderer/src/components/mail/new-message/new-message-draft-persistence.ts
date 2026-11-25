@@ -6,6 +6,7 @@ import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 
 export const toOptimisticStash = (draft: MailDraftInput): MailDraft => {
   const now = Date.now();
+
   return { ...draft, createdAt: now, updatedAt: now };
 };
 
@@ -26,6 +27,7 @@ export const runQueuedDraftOperation = async (
   } catch {
     // A failed operation must not prevent later stashes from being persisted.
   }
+
   await operation();
 };
 
@@ -35,15 +37,20 @@ export const useDraftPersistence = (mailApi: MailApi | undefined) => {
       if (mailApi === undefined) {
         return false;
       }
+
       try {
         const reply = await mailApi.saveDraft(draft);
+
         if (!reply.ok) {
           toast.error(reply.error);
+
           return false;
         }
+
         return true;
       } catch {
         toast.error("Could not save draft");
+
         return false;
       }
     },
@@ -58,19 +65,24 @@ export const useDraftPersistence = (mailApi: MailApi | undefined) => {
       if (mailApi === undefined) {
         return false;
       }
+
       try {
         const reply = await mailApi.discardDraft({
           accountId: draft.accountId,
           draftId: draft.id,
           preserveAttachments,
         });
+
         if (!reply.ok) {
           toast.error(reply.error);
+
           return false;
         }
+
         return true;
       } catch {
         toast.error("Could not update stashes");
+
         return false;
       }
     },

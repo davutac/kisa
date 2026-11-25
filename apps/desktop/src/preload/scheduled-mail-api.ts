@@ -61,7 +61,9 @@ export const scheduledMailApi: Pick<
       ScheduledMailOutcome,
       listener
     );
+
     void setOutcomeReadiness(true);
+
     return () => {
       unsubscribe();
       void setOutcomeReadiness(false);

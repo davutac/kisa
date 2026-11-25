@@ -17,10 +17,12 @@ export const useInlineMailSearch = (
   const queryDraft = useMailSearchStore((state) => state.query);
   const revision = useMailSearchStore((state) => state.revision);
   const query = toLiveMailSearchQuery(queryDraft);
+
   const effectiveQuery = applyExternalMailSearchScope(query, {
     mailbox,
     unreadOnly,
   });
+
   const results = useMailSearch(accountIds, effectiveQuery, isActive);
 
   return {

@@ -54,21 +54,26 @@ export const createHotkeyHintReveal = (
     clearTimeout(timer);
     timer = undefined;
   };
+
   const setRevealed = (next: boolean): void => {
     if (next === isRevealed) {
       return;
     }
+
     isRevealed = next;
+
     for (const listener of listeners) {
       listener();
     }
   };
+
   const syncWithHeldKeys = (): void => {
     const hold = getModifierHold(keys.getHeldKeys(), platform);
 
     if (hold !== "alone") {
       cancelPendingReveal();
     }
+
     if (hold === "none") {
       setRevealed(false);
     } else if (hold === "alone" && !isRevealed && timer === undefined) {
@@ -83,6 +88,7 @@ export const createHotkeyHintReveal = (
     isRevealed: () => isRevealed,
     subscribe: (listener) => {
       listeners.add(listener);
+
       if (unsubscribeFromKeys === undefined) {
         unsubscribeFromKeys = keys.subscribe(syncWithHeldKeys);
         syncWithHeldKeys();
@@ -90,6 +96,7 @@ export const createHotkeyHintReveal = (
 
       return () => {
         listeners.delete(listener);
+
         if (listeners.size === 0) {
           unsubscribeFromKeys?.();
           unsubscribeFromKeys = undefined;
@@ -121,37 +128,45 @@ export const createHeldKeys = (
 
   const publish = (): void => {
     const next = [...new Set(held.values())];
+
     if (
       next.length === heldKeys.length &&
       next.every((key, index) => key === heldKeys[index])
     ) {
       return;
     }
+
     heldKeys = next;
+
     for (const listener of listeners) {
       listener();
     }
   };
+
   // A modifier released where the window didn't hear it still reads as held
   // until a real key event says otherwise.
   const forgetReleasedModifiers = (event: KeyboardEvent): void => {
     if (!event.isTrusted) {
       return;
     }
+
     for (const [code, key] of held) {
       if (isModifier(key) && !event[MODIFIER_FLAGS[key]]) {
         held.delete(code);
       }
     }
   };
+
   const onKeyDown = (event: KeyboardEvent): void => {
     forgetReleasedModifiers(event);
     held.set(event.code || event.key, event.key);
     publish();
   };
+
   const onKeyUp = (event: KeyboardEvent): void => {
     held.delete(event.code || event.key);
     forgetReleasedModifiers(event);
+
     // macOS sends no keyup for a key released while ⌘ is down.
     if (event.key === "Meta" && getHotkeyModifierKey(platform) === "Meta") {
       for (const [code, key] of held) {
@@ -160,12 +175,15 @@ export const createHeldKeys = (
         }
       }
     }
+
     publish();
   };
+
   const forgetAll = (): void => {
     held.clear();
     publish();
   };
+
   const onVisibilityChange = (): void => {
     if (target.document.hidden) {
       forgetAll();
@@ -176,6 +194,7 @@ export const createHeldKeys = (
     getHeldKeys: () => heldKeys,
     subscribe: (listener) => {
       listeners.add(listener);
+
       if (listeners.size === 1) {
         target.addEventListener("keydown", onKeyDown, true);
         target.addEventListener("keyup", onKeyUp, true);
@@ -188,9 +207,11 @@ export const createHeldKeys = (
 
       return () => {
         listeners.delete(listener);
+
         if (listeners.size > 0) {
           return;
         }
+
         target.removeEventListener("keydown", onKeyDown, true);
         target.removeEventListener("keyup", onKeyUp, true);
         target.removeEventListener("blur", forgetAll);
@@ -209,11 +230,13 @@ let appHintReveal: HotkeyHintReveal | undefined;
 
 const getAppHintReveal = (): HotkeyHintReveal => {
   appHintReveal ??= createHotkeyHintReveal(createHeldKeys(window));
+
   return appHintReveal;
 };
 
 const subscribeToAppHintReveal = (onChange: () => void): (() => void) =>
   getAppHintReveal().subscribe(onChange);
+
 const readAppHintReveal = (): boolean => getAppHintReveal().isRevealed();
 const readServerHintReveal = (): boolean => false;
 
@@ -224,6 +247,7 @@ const readServerHintReveal = (): boolean => false;
  */
 export const useHotkeyHintsRevealed = (enabled: boolean): boolean => {
   const isAppScopeActive = useIsHotkeyScopeActive("app");
+
   const isRevealed = useSyncExternalStore(
     subscribeToAppHintReveal,
     readAppHintReveal,

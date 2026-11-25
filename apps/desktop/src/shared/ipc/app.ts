@@ -9,6 +9,7 @@ export const AppClosingEvent = Schema.Literal("closing");
 export const InlineImageRetentionDays = Schema.NullOr(
   Schema.Literals([30, 90, 365])
 );
+
 export type InlineImageRetentionDays = typeof InlineImageRetentionDays.Type;
 
 export const DEFAULT_INLINE_IMAGE_RETENTION_DAYS = 90;
@@ -18,6 +19,7 @@ export const DEFAULT_INLINE_IMAGE_RETENTION_DAYS = 90;
  * `0` sends at once.
  */
 export const UndoSendSeconds = Schema.Literals([0, 5, 10, 20, 30]);
+
 export type UndoSendSeconds = typeof UndoSendSeconds.Type;
 
 export const DEFAULT_UNDO_SEND_SECONDS = 10;
@@ -40,6 +42,7 @@ export const AppSettings = Schema.Struct({
     Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_UNDO_SEND_SECONDS))
   ),
 });
+
 export type AppSettings = typeof AppSettings.Type;
 
 /** Apps without stored settings behave as if they had these settings. */
@@ -55,15 +58,18 @@ export const LoginItemSettings = Schema.Struct({
   openAtLogin: Schema.Boolean,
   requiresApproval: Schema.Boolean,
 });
+
 export type LoginItemSettings = typeof LoginItemSettings.Type;
 
 export const LoginItemSettingsUpdateRequest = Schema.Struct({
   openAtLogin: Schema.Boolean,
 });
+
 export type LoginItemSettingsUpdateRequest =
   typeof LoginItemSettingsUpdateRequest.Type;
 
 export const LoginItemSettingsReply = IpcReply(LoginItemSettings);
+
 export type LoginItemSettingsReply = typeof LoginItemSettingsReply.Type;
 
 export const AppStartupErrorPayload = Schema.Struct({
@@ -71,6 +77,7 @@ export const AppStartupErrorPayload = Schema.Struct({
   reason: Schema.optional(Schema.String),
   tag: Schema.optional(Schema.String),
 });
+
 export type AppStartupErrorPayload = typeof AppStartupErrorPayload.Type;
 
 export const AppStartupReply = Schema.Union([
@@ -85,19 +92,24 @@ export const AppStartupReply = Schema.Union([
   }),
   Schema.Struct({ error: AppStartupErrorPayload, ok: Schema.Literal(false) }),
 ]);
+
 export type AppStartupReply = typeof AppStartupReply.Type;
 
 export const ThreadWindowOpenRequest = Schema.Struct({
   accountId: Schema.NonEmptyString,
   threadId: Schema.NonEmptyString,
 });
+
 export type ThreadWindowOpenRequest = typeof ThreadWindowOpenRequest.Type;
 
 export const ThreadWindowOpenReply = IpcReply(Schema.Void);
+
 export type ThreadWindowOpenReply = typeof ThreadWindowOpenReply.Type;
 
 export const AppSettingsUpdateRequest = AppSettings;
+
 export type AppSettingsUpdateRequest = typeof AppSettingsUpdateRequest.Type;
 
 export const AppSettingsReply = IpcReply(AppSettings);
+
 export type AppSettingsReply = typeof AppSettingsReply.Type;

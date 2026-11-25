@@ -12,6 +12,7 @@ const siteUrl = Astro.site ?? new URL(Astro.url.origin);
 const canonicalUrl = new URL(Astro.url.pathname, siteUrl);
 const socialImageUrl = new URL("/icon.png", siteUrl);
 const isHomePage = Astro.url.pathname === "/";
+
 const websiteStructuredData = {
   "@context": "https://schema.org",
   "@type": "WebSite",
@@ -67,6 +68,7 @@ const websiteStructuredData = {
       const headerBackdrops = document.querySelectorAll<HTMLElement>(
         "[data-header-backdrop]"
       );
+
       let headerFrame = 0;
 
       const updateHeaderBackdrops = () => {
@@ -89,6 +91,7 @@ const websiteStructuredData = {
       };
 
       updateHeaderBackdrops();
+
       window.addEventListener("scroll", queueHeaderUpdate, { passive: true });
     </script>
   </body>

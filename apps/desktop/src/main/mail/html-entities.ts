@@ -19,6 +19,8 @@ const isCharacterCodePoint = (code: number): boolean =>
 /** Decodes numeric and common named HTML entities; others stay as written. */
 export const decodeHtmlEntities = (value: string): string =>
   value.replaceAll(ENTITY_PATTERN, (match: string, ...groups: unknown[]) => {
+    // SAFETY: ENTITY_PATTERN has named groups, so the replacer's last argument
+    // is the groups object, holding each named group's text or `undefined`.
     const { decimalDigits, hexDigits, name } = groups.at(-1) as {
       decimalDigits?: string;
       hexDigits?: string;

@@ -58,6 +58,7 @@ vi.mock("electron", () => ({
 const exists = async (filePath: string): Promise<boolean> => {
   try {
     await readFile(filePath);
+
     return true;
   } catch {
     return false;
@@ -70,6 +71,7 @@ const failureOf = async (
 ): Promise<string | undefined> => {
   try {
     await promise;
+
     return undefined;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -137,12 +139,14 @@ describe("database import", () => {
     const { sessionId } = await Effect.runPromise(
       beginDatabaseImportSelection()
     );
+
     await expect(
       Effect.runPromise(selectDatabaseImportFile(sessionId, "database"))
     ).resolves.toStrictEqual({ fileName: "source.sqlite" });
     await expect(
       Effect.runPromise(selectDatabaseImportFile(sessionId, "recovery-key"))
     ).resolves.toStrictEqual({ fileName: "source.kisa-key" });
+
     return sessionId;
   };
 
@@ -169,12 +173,14 @@ describe("database import", () => {
     const progress: string[] = [];
     let validatedContents = "";
     let validatedKey = Buffer.alloc(0);
+
     const validate = vi.fn<
       (databasePath: string, key: Uint8Array) => Promise<void>
     >(async (databasePath, key) => {
       validatedContents = await readFile(databasePath, "utf-8");
       validatedKey = Buffer.from(key);
     });
+
     const sessionId = await prepareImport();
 
     await expect(
@@ -191,6 +197,7 @@ describe("database import", () => {
     const backupRoot = path.join(temporaryDirectory, "backups");
     const backupDirectories = await readdir(backupRoot);
     const backupDirectory = path.join(backupRoot, backupDirectories[0] ?? "");
+
     const [activeDatabase, activeKey, backupDatabase, backupKey, backupWal] =
       await Promise.all([
         readFile(activeDatabasePath, "utf-8"),
@@ -233,6 +240,7 @@ describe("database import", () => {
     const { sessionId } = await Effect.runPromise(
       beginDatabaseImportSelection()
     );
+
     await Effect.runPromise(cancelDatabaseImportSelection(sessionId));
 
     await expect(runImport(sessionId)).rejects.toThrow(
@@ -243,6 +251,7 @@ describe("database import", () => {
 
   it("keeps the session open when a file picker is cancelled", async () => {
     state.openDialog.mockResolvedValue({ canceled: true, filePaths: [] });
+
     const { sessionId } = await Effect.runPromise(
       beginDatabaseImportSelection()
     );
@@ -323,10 +332,12 @@ describe("database import", () => {
     ).rejects.toThrow(
       "Databases from Kisa versions before the IMAP mail engine can't be imported"
     );
+
     const [activeDatabase, directoryEntries] = await Promise.all([
       readFile(activeDatabasePath, "utf-8"),
       readdir(temporaryDirectory),
     ]);
+
     expect({
       activeDatabase,
       hasPendingImport: directoryEntries.some((name) =>
@@ -345,6 +356,7 @@ describe("database import", () => {
 
   const stagedFiles = async (): Promise<string[]> => {
     const names = await readdir(temporaryDirectory);
+
     return names.filter((name) => name.includes(".import-"));
   };
 
@@ -373,6 +385,7 @@ describe("database import", () => {
     state.messageBox.mockReset();
     state.messageBox.mockImplementationOnce(() => {
       prompted.resolve(null);
+
       return answered.promise;
     });
 
@@ -412,10 +425,12 @@ describe("database import", () => {
   it("removes the manifest first, so a discard that fails part-way cannot block the next start", async () => {
     await runImport(await prepareImport());
     const names = await stagedFiles();
+
     const stagedKey = path.join(
       temporaryDirectory,
       names.find((name) => name.endsWith(".key")) ?? ""
     );
+
     // A directory with content where the staged key was: removing it fails.
     await rm(stagedKey);
     await mkdir(stagedKey);
@@ -513,11 +528,13 @@ describe("database import", () => {
 
   const recordedStep = async (): Promise<StoredManifest["step"]> => {
     const manifest = await readStoredManifest();
+
     return manifest.step;
   };
 
   const backupPath = async (name: string): Promise<string> => {
     const manifest = await readPendingManifest();
+
     return path.join(
       temporaryDirectory,
       "backups",
@@ -700,6 +717,7 @@ describe("database import", () => {
     const directory = path.join(temporaryDirectory, "backups", OTHER_BACKUP);
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, "app.sqlite"), "earlier original");
+
     return path.join(directory, "app.sqlite");
   };
 
@@ -761,11 +779,13 @@ describe("database import", () => {
   it("never takes a copy that was cut short for the backup", async () => {
     await runImport(await prepareImport());
     const manifest = await readPendingManifest();
+
     const backupDirectory = path.join(
       temporaryDirectory,
       "backups",
       manifest.backupDirectory
     );
+
     await mkdir(backupDirectory, { recursive: true });
     await writeFile(path.join(backupDirectory, "app.sqlite.partial"), "curr");
 
@@ -783,12 +803,14 @@ describe("database import", () => {
 
   it("removes staged copies that no manifest names, and nothing else", async () => {
     const orphan = `app.sqlite.import-${"1".repeat(8)}-1111-1111-1111-${"1".repeat(12)}`;
+
     const kept = [
       "app.dev.sqlite.import-11111111-1111-1111-1111-111111111111",
       "app.sqlite.import-notes.txt",
       "app.sqlite.imported",
       `${orphan}.bak`,
     ];
+
     await Promise.all(
       [orphan, `${orphan}-wal`, `${orphan}-shm`, `${orphan}.key`, ...kept].map(
         (name) => writeFile(path.join(temporaryDirectory, name), "x")
@@ -808,13 +830,16 @@ describe("database import", () => {
   it("leaves a running import's copy alone, then stops it on quit and removes the copy", async () => {
     const sessionId = await prepareImport();
     const validating = Promise.withResolvers<null>();
+
     const running = runImport(sessionId, {
       validate: () => {
         validating.resolve(null);
+
         // Never finishes: only the stop ends it.
         return Promise.withResolvers<undefined>().promise;
       },
     });
+
     const settled = failureOf(running);
     await validating.promise;
 
@@ -835,6 +860,7 @@ describe("database import", () => {
     state.messageBox.mockReset();
     state.messageBox.mockImplementationOnce(() => {
       prompted.resolve(null);
+
       return answered.promise;
     });
     const running = runImport(sessionId);

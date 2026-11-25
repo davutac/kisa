@@ -20,6 +20,7 @@ import {
   scopeFor,
   syncFully,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 interface CachedMessage {
   readonly is_unread: number;
@@ -29,20 +30,23 @@ interface CachedMessage {
 
 const cached = (subject: string) =>
   connection
-    .prepare(
+    .prepare<unknown[], CachedMessage>(
       "SELECT message_id, thread_id, is_unread FROM mail_messages WHERE subject = ?"
     )
-    .get(subject) as CachedMessage | undefined;
+    .get(subject);
 
 /** An Outlook-like account whose Inbox holds `count` unread messages m1… */
 const syncOutlookInbox = async (count: number) => {
   insertAccount("generic", "outlook");
   const server = new FakeImapServer(OUTLOOK_MAILBOXES, OUTLOOK_CAPABILITIES);
+
   for (let index = 1; index <= count; index += 1) {
     server.deliver("INBOX", genericMessage(`m${index}`, { flags: [] }));
   }
+
   const scope = scopeFor(server, genericDialect);
   await syncFully(scope);
+
   return { scope, server };
 };
 
@@ -52,6 +56,7 @@ const pass = (scope: SyncScope) => run(syncAccount(scope));
 const countCacheWrites = () => {
   connection.exec("CREATE TEMP TABLE IF NOT EXISTS cache_writes (n INTEGER)");
   connection.exec("DELETE FROM cache_writes");
+
   const triggers = ["mail_message_locations", "mail_messages", "mail_threads"]
     .flatMap((table) =>
       ["INSERT", "UPDATE", "DELETE"].map((operation) => ({ operation, table }))
@@ -62,6 +67,7 @@ const countCacheWrites = () => {
         `CREATE TEMP TRIGGER ${name} AFTER ${operation} ON ${table}
          BEGIN INSERT INTO cache_writes VALUES (1); END`
       );
+
       return name;
     });
 
@@ -72,16 +78,19 @@ const countCacheWrites = () => {
       }
     },
     writes: () =>
-      (
+      found(
         connection
-          .prepare("SELECT count(*) AS count FROM cache_writes")
-          .get() as { count: number }
+          .prepare<unknown[], { count: number }>(
+            "SELECT count(*) AS count FROM cache_writes"
+          )
+          .get()
       ).count,
   };
 };
 
 // The oldest copy is outside the newest FLAG_HEAD_SIZE and two full slices.
 const LARGE_INBOX = FLAG_HEAD_SIZE + 2 * FLAG_SLICE_SIZE + 1;
+
 // Read by the second slice: below the first slice, above the oldest copy.
 const SECOND_SLICE_UID = LARGE_INBOX - FLAG_HEAD_SIZE - FLAG_SLICE_SIZE - 1;
 
@@ -110,16 +119,19 @@ describe("flags changed elsewhere, without CONDSTORE", () => {
     insertAccount("generic", "outlook");
     const server = new FakeImapServer(OUTLOOK_MAILBOXES, OUTLOOK_CAPABILITIES);
     server.deliver("INBOX", genericMessage("a", { flags: [] }));
+
     const recent = server.deliver(
       "INBOX",
       genericMessage("b", { flags: ["\\Seen", "\\Recent"] })
     );
+
     const scope = scopeFor(server, genericDialect);
     await syncFully(scope);
     // `\Recent` is shown to one connection only; the next does not see it.
     server.setFlags("INBOX", recent, ["\\Seen"]);
 
     const counter = countCacheWrites();
+
     try {
       await expect(pass(scope)).resolves.toStrictEqual({
         changed: [],

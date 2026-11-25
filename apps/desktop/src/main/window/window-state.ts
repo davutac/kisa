@@ -6,6 +6,7 @@ import type { BrowserWindow } from "electron";
 import { app, screen } from "electron";
 
 const MIN_VISIBLE_WINDOW_EDGE_LENGTH = 100;
+
 export const MIN_WINDOW_SIZE = {
   height: 560,
   width: 860,
@@ -70,14 +71,18 @@ const getWindowStateErrorMessage = (args: {
     case "read": {
       return `Failed to read window state from ${args.path}: ${formatErrorCause(args.cause)}`;
     }
+
     case "decode": {
       return `Failed to decode window state from ${args.path}: ${formatErrorCause(args.cause)}`;
     }
+
     case "write": {
       return `Failed to write window state to ${args.path}: ${formatErrorCause(args.cause)}`;
     }
+
     default: {
       const exhaustiveReason: never = args.reason;
+
       return exhaustiveReason;
     }
   }
@@ -111,6 +116,7 @@ const isWindowVisibleOnScreen = (
     const horizontalOverlap =
       Math.min(bounds.x + bounds.width, workArea.x + workArea.width) -
       Math.max(bounds.x, workArea.x);
+
     const verticalOverlap =
       Math.min(bounds.y + bounds.height, workArea.y + workArea.height) -
       Math.max(bounds.y, workArea.y);
@@ -145,6 +151,7 @@ const normalizeWindowState = (
   const { minimumSize } = WINDOW_STATE_CONFIG[type];
   const normalizedHeight = Math.max(height, minimumSize.height);
   const normalizedWidth = Math.max(width, minimumSize.width);
+
   const hasVisiblePosition =
     x !== undefined &&
     y !== undefined &&
@@ -170,6 +177,7 @@ const readPersistedWindowState = Effect.fn("readPersistedWindowState")(
     type: WindowStateType
   ) {
     const fileContents = yield* readWindowStateFile(windowStatePath);
+
     const windowState = yield* decodeWindowState(fileContents).pipe(
       Effect.mapError((cause) =>
         WindowStateError.new({
@@ -179,6 +187,7 @@ const readPersistedWindowState = Effect.fn("readPersistedWindowState")(
         })
       )
     );
+
     return normalizeWindowState(windowState, type);
   }
 );
@@ -219,6 +228,7 @@ export const readWindowState = (
   const windowStateExit = Effect.runSyncExit(
     readPersistedWindowState(windowStatePath, type)
   );
+
   return Exit.isSuccess(windowStateExit) ? windowStateExit.value : defaultState;
 };
 
@@ -233,6 +243,7 @@ export const writeWindowState = (
   const bounds = window.isMaximized()
     ? window.getNormalBounds()
     : window.getBounds();
+
   const windowState: WindowState = {
     ...bounds,
     isMaximized: window.isMaximized(),

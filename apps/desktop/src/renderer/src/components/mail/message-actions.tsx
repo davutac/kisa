@@ -47,6 +47,7 @@ const MailMessageActions = ({
       }
 
       const display = getHotkeyDisplay(command);
+
       return (
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel(command)}

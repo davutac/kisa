@@ -171,6 +171,7 @@ const AccountPicker = (props: AccountPickerProps) => {
           if (next === undefined) {
             return;
           }
+
           if (next !== NULL_OPTION_VALUE) {
             props.onSelect(next);
           } else if (props.nullOption !== undefined) {
@@ -193,6 +194,7 @@ const AccountPicker = (props: AccountPickerProps) => {
             enableHotkeys && !locked
               ? COMPOSER_ACCOUNT_COMMAND_IDS[index]
               : undefined;
+
           const selectAccount = (): void => props.onSelect(account.email);
 
           return (

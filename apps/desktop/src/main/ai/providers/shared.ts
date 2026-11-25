@@ -52,15 +52,18 @@ export const commandFailure = (
     `${PROVIDER_NAMES[provider]} command (${error.kind})`,
     error
   );
+
   if (error.kind === "not-installed") {
     return providerFailure(
       provider,
       `${PROVIDER_NAMES[provider]} CLI is not installed or is not on PATH`
     );
   }
+
   if (error.kind === "timeout") {
     return providerFailure(provider, `${provider} AI request timed out`);
   }
+
   return providerFailure(provider, `${provider} AI request failed`);
 };
 
@@ -77,12 +80,13 @@ export const makeTemporaryDirectory = (provider: AiProvider) =>
       ).pipe(Effect.ignore)
   );
 
-export const toJsonSchemaObject = (schema: Schema.Top): unknown => {
+export const toJsonSchemaObject = (schema: Schema.Top) => {
   // OpenAI's strict structured output (used by Codex) rejects any object
   // schema that does not set `additionalProperties: false`.
   const document = Schema.toJsonSchemaDocument(schema, {
     onExcessProperty: "error",
   });
+
   return document.definitions && Object.keys(document.definitions).length > 0
     ? { ...document.schema, $defs: document.definitions }
     : document.schema;

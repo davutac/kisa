@@ -63,6 +63,7 @@ const installWindowBehavior = (window: BrowserWindow): void => {
   });
   window.webContents.setWindowOpenHandler(({ url }) => {
     openExternalUrl(url);
+
     return { action: "deny" };
   });
   window.webContents.on("will-navigate", (event, url) => {
@@ -105,12 +106,14 @@ export const getMainWindow = (): BrowserWindow | undefined =>
 
 export const createWindow = (): BrowserWindow => {
   const { isMaximized, ...windowBounds } = readWindowState();
+
   const window = createBrowserWindow({
     ...windowBounds,
     minHeight: MIN_WINDOW_SIZE.height,
     minWidth: MIN_WINDOW_SIZE.width,
     title: APP_NAME,
   });
+
   mainWindow = window;
 
   installWindowBehavior(window);
@@ -165,18 +168,22 @@ export const openThreadWindow = async (
   if (existing !== undefined && !existing.window.isDestroyed()) {
     await existing.loaded;
     focusWindow(existing.window);
+
     return existing.window;
   }
 
   const { isMaximized, ...windowBounds } = readWindowState("thread");
+
   const window = createBrowserWindow({
     ...THREAD_WINDOW_SIZE,
     ...windowBounds,
     title: `Conversation — ${APP_NAME}`,
   });
+
   if (isMaximized === true) {
     window.maximize();
   }
+
   const threadRoute = `/thread/${encodeURIComponent(request.accountId)}/${encodeURIComponent(request.threadId)}`;
   installWindowBehavior(window);
   const entry = { loaded: loadRenderer(window, threadRoute), window };
@@ -193,11 +200,13 @@ export const openThreadWindow = async (
 
   try {
     await entry.loaded;
+
     return window;
   } catch (error) {
     if (!window.isDestroyed()) {
       window.destroy();
     }
+
     throw error;
   }
 };

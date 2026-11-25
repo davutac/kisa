@@ -90,6 +90,7 @@ export const SidebarScopeMailboxes = ({
     <ul className="flex flex-col gap-0.5" id={id}>
       {SCOPE_MAILBOXES.map(({ command, icon: Icon, label, mailbox }) => {
         const target = { accountId, mailbox };
+
         const rowProps: SidebarRowProps = {
           ariaLabel: `${label}, ${scopeLabel}`,
           className: "pl-7",

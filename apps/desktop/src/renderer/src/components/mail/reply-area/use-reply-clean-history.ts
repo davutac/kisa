@@ -42,9 +42,11 @@ export const useReplyCleanHistory = ({
   subject: string;
 }) => {
   const [history, setHistory] = useState<readonly CleanDraftVersion[]>([]);
+
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
     null
   );
+
   const composerRef = useRef(composer);
   const historyRef = useRef(history);
   const selectedVersionIdRef = useRef(selectedVersionId);
@@ -53,12 +55,15 @@ export const useReplyCleanHistory = ({
     historyRef.current = nextHistory;
     setHistory(nextHistory);
   };
+
   const updateSelectedVersionId = (versionId: string | null): void => {
     selectedVersionIdRef.current = versionId;
     setSelectedVersionId(versionId);
   };
+
   const canClean =
     model !== null && !composer.isEmpty && !(isCreatingReply || isSending);
+
   const controller = useCleanDraftHistory({
     aiApi,
     applyVersion: (version) =>
@@ -90,13 +95,16 @@ export const useReplyCleanHistory = ({
   const updateComposer = (nextComposer: EmailComposerValue): void => {
     composerRef.current = nextComposer;
     setComposer(nextComposer);
+
     const selectedVersion = historyRef.current.find(
       ({ id }) => id === selectedVersionIdRef.current
     );
+
     const authoredBody =
       signature === undefined
         ? nextComposer
         : removeEmailSignature(nextComposer, signature.body);
+
     if (
       selectedVersion !== undefined &&
       authoredBody.html !== selectedVersion.body

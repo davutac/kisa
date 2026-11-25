@@ -46,6 +46,7 @@ const getModelOptions = (
   if (status !== undefined) {
     return getAiProviderModelOptions(status);
   }
+
   return currentModel === null
     ? []
     : [{ label: currentModel, model: currentModel }];
@@ -56,6 +57,7 @@ const getModelGenerationOptions = (
   currentModel: string | null
 ) => {
   const selectedModel = status?.models.find(({ id }) => id === currentModel);
+
   return {
     optionLabel: selectedModel?.optionLabel ?? "Reasoning",
     reasoningOptions: selectedModel?.reasoningOptions ?? [],
@@ -72,6 +74,7 @@ const AiProviderStatusText = ({
   if (presentation?.showHeadline === false && presentation.detail === null) {
     return null;
   }
+
   if (presentation?.showHeadline === false) {
     return (
       <p
@@ -82,6 +85,7 @@ const AiProviderStatusText = ({
       </p>
     );
   }
+
   return (
     <p
       className="text-muted-foreground/80 flex min-w-0 flex-wrap items-center gap-x-1 text-[13px] leading-[1.45]"
@@ -110,20 +114,27 @@ const AiProviderRow = ({
 }: AiProviderRowProps) => {
   const Icon = PROVIDER_ICONS[provider];
   const isSelected = activeProvider === provider;
+
   const presentation =
     status === undefined ? null : getAiProviderPresentation(status);
+
   const modelOptions = getModelOptions(status, currentModel);
+
   const hasSelectableModel =
     status?.installed === true && status.models.length > 0;
+
   const { optionLabel, reasoningOptions } = getModelGenerationOptions(
     status,
     currentModel
   );
+
   const canActivateProvider = modelOptions.some(
     (option) => option.model === currentModel
   );
+
   const nameId = `ai-provider-${provider}-name`;
   const statusId = `ai-provider-${provider}-status`;
+
   const showStatusText =
     presentation?.showHeadline !== false || presentation.detail !== null;
 

@@ -44,18 +44,22 @@ export const formatMailbox = (
   if (address.length === 0) {
     return name ?? "Unknown sender";
   }
+
   if (name === null || name === undefined || name.length === 0) {
     return address;
   }
+
   const quoted = NEEDS_QUOTES.test(name)
     ? `"${name.replaceAll(/["\\]/gu, "")}"`
     : name;
+
   return `${quoted} <${address}>`;
 };
 
 const fallbackFilename = (attachment: StoredMailAttachment): string => {
   const [, subtype = "bin"] = attachment.mediaType.split("/");
   const extension = subtype.replaceAll(/[^\da-z]/giu, "").slice(0, 8);
+
   return `attachment.${extension.length === 0 ? "bin" : extension}`;
 };
 
@@ -131,12 +135,15 @@ const mailboxCondition = (mailbox: MailboxPlace) => {
       )`
     );
   }
+
   if (mailbox === "spam") {
     return eq(mailThreads.isInSpam, true);
   }
+
   if (mailbox === "trash") {
     return eq(mailThreads.isInTrash, true);
   }
+
   if (mailbox === "sent") {
     return and(
       eq(mailThreads.isInSent, true),
@@ -144,6 +151,7 @@ const mailboxCondition = (mailbox: MailboxPlace) => {
       eq(mailThreads.isInTrash, false)
     );
   }
+
   if (mailbox === "starred") {
     return and(
       eq(mailThreads.isInSpam, false),
@@ -154,6 +162,7 @@ const mailboxCondition = (mailbox: MailboxPlace) => {
       )`
     );
   }
+
   return and(
     eq(mailThreads.isInInbox, true),
     eq(mailThreads.isInSpam, false),
@@ -175,6 +184,7 @@ export const readThreadPage = async (
   }
 
   const { cursor } = request;
+
   const rows = await database
     .select()
     .from(mailThreads)
@@ -207,6 +217,7 @@ export const readThreadPage = async (
       asc(mailThreads.threadId)
     )
     .limit(THREAD_PAGE_SIZE + 1);
+
   const pageRows = rows.slice(0, THREAD_PAGE_SIZE);
   const lastRow = pageRows.at(-1);
 
@@ -242,6 +253,7 @@ export const readThreadSummaries = async (
       )
     )
     .all();
+
   return rows.map(toThreadSummary);
 };
 
@@ -278,6 +290,7 @@ const toBody = (row: MessageRow): ThreadMessage["body"] => {
       return { text: row.bodyText ?? "" };
     }
   }
+
   return { text: row.bodyText ?? "" };
 };
 
@@ -350,6 +363,7 @@ export const readConversation = async (
       .orderBy(asc(mailMessages.receivedAt), asc(mailMessages.messageId))
       .all()
   );
+
   const messages = rows.map(toConversationMessage);
 
   return {
@@ -412,6 +426,7 @@ export const readUnreadCounts = async (
   }
 
   const accounts = toAccountList(accountIds);
+
   const [row] = await database.values<[number, number]>(sql`
     SELECT
       (SELECT count(*) FROM ${mailThreads} INDEXED BY mail_threads_unread_idx
@@ -425,6 +440,7 @@ export const readUnreadCounts = async (
           AND ${mailThreads.isInSpam} = 1
           AND ${mailThreads.isUnread} = 1)
   `);
+
   return { inbox: row?.[0] ?? 0, spam: row?.[1] ?? 0 };
 };
 
@@ -444,6 +460,7 @@ export const readUnreadLabels = async (
   }
 
   const accounts = toAccountList(accountIds);
+
   const labelRows = await database.values<[string, string, number]>(sql`
     SELECT t.account_id, thread_label.value, count(DISTINCT t.thread_id)
     FROM mail_threads t
@@ -455,6 +472,7 @@ export const readUnreadLabels = async (
       AND thread_label.type = 'text'
     GROUP BY t.account_id, thread_label.value
   `);
+
   const accountRows = await database.values<[string, number]>(sql`
     SELECT t.account_id, count(*)
     FROM mail_threads t
@@ -475,6 +493,7 @@ export const readUnreadLabels = async (
     accounts: accountRows.map(([accountId, count]) => ({ accountId, count })),
     labels: labelRows.flatMap(([accountId, labelId, count]) => {
       const label = userLabelPath(labelId);
+
       return label === undefined || label.length === 0
         ? []
         : [{ accountId, count, label }];
@@ -497,5 +516,6 @@ export const readUnreadInboxCount = async (
       AND ${mailThreads.isInSpam} = 0
       AND ${mailThreads.isInTrash} = 0
   `);
+
   return row?.[0] ?? 0;
 };

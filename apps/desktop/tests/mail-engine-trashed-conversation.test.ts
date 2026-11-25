@@ -34,6 +34,7 @@ import {
   syncFully,
   threadRow,
 } from "./fixtures/mail-engine-harness";
+import { found, stringList } from "./fixtures/rows";
 
 const act = (scope: SyncScope, threadId: string, action: ThreadAction) =>
   run(applyThreadAction(scope, [ThreadId.make(threadId)], action));
@@ -42,18 +43,20 @@ const relist = () =>
   run(
     Effect.gen(function* relistHidden() {
       const store = yield* MailEngineStore;
+
       return yield* store.relistHidden(accountId);
     })
   );
 
 const labelsOf = (threadId: string): readonly string[] =>
-  JSON.parse(threadRow(threadId)?.label_ids ?? "[]") as string[];
+  stringList(threadRow(threadId)?.label_ids ?? "[]");
 
 /** The places main sends with the conversation, which a window lists it by. */
 const placesOf = async (threadId: string): Promise<readonly string[]> => {
   const [summary] = await readThreadSummaries(remoteDatabase, accountId, [
     threadId,
   ]);
+
   return summary?.places ?? [];
 };
 
@@ -63,6 +66,7 @@ const shownMessages = async (threadId: string): Promise<number> => {
     accountId,
     threadId
   );
+
   return conversation?.messages.length ?? 0;
 };
 
@@ -74,6 +78,7 @@ const trashedConversation = async () => {
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
   await act(scope, "400", { kind: "trash" });
+
   return { scope, server };
 };
 
@@ -82,6 +87,7 @@ const trashedThenAnswered = async () => {
   const { scope, server } = await trashedConversation();
   server.deliver(ALL_MAIL, gmailMessage("401", "400", { flags: [] }));
   await run(syncAccount(scope));
+
   return { scope, server };
 };
 
@@ -207,9 +213,15 @@ describe("labelling such a conversation outside Gmail", () => {
     server.deliver("INBOX", genericMessage("first"));
     const scope = scopeFor(server, genericDialect);
     await syncFully(scope);
-    const { thread_id: threadId } = connection
-      .prepare("SELECT thread_id FROM mail_messages WHERE subject = 'first'")
-      .get() as { thread_id: string };
+
+    const { thread_id: threadId } = found(
+      connection
+        .prepare<unknown[], { thread_id: string }>(
+          "SELECT thread_id FROM mail_messages WHERE subject = 'first'"
+        )
+        .get()
+    );
+
     await act(scope, threadId, { kind: "trash" });
     server.deliver(
       "INBOX",
@@ -243,11 +255,13 @@ describe("labelling such a conversation outside Gmail", () => {
 
 /** The cached ids of the generic message with this subject. */
 const idsOf = (subject: string) =>
-  connection
-    .prepare(
-      "SELECT message_id, thread_id FROM mail_messages WHERE subject = ?"
-    )
-    .get(subject) as { message_id: string; thread_id: string };
+  found(
+    connection
+      .prepare<unknown[], { message_id: string; thread_id: string }>(
+        "SELECT message_id, thread_id FROM mail_messages WHERE subject = ?"
+      )
+      .get(subject)
+  );
 
 /** The same mail delivered twice, with one copy deleted elsewhere. */
 const twiceDelivered = async (discarded: string) => {
@@ -257,6 +271,7 @@ const twiceDelivered = async (discarded: string) => {
   server.deliver(discarded, genericMessage("twice"));
   const scope = scopeFor(server, genericDialect);
   await syncFully(scope);
+
   return { ...idsOf("twice"), scope, server };
 };
 
@@ -300,6 +315,7 @@ describe("a message with one copy in Trash and another outside it", () => {
   it("is listed again when an earlier build filed it under Trash", async () => {
     const { message_id: messageId, thread_id: threadId } =
       await twiceDelivered("Deleted Messages");
+
     // The rows as they were written when a message carried the labels of
     // every copy.
     connection
@@ -332,6 +348,7 @@ describe("a message with one copy in Trash and another outside it", () => {
       server,
       thread_id: threadId,
     } = await twiceDelivered("Deleted Messages");
+
     server.deliver(
       "INBOX",
       genericMessage("answer", {

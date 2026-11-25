@@ -74,12 +74,15 @@ export const MailListRoot = ({
     rowCount,
     selectedMessage,
   });
+
   const { virtual } = list.api;
+
   const rows = useSyncExternalStore(
     virtual.subscribe,
     virtual.items,
     virtual.items
   );
+
   const size = useSyncExternalStore(
     virtual.subscribe,
     virtual.size,

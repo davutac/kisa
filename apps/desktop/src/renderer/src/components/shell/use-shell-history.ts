@@ -54,12 +54,14 @@ export const useShellHistory = (
   }
 
   const accountIds = accounts.map(({ email }) => email);
+
   const isAvailable = (target: ShellPlace): boolean =>
     isShellPlaceAvailable(target, {
       accountIds,
       hasScheduledMail,
       isLabelMissing,
     });
+
   const backIndex = findShellHistoryStep(recorded, -1, place, isAvailable);
   const forwardIndex = findShellHistoryStep(recorded, 1, place, isAvailable);
 
@@ -100,6 +102,7 @@ export const useShellHistory = (
       }
     );
   };
+
   const goBack = (): void => step(backIndex);
   const goForward = (): void => step(forwardIndex);
 

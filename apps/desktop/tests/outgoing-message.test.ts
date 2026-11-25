@@ -24,6 +24,7 @@ const message = (
 
 const text = (bytes: Uint8Array): string =>
   Buffer.from(bytes).toString("utf-8");
+
 const headersOf = (raw: string): string => raw.split("\r\n\r\n")[0] ?? "";
 
 describe("outgoing messages", () => {
@@ -49,6 +50,7 @@ describe("outgoing messages", () => {
         })
       ).transmitted
     );
+
     const headers = headersOf(raw);
 
     expect(headers).not.toMatch(/^(?:bcc|x-evil):/imu);

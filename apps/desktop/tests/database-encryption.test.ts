@@ -14,6 +14,7 @@ const temporaryDirectories: string[] = [];
 const makeDatabasePath = (): string => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-encryption-"));
   temporaryDirectories.push(directory);
+
   return path.join(directory, "app.sqlite");
 };
 
@@ -39,6 +40,7 @@ describe(openEncryptedDatabaseConnection, () => {
     expect(readHeader(databasePath)).not.toBe("SQLite format 3\0");
 
     const reopened = openEncryptedDatabaseConnection(databasePath, key);
+
     try {
       expect(reopened.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(
@@ -62,6 +64,7 @@ describe(openEncryptedDatabaseConnection, () => {
       databasePath,
       Buffer.alloc(32, 2)
     );
+
     try {
       expect(encrypted.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(
@@ -76,10 +79,12 @@ describe(openEncryptedDatabaseConnection, () => {
 
   it("rejects a wrong key without changing the database", () => {
     const databasePath = makeDatabasePath();
+
     const created = openEncryptedDatabaseConnection(
       databasePath,
       Buffer.alloc(32, 3)
     );
+
     created.exec("CREATE TABLE examples (value TEXT)");
     created.close();
 
@@ -91,6 +96,7 @@ describe(openEncryptedDatabaseConnection, () => {
       databasePath,
       Buffer.alloc(32, 3)
     );
+
     reopened.close();
   });
 });

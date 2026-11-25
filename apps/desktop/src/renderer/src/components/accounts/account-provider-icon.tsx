@@ -30,6 +30,7 @@ const AccountProviderIcon = ({
   if (provider === "imap") {
     return <UserRoundIcon aria-hidden="true" className={className} />;
   }
+
   return (
     <img
       alt=""

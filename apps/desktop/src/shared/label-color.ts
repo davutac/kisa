@@ -10,6 +10,7 @@ export const isLabelColor = (value: string): boolean =>
 
 const toLinearChannel = (value: number): number => {
   const channel = value / 255;
+
   return channel <= 0.04045
     ? channel / 12.92
     : ((channel + 0.055) / 1.055) ** 2.4;
@@ -25,6 +26,7 @@ export const contrastRatio = (left: string, right: string): number => {
     relativeLuminance(left),
     relativeLuminance(right),
   ].toSorted((a, b) => b - a);
+
   return (lighter + 0.05) / (darker + 0.05);
 };
 
@@ -39,10 +41,13 @@ const toHex = (value: number): string =>
 
 const hslToHex = (hue: number, saturation: number, lightness: number) => {
   const amount = saturation * Math.min(lightness, 1 - lightness);
+
   const channel = (offset: number) => {
     const k = (offset + hue / 30) % 12;
+
     return lightness - amount * Math.max(-1, Math.min(k - 3, 9 - k, 1));
   };
+
   return `#${toHex(channel(0))}${toHex(channel(8))}${toHex(channel(4))}`;
 };
 
@@ -64,10 +69,12 @@ const labelColorFromSeed = (seed: number): string =>
  */
 export const seededLabelColor = (name: string): string => {
   let hash = 0x81_1c_9d_c5;
+
   for (const char of name.trim().toLowerCase()) {
     hash ^= char.codePointAt(0) ?? 0;
     hash = Math.imul(hash, 0x01_00_01_93);
   }
+
   return labelColorFromSeed(hash >>> 0);
 };
 

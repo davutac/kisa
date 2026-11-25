@@ -19,6 +19,8 @@ interface TestWindow {
   readonly webContents: { readonly on: ReturnType<typeof vi.fn> };
 }
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const electronState = vi.hoisted(() => ({
   createdWindows: [] as TestWindow[],
   loadBarrier: undefined as Promise<unknown> | undefined,
@@ -27,6 +29,7 @@ const electronState = vi.hoisted(() => ({
 
 vi.mock(import("electron"), async (importOriginal) => {
   const original = await importOriginal();
+
   class BrowserWindow {
     readonly focus = vi.fn<() => void>();
     readonly isMinimized = vi.fn<() => boolean>(() => false);
@@ -86,22 +89,28 @@ vi.mock(import("electron"), async (importOriginal) => {
 });
 
 vi.mock(import("@electron-toolkit/utils"), () => ({ is: { dev: false } }));
+
 vi.mock(import("../src/main/app/native-mail-index-progress"), () => ({
   applyNativeMailIndexProgress:
     vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
+
 vi.mock(import("../src/main/electron/shell"), () => ({
   openExternalUrl: vi.fn<(rawUrl: string) => boolean>(() => true),
 }));
+
 vi.mock(import("../src/main/updates/updater"), () => ({
   initializeAutoUpdates: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
+
 vi.mock(import("../src/main/window/native-context-menu"), () => ({
   installNativeContextMenu: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
+
 vi.mock(import("../src/main/window/window-visibility"), () => ({
   hideWindowInBackground: vi.fn<(window: Electron.BrowserWindow) => void>(),
 }));
+
 vi.mock(import("../src/main/window/window-state"), () => ({
   MIN_WINDOW_SIZE: { height: 560, width: 860 } as const,
   readWindowState: vi.fn<(type?: string) => { height: number; width: number }>(
@@ -135,6 +144,7 @@ describe(openThreadWindow, () => {
       threadId: "thread/1",
     });
     const [window] = electronState.createdWindows;
+
     if (window === undefined) {
       throw new Error("Expected a thread window to be created");
     }
@@ -165,6 +175,7 @@ describe(openThreadWindow, () => {
       accountId: "same@example.com",
       threadId: "same-thread",
     };
+
     const loadBarrier = Promise.withResolvers<null>();
     electronState.loadBarrier = loadBarrier.promise;
 
@@ -196,10 +207,15 @@ describe(openThreadWindow, () => {
         accountId: "frames@example.com",
         threadId: "frames-thread",
       });
+
       const call =
         electronState.createdWindows[0]?.webContents.on.mock.calls.find(
           ([event]) => event === "will-frame-navigate"
         );
+
+      // SAFETY: this is the listener the window registered for
+      // `will-frame-navigate`, found by that name above, which Electron calls
+      // with the navigation's details.
       const handler = call?.[1] as
         | ((details: FrameNavigation) => void)
         | undefined;
@@ -211,6 +227,7 @@ describe(openThreadWindow, () => {
       return (url, isMainFrame) => {
         const preventDefault = vi.fn<() => void>();
         handler({ isMainFrame, preventDefault, url });
+
         return preventDefault.mock.calls.length === 0;
       };
     };

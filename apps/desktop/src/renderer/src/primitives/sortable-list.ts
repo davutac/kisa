@@ -19,6 +19,7 @@ const sameMembers = (a: readonly string[], b: readonly string[]): boolean =>
 export const sortableList = definePrimitive({
   api: (context) => {
     const change = createChange(context);
+
     const reorder = createReorder(context, {
       draft: "moving",
       key: "value",
@@ -26,9 +27,11 @@ export const sortableList = definePrimitive({
       set: (value, details) => change("value", value, details),
       slot: "item",
     });
+
     // A move can't outlive an item that left the list or one that joined it.
     context.onOptions(({ value }) => {
       const draft = context.store.get().moving;
+
       if (
         draft !== null &&
         value !== undefined &&
@@ -87,6 +90,7 @@ export const sortableList = definePrimitive({
       state: (state, { api }) => ({ order: api.reorder.order(state) }),
     }),
   }),
+  // SAFETY: widens the initial `null` to the state's type, which includes it.
   state: (options: SortableListOptions) => ({
     moving: null as ReorderDraft | null,
     value: options.value ?? options.defaultValue ?? [],

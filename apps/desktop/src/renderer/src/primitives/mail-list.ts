@@ -33,6 +33,7 @@ export type MailListCurrentReason =
   | "item-removed"
   | "list-navigation"
   | "shortcut";
+
 export type MailListCheckedReason =
   | "drag"
   | "escape-key"
@@ -87,6 +88,7 @@ export interface MailListOptions {
 const OVERSCAN = 8;
 const AUTO_SCROLL_EDGE = 64;
 const AUTO_SCROLL_SPEED = 18;
+
 // A drag keeps scrolling while the pointer overshoots the list by this much.
 const AUTO_SCROLL_OVERSHOOT = 32;
 
@@ -122,16 +124,20 @@ const paintedRows = (
 ): string[] => {
   const from = index.get(paint.anchor) ?? -1;
   const end = index.get(to) ?? -1;
+
   if (from === -1 || end === -1) {
     return [...paint.initial];
   }
+
   const next = new Set(paint.initial);
+
   for (
     let position = Math.min(from, end);
     position <= Math.max(from, end);
     position += 1
   ) {
     const key = keys[position];
+
     if (key !== undefined) {
       if (paint.checked) {
         next.add(key);
@@ -140,6 +146,7 @@ const paintedRows = (
       }
     }
   }
+
   return keys.filter((key) => next.has(key));
 };
 
@@ -164,8 +171,10 @@ export const mailList = definePrimitive({
     let stopDrag: (() => void) | undefined;
 
     const keys = (): readonly string[] => store.get().keys;
+
     const indexOf = (key: string | null): number =>
       key === null ? -1 : (store.get().index.get(key) ?? -1);
+
     const checkable = (): boolean => store.get().checkable;
 
     const virtual = createVirtualizer({
@@ -173,21 +182,25 @@ export const mailList = definePrimitive({
       estimate: () => context.options().estimate,
       keep: () => {
         const index = indexOf(store.get().current);
+
         return index === -1 ? [] : [index];
       },
       key: (index) => keys()[index] ?? `missing-${index}`,
       overscan: OVERSCAN,
     });
+
     const autoScroll = createAutoScroll({
       edge: AUTO_SCROLL_EDGE,
       onScroll: () => {
         const point = lastPoint;
+
         if (point !== null) {
           paintAt(point.x, point.y);
         }
       },
       speed: AUTO_SCROLL_SPEED,
     });
+
     let lastPoint: { x: number; y: number } | null = null;
 
     const roving = createRovingFocus(context, {
@@ -200,6 +213,7 @@ export const mailList = definePrimitive({
       remember: false,
       slot: "open",
     });
+
     const selection = createSelection(context, {
       key: "checked",
       multiple: () => true,
@@ -207,9 +221,11 @@ export const mailList = definePrimitive({
       selectable: () => checkable(),
       set: (value, details) => change("checked", value, details),
     });
+
     const recovery = createFocusRecovery({
       fallback: () => {
         const { current } = store.get();
+
         return (
           (current === null ? undefined : context.element("open", current)) ??
           scroller ??
@@ -221,6 +237,7 @@ export const mailList = definePrimitive({
     // A controlled `current` arrives after the app renders, so a request
     // made a moment ago counts as current until then.
     let requested: { key: string | null } | null = null;
+
     const setCurrent = (
       key: string | null,
       reason: MailListCurrentReason,
@@ -229,6 +246,7 @@ export const mailList = definePrimitive({
       if ((requested?.key ?? store.get().current) === key) {
         return;
       }
+
       requested = { key };
       queueMicrotask(() => {
         requested = null;
@@ -238,13 +256,16 @@ export const mailList = definePrimitive({
 
     const focusRow = (key: string, behavior: ScrollBehavior): void => {
       const index = indexOf(key);
+
       if (index === -1) {
         return;
       }
+
       virtual.scrollToIndex(index, { align: "center", behavior });
       // The list scrolls itself, smoothly unless moves come quickly, so
       // focusing must not scroll as well.
       const el = context.element("open", key);
+
       if (el === undefined) {
         roving.focus(key);
       } else {
@@ -256,10 +277,13 @@ export const mailList = definePrimitive({
       direction: ThreadSelectionDirection
     ): number | null => {
       const grid = context.element("grid");
+
       if (scroller === null || grid === undefined) {
         return null;
       }
+
       const viewportStart = scroller.scrollTop - grid.offsetTop;
+
       return getVisibleThreadSelectionIndex(
         virtual.items().map(({ index, size, start }) => ({
           end: start + size,
@@ -278,20 +302,26 @@ export const mailList = definePrimitive({
       event?: KeyboardEvent
     ): void => {
       const all = keys();
+
       if (all.length === 0) {
         return;
       }
+
       const from = indexOf(store.get().current);
+
       // With nothing focused the keys pick up from what is on screen rather
       // than a list edge the reader has scrolled away from.
       const to =
         from === -1
           ? (visibleIndex(direction) ?? (direction === 1 ? 0 : all.length - 1))
           : clamp(from + direction, 0, all.length - 1);
+
       const key = all[to];
+
       if (key === undefined) {
         return;
       }
+
       const now = performance.now();
       const behavior = getThreadSelectionScrollBehavior(lastMoveAt, now);
       lastMoveAt = now;
@@ -306,9 +336,11 @@ export const mailList = definePrimitive({
 
     const actionButtons = (key: string): HTMLElement[] => {
       const cell = context.element("actions", key);
+
       if (cell === undefined || cell.closest("[inert]") !== null) {
         return [];
       }
+
       return [...cell.querySelectorAll<HTMLElement>("button:not([disabled])")];
     };
 
@@ -317,20 +349,27 @@ export const mailList = definePrimitive({
     const moveAcross = (event: KeyboardEvent, key: string): boolean => {
       const target = event.target instanceof HTMLElement ? event.target : null;
       const grid = context.element("grid");
+
       if (target === null || grid === undefined) {
         return false;
       }
+
       const forward = event.key === (isRTL(grid) ? "ArrowLeft" : "ArrowRight");
+
       const stops = [
         context.element("open", key),
         ...actionButtons(key),
       ].filter((el): el is HTMLElement => el !== undefined);
+
       const at = stops.indexOf(target);
       const next = stops[clamp(at + (forward ? 1 : -1), 0, stops.length - 1)];
+
       if (at === -1 || next === undefined) {
         return false;
       }
+
       next.focus({ preventScroll: true });
+
       return true;
     };
 
@@ -338,14 +377,18 @@ export const mailList = definePrimitive({
       if (paint === null || scroller === null) {
         return;
       }
+
       const bounds = scroller.getBoundingClientRect();
+
       const key = rowKeyAt(
         clamp(x, bounds.left + 1, bounds.right - 1),
         clamp(y, bounds.top + 1, bounds.bottom - 1)
       );
+
       if (key === undefined || key === paint.last) {
         return;
       }
+
       paint.last = key;
       change("checked", paintedRows(keys(), store.get().index, paint, key), {
         reason: "drag",
@@ -356,10 +399,12 @@ export const mailList = definePrimitive({
     const rowKeyAt = (x: number, y: number): string | undefined => {
       for (const el of document.elementsFromPoint(x, y)) {
         const key = rowKeyOf(el);
+
         if (key !== undefined) {
           return key;
         }
       }
+
       return undefined;
     };
 
@@ -370,10 +415,13 @@ export const mailList = definePrimitive({
       lastPoint = null;
       const finished = paint;
       paint = null;
+
       if (finished === null) {
         return;
       }
+
       commit("checked", store.get().checked, { reason: "drag" });
+
       if (!sameMembers(store.get().checked, finished.initial)) {
         announce(
           (context.options().selectedMessage ?? defaultSelectedMessage)(
@@ -381,7 +429,9 @@ export const mailList = definePrimitive({
           )
         );
       }
+
       const { current } = store.get();
+
       if (
         current !== null &&
         scroller?.contains(document.activeElement) === true
@@ -410,6 +460,7 @@ export const mailList = definePrimitive({
     const followPaint = ({ x, y }: { x: number; y: number }): void => {
       lastPoint = { x, y };
       const bounds = scroller?.getBoundingClientRect();
+
       // Scrolling goes on while the pointer overshoots the list a little,
       // as if it were still at the list's edge.
       if (
@@ -424,6 +475,7 @@ export const mailList = definePrimitive({
       } else {
         autoScroll.stop();
       }
+
       paintAt(x, y);
     };
 
@@ -440,8 +492,10 @@ export const mailList = definePrimitive({
     const captureAnchor = (): void => {
       if (scroller === null || scroller.scrollTop <= 0) {
         anchor = null;
+
         return;
       }
+
       const top = scroller.scrollTop;
       const first = rendered.find(({ size, start }) => start + size > top);
       anchor =
@@ -454,32 +508,40 @@ export const mailList = definePrimitive({
     context.onDestroy(
       store.subscribe(() => {
         const state = store.get();
+
         if (state.keys === indexedKeys) {
           return;
         }
+
         const previous = indexedKeys;
         indexedKeys = state.keys;
         captureAnchor();
         const index = indexKeys(state.keys);
         store.set({ index });
         virtual.refresh();
+
         if (state.current !== null && !index.has(state.current)) {
           const replacement =
             getSelectionAfterRemoval(previous, state.keys, state.current) ??
             null;
+
           // A row on its way out keeps focus until it unmounts, so focus moves
           // with the current row now rather than after the row's exit.
           const leaving = context.element("row", state.current);
           change("current", replacement, { reason: "item-removed" });
+
           if (leaving?.contains(document.activeElement) === true) {
             const next =
               replacement === null
                 ? undefined
                 : context.element("open", replacement);
+
             (next ?? scroller)?.focus({ preventScroll: true });
           }
         }
+
         const kept = state.checked.filter((key) => index.has(key));
+
         if (kept.length !== state.checked.length) {
           change("checked", kept, { reason: "item-removed" });
         }
@@ -494,18 +556,23 @@ export const mailList = definePrimitive({
       if (indexOf(row) !== -1) {
         return row;
       }
+
       const { labelOf } = context.options();
       const wanted = row.trim().toLowerCase();
+
       const matches =
         labelOf === undefined
           ? []
           : keys().filter(
               (key) => labelOf(key).trim().toLowerCase() === wanted
             );
+
       const [match] = matches;
+
       if (matches.length === 1 && match !== undefined) {
         return match;
       }
+
       throw new Error(
         matches.length === 0
           ? `No row "${row}". Name a row by its key or label.`
@@ -516,11 +583,14 @@ export const mailList = definePrimitive({
     return {
       activate(key: string, event?: Event): void {
         const click = event instanceof MouseEvent ? event : undefined;
+
         // A click that ends a drag paints; it doesn't open the row.
         if (suppressActivate && click !== undefined && click.detail > 0) {
           suppressActivate = false;
+
           return;
         }
+
         suppressActivate = false;
         context.options().onActivate?.(key, {
           event: click,
@@ -535,6 +605,7 @@ export const mailList = definePrimitive({
         const kept = anchor;
         // A render can still show the rows placed by the keys before.
         const current = keys();
+
         if (
           kept === null ||
           scroller === null ||
@@ -542,13 +613,18 @@ export const mailList = definePrimitive({
         ) {
           return;
         }
+
         anchor = null;
         const item = rows.find(({ key }) => key === kept.key);
+
         if (item !== undefined) {
           scroller.scrollTop += item.start - kept.start;
+
           return;
         }
+
         const index = indexOf(kept.key);
+
         if (index !== -1) {
           virtual.scrollToIndex(index, { align: "start" });
           scroller.scrollTop += kept.offset;
@@ -556,15 +632,19 @@ export const mailList = definePrimitive({
       },
       clear(): void {
         const hadChecked = store.get().checked.length > 0;
+
         if (hadChecked) {
           change("checked", [], { reason: "escape-key" });
         }
+
         setCurrent(null, "escape-key");
+
         if (hadChecked && checkable()) {
           announce(
             (context.options().selectedMessage ?? defaultSelectedMessage)(0)
           );
         }
+
         if (scroller?.contains(document.activeElement) === true) {
           scroller.focus({ preventScroll: true });
         }
@@ -572,8 +652,10 @@ export const mailList = definePrimitive({
       connect(el: HTMLElement): () => void {
         scroller = el;
         const disconnect = virtual.connect(el);
+
         return () => {
           disconnect();
+
           if (scroller === el) {
             scroller = null;
           }
@@ -581,6 +663,7 @@ export const mailList = definePrimitive({
       },
       focusCurrent(): void {
         const { current } = store.get();
+
         if (current === null || indexOf(current) === -1) {
           scroller?.focus({ preventScroll: true });
         } else {
@@ -599,7 +682,9 @@ export const mailList = definePrimitive({
         ) {
           return;
         }
+
         const from = rowKeyOf(event.target) ?? store.get().current;
+
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           move(event.key === "ArrowDown" ? 1 : -1, "list-navigation", event);
@@ -616,13 +701,16 @@ export const mailList = definePrimitive({
       measure(el: HTMLElement, key: string): () => void {
         const measure = (): void => {
           const index = indexOf(key);
+
           if (index !== -1) {
             virtual.measure(index, el)();
           }
         };
+
         measure();
         const observer = new ResizeObserver(measure);
         observer.observe(el);
+
         return () => observer.disconnect();
       },
       move(direction: ThreadSelectionDirection): void {
@@ -640,8 +728,10 @@ export const mailList = definePrimitive({
         if (event.button !== 0 || !checkable()) {
           return;
         }
+
         stopPaint();
         suppressActivate = false;
+
         if (fromCheck) {
           // A checkbox paints at once, without a row's tolerance, and leaves
           // focus where it was.
@@ -652,8 +742,10 @@ export const mailList = definePrimitive({
             onEnd: endPaint,
             onMove: followPaint,
           });
+
           return;
         }
+
         // The press isn't captured until it passes the tolerance, so one
         // that lifts first stays a click on the row.
         stopDrag = bindDrag(el, event, {
@@ -670,12 +762,14 @@ export const mailList = definePrimitive({
       roving,
       rowItems(): { label: string; value: string }[] {
         const labelOf = context.options().labelOf ?? ((key: string) => key);
+
         return keys().map((key) => ({ label: labelOf(key), value: key }));
       },
       toggle(row: string): void {
         if (!checkable()) {
           throw new Error("These rows can't be checked.");
         }
+
         selection.toggle(resolveRow(row), { reason: "shortcut" });
       },
       virtual,
@@ -720,7 +814,9 @@ export const mailList = definePrimitive({
         const down = (event: PointerEvent): void => {
           part.api.pointerdown(event, part.key, el, true);
         };
+
         el.addEventListener("pointerdown", down, true);
+
         return () => el.removeEventListener("pointerdown", down, true);
       },
       props: { value: { from: "row", kind: "string", required: true } },
@@ -734,6 +830,8 @@ export const mailList = definePrimitive({
       keys: ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"],
       on: {
         keydown: (event, { api }) => {
+          // SAFETY: the slot calls this for `keydown` only, which the browser
+          // dispatches as a KeyboardEvent.
           api.keydown(event as KeyboardEvent);
         },
       },
@@ -750,10 +848,14 @@ export const mailList = definePrimitive({
       focus: "roving",
       on: {
         focus: (event, { api, key }) => {
+          // SAFETY: the slot calls this for `focus` only, which the browser
+          // dispatches as a FocusEvent.
           api.focusIn(key, event as FocusEvent);
         },
         pointerdown: (event, { api, el, key }) => {
           if (el !== undefined) {
+            // SAFETY: the slot calls this for `pointerdown` only, which the
+            // browser dispatches as a PointerEvent.
             api.pointerdown(event as PointerEvent, key, el, false);
           }
         },
@@ -777,6 +879,7 @@ export const mailList = definePrimitive({
     row: slot<{ value: string }, { checked: boolean; current: boolean }>({
       attrs: (state, { key }) => {
         const index = state.index.get(key);
+
         return {
           "aria-rowindex": index === undefined ? undefined : String(index + 1),
           "aria-selected": state.checkable
@@ -791,6 +894,7 @@ export const mailList = definePrimitive({
           part.api.measure(el, part.key),
           part.api.recovery.bind(el, part),
         ];
+
         return () => {
           for (const cleanup of cleanups) {
             cleanup();
@@ -810,6 +914,8 @@ export const mailList = definePrimitive({
       }),
     }),
   }),
+  // SAFETY: both assertions only widen an initial value to its state's type:
+  // an empty array is a `string[]`, and `null` is a `string | null`.
   state: (options: MailListOptions) => ({
     checkable: options.checkable ?? false,
     checked: options.checked ?? options.defaultChecked ?? ([] as string[]),
@@ -821,9 +927,11 @@ export const mailList = definePrimitive({
   }),
   sync: ({ checkable = false, checked, current, keys, rowCount }) => {
     const base = { checkable, keys, rowCount: rowCount ?? keys.length };
+
     if (checked === undefined) {
       return current === undefined ? base : { ...base, current };
     }
+
     return current === undefined
       ? { ...base, checked }
       : { ...base, checked, current };

@@ -11,6 +11,7 @@ import type {
 
 // ui-sdk reads a token or any other inline atom as U+FFFC.
 const LEAF_TEXT = "\uFFFC";
+
 // Block boundaries take a position each, so offsets stay ProseMirror positions.
 const BOUNDARY_TEXT = "\n";
 
@@ -20,6 +21,7 @@ export interface TiptapTextAdapterOptions {
 
 const fragmentText = (fragment: Fragment): string => {
   let text = "";
+
   for (const node of fragment.content) {
     if (node.isText) {
       text += node.text ?? "";
@@ -29,6 +31,7 @@ const fragmentText = (fragment: Fragment): string => {
       text += `${BOUNDARY_TEXT}${fragmentText(node.content)}${BOUNDARY_TEXT}`;
     }
   }
+
   return text;
 };
 
@@ -42,8 +45,10 @@ const stepChanges = (transaction: Transaction): EditorChange[] =>
     if (!(step instanceof ReplaceStep)) {
       return [];
     }
+
     const { content, openEnd, openStart } = step.slice;
     const text = fragmentText(content);
+
     return [
       {
         inserted: text.slice(openStart, text.length - openEnd),
@@ -65,6 +70,7 @@ export const createTiptapTextAdapter = (
   rectAt: (offset) => {
     try {
       const { bottom, left, top } = editor.view.coordsAtPos(offset);
+
       return { height: bottom - top, width: 0, x: left, y: top };
     } catch {
       return null;
@@ -74,9 +80,11 @@ export const createTiptapTextAdapter = (
     // oxlint-disable-next-line anti-slop/no-runtime-typeof -- ui-sdk's adapter contract hands over text, or a token read by its label.
     const text = typeof content === "string" ? content : content.label;
     const { view } = editor;
+
     const transaction = closeHistory(
       view.state.tr.insertText(text, range.start, range.end)
     );
+
     transaction.setSelection(
       TextSelection.create(transaction.doc, range.start + text.length)
     );
@@ -88,7 +96,9 @@ export const createTiptapTextAdapter = (
     if (editor.isDestroyed || !editor.view.hasFocus()) {
       return null;
     }
+
     const { from, to } = editor.state.selection;
+
     return { end: to, start: from };
   },
   subscribe: (listener) => {
@@ -105,12 +115,14 @@ export const createTiptapTextAdapter = (
         listener({ type: "selection" });
       }
     };
+
     const handleCompositionStart = () => listener({ type: "compositionstart" });
     const handleCompositionEnd = () => listener({ type: "compositionend" });
     const { dom } = editor.view;
     editor.on("transaction", handleTransaction);
     dom.addEventListener("compositionstart", handleCompositionStart);
     dom.addEventListener("compositionend", handleCompositionEnd);
+
     return () => {
       editor.off("transaction", handleTransaction);
       dom.removeEventListener("compositionstart", handleCompositionStart);
@@ -120,12 +132,15 @@ export const createTiptapTextAdapter = (
   textBefore: (length) => {
     const { $head } = editor.state.selection;
     const { parent } = $head;
+
     if (!(parent.isTextblock && allows(parent))) {
       return null;
     }
+
     const end = $head.parentOffset;
     const start = Math.max(0, end - length);
     const text = parent.textBetween(start, end, undefined, LEAF_TEXT);
+
     // At a block's start, its opening position reads as a line break, so a
     // trigger there is at a boundary rather than after unseen text.
     return start > 0 || text.length === length

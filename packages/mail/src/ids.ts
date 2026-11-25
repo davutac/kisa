@@ -4,20 +4,24 @@ import { Schema } from "effect";
 export const AccountId = Schema.NonEmptyString.pipe(
   Schema.brand("MailAccountId")
 );
+
 export type AccountId = typeof AccountId.Type;
 
 /** One logical email, whatever mailboxes hold copies of it. */
 export const MessageId = Schema.NonEmptyString.pipe(
   Schema.brand("MailMessageId")
 );
+
 export type MessageId = typeof MessageId.Type;
 
 export const ThreadId = Schema.NonEmptyString.pipe(
   Schema.brand("MailThreadId")
 );
+
 export type ThreadId = typeof ThreadId.Type;
 
 export const LabelId = Schema.NonEmptyString.pipe(Schema.brand("MailLabelId"));
+
 export type LabelId = typeof LabelId.Type;
 
 /**
@@ -73,6 +77,7 @@ export const MailboxRole = Schema.Literals([
   "sent",
   "trash",
 ]);
+
 export type MailboxRole = typeof MailboxRole.Type;
 
 const SPECIAL_USE_ROLES = new Map<string, MailboxRole>([

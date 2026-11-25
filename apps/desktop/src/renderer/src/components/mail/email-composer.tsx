@@ -84,11 +84,14 @@ export const ComposerSendHotkeyGuard = Extension.create({
               if (!(isSendPress && LINE_BREAK_INPUTS.has(event.inputType))) {
                 return false;
               }
+
               event.preventDefault();
+
               return true;
             },
             keydown: (_view, event) => {
               isSendPress = matchesHotkeyCommand(event, "composer.send");
+
               return isSendPress;
             },
           },
@@ -128,17 +131,22 @@ const insertComposerFiles = async (
 ): Promise<void> => {
   const originalDocument = view.state.doc;
   const images = await onComposerFiles(files);
+
   if (images.length === 0) {
     return;
   }
 
   const contentIds = images.map(({ contentId }) => contentId);
+
   if (view.isDestroyed || !isCurrentContent()) {
     onInlineImageInsertDiscard?.(contentIds);
+
     return;
   }
+
   if (view.state.doc !== originalDocument) {
     onInlineImageInsertFailure?.(contentIds);
+
     return;
   }
 
@@ -149,6 +157,7 @@ const insertComposerFiles = async (
         type: "composerInlineImage",
       })
     );
+
     const insertAt = Math.min(position, view.state.doc.content.size);
     view.dispatch(
       view.state.tr.insert(insertAt, Fragment.fromArray(nodes)).scrollIntoView()
@@ -164,17 +173,21 @@ const resolveComposerTemplate = (
   context: TemplateVariableContext
 ): ComposerTemplateInput | undefined => {
   const subject = resolveTemplateText(template.subject, context);
+
   if (!subject.ok) {
     toast.error(`Subject: ${subject.message}`);
+
     return undefined;
   }
 
   const previousContent = editor.getJSON();
   editor.commands.setContent(template.body.html, { emitUpdate: false });
   const body = resolveTemplateVariableContent(editor.getJSON(), context);
+
   if (!body.ok) {
     editor.commands.setContent(previousContent, { emitUpdate: false });
     toast.error(`Body: ${body.message}`);
+
     return undefined;
   }
 
@@ -223,6 +236,7 @@ const EmailComposer = ({
 }: EmailComposerProps) => {
   const contentKeyRef = useRef(contentKey);
   const [editorContent, setEditorContent] = useState(defaultValue);
+
   const editorProps = useMemo(
     () => ({
       attributes: {
@@ -235,13 +249,17 @@ const EmailComposer = ({
           ? undefined
           : (view: EditorView, event: DragEvent) => {
               const files = [...(event.dataTransfer?.files ?? [])];
+
               if (files.length === 0) {
                 return false;
               }
+
               event.preventDefault();
+
               const position =
                 view.posAtCoords({ left: event.clientX, top: event.clientY })
                   ?.pos ?? view.state.selection.from;
+
               void insertComposerFiles(
                 view,
                 files,
@@ -251,6 +269,7 @@ const EmailComposer = ({
                 onInlineImageInsertDiscard,
                 onInlineImageInsertFailure
               );
+
               return true;
             },
     }),
@@ -262,6 +281,7 @@ const EmailComposer = ({
       onInlineImageInsertFailure,
     ]
   );
+
   const extensions = useMemo(
     () => [
       StarterKit.configure({
@@ -301,6 +321,7 @@ const EmailComposer = ({
 
   useEffect(() => {
     const editable = !disabled;
+
     if (editor !== null && editor.isEditable !== editable) {
       editor.setEditable(editable, false);
     }
@@ -362,7 +383,9 @@ const EmailComposer = ({
               if (editor === null) {
                 return;
               }
+
               editor.chain().focus().deleteRange(range).run();
+
               const resolved = resolveComposerTemplate(
                 editor,
                 template,
@@ -373,6 +396,7 @@ const EmailComposer = ({
                   Date.now()
                 )
               );
+
               if (resolved !== undefined) {
                 onApplyTemplate?.(resolved);
               }

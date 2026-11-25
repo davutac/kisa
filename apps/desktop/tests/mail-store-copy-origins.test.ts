@@ -14,6 +14,7 @@ const originsOf = (accountId: AccountId) =>
   Effect.gen(function* readOrigins() {
     const store = yield* MailEngineStore;
     const origins = yield* store.copyOrigins(accountId, [SHARED, OTHER]);
+
     return Object.fromEntries(origins);
   });
 
@@ -38,6 +39,7 @@ describe("where copies taken to Trash or Spam came from", () => {
           "Junk Email"
         );
         yield* store.forgetCopyOrigins(ANA, [OTHER]);
+
         return { ana: yield* originsOf(ANA), ben: yield* originsOf(BEN) };
       })
     );
@@ -67,11 +69,14 @@ describe("where copies taken to Trash or Spam came from", () => {
           "Junk Email"
         );
         yield* store.clearAccount(ANA);
+
         const result = {
           ana: yield* originsOf(ANA),
           ben: yield* originsOf(BEN),
         };
+
         yield* store.clearAccount(BEN);
+
         return result;
       })
     );

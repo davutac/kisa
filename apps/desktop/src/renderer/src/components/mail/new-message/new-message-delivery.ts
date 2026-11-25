@@ -8,6 +8,7 @@ export const getComposerDeliveryLabel = (
   if (scheduledAt !== undefined) {
     return isScheduledEdit ? "Reschedule" : "Schedule";
   }
+
   return isScheduledEdit ? "Send now" : "Send";
 };
 
@@ -24,20 +25,26 @@ export const describeComposerDelivery = (
   const trimmedSubject = subject.trim();
   const email = trimmedSubject === "" ? "this email" : `“${trimmedSubject}”`;
   const addresses = [...recipients.to, ...recipients.cc, ...recipients.bcc];
+
   const target =
     addresses.length === 0 ? email : `${email} to ${addresses.join(", ")}`;
+
   const when =
     scheduledAt === undefined ? "" : ` for ${formatScheduledAt(scheduledAt)}`;
+
   switch (getComposerDeliveryLabel(isScheduledEdit, scheduledAt)) {
     case "Reschedule": {
       return `Reschedules ${target}${when}`;
     }
+
     case "Schedule": {
       return `Schedules ${target}${when}`;
     }
+
     case "Send now": {
       return `Sends ${target} now, before its scheduled time`;
     }
+
     default: {
       return `Sends ${target}`;
     }

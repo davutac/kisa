@@ -48,6 +48,7 @@ const writeDatabaseKey = async (
     } finally {
       await temporaryFile.close();
     }
+
     await rename(temporaryPath, keyPath);
   } finally {
     await rm(temporaryPath, { force: true });
@@ -79,8 +80,10 @@ export const loadOrCreateDatabaseKey = async (
     }
 
     const key = randomBytes(DATABASE_KEY_BYTES);
+
     try {
       await sealDatabaseKey(keyPath, key, protector);
+
       return key;
     } catch (sealError) {
       key.fill(0);

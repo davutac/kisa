@@ -95,6 +95,7 @@ export const parseBimiSelector = (value: string): string | null => {
   }
 
   const [selectorEntry] = selectorEntries;
+
   const selector = selectorEntry
     ?.match(/^s=(?<selector>[^=]+)$/u)
     ?.groups?.selector?.trim()
@@ -128,6 +129,7 @@ export const getBimiDiscoveryTarget = (
   }
 
   const [selectorHeader] = selectorHeaders;
+
   const selector =
     selectorHeader === undefined
       ? "default"
@@ -162,6 +164,7 @@ export const hasCachedSenderBrand = Effect.fn("hasCachedSenderBrand")(
     }
 
     const domains = getBimiLookupDomains(senderDomain);
+
     const rows = yield* withDatabaseClient((database) =>
       database.query.mailSenderBrands.findMany({
         where: {
@@ -236,6 +239,7 @@ export const parseBimiLocation = (value: string): BimiLocation | null => {
   }
 
   const authorityValue = tags.get("a");
+
   const authorityUrl =
     authorityValue === undefined || authorityValue.length === 0
       ? null
@@ -349,6 +353,7 @@ export const createPinnedLookup =
   (_hostname, options, callback) => {
     if (options.all) {
       callback(null, [{ address, family }]);
+
       return;
     }
 
@@ -384,6 +389,7 @@ const downloadHttps = async (url: URL, redirects = 0): Promise<Buffer> => {
 
           if (redirects >= MAX_REDIRECTS) {
             reject(new Error("Too many BIMI logo redirects"));
+
             return;
           }
 
@@ -391,6 +397,7 @@ const downloadHttps = async (url: URL, redirects = 0): Promise<Buffer> => {
 
           if (redirectUrl === null) {
             reject(new Error("Invalid BIMI logo redirect"));
+
             return;
           }
 
@@ -401,12 +408,14 @@ const downloadHttps = async (url: URL, redirects = 0): Promise<Buffer> => {
               reject(error);
             }
           })();
+
           return;
         }
 
         if (status !== 200) {
           response.resume();
           reject(new Error(`BIMI logo request failed (${status})`));
+
           return;
         }
 
@@ -418,6 +427,7 @@ const downloadHttps = async (url: URL, redirects = 0): Promise<Buffer> => {
         if (contentType !== "image/svg+xml") {
           response.resume();
           reject(new Error("BIMI logo is not an SVG image"));
+
           return;
         }
 
@@ -429,6 +439,7 @@ const downloadHttps = async (url: URL, redirects = 0): Promise<Buffer> => {
 
           if (size > MAX_INDICATOR_BYTES) {
             response.destroy(new Error("BIMI logo is too large"));
+
             return;
           }
 
@@ -503,6 +514,7 @@ const storeSenderBrand = Effect.fn("storeSenderBrand")(
     resolved: ResolvedSenderBrand | null
   ) {
     const updatedAt = Date.now();
+
     const values =
       resolved === null
         ? {
@@ -568,6 +580,7 @@ const discoverSenderBrand = Effect.fn("discoverSenderBrand")(
         }
       },
     });
+
     const bimiRecords = records
       .map((parts) => parts.join(""))
       .filter((record) => record.startsWith("v=BIMI1"));

@@ -54,11 +54,13 @@ const getDeliveryNotice = (
   if (item.deliveryState === "attention") {
     return getScheduledMailAttentionCopy(item.attentionReason);
   }
+
   if (item.deliveryState === "retrying") {
     return item.nextAttemptAt === undefined
       ? "Retrying delivery"
       : `Retrying · next attempt: ${formatMailDate(item.nextAttemptAt, calendar, "detailed")}`;
   }
+
   return item.deliveryState === "sending" ? "Sending…" : null;
 };
 
@@ -71,6 +73,7 @@ const StatusIcon = ({ item }: { readonly item: ScheduledMailSummary }) => {
       />
     );
   }
+
   if (item.deliveryState === "sending" || item.deliveryState === "retrying") {
     return (
       <LoaderCircleIcon
@@ -79,6 +82,7 @@ const StatusIcon = ({ item }: { readonly item: ScheduledMailSummary }) => {
       />
     );
   }
+
   return null;
 };
 
@@ -164,6 +168,7 @@ const ScheduledMailDetails = ({
     0,
     VISIBLE_ATTACHMENT_COUNT
   );
+
   const hiddenAttachmentCount =
     item.attachments.length - visibleAttachments.length;
 
@@ -257,9 +262,11 @@ const ScheduledMailRow = ({
 }: ScheduledMailRowProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const isPresent = useIsPresent();
+
   const [hoveredAtRevision, setHoveredAtRevision] = useState<number | null>(
     null
   );
+
   const isHovered = hoveredAtRevision === quickActionResetRevision;
   // The visible date, its tooltip, and the spoken summary all read the same
   // calendar, so a time-zone change while Scheduled is open moves them
@@ -270,10 +277,12 @@ const ScheduledMailRow = ({
   const recipientLabel = getScheduledRecipientSummary(item.recipients);
   const subject = item.subject.trim() || "No subject";
   const deliveryNotice = getDeliveryNotice(item, calendar);
+
   const deliverySummary =
     deliveryNotice === null
       ? `Scheduled for ${scheduledLabel}`
       : `${deliveryNotice}, scheduled for ${scheduledLabel}`;
+
   const canOpen = item.deliveryState !== "sending";
   const areQuickActionsRevealed = selected || isHovered;
 

@@ -8,6 +8,7 @@ describe("scheduled mail due-claim paging", () => {
       readonly accountId: string;
       readonly order: number;
     }
+
     const candidates = [
       ...Array.from({ length: 25 }, (_, index) => ({
         accountId: "paused@example.com",
@@ -15,6 +16,7 @@ describe("scheduled mail due-claim paging", () => {
       })),
       { accountId: "ready@example.com", order: 25 },
     ];
+
     const loadedCursors: (number | undefined)[] = [];
 
     const claimed = await claimFirstAvailableScheduledMail<
@@ -29,6 +31,7 @@ describe("scheduled mail due-claim paging", () => {
       loadPage: (cursor, pageSize) => {
         loadedCursors.push(cursor);
         const start = cursor === undefined ? 0 : cursor + 1;
+
         return Promise.resolve(candidates.slice(start, start + pageSize));
       },
       toCursor: ({ order }) => order,

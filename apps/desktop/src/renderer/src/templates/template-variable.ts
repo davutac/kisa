@@ -36,9 +36,11 @@ export const templateTextToVariableDocument = (source: string): JSONContent => {
 
   for (const match of source.matchAll(TEMPLATE_VARIABLE_TOKEN)) {
     const offset = match.index;
+
     if (offset > index) {
       content.push({ text: source.slice(index, offset), type: "text" });
     }
+
     content.push({
       attrs: { expression: match.groups?.expression ?? "" },
       type: "templateVariable",
@@ -67,9 +69,11 @@ export const variableDocumentToTemplateText = (
   if (content.type === "templateVariable") {
     return toTemplateVariableToken(expressionFromAttributes(content.attrs));
   }
+
   if (content.type === "text") {
     return content.text ?? "";
   }
+
   return (content.content ?? []).map(variableDocumentToTemplateText).join("");
 };
 
@@ -116,6 +120,7 @@ export const TemplateVariable = Node.create<TemplateVariableOptions>({
   },
   renderHTML({ node }) {
     const expression = expressionFromAttributes(node.attrs);
+
     return [
       "span",
       {
@@ -143,10 +148,13 @@ export const resolveTemplateVariableContent = (
     const token = toTemplateVariableToken(
       expressionFromAttributes(content.attrs)
     );
+
     const resolved: TemplateTextResult = resolveTemplateText(token, context);
+
     if (!resolved.ok) {
       return resolved;
     }
+
     if (resolved.value.length === 0) {
       return { ok: true, value: null };
     }
@@ -171,6 +179,7 @@ export const resolveTemplateVariableContent = (
       content.text?.includes("}}") === true)
   ) {
     const resolved = resolveTemplateText(content.text, context);
+
     return resolved.ok
       ? {
           ok: true,
@@ -187,11 +196,14 @@ export const resolveTemplateVariableContent = (
   }
 
   const resolvedChildren: JSONContent[] = [];
+
   for (const child of content.content) {
     const resolved = resolveTemplateVariableContent(child, context);
+
     if (!resolved.ok) {
       return resolved;
     }
+
     if (resolved.value !== null) {
       resolvedChildren.push(resolved.value);
     }

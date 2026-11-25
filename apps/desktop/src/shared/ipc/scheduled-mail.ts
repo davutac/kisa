@@ -10,6 +10,7 @@ import { IpcReply } from "./reply";
 
 export const SCHEDULED_MAIL_PAGE_SIZE = 50;
 export const MAX_SCHEDULED_MAIL_PREVIEW_LENGTH = 240;
+
 // Bound IPC payloads without imposing a product-level account limit.
 export const MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT = 1000;
 
@@ -26,6 +27,7 @@ export const ScheduledMailAttentionReason = Schema.Literals([
   "outcome-unknown",
   "rate-limit-exhausted",
 ]);
+
 export type ScheduledMailAttentionReason =
   typeof ScheduledMailAttentionReason.Type;
 
@@ -35,12 +37,14 @@ export const ScheduledMailDeliveryState = Schema.Literals([
   "scheduled",
   "sending",
 ]);
+
 export type ScheduledMailDeliveryState = typeof ScheduledMailDeliveryState.Type;
 
 export const ScheduledMailKey = Schema.Struct({
   accountId: Schema.NonEmptyString,
   draftId: Schema.NonEmptyString,
 });
+
 export type ScheduledMailKey = typeof ScheduledMailKey.Type;
 
 export const ScheduledMailScope = Schema.Struct({
@@ -48,12 +52,14 @@ export const ScheduledMailScope = Schema.Struct({
     Schema.isMaxLength(MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT)
   ),
 });
+
 export type ScheduledMailScope = typeof ScheduledMailScope.Type;
 
 export const ScheduledMailAttachmentSummary = Schema.Struct({
   filename: Schema.NonEmptyString,
   mediaType: Schema.NonEmptyString,
 });
+
 export type ScheduledMailAttachmentSummary =
   typeof ScheduledMailAttachmentSummary.Type;
 
@@ -73,12 +79,14 @@ export const ScheduledMailSummary = Schema.Struct({
   scheduledAt: Schema.Int,
   subject: MailOutgoingSubject,
 });
+
 export type ScheduledMailSummary = typeof ScheduledMailSummary.Type;
 
 export const ScheduledMailPageRequest = Schema.Struct({
   ...ScheduledMailScope.fields,
   cursor: Schema.optional(Schema.NonEmptyString),
 });
+
 export type ScheduledMailPageRequest = typeof ScheduledMailPageRequest.Type;
 
 export const ScheduledMailPage = Schema.Struct({
@@ -87,12 +95,14 @@ export const ScheduledMailPage = Schema.Struct({
   ),
   nextCursor: Schema.optional(Schema.NonEmptyString),
 });
+
 export type ScheduledMailPage = typeof ScheduledMailPage.Type;
 
 export const ScheduledMailAttentionCount = Schema.Struct({
   count: Schema.Natural,
   hasScheduledMail: Schema.Boolean,
 });
+
 export type ScheduledMailAttentionCount =
   typeof ScheduledMailAttentionCount.Type;
 
@@ -101,6 +111,7 @@ export const ScheduledMailScheduleRequest = Schema.Struct({
   draft: MailDraftInput,
   scheduledAt: Schema.Int,
 });
+
 export type ScheduledMailScheduleRequest =
   typeof ScheduledMailScheduleRequest.Type;
 
@@ -108,6 +119,7 @@ export const ScheduledMailEditSession = Schema.Struct({
   draft: MailDraft,
   item: ScheduledMailSummary,
 });
+
 export type ScheduledMailEditSession = typeof ScheduledMailEditSession.Type;
 
 const PossibleDuplicateAcknowledgement = {
@@ -132,12 +144,14 @@ export const ScheduledMailEditAction = Schema.Union([
   }),
   Schema.Struct({ kind: Schema.Literal("discard") }),
 ]);
+
 export type ScheduledMailEditAction = typeof ScheduledMailEditAction.Type;
 
 export const ScheduledMailFinishEditRequest = Schema.Struct({
   ...ScheduledMailKey.fields,
   action: ScheduledMailEditAction,
 });
+
 export type ScheduledMailFinishEditRequest =
   typeof ScheduledMailFinishEditRequest.Type;
 
@@ -155,6 +169,7 @@ export const ScheduledMailFinishEditResult = Schema.Union([
     session: ScheduledMailEditSession,
   }),
 ]);
+
 export type ScheduledMailFinishEditResult =
   typeof ScheduledMailFinishEditResult.Type;
 
@@ -162,6 +177,7 @@ export const ScheduledMailSendNowRequest = Schema.Struct({
   ...ScheduledMailKey.fields,
   allowPossibleDuplicate: Schema.Boolean,
 });
+
 export type ScheduledMailSendNowRequest =
   typeof ScheduledMailSendNowRequest.Type;
 
@@ -169,6 +185,7 @@ export const ScheduledMailChanged = Schema.Struct({
   ...ScheduledMailKey.fields,
   kind: Schema.Literals(["remove", "upsert"]),
 });
+
 export type ScheduledMailChanged = typeof ScheduledMailChanged.Type;
 
 export const ScheduledMailOutcome = Schema.Struct({
@@ -176,33 +193,41 @@ export const ScheduledMailOutcome = Schema.Struct({
   intent: Schema.Literals(["feedback", "open"]),
   kind: Schema.Literals(["attention", "sent"]),
 });
+
 export type ScheduledMailOutcome = typeof ScheduledMailOutcome.Type;
 
 export const ScheduledMailOutcomeReadiness = Schema.Boolean;
+
 export type ScheduledMailOutcomeReadiness =
   typeof ScheduledMailOutcomeReadiness.Type;
 
 export const ScheduledMailPageReply = IpcReply(ScheduledMailPage);
+
 export type ScheduledMailPageReply = typeof ScheduledMailPageReply.Type;
 
 export const ScheduledMailAttentionCountReply = IpcReply(
   ScheduledMailAttentionCount
 );
+
 export type ScheduledMailAttentionCountReply =
   typeof ScheduledMailAttentionCountReply.Type;
 
 export const ScheduledMailSummaryReply = IpcReply(ScheduledMailSummary);
+
 export type ScheduledMailSummaryReply = typeof ScheduledMailSummaryReply.Type;
 
 export const ScheduledMailEditSessionReply = IpcReply(ScheduledMailEditSession);
+
 export type ScheduledMailEditSessionReply =
   typeof ScheduledMailEditSessionReply.Type;
 
 export const ScheduledMailFinishEditReply = IpcReply(
   ScheduledMailFinishEditResult
 );
+
 export type ScheduledMailFinishEditReply =
   typeof ScheduledMailFinishEditReply.Type;
 
 export const ScheduledMailActionReply = IpcReply(Schema.Void);
+
 export type ScheduledMailActionReply = typeof ScheduledMailActionReply.Type;

@@ -46,6 +46,7 @@ function ScheduledListFooter({
       </div>
     );
   }
+
   return hasMore ? (
     <p
       aria-live="polite"
@@ -93,6 +94,7 @@ function ScheduledRoute() {
     setLastRenderedIndex,
     setSelectedKey,
   } = useScheduledMailWorkspace();
+
   const isEditing = editSession !== null;
 
   useHotkeyLayer("composer", isEditing);
@@ -181,6 +183,7 @@ function ScheduledRoute() {
             <AnimatePresence initial={false}>
               {rows.map((row) => {
                 const item = itemsByKey.get(row.key);
+
                 return item === undefined ? null : (
                   <ScheduledMailRow
                     item={item}

@@ -29,6 +29,7 @@ export const resolveImapAuth = Effect.fn("resolveImapAuth")(
           })
       )
     );
+
     const row = yield* withDatabaseClient((database) =>
       database.query.mailAccounts.findFirst({
         columns: { credentials: true },

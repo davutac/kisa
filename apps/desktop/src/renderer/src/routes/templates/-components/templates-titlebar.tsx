@@ -35,6 +35,7 @@ const getSaveStatus = ({
   if (isSaving) {
     return isCreating ? "Adding…" : "Saving…";
   }
+
   // A resting Save already says there is nothing to save, and a new
   // template's Add says it is not saved yet.
   return isDirty && !isCreating ? "Unsaved changes" : null;

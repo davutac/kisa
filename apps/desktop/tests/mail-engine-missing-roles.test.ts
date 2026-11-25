@@ -20,6 +20,7 @@ import {
   scopeFor,
   syncFully,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 /** Server commands that change or remove mail. */
 const MUTATING = [
@@ -40,10 +41,12 @@ const MUTATING = [
  */
 const syncBareServer = async () => {
   insertAccount("generic", "imap");
+
   const server = new FakeImapServer(
     [{ path: "INBOX" }, { path: "Projects" }],
     OUTLOOK_CAPABILITIES
   );
+
   server.deliver("INBOX", genericMessage("x"));
   server.deliver("Projects", genericMessage("x"));
   server.deliver(
@@ -59,9 +62,15 @@ const syncBareServer = async () => {
   );
   const scope = scopeFor(server, genericDialect);
   await syncFully(scope);
-  const { thread_id: threadId } = connection
-    .prepare("SELECT thread_id FROM mail_messages WHERE subject = 'x'")
-    .get() as { thread_id: string };
+
+  const { thread_id: threadId } = found(
+    connection
+      .prepare<unknown[], { thread_id: string }>(
+        "SELECT thread_id FROM mail_messages WHERE subject = 'x'"
+      )
+      .get()
+  );
+
   return { scope, server, threadId: ThreadId.make(threadId) };
 };
 

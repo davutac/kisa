@@ -13,6 +13,7 @@ export const hasLegacyDatabase = async (options: {
 }): Promise<boolean> => {
   try {
     await stat(getLegacyDatabasePath(options));
+
     return true;
   } catch {
     return false;

@@ -52,6 +52,7 @@ const readLabels = async (
   accountIds?: readonly string[]
 ): Promise<Record<string, number>> => {
   const { labels } = await readCounts(accountIds);
+
   return Object.fromEntries(labels);
 };
 

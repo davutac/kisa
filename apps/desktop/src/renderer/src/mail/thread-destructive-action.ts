@@ -16,11 +16,13 @@ export const getBulkThreadDestructiveAction = (
   threads: readonly Pick<MailThreadSummary, "places">[]
 ): ThreadDestructiveAction | undefined => {
   const [first] = threads;
+
   if (first === undefined) {
     return undefined;
   }
 
   const action = getThreadDestructiveAction(first.places);
+
   return threads.every(
     (thread) => getThreadDestructiveAction(thread.places) === action
   )

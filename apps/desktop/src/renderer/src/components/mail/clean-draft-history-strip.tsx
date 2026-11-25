@@ -42,6 +42,7 @@ const CleanDraftHistoryStrip = ({
         deselectable={false}
         onValueChange={([id]) => {
           const version = versions.find((candidate) => candidate.id === id);
+
           if (version !== undefined) {
             onSelect(version);
           }

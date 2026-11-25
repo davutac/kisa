@@ -52,6 +52,7 @@ vi.mock(import("../src/main/app/startup"), () => ({
 describe("openThreadWindow IPC", () => {
   beforeEach(() => {
     mocks.openThreadWindow.mockReset();
+    // SAFETY: the method awaits the window and never reads it.
     mocks.openThreadWindow.mockResolvedValue({} as BrowserWindow);
   });
 

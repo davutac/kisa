@@ -67,6 +67,7 @@ export const loadOpenThread = async ({
   if (isShown()) {
     show(cached);
   }
+
   if (!(cached.ok && cached.data.awaitsServer)) {
     return;
   }

@@ -52,6 +52,7 @@ const FILTER_EXAMPLES = {
 
 const NUMBER_FORMAT = new Intl.NumberFormat();
 const ADDRESS_HEADINGS = { from: "From user", to: "Sent to" } as const;
+
 const ADDRESS_EMPTY = {
   from: "No indexed sender answers to that name.",
   to: "No sent-mail recipient answers to that name.",
@@ -63,6 +64,7 @@ export const getMailSearchAddressRole = (
   if (field === "from") {
     return "sender";
   }
+
   return field === "to" ? "recipient" : undefined;
 };
 
@@ -113,8 +115,10 @@ export const getMailSearchCompletions = ({
       typedWord.length === 0
         ? SEARCH_FILTER_FIELDS
         : SEARCH_FILTER_FIELDS.filter((field) => field.startsWith(typedWord));
+
     const fields =
       matchingFields.length === 0 ? SEARCH_FILTER_FIELDS : matchingFields;
+
     return {
       heading: "Filters",
       items: fields.map((field) => ({
@@ -128,14 +132,18 @@ export const getMailSearchCompletions = ({
   }
 
   const typedValue = draft.value.trim();
+
   if (draft.field === "from" || draft.field === "to") {
     return toAddressItems(draft.field, senders, typedValue, onSelectFilter);
   }
+
   if (draft.field === "has" || draft.field === "is") {
     const { field } = draft;
+
     const matches = FILTER_VALUES[field].filter((value) =>
       value.startsWith(typedValue.toLowerCase())
     );
+
     return {
       empty: "No search options match that value.",
       heading: getSearchFilterLabel(draft.field),

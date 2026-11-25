@@ -42,14 +42,19 @@ export const createCoalescedRead = <A>({
     if (!isActive) {
       return;
     }
+
     if (result !== undefined) {
       apply(result);
     }
+
     if (!isStale) {
       isReading = false;
+
       return;
     }
+
     await pause();
+
     if (isActive) {
       await step();
     }
@@ -60,10 +65,13 @@ export const createCoalescedRead = <A>({
       if (!isActive) {
         return;
       }
+
       if (isReading) {
         isStale = true;
+
         return;
       }
+
       isReading = true;
       void step();
     },

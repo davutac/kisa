@@ -47,6 +47,7 @@ const AiComposerButton = ({
   workingLabel,
 }: AiComposerButtonProps) => {
   const display = getHotkeyDisplay(command);
+
   const button = (
     <Button
       aria-busy={isWorking}
@@ -66,6 +67,7 @@ const AiComposerButton = ({
       {isWorking ? workingLabel : label}
     </Button>
   );
+
   const trigger =
     popover === undefined ? (
       button
@@ -76,6 +78,7 @@ const AiComposerButton = ({
         render={button}
       />
     );
+
   const tooltip = (
     <Tooltip disabled={popover?.open}>
       <TooltipTrigger render={trigger} />

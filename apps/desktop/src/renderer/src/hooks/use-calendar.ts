@@ -48,6 +48,7 @@ const refresh = (): void => {
   }
 
   calendar = next;
+
   for (const listener of listeners) {
     listener();
   }

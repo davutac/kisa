@@ -42,6 +42,7 @@ import type {
 } from "./scheduled-mail-worker";
 
 export type MailDraftRow = typeof mailDrafts.$inferSelect;
+
 export type ScheduledMessageRow = typeof scheduledMessages.$inferSelect;
 
 export interface JoinedScheduledMessage {
@@ -116,6 +117,7 @@ export const loadScheduledMessage = async (
     )
     .limit(1)
     .all();
+
   return row;
 };
 
@@ -126,6 +128,7 @@ export const loadScheduledMailScopeTotals = async (
   if (accountIds.length === 0) {
     return { attentionCount: 0, hasScheduledMail: false };
   }
+
   const [row] = await database
     .select({
       attentionCount: sql<number>`coalesce(sum(case when ${scheduledMessages.status} = 'attention' then 1 else 0 end), 0)`,
@@ -140,6 +143,7 @@ export const loadScheduledMailScopeTotals = async (
       )
     )
     .all();
+
   return {
     attentionCount: row?.attentionCount ?? 0,
     hasScheduledMail: (row?.scheduledCount ?? 0) > 0,
@@ -150,6 +154,7 @@ const isStoredMessageValidForDelivery = (
   row: JoinedScheduledMessage
 ): boolean => {
   const { draft } = row;
+
   if (
     draft.accountEmail === null ||
     draft.kind !== "new" ||
@@ -171,16 +176,20 @@ const isStoredMessageValidForDelivery = (
     draft.signatureHtml,
     draft.signatureText,
   ];
+
   const hasNoSignature = signatureFields.every((value) => value === null);
   const hasCompleteSignature = signatureFields.every((value) => value !== null);
+
   if (!(hasNoSignature || hasCompleteSignature)) {
     return false;
   }
 
   const body = { html: draft.bodyHtml, text: draft.bodyText };
+
   if (hasNoSignature) {
     return body.text.trim().length > 0;
   }
+
   if (
     draft.signatureAccountEmail !== draft.accountEmail ||
     draft.signatureHtml === null ||
@@ -188,10 +197,12 @@ const isStoredMessageValidForDelivery = (
   ) {
     return false;
   }
+
   const signature = {
     html: draft.signatureHtml,
     text: draft.signatureText,
   };
+
   return (
     hasEmailSignature(body, signature) &&
     removeEmailSignature(body, signature).text.trim().length > 0
@@ -220,6 +231,7 @@ const toClaimedScheduledMail = (
     subject: row.draft.subject,
     to: row.draft.to,
   };
+
   return row.schedule.rateLimitStartedAt === null
     ? claimed
     : { ...claimed, rateLimitStartedAt: row.schedule.rateLimitStartedAt };
@@ -252,15 +264,19 @@ export const makeDatabaseScheduledMailWorkerStore = (
       // oxlint-disable-next-line eslint/require-await -- The paging port requires an asynchronous claim callback, including the empty-account branch.
       claim: async (row) => {
         const accountId = row.draft.accountEmail;
+
         if (accountId === null) {
           return;
         }
+
         const key = { accountId, draftId: row.draft.id };
+
         // oxlint-disable-next-line eslint/require-await -- Keyed serialization requires a promise-returning callback, including the suspended branch.
         return options.withKeyLock(key, async () => {
           if (accountMailWorkSupervisor.isSuspended(accountId)) {
             return;
           }
+
           return runScheduledMailDatabase((database) =>
             database.transaction(async (transaction) => {
               const updated = await transaction
@@ -280,6 +296,7 @@ export const makeDatabaseScheduledMailWorkerStore = (
                 )
                 .returning({ draftId: scheduledMessages.draftId })
                 .all();
+
               return updated.length === 0
                 ? undefined
                 : toClaimedScheduledMail(row, attemptId);
@@ -340,6 +357,7 @@ export const makeDatabaseScheduledMailWorkerStore = (
         if (row.schedule.nextAttemptAt === null) {
           throw scheduledMailError("Scheduled email has an invalid due time");
         }
+
         return {
           draftId: row.schedule.draftId,
           nextAttemptAt: row.schedule.nextAttemptAt,
@@ -358,6 +376,7 @@ export const makeDatabaseScheduledMailWorkerStore = (
         .orderBy(asc(scheduledMessages.nextAttemptAt))
         .limit(1)
         .all();
+
       return row?.nextAttemptAt ?? undefined;
     });
   },
@@ -379,6 +398,7 @@ export const makeDatabaseScheduledMailWorkerStore = (
           )
         )
         .all();
+
       return rows.flatMap((row) =>
         row.accountId === null
           ? []
@@ -418,9 +438,11 @@ export const makeDatabaseScheduledMailWorkerStore = (
         )
         .returning({ draftId: scheduledMessages.draftId })
         .all();
+
       if (rows.length === 1) {
         options.notifyChanged(item, "upsert");
       }
+
       return rows.length === 1;
     });
   },
@@ -449,6 +471,7 @@ export const makeDatabaseScheduledMailWorkerStore = (
         )
         .returning({ draftId: scheduledMessages.draftId })
         .all();
+
       return rows.length === 1;
     });
   },
@@ -467,6 +490,7 @@ export const makeDatabaseScheduledMailWorkerStore = (
               statusAllows("mark-attention"),
               eq(scheduledMessages.attemptId, attemptId)
             );
+
       const rows = await database
         .update(scheduledMessages)
         .set({
@@ -483,9 +507,11 @@ export const makeDatabaseScheduledMailWorkerStore = (
         )
         .returning({ draftId: scheduledMessages.draftId })
         .all();
+
       if (rows.length === 1) {
         options.notifyChanged(item, "upsert");
       }
+
       return rows.length === 1;
     });
   },
@@ -503,6 +529,7 @@ export const makeDatabaseScheduledMailWorkerStore = (
               statusAllows("mark-sent"),
               eq(scheduledMessages.attemptId, attemptId)
             );
+
       const rows = await database
         .update(scheduledMessages)
         .set({
@@ -519,9 +546,11 @@ export const makeDatabaseScheduledMailWorkerStore = (
         )
         .returning({ draftId: scheduledMessages.draftId })
         .all();
+
       if (rows.length === 1) {
         options.notifyChanged(item, "remove");
       }
+
       return rows.length === 1;
     });
   },
@@ -565,9 +594,11 @@ export const makeDatabaseScheduledMailWorkerStore = (
         )
         .returning({ draftId: scheduledMessages.draftId })
         .all();
+
       if (rows.length === 1) {
         options.notifyChanged(item, "upsert");
       }
+
       return rows.length === 1;
     });
   },

@@ -8,6 +8,7 @@ import { HOTKEY_LAYERS, isHotkeyScopeActive } from "@/hotkeys/layer-model";
 import type { HotkeyScope } from "@/hotkeys/layer-model";
 
 export type HotkeyPlatform = "linux" | "mac" | "windows";
+
 export type HotkeyRepeat = "allow" | "ignore-key-repeat" | "once";
 
 interface HotkeyCommandDefinition {
@@ -665,6 +666,7 @@ export interface HotkeyCommandDisplay {
 // macOS menus list ⇧ before ⌘; Windows and Linux lead with Ctrl.
 const toDisplayKeys = (binding: string, apple: boolean): string => {
   const { key, modifiers } = parseHotkeyBinding(binding);
+
   const ordered = apple
     ? [
         ...modifiers.filter((modifier) => modifier !== "Mod"),
@@ -699,6 +701,7 @@ export const getHotkeyAriaLabel = (
   return HOTKEY_COMMANDS[commandId].bindings
     .map((binding) => {
       const { key, modifiers } = parseHotkeyBinding(binding);
+
       return ariaKeyshortcuts(joinKeys(modifiers, key), apple);
     })
     .join(" ");
@@ -716,12 +719,14 @@ const canScopesCoexist = (left: HotkeyScope, right: HotkeyScope): boolean =>
 // One spelling per key press on a platform: `mod` resolved, modifiers sorted.
 const canonicalKeys = (keys: string, platform: HotkeyPlatform): string => {
   const parts = keys.split("+");
+
   const modifiers = parts
     .slice(0, -1)
     .map((modifier) => {
       if (modifier !== "mod") {
         return modifier;
       }
+
       return platform === "mac" ? "meta" : "control";
     })
     .toSorted();

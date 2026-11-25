@@ -48,6 +48,7 @@ const SettingsInlineImagesRow = ({
 }: SettingsInlineImagesRowProps) => {
   const { inlineImageRetentionDays, setInlineImageRetentionDays } =
     useAppSettings(appSettingsApi);
+
   const selected = findInlineImageRetentionOption(inlineImageRetentionDays);
 
   return (
@@ -87,6 +88,7 @@ const SettingsInlineImagesRow = ({
                 const option = INLINE_IMAGE_RETENTION_OPTIONS.find(
                   (candidate) => candidate.value === value
                 );
+
                 if (option !== undefined) {
                   setInlineImageRetentionDays(option.days);
                 }

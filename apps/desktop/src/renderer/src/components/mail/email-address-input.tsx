@@ -54,6 +54,7 @@ const SEPARATOR_KEYS = new Set([",", ";", " "]);
  */
 const keepsTypedAddress = (draft: string, highlighted: string): boolean => {
   const [typed, ...rest] = parseEmailAddressList(draft);
+
   return (
     typed === draft &&
     rest.length === 0 &&
@@ -81,6 +82,7 @@ const EmailAddressInput = ({
   const [isInvalid, setIsInvalid] = useState(false);
   const [isListWanted, setIsListWanted] = useState(false);
   const [highlighted, setHighlighted] = useState<string | null>(null);
+
   // The last answer stays, narrowed to the new draft below, until the next
   // one arrives, so the hint doesn't blink and Tab never finds a gap.
   const indexedSuggestions = useAddressSuggestions(
@@ -89,6 +91,7 @@ const EmailAddressInput = ({
     accountId.length === 0 || draft.length === 0 ? undefined : draft,
     { whileLoading: "previous" }
   );
+
   const suggestions = findEmailAddressSuggestions(
     draft,
     [
@@ -97,7 +100,9 @@ const EmailAddressInput = ({
     ],
     [accountId, ...value]
   );
+
   const isListOpen = isListWanted && suggestions.length > 0;
+
   // What Tab takes: the highlighted suggestion, shown after the draft. A
   // whole typed address it doesn't complete has none, so Tab leaves the
   // field and adds what was typed, as Enter does.
@@ -121,10 +126,12 @@ const EmailAddressInput = ({
 
     if (addresses.length === 0) {
       setIsInvalid(true);
+
       return false;
     }
 
     add(addresses);
+
     return true;
   };
 
@@ -134,15 +141,18 @@ const EmailAddressInput = ({
     if (event.key === "Tab" && hinted !== undefined && !event.shiftKey) {
       event.preventDefault();
       add([hinted.address]);
+
       return;
     }
 
     const isEnter = event.key === "Enter";
+
     if (!isEnter && !SEPARATOR_KEYS.has(event.key)) {
       return;
     }
 
     const current = combobox.getHighlighted();
+
     const chosen =
       current === null || keepsTypedAddress(draft, current) ? null : current;
 
@@ -156,6 +166,7 @@ const EmailAddressInput = ({
           commit(draft);
         }
       });
+
       return;
     }
 
@@ -193,9 +204,12 @@ const EmailAddressInput = ({
             details.reason !== "input-change"
           ) {
             details.cancel();
+
             return;
           }
+
           setIsListWanted(open);
+
           // The combobox drops its highlight on close without reporting it.
           if (!open) {
             setHighlighted(null);
@@ -213,10 +227,12 @@ const EmailAddressInput = ({
           if (added.length > 0 && addresses.length === 0) {
             details.cancel();
             setIsInvalid(true);
+
             return;
           }
 
           onChange(mergeUniqueEmailAddresses(kept, addresses));
+
           if (added.length > 0) {
             setDraft("");
             setIsInvalid(false);
@@ -236,6 +252,8 @@ const EmailAddressInput = ({
         <ComboboxChips className="py-1">
           <ComboboxValue>
             {(state) =>
+              // SAFETY: this Combobox is `multiple` and takes the addresses as
+              // its `value`, so its state holds that array of strings.
               (state.value as string[]).map((address) => (
                 <ComboboxChip key={address} value={address}>
                   <span className="truncate">{address}</span>

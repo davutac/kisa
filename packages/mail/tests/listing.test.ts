@@ -43,6 +43,7 @@ const isInboxMail = (message: Message): boolean =>
 /** The condition the Inbox list, its unread count and notifications use. */
 const isListedInInbox = (conversation: readonly Message[]): boolean => {
   const places = conversationPlaces(conversation);
+
   return places.isInInbox && !places.isInSpam && !places.isInTrash;
 };
 
@@ -103,6 +104,7 @@ describe("where a conversation is listed", () => {
   it("lists every conversation by at least one of its messages, and settles", () => {
     const unsettled = CONVERSATIONS.filter((conversation) => {
       const listed = listedMessages(conversation);
+
       return (
         listed.length === 0 || listedMessages(listed).length !== listed.length
       );

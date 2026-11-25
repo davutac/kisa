@@ -148,6 +148,7 @@ export const getScheduledMailRateLimitDelay = (
     60 * 60 * 1000,
     60_000 * 2 ** Math.min(Math.max(0, attemptCount), 6)
   );
+
   return Math.max(exponential, retryAfterMs ?? 0);
 };
 
@@ -163,6 +164,7 @@ const earliestTime = (
   if (first === undefined) {
     return second;
   }
+
   return second === undefined ? first : Math.min(first, second);
 };
 
@@ -200,6 +202,7 @@ export class ScheduledMailWorker {
       if (this.#running) {
         return;
       }
+
       this.#running = true;
       yield* promiseEffect(() =>
         this.#store.resetPreparing(this.#dependencies.now())
@@ -222,9 +225,11 @@ export class ScheduledMailWorker {
       this.#timer = undefined;
       this.#reconcileAfter.clear();
       const wakeFiber = this.#wakeFiber;
+
       if (wakeFiber !== undefined) {
         yield* Fiber.interrupt(wakeFiber);
       }
+
       this.#wakeFiber = undefined;
     });
   }
@@ -234,12 +239,15 @@ export class ScheduledMailWorker {
       if (!this.#running) {
         return;
       }
+
       this.#timer?.cancel();
       this.#timer = undefined;
       const current = this.#wakeFiber;
+
       if (current !== undefined) {
         this.#wakePending = true;
         yield* Fiber.await(current);
+
         if (
           this.#running &&
           this.#wakePending &&
@@ -247,8 +255,10 @@ export class ScheduledMailWorker {
         ) {
           yield* this.#wake();
         }
+
         return;
       }
+
       const fiber = yield* Effect.forkDetach(this.#runWakeCycles());
       this.#wakeFiber = fiber;
       yield* Fiber.await(fiber);
@@ -262,9 +272,11 @@ export class ScheduledMailWorker {
         this.#timer?.cancel();
         this.#timer = undefined;
         yield* this.#runCycle().pipe(Effect.ignore);
+
         if (!this.#running || this.#wakePending) {
           continue;
         }
+
         yield* this.#armNextWake().pipe(
           // oxlint-disable-next-line promise/prefer-await-to-callbacks, promise/prefer-await-to-then -- Timer adapter failures fall back to a bounded poll.
           Effect.catch(() => Effect.sync(() => this.#armPollFallback()))
@@ -283,6 +295,7 @@ export class ScheduledMailWorker {
     if (!this.#running || this.#timer !== undefined) {
       return;
     }
+
     this.#timer = this.#dependencies.schedule(() => {
       this.#timer = undefined;
       void this.wake();
@@ -301,26 +314,35 @@ export class ScheduledMailWorker {
       if (!this.#running || this.#timer !== undefined) {
         return;
       }
+
       const now = this.#dependencies.now();
+
       const nextAttemptAt = yield* promiseEffect(() =>
         this.#store.getNextAttemptAt()
       );
+
       const nextReconciliationAt =
         this.#reconcileAfter.size === 0
           ? undefined
           : Math.min(...this.#reconcileAfter.values());
+
       const nextWakeAt = earliestTime(nextAttemptAt, nextReconciliationAt);
+
       if (nextWakeAt === undefined) {
         return;
       }
+
       const untilNextAttempt = nextWakeAt - now;
+
       const delayMs =
         untilNextAttempt > 0
           ? Math.min(SCHEDULED_MAIL_POLL_INTERVAL_MS, untilNextAttempt)
           : SCHEDULED_MAIL_POLL_INTERVAL_MS;
+
       if (!this.#running) {
         return;
       }
+
       this.#timer = this.#dependencies.schedule(() => {
         this.#timer = undefined;
         void this.wake();
@@ -332,15 +354,19 @@ export class ScheduledMailWorker {
     return Effect.gen({ self: this }, function* drainScheduledMail() {
       const context = yield* Effect.context<never>();
       const runPromise = Effect.runPromiseWith(context);
+
       while (this.#running) {
         const now = this.#dependencies.now();
         const attemptId = this.#dependencies.randomId();
+
         const item = yield* promiseEffect(() =>
           this.#store.claimDue(now, attemptId)
         );
+
         if (item === undefined) {
           return;
         }
+
         if (!this.#running) {
           yield* promiseEffect(() =>
             this.#store.releasePreparation(
@@ -350,14 +376,18 @@ export class ScheduledMailWorker {
               now
             )
           );
+
           return;
         }
+
         let accountWorkStarted = false;
+
         const completed = yield* promiseEffect((parentSignal) =>
           this.#dependencies.runAccountWork(
             item.accountId,
             (signal) => {
               accountWorkStarted = true;
+
               return runPromise(this.#attempt(item, signal), { signal });
             },
             parentSignal
@@ -366,6 +396,7 @@ export class ScheduledMailWorker {
           Effect.as(true),
           Effect.orElseSucceed(() => false)
         );
+
         if (completed) {
           if (!accountWorkStarted) {
             const skippedAt = this.#dependencies.now();
@@ -378,8 +409,10 @@ export class ScheduledMailWorker {
               )
             );
           }
+
           continue;
         }
+
         const failedAt = this.#dependencies.now();
         yield* promiseEffect(() =>
           this.#store.releasePreparation(
@@ -392,6 +425,7 @@ export class ScheduledMailWorker {
           // oxlint-disable-next-line promise/prefer-await-to-callbacks, promise/prefer-await-to-then -- A sending row stays durable for startup reconciliation if release fails.
           Effect.catch(() => Effect.void)
         );
+
         return;
       }
     });
@@ -402,6 +436,7 @@ export class ScheduledMailWorker {
     signal: AbortSignal
   ): Effect.Effect<void, ScheduledMailWorkerError> {
     let phase: "preparing" | "sending" | "terminal" = "preparing";
+
     return Effect.gen({ self: this }, function* attemptScheduledMailDelivery() {
       if (!item.isMessageValid) {
         yield* promiseEffect(() =>
@@ -414,6 +449,7 @@ export class ScheduledMailWorker {
         );
         phase = "terminal";
         yield* this.#notify(item, "attention");
+
         return;
       }
 
@@ -431,6 +467,7 @@ export class ScheduledMailWorker {
           )
         );
         phase = "terminal";
+
         return;
       }
 
@@ -445,11 +482,13 @@ export class ScheduledMailWorker {
         // oxlint-disable-next-line promise/prefer-await-to-callbacks, promise/prefer-await-to-then -- Attachment preparation failure is a durable attention transition.
         Effect.catch((error) => Effect.succeed({ error, ok: false as const }))
       );
+
       if (!loaded.ok) {
         const reason =
           loaded.error instanceof ScheduledMailAttachmentError
             ? loaded.error.reason
             : "attachment-invalid";
+
         yield* promiseEffect(() =>
           this.#store.markAttention(
             item,
@@ -460,6 +499,7 @@ export class ScheduledMailWorker {
         );
         phase = "terminal";
         yield* this.#notify(item, "attention");
+
         return;
       }
 
@@ -468,6 +508,7 @@ export class ScheduledMailWorker {
           if (signal.aborted) {
             return Promise.resolve(false);
           }
+
           return this.#store.markSending(
             item,
             item.attemptId,
@@ -475,6 +516,7 @@ export class ScheduledMailWorker {
           );
         })
       );
+
       if (!maySend) {
         yield* promiseEffect(() =>
           this.#store.releasePreparation(
@@ -485,8 +527,10 @@ export class ScheduledMailWorker {
           )
         );
         phase = "terminal";
+
         return;
       }
+
       phase = "sending";
 
       const outcome: Awaited<
@@ -499,7 +543,9 @@ export class ScheduledMailWorker {
           ok: false as const,
         }))
       );
+
       const now = this.#dependencies.now();
+
       if (outcome.ok) {
         if (
           yield* promiseEffect(() =>
@@ -511,12 +557,14 @@ export class ScheduledMailWorker {
         } else {
           phase = "terminal";
         }
+
         return;
       }
 
       if (outcome.error.kind === "rate-limited") {
         const { retryAfterMs } = outcome.error;
         const rateLimitStartedAt = item.rateLimitStartedAt ?? now;
+
         if (now - rateLimitStartedAt >= SCHEDULED_MAIL_RATE_LIMIT_WINDOW_MS) {
           yield* promiseEffect(() =>
             this.#store.markAttention(
@@ -528,8 +576,10 @@ export class ScheduledMailWorker {
           );
           phase = "terminal";
           yield* this.#notify(item, "attention");
+
           return;
         }
+
         yield* promiseEffect(() =>
           this.#store.retryAfterRateLimit(
             item,
@@ -543,6 +593,7 @@ export class ScheduledMailWorker {
           )
         );
         phase = "terminal";
+
         return;
       }
 
@@ -554,6 +605,7 @@ export class ScheduledMailWorker {
           now + SCHEDULED_MAIL_POLL_INTERVAL_MS
         );
         phase = "terminal";
+
         return;
       }
 
@@ -579,7 +631,9 @@ export class ScheduledMailWorker {
     if (phase !== "preparing") {
       return Effect.void;
     }
+
     const now = this.#dependencies.now();
+
     return promiseEffect(() =>
       this.#store.releasePreparation(
         item,
@@ -596,31 +650,39 @@ export class ScheduledMailWorker {
       const runPromise = Effect.runPromiseWith(context);
       const sending = yield* promiseEffect(() => this.#store.listSending());
       const presentKeys = new Set(sending.map(getScheduledMailKeyId));
+
       for (const key of this.#reconcileAfter.keys()) {
         if (!presentKeys.has(key)) {
           this.#reconcileAfter.delete(key);
         }
       }
+
       for (const item of sending) {
         if (!this.#running) {
           return;
         }
+
         const key = getScheduledMailKeyId(item);
         const now = this.#dependencies.now();
+
         if ((this.#reconcileAfter.get(key) ?? 0) > now) {
           continue;
         }
+
         if (!this.#dependencies.isOnline()) {
           this.#reconcileAfter.set(key, now + SCHEDULED_MAIL_POLL_INTERVAL_MS);
           continue;
         }
+
         let started = false;
         let handled = false;
+
         const completed = yield* promiseEffect((parentSignal) =>
           this.#dependencies.runAccountWork(
             item.accountId,
             (signal) => {
               started = true;
+
               return runPromise(
                 this.#reconcile(item, key, signal).pipe(
                   Effect.tap(() =>
@@ -638,9 +700,11 @@ export class ScheduledMailWorker {
           Effect.as(true),
           Effect.orElseSucceed(() => false)
         );
+
         if (!this.#running) {
           return;
         }
+
         if (!completed || !started || !handled) {
           this.#reconcileAfter.set(
             key,
@@ -660,9 +724,11 @@ export class ScheduledMailWorker {
       const reconciliation = yield* promiseEffect(() =>
         this.#dependencies.reconcile(item, signal)
       );
+
       if (!this.#running || signal.aborted) {
         return;
       }
+
       if (reconciliation.kind === "defer") {
         this.#reconcileAfter.set(
           key,
@@ -672,8 +738,10 @@ export class ScheduledMailWorker {
               reconciliation.retryAfterMs ?? 0
             )
         );
+
         return;
       }
+
       if (reconciliation.kind === "missing") {
         this.#reconcileAfter.delete(key);
         yield* promiseEffect(() =>
@@ -685,8 +753,10 @@ export class ScheduledMailWorker {
           )
         );
         yield* this.#notify(item, "attention");
+
         return;
       }
+
       if (
         yield* promiseEffect(() =>
           this.#store.markSent(item, undefined, this.#dependencies.now())

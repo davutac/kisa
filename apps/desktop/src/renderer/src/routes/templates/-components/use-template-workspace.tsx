@@ -29,10 +29,12 @@ export const useTemplateWorkspace = () => {
   const accounts = useAccounts();
   const { isLoading, templates } = useComposerTemplates();
   const templateApi = useMemo(() => getTemplateApi(), []);
+
   const accountIds = useMemo(
     () => new Set(accounts.map(({ email }) => email)),
     [accounts]
   );
+
   const [draft, setDraft] = useState<ComposerTemplateInput | null>(null);
   const [original, setOriginal] = useState<ComposerTemplateInput | null>(null);
   const [query, setQuery] = useState("");
@@ -51,12 +53,15 @@ export const useTemplateWorkspace = () => {
   const isDirty =
     draft !== null &&
     (original === null || !templatesAreEqual(draft, original));
+
   const filteredTemplates = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
+
     return templates.filter(({ name }) =>
       name.toLocaleLowerCase().includes(normalizedQuery)
     );
   }, [query, templates]);
+
   const { confirmDelete, confirmDiscard } = useTemplateConfirmations({
     isDirty,
     templateName: draft?.name,
@@ -70,14 +75,17 @@ export const useTemplateWorkspace = () => {
     }
 
     const latest = templates.find(({ id }) => id === draft.id);
+
     if (latest === undefined) {
       // oxlint-disable-next-line react/set-state-in-effect -- A clean buffer mirrors template changes from other windows and account removal; it stays local state because editing takes it over.
       setDraft(null);
       setOriginal(null);
+
       return;
     }
 
     const input = toTemplateInput(latest, accountIds);
+
     if (!templatesAreEqual(input, draft)) {
       setDraft(input);
       setOriginal(input);
@@ -89,6 +97,7 @@ export const useTemplateWorkspace = () => {
   const requestDiscard = async (action: () => void): Promise<void> => {
     if (!isDirty) {
       action();
+
       return;
     }
 
@@ -122,6 +131,7 @@ export const useTemplateWorkspace = () => {
       draft?.id,
       direction
     );
+
     const nextTemplate =
       nextIndex === null ? undefined : filteredTemplates[nextIndex];
 
@@ -153,10 +163,13 @@ export const useTemplateWorkspace = () => {
     }
 
     const validationError = getTemplateNameError(draft, templates);
+
     if (validationError !== undefined) {
       setNameError(validationError);
+
       return;
     }
+
     setNameError(undefined);
 
     for (const [field, value] of [
@@ -164,8 +177,10 @@ export const useTemplateWorkspace = () => {
       ["Body", draft.body.text],
     ] as const) {
       const validation = validateTemplateText(value);
+
       if (!validation.ok) {
         toast.error(`${field}: ${validation.message}`);
+
         return;
       }
     }
@@ -179,17 +194,22 @@ export const useTemplateWorkspace = () => {
             ...submittedDraft,
             name: submittedDraft.name.trim(),
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
+
           const saved = toTemplateInput(reply.data, accountIds);
+
           if (draftRef.current?.id === saved.id) {
             setOriginal(saved);
             setDraft((current) =>
               current === submittedDraft ? saved : current
             );
           }
+
           toast.success("Template saved");
         } catch {
           toast.error("Could not save template");
@@ -208,10 +228,13 @@ export const useTemplateWorkspace = () => {
 
     try {
       const reply = await templateApi.delete({ templateId: original.id });
+
       if (!reply.ok) {
         toast.error(reply.error);
+
         return;
       }
+
       setDraft(null);
       setOriginal(null);
       toast.success("Template deleted");

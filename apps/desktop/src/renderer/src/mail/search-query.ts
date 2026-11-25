@@ -20,6 +20,7 @@ export const MIN_SEARCH_TEXT_LENGTH = 2;
 /** Filter-only and broad searches run immediately; free text needs two letters. */
 export const isMailSearchQueryReady = (query: SearchQuery): boolean => {
   const text = query.text.trim();
+
   return text.length === 0 || text.length >= MIN_SEARCH_TEXT_LENGTH;
 };
 
@@ -47,6 +48,9 @@ const FILTER_FIELDS = new Set<string>(SEARCH_FILTER_FIELDS);
 export const TYPED_SEARCH_STATES = ["starred"] as const;
 
 const TYPED_STATES = new Set<string>(TYPED_SEARCH_STATES);
+
+const toFilterField = (field: string): SearchFilterField | undefined =>
+  SEARCH_FILTER_FIELDS.find((candidate) => candidate === field);
 
 const isTypedFilter = (field: string, value: string): boolean =>
   FILTER_FIELDS.has(field) &&
@@ -90,6 +94,7 @@ const tokenizeQuery = (raw: string): readonly RawToken[] => {
   }
 
   flush(raw.length);
+
   return tokens;
 };
 
@@ -100,10 +105,11 @@ const toFilter = (token: string): SearchFilter | undefined => {
     return undefined;
   }
 
-  const field = token.slice(0, separatorIndex).toLowerCase();
+  const field = toFilterField(token.slice(0, separatorIndex).toLowerCase());
   const value = token.slice(separatorIndex + 1).trim();
-  return isTypedFilter(field, value) && value.length > 0
-    ? { field: field as SearchFilterField, value }
+
+  return field !== undefined && isTypedFilter(field, value) && value.length > 0
+    ? { field, value }
     : undefined;
 };
 
@@ -172,6 +178,7 @@ export const applyExternalMailSearchScope = (
   } else if (mailbox !== "inbox") {
     scopeFilters.push({ field: "label", value: mailbox });
   }
+
   if (unreadOnly) {
     scopeFilters.push({ field: "is", value: "unread" });
   }
@@ -252,15 +259,13 @@ export const parseFilterDraft = (draft: string): FilterDraft | undefined => {
     return undefined;
   }
 
-  const field = token.value.slice(0, separatorIndex).toLowerCase();
+  const field = toFilterField(
+    token.value.slice(0, separatorIndex).toLowerCase()
+  );
+
   const value = token.value.slice(separatorIndex + 1);
 
-  return FILTER_FIELDS.has(field)
-    ? {
-        field: field as SearchFilterField,
-        value,
-      }
-    : undefined;
+  return field === undefined ? undefined : { field, value };
 };
 
 /** Replaces the operator being typed with nothing, once it has become a pill. */

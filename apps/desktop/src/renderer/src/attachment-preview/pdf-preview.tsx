@@ -35,11 +35,14 @@ const PdfPage = ({
     if (container === null) {
       return;
     }
+
     const observer = new IntersectionObserver(
       ([entry]) => setVisible(entry?.isIntersecting === true),
       { rootMargin: "900px 0px" }
     );
+
     observer.observe(container);
+
     return () => observer.disconnect();
   }, [container]);
 
@@ -47,24 +50,29 @@ const PdfPage = ({
     if (container === null) {
       return;
     }
+
     const updateWidth = (nextWidth: number): void => {
       const roundedWidth = Math.floor(nextWidth);
       setWidth((currentWidth) =>
         currentWidth === roundedWidth ? currentWidth : roundedWidth
       );
     };
+
     const observer = new ResizeObserver(([entry]) => {
       if (entry !== undefined) {
         updateWidth(entry.contentRect.width);
       }
     });
+
     updateWidth(container.getBoundingClientRect().width);
     observer.observe(container);
+
     return () => observer.disconnect();
   }, [container]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
+
     if (!(visible && canvas !== null && width > 0)) {
       return;
     }
@@ -72,14 +80,17 @@ const PdfPage = ({
     let cancelled = false;
     let page: PDFPageProxy | undefined;
     let renderTask: RenderTask | undefined;
+
     const render = async (): Promise<void> => {
       await runWithCleanup(
         async () => {
           try {
             page = await document.getPage(pageNumber);
+
             if (cancelled) {
               return;
             }
+
             const baseViewport = page.getViewport({ scale: 1 });
             const cssScale = width / baseViewport.width;
             const viewport = page.getViewport({ scale: cssScale });
@@ -109,7 +120,9 @@ const PdfPage = ({
         }
       );
     };
+
     void render();
+
     return () => {
       cancelled = true;
       renderTask?.cancel();
@@ -145,16 +158,20 @@ const PdfPreview = ({ bytes }: { bytes: Uint8Array }) => {
   useEffect(() => {
     let disposed = false;
     let loadingTask: PDFDocumentLoadingTask | undefined;
+
     const load = async (): Promise<void> => {
       try {
         const pdfjs = await loadPdfjs();
         pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
         loadingTask = pdfjs.getDocument({ data: new Uint8Array(bytes) });
         const nextDocument = await loadingTask.promise;
+
         if (disposed) {
           await loadingTask.destroy();
+
           return;
         }
+
         setDocument(nextDocument);
       } catch {
         if (!disposed) {
@@ -162,7 +179,9 @@ const PdfPreview = ({ bytes }: { bytes: Uint8Array }) => {
         }
       }
     };
+
     void load();
+
     return () => {
       disposed = true;
       void loadingTask?.destroy();
@@ -172,6 +191,7 @@ const PdfPreview = ({ bytes }: { bytes: Uint8Array }) => {
   if (error) {
     return <PreviewError message="This PDF could not be displayed." />;
   }
+
   if (document === undefined) {
     return <PreviewPending label="Preparing PDF…" />;
   }

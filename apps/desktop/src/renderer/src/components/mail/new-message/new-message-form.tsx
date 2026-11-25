@@ -71,22 +71,29 @@ const NewMessageForm = ({
   const composer = useNewMessageStore((state) => state.composer);
   const cleanHistory = useNewMessageStore((state) => state.cleanHistory);
   const draftId = useNewMessageStore((state) => state.draftId);
+
   const isBusy = useNewMessageStore(
     (state) => state.isSending || state.isScheduling
   );
+
   const recipientResetVersion = useNewMessageStore(
     (state) => state.recipientResetVersion
   );
+
   const recipients = useNewMessageStore((state) => state.recipients);
+
   const selectedCleanVersionId = useNewMessageStore(
     (state) => state.selectedCleanVersionId
   );
+
   const subject = useNewMessageStore((state) => state.subject);
   const setRecipients = useNewMessageStore((state) => state.setRecipients);
   const { isEdit } = scheduled;
+
   const fromAccounts = isEdit
     ? accounts.filter(({ email }) => email === selectedAccountId)
     : accounts;
+
   return (
     <form
       className="flex min-h-0 flex-1 flex-col overflow-hidden"

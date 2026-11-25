@@ -62,6 +62,7 @@ const loadAccountSnapshots = async (
   accountIds: readonly string[]
 ): Promise<void> => {
   const accounts = toAccountList(accountIds);
+
   const tuples = await database.values<CorrespondentTuple>(sql`
     WITH visible_messages AS (
       SELECT m.account_id AS account_email, m.from_address, m.from_name,
@@ -116,6 +117,7 @@ const loadAccountSnapshots = async (
     WHERE address_rank <= ${MAX_CORRESPONDENTS_PER_ACCOUNT}
     ORDER BY account_email ASC, address_rank ASC
   `);
+
   const nextByAccount = new Map(
     accountIds.map(
       (accountId) =>
@@ -128,6 +130,7 @@ const loadAccountSnapshots = async (
       address,
       messageCount,
     };
+
     nextByAccount
       .get(accountId)
       ?.set(
@@ -198,6 +201,7 @@ export const listCachedCorrespondents = (
       }
 
       const name = existing.name ?? suggestion.name;
+
       const mergedSuggestion = {
         address: existing.address,
         messageCount: existing.messageCount + suggestion.messageCount,
@@ -211,6 +215,7 @@ export const listCachedCorrespondents = (
   }
 
   const byCount = [...merged.values()].toSorted(compareSuggestions);
+
   return {
     senders: (needle.length === 0
       ? byCount
@@ -248,6 +253,7 @@ export const rememberCorrespondentMessages = (
       if (existing.name === undefined && mailbox.name !== undefined) {
         cached.set(key, { ...existing, name: mailbox.name });
       }
+
       return;
     }
 
@@ -255,6 +261,7 @@ export const rememberCorrespondentMessages = (
       address: mailbox.address,
       messageCount: 1,
     };
+
     cached.set(
       key,
       mailbox.name === undefined

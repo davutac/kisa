@@ -1,6 +1,6 @@
 // oxlint-disable typescript/no-unsafe-type-assertion
 import { genericDialect, gmailDialect } from "@repo/mail/dialects";
-import { ThreadId, userLabelId } from "@repo/mail/ids";
+import { LabelId, ThreadId, userLabelId } from "@repo/mail/ids";
 import { createLabel, deleteLabel, renameLabel } from "@repo/mail/labels";
 import { applyThreadAction } from "@repo/mail/mutations";
 import { relabelStep, syncAccount } from "@repo/mail/sync";
@@ -24,6 +24,7 @@ import {
   syncFully,
   threadRow,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 const userLabels = () =>
   connection
@@ -42,6 +43,7 @@ const labelCursors = () =>
 /** A full pass that also reports whether its discovery changed the labels. */
 const syncReportingLabels = async (scope: SyncScope) => {
   let labelsChanged: boolean | undefined;
+
   const changes = await run(
     syncAccount({
       ...scope,
@@ -51,6 +53,7 @@ const syncReportingLabels = async (scope: SyncScope) => {
         }),
     })
   );
+
   return { changes, labelsChanged };
 };
 
@@ -62,6 +65,7 @@ const relabelFully = async (scope: SyncScope): Promise<number> => {
       return step;
     }
   }
+
   throw new Error("label reread did not finish");
 };
 
@@ -70,25 +74,26 @@ const fileUnder = (scope: SyncScope, threadId: string, labelId: string) =>
     applyThreadAction(scope, [ThreadId.make(threadId)], {
       applied: true,
       kind: "setLabel",
-      labelId: labelId as never,
+      labelId: LabelId.make(labelId),
     })
   );
 
 const genericMessageIds = (subject: string) =>
-  connection
-    .prepare(
-      "SELECT message_id, thread_id FROM mail_messages WHERE subject = ?"
-    )
-    .get(subject) as { message_id: string; thread_id: string };
+  found(
+    connection
+      .prepare<unknown[], { message_id: string; thread_id: string }>(
+        "SELECT message_id, thread_id FROM mail_messages WHERE subject = ?"
+      )
+      .get(subject)
+  );
 
 const locationPaths = (messageId: string) =>
-  (
-    connection
-      .prepare(
-        "SELECT mailbox_path FROM mail_message_locations WHERE message_id = ? ORDER BY mailbox_path"
-      )
-      .all(messageId) as { mailbox_path: string }[]
-  ).map((row) => row.mailbox_path);
+  connection
+    .prepare<unknown[], { mailbox_path: string }>(
+      "SELECT mailbox_path FROM mail_message_locations WHERE message_id = ? ORDER BY mailbox_path"
+    )
+    .all(messageId)
+    .map((row) => row.mailbox_path);
 
 const syncGmailWorkMessage = async () => {
   insertAccount("gmail");
@@ -102,6 +107,7 @@ const syncGmailWorkMessage = async () => {
   );
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
+
   return { scope, server };
 };
 
@@ -112,6 +118,7 @@ const syncIcloudReceipt = async () => {
   server.deliver("Receipts", genericMessage("receipt"));
   const scope = scopeFor(server, genericDialect);
   await syncFully(scope);
+
   return { scope, server };
 };
 
@@ -409,6 +416,7 @@ describe("labels with the generic dialect", () => {
 
   it("creates a folder that takes mail at once", async () => {
     const { scope } = await syncIcloudReceipt();
+
     const { message_id: messageId, thread_id: threadId } =
       genericMessageIds("inbox");
 
@@ -421,6 +429,7 @@ describe("labels with the generic dialect", () => {
 
   it("renames a folder without walking it again", async () => {
     const { scope, server } = await syncIcloudReceipt();
+
     const { message_id: messageId, thread_id: threadId } =
       genericMessageIds("receipt");
 
@@ -453,6 +462,7 @@ describe("labels with the generic dialect", () => {
 
   it("moves a folder's mail to Archive before deleting it", async () => {
     const { scope, server } = await syncIcloudReceipt();
+
     const { message_id: messageId, thread_id: threadId } =
       genericMessageIds("receipt");
 

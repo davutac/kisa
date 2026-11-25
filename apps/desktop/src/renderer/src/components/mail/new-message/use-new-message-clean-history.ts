@@ -31,14 +31,18 @@ export const useNewMessageCleanHistory = ({
   const composer = useNewMessageStore((state) => state.composer);
   const isSending = useNewMessageStore((state) => state.isSending);
   const resetHistory = useNewMessageStore((state) => state.resetCleanHistory);
+
   const selectedVersionId = useNewMessageStore(
     (state) => state.selectedCleanVersionId
   );
+
   const setHistory = useNewMessageStore((state) => state.setCleanHistory);
   const setComposer = useNewMessageStore((state) => state.setComposer);
+
   const setSelectedVersionId = useNewMessageStore(
     (state) => state.setSelectedCleanVersionId
   );
+
   const setSubject = useNewMessageStore((state) => state.setSubject);
   const subject = useNewMessageStore((state) => state.subject);
   const aiApi = useMemo(() => getAiApi(), []);
@@ -47,6 +51,7 @@ export const useNewMessageCleanHistory = ({
 
   useEffect(() => {
     isOpenRef.current = isOpen;
+
     return () => {
       isOpenRef.current = false;
     };
@@ -56,27 +61,34 @@ export const useNewMessageCleanHistory = ({
     model.selection !== null &&
     (subject.trim().length > 0 || !composer.isEmpty) &&
     !isSending;
+
   const controller = useCleanDraftHistory({
     aiApi,
     applyVersion: (version) => {
       const { signature } = store.getState();
+
       const body =
         signature === undefined
           ? version.body
           : appendEmailSignatureHtml(version.body, signature.body);
+
       if (!focus.replaceContent("message", body)) {
         return false;
       }
+
       setSubject(version.subject);
+
       return true;
     },
     canClean,
     getState: () => {
       const state = store.getState();
+
       const body =
         state.signature === undefined
           ? state.composer
           : removeEmailSignature(state.composer, state.signature.body);
+
       return {
         draft: {
           body: body.html,
@@ -94,16 +106,19 @@ export const useNewMessageCleanHistory = ({
     setHistory,
     setSelectedVersionId,
   });
+
   const selectedVersion =
     history.find(({ id }) => id === selectedVersionId) ?? null;
 
   const updateComposer = (nextComposer: EmailComposerValue): void => {
     setComposer(nextComposer);
     const { signature } = store.getState();
+
     const authoredBody =
       signature === undefined
         ? nextComposer
         : removeEmailSignature(nextComposer, signature.body);
+
     if (
       selectedVersion !== null &&
       authoredBody.html !== selectedVersion.body
@@ -114,6 +129,7 @@ export const useNewMessageCleanHistory = ({
 
   const updateSubject = (nextSubject: string): void => {
     setSubject(nextSubject);
+
     if (
       selectedVersion !== null &&
       truncateSubject(nextSubject) !== selectedVersion.subject

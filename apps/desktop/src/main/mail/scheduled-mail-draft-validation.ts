@@ -38,14 +38,17 @@ export const normalizeValidScheduledDeliveryDraft = Effect.fn(
   }
 
   const recipients = [...draft.to, ...draft.cc, ...draft.bcc];
+
   if (recipients.length === 0) {
     return yield* scheduledMailError(
       "Add at least one recipient before scheduling"
     );
   }
+
   const invalidRecipient = recipients.find(
     (recipient) => parseMailbox(recipient) === undefined
   );
+
   if (invalidRecipient !== undefined) {
     return yield* scheduledMailError(
       `Invalid recipient address: ${invalidRecipient}`
@@ -53,9 +56,11 @@ export const normalizeValidScheduledDeliveryDraft = Effect.fn(
   }
 
   const subject = draft.subject.trim();
+
   if (subject.length === 0) {
     return yield* scheduledMailError("Add a subject before scheduling");
   }
+
   if (!isOutgoingSubject(subject)) {
     return yield* scheduledMailError("The subject is too long");
   }
@@ -64,6 +69,7 @@ export const normalizeValidScheduledDeliveryDraft = Effect.fn(
     draft.signature === undefined
       ? draft.body
       : removeEmailSignature(draft.body, draft.signature.body);
+
   if (authoredBody.text.trim().length === 0) {
     return yield* scheduledMailError("Add a message before scheduling");
   }

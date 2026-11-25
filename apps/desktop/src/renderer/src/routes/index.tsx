@@ -99,15 +99,19 @@ function getThreadCloseLabel(mailbox: MailboxPlace): string | undefined {
   if (isLabelPlace(mailbox)) {
     return `Back to ${mailbox.label}`;
   }
+
   if (mailbox === "spam") {
     return "Back to spam";
   }
+
   if (mailbox === "sent") {
     return "Back to sent";
   }
+
   if (mailbox === "starred") {
     return "Back to starred";
   }
+
   return mailbox === "trash" ? "Back to trash" : undefined;
 }
 
@@ -134,9 +138,9 @@ function getIndexingMessage(
     return undefined;
   }
 
-  const oldest = running
-    .map((entry) => entry.oldestIndexedAt)
-    .filter((value): value is number => value !== undefined);
+  const oldest = running.flatMap(({ oldestIndexedAt }) =>
+    oldestIndexedAt === undefined ? [] : [oldestIndexedAt]
+  );
 
   return oldest.length === 0
     ? "Indexing your mail…"
@@ -246,19 +250,24 @@ function HomeRoute() {
   const reloadRevision = useMailboxReloadRevision();
   const openThreadId = useOpenThreadId();
   const closeThread = useMailboxStore((state) => state.closeThread);
+
   const clearCheckedThreads = useMailboxStore(
     (state) => state.clearCheckedThreads
   );
+
   const selectThread = useMailboxStore((state) => state.selectThread);
   const windowApi = getWindowApi();
   const openThread = parseThreadSelectionKey(openThreadId ?? "");
+
   const mailboxThreads = useMailboxThreads({
     accountIds,
     mailbox,
     reloadRevision,
     unreadOnly: showUnread,
   });
+
   const search = useInlineMailSearch(accountIds, mailbox, showUnread);
+
   const {
     error: loadError,
     hasNextPage,
@@ -268,13 +277,16 @@ function HomeRoute() {
     retry: onRetryLoad,
     threads,
   } = mailboxThreads;
+
   const threadActions = useThreadActions();
   const indexProgress = useMailIndexProgress();
   const emptyState = getEmptyState(mailbox, showUnread);
+
   const indexingMessage =
     mailbox === "spam"
       ? undefined
       : getIndexingMessage(indexProgress, accountIds);
+
   const listView = search.isShowingResults
     ? getSearchThreadListView(search)
     : getMailboxThreadListView({
@@ -295,6 +307,7 @@ function HomeRoute() {
         showAccount: accountIds.length > 1,
         threads,
       });
+
   const popOutThread = useCallback(
     async (thread: { accountId: string; threadId: string }): Promise<void> => {
       if (windowApi === undefined) {
@@ -306,6 +319,7 @@ function HomeRoute() {
 
         if (!reply.ok) {
           toast.error(reply.error);
+
           return;
         }
 

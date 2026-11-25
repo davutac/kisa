@@ -26,13 +26,16 @@ const fetchThreadDraft = async (
 ): Promise<ThreadDraftFetch> => {
   try {
     const reply = await mailApi.loadThreadDraft({ accountId, threadId });
+
     if (reply.ok) {
       return { draft: reply.data, kind: "loaded" };
     }
+
     toast.error(reply.error);
   } catch {
     toast.error("Could not load saved reply");
   }
+
   return { kind: "failed" };
 };
 
@@ -40,9 +43,11 @@ const getDraftActionLabel = (action: MailMessageAction): string => {
   if (action === "forward") {
     return "forward";
   }
+
   if (action === "reply-all") {
     return "reply all";
   }
+
   return "reply";
 };
 
@@ -62,15 +67,18 @@ export const useThreadDraft = ({
   const [draft, setDraft] = useState<MailDraftInput | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
+
   // Until a load succeeds, whether a draft is stored is unknown.
   const [loadState, setLoadState] = useState<ThreadDraftLoad>(
     mailApi === undefined ? "loaded" : "loading"
   );
+
   const isLoadingDraft = loadState === "loading";
   const isActiveRef = useRef(false);
   const isComposerOpenRef = useRef(isComposerOpen);
   const restoredDraftIdRef = useRef<string | null>(null);
   const openMessage = useThreadConversationStore((state) => state.openMessage);
+
   const draftMessage = messages.find(
     (message) => message.id === draft?.messageId
   );
@@ -78,6 +86,7 @@ export const useThreadDraft = ({
   useEffect(() => {
     if (draft === null) {
       restoredDraftIdRef.current = null;
+
       return;
     }
 
@@ -103,6 +112,7 @@ export const useThreadDraft = ({
     () =>
       undoneDrafts.subscribe(() => {
         const { current } = draftRef;
+
         if (current !== null && takeReplyDraft(current.id)) {
           setIsComposerOpen(true);
         }
@@ -114,10 +124,13 @@ export const useThreadDraft = ({
     if (!isActiveRef.current) {
       return;
     }
+
     if (fetched.kind === "failed") {
       setLoadState("failed");
+
       return;
     }
+
     setLoadState("loaded");
     setDraft(fetched.draft);
     setIsComposerOpen(fetched.draft !== null);
@@ -127,11 +140,13 @@ export const useThreadDraft = ({
     if (mailApi === undefined) {
       return;
     }
+
     isActiveRef.current = true;
 
     const load = async (): Promise<void> => {
       applyFetch(await fetchThreadDraft(mailApi, accountId, threadId));
     };
+
     void load();
 
     const unsubscribe = mailApi.onDraftChanged((change) => {
@@ -142,6 +157,7 @@ export const useThreadDraft = ({
           );
           setIsComposerOpen(false);
         }
+
         return;
       }
 
@@ -152,6 +168,7 @@ export const useThreadDraft = ({
         setDraft((current) =>
           adoptSavedDraft(current, change.draft, isComposerOpenRef.current)
         );
+
         if (takeReplyDraft(change.draft.id)) {
           setIsComposerOpen(true);
         }
@@ -168,6 +185,7 @@ export const useThreadDraft = ({
     if (mailApi === undefined) {
       return;
     }
+
     setLoadState("loading");
     applyFetch(await fetchThreadDraft(mailApi, accountId, threadId));
   }, [accountId, applyFetch, mailApi, threadId]);
@@ -181,12 +199,14 @@ export const useThreadDraft = ({
     async (created: MailDraftInput): Promise<void> => {
       setDraft(created);
       setIsComposerOpen(true);
+
       if (mailApi === undefined) {
         return;
       }
 
       try {
         const reply = await mailApi.saveDraft(created);
+
         if (!reply.ok) {
           toast.error(reply.error);
         }
@@ -209,21 +229,28 @@ export const useThreadDraft = ({
   const startAction = useCallback(
     (action: MailMessageAction): void => {
       const start = getThreadDraftStart({ action, draft, load: loadState });
+
       if (start.kind === "wait") {
         return;
       }
+
       if (start.kind === "reload") {
         void reloadDraft();
+
         return;
       }
+
       if (start.kind === "continue") {
         continueDraft();
+
         return;
       }
+
       if (start.kind === "other-action") {
         toast.info(
           `A ${getDraftActionLabel(start.draftAction)} draft is already in progress`
         );
+
         return;
       }
 
@@ -262,6 +289,7 @@ export const useThreadDraft = ({
 
     if (mailApi === undefined) {
       clearDraft();
+
       return;
     }
 
@@ -273,8 +301,10 @@ export const useThreadDraft = ({
             accountId,
             draftId: draft.id,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
 

@@ -1,5 +1,6 @@
 const IMAGE_FILENAME_PATTERN =
   /\.(?:avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|tiff?|webp)$/iu;
+
 const PDF_FILENAME_PATTERN = /\.pdf$/iu;
 const FILENAME_EXTENSION_PATTERN = /\.(?<extension>[a-z\d]{1,8})$/iu;
 
@@ -94,21 +95,27 @@ export const getAttachmentTypeLabel = (
     case "audio": {
       return "AUDIO";
     }
+
     case "font": {
       return "FONT";
     }
+
     case "image": {
       return "IMAGE";
     }
+
     case "message": {
       return "EMAIL";
     }
+
     case "text": {
       return "TEXT";
     }
+
     case "video": {
       return "VIDEO";
     }
+
     default: {
       return "FILE";
     }

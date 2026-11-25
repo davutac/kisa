@@ -27,6 +27,7 @@ export const fetchAttachment = Effect.fn("MailAttachments.fetchAttachment")(
     section: string
   ) {
     const store = yield* MailEngineStore;
+
     const stored = yield* store.findAttachment(
       scope.accountId,
       messageId,
@@ -38,6 +39,7 @@ export const fetchAttachment = Effect.fn("MailAttachments.fetchAttachment")(
     }
 
     const attachment = stored.value;
+
     const bytes = yield* scope.session.fetchSection(
       attachment.mailboxPath,
       attachment.uidValidity,

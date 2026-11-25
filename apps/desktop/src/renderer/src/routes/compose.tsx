@@ -39,8 +39,10 @@ function ComposeRoute() {
       onClose={() => {
         if (toggleWorkspace === null) {
           void navigate({ to: "/" });
+
           return;
         }
+
         toggleWorkspace("/compose");
       }}
     />

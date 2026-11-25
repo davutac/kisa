@@ -89,13 +89,17 @@ const textOf = (node: ReactNode): string => {
   if (node === null || node === undefined || node === true || node === false) {
     return "";
   }
+
   if (Array.isArray(node)) {
     return node.map(textOf).join("");
   }
+
   if (!isValidElement<Partial<ConfirmMessageProps>>(node)) {
     return String(node);
   }
+
   const { children, subject } = node.props;
+
   return subject === undefined
     ? textOf(children)
     : `${textOf(subject)}: ${textOf(children)}`;
@@ -116,6 +120,7 @@ const getInitialFocus = (
   if (options.confirmationText !== undefined) {
     return "text";
   }
+
   return options.confirmVariant === "destructive" ? "cancel" : "confirm";
 };
 
@@ -133,6 +138,7 @@ const ConfirmDialogView = ({
     description,
     title,
   } = options;
+
   const inputId = useId();
   const inputDescriptionId = useId();
   const isConfirmed = isConfirmationEntered(options, inputValue);
@@ -207,10 +213,9 @@ const ConfirmDialogView = ({
         </div>
       ) : null}
 
-      <AlertDialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">
+      <AlertDialogFooter>
         <AlertDialogClose
           data-confirm-focus={initialFocus === "cancel" ? "" : undefined}
-          size="footer"
         >
           {cancelLabel}
         </AlertDialogClose>
@@ -218,7 +223,6 @@ const ConfirmDialogView = ({
           data-agent-confirm={describeConfirmation(options)}
           data-confirm-focus={initialFocus === "confirm" ? "" : undefined}
           disabled={!isConfirmed}
-          size="footer"
           value="confirm"
           variant={confirmVariant}
         >

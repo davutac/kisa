@@ -1,21 +1,27 @@
 import { defineConfig } from "oxlint";
+import antislop from "ultracite/oxlint/anti-slop";
 import core from "ultracite/oxlint/core";
 import react from "ultracite/oxlint/react";
 import tanstack from "ultracite/oxlint/tanstack";
 import vitest from "ultracite/oxlint/vitest";
 
 export default defineConfig({
-  extends: [core, react, tanstack, vitest],
+  extends: [core, react, tanstack, vitest, antislop],
   ignorePatterns: [
     ...(core.ignorePatterns ?? []),
     "apps/marketing/src/components/ui/**",
     "packages/database/drizzle/**/snapshot.json",
     "repos/**",
   ],
-  jsPlugins: [
-    { name: "anti-slop", specifier: "./tools/oxlint/anti-slop/index.ts" },
-  ],
   overrides: [
+    {
+      // The desktop tests replace `electron` and main's own modules with
+      // `vi.mock`. Taking those mocks out means adding injection seams to
+      // production code, which is a change of its own, so the rule is off for
+      // this folder alone.
+      files: ["apps/desktop/tests/**"],
+      rules: { "anti-slop/no-module-mocking": "off" },
+    },
     {
       excludeFiles: [
         "apps/desktop/src/renderer/src/routes/**/-components/**/*.tsx",
@@ -35,16 +41,6 @@ export default defineConfig({
     },
   ],
   rules: {
-    "anti-slop/no-chained-type-assertions": "error",
-    "anti-slop/no-conditional-empty-object-spread": "error",
-    "anti-slop/no-known-value-widening": "error",
-    "anti-slop/no-object-parameters": "error",
-    "anti-slop/no-runtime-typeof": "error",
-    "anti-slop/no-shape-in-symbol-names": "error",
-    "anti-slop/no-unknown-parameters": "error",
-    "anti-slop/no-unknown-type-aliases": "error",
-    "anti-slop/no-unsafe-dictionary-type": "error",
-    "anti-slop/no-widen-then-assert": "error",
     // Schema values share names with their `typeof X.Type` aliases; TypeScript rejects genuine redeclarations.
     "no-redeclare": "off",
   },

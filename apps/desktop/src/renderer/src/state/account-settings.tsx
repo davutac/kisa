@@ -26,6 +26,7 @@ export const AccountSettingsProvider = ({
     }
 
     let isMounted = true;
+
     const apply = (reply: AccountSettingsReply): void => {
       if (!(isMounted && reply.ok)) {
         return;
@@ -33,6 +34,7 @@ export const AccountSettingsProvider = ({
 
       setSettings(reply.data);
     };
+
     const unsubscribe = api.onAccountSettingsChanged(apply);
 
     void (async () => {

@@ -19,7 +19,7 @@ import {
   MailStoreError,
 } from "@repo/mail/errors";
 import { AccountId } from "@repo/mail/ids";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import {
   afterAll,
   afterEach,
@@ -43,8 +43,10 @@ import type {
 } from "../src/main/mail/scheduled-mail-notifications";
 import type { ScheduledMailEditSession } from "../src/shared/ipc/scheduled-mail";
 import { insertGmailAccount } from "./fixtures/mail-accounts";
+import { found } from "./fixtures/rows";
 
 const connection = openDatabaseConnection(":memory:");
+
 applyDatabaseMigrations(
   createDatabaseClient(connection),
   fileURLToPath(new URL("../../../packages/database/drizzle", import.meta.url))
@@ -56,15 +58,21 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
   method
 ) => {
   const statement = connection.prepare(query);
+
   if (method === "run") {
     statement.run(...parameters);
+
     return Promise.resolve({ rows: [] });
   }
+
   const dataStatement = statement.raw(true);
+
   if (method === "get") {
     const row = dataStatement.get(...parameters);
+
     return Promise.resolve({ rows: Array.isArray(row) ? row : [] });
   }
+
   return Promise.resolve({ rows: dataStatement.all(...parameters) });
 };
 
@@ -73,6 +81,7 @@ const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
 vi.mock(import("../src/main/database-query"), async () => {
   const { DatabaseError } = await import("@repo/database/runtime");
   const { Effect: EffectModule } = await import("effect");
+
   const useTestDatabase = <A>(
     run: (database: RemoteDatabaseClient) => Promise<A>
   ) =>
@@ -80,11 +89,13 @@ vi.mock(import("../src/main/database-query"), async () => {
       catch: (cause) => DatabaseError.new({ cause, reason: "query" }),
       try: () => run(remoteDatabase),
     });
+
   return { withDatabaseClient: useTestDatabase };
 });
 
 vi.mock(import("electron"), async (importOriginal) => {
   const original = await importOriginal();
+
   return {
     ...original,
     net: { ...original.net, isOnline: () => true },
@@ -103,6 +114,9 @@ vi.mock(import("../src/main/electron/renderer-events"), () => ({
 
 vi.mock(import("../src/main/mail/engine/mail-engine"), async () => {
   const { Effect: EffectModule } = await import("effect");
+
+  // SAFETY: scheduled delivery imports only `runEngineExit` from the engine,
+  // so that is all of the module this stand-in needs.
   return {
     runEngineExit: (
       effect: Parameters<typeof EffectModule.runPromiseExit>[0]
@@ -139,12 +153,16 @@ const {
   startScheduledMail,
   stopScheduledMail,
 } = await import("../src/main/mail/scheduled-mail");
+
 const { makeDatabaseScheduledMailWorkerStore } =
   await import("../src/main/mail/scheduled-mail-database");
+
 const { configureDraftAttachmentStore } =
   await import("../src/main/mail/draft-attachment-store");
+
 const { outgoingAttachmentAuthorizations } =
   await import("../src/main/mail/outgoing-attachment-authorizations");
+
 const {
   findSentMessage: findSentMessageMock,
   sendNewMessage: sendNewMessageMock,
@@ -153,6 +171,18 @@ const {
 const accountId = "person@example.com";
 const draftId = "scheduled-save-draft";
 const temporaryDirectories: string[] = [];
+
+const StoredAttachments = Schema.fromJsonString(
+  Schema.Array(
+    Schema.Struct({
+      path: Schema.String,
+      storage: Schema.optional(Schema.String),
+    })
+  )
+);
+
+/** The attachments a draft row stores, as far as these tests read them. */
+const decodeStoredAttachments = Schema.decodeSync(StoredAttachments);
 
 insertGmailAccount(connection, accountId);
 
@@ -200,9 +230,11 @@ const saveScheduledSession = async ({
       ownerId
     )
   );
+
   if (result.kind !== "saved") {
     throw new Error("Expected an in-place save result");
   }
+
   return result.session;
 };
 
@@ -225,6 +257,7 @@ describe("scheduled mail in-place save", () => {
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 71)
     );
+
     const secondSnapshot = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 72)
     );
@@ -234,11 +267,13 @@ describe("scheduled mail in-place save", () => {
       session: opened,
       subject: "  Normalized  ",
     });
+
     expect(saved).toMatchObject({
       draft: { subject: "Normalized" },
       item: { revision: 2 },
     });
     const scheduledAt = Date.now() + 120_000;
+
     const rescheduled = await Effect.runPromise(
       finishScheduledMailEdit(
         {
@@ -254,6 +289,7 @@ describe("scheduled mail in-place save", () => {
         72
       )
     );
+
     expect(rescheduled).toMatchObject({
       kind: "saved",
       session: {
@@ -267,6 +303,7 @@ describe("scheduled mail in-place save", () => {
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 71)
     );
+
     // The worker's attempt ends without a known outcome while the editor
     // still shows the snapshot from before it.
     connection
@@ -277,6 +314,7 @@ describe("scheduled mail in-place save", () => {
          WHERE draft_id = ?`
       )
       .run(draftId);
+
     const sendNow = (allowPossibleDuplicate: boolean) =>
       Effect.runPromise(
         finishScheduledMailEdit(
@@ -292,6 +330,7 @@ describe("scheduled mail in-place save", () => {
           71
         )
       );
+
     const storedSchedule = () =>
       connection
         .prepare(
@@ -324,6 +363,7 @@ describe("scheduled mail in-place save", () => {
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 71)
     );
+
     connection
       .prepare("DELETE FROM scheduled_messages WHERE draft_id = ?")
       .run(draftId);
@@ -394,6 +434,7 @@ describe("scheduled mail in-place save", () => {
       .run(draftId);
 
     await startScheduledMail();
+
     try {
       expect(sendNewMessageMock).toHaveBeenCalledOnce();
       expect(
@@ -435,6 +476,7 @@ describe("scheduled mail in-place save", () => {
          WHERE draft_id = ?`
       )
       .run(draftId);
+
     const deliveryStatus = () =>
       connection
         .prepare(
@@ -448,6 +490,7 @@ describe("scheduled mail in-place save", () => {
     // The next start looks in sent mail at once.
     await stopScheduledMail();
     await startScheduledMail();
+
     try {
       expect(afterSend).toStrictEqual({
         attentionReason: null,
@@ -476,6 +519,7 @@ describe("scheduled mail in-place save", () => {
     await Effect.runPromise(beginScheduledMailEdit({ accountId, draftId }, 71));
 
     await startScheduledMail();
+
     try {
       expect(sendNewMessageMock).toHaveBeenCalledOnce();
       expect(
@@ -494,20 +538,25 @@ describe("scheduled mail in-place save", () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "kisa-scheduled-save-attachment-")
     );
+
     temporaryDirectories.push(directory);
     configureDraftAttachmentStore(path.join(directory, "user-data"));
     const sourcePath = path.join(directory, "notes.txt");
     await writeFile(sourcePath, "scheduled contents");
+
     const [attachment] =
       await outgoingAttachmentAuthorizations.authorizeSelections(101, {
         files: [{ mediaType: "text/plain", path: sourcePath }],
       });
+
     if (attachment === undefined) {
       throw new Error("Expected an authorized attachment");
     }
+
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 101)
     );
+
     const saved = await Effect.runPromise(
       finishScheduledMailEdit(
         {
@@ -521,18 +570,24 @@ describe("scheduled mail in-place save", () => {
         101
       )
     );
+
     expect(saved.kind).toBe("saved");
-    const stored = connection
-      .prepare("SELECT attachments FROM mail_drafts WHERE id = ?")
-      .get(draftId) as { readonly attachments: string };
-    const storedAttachments = JSON.parse(stored.attachments) as readonly {
-      readonly path: string;
-      readonly storage: string;
-    }[];
+
+    const stored = found(
+      connection
+        .prepare<unknown[], { readonly attachments: string }>(
+          "SELECT attachments FROM mail_drafts WHERE id = ?"
+        )
+        .get(draftId)
+    );
+
+    const storedAttachments = decodeStoredAttachments(stored.attachments);
+
     expect(storedAttachments).toStrictEqual([
       expect.objectContaining({ storage: "app-owned" }),
     ]);
     const [ownedAttachment] = storedAttachments;
+
     if (ownedAttachment === undefined) {
       throw new Error("Expected a stored attachment");
     }
@@ -550,6 +605,7 @@ describe("scheduled mail in-place save", () => {
       .run(draftId);
 
     await startScheduledMail();
+
     try {
       expect(sendNewMessageMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -575,19 +631,24 @@ describe("scheduled mail in-place save", () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "kisa-scheduled-inline-image-")
     );
+
     temporaryDirectories.push(directory);
     configureDraftAttachmentStore(path.join(directory, "user-data"));
     const sourcePath = path.join(directory, "inline.jpg");
     const bytes = Uint8Array.from([255, 216, 255, 217]);
     await writeFile(sourcePath, bytes);
+
     const [attachment] =
       await outgoingAttachmentAuthorizations.authorizeSelections(104, {
         files: [{ mediaType: "image/jpeg", path: sourcePath }],
       });
+
     if (attachment === undefined) {
       throw new Error("Expected an authorized attachment");
     }
+
     const contentId = "saved@inline.kisa.email";
+
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 104)
     );
@@ -612,15 +673,23 @@ describe("scheduled mail in-place save", () => {
         104
       )
     );
-    const stored = connection
-      .prepare("SELECT attachments FROM mail_drafts WHERE id = ?")
-      .get(draftId) as { readonly attachments: string };
+
+    const stored = found(
+      connection
+        .prepare<unknown[], { readonly attachments: string }>(
+          "SELECT attachments FROM mail_drafts WHERE id = ?"
+        )
+        .get(draftId)
+    );
+
     const storedAttachments = decodeStoredOutgoingAttachmentsStrict(
       JSON.parse(stored.attachments)
     );
+
     if (storedAttachments === undefined) {
       throw new Error("Expected stored attachments");
     }
+
     expect(storedAttachments[0]?.contentId).toBe(contentId);
     connection
       .prepare("UPDATE mail_drafts SET attachments = ? WHERE id = ?")
@@ -633,10 +702,13 @@ describe("scheduled mail in-place save", () => {
         ),
         draftId
       );
+
     const reopened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 105)
     );
+
     const [restored] = reopened.draft.attachments;
+
     if (restored === undefined) {
       throw new Error("Expected a restored attachment");
     }
@@ -661,20 +733,25 @@ describe("scheduled mail in-place save", () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "kisa-scheduled-discard-attachment-")
     );
+
     temporaryDirectories.push(directory);
     configureDraftAttachmentStore(path.join(directory, "user-data"));
     const sourcePath = path.join(directory, "discard.txt");
     await writeFile(sourcePath, "discard contents");
+
     const [attachment] =
       await outgoingAttachmentAuthorizations.authorizeSelections(102, {
         files: [{ mediaType: "text/plain", path: sourcePath }],
       });
+
     if (attachment === undefined) {
       throw new Error("Expected an authorized attachment");
     }
+
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 102)
     );
+
     await Effect.runPromise(
       finishScheduledMailEdit(
         {
@@ -688,12 +765,17 @@ describe("scheduled mail in-place save", () => {
         102
       )
     );
-    const stored = connection
-      .prepare("SELECT attachments FROM mail_drafts WHERE id = ?")
-      .get(draftId) as { readonly attachments: string };
-    const [ownedAttachment] = JSON.parse(stored.attachments) as readonly {
-      readonly path: string;
-    }[];
+
+    const stored = found(
+      connection
+        .prepare<unknown[], { readonly attachments: string }>(
+          "SELECT attachments FROM mail_drafts WHERE id = ?"
+        )
+        .get(draftId)
+    );
+
+    const [ownedAttachment] = decodeStoredAttachments(stored.attachments);
+
     if (ownedAttachment === undefined) {
       throw new Error("Expected a stored attachment");
     }
@@ -712,34 +794,42 @@ describe("scheduled mail in-place save", () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "kisa-scheduled-legacy-attachment-")
     );
+
     temporaryDirectories.push(directory);
     configureDraftAttachmentStore(path.join(directory, "user-data"));
     const sourcePath = path.join(directory, "legacy.txt");
     await writeFile(sourcePath, "legacy contents");
+
     const [attachment] =
       await outgoingAttachmentAuthorizations.authorizeSelections(103, {
         files: [{ mediaType: "text/plain", path: sourcePath }],
       });
+
     if (attachment === undefined) {
       throw new Error("Expected an authorized attachment");
     }
+
     const legacyAttachments =
       outgoingAttachmentAuthorizations.serializeDraftAttachments(103, [
         attachment,
       ]);
+
     connection
       .prepare("UPDATE mail_drafts SET attachments = ? WHERE id = ?")
       .run(JSON.stringify(legacyAttachments), draftId);
 
     await Effect.runPromise(adoptLegacyScheduledMailAttachments());
 
-    const stored = connection
-      .prepare("SELECT attachments FROM mail_drafts WHERE id = ?")
-      .get(draftId) as { readonly attachments: string };
-    const [ownedAttachment] = JSON.parse(stored.attachments) as readonly {
-      readonly path: string;
-      readonly storage: string;
-    }[];
+    const stored = found(
+      connection
+        .prepare<unknown[], { readonly attachments: string }>(
+          "SELECT attachments FROM mail_drafts WHERE id = ?"
+        )
+        .get(draftId)
+    );
+
+    const [ownedAttachment] = decodeStoredAttachments(stored.attachments);
+
     expect(ownedAttachment?.storage).toBe("app-owned");
     await unlink(sourcePath);
     await expect(access(ownedAttachment?.path ?? "")).resolves.toBeUndefined();
@@ -749,22 +839,26 @@ describe("scheduled mail in-place save", () => {
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 81)
     );
+
     const firstSave = await saveScheduledSession({
       ownerId: 81,
       session: opened,
       subject: "Normalized",
     });
+
     const secondSave = await saveScheduledSession({
       ownerId: 81,
       session: firstSave,
       subject: "Saved again",
     });
+
     expect(secondSave).toMatchObject({
       draft: { subject: "Saved again" },
       item: { revision: 3 },
     });
 
     const scheduledAt = Date.now() + 120_000;
+
     const rescheduled = await Effect.runPromise(
       finishScheduledMailEdit(
         {
@@ -780,6 +874,7 @@ describe("scheduled mail in-place save", () => {
         81
       )
     );
+
     expect(rescheduled).toMatchObject({
       kind: "saved",
       session: { item: { revision: 4, scheduledAt } },
@@ -805,6 +900,7 @@ describe("scheduled mail in-place save", () => {
          WHERE draft_id = ?`
       )
       .run(lastAttemptAt, nextAttemptAt, rateLimitStartedAt, draftId);
+
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 91)
     );
@@ -992,6 +1088,8 @@ describe("scheduled mail delivery status", () => {
     const claimed = deliveryRow();
     await workerStore.markSending(key, ATTEMPT_ID, 20);
     const sending = deliveryRow();
+    // SAFETY: the store matches the claimed row by `draftId` and `attemptId`
+    // and reads nothing else of the claim.
     await workerStore.retryAfterRateLimit(
       { ...key, attemptId: ATTEMPT_ID } as never,
       500,
@@ -1038,11 +1136,14 @@ describe("scheduled mail delivery status", () => {
 
     setDeliveryStatus("preparing");
     await workerStore.resetPreparing(60);
-    const scheduledAt = connection
-      .prepare(
-        "SELECT scheduled_at AS scheduledAt FROM scheduled_messages WHERE draft_id = ?"
-      )
-      .get(draftId) as { scheduledAt: number };
+
+    const scheduledAt = found(
+      connection
+        .prepare<unknown[], { scheduledAt: number }>(
+          "SELECT scheduled_at AS scheduledAt FROM scheduled_messages WHERE draft_id = ?"
+        )
+        .get(draftId)
+    );
 
     expect(released).toMatchObject({
       attemptId: null,

@@ -28,6 +28,7 @@ const BRAND_ICON_SIZE = 128;
 const OPEN_ACTION_INDEX = 0;
 const MARK_AS_READ_ACTION_INDEX = 1;
 const TRASH_ACTION_INDEX = 2;
+
 const UNSAFE_RASTER_SVG_PATTERN =
   /<image|<style|@import|\b(?:href|src)\s*=|url\(/iu;
 
@@ -99,8 +100,10 @@ const cleanNotificationText = (value: string): string =>
   [...value]
     .map((character) => {
       const codePoint = character.codePointAt(0) ?? 0;
+
       const isControl =
         codePoint <= 31 || (codePoint >= 127 && codePoint <= 159);
+
       const isBidirectionalControl =
         (character >= "\u202A" && character <= "\u202E") ||
         (character >= "\u2066" && character <= "\u2069");
@@ -157,6 +160,7 @@ export const toNewMailNotificationCopy = (
   const senderAddress = cleanNotificationText(message.fromAddress);
   const subject = cleanNotificationText(message.subject) || "(No subject)";
   const snippet = cleanNotificationText(message.snippet);
+
   const sender =
     senderName.length === 0 || senderName === senderAddress
       ? senderAddress
@@ -228,6 +232,7 @@ const activeNotifications = new Map<
   Notification,
   Pick<NewMailNotificationMessage, "accountId" | "threadId">
 >();
+
 const brandIcons = new Map<string, NativeImage>();
 
 export const dismissThreadNotifications = (
@@ -307,6 +312,7 @@ const toBrandIcon = Effect.fn("toBrandIcon")(function* toBrandIcon(
         .png()
         .toBuffer(),
   });
+
   const icon = nativeImage.createFromBuffer(png);
 
   if (icon.isEmpty()) {
@@ -322,6 +328,7 @@ const toBrandIcon = Effect.fn("toBrandIcon")(function* toBrandIcon(
   }
 
   brandIcons.set(brand.imageDataUrl, icon);
+
   return icon;
 });
 
@@ -333,10 +340,12 @@ const showNotification = (
   dependencies: NewMailNotificationDependencies
 ): void => {
   const copy = toNewMailNotificationCopy(message);
+
   const accountTitle = truncateNotificationText(
     message.accountId,
     MAX_NOTIFICATION_HEADING_BYTES
   );
+
   const notification = new Notification({
     actions: [
       { text: "Open", type: "button" },
@@ -351,14 +360,18 @@ const showNotification = (
     subtitle: copy.subtitle,
     title: copy.title,
   });
+
   const release = (): void => {
     activeNotifications.delete(notification);
   };
+
   const request = {
     accountId: message.accountId,
     threadId: message.threadId,
   };
+
   let wasActivated = false;
+
   const runOnce = (action: () => void): void => {
     if (wasActivated) {
       return;
@@ -368,6 +381,7 @@ const showNotification = (
     release();
     action();
   };
+
   const activate = (): void => {
     runOnce(() => {
       void Effect.runPromise(
@@ -385,9 +399,11 @@ const showNotification = (
       );
     });
   };
+
   const markAsRead = (): void => {
     runOnce(() => markThreadRead(request));
   };
+
   const trash = (): void => {
     runOnce(() => trashThread(request));
   };
@@ -395,11 +411,13 @@ const showNotification = (
   notification.once("action", ({ actionIndex }) => {
     if (actionIndex === TRASH_ACTION_INDEX) {
       trash();
+
       return;
     }
 
     if (actionIndex === MARK_AS_READ_ACTION_INDEX) {
       markAsRead();
+
       return;
     }
 
@@ -436,6 +454,7 @@ export const selectNewMailNotificationMessages = (
         message.labelIds.includes(UNREAD_LABEL)
     )
     .slice(0, MAX_NOTIFICATIONS_PER_SYNC);
+
   const snippetsByThread = new Map(
     threads.map((thread) => [thread.threadId, thread.snippet] as const)
   );
@@ -490,6 +509,7 @@ const loadNotificationMessages = Effect.fn("loadNotificationMessages")(
         orderBy: { receivedAt: "desc" },
         where: { accountId, messageId: { in: candidateIds } },
       });
+
       const eligible = messages
         .filter(
           (message) =>
@@ -562,6 +582,7 @@ export const showNewMailNotifications = Effect.fn("showNewMailNotifications")(
       const brand = yield* resolveSenderBrand(message).pipe(
         Effect.orElseSucceed(() => null)
       );
+
       const brandIcon = yield* brand === null
         ? Effect.succeed(null)
         : toBrandIcon(brand).pipe(Effect.orElseSucceed(() => null));

@@ -49,6 +49,7 @@ describe(blockRemoteImages, () => {
     const html =
       '<img src="cid:logo@example"><img src="data:image/png;base64,AAAA">' +
       '<div style="background-image: url(data:image/gif;base64,AA)"></div>';
+
     const result = blockRemoteImages(html);
 
     expect(result.hasRemoteImages).toBeFalsy();
@@ -59,6 +60,7 @@ describe(blockRemoteImages, () => {
     const html =
       '<img data-src="https://cdn.example/a.png" alt="src=https://x.example">' +
       '<a href="https://example.com">Link</a>';
+
     const result = blockRemoteImages(html);
 
     expect(result.hasRemoteImages).toBeFalsy();
@@ -68,6 +70,7 @@ describe(blockRemoteImages, () => {
   it("does not treat scripts and frames as images", () => {
     const html =
       '<script src="https://cdn.example/a.js"></script><iframe src="https://cdn.example/a.html"></iframe>';
+
     const result = blockRemoteImages(html);
 
     expect(result.hasRemoteImages).toBeFalsy();

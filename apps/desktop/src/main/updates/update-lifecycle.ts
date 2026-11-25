@@ -51,6 +51,7 @@ export const createUpdateLifecycle = ({
     }
 
     publishStatus({ state: "unsupported" });
+
     return false;
   };
 
@@ -76,6 +77,7 @@ export const createUpdateLifecycle = ({
       }
 
       isCheckingForUpdates = false;
+
       return currentStatus;
     },
     download: async () => {
@@ -89,6 +91,7 @@ export const createUpdateLifecycle = ({
       const downloadExit = await Effect.runPromiseExit(
         Effect.tryPromise(downloadUpdate)
       );
+
       const statusAfterDownload = readStatus();
 
       if (
@@ -118,6 +121,7 @@ export const createUpdateLifecycle = ({
           state: "available",
           version: currentStatus.version,
         });
+
         return;
       }
 

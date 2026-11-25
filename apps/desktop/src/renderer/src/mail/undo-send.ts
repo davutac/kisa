@@ -38,16 +38,20 @@ export interface HeldSend {
 
 const recipientName = (recipient: string): string => {
   const { email, name } = parseMailboxAddress(recipient);
+
   return name ?? email;
 };
 
 /** Who a held message goes to, as its toast's caption says it. */
 export const describeSendingTo = (recipients: readonly string[]): string => {
   const [first] = recipients;
+
   if (first === undefined) {
     return "Sending…";
   }
+
   const others = recipients.length - 1;
+
   return `Sending to ${recipientName(first)}${others > 0 ? ` +${others}` : ""}`;
 };
 
@@ -79,6 +83,7 @@ export const toUndoSendOffer = (held: HeldSend): UndoOffer => {
       if (!answer.ok) {
         // The composer is gone by now, so this toast stays until dismissed.
         const { restore } = held;
+
         return {
           action:
             restore === undefined
@@ -90,6 +95,7 @@ export const toUndoSendOffer = (held: HeldSend): UndoOffer => {
           stays: true,
         };
       }
+
       return answer.data.kind === "canceled"
         ? { kind: "confirmed" }
         : { kind: "done", ...describeSendOutcome(answer.data) };
@@ -97,20 +103,24 @@ export const toUndoSendOffer = (held: HeldSend): UndoOffer => {
     undo: async () => {
       const callOff = held.expectRestore?.();
       let canceled: MailSendCancelReply;
+
       try {
         canceled = await held.cancel();
       } catch (error) {
         callOff?.();
         throw error;
       }
+
       if (!canceled.ok) {
         callOff?.();
         throw new Error(canceled.error);
       }
+
       if (canceled.data === "too-late") {
         callOff?.();
         throw new Error("Too late to undo: the message is on its way");
       }
+
       // The send answers too once main has put the draft back.
       await reply;
       held.restore?.();
@@ -140,9 +150,11 @@ export const restoreComposeDraft = (draft: MailDraftInput): void => {
 
 export const takeComposeDraft = (): MailDraftInput | undefined => {
   const { compose } = undoneDrafts.getState();
+
   if (compose !== undefined) {
     undoneDrafts.setState({ compose: undefined });
   }
+
   return compose;
 };
 
@@ -155,11 +167,14 @@ export const restoreReplyDraft = (draftId: string): void => {
 /** Whether this reply was taken back, forgetting it once asked. */
 export const takeReplyDraft = (draftId: string): boolean => {
   const { replies } = undoneDrafts.getState();
+
   if (!replies.has(draftId)) {
     return false;
   }
+
   undoneDrafts.setState({
     replies: new Set([...replies].filter((id) => id !== draftId)),
   });
+
   return true;
 };

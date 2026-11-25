@@ -155,6 +155,7 @@ const getThreadListPresentation = (
   if (searchResults) {
     return { emptyIcon: <SearchIcon />, label: "Search results" };
   }
+
   if (isLabelPlace(mailbox)) {
     return {
       emptyIcon: <TagIcon />,
@@ -162,19 +163,25 @@ const getThreadListPresentation = (
       mailboxLabel: mailbox.label,
     };
   }
+
   const mailboxLabel = getMailboxSystemLabel(mailbox);
+
   if (mailbox === "spam") {
     return { emptyIcon: <ShieldAlertIcon />, label: "Spam", mailboxLabel };
   }
+
   if (mailbox === "sent") {
     return { emptyIcon: <SendIcon />, label: "Sent", mailboxLabel };
   }
+
   if (mailbox === "trash") {
     return { emptyIcon: <Trash2Icon />, label: "Trash", mailboxLabel };
   }
+
   if (mailbox === "starred") {
     return { emptyIcon: <StarIcon />, label: "Starred", mailboxLabel };
   }
+
   return { emptyIcon: <InboxIcon />, label: "Inbox", mailboxLabel };
 };
 
@@ -200,6 +207,7 @@ const getThreadListPlaceholderView = (
   if (placeholder === "loading") {
     return { icon: <Spinner />, title: copy.loadingTitle };
   }
+
   if (placeholder === "failed") {
     return {
       description: copy.loadError,
@@ -207,6 +215,7 @@ const getThreadListPlaceholderView = (
       title: copy.loadErrorTitle,
     };
   }
+
   return {
     description: copy.emptyMessage,
     icon: copy.emptyIcon,
@@ -238,9 +247,11 @@ const ThreadListPlaceholderPane = ({
     isInitialLoading,
     threadCount,
   });
+
   if (placeholder === undefined) {
     return null;
   }
+
   const view = getThreadListPlaceholderView(placeholder, copy);
 
   return (
@@ -319,14 +330,19 @@ const useMailboxThreadCommands = ({
     },
     [actions]
   );
+
   const isChecking = checkedThreads.length > 0;
+
   const archivable = checkedThreads.filter((thread) =>
     canArchiveThread(thread.places)
   );
+
   const starrable = checkedThreads.filter((thread) =>
     canStarThread(thread.places)
   );
+
   const canReportChecked = bulkDestructiveAction === "trash";
+
   /** Whether a command has a target: the selection, or the focused row. */
   const hasTarget = (
     hasCheckedTarget: boolean,
@@ -335,12 +351,15 @@ const useMailboxThreadCommands = ({
     isChecking
       ? hasCheckedTarget
       : selectedThread !== undefined && appliesTo(selectedThread.places);
+
   const archiveChecked = (): void => {
     actions.bulkArchive(archivable);
   };
+
   const toggleCheckedStar = (): void => {
     actions.bulkSetStarred(starrable, getBulkStarTarget(starrable));
   };
+
   const reportCheckedSpam = (): void => {
     actions.bulkReportSpam(checkedThreads);
   };
@@ -418,21 +437,26 @@ const MailThreadList = ({
   const isCovered = useOpenThreadId() !== null;
   const openThread = useOpenThread();
   const checkThread = useMailboxStore((state) => state.checkThread);
+
   const clearCheckedThreads = useMailboxStore(
     (state) => state.clearCheckedThreads
   );
+
   const setCheckedThreads = useMailboxStore((state) => state.setCheckedThreads);
   const selectThread = useMailboxStore((state) => state.selectThread);
   const previousScrollResetKeyRef = useRef(scrollResetKey);
+
   const threadKeys = useMemo(
     () => threads.map((thread) => getThreadSelectionKey(thread)),
     [threads]
   );
+
   const threadsByKey = useMemo(
     () =>
       new Map(threads.map((thread) => [getThreadSelectionKey(thread), thread])),
     [threads]
   );
+
   const checkedKeys = useMemo(() => [...checkedThreadIds], [checkedThreadIds]);
   const calendar = useCalendar();
   const isGroupedByDay = useMemo(() => isNewestFirst(threads), [threads]);
@@ -441,17 +465,21 @@ const MailThreadList = ({
   // A failure with rows on screen is reported after them; without rows the
   // placeholder reports it.
   const trailingError = threads.length > 0 ? loadError : undefined;
+
   const hasTrailingRow =
     hasNextPage || trailingMessage !== undefined || trailingError !== undefined;
+
   const presentation = getThreadListPresentation(searchResults, mailbox);
   // The floating selection bar (bottom-4 plus its 44px height) would cover
   // the last row, so the list reserves room below it while it is shown.
   const bottomClearance = checkedThreadIds.size > 0 ? 80 : 16;
   const [lastRenderedIndex, setLastRenderedIndex] = useState<number>();
+
   const selectedThread =
     selectedThreadKey === null
       ? undefined
       : threadsByKey.get(selectedThreadKey);
+
   const checkedThreads = useMemo(
     () =>
       threads.filter((thread) =>
@@ -459,7 +487,9 @@ const MailThreadList = ({
       ),
     [checkedThreadIds, threads]
   );
+
   const bulkDestructiveAction = getBulkThreadDestructiveAction(checkedThreads);
+
   // Checked state is read at event time, not captured, so these props stay
   // stable and toggling one row doesn't re-render the memoized others.
   const handleActivate = useCallback(
@@ -470,10 +500,13 @@ const MailThreadList = ({
       if (target === undefined) {
         return;
       }
+
       if (checked.size === 0 || source === "agent") {
         openThread(target);
+
         return;
       }
+
       // With conversations checked a click adds or removes the row, as X
       // does; Enter opens nothing until the selection is cleared.
       if (source === "pointer") {
@@ -483,12 +516,14 @@ const MailThreadList = ({
     },
     [checkThread, openThread, selectThread, threadsByKey]
   );
+
   const handleCheckedChange = useCallback(
     (keys: readonly string[]): void => {
       setCheckedThreads(new Set(keys));
     },
     [setCheckedThreads]
   );
+
   const handleToggleSelection = useCallback(
     (target: MailThreadSummary): void => {
       const key = getThreadSelectionKey(target);
@@ -497,11 +532,14 @@ const MailThreadList = ({
     },
     [checkThread, selectThread]
   );
+
   const labelOf = useCallback(
     (key: string): string => threadsByKey.get(key)?.subject ?? key,
     [threadsByKey]
   );
+
   const handleToggleRead = actions.toggleRead;
+
   const requestDeleteForever = useCallback(
     async (thread: MailThreadSummary): Promise<void> => {
       const confirmed = await confirm(
@@ -514,12 +552,14 @@ const MailThreadList = ({
     },
     [actions, confirm]
   );
+
   const handleDeleteForever = useCallback(
     (thread: MailThreadSummary): void => {
       void requestDeleteForever(thread);
     },
     [requestDeleteForever]
   );
+
   const requestBulkDeleteForever = useCallback(async (): Promise<void> => {
     const confirmed = await confirm(
       getBulkDeleteForeverConfirmation(checkedThreads.length)
@@ -529,9 +569,11 @@ const MailThreadList = ({
       actions.bulkDeleteForever(checkedThreads);
     }
   }, [actions, checkedThreads, confirm]);
+
   const requestBulkTrash = useCallback((): void => {
     actions.bulkTrash(checkedThreads);
   }, [actions, checkedThreads]);
+
   const { selectionBar, toggleStar: handleToggleStar } =
     useMailboxThreadCommands({
       actions,
@@ -539,6 +581,7 @@ const MailThreadList = ({
       checkedThreads,
       selectedThread,
     });
+
   useHotkeyLayer("mailbox", true);
   useAppCommand(
     "mailbox.nextThread",

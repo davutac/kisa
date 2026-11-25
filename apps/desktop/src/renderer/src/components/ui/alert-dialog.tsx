@@ -8,6 +8,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import type { ButtonProps } from "@/components/ui/button";
+import { dialogFooterClassName } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export {
@@ -15,6 +16,7 @@ export {
   AlertDialogTrigger,
   createConfirm,
 } from "@ui-sdk/react/alert-dialog";
+
 export type { AlertDialogController } from "@ui-sdk/react/alert-dialog";
 
 type ClassNameProps<Props> = Omit<Props, "className"> & { className?: string };
@@ -56,26 +58,14 @@ const AlertDialogHeader = ({
   className,
   ...props
 }: React.ComponentProps<"div">) => (
-  <div
-    className={cn(
-      "grid place-items-center gap-1 text-center sm:place-items-start sm:text-left",
-      className
-    )}
-    {...props}
-  />
+  <div className={cn("grid gap-1", className)} {...props} />
 );
 
 const AlertDialogFooter = ({
   className,
   ...props
 }: React.ComponentProps<"div">) => (
-  <div
-    className={cn(
-      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-      className
-    )}
-    {...props}
-  />
+  <div className={cn(dialogFooterClassName, className)} {...props} />
 );
 
 const AlertDialogTitle = ({
@@ -106,7 +96,7 @@ const AlertDialogDescription = ({
 const AlertDialogClose = ({
   className,
   size = "default",
-  variant = "outline",
+  variant = "secondary",
   ...props
 }: ClassNameProps<React.ComponentProps<typeof AlertDialogClosePrimitive>> &
   Pick<ButtonProps, "size" | "variant">) => (

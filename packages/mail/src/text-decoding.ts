@@ -60,15 +60,19 @@ const hexValue = (byte: number | undefined): number => {
   if (byte === undefined) {
     return -1;
   }
+
   if (byte >= 0x30 && byte <= 0x39) {
     return byte - 0x30;
   }
+
   if (byte >= 0x41 && byte <= 0x46) {
     return byte - 0x37;
   }
+
   if (byte >= 0x61 && byte <= 0x66) {
     return byte - 0x57;
   }
+
   return -1;
 };
 
@@ -88,11 +92,13 @@ const decodeQuotedPrintable = (bytes: Uint8Array): Uint8Array => {
     }
 
     const next = bytes[index + 1];
+
     // A soft line break joins two encoded lines.
     if (next === CARRIAGE_RETURN && bytes[index + 2] === LINE_FEED) {
       index += 3;
       continue;
     }
+
     if (next === LINE_FEED) {
       index += 2;
       continue;
@@ -126,9 +132,11 @@ export const decodeTransferEncoding = (
     case "base64": {
       return decodeBase64(bytes);
     }
+
     case "quoted-printable": {
       return decodeQuotedPrintable(bytes);
     }
+
     default: {
       return bytes;
     }

@@ -38,26 +38,35 @@ import {
   scopeFor,
   syncFully,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 vi.mock("../src/main/database", () => ({
   withDatabaseClient: vi.fn<() => never>(),
 }));
+
 vi.mock("../src/main/mail/new-mail-notifications", () => ({
   dismissInactiveThreadNotifications: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/mail/engine/mail-arrivals", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { announceArrivals: () => MockEffect.void };
 });
+
 vi.mock("../src/main/electron/renderer-events", () => ({
   sendRendererEvent: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/mail/unread-badge", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { refreshUnreadBadge: () => MockEffect.void };
 });
+
 vi.mock("../src/main/mail/engine/account-credentials", async () => {
   const { Effect: MockEffect, Redacted } = await import("effect");
+
   return {
     resolveImapAuth: () =>
       MockEffect.succeed({
@@ -69,8 +78,10 @@ vi.mock("../src/main/mail/engine/account-credentials", async () => {
 });
 
 const sent: SmtpSendRequest[] = [];
+
 let smtpResult: Effect.Effect<{ refused: string[] }, MailSendUnknownError> =
   Effect.succeed({ refused: [] });
+
 /** What the provider does with a message its SMTP server accepted. */
 let afterSmtpSend: ((request: SmtpSendRequest) => void) | undefined;
 
@@ -90,6 +101,7 @@ const layers = (
           Effect.suspend(() => {
             sent.push(request);
             afterSmtpSend?.(request);
+
             return smtpResult;
           }),
       })
@@ -117,6 +129,7 @@ const syncedIcloud = async (prepare?: (server: FakeImapServer) => void) => {
   const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
   prepare?.(server);
   await syncFully(scopeFor(server, genericDialect));
+
   return server;
 };
 
@@ -140,6 +153,7 @@ describe("sending", () => {
       Effect.runPromise(
         sendNewMessage(newMessage).pipe(Effect.provide(layers(server)))
       );
+
     await run();
 
     expect(sent[0]?.envelope.to).toStrictEqual([
@@ -195,9 +209,14 @@ describe("sending", () => {
         })
       );
     });
-    const parent = connection
-      .prepare("SELECT message_id, thread_id FROM mail_messages")
-      .get() as { message_id: string; thread_id: string };
+
+    const parent = found(
+      connection
+        .prepare<unknown[], { message_id: string; thread_id: string }>(
+          "SELECT message_id, thread_id FROM mail_messages"
+        )
+        .get()
+    );
 
     await Effect.runPromise(
       sendThreadMessage({
@@ -240,10 +259,12 @@ describe("sending", () => {
 
   it("sends from an account without a Sent folder, filing no copy", async () => {
     insertAccount("generic", "imap");
+
     const server = new FakeImapServer(
       [{ path: "INBOX" }, { path: "Projects" }],
       OUTLOOK_CAPABILITIES
     );
+
     await syncFully(scopeFor(server, genericDialect));
 
     await Effect.runPromise(
@@ -261,6 +282,7 @@ const syncedOutlook = async () => {
   insertAccount("generic", "outlook");
   const server = new FakeImapServer(OUTLOOK_MAILBOXES, OUTLOOK_CAPABILITIES);
   await syncFully(scopeFor(server, genericDialect));
+
   return server;
 };
 
@@ -294,6 +316,7 @@ const nextThreadListUpdate = () => {
       updated.resolve(null);
     }
   });
+
   return updated.promise;
 };
 
@@ -337,6 +360,7 @@ describe("the Sent copy of an Outlook account", () => {
     const server = await syncedOutlook();
     const connecting = Promise.withResolvers<null>();
     const released = Promise.withResolvers<null>();
+
     // The refresh of Sent is held while it opens its connection.
     const runHeld = <A, E>(effect: Effect.Effect<A, E, EngineServices>) =>
       Effect.runPromise(
@@ -347,6 +371,7 @@ describe("the Sent copy of an Outlook account", () => {
               Effect.promise(async () => {
                 connecting.resolve(null);
                 await released.promise;
+
                 return server.session();
               })
             )

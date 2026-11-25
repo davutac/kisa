@@ -83,6 +83,7 @@ const withContentId = (
       "Only JPEG, PNG, GIF, and WebP images up to 2 MB can be inserted inline"
     );
   }
+
   const { contentId: _previousContentId, ...base } = record;
 
   return contentId === undefined ? base : { ...base, contentId };
@@ -93,9 +94,11 @@ const hasDuplicates = (values: readonly string[]): boolean =>
 
 const getAttachmentBytes = (entries: readonly { readonly size: number }[]) => {
   let total = 0;
+
   for (const entry of entries) {
     total += entry.size;
   }
+
   return total;
 };
 
@@ -103,11 +106,13 @@ const validateInlineImageTotal = (
   records: readonly StoredMailDraftAttachment[]
 ): void => {
   let totalBytes = 0;
+
   for (const record of records) {
     if (record.contentId !== undefined) {
       totalBytes += record.size;
     }
   }
+
   if (totalBytes > MAX_INLINE_MESSAGE_BYTES) {
     throw authorizationError("Inline images can total up to 8 MB");
   }
@@ -188,16 +193,19 @@ export class OutgoingAttachmentAuthorizations {
     bodyHtml?: string
   ): readonly MailDraftAttachment[] {
     const entries = decodeStoredOutgoingAttachmentEntries(input);
+
     if (
       entries === undefined ||
       entries.length > MAX_OUTGOING_ATTACHMENT_COUNT
     ) {
       return [this.#unavailableAttachment(0)];
     }
+
     const restorableEntries =
       bodyHtml !== undefined && entries.every((entry) => entry !== undefined)
         ? recoverMissingInlineContentIds(bodyHtml, entries)
         : entries;
+
     return restorableEntries.map((record, index) =>
       record === undefined
         ? this.#unavailableAttachment(index)
@@ -211,25 +219,33 @@ export class OutgoingAttachmentAuthorizations {
   ): readonly StoredMailDraftAttachment[] {
     const referenceIds = attachments.map(({ referenceId }) => referenceId);
     assertValidAttachmentReferenceIds(referenceIds);
+
     const contentIds = attachments.flatMap(({ contentId }) =>
       contentId === undefined ? [] : [contentId]
     );
+
     if (hasDuplicates(contentIds)) {
       throw authorizationError("Inline image authorization is invalid");
     }
+
     const records = attachments.map(({ contentId, referenceId }) => {
       const reference = this.#references.get(referenceId);
+
       if (reference === undefined || reference.ownerId !== ownerId) {
         throw authorizationError(
           "An attachment is no longer authorized; attach it again"
         );
       }
+
       return withContentId(reference.record, contentId);
     });
+
     if (getAttachmentBytes(records) > MAX_OUTGOING_ATTACHMENT_BYTES) {
       throw authorizationError("Attachments can total up to 25 MB");
     }
+
     validateInlineImageTotal(records);
+
     return records;
   }
 
@@ -240,23 +256,29 @@ export class OutgoingAttachmentAuthorizations {
     this.#expireCapabilities();
     const referenceIds = attachments.map(({ referenceId }) => referenceId);
     assertValidAttachmentReferenceIds(referenceIds);
+
     const contentIds = attachments.flatMap(({ contentId }) =>
       contentId === undefined ? [] : [contentId]
     );
+
     if (hasDuplicates(contentIds)) {
       throw authorizationError("Attachment authorization is invalid");
     }
 
     const records = attachments.map(({ contentId, referenceId }) => {
       const reference = this.#references.get(referenceId);
+
       if (reference === undefined || reference.ownerId !== ownerId) {
         throw authorizationError(
           "An attachment is no longer authorized; attach it again"
         );
       }
+
       return withContentId(reference.record, contentId);
     });
+
     validateInlineImageTotal(records);
+
     if (getAttachmentBytes(records) > MAX_OUTGOING_ATTACHMENT_BYTES) {
       throw authorizationError("Attachments can total up to 25 MB");
     }
@@ -264,31 +286,41 @@ export class OutgoingAttachmentAuthorizations {
     const settled = await Promise.allSettled(
       records.map(openOutgoingAttachment)
     );
+
     const pending: OpenedOutgoingAttachment[] = settled.flatMap((result) =>
       result.status === "fulfilled" ? [result.value] : []
     );
+
     const failed = settled.find((result) => result.status === "rejected");
     const totalBytes = getAttachmentBytes(pending);
+
     if (failed !== undefined || totalBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
       await Promise.all(
         pending.map(({ file }) => closeOutgoingAttachment(file))
       );
+
       if (failed !== undefined) {
         const error = failed.reason;
+
         if (error instanceof OutgoingAttachmentAuthorizationError) {
           throw error;
         }
+
         throw authorizationError("Could not prepare attachments");
       }
+
       throw authorizationError("Attachments can total up to 25 MB");
     }
 
     const expiresAt = this.#now() + this.#capabilityTtlMs;
+
     return pending.map(({ file, record, size }) => {
       const capability = this.#randomId();
+
       const timer = setTimeout(() => {
         void this.#expireCapability(capability);
       }, this.#capabilityTtlMs);
+
       timer.unref();
       this.#capabilities.set(capability, {
         capability,
@@ -299,12 +331,14 @@ export class OutgoingAttachmentAuthorizations {
         size,
         timer,
       });
+
       return { capability };
     });
   }
 
   loadInlineImagePreview(ownerId: number, referenceId: string) {
     const reference = this.#references.get(referenceId);
+
     if (reference === undefined || reference.ownerId !== ownerId) {
       return Effect.fail(
         authorizationError(
@@ -312,6 +346,7 @@ export class OutgoingAttachmentAuthorizations {
         )
       );
     }
+
     return loadInlineImagePreview(reference.record);
   }
 
@@ -324,6 +359,7 @@ export class OutgoingAttachmentAuthorizations {
 
     const prepared = capabilityIds.map((capability) => {
       const entry = this.#capabilities.get(capability);
+
       if (
         entry === undefined ||
         entry.ownerId !== ownerId ||
@@ -333,6 +369,7 @@ export class OutgoingAttachmentAuthorizations {
           "Attachment authorization expired; attach the file again"
         );
       }
+
       return entry;
     });
 
@@ -347,6 +384,7 @@ export class OutgoingAttachmentAuthorizations {
       if (error instanceof OutgoingAttachmentAuthorizationError) {
         throw error;
       }
+
       throw authorizationError("Could not read an attachment");
     } finally {
       await Promise.all(
@@ -357,13 +395,17 @@ export class OutgoingAttachmentAuthorizations {
 
   async releaseOwner(ownerId: number): Promise<void> {
     const referenceIds = this.#referenceIdsByOwner.get(ownerId);
+
     if (referenceIds !== undefined) {
       for (const referenceId of referenceIds.values()) {
         this.#references.delete(referenceId);
       }
+
       this.#referenceIdsByOwner.delete(ownerId);
     }
+
     const closing: Promise<void>[] = [];
+
     for (const [capability, entry] of this.#capabilities) {
       if (entry.ownerId === ownerId) {
         this.#capabilities.delete(capability);
@@ -371,6 +413,7 @@ export class OutgoingAttachmentAuthorizations {
         closing.push(closeOutgoingAttachment(entry.file));
       }
     }
+
     await Promise.all(closing);
   }
 
@@ -380,10 +423,12 @@ export class OutgoingAttachmentAuthorizations {
   ): MailDraftAttachment {
     const referenceIds =
       this.#referenceIdsByOwner.get(ownerId) ?? new Map<string, string>();
+
     const referenceId = referenceIds.get(record.id) ?? this.#randomId();
     referenceIds.set(record.id, referenceId);
     this.#referenceIdsByOwner.set(ownerId, referenceIds);
     this.#references.set(referenceId, { ownerId, record });
+
     return {
       contentId: record.contentId,
       filename: record.filename,
@@ -396,6 +441,7 @@ export class OutgoingAttachmentAuthorizations {
 
   #unavailableAttachment(index: number): MailDraftAttachment {
     const id = `unavailable-${this.#randomId()}-${index}`;
+
     return {
       filename: "Attachment unavailable — remove and reattach",
       id,
@@ -415,9 +461,11 @@ export class OutgoingAttachmentAuthorizations {
 
   async #expireCapability(capability: string): Promise<void> {
     const entry = this.#capabilities.get(capability);
+
     if (entry === undefined) {
       return;
     }
+
     this.#capabilities.delete(capability);
     clearTimeout(entry.timer);
     await closeOutgoingAttachment(entry.file);
@@ -429,18 +477,20 @@ export const outgoingAttachmentAuthorizations =
 
 interface AttachmentOwner {
   readonly id: number;
-  readonly once: (event: "destroyed", listener: () => void) => unknown;
+  readonly once: (event: "destroyed", listener: () => void) => void;
 }
 
 const boundAttachmentOwners = new WeakSet<AttachmentOwner>();
 
 export const bindOutgoingAttachmentOwner = (owner: AttachmentOwner): number => {
   const ownerId = owner.id;
+
   if (!boundAttachmentOwners.has(owner)) {
     boundAttachmentOwners.add(owner);
     owner.once("destroyed", () => {
       void outgoingAttachmentAuthorizations.releaseOwner(ownerId);
     });
   }
+
   return ownerId;
 };

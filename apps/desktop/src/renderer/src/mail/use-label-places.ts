@@ -44,6 +44,7 @@ export const useLeaveMissingLabelPlace = (): void => {
   const { accountIds } = useMailboxAccountScope();
   const isLabelMissing = useIsLabelMissing();
   const setMailbox = useMailboxStore((state) => state.setMailbox);
+
   const isMissing =
     isLabelPlace(mailbox) && isLabelMissing(mailbox.label, accountIds);
 

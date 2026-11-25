@@ -92,8 +92,10 @@ export const getAccountSetupMode = (
   if (provider === "imap") {
     return { kind: "manual" };
   }
+
   const address = email.trim();
   const isAddress = isMailAddress(address);
+
   if (provider === "outlook") {
     return {
       kind: "microsoft",
@@ -103,9 +105,12 @@ export const getAccountSetupMode = (
           : "provider",
     };
   }
+
   const preset = MAIL_ACCOUNT_PRESETS[provider];
+
   const isOwnAddress =
     isAddress && findMailAccountPreset(address)?.provider === provider;
+
   return { kind: "preset", preset, via: isOwnAddress ? "address" : "provider" };
 };
 
@@ -160,12 +165,14 @@ const checkServer = (
       message: `Enter the ${SERVER_NAMES[side]} server's host name.`,
     };
   }
+
   if (!isMailPort(toPort(fields.port))) {
     return {
       field: side === "imap" ? "imapPort" : "smtpPort",
       message: `Enter the ${SERVER_NAMES[side]} server's port, from 1 to 65535.`,
     };
   }
+
   return undefined;
 };
 
@@ -188,9 +195,11 @@ const findAddressProvider = (
   address: string
 ): Exclude<SetupProvider, "imap"> | undefined => {
   const preset = findMailAccountPreset(address);
+
   if (preset !== undefined) {
     return preset.provider;
   }
+
   return isMicrosoftConsumerAddress(address) ? "outlook" : undefined;
 };
 
@@ -207,12 +216,14 @@ const findProviderMismatch = (
   address: string
 ): AccountSetupProblem | undefined => {
   const owner = findAddressProvider(address);
+
   if (owner !== undefined && owner !== provider) {
     return {
       field: "email",
       message: `This is ${ADDRESS_NAMES[owner]} address. Go back and choose ${SETUP_PROVIDER_NAMES[owner]}.`,
     };
   }
+
   if (provider === "icloud" && owner === undefined) {
     return {
       field: "email",
@@ -220,6 +231,7 @@ const findProviderMismatch = (
         "Enter an iCloud address, such as name@icloud.com. For another domain, go back and choose Other.",
     };
   }
+
   return undefined;
 };
 
@@ -235,12 +247,14 @@ const checkName = (name: string): AccountSetupProblem | undefined => {
       message: `Keep the name to ${MAX_DISPLAY_NAME_LENGTH} characters or fewer.`,
     };
   }
+
   if (CONTROL_CHARACTER.test(trimmed)) {
     return {
       field: "name",
       message: "Remove tabs and line breaks from the name.",
     };
   }
+
   return undefined;
 };
 
@@ -250,9 +264,11 @@ const checkServers = (
 ): AccountSetupProblem | undefined => {
   const problem =
     checkServer("imap", form.imap) ?? checkServer("smtp", form.smtp);
+
   if (problem !== undefined) {
     return problem;
   }
+
   return isMicrosoftMailHost(form.imap.host)
     ? {
         field: "imapHost",
@@ -269,24 +285,32 @@ export const findAccountSetupProblem = (
   hasPassword: boolean
 ): AccountSetupProblem | undefined => {
   const nameProblem = checkName(form.name);
+
   if (nameProblem !== undefined) {
     return nameProblem;
   }
+
   const address = form.email.trim();
+
   if (!isMailAddress(address)) {
     return { field: "email", message: "Enter your email address." };
   }
+
   const mismatch = findProviderMismatch(provider, address);
+
   if (mismatch !== undefined) {
     return mismatch;
   }
+
   // Microsoft takes the password in the browser; this window asks for none.
   if (provider === "outlook") {
     return undefined;
   }
+
   if (!hasPassword) {
     return { field: "password", message: "Enter the app password." };
   }
+
   return provider === "imap" ? checkServers(form) : undefined;
 };
 
@@ -307,18 +331,22 @@ export const toAccountServers = (
   provider: SetupProvider
 ): MailAccountServers | undefined => {
   const mode = getAccountSetupMode(provider, form.email);
+
   if (mode.kind === "manual") {
     return { imap: toServer(form.imap), smtp: toServer(form.smtp) };
   }
+
   if (mode.kind === "preset" && mode.via === "provider") {
     return { imap: mode.preset.imap, smtp: mode.preset.smtp };
   }
+
   return undefined;
 };
 
 /** The trimmed sender name, or `undefined` when left blank. */
 export const toAccountName = (form: AccountSetupForm): string | undefined => {
   const name = form.name.trim();
+
   return name.length === 0 ? undefined : name;
 };
 
@@ -328,6 +356,7 @@ export const toMicrosoftSignIn = (
 ): MicrosoftAccountSetupRequest => {
   const email = form.email.trim();
   const name = toAccountName(form);
+
   return name === undefined ? { email } : { email, name };
 };
 
@@ -348,6 +377,7 @@ export const readSignInAgain = (
   const params = new URLSearchParams(search);
   const email = params.get("account");
   const method = params.get("method");
+
   if (
     email === null ||
     !isMailAddress(email) ||
@@ -355,6 +385,7 @@ export const readSignInAgain = (
   ) {
     return undefined;
   }
+
   return { email, method };
 };
 

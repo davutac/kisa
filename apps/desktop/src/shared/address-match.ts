@@ -23,13 +23,17 @@ interface AddressCandidate {
 
 const hasLettersInOrder = (text: string, needle: string): boolean => {
   let from = 0;
+
   for (const character of needle) {
     const found = text.indexOf(character, from);
+
     if (found === -1) {
       return false;
     }
+
     from = found + 1;
   }
+
   return true;
 };
 
@@ -37,18 +41,23 @@ const matchText = (text: string, needle: string): number => {
   if (text === needle) {
     return EXACT;
   }
+
   let index = text.indexOf(needle);
+
   if (index === 0) {
     return PREFIX;
   }
+
   if (index > 0) {
     for (; index !== -1; index = text.indexOf(needle, index + 1)) {
       if (WORD_SEPARATORS.has(text.charAt(index - 1))) {
         return WORD_START;
       }
     }
+
     return CONTAINS;
   }
+
   return hasLettersInOrder(text, needle) ? IN_ORDER : NO_MATCH;
 };
 
@@ -68,7 +77,9 @@ const matchAddress = (
   if (query.length === 0) {
     return NO_MATCH;
   }
+
   const byAddress = matchText(address.toLowerCase(), query);
+
   return name === undefined
     ? byAddress
     : Math.max(
@@ -88,7 +99,10 @@ export const rankAddressMatches = <Candidate extends AddressCandidate>(
   candidates: Iterable<Candidate>
 ): Candidate[] =>
   [...candidates]
-    .map((candidate) => ({ candidate, match: matchAddress(query, candidate) }))
-    .filter(({ match }) => match !== NO_MATCH)
+    .flatMap((candidate) => {
+      const match = matchAddress(query, candidate);
+
+      return match === NO_MATCH ? [] : [{ candidate, match }];
+    })
     .toSorted((left, right) => right.match - left.match)
     .map(({ candidate }) => candidate);

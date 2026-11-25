@@ -23,6 +23,7 @@ interface EmailComposerLinkButtonProps {
 
 const normalizeLinkHref = (value: string): string => {
   const href = value.trim();
+
   return /^[a-z][a-z\d+.-]*:/iu.test(href) ? href : `https://${href}`;
 };
 
@@ -38,6 +39,7 @@ const EmailComposerLinkButton = ({
   const handleOpenChange = (open: boolean): void => {
     setIsOpen(open);
     setValidationError("");
+
     if (open) {
       setHref(String(editor.getAttributes("link").href ?? ""));
     }
@@ -45,20 +47,26 @@ const EmailComposerLinkButton = ({
 
   const applyLink = (event: SubmitEvent<HTMLFormElement>): void => {
     event.preventDefault();
+
     if (href.trim().length === 0) {
       setValidationError("Enter a link");
+
       return;
     }
+
     const applied = editor
       .chain()
       .focus()
       .extendMarkRange("link")
       .setLink({ href: normalizeLinkHref(href) })
       .run();
+
     if (!applied) {
       setValidationError("Enter a valid link");
+
       return;
     }
+
     setIsOpen(false);
   };
 

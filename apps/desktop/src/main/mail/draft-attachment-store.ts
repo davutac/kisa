@@ -50,6 +50,7 @@ const draftDirectoryName = (draftId: string): string =>
 
 const draftDirectory = (draftId: string, ownedRoot: string): string =>
   path.join(ownedRoot, draftDirectoryName(draftId));
+
 const isOwnedPath = (
   attachment: StoredMailDraftAttachment,
   ownedRoot: string
@@ -57,14 +58,17 @@ const isOwnedPath = (
   if (attachment.storage !== "app-owned") {
     return false;
   }
+
   const resolved = path.resolve(attachment.path);
   const directory = path.dirname(resolved);
+
   return (
     path.dirname(directory) === ownedRoot &&
     DRAFT_DIRECTORY_PATTERN.test(path.basename(directory)) &&
     ATTACHMENT_FILE_PATTERN.test(path.basename(resolved))
   );
 };
+
 const isOwnedByDraft = (
   draftId: string,
   attachment: StoredMailDraftAttachment,
@@ -98,6 +102,7 @@ const NodeError = Schema.Struct({ code: Schema.String });
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Node filesystem rejections are decoded at this adapter boundary.
 const isNodeErrorCode = (error: unknown, codes: readonly string[]): boolean => {
   const decoded = Schema.decodeUnknownOption(NodeError)(error);
+
   return decoded._tag === "Some" && codes.includes(decoded.value.code);
 };
 
@@ -116,6 +121,7 @@ const readDirectory = (
         if (isNodeErrorCode(error, ["ENOENT"])) {
           return [];
         }
+
         throw error;
       }
     },
@@ -197,6 +203,7 @@ export const makeDraftAttachmentStore = (
   userDataPath: string
 ): DraftAttachmentStore => {
   const root = path.resolve(userDataPath, "attachments", "drafts");
+
   const resolveRoot = (): Effect.Effect<string, DraftAttachmentStoreError> =>
     Effect.tryPromise({
       catch: storeError,
@@ -207,6 +214,7 @@ export const makeDraftAttachmentStore = (
           if (isNodeErrorCode(error, ["ENOENT"])) {
             return root;
           }
+
           throw error;
         }
       },
@@ -224,8 +232,10 @@ export const makeDraftAttachmentStore = (
           if (!isOwnedPath(attachment, ownedRoot)) {
             return Effect.void;
           }
+
           const ownedPath = path.resolve(attachment.path);
           directories.add(path.dirname(ownedPath));
+
           return removeFile(ownedPath);
         },
         { concurrency: "unbounded" }
@@ -266,6 +276,7 @@ export const makeDraftAttachmentStore = (
         const temporaryPath = path.join(directory, `.${randomUUID()}.tmp`);
         let temporaryFile: Awaited<ReturnType<typeof open>> | undefined;
         let moved = false;
+
         try {
           temporaryFile = await open(temporaryPath, "wx", FILE_MODE);
           await temporaryFile.writeFile(bytes);
@@ -276,6 +287,7 @@ export const makeDraftAttachmentStore = (
           moved = true;
           const canonicalPath = await realpath(targetPath);
           const stats = await stat(canonicalPath);
+
           return toStoredRecord(attachment, canonicalPath, stats);
         } catch (error) {
           await temporaryFile?.close().catch(() => null);
@@ -291,6 +303,7 @@ export const makeDraftAttachmentStore = (
     attachments: readonly StoredMailDraftAttachment[]
   ) {
     const ownedRoot = yield* resolveRoot();
+
     const adoptFrom = (
       index: number
     ): Effect.Effect<
@@ -298,9 +311,11 @@ export const makeDraftAttachmentStore = (
       DraftAttachmentStoreError | OutgoingAttachmentAuthorizationError
     > => {
       const attachment = attachments[index];
+
       if (attachment === undefined) {
         return Effect.succeed({ attachments: [], created: [] });
       }
+
       if (isOwnedByDraft(draftId, attachment, ownedRoot)) {
         return adoptFrom(index + 1).pipe(
           Effect.map((rest) => ({
@@ -309,6 +324,7 @@ export const makeDraftAttachmentStore = (
           }))
         );
       }
+
       return copyAttachment(draftId, attachment).pipe(
         Effect.flatMap((copied) =>
           adoptFrom(index + 1).pipe(
@@ -323,6 +339,7 @@ export const makeDraftAttachmentStore = (
         )
       );
     };
+
     return yield* adoptFrom(0);
   });
 
@@ -332,11 +349,15 @@ export const makeDraftAttachmentStore = (
       retained: readonly StoredMailDraftAttachment[]
     ) {
       const ownedRoot = yield* resolveRoot();
+
       const retainedPaths = new Set(
-        retained
-          .filter((attachment) => isOwnedPath(attachment, ownedRoot))
-          .map((attachment) => path.resolve(attachment.path))
+        retained.flatMap((attachment) =>
+          isOwnedPath(attachment, ownedRoot)
+            ? [path.resolve(attachment.path)]
+            : []
+        )
       );
+
       yield* deleteAttachments(
         previous.filter(
           (attachment) =>
@@ -367,12 +388,17 @@ export const makeDraftAttachmentStore = (
   const cleanupOrphans = Effect.fn("DraftAttachmentStore.cleanupOrphans")(
     function* cleanupOrphans(referenced: readonly StoredMailDraftAttachment[]) {
       const ownedRoot = yield* resolveRoot();
+
       const retainedPaths = new Set(
-        referenced
-          .filter((attachment) => isOwnedPath(attachment, ownedRoot))
-          .map((attachment) => path.resolve(attachment.path))
+        referenced.flatMap((attachment) =>
+          isOwnedPath(attachment, ownedRoot)
+            ? [path.resolve(attachment.path)]
+            : []
+        )
       );
+
       const draftDirectories = yield* readDirectory(ownedRoot);
+
       for (const draftEntry of draftDirectories) {
         if (
           !draftEntry.isDirectory() ||
@@ -380,12 +406,14 @@ export const makeDraftAttachmentStore = (
         ) {
           continue;
         }
+
         const directory = path.join(ownedRoot, draftEntry.name);
         const entries = yield* readDirectory(directory);
         yield* Effect.forEach(
           entries,
           (entry) => {
             const candidate = path.resolve(directory, entry.name);
+
             return (entry.isFile() || entry.isSymbolicLink()) &&
               !retainedPaths.has(candidate)
               ? removeFile(candidate)
@@ -414,6 +442,7 @@ export const configureDraftAttachmentStore = (
   userDataPath: string
 ): DraftAttachmentStore => {
   configuredStore = makeDraftAttachmentStore(userDataPath);
+
   return configuredStore;
 };
 

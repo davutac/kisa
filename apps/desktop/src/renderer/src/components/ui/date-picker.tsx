@@ -46,8 +46,10 @@ const DatePicker = ({
     onOpenChange={(open, details) => {
       if (!open && details.reason === "window-blur") {
         details.cancel();
+
         return;
       }
+
       onOpenChange?.(open, details);
     }}
     weekdayFormat={weekdayFormat}

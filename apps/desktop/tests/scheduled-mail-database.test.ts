@@ -29,6 +29,7 @@ vi.mock(import("../src/main/database-query"), () => ({
 const migrationsFolder = fileURLToPath(
   new URL("../../../packages/database/drizzle", import.meta.url)
 );
+
 const temporaryDirectories: string[] = [];
 const PragmaNameRows = Schema.Array(Schema.Struct({ name: Schema.String }));
 const decodePragmaNames = Schema.decodeUnknownSync(PragmaNameRows);
@@ -67,17 +68,23 @@ const toRemoteDatabase = (
 ): RemoteDatabaseClient => {
   const execute: DatabaseRemoteCallback = (query, parameters, method) => {
     const statement = connection.prepare(query);
+
     if (method === "run") {
       statement.run(...parameters);
+
       return Promise.resolve({ rows: [] });
     }
+
     const dataStatement = statement.raw(true);
+
     const rows =
       method === "get"
         ? dataStatement.get(...parameters)
         : dataStatement.all(...parameters);
+
     return Promise.resolve({ rows: Array.isArray(rows) ? rows : [] });
   };
+
   return createRemoteDatabaseClient(execute);
 };
 
@@ -101,6 +108,7 @@ describe("scheduled mail database", () => {
     connection.close();
 
     const reopened = openDatabaseConnection(databasePath);
+
     try {
       expect(reopened.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(() => {
@@ -170,9 +178,11 @@ describe("scheduled mail database", () => {
         createDatabaseClient(connection),
         migrationsFolder
       );
+
       const indexes = connection
         .prepare("PRAGMA index_list('scheduled_messages')")
         .all();
+
       const columns = connection
         .prepare("PRAGMA index_info('scheduled_messages_due_idx')")
         .all();

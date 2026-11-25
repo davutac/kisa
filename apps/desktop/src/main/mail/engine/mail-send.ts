@@ -51,16 +51,20 @@ export interface OutgoingRecipients {
 const parseRecipients = Effect.fn("MailSend.parseRecipients")(
   function* parseRecipients(account: MailAccount, values: readonly string[]) {
     const recipients: OutgoingAddress[] = [];
+
     for (const value of values) {
       const mailbox = parseMailbox(value);
+
       if (mailbox === undefined || !isSendableAddress(mailbox.address)) {
         return yield* new MailProtocolError({
           accountId: account.accountId,
           message: `Invalid recipient address: ${value}`,
         });
       }
+
       recipients.push({ address: mailbox.address, name: mailbox.name });
     }
+
     return recipients;
   }
 );
@@ -80,6 +84,7 @@ const resolveRecipients = Effect.fn("MailSend.resolveRecipients")(
         message: "Add at least one recipient before sending",
       });
     }
+
     return { bcc, cc, to };
   }
 );
@@ -89,12 +94,14 @@ const senderOf = Effect.fn("MailSend.senderOf")(function* senderOf(
   account: MailAccount
 ) {
   const database = yield* MailDatabase;
+
   const row = yield* database.use("Could not load the account", (db) =>
     db.query.mailAccounts.findFirst({
       columns: { displayName: true },
       where: { accountId: account.accountId },
     })
   );
+
   return {
     address: account.email,
     name: row?.displayName ?? undefined,
@@ -139,6 +146,7 @@ const SENT_COPY_NOT_FILED = "Message sent, but its Sent copy was not filed";
 const sentMailboxOf = Effect.fn("MailSend.sentMailboxOf")(
   function* sentMailboxOf(account: MailAccount) {
     const store = yield* MailEngineStore;
+
     return (yield* store.getMailboxes(account.accountId)).find(
       (mailbox) => mailbox.role === "sent" && mailbox.selectable
     );
@@ -176,9 +184,11 @@ const appendSentCopy = (
           name: "Message-ID",
           value: `<${composed.messageId}>`,
         });
+
         if (!filed) {
           yield* scope.session.append(sentPath, composed.sentCopy, ["\\Seen"]);
         }
+
         const changes = yield* refreshMailboxes(scope, [sentPath]);
         yield* publishChanges(account.accountId, changes);
       })
@@ -190,6 +200,7 @@ const showServerSentCopy = Effect.fn("MailSend.showServerSentCopy")(
   function* showServerSentCopy(account: MailAccount, sentPath: string) {
     const refreshes = yield* SentCopyRefreshes;
     let waited = 0;
+
     for (const at of refreshes) {
       yield* Effect.sleep(Math.max(0, at - waited));
       waited = at;
@@ -208,19 +219,25 @@ const fileSentCopy = Effect.fn("MailSend.fileSentCopy")(function* fileSentCopy(
   composed: ComposedMessage
 ) {
   const filer = SENT_COPY_FILER[account.provider];
+
   if (filer === "server") {
     return;
   }
+
   const sent = yield* sentMailboxOf(account);
+
   if (sent === undefined) {
     return yield* Effect.logWarning(
       "Message sent, but the account has no Sent folder to keep a copy in"
     );
   }
+
   if (filer === "kisa") {
     yield* appendSentCopy(account, composed, sent.path);
+
     return;
   }
+
   yield* forkAccountWork(
     account.accountId,
     showServerSentCopy(account, sent.path)
@@ -238,6 +255,7 @@ const deliver = Effect.fn("MailSend.deliver")(function* deliver(
 ) {
   const smtp = yield* SmtpTransport;
   const auth = yield* resolveImapAuth(account);
+
   const result = yield* smtp.send({
     accountId: account.accountId,
     auth,
@@ -250,6 +268,7 @@ const deliver = Effect.fn("MailSend.deliver")(function* deliver(
     Effect.catchCause(() => Effect.logWarning(SENT_COPY_NOT_FILED))
   );
   yield* Effect.sync(() => requestMailSync(account.accountId));
+
   return result;
 });
 
@@ -301,10 +320,12 @@ export interface ThreadMessageRequest extends OutgoingRecipients {
 const conversationFor = Effect.fn("MailSend.conversationFor")(
   function* conversationFor(account: MailAccount, threadId: string) {
     const database = yield* MailDatabase;
+
     const read = () =>
       database.use("Could not load the conversation", (db) =>
         readConversation(db, account.accountId, threadId)
       );
+
     const conversation = yield* read();
 
     if (conversation === undefined) {
@@ -312,12 +333,15 @@ const conversationFor = Effect.fn("MailSend.conversationFor")(
         message: "This conversation is no longer available",
       });
     }
+
     if (!conversation.missingBodies) {
       return conversation;
     }
+
     yield* withForeground(account, (scope) =>
       loadThreadBodies(scope, ThreadId.make(threadId))
     ).pipe(Effect.ignore);
+
     return (yield* read()) ?? conversation;
   }
 );
@@ -328,6 +352,7 @@ const threadingOf = Effect.fn("MailSend.threadingOf")(function* threadingOf(
   messageId: string
 ) {
   const database = yield* MailDatabase;
+
   const [row] = yield* database.use("Could not load the conversation", (db) =>
     db
       .select({
@@ -345,7 +370,9 @@ const threadingOf = Effect.fn("MailSend.threadingOf")(function* threadingOf(
       .limit(1)
       .all()
   );
+
   const parent = row?.rfc822MessageId ?? undefined;
+
   return {
     inReplyTo: parent,
     references: [
@@ -376,6 +403,7 @@ const forwardedAttachments = Effect.fn("MailSend.forwardedAttachments")(
         attachment.disposition === "attachment" ||
         attachment.contentId !== undefined
     );
+
     if (wanted.length === 0) {
       return [];
     }
@@ -405,6 +433,7 @@ const forwardedAttachments = Effect.fn("MailSend.forwardedAttachments")(
         { concurrency: 3 }
       )
     );
+
     return fetched.flat();
   }
 );
@@ -415,6 +444,7 @@ export const sendThreadMessage = Effect.fn("MailSend.sendThreadMessage")(
     const recipients = yield* resolveRecipients(account, request);
     const from = yield* senderOf(account);
     const conversation = yield* conversationFor(account, request.threadId);
+
     const target =
       conversation.messages.find(
         (candidate) => candidate.message.id === request.messageId
@@ -434,8 +464,10 @@ export const sendThreadMessage = Effect.fn("MailSend.sendThreadMessage")(
       subject: target.message.subject,
       to: target.message.to,
     };
+
     const threading = yield* threadingOf(account, target.message.id);
     const isForward = request.action === "forward";
+
     const attachments = isForward
       ? [
           ...(yield* forwardedAttachments(
@@ -446,6 +478,7 @@ export const sendThreadMessage = Effect.fn("MailSend.sendThreadMessage")(
           ...request.attachments,
         ]
       : request.attachments;
+
     const totalBytes = attachments.reduce(
       (total, attachment) => total + attachment.bytes.byteLength,
       0
@@ -489,6 +522,7 @@ export const findSentMessage = Effect.fn("MailSend.findSentMessage")(
     const store = yield* MailEngineStore;
     const mailboxes = yield* store.getMailboxes(account.accountId);
     const isGmail = account.provider === "gmail";
+
     const mailbox = mailboxes.find(
       (candidate) =>
         candidate.selectable && candidate.role === (isGmail ? "all" : "sent")

@@ -75,9 +75,11 @@ export const getAccountRowStatus = ({
   if (isSyncing) {
     return "syncing";
   }
+
   if (indexStatus === "paused") {
     return "needs-sign-in";
   }
+
   return indexStatus === "running" ? "indexing" : "idle";
 };
 
@@ -98,12 +100,15 @@ const AccountStatusIcon = ({
   if (status === "syncing") {
     return <Spinner />;
   }
+
   if (status === "needs-sign-in") {
     return <CircleAlertIcon className="text-destructive" />;
   }
+
   if (status !== "indexing") {
     return <AccountProviderIcon className="size-4" provider={provider} />;
   }
+
   return (
     // The row's tooltip reads out the share; hidden, so an agent naming the
     // account finds only its row.
@@ -139,10 +144,12 @@ const SidebarAccountRow = ({
   const openThreadId = useOpenThreadId();
   const isSyncing = useIsAccountSyncing(account.email);
   const indexProgress = useAccountIndexProgress(account.email);
+
   const status = getAccountRowStatus({
     indexStatus: indexProgress?.status,
     isSyncing,
   });
+
   const isIndexing = status === "indexing";
   const needsSignIn = status === "needs-sign-in";
   const indexedRatio = toMailIndexRatio(indexProgress);
@@ -154,7 +161,9 @@ const SidebarAccountRow = ({
       isExpanded,
       openThreadId !== null
     );
+
     onExpandedChange(account.email, next.isExpanded);
+
     if (next.opensInbox) {
       onOpen(account.email);
     }

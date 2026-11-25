@@ -35,6 +35,7 @@ export const useScopeRead = <A>(
     // The scope key, not the caller's array, drives the effect, so a caller
     // building a new array on every render does not request again each time.
     const scopeAccountIds = scopeKey.split("\u0000");
+
     const reader = createCoalescedRead({
       apply: (value: A) => {
         setStatus({ scopeKey, value });
@@ -42,10 +43,12 @@ export const useScopeRead = <A>(
       pause: () => {
         const { promise, resolve } = Promise.withResolvers<undefined>();
         setTimeout(resolve, BURST_READ_GAP_MS);
+
         return promise;
       },
       read: () => read(mailApi, scopeAccountIds),
     });
+
     const unsubscribe = mailApi.onThreadListUpdated(({ changes }) => {
       if (
         changes.some((change) =>

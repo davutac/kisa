@@ -70,6 +70,7 @@ export const getScheduledMailActionRefusal = (
   if (status === undefined || status === "sent") {
     return "gone";
   }
+
   return getScheduledMailSourceStatuses(name).includes(status)
     ? undefined
     : "being-sent";

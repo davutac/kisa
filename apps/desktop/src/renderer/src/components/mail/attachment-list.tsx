@@ -30,12 +30,14 @@ const MailAttachmentList = ({
     }
 
     const key = `${attachment.messageId}:${attachment.attachmentId}`;
+
     const request = {
       accountId,
       attachmentId: attachment.attachmentId,
       messageId: attachment.messageId,
       partId: attachment.partId,
     };
+
     setActiveAttachment(key);
 
     await runWithCleanup(
@@ -65,6 +67,7 @@ const MailAttachmentList = ({
 
   return attachments.map((attachment, index) => {
     const key = `${attachment.messageId}:${attachment.attachmentId ?? attachment.filename}:${index}`;
+
     const action =
       getAttachmentPreviewKind(attachment.filename, attachment.mediaType) ===
       undefined

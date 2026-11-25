@@ -18,7 +18,9 @@ describe(ScheduledMailKeyedSerial, () => {
       await releaseFirst.promise;
       events.push("first-finished");
     });
+
     await firstStarted.promise;
+
     const second = Effect.runPromise(
       serial.runEffect(
         key,

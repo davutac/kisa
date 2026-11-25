@@ -35,6 +35,7 @@ import { decodeTextPart } from "./text-decoding";
 
 /** Messages per skeleton fetch and per transaction. */
 export const SKELETON_BATCH_SIZE = 500;
+
 /** Messages per body fetch; bodies are larger, so batches stay small. */
 export const BODY_BATCH_SIZE = 25;
 
@@ -137,14 +138,18 @@ export const mergeThreadChanges = (
   ...all: readonly ThreadChanges[]
 ): ThreadChanges => {
   const removed = new Set<ThreadId>(all.flatMap((changes) => changes.removed));
+
   const changed = new Set<ThreadId>(
     all.flatMap((changes) => changes.changed).filter((id) => !removed.has(id))
   );
+
   const arrived = new Set(all.flatMap((changes) => changes.arrived ?? []));
+
   const merged: ThreadChanges = {
     changed: [...changed],
     removed: [...removed],
   };
+
   return arrived.size === 0 ? merged : { ...merged, arrived: [...arrived] };
 };
 
@@ -166,6 +171,7 @@ export const salvaging =
   <A, E, R>(steps: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Effect.tapError(steps, () => {
       const changes = mergeThreadChanges(...saved);
+
       return scope.salvage === undefined ||
         (changes.changed.length === 0 && changes.removed.length === 0)
         ? Effect.void
@@ -195,9 +201,11 @@ export const byMailboxPriority = (
 
 const chunk = <A>(items: readonly A[], size: number): readonly A[][] => {
   const chunks: A[][] = [];
+
   for (let index = 0; index < items.length; index += size) {
     chunks.push(items.slice(index, index + size));
   }
+
   return chunks;
 };
 
@@ -206,14 +214,17 @@ const groupBy = <A>(
   key: (item: A) => string
 ): ReadonlyMap<string, readonly A[]> => {
   const groups = new Map<string, A[]>();
+
   for (const item of items) {
     const group = groups.get(key(item));
+
     if (group === undefined) {
       groups.set(key(item), [item]);
     } else {
       group.push(item);
     }
   }
+
   return groups;
 };
 
@@ -222,6 +233,7 @@ const toAddressList = (
 ): readonly string[] =>
   (addresses ?? []).flatMap((entry) => {
     const address = entry.address?.trim();
+
     return address === undefined || address.length === 0 ? [] : [address];
   });
 
@@ -249,11 +261,14 @@ export const toMessageMetadata = (
   identity: MessageIdentity
 ): MessageMetadata => {
   const { envelope = EMPTY_ENVELOPE } = message;
+
   const headers =
     message.headers === undefined ? [] : parseHeaderBlock(message.headers);
+
   const [firstReference] = parseMessageIds(
     getHeaderValue(headers, "references")
   );
+
   const [inReplyTo] = parseMessageIds(envelope.inReplyTo);
   const [rfc822MessageId] = parseMessageIds(envelope.messageId);
   const [replyTo] = toAddressList(envelope.replyTo);
@@ -287,6 +302,7 @@ const identifyAll = (
 ): readonly IdentifiedMessage[] =>
   messages.flatMap((message) => {
     const identity = dialect.identify(message);
+
     return identity === undefined ? [] : [{ identity, message }];
   });
 
@@ -336,12 +352,14 @@ export const rereadCopies = Effect.fn("MailSync.rereadCopies")(
     uids: readonly number[]
   ) {
     const store = yield* MailEngineStore;
+
     const fetched = yield* scope.session.fetch(
       mailbox.path,
       uidValidity,
       { kind: "uids", uids },
       changeFields(scope.dialect)
     );
+
     const returned = new Set(fetched.map((message) => message.uid));
 
     return {
@@ -366,12 +384,14 @@ const storeSkeleton = Effect.fn("MailSync.storeSkeleton")(
     progress: { readonly skeletonFloor?: number }
   ) {
     const store = yield* MailEngineStore;
+
     const fetched = yield* scope.session.fetch(
       mailbox.path,
       uidValidity,
       { kind: "uids", uids },
       scope.dialect.skeletonFields
     );
+
     const identified = identifyAll(scope.dialect, fetched);
 
     return yield* store.applyMailboxBatch(scope.accountId, {
@@ -404,7 +424,8 @@ const labelsMissingFrom = (
   next: readonly UserLabel[]
 ): readonly LabelId[] => {
   const known = new Set(previous.map((label) => label.id));
-  return next.filter((label) => !known.has(label.id)).map((label) => label.id);
+
+  return next.flatMap((label) => (known.has(label.id) ? [] : [label.id]));
 };
 
 /**
@@ -417,6 +438,7 @@ export const startRelabel = Effect.fn("MailSync.startRelabel")(
     records: readonly MailboxRecord[]
   ) {
     const store = yield* MailEngineStore;
+
     for (const record of records) {
       if (
         record.uidNext !== undefined &&
@@ -454,15 +476,18 @@ export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
     // mail is read from says the mail is hidden, not gone. Saved, it would
     // drop that mailbox with every copy cached from it.
     const hidden = scope.dialect.unreadable?.(listed);
+
     if (hidden !== undefined) {
       return yield* new MailHiddenError({
         accountId: scope.accountId,
         message: hidden,
       });
     }
+
     const synced = new Set(
       scope.dialect.syncedMailboxes(listed).map((mailbox) => mailbox.path)
     );
+
     const records: MailboxRecord[] = listed.map((mailbox) => ({
       delimiter: mailbox.delimiter,
       path: mailbox.path,
@@ -470,6 +495,7 @@ export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
       selectable: mailbox.selectable,
       synced: synced.has(mailbox.path),
     }));
+
     const cachedLabels = scope.dialect.userLabels(cached.map(toImapMailbox));
     const listedLabels = scope.dialect.userLabels(listed);
     const added = labelsMissingFrom(cachedLabels, listedLabels);
@@ -480,6 +506,7 @@ export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
       for (const labelId of removed) {
         results.push(yield* store.removeLabel(scope.accountId, labelId));
       }
+
       if (removed.length > 0 && added.length > 0) {
         yield* startRelabel(
           scope.accountId,
@@ -511,6 +538,7 @@ export const discoverMailboxes = Effect.fn("MailSync.discoverMailboxes")(
 export const relabelStep = Effect.fn("MailSync.relabelStep")(
   function* relabelStep(scope: SyncScope) {
     const store = yield* MailEngineStore;
+
     const record = (yield* store.getMailboxes(scope.accountId)).find(
       (candidate) => candidate.synced && candidate.labelCursor !== undefined
     );
@@ -522,6 +550,7 @@ export const relabelStep = Effect.fn("MailSync.relabelStep")(
     const cursor = record.labelCursor;
     const floor = record.skeletonFloor ?? cursor;
     const { uidValidity } = record;
+
     // A mailbox without a UIDVALIDITY has nothing cached to read again.
     const start =
       uidValidity !== undefined && floor < cursor
@@ -532,6 +561,7 @@ export const relabelStep = Effect.fn("MailSync.relabelStep")(
             FLAG_SLICE_SIZE
           )
         : undefined;
+
     const fetched =
       start === undefined || uidValidity === undefined
         ? []
@@ -580,6 +610,7 @@ const rereadFlags = Effect.fn("MailSync.rereadFlags")(function* rereadFlags(
   const { accountId } = scope;
   const { path } = mailbox;
   const floor = cached.skeletonFloor ?? cached.uidNext;
+
   const headStart =
     floor < cached.uidNext
       ? yield* store.uidWindowStart(
@@ -595,12 +626,14 @@ const rereadFlags = Effect.fn("MailSync.rereadFlags")(function* rereadFlags(
   }
 
   const fields = changeFields(scope.dialect);
+
   const head = yield* scope.session.fetch(
     path,
     cached.uidValidity,
     { from: Math.max(headStart, floor), kind: "range", to: cached.uidNext - 1 },
     fields
   );
+
   if (extent === "newest") {
     return yield* store.applyLocationChanges(
       accountId,
@@ -611,12 +644,14 @@ const rereadFlags = Effect.fn("MailSync.rereadFlags")(function* rereadFlags(
   }
 
   let sliceEnd = Math.min(cached.flagCursor ?? headStart, headStart);
+
   let sliceStart = yield* store.uidWindowStart(
     accountId,
     path,
     sliceEnd,
     FLAG_SLICE_SIZE
   );
+
   if (sliceStart === undefined && sliceEnd < headStart) {
     // The last slice reached the oldest cached copy: start over.
     sliceEnd = headStart;
@@ -692,9 +727,11 @@ const checkDrift = Effect.fn("MailSync.checkDrift")(function* checkDrift(
   const store = yield* MailEngineStore;
   const { accountId, session } = scope;
   const { path } = mailbox;
+
   const record = (yield* store.getMailboxes(accountId)).find(
     (candidate) => candidate.path === path
   );
+
   // Counts say nothing until every message is cached, and a reread under
   // way is already the repair.
   if (record?.skeletonFloor !== 1 || record.labelCursor !== undefined) {
@@ -703,6 +740,7 @@ const checkDrift = Effect.fn("MailSync.checkDrift")(function* checkDrift(
 
   const copiesKey = `copies ${path}`;
   const unreadKey = `unread ${path}`;
+
   const differs = (counts: MailboxCounts) => ({
     copies:
       !memory.unreconciled.has(copiesKey) && counts.copies !== status.messages,
@@ -711,15 +749,20 @@ const checkDrift = Effect.fn("MailSync.checkDrift")(function* checkDrift(
       status.unseen !== undefined &&
       counts.unread !== status.unseen,
   });
+
   const cached = yield* store.mailboxCounts(accountId, path);
   const drift = differs(cached);
+
   if (!drift.copies && !drift.unread) {
     memory.rereading.delete(path);
+
     return NO_THREAD_CHANGES;
   }
+
   if (!isSameState(status, yield* session.status(path))) {
     return NO_THREAD_CHANGES;
   }
+
   yield* Effect.logWarning(
     `The mail cache differs from the server in a mailbox (${mailbox.role}): ` +
       `${cached.copies} copies and ${cached.unread} unread cached, ` +
@@ -728,16 +771,20 @@ const checkDrift = Effect.fn("MailSync.checkDrift")(function* checkDrift(
 
   const results: ThreadChanges[] = [];
   let counts = cached;
+
   if (drift.copies) {
     const present = new Set(
       yield* session.search(path, status.uidValidity, { kind: "all" })
     );
+
     const copies = new Set(yield* store.locationUids(accountId, path));
     const extra = [...copies].filter((uid) => !present.has(uid));
     const missing = [...present].filter((uid) => !copies.has(uid));
+
     if (extra.length > 0) {
       results.push(yield* store.removeLocations(accountId, path, extra));
     }
+
     if (missing.length > 0) {
       results.push(
         withoutArrivals(
@@ -751,7 +798,9 @@ const checkDrift = Effect.fn("MailSync.checkDrift")(function* checkDrift(
         )
       );
     }
+
     counts = yield* store.mailboxCounts(accountId, path);
+
     if (counts.copies !== status.messages) {
       // More was missing than a pass fetches, and the next pass goes on. Or
       // the whole listing was applied and the count still differs: a
@@ -759,6 +808,7 @@ const checkDrift = Effect.fn("MailSync.checkDrift")(function* checkDrift(
       if (missing.length <= DRIFT_FETCH_LIMIT) {
         memory.unreconciled.add(copiesKey);
       }
+
       // The unread count means nothing while copies are missing.
       return mergeThreadChanges(...results);
     }
@@ -809,6 +859,7 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
     } = {}
   ) {
     const store = yield* MailEngineStore;
+
     const status =
       options.status ?? (yield* scope.session.status(mailbox.path));
 
@@ -839,6 +890,7 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
           status.uidValidity,
           { from: cachedUidNext, kind: "uidRange", to: status.uidNext - 1 }
         )).filter((uid) => uid >= cachedUidNext);
+
         arrivals = newUids.length;
 
         // A pass cut short after caching new mail saved no progress for it,
@@ -846,11 +898,13 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
         // lists their range, and a copy it does not return has left the
         // server.
         const listed = new Set(newUids);
+
         const left = (yield* store.locationUids(
           scope.accountId,
           mailbox.path,
           cachedUidNext
         )).filter((uid) => uid < status.uidNext && !listed.has(uid));
+
         if (left.length > 0) {
           results.push(
             yield* store.removeLocations(scope.accountId, mailbox.path, left)
@@ -858,6 +912,7 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
         }
 
         const batches = chunk(newUids, SKELETON_BATCH_SIZE);
+
         for (const uids of batches) {
           results.push(
             yield* storeSkeleton(scope, mailbox, status.uidValidity, uids, {})
@@ -866,6 +921,7 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
       }
 
       const floor = cached.skeletonFloor ?? cachedUidNext;
+
       if (status.highestModseq === undefined) {
         if (options.rereadFlags === true || options.rereadFlags === "newest") {
           results.push(
@@ -894,6 +950,7 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
           changeFields(scope.dialect),
           { changedSince: cached.highestModseq }
         );
+
         results.push(
           yield* store.applyLocationChanges(
             scope.accountId,
@@ -909,16 +966,19 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
       // list compared with the cache. The saved count covers no copy at or
       // above the saved UIDNEXT; those were compared with the search above.
       const expected = (cached.messageCount ?? status.messages) + arrivals;
+
       if (status.messages < expected) {
         const present = new Set(
           yield* scope.session.search(mailbox.path, status.uidValidity, {
             kind: "all",
           })
         );
+
         const vanished = (yield* store.locationUids(
           scope.accountId,
           mailbox.path
         )).filter((uid) => !present.has(uid));
+
         results.push(
           yield* store.removeLocations(scope.accountId, mailbox.path, vanished)
         );
@@ -931,6 +991,7 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
           uidNext: status.uidNext,
         })
       );
+
       if (options.drift !== undefined) {
         results.push(yield* checkDrift(scope, mailbox, status, options.drift));
       }
@@ -985,10 +1046,13 @@ const openMailbox = (scope: SyncScope, mailbox: ImapMailbox) =>
 export const syncAccount = Effect.fn("MailSync.syncAccount")(
   function* syncAccount(scope: SyncScope) {
     const store = yield* MailEngineStore;
+
     const exclusive =
       scope.exclusive ?? (<A, E, R>(effect: Effect.Effect<A, E, R>) => effect);
+
     const discovered = yield* exclusive(discoverMailboxes(scope));
     yield* scope.discovered?.(discovered) ?? Effect.void;
+
     const results: ThreadChanges[] =
       scope.discovered === undefined ? [discovered.changes] : [];
 
@@ -1001,12 +1065,15 @@ export const syncAccount = Effect.fn("MailSync.syncAccount")(
         const changes = yield* exclusive(
           Effect.gen(function* syncOneMailbox() {
             const status = yield* openMailbox(scope, mailbox);
+
             if (status === undefined) {
               return;
             }
+
             const cached = (yield* store.getMailboxes(scope.accountId)).find(
               (record) => record.path === mailbox.path
             );
+
             return yield* syncMailbox(scope, mailbox, cached, {
               drift: scope.drift,
               rereadFlags: true,
@@ -1014,6 +1081,7 @@ export const syncAccount = Effect.fn("MailSync.syncAccount")(
             });
           })
         );
+
         if (changes === undefined) {
           isComplete = false;
         } else {
@@ -1049,16 +1117,19 @@ const nextSkeletonUids = Effect.fn("MailSync.nextSkeletonUids")(
 
     for (;;) {
       const from = Math.max(1, floor - window);
+
       const uids = yield* scope.session.search(path, uidValidity, {
         from,
         kind: "uidRange",
         to: floor - 1,
       });
+
       const below = uids.filter((uid) => uid < floor);
 
       if (below.length >= SKELETON_BATCH_SIZE || from === 1) {
         const batch = below.slice(-SKELETON_BATCH_SIZE);
         const reachedBottom = from === 1 && below.length <= SKELETON_BATCH_SIZE;
+
         return {
           floor: reachedBottom ? 1 : (batch[0] ?? 1),
           uids: batch,
@@ -1077,6 +1148,7 @@ const nextSkeletonUids = Effect.fn("MailSync.nextSkeletonUids")(
 export const skeletonStep = Effect.fn("MailSync.skeletonStep")(
   function* skeletonStep(scope: SyncScope) {
     const store = yield* MailEngineStore;
+
     const [mailbox] = (yield* store.getMailboxes(scope.accountId))
       .filter(
         (record) =>
@@ -1153,16 +1225,20 @@ const bodySources = (candidates: readonly BodyCandidate[]) => {
       readonly uidValidity: bigint;
     }
   >();
+
   for (const { mailboxPath, messageId, uid, uidValidity } of candidates) {
     const key = `${uidValidity} ${mailboxPath}`;
+
     const source = sources.get(key) ?? {
       messageIds: new Map<number, MessageId>(),
       path: mailboxPath,
       uidValidity,
     };
+
     source.messageIds.set(uid, messageId);
     sources.set(key, source);
   }
+
   return [...sources.values()];
 };
 
@@ -1191,17 +1267,21 @@ export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
         { kind: "uids", uids: [...messageIds.keys()] },
         { headers: BODY_HEADER_FIELDS, structure: true }
       );
+
       const planned: PlannedMessage[] = [];
 
       for (const message of described) {
         const messageId = messageIds.get(message.uid);
+
         if (messageId === undefined) {
           continue;
         }
+
         if (message.structure === undefined) {
           bodies.push({ failed: true, headers: [], messageId });
           continue;
         }
+
         planned.push({
           headers:
             message.headers === undefined
@@ -1216,6 +1296,7 @@ export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
       for (const members of groupBy(planned, sectionKey).values()) {
         const [first] = members;
         const parts = first?.plan.bodies ?? [];
+
         const fetched =
           parts.length === 0
             ? []
@@ -1225,12 +1306,14 @@ export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
                 { kind: "uids", uids: members.map((member) => member.uid) },
                 { sections: parts.map((part) => part.section) }
               );
+
         const sectionsByUid = new Map(
           fetched.map((message) => [message.uid, message.sections])
         );
 
         for (const member of members) {
           const sections = sectionsByUid.get(member.uid);
+
           if (
             member.plan.bodies.length > 0 &&
             !member.plan.bodies.some(
@@ -1255,11 +1338,14 @@ export const fetchBodies = Effect.fn("MailSync.fetchBodies")(
 
           const html: string[] = [];
           const text: string[] = [];
+
           for (const part of member.plan.bodies) {
             const bytes = sections?.get(part.section);
+
             if (bytes === undefined) {
               continue;
             }
+
             const decoded = decodeTextPart(bytes, part.encoding, part.charset);
             (part.mimeType === "text/html" ? html : text).push(decoded);
           }
@@ -1289,6 +1375,7 @@ export const bodyStep = Effect.fn("MailSync.bodyStep")(function* bodyStep(
   options: { readonly receivedAfter?: number } = {}
 ) {
   const store = yield* MailEngineStore;
+
   const candidates = yield* store.bodyCandidates(scope.accountId, {
     limit: BODY_BATCH_SIZE,
     receivedAfter: options.receivedAfter,
@@ -1305,6 +1392,7 @@ export const bodyStep = Effect.fn("MailSync.bodyStep")(function* bodyStep(
 export const loadThreadBodies = Effect.fn("MailSync.loadThreadBodies")(
   function* loadThreadBodies(scope: SyncScope, threadId: ThreadId) {
     const store = yield* MailEngineStore;
+
     const candidates = yield* store.threadBodyCandidates(
       scope.accountId,
       threadId

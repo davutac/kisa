@@ -68,6 +68,7 @@ export const updateAppSettings = makeIpcMethod({
       Effect.sync(() => {
         writeAppSettings(request);
         setBackgroundTray(request.runInBackground, getMainWindow);
+
         return getCurrentAppSettings();
       }),
       "Could not save app settings"

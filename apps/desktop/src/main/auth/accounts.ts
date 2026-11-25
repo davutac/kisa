@@ -28,6 +28,7 @@ export const listAccounts = Effect.fn("listAccounts")(function* listAccounts() {
   yield* requireSecureCredentialStorage.pipe(
     Effect.mapError(({ message }) => new AccountsError({ message }))
   );
+
   const rows = yield* withDatabaseClient((database) =>
     database.query.mailAccounts.findMany({
       columns: {
@@ -65,6 +66,7 @@ export const reorderAccounts = Effect.fn("reorderAccounts")(
           .select({ email: mailAccounts.email })
           .from(mailAccounts)
           .all();
+
         const storedEmails = new Set(stored.map(({ email }) => email));
 
         if (
@@ -83,6 +85,7 @@ export const reorderAccounts = Effect.fn("reorderAccounts")(
             .where(eq(mailAccounts.email, email))
             .run();
         }
+
         return true;
       })
     ).pipe(
@@ -107,6 +110,7 @@ export const reorderAccounts = Effect.fn("reorderAccounts")(
 export const updateAccountName = Effect.fn("updateAccountName")(
   function* updateAccountName(email: string, name: string) {
     const trimmed = name.trim();
+
     const updated = yield* withDatabaseClient((database) =>
       database
         .update(mailAccounts)
@@ -131,6 +135,7 @@ export const updateAccountName = Effect.fn("updateAccountName")(
 
     const accounts = yield* listAccounts();
     notifyAccountsChanged({ data: accounts, ok: true });
+
     return accounts;
   }
 );

@@ -45,6 +45,7 @@ const SettingsUndoSendRow = ({
 }) => {
   const { setUndoSendSeconds, undoSendSeconds } =
     useAppSettings(appSettingsApi);
+
   const selected = findUndoSendOption(undoSendSeconds);
 
   return (
@@ -81,6 +82,7 @@ const SettingsUndoSendRow = ({
                 const option = UNDO_SEND_OPTIONS.find(
                   (candidate) => candidate.value === value
                 );
+
                 if (option !== undefined) {
                   setUndoSendSeconds(option.seconds);
                 }

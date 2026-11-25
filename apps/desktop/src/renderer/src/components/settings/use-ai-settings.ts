@@ -25,15 +25,19 @@ export const useAiSettings = () => {
   const isLoadingProviders = useAiProviderState(
     (state) => state.isLoadingProviders
   );
+
   const isLoadingSettings = useAiProviderState(
     (state) => state.isLoadingSettings
   );
+
   const loadSettings = useAiProviderState((state) => state.loadSettings);
   const providers = useAiProviderState((state) => state.providers);
   const providersError = useAiProviderState((state) => state.providersError);
+
   const refreshProviders = useAiProviderState(
     (state) => state.refreshProviders
   );
+
   const saveSettings = useAiProviderState((state) => state.saveSettings);
   const settings = useAiProviderState((state) => state.settings);
   const settingsError = useAiProviderState((state) => state.settingsError);
@@ -78,14 +82,18 @@ export const useAiSettings = () => {
       if (current === null) {
         return null;
       }
+
       const modelInfo = providers
         .find((status) => status.provider === provider)
         ?.models.find((candidate) => candidate.id === model);
+
       const currentReasoning = current.providerReasoning[provider];
+
       const nextReasoning = getReasoningAfterModelChange(
         currentReasoning,
         modelInfo
       );
+
       return {
         ...current,
         providerModels: { ...current.providerModels, [provider]: model },
@@ -125,6 +133,7 @@ export const useAiSettings = () => {
     let active = true;
     void (async () => {
       const error = await saveSettings(draft);
+
       if (active && error !== null) {
         toast.error(error);
       }

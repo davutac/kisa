@@ -63,9 +63,11 @@ export const isSameShellPlace = (a: ShellPlace, b: ShellPlace): boolean => {
         isSameMailboxPlace(a.mailbox, b.mailbox)
       );
     }
+
     case "scheduled": {
       return b.kind === "scheduled" && a.accountId === b.accountId;
     }
+
     default: {
       return b.kind === "workspace" && a.path === b.path;
     }

@@ -12,6 +12,7 @@ export const toMailIndexRatio = (
   }
 
   const estimate = progress.estimatedMessages;
+
   return estimate === undefined || estimate <= 0
     ? undefined
     : Math.min(1, progress.indexedMessages / estimate);
@@ -27,11 +28,14 @@ export const toOverallMailIndexRatio = (
 
   let estimated = 0;
   let indexed = 0;
+
   for (const entry of entries) {
     const estimate = entry.estimatedMessages;
+
     if (estimate === undefined || estimate <= 0) {
       return undefined;
     }
+
     estimated += estimate;
     indexed += Math.min(entry.indexedMessages, estimate);
   }

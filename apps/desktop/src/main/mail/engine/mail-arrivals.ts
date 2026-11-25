@@ -26,13 +26,16 @@ const resolveSenderBrand = Effect.fn("MailArrivals.resolveSenderBrand")(
     if (!(yield* hasCachedSenderBrand(message.fromAddress))) {
       return null;
     }
+
     const database = yield* MailDatabase;
+
     const row = yield* database.use("Could not load a sender", (db) =>
       db.query.mailMessages.findFirst({
         columns: { headers: true },
         where: { accountId: message.accountId, messageId: message.messageId },
       })
     );
+
     return yield* getSenderBrand({
       allowDiscovery: false,
       from: message.fromAddress,
@@ -48,6 +51,7 @@ const resolveSenderBrand = Effect.fn("MailArrivals.resolveSenderBrand")(
 const newInboxThreads = Effect.fn("MailArrivals.newInboxThreads")(
   function* newInboxThreads(accountId: string, arrived: readonly MessageId[]) {
     const database = yield* MailDatabase;
+
     return yield* database.use("Could not load new mail", async (db) => {
       const messages = await db
         .select({ threadId: mailMessages.threadId })
@@ -59,16 +63,20 @@ const newInboxThreads = Effect.fn("MailArrivals.newInboxThreads")(
           )
         )
         .all();
+
       const arrivedPerThread = new Map<string, number>();
+
       for (const { threadId } of messages) {
         arrivedPerThread.set(
           threadId,
           (arrivedPerThread.get(threadId) ?? 0) + 1
         );
       }
+
       if (arrivedPerThread.size === 0) {
         return [];
       }
+
       const threads = await db
         .select({
           isInInbox: mailThreads.isInInbox,
@@ -83,6 +91,7 @@ const newInboxThreads = Effect.fn("MailArrivals.newInboxThreads")(
           )
         )
         .all();
+
       return threads
         .filter(
           (thread) =>
@@ -124,6 +133,7 @@ export const announceArrivals = Effect.fn("MailArrivals.announce")(
       )
     ) {
       const threadIds = yield* newInboxThreads(accountId, arrived);
+
       if (threadIds.length > 0) {
         yield* Effect.sync(() =>
           publishNewMailThreads({ accountId, threadIds })

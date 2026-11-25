@@ -14,6 +14,7 @@ export const requireAiModelSelection = Effect.fnUntraced(
 
     const provider = settings.activeProvider;
     const model = provider === null ? null : settings.providerModels[provider];
+
     if (provider === null || model === null) {
       return yield* new AiModelSelectionError({
         message: "Choose an AI model before using AI features",
@@ -21,6 +22,7 @@ export const requireAiModelSelection = Effect.fnUntraced(
     }
 
     const reasoning = settings.providerReasoning[provider];
+
     return {
       model,
       provider,

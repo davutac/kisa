@@ -26,6 +26,7 @@ const NO_INLINE_IMAGE_PREVIEW_LOAD = (): Promise<null> => Promise.resolve(null);
 
 const readStringAttribute = (node: ProseMirrorNode, name: string): string => {
   const value: unknown = node.attrs[name];
+
   return Predicate.isString(value) ? value : "";
 };
 
@@ -39,9 +40,11 @@ const loadImageElementPreview = async (
 ): Promise<void> => {
   try {
     const loadedPreviewUrl = await loadPreviewUrl(contentId);
+
     if (loadedPreviewUrl === null || image.dataset.contentId !== contentId) {
       return;
     }
+
     image.classList.remove("composer-inline-image-missing");
     image.src = loadedPreviewUrl;
   } catch {
@@ -62,8 +65,10 @@ const updateImageElement = (
   image.draggable = true;
   const previewUrl = getPreviewUrl(contentId);
   image.classList.toggle("composer-inline-image-missing", previewUrl === null);
+
   if (previewUrl === null) {
     image.removeAttribute("src");
+
     if (contentId.length > 0) {
       void loadImageElementPreview(image, contentId, loadPreviewUrl);
     }
@@ -100,7 +105,9 @@ export const ComposerInlineImageNode = Node.create<ComposerInlineImageOptions>({
           if (nextNode.type !== node.type) {
             return false;
           }
+
           updateImageElement(image, nextNode, getPreviewUrl, loadPreviewUrl);
+
           return true;
         },
       };
@@ -142,12 +149,15 @@ export const collectComposerInlineContentIds = (
   html: string
 ): ReadonlySet<string> => {
   const contentIds = new Set<string>();
+
   for (const match of html.matchAll(CID_REFERENCE)) {
     const contentId = match.groups?.contentId;
+
     if (contentId !== undefined) {
       contentIds.add(contentId);
     }
   }
+
   return contentIds;
 };
 
@@ -164,11 +174,13 @@ export const getRetainedComposerInlineBytes = (
   attachments: readonly MailDraftAttachment[]
 ): number => {
   let total = 0;
+
   for (const attachment of attachments) {
     if (attachment.contentId !== undefined) {
       total += attachment.size;
     }
   }
+
   return total;
 };
 
@@ -176,9 +188,11 @@ export const getComposerAttachmentBytes = (
   attachments: readonly MailDraftAttachment[]
 ): number => {
   let total = 0;
+
   for (const attachment of attachments) {
     total += attachment.size;
   }
+
   return total;
 };
 
@@ -199,8 +213,10 @@ export const assignComposerInlineContentIds = (
       attachment.size <= remainingInlineBytes
     ) {
       remainingInlineBytes -= attachment.size;
+
       return { ...attachment, contentId: makeContentId() };
     }
+
     return attachment;
   });
 };
@@ -211,6 +227,7 @@ export const partitionComposerFiles = (
 ) => {
   const inlineImages: File[] = [];
   const attachments: File[] = [];
+
   let remainingInlineBytes = Math.max(
     MAX_INLINE_MESSAGE_BYTES - existingInlineBytes,
     0

@@ -70,8 +70,10 @@ const useMailComposerAttachmentHandlers = (
 ) => {
   const addAttachments = controller?.addAttachments;
   const addInlineImages = controller?.addInlineImages;
+
   const fallbackInlineImagesToAttachments =
     controller?.fallbackInlineImagesToAttachments;
+
   const setReferencedInlineContentIds =
     controller?.setReferencedInlineContentIds;
 
@@ -80,14 +82,18 @@ const useMailComposerAttachmentHandlers = (
       if (addAttachments === undefined || addInlineImages === undefined) {
         return [];
       }
+
       const existingInlineBytes = getRetainedComposerInlineBytes(
         controller?.attachments ?? []
       );
+
       const partitioned = partitionComposerFiles(files, existingInlineBytes);
       const inlineImages = await addInlineImages(partitioned.inlineImages);
+
       if (partitioned.attachments.length > 0) {
         void addAttachments(partitioned.attachments);
       }
+
       return inlineImages;
     },
     [addAttachments, addInlineImages, controller?.attachments]
@@ -108,16 +114,20 @@ const useMailComposerAttachmentHandlers = (
       const referencedContentIds = collectComposerInlineContentIds(
         template.body.html
       );
+
       setReferencedInlineContentIds?.(referencedContentIds);
+
       if (controller !== undefined) {
         const detachedContentIds = getDetachedInlineContentIds(
           controller,
           referencedContentIds
         );
+
         if (detachedContentIds.length > 0) {
           fallbackInlineImagesToAttachments?.(detachedContentIds);
         }
       }
+
       onApplyTemplate?.(template);
     },
     [
@@ -163,6 +173,7 @@ const MailComposer = ({
   ...composerProps
 }: MailComposerProps) => {
   const attachmentController = attachments?.controller;
+
   const {
     handleApplyTemplate,
     handleAttachmentFiles,
@@ -174,6 +185,7 @@ const MailComposer = ({
     onApplyTemplate,
     onChange
   );
+
   const attachmentCommand = attachments?.command ?? "composer.attach";
   useAppCommand(attachmentCommand, () => attachmentController?.picker.open(), {
     enabled: attachments !== undefined && !disabled,
@@ -198,6 +210,7 @@ const MailComposer = ({
       />
     );
   });
+
   const aiControls =
     groupAiActions && aiButtons.length > 0 ? (
       <ButtonGroup

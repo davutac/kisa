@@ -19,6 +19,7 @@ const layerPlatform: Layer.Layer<Worker.WorkerPlatform> = Layer.succeed(
         scope,
         Effect.suspend(() => {
           worker.postMessage([1]);
+
           return Deferred.await(exited);
         }).pipe(
           Effect.timeout(5000),
@@ -36,6 +37,7 @@ const layerPlatform: Layer.Layer<Worker.WorkerPlatform> = Layer.succeed(
       const onMessage = <Message>(message: Message): void => {
         emit(message);
       };
+
       const onError = (
         type: "FatalError",
         location: string,
@@ -51,6 +53,7 @@ const layerPlatform: Layer.Layer<Worker.WorkerPlatform> = Layer.succeed(
           })
         );
       };
+
       const onExit = (code: number): void => {
         Deferred.doneUnsafe(
           deferred,

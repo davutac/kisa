@@ -50,6 +50,7 @@ export const openThreadWithPreference = (
 
   if (!alwaysOpenInNewWindow || windowApi === undefined) {
     openInline(threadKey);
+
     return "inline";
   }
 

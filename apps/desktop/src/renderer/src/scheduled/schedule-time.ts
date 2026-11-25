@@ -10,6 +10,7 @@ export interface SchedulePreset {
 }
 
 export const MAX_SCHEDULE_TIMER_DELAY = 2_147_483_647;
+
 export const LOCAL_TIME_ZONE =
   new Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
 
@@ -96,6 +97,7 @@ export const resolveLocalScheduleTime = (
   }
 
   const match = TIME_PATTERN.exec(time);
+
   if (match?.groups === undefined) {
     return { error: "Choose a valid time", ok: false };
   }
@@ -127,7 +129,9 @@ export const resolveLocalScheduleTime = (
     if (offset === 0) {
       continue;
     }
+
     const alternative = new Date(candidate.getTime() + offset * 60_000);
+
     if (hasSameLocalParts(alternative, year, month, day, hours, minutes)) {
       matchingInstants.add(alternative.getTime());
     }
@@ -152,9 +156,11 @@ export const getInitialCustomSchedule = (now: Date): Date => {
   const minimum = new Date(now.getTime() + 30 * 60_000);
   minimum.setSeconds(0, 0);
   const remainder = minimum.getMinutes() % 30;
+
   if (remainder !== 0) {
     minimum.setMinutes(minimum.getMinutes() + (30 - remainder));
   }
+
   return minimum;
 };
 

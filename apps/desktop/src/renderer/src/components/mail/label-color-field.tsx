@@ -48,10 +48,13 @@ const LabelColorField = ({
       onValueChange={(next, details) => {
         // Labels are opaque `#rrggbb`; a typed colour with alpha is refused.
         const color = next.toLowerCase();
+
         if (!isLabelColor(color)) {
           details.cancel();
+
           return;
         }
+
         onValueChange(color);
       }}
       space="hsv"

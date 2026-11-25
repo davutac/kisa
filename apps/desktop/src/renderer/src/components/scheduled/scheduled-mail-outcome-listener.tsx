@@ -16,6 +16,7 @@ const ScheduledMailOutcomeListener = () => {
     if (api === undefined) {
       return;
     }
+
     return api.onOutcome((outcome) => {
       handleScheduledMailOutcome(outcome, {
         navigate: (to) => {

@@ -17,6 +17,7 @@ class DatabaseUnlockError extends Schema.TaggedError<
 const receiveDatabaseKey = Effect.fn("receiveDatabaseKey")(
   function* receiveDatabaseKeyEffect() {
     const { parentPort } = process;
+
     if (parentPort === null) {
       return yield* new DatabaseUnlockError({
         message: "Database process has no Electron parent port",
@@ -30,11 +31,13 @@ const receiveDatabaseKey = Effect.fn("receiveDatabaseKey")(
         };
 
         parentPort.once("message", onMessage);
+
         return Effect.sync(() => {
           parentPort.removeListener("message", onMessage);
         });
       }
     );
+
     const unlock = yield* Schema.decodeUnknownEffect(DatabaseUnlock)(
       message
     ).pipe(
@@ -60,11 +63,13 @@ const program = Effect.gen(function* databaseProcessProgram() {
   const [databasePath, migrationsFolder] = yield* Schema.decodeUnknownEffect(
     DatabasePaths
   )(process.argv.slice(-2));
+
   const encryptionKey = yield* receiveDatabaseKey();
 
   const handlers = DatabaseRpcs.toLayer(
     Effect.gen(function* makeHandlers() {
       const executor = yield* DatabaseExecutor;
+
       return DatabaseRpcs.of({
         DatabaseReady: () => Effect.void,
         ExecuteDatabase: executor.execute,
@@ -98,7 +103,7 @@ const main = async (): Promise<void> => {
   // process alive while its parent port is open, so without this main waits
   // out its whole close timeout on every quit and then kills the process.
   // Only a utility process has that port; anywhere else, nothing lingers.
-  if (Predicate.isNotNullish(Reflect.get(process, "parentPort"))) {
+  if (Predicate.isNotNullish(process.parentPort)) {
     process.exit();
   }
 };

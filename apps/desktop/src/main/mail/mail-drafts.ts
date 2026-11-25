@@ -48,9 +48,11 @@ const cleanupOwnedAttachments = (
   cleanup: (store: DraftAttachmentStore) => Effect.Effect<void, unknown>
 ): Effect.Effect<void> => {
   const store = getOptionalDraftAttachmentStore();
+
   if (store === undefined) {
     return Effect.void;
   }
+
   return bestEffortDraftAttachmentCleanup(cleanup(store));
 };
 
@@ -144,6 +146,7 @@ export const notifyDraftUpserted = (
     MailDraftChanged,
     (webContents) => {
       const ownerId = bindOutgoingAttachmentOwner(webContents);
+
       return {
         draft: {
           ...draft,
@@ -236,6 +239,7 @@ export const loadThreadDraft = Effect.fn("loadThreadDraft")(
         () => new MailDraftError({ message: "Could not load saved reply" })
       )
     );
+
     const [row] = rows;
 
     // A reply waiting out its Undo send delay is not a draft to continue.
@@ -270,6 +274,7 @@ const findDraftRow = (accountId: string, draftId: string) =>
 export const republishDraft = Effect.fn("republishDraft")(
   function* republishDraft(accountId: string, draftId: string) {
     const row = yield* findDraftRow(accountId, draftId);
+
     if (row !== undefined) {
       notifyStoredDraftUpserted(row);
     }
@@ -292,7 +297,9 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
   if (isHeldDraft(input.accountId, input.id)) {
     return yield* heldDraftError();
   }
+
   const updatedAt = yield* Clock.currentTimeMillis;
+
   const storedAttachments = yield* Effect.try({
     catch: (error) =>
       new MailDraftError({
@@ -305,6 +312,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
         input.attachments
       ),
   });
+
   const saved = yield* withDatabaseClient((database) =>
     database.transaction(async (transaction) => {
       if (!hasValidDraftContext(input)) {
@@ -316,6 +324,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
           columns: { accountId: true },
           where: { accountId: input.accountId },
         });
+
         if (account === undefined) {
           throw new Error("Draft account is not connected");
         }
@@ -324,15 +333,18 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
       const existing = await transaction.query.mailDrafts.findFirst({
         where: { id: input.id },
       });
+
       const scheduled = await transaction.query.scheduledMessages.findFirst({
         columns: { draftId: true },
         where: { draftId: input.id },
       });
+
       if (scheduled !== undefined) {
         throw new Error(
           "Scheduled drafts must be edited through scheduled mail"
         );
       }
+
       const replaced =
         input.threadId === undefined || input.accountId === undefined
           ? undefined
@@ -342,6 +354,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
                 threadId: input.threadId,
               },
             });
+
       const values: typeof mailDrafts.$inferInsert = {
         accountEmail: input.accountId ?? null,
         attachments: storedAttachments,
@@ -387,9 +400,11 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
           .run();
       } else {
         const { accountId } = input;
+
         if (accountId === undefined) {
           throw new Error("Thread drafts require an account");
         }
+
         await transaction
           .delete(mailDrafts)
           .where(
@@ -418,6 +433,7 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
       () => new MailDraftError({ message: "Could not save draft" })
     )
   );
+
   const draft: MailDraft = { ...input, createdAt: saved.createdAt, updatedAt };
 
   yield* cleanupOwnedAttachments((store) =>
@@ -432,7 +448,9 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
       threadId: input.threadId,
     });
   }
+
   notifyDraftUpserted(draft, ownerWebContentsId, storedAttachments);
+
   return draft;
 });
 
@@ -441,6 +459,7 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
     if (isHeldDraft(request.accountId, request.draftId)) {
       return yield* heldDraftError();
     }
+
     const removed = yield* withDatabaseClient((database) =>
       database.transaction(async (transaction) => {
         const drafts = await transaction
@@ -455,6 +474,7 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
             )
           )
           .all();
+
         const [draft] = drafts;
 
         if (draft !== undefined) {
@@ -464,11 +484,13 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
               where: { draftId: request.draftId },
             }
           );
+
           if (scheduled !== undefined) {
             throw new Error(
               "Scheduled drafts must be discarded through scheduled mail"
             );
           }
+
           await transaction
             .delete(mailDrafts)
             .where(eq(mailDrafts.id, request.draftId))
@@ -491,6 +513,7 @@ export const discardMailDraft = Effect.fn("discardMailDraft")(
         threadId: removed.threadId ?? undefined,
       });
     }
+
     if (request.preserveAttachments !== true) {
       yield* cleanupOwnedAttachments((store) =>
         store
@@ -510,10 +533,12 @@ export const forgetAccountDrafts = Effect.fn("forgetAccountDrafts")(
           .from(mailDrafts)
           .where(eq(mailDrafts.accountEmail, accountId))
           .all();
+
         await transaction
           .delete(mailDrafts)
           .where(eq(mailDrafts.accountEmail, accountId))
           .run();
+
         return rows;
       })
     ).pipe(
@@ -521,6 +546,7 @@ export const forgetAccountDrafts = Effect.fn("forgetAccountDrafts")(
         () => new MailDraftError({ message: "Could not delete account drafts" })
       )
     );
+
     yield* cleanupOwnedAttachments((store) =>
       store.delete(
         removed.flatMap(({ attachments }) =>
@@ -544,6 +570,7 @@ export const reconcileDraftAttachmentStore = Effect.fn(
       () => new MailDraftError({ message: "Could not reconcile draft files" })
     )
   );
+
   yield* cleanupOwnedAttachments((store) =>
     store.cleanupOrphans(
       rows.flatMap(({ attachments }) => decodeStoredAttachments(attachments))

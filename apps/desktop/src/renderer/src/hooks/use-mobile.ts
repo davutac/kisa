@@ -15,6 +15,7 @@ const subscribeToMobileBreakpoint = (
   );
 
   mediaQuery.addEventListener("change", onStoreChange);
+
   return () => mediaQuery.removeEventListener("change", onStoreChange);
 };
 

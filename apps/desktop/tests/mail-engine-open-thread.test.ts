@@ -35,34 +35,47 @@ import {
   syncFully,
   threadRow,
 } from "./fixtures/mail-engine-harness";
+import { found } from "./fixtures/rows";
 
 vi.mock("../src/main/database", () => ({
   withDatabaseClient: vi.fn<() => never>(),
 }));
+
 vi.mock("../src/main/mail/new-mail-notifications", () => ({
   dismissInactiveThreadNotifications: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/mail/engine/mail-arrivals", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { announceArrivals: () => MockEffect.void };
 });
+
 vi.mock("../src/main/electron/renderer-events", () => ({
   sendRendererEvent: vi.fn<() => void>(),
 }));
+
 vi.mock("../src/main/mail/unread-badge", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { refreshUnreadBadge: () => MockEffect.void };
 });
+
 vi.mock("../src/main/mail/sender-brand", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { getSenderBrand: () => MockEffect.succeed(null) };
 });
+
 vi.mock("../src/main/mail/trusted-image-senders", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return { loadTrustedImageSenderCheck: () => MockEffect.succeed(() => false) };
 });
+
 vi.mock("../src/main/mail/engine/account-credentials", async () => {
   const { Effect: MockEffect, Redacted } = await import("effect");
+
   return {
     resolveImapAuth: () =>
       MockEffect.succeed({
@@ -90,17 +103,19 @@ const layers = (server: FakeImapServer) =>
   layersWith({ connect: () => Effect.succeed(server.session()) });
 
 const keptImageUsedAt = (): number | undefined =>
-  (
-    connection
-      .prepare("SELECT used_at AS usedAt FROM mail_inline_images")
-      .get() as { usedAt: number } | undefined
-  )?.usedAt;
+  connection
+    .prepare<unknown[], { usedAt: number }>(
+      "SELECT used_at AS usedAt FROM mail_inline_images"
+    )
+    .get()?.usedAt;
 
 const keptImageCount = (): number =>
-  (
+  found(
     connection
-      .prepare("SELECT count(*) AS count FROM mail_inline_images")
-      .get() as { count: number }
+      .prepare<unknown[], { count: number }>(
+        "SELECT count(*) AS count FROM mail_inline_images"
+      )
+      .get()
   ).count;
 
 /** Opens the conversation in full once, which keeps its inline image. */
@@ -147,6 +162,7 @@ const serveUnreadLogoMessage = async (): Promise<FakeImapServer> => {
     })
   );
   await syncFully(scopeFor(server, gmailDialect));
+
   return server;
 };
 
@@ -186,6 +202,7 @@ describe("opening a conversation", () => {
         Effect.provide(layers(server))
       )
     );
+
     const [message] = thread.messages;
 
     expect(thread.awaitsServer).toBeFalsy();
@@ -239,6 +256,7 @@ describe("kept inline images", () => {
           layersWith({
             connect: () => {
               connections += 1;
+
               return Effect.die("the server is unreachable");
             },
           })
@@ -259,6 +277,7 @@ describe("kept inline images", () => {
     const own = await readCachedInlineImages(remoteDatabase, accountId, [
       "950",
     ]);
+
     const other = await readCachedInlineImages(
       remoteDatabase,
       "other@example.com",
@@ -328,11 +347,13 @@ describe("kept inline images", () => {
 
   it("clears only the account's images not shown since the cutoff", async () => {
     await openLogoMessageOnce();
+
     const insertKept = connection.prepare(
       `INSERT INTO mail_inline_images
          (account_id, message_id, section, media_type, data, used_at)
        VALUES (?, ?, '2', 'image/png', x'00', ?)`
     );
+
     insertKept.run(accountId, "old", 1000);
     insertKept.run("other@example.com", "old", 1000);
 

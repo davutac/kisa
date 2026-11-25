@@ -61,6 +61,7 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
   // Scheduled scrolls its own list, and a scheduled email opens over it as a
   // composer page, which the fade would dim just as it would a new email.
   const scrollsItself = isComposing || view.currentPath === "/scheduled";
+
   const toggleComposer = (): void => {
     toggleWorkspace("/compose");
   };
@@ -73,12 +74,15 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
   // results on screen with nothing naming or closing them.
   const toggleSidebar = useCallback((): void => {
     hasToggledSidebarRef.current = true;
+
     if (isSidebarOpen && isSearchActive) {
       exitSearch();
     }
+
     setIsSidebarOpen(!isSidebarOpen);
     writeSidebarOpen(!isSidebarOpen);
   }, [exitSearch, isSearchActive, isSidebarOpen]);
+
   // Showing search results reveals the sidebar while the closing search bar
   // hands focus back, so this skips the focus hand-off a toggle would make.
   const revealSidebar = useCallback((): void => {
@@ -104,6 +108,7 @@ const AppShell = ({ children }: { readonly children: ReactNode }) => {
     }
 
     const active = document.activeElement;
+
     const isStranded =
       active === null ||
       active === document.body ||

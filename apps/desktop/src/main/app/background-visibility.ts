@@ -36,6 +36,7 @@ export const updateDockVisibility = ({
     if (!dock.isVisible()) {
       void dock.show();
     }
+
     return true;
   }
 

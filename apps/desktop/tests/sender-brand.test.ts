@@ -16,6 +16,8 @@ import {
   parseBimiLocation,
 } from "../src/main/mail/sender-brand";
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const testState = vi.hoisted(() => ({
   databaseAvailable: false,
   txtLookups: [] as string[],
@@ -23,6 +25,8 @@ const testState = vi.hoisted(() => ({
 
 // An empty sender-brand cache. Database access stays an error unless a test
 // opts in, so header checks are proven to fail before the cache is read.
+// SAFETY: the stand-in has the insert and the two `mailSenderBrands` queries,
+// which are all the sender-brand cache runs on a database.
 vi.mock(import("../src/main/database"), () => ({
   withDatabaseClient: <A>(run: (database: never) => Promise<A>) =>
     testState.databaseAvailable
@@ -48,6 +52,7 @@ vi.mock(import("node:dns/promises"), async (importOriginal) => ({
   ...(await importOriginal()),
   resolveTxt: vi.fn<(name: string) => Promise<string[][]>>((name) => {
     testState.txtLookups.push(name);
+
     return Promise.resolve([]);
   }),
 }));

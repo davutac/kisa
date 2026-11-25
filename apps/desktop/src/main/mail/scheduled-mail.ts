@@ -105,7 +105,10 @@ const Cursor = Schema.Struct({
   draftId: Schema.NonEmptyString,
   scheduledAt: Schema.Int,
 });
+
 type Cursor = typeof Cursor.Type;
+
+const CursorJson = Schema.fromJsonString(Cursor);
 
 const attentionRank = sql<0 | 1>`case
   when ${scheduledMessages.status} = 'attention' then 0
@@ -120,13 +123,10 @@ const decodeCursor = Effect.fn("ScheduledMail.decodeCursor")(
     if (cursor === undefined) {
       return;
     }
-    const parsed = yield* Effect.try({
-      catch: () =>
-        scheduledMailError("The scheduled email page cursor is invalid"),
-      try: (): unknown =>
-        JSON.parse(Buffer.from(cursor, "base64url").toString("utf-8")),
-    });
-    return yield* Schema.decodeUnknownEffect(Cursor)(parsed).pipe(
+
+    return yield* Schema.decodeEffect(CursorJson)(
+      Buffer.from(cursor, "base64url").toString("utf-8")
+    ).pipe(
       Effect.mapError(() =>
         scheduledMailError("The scheduled email page cursor is invalid")
       )
@@ -140,12 +140,15 @@ const adoptDraftAttachments = Effect.fn("adoptDraftAttachments")(
     attachments: readonly StoredMailDraftAttachment[]
   ) {
     const store = getOptionalDraftAttachmentStore();
+
     if (store === undefined) {
       if (attachments.length === 0) {
         return { attachments: [], created: [] };
       }
+
       return yield* scheduledMailError("Attachment storage is not available");
     }
+
     return yield* store
       .adopt(draftId, attachments)
       .pipe(Effect.mapError((error) => scheduledMailError(error.message)));
@@ -156,9 +159,11 @@ const cleanupAdoptedAttachments = (
   run: (store: DraftAttachmentStore) => Effect.Effect<void, unknown>
 ): Effect.Effect<void> => {
   const store = getOptionalDraftAttachmentStore();
+
   if (store === undefined) {
     return Effect.void;
   }
+
   return bestEffortDraftAttachmentCleanup(run(store));
 };
 
@@ -173,8 +178,10 @@ export const listScheduledMailPage = Effect.fn("listScheduledMailPage")(
     if (request.accountIds.length === 0) {
       return { items: [] };
     }
+
     const cursor = yield* decodeCursor(request.cursor);
     const accountIds = [...new Set(request.accountIds)];
+
     const rows = yield* withScheduledMailDatabase(
       (database) =>
         database
@@ -211,12 +218,15 @@ export const listScheduledMailPage = Effect.fn("listScheduledMailPage")(
           .all(),
       "Could not load scheduled email"
     );
+
     const visible = rows.slice(0, SCHEDULED_MAIL_PAGE_SIZE);
     const items = visible.map(toScheduledMailSummary);
     const last = visible.at(-1);
+
     if (rows.length <= SCHEDULED_MAIL_PAGE_SIZE || last === undefined) {
       return { items };
     }
+
     return {
       items,
       nextCursor: encodeCursor({
@@ -235,6 +245,7 @@ export const getScheduledMailAttentionCount = Effect.fn(
     (database) => loadScheduledMailScopeTotals(database, request.accountIds),
     "Could not check scheduled email"
   );
+
   return {
     count: totals.attentionCount,
     hasScheduledMail: totals.hasScheduledMail,
@@ -246,15 +257,18 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
   ownerWebContentsId: number
 ) {
   const now = yield* Clock.currentTimeMillis;
+
   if (request.scheduledAt <= now) {
     return yield* scheduledMailError(
       "Choose a future time for this scheduled email"
     );
   }
+
   const draft = yield* normalizeValidScheduledDeliveryDraft(
     request,
     request.draft
   );
+
   const storedAttachments = yield* Effect.try({
     catch: (error) =>
       error instanceof OutgoingAttachmentAuthorizationError
@@ -266,10 +280,12 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
         draft.attachments
       ),
   });
+
   const adoption = yield* adoptDraftAttachments(
     request.draftId,
     storedAttachments
   );
+
   const result = yield* keySerial
     .runEffect(
       request,
@@ -282,32 +298,40 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
             .where(eq(mailAccounts.accountId, request.accountId))
             .limit(1)
             .all();
+
           if (account === undefined) {
             throw scheduledMailError("The account is no longer connected");
           }
+
           const existingSchedule =
             await transaction.query.scheduledMessages.findFirst({
               where: { draftId: request.draftId },
             });
+
           if (existingSchedule !== undefined) {
             throw scheduledMailError("This email is already scheduled");
           }
+
           const existingDraft = await transaction.query.mailDrafts.findFirst({
             where: { id: request.draftId },
           });
+
           if (
             existingDraft !== undefined &&
             existingDraft.accountEmail !== request.accountId
           ) {
             throw scheduledMailError("This draft belongs to another account");
           }
+
           previousAttachments = decodeAttachments(existingDraft?.attachments);
+
           const values = toScheduledDraftValues(
             draft,
             adoption.attachments,
             existingDraft?.createdAt ?? now,
             now
           );
+
           await upsertScheduledDraft(transaction, values);
           await transaction
             .insert(scheduledMessages)
@@ -325,9 +349,11 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
         });
 
         const saved = await loadScheduledMessage(database, request);
+
         if (saved === undefined) {
           throw scheduledMailError("Could not load the scheduled email");
         }
+
         return { previousAttachments, row: saved };
       }, "Could not schedule email")
     )
@@ -336,12 +362,14 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
         cleanupAdoptedAttachments((store) => store.delete(adoption.created))
       )
     );
+
   yield* cleanupAdoptedAttachments((store) =>
     store.deleteNotRetained(result.previousAttachments, adoption.attachments)
   );
   notifyDraftRemoved(request.draftId, request.accountId);
   notifyScheduledMailChanged(request, "upsert");
   void scheduledMailWorker.wake();
+
   return toScheduledMailSummary(result.row);
 });
 
@@ -356,9 +384,11 @@ const allowUserAction = <Row extends JoinedScheduledMessage>(
   row: Row | undefined
 ): Row => {
   const refusal = getScheduledMailActionRefusal(name, row?.schedule.status);
+
   if (row === undefined || refusal !== undefined) {
     throw scheduledMailError(ACTION_REFUSALS[refusal ?? "gone"]);
   }
+
   return row;
 };
 
@@ -378,6 +408,7 @@ export const beginScheduledMailEdit = Effect.fn("beginScheduledMailEdit")(
             ),
           "Could not open scheduled email"
         );
+
         return {
           draft: toMailDraft(row.draft, attachmentOwnerId),
           item: toScheduledMailSummary(row),
@@ -418,6 +449,7 @@ const getEditedScheduledAt = (
   if (action.kind === "reschedule") {
     return action.scheduledAt;
   }
+
   return action.kind === "send-now" ? now : currentScheduledAt;
 };
 
@@ -427,11 +459,13 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
     attachmentOwnerId: number
   ) {
     let draft = actionDraft(request.action);
+
     if (draft !== undefined && !isValidScheduledDraft(request, draft)) {
       return yield* scheduledMailError(
         "The edited draft does not match its scheduled email"
       );
     }
+
     if (
       draft !== undefined &&
       (request.action.kind === "save" ||
@@ -441,7 +475,9 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
       const editedDraft = draft;
       draft = yield* normalizeValidScheduledDeliveryDraft(request, editedDraft);
     }
+
     const now = yield* Clock.currentTimeMillis;
+
     if (
       request.action.kind === "reschedule" &&
       request.action.scheduledAt <= now
@@ -450,6 +486,7 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
         "Choose a future time for this scheduled email"
       );
     }
+
     const serializedAttachments =
       draft === undefined
         ? undefined
@@ -464,10 +501,12 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                 draft.attachments
               ),
           });
+
     const adoption =
       serializedAttachments === undefined
         ? undefined
         : yield* adoptDraftAttachments(request.draftId, serializedAttachments);
+
     const outcome = yield* keySerial
       .runEffect(
         request,
@@ -490,10 +529,12 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                 )
                 .limit(1)
                 .all();
+
               const row = allowUserAction(
                 `edit-${request.action.kind}` as const,
                 stored
               );
+
               if (
                 request.action.kind === "save" ||
                 request.action.kind === "reschedule" ||
@@ -503,12 +544,14 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                   columns: { accountId: true },
                   where: { accountId: request.accountId },
                 });
+
                 if (account === undefined) {
                   throw scheduledMailError(
                     "The account is no longer connected"
                   );
                 }
               }
+
               // Before any write, so the editor can ask and send the action
               // again against an untouched email.
               if (
@@ -525,6 +568,7 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
               const previousAttachments = decodeAttachments(
                 row.draft.attachments
               );
+
               if (draft !== undefined && adoption !== undefined) {
                 const values = toScheduledDraftValues(
                   draft,
@@ -532,6 +576,7 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                   row.draft.createdAt,
                   now
                 );
+
                 await upsertScheduledDraft(transaction, values);
               }
 
@@ -545,20 +590,25 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                     )
                   )
                   .run();
+
                 return { kind: "remove" as const, previousAttachments };
               }
+
               const isUnknownAttention =
                 row.schedule.status === "attention" &&
                 row.schedule.attentionReason === "outcome-unknown";
+
               const retryingUnknown =
                 isUnknownAttention &&
                 (request.action.kind === "reschedule" ||
                   request.action.kind === "send-now");
+
               const scheduledAt = getEditedScheduledAt(
                 request.action,
                 row.schedule.scheduledAt,
                 now
               );
+
               await transaction
                 .update(scheduledMessages)
                 .set(
@@ -586,6 +636,7 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                   )
                 )
                 .run();
+
               if (
                 request.action.kind === "save" ||
                 request.action.kind === "reschedule"
@@ -605,11 +656,13 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                   )
                   .limit(1)
                   .all();
+
                 if (savedRow === undefined) {
                   throw scheduledMailError(
                     "Could not reload the saved scheduled email"
                   );
                 }
+
                 return {
                   kind: "saved" as const,
                   previousAttachments,
@@ -619,6 +672,7 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                   },
                 };
               }
+
               return { kind: "upsert" as const, previousAttachments };
             }),
           "Could not update scheduled email"
@@ -640,9 +694,11 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
           store.delete(adoption.created)
         );
       }
+
       const unconfirmed: ScheduledMailFinishEditResult = {
         kind: "possible-duplicate",
       };
+
       return unconfirmed;
     }
 
@@ -660,10 +716,12 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
         : "remove"
     );
     void scheduledMailWorker.wake();
+
     const result: ScheduledMailFinishEditResult =
       outcome.kind === "saved"
         ? { kind: "saved", session: outcome.session }
         : { kind: "finished" };
+
     return result;
   }
 );
@@ -674,6 +732,7 @@ const cancelOrDiscardScheduledMail = Effect.fn("cancelOrDiscardScheduledMail")(
     discard: boolean
   ) {
     const now = yield* Clock.currentTimeMillis;
+
     const result = yield* keySerial.runEffect(
       request,
       withScheduledMailDatabase((database) =>
@@ -690,10 +749,12 @@ const cancelOrDiscardScheduledMail = Effect.fn("cancelOrDiscardScheduledMail")(
             )
             .limit(1)
             .all();
+
           const row = allowUserAction(
             discard ? "row-discard" : "row-cancel",
             stored
           );
+
           const deletion = discard
             ? transaction
                 .delete(mailDrafts)
@@ -711,10 +772,13 @@ const cancelOrDiscardScheduledMail = Effect.fn("cancelOrDiscardScheduledMail")(
                     accountOwnsScheduledDraft(request)
                   )
                 );
+
           await deletion.run();
+
           if (discard) {
             return row;
           }
+
           await transaction
             .update(mailDrafts)
             .set({ updatedAt: now })
@@ -725,16 +789,20 @@ const cancelOrDiscardScheduledMail = Effect.fn("cancelOrDiscardScheduledMail")(
               )
             )
             .run();
+
           return { ...row, draft: { ...row.draft, updatedAt: now } };
         })
       )
     );
+
     yield* Effect.sync(() => {
       if (!discard) {
         notifyStoredDraftUpserted(result.draft);
       }
+
       notifyScheduledMailChanged(request, "remove");
     });
+
     return result;
   }
 );
@@ -777,14 +845,18 @@ export const sendScheduledMailNow = Effect.fn("sendScheduledMailNow")(
               )
               .limit(1)
               .all();
+
             const row = allowUserAction("row-send-now", stored);
+
             const account = await transaction.query.mailAccounts.findFirst({
               columns: { accountId: true },
               where: { accountId: request.accountId },
             });
+
             if (account === undefined) {
               throw scheduledMailError("The account is no longer connected");
             }
+
             assertPossibleDuplicateAcknowledged(
               row.schedule,
               request.allowPossibleDuplicate
@@ -829,6 +901,7 @@ export const forgetAccountScheduledMail = Effect.fn(
       .innerJoin(mailDrafts, eq(mailDrafts.id, scheduledMessages.draftId))
       .where(eq(mailDrafts.accountEmail, accountId))
       .all();
+
     await database
       .delete(scheduledMessages)
       .where(
@@ -839,6 +912,7 @@ export const forgetAccountScheduledMail = Effect.fn(
         )`
       )
       .run();
+
     return rows.map(({ draftId }) => draftId);
   }).pipe(
     Effect.mapError(() =>
@@ -848,6 +922,7 @@ export const forgetAccountScheduledMail = Effect.fn(
 
   yield* Effect.sync(() => {
     closeScheduledMailNotifications(accountId);
+
     for (const draftId of draftIds) {
       notifyScheduledMailChanged({ accountId, draftId }, "remove");
     }
@@ -858,9 +933,11 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
   "adoptLegacyScheduledMailAttachments"
 )(function* adoptLegacyScheduledMailAttachments() {
   const store = getOptionalDraftAttachmentStore();
+
   if (store === undefined) {
     return;
   }
+
   const rows = yield* withScheduledMailDatabase(
     (database) =>
       database
@@ -883,6 +960,7 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
   for (const row of rows) {
     const { accountId } = row;
     const attachments = decodeStoredOutgoingAttachmentsStrict(row.attachments);
+
     if (
       accountId === null ||
       attachments === undefined ||
@@ -890,6 +968,7 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
     ) {
       continue;
     }
+
     const key = { accountId, draftId: row.draftId };
     yield* keySerial
       .runEffect(
@@ -899,6 +978,7 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
             row.draftId,
             attachments
           );
+
           const updated = yield* withScheduledMailDatabase(
             (database) =>
               database
@@ -925,12 +1005,15 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
               bestEffortDraftAttachmentCleanup(store.delete(adoption.created))
             )
           );
+
           if (updated.length === 0) {
             yield* bestEffortDraftAttachmentCleanup(
               store.delete(adoption.created)
             );
+
             return;
           }
+
           yield* bestEffortDraftAttachmentCleanup(
             store.deleteNotRetained(attachments, adoption.attachments)
           );
@@ -950,6 +1033,7 @@ const scheduledMailLifecycle = createScheduledMailLifecycle({
   dispatchPendingNotifications: dispatchPendingScheduledMailNotifications(),
   listenForResume: (listener) => {
     powerMonitor.on("resume", listener);
+
     return () => powerMonitor.off("resume", listener);
   },
   releaseStaleNotificationClaims: releaseStaleScheduledMailNotificationClaims(),

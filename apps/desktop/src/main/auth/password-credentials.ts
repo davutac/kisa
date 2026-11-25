@@ -17,6 +17,7 @@ export const decryptPasswordCredentials = Effect.fn(
   const failure = new CredentialStorageError({
     message: "Could not read the saved password",
   });
+
   const opened = yield* openSealedCredentials(credentials).pipe(
     Effect.mapError(() => failure)
   );

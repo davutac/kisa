@@ -20,6 +20,7 @@ const KEYBOARD_STEP = 16;
 /** A computed length in pixels, or 0 when it is not one. */
 const pixels = (element: Element, property: string): number => {
   const value = element.computedStyleMap().get(property);
+
   return value instanceof CSSUnitValue && value.unit === "px" ? value.value : 0;
 };
 
@@ -38,11 +39,14 @@ const measureMinWidth = (
   if (panel === null || anchor === null) {
     return MIN_SIDEBAR_WIDTH;
   }
+
   const strip = anchor.parentElement;
   const trailingPadding = strip === null ? 0 : pixels(strip, "padding-right");
   const border = pixels(panel, "border-right-width");
+
   const edge =
     anchor.getBoundingClientRect().right - panel.getBoundingClientRect().left;
+
   return clampSidebarWidth(Math.ceil(edge + trailingPadding + border));
 };
 
@@ -80,9 +84,11 @@ const SidebarFrame = ({
   // as easing until that animation completes, so a re-render partway
   // through, or a quick second toggle, still eases.
   const [openMotion, setOpenMotion] = useState({ isEasing: false, isOpen });
+
   if (openMotion.isOpen !== isOpen) {
     setOpenMotion({ isEasing: true, isOpen });
   }
+
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Measured before paint, so a remembered width narrower than this
@@ -92,6 +98,7 @@ const SidebarFrame = ({
       panelRef.current,
       minWidthAnchorRef.current
     );
+
     setMinWidth(measured);
     setWidth((current) => clampSidebarWidth(current, measured));
   }, [minWidthAnchorRef]);
@@ -103,9 +110,11 @@ const SidebarFrame = ({
       panelRef.current,
       minWidthAnchorRef.current
     );
+
     if (measured !== minWidth) {
       flushSync(() => setMinWidth(measured));
     }
+
     return measured;
   };
 
@@ -150,6 +159,7 @@ const SidebarFrame = ({
                 DEFAULT_SIDEBAR_WIDTH,
                 remeasure()
               );
+
               setWidth(next);
               writeSidebarWidth(next);
             }}

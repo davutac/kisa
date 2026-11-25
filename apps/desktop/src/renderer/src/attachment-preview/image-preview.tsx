@@ -10,6 +10,7 @@ const ImagePreview = ({
   attachment: MailAttachmentPreview;
 }) => {
   const [failed, setFailed] = useState(false);
+
   const url = useMemo(
     () =>
       URL.createObjectURL(

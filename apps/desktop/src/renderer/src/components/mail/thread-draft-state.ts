@@ -33,13 +33,16 @@ export const getThreadDraftStart = ({
 }): ThreadDraftStart => {
   if (draft !== null) {
     const draftAction = getThreadDraftAction(draft);
+
     return draftAction === action
       ? { kind: "continue" }
       : { draftAction, kind: "other-action" };
   }
+
   if (load === "loading") {
     return { kind: "wait" };
   }
+
   return load === "failed" ? { kind: "reload" } : { kind: "create" };
 };
 
@@ -56,5 +59,6 @@ export const adoptSavedDraft = (
   if (current === null) {
     return saved;
   }
+
   return current.id === saved.id && !isComposerOpen ? saved : current;
 };

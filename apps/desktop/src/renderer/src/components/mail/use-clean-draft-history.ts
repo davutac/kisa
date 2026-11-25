@@ -74,9 +74,11 @@ export const useCleanDraftHistory = ({
 
   const removePendingVersion = (versionId: string): void => {
     const { history } = getState();
+
     const nextHistory = history.filter(
       ({ id, status }) => id !== versionId || status !== "loading"
     );
+
     if (nextHistory.length !== history.length) {
       setRemainingHistory(nextHistory);
     }
@@ -86,12 +88,16 @@ export const useCleanDraftHistory = ({
     if (!(canClean && aiApi && model)) {
       return;
     }
+
     const initial = getState();
     const snapshot = initial.draft;
     const pending = appendPendingCleanDraftVersion(initial.history, snapshot);
+
     const requestedSelectionId =
       initial.history.length === 0 ? "original" : initial.selectedVersionId;
+
     setHistory(pending.history);
+
     if (initial.history.length === 0) {
       setSelectedVersionId("original");
     }
@@ -105,37 +111,50 @@ export const useCleanDraftHistory = ({
             model,
             subject: snapshot.subject,
           });
+
           if (!isActive()) {
             return;
           }
+
           if (!reply.ok) {
             removePendingVersion(pending.version.id);
             toast.error(reply.error);
+
             return;
           }
+
           const latest = getState();
+
           const completed = completePendingCleanDraftVersion(
             latest.history,
             pending.version.id,
             reply.data
           );
+
           if (completed === undefined) {
             return;
           }
+
           setHistory(completed.history);
+
           const shouldApply =
             latest.history.at(-1)?.id === pending.version.id &&
             latest.selectedVersionId === requestedSelectionId &&
             isSameDraft(latest.draft, snapshot);
+
           if (!shouldApply) {
             toast.success("Clean version ready");
+
             return;
           }
+
           if (!applyVersion(completed.version)) {
             setSelectedVersionId(null);
             toast.error(messages.applyError);
+
             return;
           }
+
           setSelectedVersionId(completed.version.id);
           toast.success(messages.cleaned);
         } catch (error) {
@@ -157,10 +176,13 @@ export const useCleanDraftHistory = ({
     if (isInteractionDisabled || version.status === "loading") {
       return;
     }
+
     if (!applyVersion(version)) {
       toast.error(messages.applyError);
+
       return;
     }
+
     setSelectedVersionId(version.id);
   };
 
@@ -168,21 +190,29 @@ export const useCleanDraftHistory = ({
     if (isInteractionDisabled || version.id === "original") {
       return;
     }
+
     const current = getState();
+
     const dismissal = dismissCleanDraftVersion(
       current.history,
       version.id,
       current.selectedVersionId
     );
+
     if (version.id !== current.selectedVersionId) {
       setRemainingHistory(dismissal.history);
+
       return;
     }
+
     const fallback = dismissal.selectedVersion;
+
     if (fallback === null || !applyVersion(fallback)) {
       toast.error(messages.applyError);
+
       return;
     }
+
     if (dismissal.history.some(({ id }) => id !== "original")) {
       setHistory(dismissal.history);
       setSelectedVersionId(fallback.id);

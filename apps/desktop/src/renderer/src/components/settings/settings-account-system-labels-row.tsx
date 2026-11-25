@@ -39,6 +39,7 @@ const SettingsAccountSystemLabelsRow = ({
             accountId: account.email,
             showSystemLabels: checked,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
           }

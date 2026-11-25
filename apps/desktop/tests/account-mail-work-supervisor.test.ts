@@ -12,11 +12,13 @@ describe("account mail work supervisor", () => {
     const secondRelease = Promise.withResolvers<null>();
     const started = Promise.withResolvers<null>();
     let startedCount = 0;
+
     const makeWork =
       (name: string, release: Promise<null>) =>
       async (signal: AbortSignal): Promise<void> => {
         signals.push(signal);
         startedCount += 1;
+
         if (startedCount === 2) {
           started.resolve(null);
         }
@@ -29,18 +31,22 @@ describe("account mail work supervisor", () => {
       "user@example.com",
       makeWork("first", firstRelease.promise)
     );
+
     const second = supervisor.run(
       "user@example.com",
       makeWork("second", secondRelease.promise)
     );
+
     await started.promise;
 
     let suspensionCompleted = false;
+
     const suspendAndRecord = async (): Promise<void> => {
       await Effect.runPromise(supervisor.suspend("user@example.com"));
       suspensionCompleted = true;
       events.push("suspended");
     };
+
     const suspension = suspendAndRecord();
     await Promise.resolve();
 
@@ -110,6 +116,7 @@ describe("account mail work supervisor", () => {
     supervisor.resume("paused@example.com");
     await supervisor.run("paused@example.com", () => {
       runs.push("too-early");
+
       return Promise.resolve();
     });
     expect(supervisor.isSuspended("paused@example.com")).toBeTruthy();
@@ -118,6 +125,7 @@ describe("account mail work supervisor", () => {
     supervisor.resume("paused@example.com");
     await supervisor.run("paused@example.com", () => {
       runs.push("after-all-resumed");
+
       return Promise.resolve();
     });
 
@@ -129,6 +137,7 @@ describe("account mail work supervisor", () => {
     const supervisor = makeAccountMailWorkSupervisor();
     const parent = new AbortController();
     const started = Promise.withResolvers<AbortSignal>();
+
     const completion = supervisor.run(
       "user@example.com",
       async (signal) => {
@@ -152,9 +161,11 @@ describe("account mail work supervisor", () => {
   it("names the accounts with work running, and no others", async () => {
     const supervisor = makeAccountMailWorkSupervisor();
     const release = Promise.withResolvers<null>();
+
     const running = supervisor.run("busy@example.com", async () => {
       await release.promise;
     });
+
     await supervisor.run("done@example.com", async () => {});
 
     const whileRunning = supervisor.activeAccountIds();

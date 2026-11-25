@@ -123,6 +123,7 @@ export const advanceEtas = (
 
     const sample = { at: now, indexedThreads: entry.indexedThreads };
     const existing = samples.get(entry.accountId);
+
     // A count that went backwards means a different run; start over rather
     // than measuring across the discontinuity.
     const merged =

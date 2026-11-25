@@ -30,9 +30,11 @@ const SidebarFavoriteToggle = ({
   readonly favorite: FavoriteLabel;
 }) => {
   const isFavorite = useIsFavoriteLabel(favorite);
+
   const toggleFavorite = useFavoriteLabelsStore(
     (state) => state.toggleFavorite
   );
+
   const action = isFavorite ? "Remove from Favorites" : "Add to Favorites";
 
   return (

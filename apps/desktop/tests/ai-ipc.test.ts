@@ -160,6 +160,7 @@ describe("AI IPC", () => {
         model: { model: "claude-sonnet-5", provider: "claude" as const },
         threadId: "thread-1",
       };
+
       const cleanupRequest = {
         body: "rough body",
         model: { model: "openai/gpt-5", provider: "opencode" as const },

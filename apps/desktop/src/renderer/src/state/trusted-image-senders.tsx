@@ -30,6 +30,7 @@ export const TrustedImageSendersProvider = ({
     }
 
     let isMounted = true;
+
     const apply = (reply: MailTrustedImageSendersReply): void => {
       if (!(isMounted && reply.ok)) {
         return;
@@ -37,6 +38,7 @@ export const TrustedImageSendersProvider = ({
 
       setSenders(reply.data);
     };
+
     const unsubscribe = api.onTrustedImageSendersChanged(apply);
 
     void (async () => {

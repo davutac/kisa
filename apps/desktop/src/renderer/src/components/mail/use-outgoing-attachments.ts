@@ -25,6 +25,7 @@ const clearSettledPreviewLoad = async (
   load: Promise<string | null>
 ): Promise<void> => {
   await load;
+
   if (previewLoads.get(contentId) === load) {
     previewLoads.delete(contentId);
   }
@@ -37,16 +38,20 @@ export const useOutgoingAttachments = (
 ) => {
   const [attachmentState, setAttachmentState] =
     useState<readonly MailDraftAttachment[]>(initialAttachments);
+
   const [pendingAuthorizations, setPendingAuthorizations] = useState(0);
   const activeRef = useRef(true);
   const attachmentsRef = useRef(attachmentState);
   const picker = useInstanceValue(createFileInputController);
   const previewLoadsRef = useRef(new Map<string, Promise<string | null>>());
   const previewUrlsRef = useRef(new Map<string, string>());
+
   const [referencedContentIds, setReferencedContentIds] = useState(() =>
     collectComposerInlineContentIds(initialBodyHtml)
   );
+
   const revisionRef = useRef(0);
+
   const activeAttachments = useMemo(
     () => getActiveComposerAttachments(attachmentState, referencedContentIds),
     [attachmentState, referencedContentIds]
@@ -72,12 +77,15 @@ export const useOutgoingAttachments = (
     const previewUrls = previewUrlsRef.current;
     const revision = revisionRef;
     active.current = true;
+
     return () => {
       active.current = false;
       revision.current += 1;
+
       for (const url of previewUrls.values()) {
         URL.revokeObjectURL(url);
       }
+
       previewLoads.clear();
       previewUrls.clear();
     };
@@ -88,6 +96,7 @@ export const useOutgoingAttachments = (
       for (const contentId of contentIds) {
         previewLoadsRef.current.delete(contentId);
         const previewUrl = previewUrlsRef.current.get(contentId);
+
         if (previewUrl !== undefined) {
           URL.revokeObjectURL(previewUrl);
           previewUrlsRef.current.delete(contentId);
@@ -108,17 +117,22 @@ export const useOutgoingAttachments = (
 
       const revision = revisionRef.current;
       setPendingAuthorizations((current) => current + 1);
+
       return await runWithCleanup(
         async () => {
           try {
             const reply = await mailApi.authorizeOutgoingAttachments(files);
+
             if (!activeRef.current || revisionRef.current !== revision) {
               return [];
             }
+
             if (!reply.ok) {
               toast.error(reply.error);
+
               return [];
             }
+
             const additions = inline
               ? assignComposerInlineContentIds(
                   reply.data,
@@ -126,15 +140,21 @@ export const useOutgoingAttachments = (
                   makeInlineContentId
                 )
               : reply.data;
+
             const currentBytes = getComposerAttachmentBytes(
               attachmentsRef.current
             );
+
             const selectedBytes = getComposerAttachmentBytes(additions);
+
             if (currentBytes + selectedBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
               toast.error("Attachments can total up to 25 MB");
+
               return [];
             }
+
             updateAttachments((current) => [...current, ...additions]);
+
             return additions;
           } catch (error) {
             if (activeRef.current && revisionRef.current === revision) {
@@ -144,6 +164,7 @@ export const useOutgoingAttachments = (
                   : "Could not attach files"
               );
             }
+
             return [];
           }
         },
@@ -167,13 +188,17 @@ export const useOutgoingAttachments = (
   const addInlineImages = useCallback(
     async (files: readonly File[]): Promise<readonly ComposerInlineImage[]> => {
       const additions = await authorizeAttachments(files, true);
+
       return additions.flatMap((attachment, index) => {
         const { contentId, filename } = attachment;
         const file = files.at(index);
+
         if (contentId === undefined || file === undefined) {
           return [];
         }
+
         previewUrlsRef.current.set(contentId, URL.createObjectURL(file));
+
         return [{ contentId, filename }];
       });
     },
@@ -221,9 +246,11 @@ export const useOutgoingAttachments = (
     (attachmentId: string): void => {
       updateAttachments((current) => {
         const removed = current.find(({ id }) => id === attachmentId);
+
         if (removed?.contentId !== undefined) {
           revokeInlinePreviews(new Set([removed.contentId]));
         }
+
         return current.filter(({ id }) => id !== attachmentId);
       });
     },
@@ -249,36 +276,47 @@ export const useOutgoingAttachments = (
   const loadInlineImagePreview = useCallback(
     (contentId: string): Promise<string | null> => {
       const cached = previewUrlsRef.current.get(contentId);
+
       if (cached !== undefined) {
         return Promise.resolve(cached);
       }
+
       const pending = previewLoadsRef.current.get(contentId);
+
       if (pending !== undefined) {
         return pending;
       }
+
       const attachment = attachmentsRef.current.find(
         (candidate) => candidate.contentId === contentId
       );
+
       if (attachment === undefined || mailApi === undefined) {
         return Promise.resolve(null);
       }
+
       const revision = revisionRef.current;
+
       const load = (async (): Promise<string | null> => {
         try {
           const reply = await mailApi.loadOutgoingInlineImagePreview({
             referenceId: attachment.referenceId,
           });
+
           if (!reply.ok) {
             if (activeRef.current && revisionRef.current === revision) {
               toast.error(reply.error);
             }
+
             return null;
           }
+
           const isCurrentAttachment = attachmentsRef.current.some(
             (candidate) =>
               candidate.contentId === contentId &&
               candidate.referenceId === attachment.referenceId
           );
+
           if (
             !activeRef.current ||
             revisionRef.current !== revision ||
@@ -286,12 +324,15 @@ export const useOutgoingAttachments = (
           ) {
             return null;
           }
+
           const previewUrl = URL.createObjectURL(
             new Blob([Uint8Array.from(reply.data.bytes)], {
               type: reply.data.mediaType,
             })
           );
+
           previewUrlsRef.current.set(contentId, previewUrl);
+
           return previewUrl;
         } catch (error) {
           if (activeRef.current && revisionRef.current === revision) {
@@ -301,11 +342,14 @@ export const useOutgoingAttachments = (
                 : "Could not load inline image preview"
             );
           }
+
           return null;
         }
       })();
+
       previewLoadsRef.current.set(contentId, load);
       void clearSettledPreviewLoad(previewLoadsRef.current, contentId, load);
+
       return load;
     },
     [mailApi]
@@ -323,10 +367,13 @@ export const useOutgoingAttachments = (
           referenceId,
         })),
       });
+
       if (!reply.ok) {
         toast.error(reply.error);
+
         return;
       }
+
       return reply.data;
     },
     [mailApi]

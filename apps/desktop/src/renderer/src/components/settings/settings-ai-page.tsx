@@ -73,6 +73,7 @@ const SettingsAiPage = () => {
   const providersById = new Map(
     workflow.providers.map((provider) => [provider.provider, provider])
   );
+
   const handleReplyInstructionsSave = workflow.setReplyUserInstructions;
   const handleCleanupInstructionsSave = workflow.setCleanupUserInstructions;
 

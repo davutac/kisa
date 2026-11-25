@@ -48,6 +48,7 @@ const attempt = (
 /** A scope that keeps what failing steps hand over, merged. */
 const salvaging = (scope: SyncScope) => {
   const handed: ThreadChanges[] = [];
+
   return {
     salvaged: (): ThreadChanges => mergeThreadChanges(...handed),
     scope: {
@@ -69,26 +70,25 @@ const plainText = (text: string) => ({
 /** Every cached message by subject, with whether its body is downloaded. */
 const cachedMail = (): readonly { body_state: string; subject: string }[] =>
   connection
-    .prepare(
+    .prepare<unknown[], { body_state: string; subject: string }>(
       "SELECT subject, body_state FROM mail_messages WHERE account_id = ? ORDER BY subject"
     )
-    .all(accountId) as { body_state: string; subject: string }[];
+    .all(accountId);
 
 /** The mailboxes holding a copy of the message with this subject. */
 const mailboxesOf = (subject: string): readonly string[] =>
-  (
-    connection
-      .prepare(
-        `SELECT location.mailbox_path AS path
+  connection
+    .prepare<unknown[], { readonly path: string }>(
+      `SELECT location.mailbox_path AS path
          FROM mail_message_locations AS location
          JOIN mail_messages AS message
            ON message.account_id = location.account_id
           AND message.message_id = location.message_id
          WHERE location.account_id = ? AND message.subject = ?
          ORDER BY location.mailbox_path`
-      )
-      .all(accountId, subject) as { readonly path: string }[]
-  ).map((row) => row.path);
+    )
+    .all(accountId, subject)
+    .map((row) => row.path);
 
 /** A Gmail account, synced, with one unread message that has just arrived. */
 const gmailWithNewMail = async () => {
@@ -98,6 +98,7 @@ const gmailWithNewMail = async () => {
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
   server.deliver(ALL_MAIL, gmailMessage("501", "501", { flags: [] }));
+
   return { scope, server };
 };
 
@@ -157,6 +158,7 @@ describe("a pass that fails after saving mail", () => {
         Deferred.doneUnsafe(stop, Effect.void);
       }
     };
+
     const interrupted = salvaging(scope);
 
     await run(
@@ -218,10 +220,12 @@ describe("a folder the server will not open", () => {
   it("keeps mail that may only have moved into it", async () => {
     insertAccount("generic");
     const server = new FakeImapServer(ICLOUD_MAILBOXES, ["CONDSTORE", "IDLE"]);
+
     const uid = server.deliver(
       "INBOX",
       genericMessage("filed", plainText("kept"))
     );
+
     const scope = scopeFor(server, genericDialect);
     await syncFully(scope);
     await run(bodyStep(scope));

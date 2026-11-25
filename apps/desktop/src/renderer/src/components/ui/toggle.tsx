@@ -51,6 +51,7 @@ const Toggle = ({
     onPressedChange: _onPressedChange,
     ...enabledProps
   } = props;
+
   return (
     <TogglePrimitive
       className={cn(

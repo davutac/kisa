@@ -97,12 +97,14 @@ const sortLabels = (labels: Iterable<string>): readonly string[] =>
   unique(labels).toSorted((left, right) => {
     const leftRank = SYSTEM_LABEL_ORDER.indexOf(left);
     const rightRank = SYSTEM_LABEL_ORDER.indexOf(right);
+
     if (leftRank !== -1 || rightRank !== -1) {
       return (
         (leftRank === -1 ? Number.MAX_SAFE_INTEGER : leftRank) -
         (rightRank === -1 ? Number.MAX_SAFE_INTEGER : rightRank)
       );
     }
+
     return left.localeCompare(right);
   });
 
@@ -147,6 +149,7 @@ const recomputeMessages = async (
         )
       )
       .all();
+
     // oxlint-disable-next-line eslint/no-await-in-loop
     const messages = await transaction
       .select({
@@ -162,6 +165,7 @@ const recomputeMessages = async (
         )
       )
       .all();
+
     const copiesByMessage = new Map<string, (typeof locations)[number][]>();
 
     for (const location of locations) {
@@ -171,15 +175,18 @@ const recomputeMessages = async (
     }
 
     const relabelled: (readonly unknown[])[] = [];
+
     for (const message of messages) {
       const labels = sortLabels(
         labelsOfCopies(copiesByMessage.get(message.messageId) ?? [])
       );
+
       const isRelabelled = !sameLabels(labels, message.labelIds);
 
       if (isRelabelled || threadsOf === "looked-at") {
         threadIds.add(message.threadId);
       }
+
       if (isRelabelled) {
         relabelled.push([
           message.messageId,
@@ -251,6 +258,7 @@ const recomputeThreads = async (
       )
       .orderBy(mailMessages.receivedAt, mailMessages.messageId)
       .all();
+
     // oxlint-disable-next-line eslint/no-await-in-loop
     const existing = await transaction
       .select({
@@ -265,9 +273,11 @@ const recomputeThreads = async (
         )
       )
       .all();
+
     const spamAddedAt = new Map(
       existing.map((row) => [row.threadId, row.spamAddedAt])
     );
+
     const byThread = new Map<string, (typeof messages)[number][]>();
 
     for (const message of messages) {
@@ -279,6 +289,7 @@ const recomputeThreads = async (
     const emptied = ids.filter(
       (threadId) => !byThread.has(threadId) && spamAddedAt.has(threadId)
     );
+
     if (emptied.length > 0) {
       // oxlint-disable-next-line eslint/no-await-in-loop
       await transaction
@@ -300,6 +311,7 @@ const recomputeThreads = async (
       const [first] = group;
       const latest = group.at(-1);
       const labels = sortLabels(group.flatMap((message) => message.labelIds));
+
       const attachments: ThreadAttachment[] = group.flatMap((message) =>
         (message.attachments ?? [])
           .filter(isListedAttachment)
@@ -308,12 +320,15 @@ const recomputeThreads = async (
             messageId: message.messageId,
           }))
       );
+
       const snippet =
         group.toReversed().find((message) => message.snippet.length > 0)
           ?.snippet ?? "";
+
       const places = conversationPlaces(messagesOfThread);
 
       changed.push(ThreadId.make(threadId));
+
       return {
         accountId,
         attachments,
@@ -381,6 +396,7 @@ const recomputeFromMessages = async (
     messageIds,
     now
   );
+
   return recomputeThreads(
     transaction,
     accountId,
@@ -481,6 +497,7 @@ const deleteMessagesWithoutCopies = async (
         )
       )
       .all();
+
     orphans.push(...rows);
   }
 
@@ -551,6 +568,7 @@ const messagesWithLabel = async (
     .from(mailMessageLocations)
     .where(locationsWithLabel(accountId, match))
     .all();
+
   return rows.map((row) => row.messageId);
 };
 
@@ -649,13 +667,16 @@ const applyBatch = async (
         )
       )
       .all();
+
     previousThreads.push(...rows.map((row) => row.threadId));
+
     for (const row of rows) {
       known.add(row.messageId);
     }
   }
 
   const batchLabels = new Map<string, LabelId[]>();
+
   for (const location of batch.locations) {
     batchLabels.set(location.messageId, [
       ...(batchLabels.get(location.messageId) ?? []),
@@ -671,6 +692,7 @@ const applyBatch = async (
       now
     )
   );
+
   if (messageRows.length > 0) {
     await transaction.run(
       insertRows(mailMessages, messageRows, {
@@ -683,6 +705,7 @@ const applyBatch = async (
   const locationRows = batch.locations.map((location) =>
     toLocationRow(accountId, batch.path, batch.uidValidity, location, now)
   );
+
   if (locationRows.length > 0) {
     await transaction.run(
       insertRows(mailMessageLocations, locationRows, {
@@ -710,6 +733,7 @@ const applyBatch = async (
     previousThreads,
     now
   );
+
   await saveProgress(
     transaction,
     accountId,
@@ -718,6 +742,7 @@ const applyBatch = async (
     now
   );
   const arrived = unique(messageIds).filter((id) => !known.has(id));
+
   return arrived.length === 0
     ? changes
     : { ...changes, arrived: arrived.map((id) => MessageId.make(id)) };
@@ -728,6 +753,7 @@ const sameSet = (
   right: readonly string[]
 ): boolean => {
   const set = new Set(left);
+
   return (
     set.size === new Set(right).size && right.every((item) => set.has(item))
   );
@@ -777,12 +803,14 @@ const applyChanges = async (
 
     for (const current of known) {
       const change = byUid.get(current.uid);
+
       if (change === undefined) {
         continue;
       }
 
       const labelIds = sortLabels(change.labelIds);
       const modseq = toBigIntText(change.modseq) ?? null;
+
       if (
         !sameSet(current.flags, change.flags) ||
         !sameLabels(current.labelIds, labelIds)
@@ -799,6 +827,7 @@ const applyChanges = async (
     eq(mailMessageLocations.accountId, accountId),
     eq(mailMessageLocations.mailboxPath, path)
   );
+
   if (reflagged.length > 0) {
     await transaction.run(
       updateEach(mailMessageLocations, reflagged, {
@@ -813,6 +842,7 @@ const applyChanges = async (
       })
     );
   }
+
   if (resequenced.length > 0) {
     await transaction.run(
       updateEach(mailMessageLocations, resequenced, {
@@ -897,6 +927,7 @@ const toBodyCandidates = (row: {
   readonly uidValidity: string;
 }): readonly BodyCandidate[] => {
   const uidValidity = fromBigIntText(row.uidValidity);
+
   return uidValidity === undefined
     ? []
     : [
@@ -950,6 +981,7 @@ const withCopies = (
       )
     )
     .orderBy(desc(mailMessages.receivedAt));
+
   const messages = (
     options.limit === undefined ? queued : queued.limit(options.limit)
   ).as("queued");
@@ -1004,6 +1036,7 @@ const saveBodyRows = async (
   const threadIds: string[] = [];
   // A message named twice keeps the last body, as if written in turn.
   const latest = new Map(prepared.map((body) => [body.messageId, body]));
+
   const rows = [...latest.values()].map((body) => [
     body.messageId,
     body.attachments,
@@ -1043,6 +1076,7 @@ const saveBodyRows = async (
       )
       .returning({ threadId: mailMessages.threadId })
       .all();
+
     threadIds.push(...saved.map((row) => row.threadId));
   }
 
@@ -1059,6 +1093,7 @@ const toCorrespondentMessages = (
       .filter((location) => location.labelIds.includes(SystemLabel.spam))
       .map((location) => location.messageId)
   );
+
   return batch.messages
     .filter((message) => !spam.has(message.messageId))
     .map((message) => ({
@@ -1102,16 +1137,19 @@ const rememberOrigins = (
   for (const messageId of moved) {
     remembered.delete(messageId);
   }
+
   for (const { mailboxPath, messageId } of origins) {
     remembered.set(messageId, {
       heldIn,
       origins: [...(remembered.get(messageId)?.origins ?? []), mailboxPath],
     });
   }
+
   for (const messageId of remembered.keys()) {
     if (remembered.size <= MAX_REMEMBERED_MESSAGES) {
       break;
     }
+
     remembered.delete(messageId);
   }
 
@@ -1153,6 +1191,7 @@ export const MailEngineStoreLive = Layer.effect(
               changes,
               now
             );
+
             const result =
               touched.length === 0
                 ? NO_CHANGES
@@ -1163,7 +1202,9 @@ export const MailEngineStoreLive = Layer.effect(
                     [],
                     now
                   );
+
             await saveProgress(transaction, accountId, path, progress, now);
+
             return result;
           }
         ),
@@ -1198,6 +1239,7 @@ export const MailEngineStoreLive = Layer.effect(
             ),
             { limit: options.limit }
           );
+
           return rows.flatMap(toBodyCandidates);
         }),
 
@@ -1207,6 +1249,7 @@ export const MailEngineStoreLive = Layer.effect(
           async (transaction) => {
             forgetCachedCorrespondents(accountId);
             copyOriginsByAccount.delete(accountId);
+
             // Deleting message rows also clears their FTS entries (triggers).
             for (const table of [
               mailMessageLocations,
@@ -1268,6 +1311,7 @@ export const MailEngineStoreLive = Layer.effect(
             WHERE ${mailMessageLocations.accountId} = ${accountId}
               AND ${mailMessageLocations.mailboxPath} = ${path}
           `);
+
           return { copies: counts?.[0] ?? 0, unread: counts?.[1] ?? 0 };
         }),
 
@@ -1293,6 +1337,7 @@ export const MailEngineStoreLive = Layer.effect(
                   AND ${mailMessages.threadId} = ${mailThreads.threadId}
                   AND ${listedElsewhere}
               `);
+
             // A message once carried the labels of every copy, so one with
             // a copy in Trash or Spam and another elsewhere may still be
             // filed with the discarded one. No row under Trash leads to it
@@ -1314,6 +1359,7 @@ export const MailEngineStoreLive = Layer.effect(
                     AND other.mailbox_path <> ${mailMessageLocations.mailboxPath}
                 )
             `);
+
             const relabelled = await recomputeMessages(
               transaction,
               accountId,
@@ -1323,6 +1369,7 @@ export const MailEngineStoreLive = Layer.effect(
             );
 
             const outsideTrash = sql`NOT ${messageHasLabel(SystemLabel.trash)}`;
+
             const hidden = [
               ...relabelled.map((threadId) => [threadId] as const),
               ...(await hiddenUnder(
@@ -1352,10 +1399,12 @@ export const MailEngineStoreLive = Layer.effect(
 
           for (const messageId of messageIds) {
             const copies = remembered?.get(messageId);
+
             if (copies !== undefined) {
               taken.set(messageId, copies);
             }
           }
+
           return taken;
         }),
 
@@ -1377,9 +1426,11 @@ export const MailEngineStoreLive = Layer.effect(
             )
             .limit(1)
             .all();
+
           const attachment = message?.attachments?.find(
             (candidate) => candidate.section === section
           );
+
           const [location] = await client
             .select({
               mailboxPath: mailMessageLocations.mailboxPath,
@@ -1397,6 +1448,7 @@ export const MailEngineStoreLive = Layer.effect(
             .all();
 
           const uidValidity = fromBigIntText(location?.uidValidity);
+
           return attachment === undefined ||
             location === undefined ||
             uidValidity === undefined
@@ -1421,6 +1473,7 @@ export const MailEngineStoreLive = Layer.effect(
             .where(eq(mailAccounts.accountId, accountId))
             .limit(1)
             .all();
+
           return row === undefined
             ? Option.none()
             : Option.some(toMailAccount(row));
@@ -1433,6 +1486,7 @@ export const MailEngineStoreLive = Layer.effect(
             .from(mailMailboxes)
             .where(eq(mailMailboxes.accountId, accountId))
             .all();
+
           return rows.map(toMailboxRecord);
         }),
 
@@ -1451,12 +1505,14 @@ export const MailEngineStoreLive = Layer.effect(
               )
             )
             .all();
+
           return rows.map((row) => row.uid);
         }),
 
       removeLabel: (accountId, labelId) =>
         inTransaction("Could not remove a label", async (transaction, now) => {
           const match = sql`value = ${labelId}`;
+
           const messageIds = await messagesWithLabel(
             transaction,
             accountId,
@@ -1502,12 +1558,14 @@ export const MailEngineStoreLive = Layer.effect(
                   eq(mailMessageLocations.mailboxPath, path),
                   inJson(mailMessageLocations.uid, uidChunk)
                 );
+
                 // oxlint-disable-next-line eslint/no-await-in-loop
                 const rows = await transaction
                   .select({ messageId: mailMessageLocations.messageId })
                   .from(mailMessageLocations)
                   .where(where)
                   .all();
+
                 messageIds.push(...rows.map((row) => row.messageId));
                 // oxlint-disable-next-line eslint/no-await-in-loop
                 await transaction
@@ -1546,6 +1604,7 @@ export const MailEngineStoreLive = Layer.effect(
         inTransaction("Could not rename a label", async (transaction, now) => {
           const separator = delimiter.length === 0 ? "/" : delimiter;
           const idMatch = isAtOrUnder(sql`value`, from.id, "/");
+
           const messageIds = await messagesWithLabel(
             transaction,
             accountId,
@@ -1633,10 +1692,13 @@ export const MailEngineStoreLive = Layer.effect(
             .from(mailMailboxes)
             .where(eq(mailMailboxes.accountId, accountId))
             .all();
+
           const listed = new Set(mailboxes.map((mailbox) => mailbox.path));
+
           const gone = existing
             .map((row) => row.path)
             .filter((path) => !listed.has(path));
+
           const unsynced = mailboxes
             .filter((mailbox) => !mailbox.synced)
             .map((mailbox) => mailbox.path);
@@ -1669,6 +1731,7 @@ export const MailEngineStoreLive = Layer.effect(
           }
 
           const affected: string[] = [];
+
           for (const path of [...gone, ...unsynced]) {
             // oxlint-disable-next-line eslint/no-await-in-loop
             const removedFrom = await deleteMailboxLocations(
@@ -1676,8 +1739,10 @@ export const MailEngineStoreLive = Layer.effect(
               accountId,
               path
             );
+
             affected.push(...removedFrom);
           }
+
           if (gone.length > 0) {
             await transaction
               .delete(mailMailboxes)
@@ -1689,6 +1754,7 @@ export const MailEngineStoreLive = Layer.effect(
               )
               .run();
           }
+
           if (unsynced.length > 0) {
             // A mailbox the dialect stops reading starts over if it returns.
             await transaction
@@ -1711,7 +1777,7 @@ export const MailEngineStoreLive = Layer.effect(
               .run();
           }
 
-          const labelIds = labels.map((label) => label.id as string);
+          const labelIds = labels.map((label): string => label.id);
           await transaction
             .delete(mailLabels)
             .where(
@@ -1724,6 +1790,7 @@ export const MailEngineStoreLive = Layer.effect(
               )
             )
             .run();
+
           for (const rows of chunkRows(
             labels.map((label) => ({
               accountId,
@@ -1772,6 +1839,7 @@ export const MailEngineStoreLive = Layer.effect(
             accountId,
             path
           );
+
           const changes = await recomputeFromMessages(
             transaction,
             accountId,
@@ -1779,6 +1847,7 @@ export const MailEngineStoreLive = Layer.effect(
             [],
             now
           );
+
           // The old UIDs mean nothing now: the flag slices start over, and
           // the walk reads every label again anyway.
           await transaction
@@ -1792,6 +1861,7 @@ export const MailEngineStoreLive = Layer.effect(
             )
             .run();
           await saveProgress(transaction, accountId, path, progress, now);
+
           return changes;
         }),
 
@@ -1810,9 +1880,11 @@ export const MailEngineStoreLive = Layer.effect(
                 .where(eq(mailAccounts.accountId, accountId))
                 .limit(1)
                 .all();
+
               const senders = new Map<string, string>();
+
               for (const ids of chunk(
-                bodies.map((body) => body.messageId as string),
+                bodies.map((body): string => body.messageId),
                 ID_CHUNK_SIZE
               )) {
                 // oxlint-disable-next-line eslint/no-await-in-loop
@@ -1829,16 +1901,19 @@ export const MailEngineStoreLive = Layer.effect(
                     )
                   )
                   .all();
+
                 for (const row of rows) {
                   senders.set(row.messageId, row.fromAddress);
                 }
               }
+
               return {
                 dialect: account?.dialect ?? ("generic" satisfies DialectKind),
                 senders,
               };
             }
           );
+
           // Compression and text extraction happen before the connection is
           // taken, so they never hold up foreground reads.
           const prepared = yield* Effect.tryPromise({
@@ -1851,6 +1926,7 @@ export const MailEngineStoreLive = Layer.effect(
               Promise.all(
                 bodies.flatMap((body) => {
                   const fromAddress = context.senders.get(body.messageId);
+
                   return fromAddress === undefined
                     ? []
                     : [
@@ -1883,6 +1959,7 @@ export const MailEngineStoreLive = Layer.effect(
               inArray(sql`+${mailMessages.bodyState}`, ["none", "failed"])
             )
           );
+
           return rows.flatMap(toBodyCandidates);
         }),
 
@@ -1914,8 +1991,10 @@ export const MailEngineStoreLive = Layer.effect(
                 .all()
             )
           );
+
           return chunks.flat().flatMap((row) => {
             const uidValidity = fromBigIntText(row.uidValidity);
+
             // Without it nothing may be asked of the server by this UID.
             return uidValidity === undefined
               ? []
@@ -1950,10 +2029,12 @@ export const MailEngineStoreLive = Layer.effect(
             .orderBy(desc(mailMessageLocations.uid))
             .limit(count)
             .as("window");
+
           const [row] = await client
             .select({ start: sql<number | null>`min(${window.uid})` })
             .from(window)
             .all();
+
           return row?.start ?? undefined;
         }),
     });

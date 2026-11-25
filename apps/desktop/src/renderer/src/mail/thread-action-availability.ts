@@ -10,6 +10,7 @@ import {
 } from "./label";
 
 type Labels = readonly string[];
+
 /** A conversation's `places`: where main lists it. */
 type Places = readonly string[];
 

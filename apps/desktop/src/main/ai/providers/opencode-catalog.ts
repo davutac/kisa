@@ -18,6 +18,7 @@ const OpenCodeModel = Schema.Struct({
   providerID: Schema.NonEmptyString,
   variants: Schema.Array(Schema.Struct({ id: Schema.NonEmptyString })),
 });
+
 const OpenCodeInventory = Schema.Struct({
   models: Schema.Struct({ data: Schema.Array(OpenCodeModel) }),
   providers: Schema.Struct({
@@ -37,15 +38,19 @@ export const inferOpenCodeDefaultVariant = (
   if (variants.length === 1) {
     return variants[0];
   }
+
   if (providerId === "anthropic" || providerId.startsWith("google")) {
     return variants.includes("high") ? "high" : undefined;
   }
+
   if (providerId === "openai" || providerId === "opencode") {
     if (variants.includes("medium")) {
       return "medium";
     }
+
     return variants.includes("high") ? "high" : undefined;
   }
+
   return undefined;
 };
 
@@ -54,17 +59,22 @@ export const mapOpenCodeModels = (
 ): readonly AiModel[] => {
   const models: AiModel[] = [];
   const seen = new Set<string>();
+
   for (const model of inventory) {
     const id = `${model.providerID}/${model.id}`;
+
     if (!model.enabled || seen.has(id)) {
       continue;
     }
+
     seen.add(id);
     const variants = [...new Set(model.variants.map((variant) => variant.id))];
+
     const defaultVariant = inferOpenCodeDefaultVariant(
       model.providerID,
       variants
     );
+
     models.push({
       id,
       isDefault: false,
@@ -77,6 +87,7 @@ export const mapOpenCodeModels = (
       ),
     });
   }
+
   return models;
 };
 
@@ -98,9 +109,11 @@ const loadOpenCodeModels = Effect.fn("loadOpenCodeModels")(
         client.debug.location.evict({ location }, { signal })
       ).pipe(Effect.timeoutOption(5000), Effect.ignore)
     );
+
     const inventory = yield* Effect.gen(function* readInventory() {
       yield* catalogRequest(async (signal) => {
         let locationDirectory: string | undefined;
+
         // Subscribe before creating the location so cold-start plugin updates cannot be missed.
         for await (const event of client.event.subscribe({ signal })) {
           if (
@@ -110,6 +123,7 @@ const loadOpenCodeModels = Effect.fn("loadOpenCodeModels")(
             const info = await client.location.get({ location }, { signal });
             locationDirectory = info.directory;
           }
+
           if (
             event.type === "plugin.updated" &&
             locationDirectory !== undefined &&
@@ -118,8 +132,10 @@ const loadOpenCodeModels = Effect.fn("loadOpenCodeModels")(
             return;
           }
         }
+
         throw new Error("OpenCode plugin event stream ended before activation");
       });
+
       return yield* Effect.all(
         {
           models: catalogRequest((signal) =>
@@ -140,6 +156,7 @@ const loadOpenCodeModels = Effect.fn("loadOpenCodeModels")(
           ),
       })
     );
+
     const decoded = yield* Schema.decodeEffect(OpenCodeInventory)(
       inventory
     ).pipe(
@@ -150,11 +167,13 @@ const loadOpenCodeModels = Effect.fn("loadOpenCodeModels")(
         )
       )
     );
+
     const providers = new Set(
       decoded.providers.data
         .filter((provider) => provider.activation !== "disabled")
         .map((provider) => provider.id)
     );
+
     return mapOpenCodeModels(
       decoded.models.data.filter((model) => providers.has(model.providerID))
     );
@@ -165,6 +184,7 @@ const loadOpenCodeModels = Effect.fn("loadOpenCodeModels")(
 export const getOpenCodeStatus = Effect.fn("getOpenCodeStatus")(
   function* getOpenCodeStatus(): Effect.fn.Return<AiProviderStatus> {
     const version = yield* runProbeCommand("opencode", ["--version"]);
+
     if (version === undefined || version.exitCode !== 0) {
       return {
         authentication: "unknown",
@@ -174,7 +194,9 @@ export const getOpenCodeStatus = Effect.fn("getOpenCodeStatus")(
         provider: "opencode",
       };
     }
+
     const cliVersion = parseCliVersion(`${version.stdout}\n${version.stderr}`);
+
     const unavailable = {
       authentication: "unknown",
       installed: true,
@@ -182,6 +204,7 @@ export const getOpenCodeStatus = Effect.fn("getOpenCodeStatus")(
       provider: "opencode",
       version: cliVersion,
     } satisfies AiProviderStatus;
+
     if (!isSupportedOpenCodeVersion(cliVersion)) {
       return {
         ...unavailable,
@@ -189,13 +212,17 @@ export const getOpenCodeStatus = Effect.fn("getOpenCodeStatus")(
           "OpenCode 2.2 or later is required. Update OpenCode, then refresh providers.",
       };
     }
+
     const models = yield* loadOpenCodeModels().pipe(Effect.result);
+
     if (models._tag === "Failure") {
       return { ...unavailable, error: models.failure.message };
     }
+
     const connectedProviderCount = new Set(
       models.success.map((model) => model.id.split("/", 1)[0])
     ).size;
+
     return {
       ...unavailable,
       authLabel: connectedProviderCount > 0 ? "opencode" : undefined,

@@ -17,6 +17,7 @@ export const AccountSettings = Schema.Struct({
   /** System labels (INBOX, UNREAD, STARRED, …) shown next to threads. */
   showSystemLabels: Schema.Boolean,
 });
+
 export type AccountSettings = typeof AccountSettings.Type;
 
 /** Accounts without a stored row behave as if they had these settings. */
@@ -45,49 +46,59 @@ export const AccountSettingsUpdateRequest = Schema.Union([
     showSystemLabels: Schema.Boolean,
   }),
 ]);
+
 export type AccountSettingsUpdateRequest =
   typeof AccountSettingsUpdateRequest.Type;
 
 export const AccountSettingsReply = IpcReply(Schema.Array(AccountSettings));
+
 export type AccountSettingsReply = typeof AccountSettingsReply.Type;
 
 export const DatabaseRecoveryKeyExportOutcome = Schema.Literals([
   "cancelled",
   "saved",
 ]);
+
 export type DatabaseRecoveryKeyExportOutcome =
   typeof DatabaseRecoveryKeyExportOutcome.Type;
 
 export const DatabaseRecoveryKeyExportReply = IpcReply(
   DatabaseRecoveryKeyExportOutcome
 );
+
 export type DatabaseRecoveryKeyExportReply =
   typeof DatabaseRecoveryKeyExportReply.Type;
 
 export const DatabaseImportOutcome = Schema.Literal("restart-pending");
+
 export type DatabaseImportOutcome = typeof DatabaseImportOutcome.Type;
 
 export const DatabaseImportReply = IpcReply(DatabaseImportOutcome);
+
 export type DatabaseImportReply = typeof DatabaseImportReply.Type;
 
 export const DatabaseImportSession = Schema.Struct({
   sessionId: Schema.NonEmptyString,
 });
+
 export type DatabaseImportSession = typeof DatabaseImportSession.Type;
 
 export const DatabaseImportSessionReply = IpcReply(DatabaseImportSession);
+
 export type DatabaseImportSessionReply = typeof DatabaseImportSessionReply.Type;
 
 export const DatabaseImportFileKind = Schema.Literals([
   "database",
   "recovery-key",
 ]);
+
 export type DatabaseImportFileKind = typeof DatabaseImportFileKind.Type;
 
 export const DatabaseImportFileSelectionRequest = Schema.Struct({
   kind: DatabaseImportFileKind,
   sessionId: Schema.NonEmptyString,
 });
+
 export type DatabaseImportFileSelectionRequest =
   typeof DatabaseImportFileSelectionRequest.Type;
 
@@ -96,22 +107,26 @@ export const DatabaseImportDroppedFileRequest = Schema.Struct({
   kind: DatabaseImportFileKind,
   sessionId: Schema.NonEmptyString,
 });
+
 export type DatabaseImportDroppedFileRequest =
   typeof DatabaseImportDroppedFileRequest.Type;
 
 export const DatabaseImportFileSelection = Schema.Struct({
   fileName: Schema.NonEmptyString,
 });
+
 export type DatabaseImportFileSelection =
   typeof DatabaseImportFileSelection.Type;
 
 export const DatabaseImportFileSelectionReply = IpcReply(
   Schema.NullOr(DatabaseImportFileSelection)
 );
+
 export type DatabaseImportFileSelectionReply =
   typeof DatabaseImportFileSelectionReply.Type;
 
 export const DatabaseImportCancelReply = IpcReply(Schema.Void);
+
 export type DatabaseImportCancelReply = typeof DatabaseImportCancelReply.Type;
 
 /**
@@ -122,15 +137,19 @@ export const DatabaseImportStatus = Schema.Struct({
   restart: Schema.Literals(["quit", "relaunch"]),
   state: Schema.Literals(["importing", "none", "restart-pending"]),
 });
+
 export type DatabaseImportStatus = typeof DatabaseImportStatus.Type;
 
 export const DatabaseImportStatusReply = IpcReply(DatabaseImportStatus);
+
 export type DatabaseImportStatusReply = typeof DatabaseImportStatusReply.Type;
 
 export const DatabaseImportDiscardReply = IpcReply(Schema.Void);
+
 export type DatabaseImportDiscardReply = typeof DatabaseImportDiscardReply.Type;
 
 export const DatabaseImportRestartReply = IpcReply(Schema.Void);
+
 export type DatabaseImportRestartReply = typeof DatabaseImportRestartReply.Type;
 
 export const DatabaseImportProgress = Schema.Literals([
@@ -139,4 +158,5 @@ export const DatabaseImportProgress = Schema.Literals([
   "preparing",
   "ready",
 ]);
+
 export type DatabaseImportProgress = typeof DatabaseImportProgress.Type;

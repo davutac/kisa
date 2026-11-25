@@ -53,6 +53,7 @@ export const resolveMessageBodyCopyText = (
   // `innerText` matches what the user sees; `textContent` includes hidden markup.
   // oxlint-disable-next-line unicorn/prefer-dom-node-text-content
   const renderedText = frame?.contentDocument?.body.innerText;
+
   return bodyText ?? renderedText ?? fallbackText;
 };
 
@@ -65,6 +66,7 @@ export const resizeEmailFrame = (frame: EmailFrameLayout): void => {
     // iframe viewport. Collapse that viewport before measuring so a reflowed
     // message can shrink instead of feeding the previous height back in.
     frame.style.height = "0px";
+
     const contentHeight = Math.max(
       documentElement.scrollHeight,
       documentElement.offsetHeight,
@@ -85,6 +87,7 @@ const MailMessageBody = ({
   const resizeObserver = useRef<ResizeObserver | null>(null);
   const { resolvedTheme } = useTheme();
   const lightSurface = body.html !== undefined && needsLightSurface(body.html);
+
   const emailDocument = useMemo(
     () =>
       body.html === undefined
@@ -99,6 +102,7 @@ const MailMessageBody = ({
           ),
     [allowRemoteImages, body.html, lightSurface, resolvedTheme]
   );
+
   const copyMessageBody = useCallback(async (): Promise<void> => {
     const text = resolveMessageBodyCopyText(
       body.text,
@@ -113,6 +117,7 @@ const MailMessageBody = ({
       toast.error("Could not copy message");
     }
   }, [body.text, fallbackText]);
+
   const prepareEmailFrame = useCallback((frame: HTMLIFrameElement): void => {
     resizeObserver.current?.disconnect();
 
@@ -154,9 +159,11 @@ const MailMessageBody = ({
     }
 
     const previous = frame.contentDocument;
+
     let request = requestAnimationFrame(function prepareWhenParsed() {
       if (isParsedMessageDocument(frame.contentDocument, previous)) {
         prepareEmailFrame(frame);
+
         return;
       }
 

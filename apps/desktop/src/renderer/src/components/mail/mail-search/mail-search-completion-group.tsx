@@ -28,8 +28,10 @@ const FIELD_ICONS = {
 } satisfies Record<SearchFilterField, LucideIcon>;
 
 export const MAIL_SEARCH_GROUP_CLASS_NAME = "p-0";
+
 export const MAIL_SEARCH_GROUP_LABEL_CLASS_NAME =
   "px-3 pt-3 pb-1.5 text-xs font-normal";
+
 export const MAIL_SEARCH_ITEM_CLASS_NAME = "min-h-9 gap-3 rounded-lg px-3 py-2";
 
 export const MailSearchItemIcon = ({
@@ -56,6 +58,7 @@ const MailSearchCompletionGroup = ({ heading, items }: MailSearchCompletions) =>
       </CommandGroupLabel>
       {items.map((item) => {
         const handleSelect = (): void => item.onSelect();
+
         return (
           <CommandItem
             className={MAIL_SEARCH_ITEM_CLASS_NAME}

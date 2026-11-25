@@ -10,6 +10,7 @@ export const getAdjacentMessageId = (
   }
 
   const selectedIndex = messageIds.indexOf(selectedMessageId);
+
   if (selectedIndex === -1) {
     return direction === 1
       ? (messageIds[0] ?? null)

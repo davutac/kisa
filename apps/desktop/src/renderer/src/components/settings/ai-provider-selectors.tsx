@@ -93,6 +93,7 @@ export const AiModelSelect = ({
   const selectedModel = modelOptions.find(
     (option) => option.model === currentModel
   );
+
   const modelGroups =
     provider === "opencode" ? groupOpenCodeModelOptions(modelOptions) : null;
 
@@ -145,6 +146,7 @@ export const AiReasoningSelect = ({
 }) => {
   const selectedId = resolveAiReasoning(currentReasoning, reasoningOptions);
   const selectedOption = reasoningOptions.find(({ id }) => id === selectedId);
+
   const selectedLabel = selectedOption
     ? getAiReasoningOptionName(selectedOption)
     : `Choose ${optionLabel.toLowerCase()}`;

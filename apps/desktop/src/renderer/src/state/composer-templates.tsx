@@ -44,9 +44,11 @@ const applyChanges = (
   changes: readonly ComposerTemplateChanged[]
 ): readonly ComposerTemplate[] => {
   let current = templates;
+
   for (const change of changes) {
     current = applyChange(current, change);
   }
+
   return current;
 };
 
@@ -58,6 +60,7 @@ export const ComposerTemplatesProvider = ({
   const templateApi = useMemo(() => getTemplateApi(), []);
   const [templates, setTemplates] = useState<readonly ComposerTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(templateApi !== undefined);
+
   const value = useMemo(
     () => ({ isLoading, templates }),
     [isLoading, templates]
@@ -71,14 +74,18 @@ export const ComposerTemplatesProvider = ({
     let active = true;
     let isLoaded = false;
     const pendingChanges: ComposerTemplateChanged[] = [];
+
     const unsubscribe = templateApi.onChanged((change) => {
       if (!active) {
         return;
       }
+
       if (!isLoaded) {
         pendingChanges.push(change);
+
         return;
       }
+
       setTemplates((current) => applyChange(current, change));
     });
 
@@ -87,17 +94,22 @@ export const ComposerTemplatesProvider = ({
         async () => {
           try {
             const reply = await templateApi.list();
+
             if (!active) {
               return;
             }
+
             if (!reply.ok) {
               toast.error(reply.error);
+
               return;
             }
+
             const loadedTemplates = applyChanges(
               sortTemplates(reply.data),
               pendingChanges
             );
+
             pendingChanges.length = 0;
             setTemplates(loadedTemplates);
           } catch {
@@ -109,16 +121,19 @@ export const ComposerTemplatesProvider = ({
         () => {
           if (active) {
             isLoaded = true;
+
             if (pendingChanges.length > 0) {
               const changes = [...pendingChanges];
               pendingChanges.length = 0;
               setTemplates((current) => applyChanges(current, changes));
             }
+
             setIsLoading(false);
           }
         }
       );
     };
+
     void load();
 
     return () => {

@@ -24,6 +24,7 @@ export const decodeScheduledAttachments = Effect.fn(
   "ScheduledMailAttachments.decode"
 )(function* decodeScheduledAttachments<Input>(input: Input) {
   const decoded = decodeStoredOutgoingAttachmentsStrict(input);
+
   if (
     decoded === undefined ||
     decoded.length > MAX_OUTGOING_ATTACHMENT_COUNT ||
@@ -32,12 +33,14 @@ export const decodeScheduledAttachments = Effect.fn(
   ) {
     return yield* scheduledMailAttachmentError("attachment-invalid");
   }
+
   if (
     decoded.reduce((total, attachment) => total + attachment.size, 0) >
     MAX_OUTGOING_ATTACHMENT_BYTES
   ) {
     return yield* scheduledMailAttachmentError("attachment-too-large");
   }
+
   return decoded;
 });
 
@@ -46,12 +49,14 @@ const mapOpenError = (
   error: unknown
 ): ScheduledMailAttachmentError => {
   const fileSystemError = decodeFileSystemError(error);
+
   if (
     Option.isSome(fileSystemError) &&
     fileSystemError.value.code === "ENOENT"
   ) {
     return scheduledMailAttachmentError("attachment-missing");
   }
+
   return scheduledMailAttachmentError(
     error instanceof OutgoingAttachmentAuthorizationError
       ? "attachment-changed"
@@ -95,13 +100,17 @@ export const loadScheduledAttachmentsEffect = Effect.fn(
   return yield* Effect.scoped(
     Effect.gen(function* loadScheduledAttachmentsScoped() {
       const decoded = yield* decodeScheduledAttachments(input);
+
       const opened = yield* Effect.forEach(decoded, openScheduledAttachment, {
         concurrency: "unbounded",
       });
+
       const totalBytes = opened.reduce((total, entry) => total + entry.size, 0);
+
       if (totalBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
         return yield* scheduledMailAttachmentError("attachment-too-large");
       }
+
       return yield* Effect.forEach(opened, readScheduledAttachment, {
         concurrency: "unbounded",
       });

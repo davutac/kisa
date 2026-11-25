@@ -49,7 +49,9 @@ const escapeWindowsShellArg = (argument: string): string => {
     /(?<slashes>\\*)"/gu,
     '$<slashes>$<slashes>\\"'
   );
+
   escaped = escaped.replace(/(?<slashes>\\*)$/u, "$<slashes>$<slashes>");
+
   return `"${escaped}"`.replaceAll(WINDOWS_SHELL_META_CHARS, "^$<character>");
 };
 
@@ -60,19 +62,23 @@ const resolveWindowsCommand = (
   const extensions = (environment["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD")
     .split(";")
     .map((extension) => extension.toLowerCase());
+
   const candidates = path.win32.extname(command)
     ? [command]
     : [command, ...extensions.map((extension) => `${command}${extension}`)];
+
   const pathEntries = (environment["Path"] ?? environment["PATH"] ?? "").split(
     ";"
   );
 
   for (const directory of pathEntries) {
     const normalized = directory.trim().replaceAll(/^"|"$/gu, "");
+
     for (const candidate of candidates) {
       const candidatePath = path.win32.isAbsolute(candidate)
         ? candidate
         : path.win32.join(normalized, candidate);
+
       try {
         if (existsSync(candidatePath) && statSync(candidatePath).isFile()) {
           return candidatePath;
@@ -97,6 +103,7 @@ export const resolveAiSpawnCommand = (
 
   const resolvedCommand = resolveWindowsCommand(command, environment);
   const extension = path.win32.extname(resolvedCommand).toLowerCase();
+
   if (extension !== ".cmd" && extension !== ".bat") {
     return { args: [...args], command: resolvedCommand, shell: false };
   }
@@ -117,12 +124,16 @@ export const resolveAiExecutablePath = (
       ? command
       : undefined;
   }
+
   if (process.platform === "win32") {
     const resolved = resolveWindowsCommand(command, environment);
+
     return resolved === command ? undefined : resolved;
   }
+
   for (const directory of (environment["PATH"] ?? "").split(":")) {
     const candidate = path.join(directory, command);
+
     try {
       if (existsSync(candidate) && statSync(candidate).isFile()) {
         return candidate;
@@ -131,6 +142,7 @@ export const resolveAiExecutablePath = (
       // Continue through PATH candidates.
     }
   }
+
   return undefined;
 };
 
@@ -141,15 +153,18 @@ const mergePath = (
 ): string | undefined => {
   const seen = new Set<string>();
   const entries: string[] = [];
+
   for (const value of [preferred, inherited]) {
     for (const entry of value?.split(delimiter) ?? []) {
       const normalized = entry.trim();
+
       if (normalized.length > 0 && !seen.has(normalized)) {
         seen.add(normalized);
         entries.push(normalized);
       }
     }
   }
+
   return entries.length > 0 ? entries.join(delimiter) : undefined;
 };
 
@@ -159,11 +174,13 @@ const readLoginShellPath = async (): Promise<string | undefined> => {
   }
 
   let userShell: string | undefined;
+
   try {
     userShell = os.userInfo().shell ?? undefined;
   } catch {
     userShell = undefined;
   }
+
   const shell =
     process.env["SHELL"] ??
     userShell ??
@@ -178,16 +195,21 @@ const readLoginShellPath = async (): Promise<string | undefined> => {
       ],
       { encoding: "utf-8", timeout: 5000 }
     );
+
     const output = stdout.toString();
     const start = output.indexOf(PATH_CAPTURE_START);
+
     const end = output.indexOf(
       PATH_CAPTURE_END,
       start + PATH_CAPTURE_START.length
     );
+
     if (start === -1 || end === -1) {
       return undefined;
     }
+
     const value = output.slice(start + PATH_CAPTURE_START.length, end).trim();
+
     return value.length > 0 ? value : undefined;
   } catch {
     return undefined;
@@ -198,6 +220,7 @@ let cachedEnvironment: Promise<NodeJS.ProcessEnv> | undefined;
 
 const loadAiProcessEnvironment = async (): Promise<NodeJS.ProcessEnv> => {
   const environment = { ...process.env };
+
   if (process.platform === "win32") {
     const knownDirectories = [
       environment["APPDATA"] ? `${environment["APPDATA"]}\\npm` : undefined,
@@ -214,6 +237,7 @@ const loadAiProcessEnvironment = async (): Promise<NodeJS.ProcessEnv> => {
         ? `${environment["USERPROFILE"]}\\.bun\\bin`
         : undefined,
     ].filter((entry): entry is string => entry !== undefined);
+
     environment["Path"] = mergePath(
       knownDirectories.join(";"),
       environment["Path"] ?? environment["PATH"],
@@ -233,6 +257,7 @@ const loadAiProcessEnvironment = async (): Promise<NodeJS.ProcessEnv> => {
 export const aiProcessEnvironment: Effect.Effect<NodeJS.ProcessEnv> =
   Effect.promise(() => {
     cachedEnvironment ??= loadAiProcessEnvironment();
+
     return cachedEnvironment;
   });
 
@@ -242,12 +267,15 @@ export const terminateAiProcess = (
   if (child.exitCode !== null || child.killed) {
     return;
   }
+
   child.kill("SIGTERM");
+
   const forceKillTimer = setTimeout(() => {
     if (child.exitCode === null) {
       child.kill("SIGKILL");
     }
   }, 2000);
+
   forceKillTimer.unref();
 };
 
@@ -255,12 +283,14 @@ export const runAiCommand = Effect.fn("runAiCommand")(function* runAiCommand(
   input: AiCommandInput
 ) {
   const environment = input.env ?? (yield* aiProcessEnvironment);
+
   return yield* Effect.callback<AiCommandResult, AiCommandError>((resume) => {
     const resolved = resolveAiSpawnCommand(
       input.command,
       input.args,
       environment
     );
+
     const child = spawn(resolved.command, resolved.args, {
       cwd: input.cwd,
       env: environment,
@@ -268,6 +298,7 @@ export const runAiCommand = Effect.fn("runAiCommand")(function* runAiCommand(
       stdio: "pipe",
       windowsHide: true,
     });
+
     const maxOutputBytes = input.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
     let outputBytes = 0;
     let settled = false;
@@ -278,22 +309,28 @@ export const runAiCommand = Effect.fn("runAiCommand")(function* runAiCommand(
       if (settled) {
         return;
       }
+
       settled = true;
       resume(effect);
     };
+
     const append = (target: "stderr" | "stdout", chunk: Buffer) => {
       outputBytes += chunk.byteLength;
+
       if (outputBytes > maxOutputBytes) {
         terminateAiProcess(child);
         finish(Effect.fail(new AiCommandError({ kind: "output-limit" })));
+
         return;
       }
+
       if (target === "stdout") {
         stdout += chunk.toString("utf-8");
       } else {
         stderr += chunk.toString("utf-8");
       }
     };
+
     child.stdout.on("data", (chunk: Buffer) => append("stdout", chunk));
     child.stderr.on("data", (chunk: Buffer) => append("stderr", chunk));
     child.once("error", (error: NodeJS.ErrnoException) => {

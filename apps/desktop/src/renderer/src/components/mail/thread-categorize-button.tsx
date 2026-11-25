@@ -32,6 +32,7 @@ const ThreadCategorizeButton = ({
 
   const isDisabled = isLoading || selection === null || isCategorizing;
   let tooltip = modelLabel;
+
   if (selection !== null) {
     tooltip = isCategorizing
       ? "Categorizing…"
@@ -44,12 +45,15 @@ const ThreadCategorizeButton = ({
       async () => {
         try {
           const reply = await aiApi.categorizeThread({ accountId, threadId });
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
 
           const count = reply.data.labelIds.length;
+
           if (count === 0) {
             toast.info("No new labels added");
           } else {

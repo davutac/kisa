@@ -31,6 +31,7 @@ let startupPromise: Promise<AppStartupExit> | null = null;
 const CORRESPONDENT_WARM_DELAY_MS = 1000;
 
 type AppStartupError = DatabaseError;
+
 type AppStartupExit = Exit.Exit<void, AppStartupError>;
 
 const runStartupOnce = async (): Promise<AppStartupExit> => {
@@ -70,10 +71,12 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
       requestMailSync();
     });
     void startScheduledMail();
+
     // Give the first mailbox page priority over this one-time full-index scan.
     const warmTimer = setTimeout(() => {
       void Effect.runPromise(warmCorrespondentCache().pipe(Effect.ignore));
     }, CORRESPONDENT_WARM_DELAY_MS);
+
     warmTimer.unref();
   }
 

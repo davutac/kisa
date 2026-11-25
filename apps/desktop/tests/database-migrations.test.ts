@@ -14,6 +14,7 @@ import {
 const migrationsFolder = fileURLToPath(
   new URL("../../../packages/database/drizzle", import.meta.url)
 );
+
 const temporaryDirectories: string[] = [];
 const openConnections: ReturnType<typeof openDatabaseConnection>[] = [];
 
@@ -26,6 +27,7 @@ const LABEL_CURSOR = "20261124083947_mail_mailboxes_label_cursor";
 const makeTemporaryDirectory = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
   temporaryDirectories.push(directory);
+
   return directory;
 };
 
@@ -34,19 +36,23 @@ const openTemporaryConnection = () => {
   const connection = openDatabaseConnection(
     path.join(makeTemporaryDirectory(), "mail.sqlite")
   );
+
   openConnections.push(connection);
+
   return connection;
 };
 
 const openMigratedDatabase = () => {
   const connection = openTemporaryConnection();
   applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+
   return connection;
 };
 
 /** A database an earlier build left, migrated only as far as `migrations`. */
 const openDatabaseWith = (...migrations: readonly string[]) => {
   const earlierFolder = makeTemporaryDirectory();
+
   for (const migration of migrations) {
     cpSync(
       path.join(migrationsFolder, migration),
@@ -54,8 +60,10 @@ const openDatabaseWith = (...migrations: readonly string[]) => {
       { recursive: true }
     );
   }
+
   const connection = openTemporaryConnection();
   applyDatabaseMigrations(createDatabaseClient(connection), earlierFolder);
+
   return connection;
 };
 
@@ -102,6 +110,7 @@ const openDatabaseWithBodies = () => {
     DROP_OAUTH_COLUMNS,
     FLAG_CURSOR
   );
+
   const insertAccount = connection.prepare(
     `INSERT INTO mail_accounts (account_id, created_at, credentials,
       dialect, email, imap_host, imap_port, imap_security, provider,
@@ -110,6 +119,7 @@ const openDatabaseWithBodies = () => {
      VALUES (?, 0, X'00', ?, ?, 'imap.example.com', 993, 'tls', ?,
       'smtp.example.com', 465, 'tls', 0, 0, ?)`
   );
+
   insertAccount.run(
     "g@example.com",
     "generic",
@@ -124,6 +134,7 @@ const openDatabaseWithBodies = () => {
     "gmail",
     "m@gmail.com"
   );
+
   const insertBody = connection.prepare(
     `INSERT INTO mail_messages (account_id, attachments, bcc_addresses,
       body_html, body_state, body_text, cc_addresses, from_address,
@@ -136,6 +147,7 @@ const openDatabaseWithBodies = () => {
       '[{"name":"List-Unsubscribe","value":"<x>"}]', 0, 0, 1,
       '["INBOX"]', ?, 1, 3, 1, 1, ?, ?, 't', '[]', 1)`
   );
+
   insertBody.run(
     "g@example.com",
     "ready",
@@ -170,6 +182,7 @@ const openDatabaseWithBodies = () => {
         0, 0, 1, '["INBOX"]', 'g-none', 1, 1, 'Pending', 't', '[]', 1)`
     )
     .run();
+
   const insertThread = connection.prepare(
     `INSERT INTO mail_threads (account_id, attachments, from_address,
       has_attachments, is_in_inbox, is_in_sent, is_in_spam, is_in_trash,
@@ -178,10 +191,12 @@ const openDatabaseWithBodies = () => {
      VALUES (?, '[{"filename":"a.pdf"}]', 'sender@example.com', 1, 1, 0, 0,
       0, 1, '["INBOX"]', 1, ?, 1, ?, 'Subject', 't', 1)`
   );
+
   insertThread.run("g@example.com", "g-ready", "wrongbody");
   insertThread.run("m@gmail.com", "m-ready", "gmailbody");
 
   applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+
   return connection;
 };
 
@@ -208,6 +223,7 @@ const openBeforeBodiesLast = () => {
     FLAG_CURSOR,
     RESET_GENERIC_BODIES
   );
+
   insertMessage(connection, "m1", "Quarterly report", "numbers inside");
   insertMessage(connection, "m2", "Lunch", "café on friday");
   connection
@@ -218,6 +234,7 @@ const openBeforeBodiesLast = () => {
        WHERE message_id = 'm1'`
     )
     .run();
+
   return connection;
 };
 
@@ -226,15 +243,18 @@ const rowsOf = (connection: ReturnType<typeof openDatabaseConnection>) =>
 
 const columnsOf = (connection: ReturnType<typeof openDatabaseConnection>) =>
   connection
-    .prepare("SELECT name FROM pragma_table_info('mail_messages')")
+    .prepare<unknown[], { readonly name: string }>(
+      "SELECT name FROM pragma_table_info('mail_messages')"
+    )
     .all()
-    .map((row) => (row as { readonly name: string }).name);
+    .map((row) => row.name);
 
 describe("database baseline", () => {
   afterEach(() => {
     for (const connection of openConnections.splice(0)) {
       connection.close();
     }
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { force: true, recursive: true });
     }
@@ -322,9 +342,12 @@ describe("database baseline", () => {
     applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
 
     const columns = connection
-      .prepare("SELECT name FROM pragma_table_info('mail_accounts')")
+      .prepare<unknown[], { name: string }>(
+        "SELECT name FROM pragma_table_info('mail_accounts')"
+      )
       .all()
-      .map((column) => (column as { name: string }).name);
+      .map((column) => column.name);
+
     expect(columns).not.toContain("auth_kind");
     expect(columns.filter((name) => name.startsWith("avatar_"))).toStrictEqual(
       []
@@ -367,6 +390,7 @@ describe("database baseline", () => {
     const connection = openDatabaseWith(
       ...readdirSync(migrationsFolder).filter((name) => name < LABEL_CURSOR)
     );
+
     connection
       .prepare(
         `INSERT INTO mail_mailboxes (account_id, delimiter, flag_cursor, path,

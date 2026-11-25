@@ -38,6 +38,7 @@ const withDevelopmentErrorLog = <A, E extends Error, R>(
       yield* Effect.sync(() => logDevelopmentAiError(operation, error));
     }
   );
+
   return effect.pipe(Effect.tapError(logError));
 };
 

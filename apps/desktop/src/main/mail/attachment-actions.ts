@@ -20,6 +20,7 @@ import { markAsDownloaded } from "./download-mark";
 import { inEngine, loadAttachment } from "./engine/mail-engine";
 
 const MAX_ATTACHMENT_BYTES = 50_000_000;
+
 const PREVIEW_WINDOW_SIZE = {
   height: 760,
   minHeight: 420,
@@ -69,9 +70,11 @@ const resolveAttachment = Effect.fn("resolveAttachment")(
         },
       })
     ).pipe(Effect.mapError(() => actionError("Could not find attachment")));
+
     // An attachment is addressed by its IMAP part number, which the renderer
     // receives as both its attachment id and part id.
     const section = request.partId ?? request.attachmentId;
+
     const attachment = row?.attachments?.find(
       (candidate) => candidate.section === section
     );
@@ -159,6 +162,7 @@ const saveLoadedAttachment = Effect.fn("saveLoadedAttachment")(
         Effect.logWarning("Could not mark a saved attachment as downloaded")
       )
     );
+
     return "saved" satisfies MailAttachmentSaveOutcome;
   }
 );
@@ -169,6 +173,7 @@ const getLoadedPreview = Effect.fn("getLoadedPreview")(
   function* getLoadedPreview(session: PreviewSession) {
     const loaded = yield* session.load;
     session.loaded = loaded;
+
     return loaded;
   }
 );
@@ -179,6 +184,7 @@ const loadPreviewRenderer = (window: BrowserWindow): Promise<void> => {
   if (is.dev && rendererUrl !== undefined) {
     const url = new URL(rendererUrl);
     url.pathname = `${url.pathname.replace(/\/$/u, "")}/attachment-preview.html`;
+
     return window.loadURL(url.toString());
   }
 
@@ -191,6 +197,7 @@ const createPreviewWindow = Effect.fn("createPreviewWindow")(
   function* createPreviewWindow(metadata: ResolvedAttachment) {
     const { isMaximized, ...windowBounds } =
       readWindowState("attachment-preview");
+
     const window = createBrowserWindow({
       ...PREVIEW_WINDOW_SIZE,
       ...windowBounds,
@@ -200,9 +207,11 @@ const createPreviewWindow = Effect.fn("createPreviewWindow")(
       ),
       title: metadata.filename,
     });
+
     if (isMaximized === true) {
       window.maximize();
     }
+
     const webContentsId = window.webContents.id;
     const load = yield* Effect.cached(fetchAttachment(metadata));
     const session: PreviewSession = { load, metadata, window };
@@ -267,6 +276,7 @@ const getPreviewSession = (
   webContentsId: number
 ): Effect.Effect<PreviewSession, AttachmentActionError> => {
   const session = previewSessions.get(webContentsId);
+
   return session === undefined
     ? Effect.fail(actionError("Attachment preview is no longer available"))
     : Effect.succeed(session);
@@ -276,6 +286,7 @@ export const loadAttachmentPreview = Effect.fn("loadAttachmentPreview")(
   function* loadAttachmentPreview(webContentsId: number) {
     const session = yield* getPreviewSession(webContentsId);
     const loaded = yield* getLoadedPreview(session);
+
     const kind = getAttachmentPreviewKind(
       loaded.metadata.filename,
       loaded.metadata.mediaType

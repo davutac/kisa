@@ -31,16 +31,21 @@ const useIsScheduledSendOverdue = (scheduledAt: number | undefined) => {
     if (scheduledAt === undefined) {
       return;
     }
+
     let timeout: number | undefined;
+
     const checkDueTime = (): void => {
       const delay = getScheduledDueCheckDelay(scheduledAt, Date.now());
       // A reschedule moves the time forward again, so this also clears.
       setIsOverdue(delay === 0);
+
       if (delay > 0) {
         timeout = window.setTimeout(checkDueTime, delay);
       }
     };
+
     checkDueTime();
+
     return () => {
       if (timeout !== undefined) {
         window.clearTimeout(timeout);
@@ -109,9 +114,11 @@ const NewMessageTitlebar = ({
   const { isEdit, scheduledAt } = workspace.scheduled;
   const isOverdue = useIsScheduledSendOverdue(isEdit ? scheduledAt : undefined);
   const [sendBinding] = workspace.sendDisplay.bindings;
+
   const handleDiscardStash = (draft: MailDraft): void => {
     void workspace.discardStash(draft);
   };
+
   const handleSelectDraft = workspace.switchDraft;
   const handleSend = workspace.send;
   const handleStash = workspace.stashCurrentDraft;

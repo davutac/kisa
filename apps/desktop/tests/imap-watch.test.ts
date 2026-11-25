@@ -21,6 +21,7 @@ type MailboxListener = Parameters<IdleClient["on"]>[1];
 /** Lets a test wait for the next time something happens. */
 const createCue = () => {
   const waiters: (() => void)[] = [];
+
   return {
     fire: (): void => {
       for (const waiter of waiters.splice(0)) {
@@ -30,6 +31,7 @@ const createCue = () => {
     next: (): Promise<null> => {
       const cue = Promise.withResolvers<null>();
       waiters.push(() => cue.resolve(null));
+
       return cue.promise;
     },
   };
@@ -41,16 +43,20 @@ const createCue = () => {
  */
 const createClient = (behavior: { readonly answersNoop?: boolean } = {}) => {
   const listeners = new Map<string, Set<MailboxListener>>();
+
   const listenersFor = (event: string): Set<MailboxListener> => {
     const existing = listeners.get(event) ?? new Set<MailboxListener>();
     listeners.set(event, existing);
+
     return existing;
   };
+
   const emit = (event: string, data: Parameters<MailboxListener>[0]): void => {
     for (const listener of listenersFor(event)) {
       listener(data);
     }
   };
+
   const calls: string[] = [];
   const state = { usable: true };
   const idleStarted = createCue();
@@ -60,6 +66,7 @@ const createClient = (behavior: { readonly answersNoop?: boolean } = {}) => {
   const client: IdleClient = {
     getMailboxLock: (path, options) => {
       calls.push(`lock ${path} ${options.readOnly ? "read" : "write"}`);
+
       return Promise.resolve({
         release: () => {
           calls.push("release");
@@ -70,15 +77,19 @@ const createClient = (behavior: { readonly answersNoop?: boolean } = {}) => {
       calls.push("idle");
       idle = Promise.withResolvers();
       idleStarted.fire();
+
       return idle.promise;
     },
     noop: () => {
       calls.push("noop");
       noopSent.fire();
+
       if (behavior.answersNoop === false) {
         return Promise.withResolvers<undefined>().promise;
       }
+
       idle?.resolve(undefined);
+
       return Promise.resolve();
     },
     off: (event, listener) => listenersFor(event).delete(listener),
@@ -122,6 +133,7 @@ const startWatch = Effect.fnUntraced(function* startWatch(server: Server) {
   const idling = server.nextIdle();
   const fiber = yield* Effect.forkChild(watch(server, stop));
   yield* Effect.promise(() => idling);
+
   return { fiber, stop };
 });
 
@@ -133,6 +145,7 @@ const startFailingWatch = Effect.fnUntraced(function* startFailingWatch(
   const idling = server.nextIdle();
   const fiber = yield* Effect.forkChild(Effect.flip(watch(server, stop)));
   yield* Effect.promise(() => idling);
+
   return { fiber, stop };
 });
 

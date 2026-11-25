@@ -85,6 +85,7 @@ export const getThreadControlName = (
   showAccount: boolean
 ): string => {
   const subject = thread.subject.trim() || "No subject";
+
   return showAccount ? `${subject} in ${thread.accountId}` : subject;
 };
 
@@ -177,6 +178,7 @@ const ThreadSelectionCheckbox = ({
         onCheckedChange={() => onToggle()}
         onClick={(event) => {
           event.stopPropagation();
+
           // Pressing it already painted the row for a drag; preventDefault
           // skips the checkbox's own toggle. Keyboard clicks have detail 0.
           if (event.detail > 0) {
@@ -205,6 +207,7 @@ const ThreadSenderHeader = ({
 }) => {
   const senderMailbox = parseMailboxAddress(thread.from);
   const hasSenderName = senderMailbox.name !== undefined;
+
   // Whichever part names the sender carries the unread weight; an address
   // shown beside a name stays secondary.
   const senderClassName = thread.isUnread
@@ -282,6 +285,7 @@ const ThreadAttachments = ({ thread }: { thread: MailThreadSummary }) => {
     0,
     VISIBLE_ATTACHMENT_COUNT
   );
+
   const hiddenAttachmentCount =
     thread.attachments.length - visibleAttachments.length;
 
@@ -325,13 +329,16 @@ const MailThreadItem = ({
   const shouldReduceMotion = useReducedMotionConfig();
   const calendar = useCalendar();
   const [isHovered, setIsHovered] = useState(false);
+
   const { areQuickActionsRevealed, isActive } = getThreadItemRevealState(
     hasCheckedThreads,
     isChecked,
     isSelected,
     isHovered
   );
+
   const revealTransition = shouldReduceMotion ? NO_MOTION : easeInOut(0.26);
+
   const { bound: quickActions, width: quickActionsWidth } = bindQuickActions(
     rowActions,
     thread

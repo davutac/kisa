@@ -39,6 +39,7 @@ const SettingsAccountNotificationsRow = ({
             accountId: account.email,
             notificationsEnabled: checked,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
           }

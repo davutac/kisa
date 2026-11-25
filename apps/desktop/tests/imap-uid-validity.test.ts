@@ -27,12 +27,15 @@ const noMessages = async function* noMessages() {};
  */
 const standIn = (held: bigint, selected?: bigint) => {
   const calls: string[] = [];
+
   const sent =
     (name: string) =>
     (range: string): Promise<boolean> => {
       calls.push(`${name} ${range}`);
+
       return Promise.resolve(true);
     };
+
   const client = {
     capabilities: new Map([
       ["MOVE", true],
@@ -40,16 +43,19 @@ const standIn = (held: bigint, selected?: bigint) => {
     ]),
     fetch: (range: string) => {
       calls.push(`fetch ${range}`);
+
       return noMessages();
     },
     fetchOne: (range: string) => {
       calls.push(`fetch ${range}`);
+
       return Promise.resolve(false);
     },
     getMailboxLock: () => {
       if (client.mailbox === false) {
         client.mailboxOpen();
       }
+
       return Promise.resolve({
         // oxlint-disable-next-line eslint/no-empty-function -- Nothing is held.
         release: () => {},
@@ -62,6 +68,7 @@ const standIn = (held: bigint, selected?: bigint) => {
     mailboxOpen: () => {
       calls.push("select");
       Object.assign(client, { mailbox: { path: PATH, uidValidity: held } });
+
       return Promise.resolve();
     },
     messageCopy: sent("copy"),
@@ -70,9 +77,14 @@ const standIn = (held: bigint, selected?: bigint) => {
     messageMove: sent("move"),
     search: () => {
       calls.push("search");
+
       return Promise.resolve([3, 1]);
     },
   };
+
+  // SAFETY: stands in for ImapFlow with the members the session operations
+  // under test call; one it lacked would fail the test as a call of
+  // `undefined`.
   return {
     calls,
     session: makeSession(accountId, client as unknown as ImapFlow),
@@ -131,6 +143,7 @@ describe("the IMAP session's UIDVALIDITY guard", () => {
     "sends no %s in a mailbox that has another UIDVALIDITY",
     async (name) => {
       const { calls, session } = standIn(8n, 8n);
+
       const command = uidCommands(session, 7n).find(
         ([candidate]) => candidate === name
       )?.[1];

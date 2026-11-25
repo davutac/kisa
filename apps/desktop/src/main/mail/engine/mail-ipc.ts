@@ -69,6 +69,7 @@ const readDatabase = <A>(
   inEngine(
     Effect.gen(function* readMailDatabase() {
       const database = yield* MailDatabase;
+
       return yield* database.use(message, run);
     })
   );
@@ -153,9 +154,11 @@ const toThreadAction = (
         labelId: LabelId.make(operation.labelId),
       };
     }
+
     case "setReadState": {
       return { kind: "setRead", read: !operation.isUnread };
     }
+
     default: {
       return { kind: operation.kind };
     }
@@ -175,6 +178,7 @@ const splitRound = Effect.fn("MailIpc.splitRound")(function* splitRound(
   if (operation.kind !== "moveToSpam") {
     return { refused: [], toChange: round };
   }
+
   const { ownOnly } = yield* inAccountEngine(
     accountId,
     partitionReportable(
@@ -182,7 +186,9 @@ const splitRound = Effect.fn("MailIpc.splitRound")(function* splitRound(
       round.map((thread) => thread.threadId)
     )
   );
+
   const refused = new Set<string>(ownOnly);
+
   return {
     refused: round.filter((thread) => refused.has(thread.threadId)),
     toChange: round.filter((thread) => !refused.has(thread.threadId)),
@@ -190,6 +196,7 @@ const splitRound = Effect.fn("MailIpc.splitRound")(function* splitRound(
 });
 
 const MAX_BULK_THREADS = 5000;
+
 /**
  * Conversations per server round; a failure leaves the other rounds done. No
  * more than one thread list event carries (`MAX_UPSERTS` in the engine), so
@@ -212,6 +219,7 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
         ])
       ).values(),
     ];
+
     if (threads.length === 0 || threads.length > MAX_BULK_THREADS) {
       return yield* new MailEngineError({
         message: `Select between 1 and ${MAX_BULK_THREADS} conversations`,
@@ -220,6 +228,7 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
 
     const action = toThreadAction(request.operation);
     const byAccount = new Map<string, MailThreadRequest[]>();
+
     for (const thread of threads) {
       byAccount.set(thread.accountId, [
         ...(byAccount.get(thread.accountId) ?? []),
@@ -229,6 +238,7 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
 
     const succeeded: MailThreadRequest[] = [];
     const failed: MailThreadRequest[] = [];
+
     for (const [accountId, accountThreads] of byAccount) {
       for (
         let start = 0;
@@ -236,18 +246,23 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
         start += BULK_CHUNK_SIZE
       ) {
         const round = accountThreads.slice(start, start + BULK_CHUNK_SIZE);
+
         const split = yield* Effect.exit(
           splitRound(accountId, round, request.operation)
         );
+
         if (Exit.isFailure(split)) {
           failed.push(...round);
           continue;
         }
+
         const { refused, toChange } = split.value;
         failed.push(...refused);
+
         if (toChange.length === 0) {
           continue;
         }
+
         const exit = yield* Effect.exit(
           inAccountEngine(
             accountId,
@@ -258,6 +273,7 @@ export const bulkMutateThreads = Effect.fn("MailIpc.bulkMutateThreads")(
             )
           )
         );
+
         (Exit.isSuccess(exit) ? succeeded : failed).push(...toChange);
       }
     }
@@ -291,6 +307,7 @@ const readSavedLabel = Effect.fn("MailIpc.readSavedLabel")(
     label: { readonly id: string; readonly name: string }
   ) {
     const catalog = yield* listLabelCatalog({ accountId });
+
     return (
       catalog.labels.find((candidate) => candidate.id === label.id) ??
       ({
@@ -309,9 +326,11 @@ export const createAccountLabelFromRequest = Effect.fn(
     request.accountId,
     createAccountLabel(request.accountId, request.name)
   );
+
   if (request.color !== undefined) {
     yield* saveLabelColor(request.accountId, label.id, request.color);
   }
+
   return yield* readSavedLabel(request.accountId, label);
 });
 
@@ -321,10 +340,12 @@ export const updateAccountLabel = Effect.fn("MailIpc.updateAccountLabel")(
       request.accountId,
       renameAccountLabel(request.accountId, request.labelId, request.name)
     );
+
     // An unchanged colour is sent as `undefined`.
     if (request.color !== undefined) {
       yield* saveLabelColor(request.accountId, label.id, request.color);
     }
+
     return yield* readSavedLabel(request.accountId, label);
   }
 );
@@ -385,6 +406,7 @@ const deliverFromDraft = Effect.fn("MailIpc.deliverFromDraft")(
     }
 
     const draft = { accountId, draftId };
+
     // Sent. A draft left behind would invite sending it twice, but it cannot
     // make the send fail.
     const removeDraft = () =>
@@ -393,6 +415,7 @@ const deliverFromDraft = Effect.fn("MailIpc.deliverFromDraft")(
           Effect.logWarning("Message sent, but its draft was not removed")
         )
       );
+
     const held = yield* inAccountEngine(
       accountId,
       holdSend(
@@ -407,10 +430,13 @@ const deliverFromDraft = Effect.fn("MailIpc.deliverFromDraft")(
         republishDraft(accountId, draftId).pipe(Effect.ignore)
       )
     );
+
     if (held.kind === "canceled") {
       yield* republishDraft(accountId, draftId).pipe(Effect.ignore);
+
       return { kind: "canceled" } satisfies MailSendResult;
     }
+
     return toSent(held.value);
   }
 );
@@ -428,6 +454,7 @@ export const cancelSendFromRequest = Effect.fn("MailIpc.cancelSend")(
     if (!(yield* hasDraft(request.accountId, request.draftId))) {
       return "too-late" as const;
     }
+
     return yield* cancelHeldSend(request, ownerWebContentsId);
   }
 );
@@ -438,12 +465,14 @@ export const sendNewMessageFromRequest = Effect.fn("MailIpc.sendNewMessage")(
     ownerWebContentsId: number
   ) {
     const { draftId, ...message } = request;
+
     // Read now: the window's attachment permissions expire, and the window
     // may close while the message waits.
     const attachments = yield* consumeAttachments(
       ownerWebContentsId,
       message.attachments
     );
+
     return yield* deliverFromDraft(
       message.accountId,
       draftId,
@@ -460,10 +489,12 @@ export const sendThreadMessageFromRequest = Effect.fn(
   ownerWebContentsId: number
 ) {
   const { draftId, ...message } = request;
+
   const attachments = yield* consumeAttachments(
     ownerWebContentsId,
     message.attachments
   );
+
   return yield* deliverFromDraft(
     message.accountId,
     draftId,

@@ -27,6 +27,7 @@ type Listener = (
 // request through either of its hooks.
 const installPolicy = () => {
   const listeners = new Map<"receive" | "send", Listener>();
+
   const session = {
     webRequest: {
       onBeforeSendHeaders: (listener: Listener) => {
@@ -38,6 +39,8 @@ const installPolicy = () => {
     },
   };
 
+  // SAFETY: the policy only registers its two `webRequest` hooks on the
+  // session, `onBeforeSendHeaders` and `onHeadersReceived`, which this has.
   installMessageFrameRequestPolicy(session as unknown as Electron.Session);
 
   return (event: "receive" | "send", details: RequestDetails) => {
@@ -45,6 +48,7 @@ const installPolicy = () => {
     listeners.get(event)?.(details, (value) => {
       response = value;
     });
+
     return response;
   };
 };
@@ -100,6 +104,7 @@ describe(installMessageFrameRequestPolicy, () => {
 
   it("leaves the app's own requests and main-process requests alone", () => {
     const respond = installPolicy();
+
     const requestHeaders = {
       Cookie: "session=app",
       Referer: "http://localhost:5173/",

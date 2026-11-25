@@ -91,9 +91,11 @@ export const useNewMessageWorkspace = ({
   const setSignature = useNewMessageStore((state) => state.setSignature);
   const setSubject = useNewMessageStore((state) => state.setSubject);
   const updateStashes = useNewMessageStore((state) => state.updateStashes);
+
   const incrementRecipientResetVersion = useNewMessageStore(
     (state) => state.incrementRecipientResetVersion
   );
+
   const { templates } = useComposerTemplates();
   const accountSettings = useAllAccountSettings();
   const draftOperationQueueRef = useRef(Promise.resolve());
@@ -104,24 +106,29 @@ export const useNewMessageWorkspace = ({
   const [isLeaving, setIsLeaving] = useState(false);
   const confirm = useConfirm();
   const mailApi = useMemo(() => getMailApi(), []);
+
   const outgoingAttachments = useOutgoingAttachments(
     mailApi,
     scheduledEdit?.draft.attachments,
     scheduledEdit?.draft.body.html
   );
+
   const {
     activeAttachments,
     isAuthorizing,
     prepareAttachments,
     replaceAttachments,
   } = outgoingAttachments;
+
   const { persistDraft, popDraft } = useDraftPersistence(mailApi);
   const offerUndo = useOfferUndo();
   const focus = useComposerFocus();
   const cleanup = useNewMessageCleanHistory({ focus, isOpen });
+
   const selectedAccountId = accounts.some(({ email }) => email === accountId)
     ? accountId
     : "";
+
   const currentDraft = useMemo<MailDraftInput>(
     () => ({
       accountId: selectedAccountId.length === 0 ? undefined : selectedAccountId,
@@ -148,6 +155,7 @@ export const useNewMessageWorkspace = ({
       subject,
     ]
   );
+
   const currentDraftRef = useRef(currentDraft);
 
   const enqueueDraftOperation = useCallback(
@@ -182,10 +190,12 @@ export const useNewMessageWorkspace = ({
   }, [draftId, focus]);
 
   const availableStashes = stashes.filter(({ id }) => id !== draftId);
+
   const stashCommandAction = getNewMailStashCommandAction(
     currentDraft,
     availableStashes.length > 0
   );
+
   const isBusy = [
     cleanup.isCleaning,
     isAuthorizing,
@@ -193,9 +203,12 @@ export const useNewMessageWorkspace = ({
     isScheduling,
     isSending,
   ].some(Boolean);
+
   const isScheduledEdit = scheduledEdit !== undefined;
+
   const canStash =
     !isScheduledEdit && stashCommandAction === "stash" && !isBusy;
+
   const canSend =
     mailApi !== undefined &&
     selectedAccountId.length > 0 &&
@@ -203,6 +216,7 @@ export const useNewMessageWorkspace = ({
     currentDraft.subject.trim().length > 0 &&
     !composer.isEmpty &&
     !isBusy;
+
   const scheduled = useScheduledComposer({
     canSend,
     currentDraft,
@@ -221,18 +235,23 @@ export const useNewMessageWorkspace = ({
     if (mailApi === undefined || scheduledEdit !== undefined) {
       return;
     }
+
     let active = true;
+
     const load = async (): Promise<void> => {
       try {
         const reply = await mailApi.listStashedDrafts({
           accountIds: accounts.map(({ email }) => email),
         });
+
         if (!(active && reply.ok)) {
           if (active && !reply.ok) {
             toast.error(reply.error);
           }
+
           return;
         }
+
         setStashes(reply.data);
       } catch {
         if (active) {
@@ -240,14 +259,18 @@ export const useNewMessageWorkspace = ({
         }
       }
     };
+
     void load();
+
     const unsubscribe = mailApi.onDraftChanged((change) => {
       if (change.kind === "remove") {
         updateStashes((current) =>
           current.filter(({ id }) => id !== change.draftId)
         );
+
         return;
       }
+
       if (
         change.draft.kind !== "new" ||
         (change.draft.accountId !== undefined &&
@@ -255,8 +278,10 @@ export const useNewMessageWorkspace = ({
       ) {
         return;
       }
+
       updateStashes((current) => upsertStash(current, change.draft));
     });
+
     return () => {
       active = false;
       unsubscribe();
@@ -274,6 +299,7 @@ export const useNewMessageWorkspace = ({
       getEmailSignature(nextAccountId),
       getEmailSignature(currentDraftRef.current.accountId ?? "")
     );
+
     currentDraftRef.current = nextDraft;
     setAccountId(nextAccountId);
     setSignature(nextDraft.signature);
@@ -287,6 +313,7 @@ export const useNewMessageWorkspace = ({
       accounts.some(({ email }) => email === template.accountId)
         ? template
         : { ...template, accountId: null };
+
     const applied = applyComposerTemplate(
       {
         accountId: selectedAccountId,
@@ -300,17 +327,21 @@ export const useNewMessageWorkspace = ({
       applicableTemplate,
       scheduledEdit?.item.accountId
     );
+
     const signatureBody = createEmailSignatureBody(
       getEmailSignature(applied.accountId)
     );
+
     const appliedSignature =
       signatureBody === undefined || applied.accountId.length === 0
         ? undefined
         : { accountId: applied.accountId, body: signatureBody };
+
     const appliedBody =
       appliedSignature === undefined
         ? applied.body
         : appendEmailSignatureBody(applied.body, appliedSignature.body);
+
     cleanup.reset();
     setAccountId(applied.accountId);
     setComposer({
@@ -327,29 +358,37 @@ export const useNewMessageWorkspace = ({
 
   const stashCurrentDraft = (): void => {
     const draft = currentDraftRef.current;
+
     if (isBusy || isNewMailDraftEmpty(draft)) {
       return;
     }
+
     const optimisticStash = toOptimisticStash(draft);
+
     const blankDraft = createNewMailDraft(
       draft.accountId,
       draft.accountId === undefined
         ? EMPTY_EMAIL_SIGNATURE_BODY
         : getEmailSignature(draft.accountId)
     );
+
     const focusTarget = focus.getCurrentTarget();
     updateStashes((current) => upsertStash(current, optimisticStash));
     focus.requestRestore(focusTarget);
     applyDraft(blankDraft);
     enqueueDraftOperation(async () => {
       const succeeded = await persistDraft(draft);
+
       if (succeeded) {
         toast.success("Draft stashed");
+
         return;
       }
+
       updateStashes((current) =>
         current.filter(({ id }) => id !== optimisticStash.id)
       );
+
       if (
         currentDraftRef.current.id === blankDraft.id &&
         isNewMailDraftEmpty(currentDraftRef.current)
@@ -371,11 +410,14 @@ export const useNewMessageWorkspace = ({
     if (scheduled.isEdit) {
       return await scheduled.confirmLeave();
     }
+
     const draft = currentDraftRef.current;
     const action = getNewMessageLeave(draft, isBusy);
+
     if (action !== "stash") {
       return action === "close";
     }
+
     let succeeded = false;
     setIsLeaving(true);
     // Queued behind any earlier stash, so the saves land in order.
@@ -384,9 +426,11 @@ export const useNewMessageWorkspace = ({
     });
     await draftOperationQueueRef.current;
     setIsLeaving(false);
+
     if (succeeded) {
       toast.success("Draft stashed");
     }
+
     return succeeded;
   };
 
@@ -400,9 +444,11 @@ export const useNewMessageWorkspace = ({
   /** Closes without keeping the draft, after confirming if it has content. */
   const discard = async (): Promise<void> => {
     const draft = currentDraftRef.current;
+
     if (isBusy) {
       return;
     }
+
     if (
       !isNewMailDraftEmpty(draft) &&
       !(await confirm({
@@ -415,6 +461,7 @@ export const useNewMessageWorkspace = ({
     ) {
       return;
     }
+
     enqueueDraftOperation(async () => {
       await popDraft(draft);
     });
@@ -439,12 +486,15 @@ export const useNewMessageWorkspace = ({
     ) {
       return;
     }
+
     updateStashes((current) => current.filter(({ id }) => id !== stash.id));
     enqueueDraftOperation(async () => {
       if (await popDraft(stash)) {
         toast.success("Stash discarded");
+
         return;
       }
+
       updateStashes((current) => upsertStash(current, stash));
     });
   };
@@ -453,11 +503,13 @@ export const useNewMessageWorkspace = ({
     if (next.id === draftId || isBusy) {
       return;
     }
+
     updateStashes((current) => current.filter(({ id }) => id !== next.id));
     focus.requestRestore(getDraftResumeFocusTarget(next));
     applyDraft(next);
     enqueueDraftOperation(async () => {
       const succeeded = await popDraft(next, true);
+
       if (!succeeded) {
         updateStashes((current) => upsertStash(current, next));
       }
@@ -471,14 +523,19 @@ export const useNewMessageWorkspace = ({
     if (undoneCompose === undefined || isBusy || scheduled.isEdit) {
       return;
     }
+
     const undone = takeComposeDraft();
+
     if (undone === undefined) {
       return;
     }
+
     if (isNewMailDraftEmpty(currentDraftRef.current)) {
       switchDraft(toOptimisticStash(undone));
+
       return;
     }
+
     updateStashes((current) => upsertStash(current, toOptimisticStash(undone)));
     toast.info("Sending undone. The email is in Stash.");
   });
@@ -495,15 +552,18 @@ export const useNewMessageWorkspace = ({
     if (mailApi === undefined) {
       return;
     }
+
     const draft = currentDraft;
     let isKept = false;
     enqueueDraftOperation(async () => {
       isKept = await persistDraft(draft);
     });
     await draftOperationQueueRef.current;
+
     if (!isKept) {
       return;
     }
+
     offerUndo(
       toUndoSendOffer({
         cancel: () =>
@@ -530,10 +590,13 @@ export const useNewMessageWorkspace = ({
     if (!(canSend && mailApi)) {
       return;
     }
+
     if (scheduled.isEdit) {
       await scheduled.sendNow();
+
       return;
     }
+
     setIsSending(true);
     await runWithCleanup(
       async () => {
@@ -541,9 +604,11 @@ export const useNewMessageWorkspace = ({
           const preparedAttachments = await prepareAttachments(
             currentDraft.attachments
           );
+
           if (preparedAttachments === undefined) {
             return;
           }
+
           const request = {
             accountId: selectedAccountId,
             attachments: preparedAttachments,
@@ -553,19 +618,27 @@ export const useNewMessageWorkspace = ({
             subject,
             to: recipients.to,
           };
+
           const delayMs = getAppSettingsState().undoSendSeconds * 1000;
+
           if (delayMs > 0) {
             await sendWithUndo(request, delayMs);
+
             return;
           }
+
           const reply = await mailApi.sendMessage(request);
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
+
           if (reply.data.kind === "canceled") {
             return;
           }
+
           enqueueDraftOperation(async () => {
             await popDraft(currentDraft);
           });
@@ -592,6 +665,7 @@ export const useNewMessageWorkspace = ({
       },
       { html: nextComposer.html, text: nextComposer.text }
     );
+
     setSignature(draft.signature);
     cleanup.updateComposer(toMailDraftComposerValue(draft));
   };

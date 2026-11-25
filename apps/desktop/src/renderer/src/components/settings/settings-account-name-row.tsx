@@ -55,20 +55,27 @@ const saveAccountNames = async ({
   if (isSavingRef.current) {
     return;
   }
+
   isSavingRef.current = true;
+
   try {
     while (pendingRef.current !== null) {
       const name = pendingRef.current;
       pendingRef.current = null;
+
       if (name === storedRef.current) {
         continue;
       }
+
       // oxlint-disable-next-line no-await-in-loop -- Saves go one at a time, in typing order.
       const reply = await accountsApi.updateAccountName({ email, name });
+
       if (!reply.ok) {
         toast.error(reply.error);
+
         return;
       }
+
       storedRef.current = name;
     }
   } catch {
@@ -108,6 +115,7 @@ const SettingsAccountNameRow = ({
 
   if (saved !== shownSaved) {
     setShownSaved(saved);
+
     if (draft === shownSaved) {
       setDraft(saved);
     }
@@ -122,6 +130,7 @@ const SettingsAccountNameRow = ({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+
     void saveAccountNames({
       accountsApi,
       email: account.email,
@@ -165,9 +174,11 @@ const SettingsAccountNameRow = ({
           onValueChange={(value) => {
             setDraft(value);
             pendingRef.current = toAccountName(value);
+
             if (timerRef.current !== null) {
               clearTimeout(timerRef.current);
             }
+
             timerRef.current = setTimeout(saveNow, ACCOUNT_NAME_SAVE_DELAY_MS);
           }}
           placeholder="No name"

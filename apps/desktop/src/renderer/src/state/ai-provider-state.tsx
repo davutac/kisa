@@ -48,12 +48,15 @@ export const createAiProviderStateStore = (aiApi: AiApi | undefined) => {
       if (aiApi === undefined) {
         return;
       }
+
       if (settingsLoad !== null) {
         await settingsLoad;
+
         return;
       }
 
       set({ isLoadingSettings: true, settingsError: null });
+
       const load = (async (): Promise<void> => {
         try {
           const reply = await aiApi.getSettings();
@@ -68,7 +71,9 @@ export const createAiProviderStateStore = (aiApi: AiApi | undefined) => {
           set({ isLoadingSettings: false });
         }
       })();
+
       settingsLoad = load;
+
       try {
         await load;
       } finally {
@@ -83,12 +88,15 @@ export const createAiProviderStateStore = (aiApi: AiApi | undefined) => {
       if (aiApi === undefined) {
         return;
       }
+
       if (providerRefresh !== null) {
         await providerRefresh;
+
         return;
       }
 
       set({ isLoadingProviders: true, providersError: null });
+
       const refresh = (async (): Promise<void> => {
         try {
           const reply = await aiApi.listProviders();
@@ -106,7 +114,9 @@ export const createAiProviderStateStore = (aiApi: AiApi | undefined) => {
           set({ isLoadingProviders: false });
         }
       })();
+
       providerRefresh = refresh;
+
       try {
         await refresh;
       } finally {
@@ -122,15 +132,20 @@ export const createAiProviderStateStore = (aiApi: AiApi | undefined) => {
 
       const request = settingsSaveRequest + 1;
       settingsSaveRequest = request;
+
       try {
         const reply = await aiApi.updateSettings(settings);
+
         if (request !== settingsSaveRequest) {
           return null;
         }
+
         if (!reply.ok) {
           return reply.error;
         }
+
         set({ settings: reply.data, settingsError: null });
+
         return null;
       } catch {
         return request === settingsSaveRequest
@@ -167,8 +182,10 @@ export const useAiProviderState = <Value,>(
   selector: (state: AiProviderState) => Value
 ): Value => {
   const store = useContext(AiProviderStateContext);
+
   if (store === null) {
     throw new Error("AiProviderStateProvider is missing");
   }
+
   return useStore(store, selector);
 };

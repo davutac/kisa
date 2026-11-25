@@ -63,28 +63,36 @@ export const useReplyWorkspace = ({
   const aiModel = useAiModelSelection();
   const mailApi = useMemo(() => getMailApi(), []);
   const offerUndo = useOfferUndo();
+
   const outgoingAttachments = useOutgoingAttachments(
     mailApi,
     draft.attachments,
     draft.body.html
   );
+
   const { activeAttachments, isAuthorizing, prepareAttachments } =
     outgoingAttachments;
+
   const [composer, setComposer] = useState<EmailComposerValue>(() =>
     toMailDraftComposerValue(draft)
   );
+
   const [isCreatingReply, setIsCreatingReply] = useState(false);
   const [isSending, setIsSending] = useState(false);
+
   const [recipients, setRecipients] = useState<EmailRecipients>(() => ({
     bcc: draft.bcc,
     cc: draft.cc,
     to: draft.to,
   }));
+
   const [signature, setSignature] = useState(draft.signature);
+
   const initialRecipients = useMemo(
     () => getInitialReplyRecipients(accountId, action, message),
     [accountId, action, message]
   );
+
   // One per mounted composer. The reply area is keyed by its draft's id, and
   // the conversation never replaces the draft while its composer is open, so
   // `draft` is the copy this composer opened with for as long as it is open.
@@ -100,7 +108,9 @@ export const useReplyWorkspace = ({
           }),
     [accountId, draft, mailApi]
   );
+
   const mountedRef = useRef(false);
+
   const cleanHistory = useReplyCleanHistory({
     aiApi,
     composer,
@@ -113,6 +123,7 @@ export const useReplyWorkspace = ({
     signature,
     subject: draft.subject,
   });
+
   const currentDraft = useMemo<MailDraftInput>(
     () => ({
       ...draft,
@@ -132,9 +143,12 @@ export const useReplyWorkspace = ({
       signature,
     ]
   );
+
   const currentDraftRef = useRef(currentDraft);
+
   const isBusy =
     cleanHistory.isCleaning || isAuthorizing || isCreatingReply || isSending;
+
   const canCreateReply = canCreateAiReply(aiModel.selection, action, isBusy);
   const isBodyOnlySignature = isDraftBodyOnlySignature(currentDraft);
 
@@ -146,9 +160,11 @@ export const useReplyWorkspace = ({
     if (persistence === undefined) {
       return;
     }
+
     const timeout = window.setTimeout(() => {
       void persistence.save(currentDraft);
     }, 450);
+
     return () => window.clearTimeout(timeout);
   }, [currentDraft, persistence]);
 
@@ -156,17 +172,20 @@ export const useReplyWorkspace = ({
     if (mailApi === undefined || persistence === undefined) {
       return;
     }
+
     return mailApi.onDraftChanged(persistence.observe);
   }, [mailApi, persistence]);
 
   useEffect(() => {
     mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
       queueMicrotask(() => {
         if (mountedRef.current || persistence === undefined) {
           return;
         }
+
         const latest = currentDraftRef.current;
         void persistence.settle(
           latest,
@@ -189,9 +208,11 @@ export const useReplyWorkspace = ({
     if (mailApi === undefined || persistence === undefined) {
       return;
     }
+
     if (!(await persistence.save(currentDraft))) {
       return;
     }
+
     persistence.finalize();
     const draftId = currentDraft.id;
     offerUndo(
@@ -202,6 +223,7 @@ export const useReplyWorkspace = ({
         // answers: the conversation opens it again as it arrives.
         expectRestore: () => {
           restoreReplyDraft(draftId);
+
           return () => {
             takeReplyDraft(draftId);
           };
@@ -219,6 +241,7 @@ export const useReplyWorkspace = ({
     if (mailApi === undefined || isBusy) {
       return;
     }
+
     setIsSending(true);
     await runWithCleanup(
       async () => {
@@ -226,9 +249,11 @@ export const useReplyWorkspace = ({
           const preparedAttachments = await prepareAttachments(
             currentDraft.attachments
           );
+
           if (preparedAttachments === undefined) {
             return;
           }
+
           const request = {
             accountId,
             action,
@@ -240,25 +265,35 @@ export const useReplyWorkspace = ({
             threadId,
             to: recipients.to,
           };
+
           const delayMs = getAppSettingsState().undoSendSeconds * 1000;
+
           if (delayMs > 0 && persistence !== undefined) {
             await sendWithUndo(request, delayMs);
+
             return;
           }
+
           const reply = await mailApi.sendThreadMessage(request);
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
+
           if (reply.data.kind === "canceled") {
             return;
           }
+
           persistence?.finalize();
+
           try {
             const discarded = await mailApi.discardDraft({
               accountId,
               draftId: draft.id,
             });
+
             if (!discarded.ok) {
               toast.error(discarded.error);
             }
@@ -267,6 +302,7 @@ export const useReplyWorkspace = ({
               "Message sent, but its local draft could not be removed"
             );
           }
+
           const notice = describeSendOutcome(reply.data);
           toast[notice.tone](notice.message);
           onSent();
@@ -286,17 +322,22 @@ export const useReplyWorkspace = ({
     if (mailApi === undefined || isBusy) {
       return;
     }
+
     persistence?.finalize();
+
     try {
       const reply = await mailApi.discardDraft({
         accountId,
         draftId: draft.id,
       });
+
       if (!reply.ok) {
         persistence?.reopen();
         toast.error(reply.error);
+
         return;
       }
+
       onCancel();
     } catch {
       persistence?.reopen();
@@ -306,9 +347,11 @@ export const useReplyWorkspace = ({
 
   const createReply = async (instructions?: string): Promise<void> => {
     const model = aiModel.selection;
+
     if (!(aiApi && model && canCreateReply)) {
       return;
     }
+
     setIsCreatingReply(true);
     await runWithCleanup(
       async () => {
@@ -319,21 +362,28 @@ export const useReplyWorkspace = ({
             model,
             threadId,
           });
+
           if (!mountedRef.current) {
             return;
           }
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
+
           const replyBody =
             signature === undefined
               ? reply.data.body
               : appendEmailSignatureHtml(reply.data.body, signature.body);
+
           if (!replaceComposerContent(replyBody)) {
             toast.error("Could not update the reply draft");
+
             return;
           }
+
           cleanHistory.reset();
           toast.success("Reply created");
         } catch (error) {
@@ -357,6 +407,7 @@ export const useReplyWorkspace = ({
       html: nextComposer.html,
       text: nextComposer.text,
     });
+
     setSignature(nextDraft.signature);
     cleanHistory.updateComposer(toMailDraftComposerValue(nextDraft));
   };

@@ -10,9 +10,11 @@ const createClosingTagPattern = (tag: string): RegExp | undefined => {
     case "script": {
       return /<\/script\s*>/giu;
     }
+
     case "style": {
       return /<\/style\s*>/giu;
     }
+
     default: {
       return undefined;
     }

@@ -84,6 +84,7 @@ export const updateAccountSettings = Effect.fn("updateAccountSettings")(
   function* updateAccountSettings(request: AccountSettingsUpdateRequest) {
     const now = Date.now();
     let setting;
+
     if ("categorizationEnabled" in request) {
       setting = { categorizationEnabled: request.categorizationEnabled };
     } else if ("emailSignature" in request) {

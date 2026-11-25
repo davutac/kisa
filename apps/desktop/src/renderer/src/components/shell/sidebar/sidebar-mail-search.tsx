@@ -76,6 +76,7 @@ const SidebarMailSearch = ({
 
     showResults(nextQuery);
   };
+
   const openFromBar = (thread: MailThreadSummary): void => {
     setIsBarOpen(false);
 
@@ -83,6 +84,7 @@ const SidebarMailSearch = ({
       void navigate({ to: "/" });
     }
   };
+
   const clear = (): void => {
     setIsBarOpen(false);
     exit();

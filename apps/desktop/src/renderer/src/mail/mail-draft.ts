@@ -55,6 +55,7 @@ const createDraftSignature = (
   configuredSignature: EmailSignatureBody
 ): MailDraftSignature | undefined => {
   const body = createEmailSignatureBody(configuredSignature);
+
   return body === undefined ? undefined : { accountId, body };
 };
 
@@ -63,6 +64,7 @@ const createDraftSignatureContent = (
   configuredSignature: EmailSignatureBody
 ) => {
   const signature = createDraftSignature(accountId, configuredSignature);
+
   return {
     body:
       signature === undefined
@@ -105,9 +107,11 @@ export const getDraftResumeFocusTarget = (
   if (draft.to.length === 0) {
     return "to";
   }
+
   if (draft.subject.trim().length === 0) {
     return "subject";
   }
+
   return "message";
 };
 
@@ -149,6 +153,7 @@ export const createNewMailDraft = (
     accountId === undefined
       ? { body: { html: "", text: "" }, signature: undefined }
       : createDraftSignatureContent(accountId, configuredSignature);
+
   const draft = {
     attachments: [],
     bcc: [],
@@ -198,15 +203,19 @@ export const changeNewMailDraftAccount = (
   previousConfiguredSignature: EmailSignatureBody = EMPTY_EMAIL_SIGNATURE_BODY
 ): MailDraftInput => {
   const nextSignature = createDraftSignature(accountId, configuredSignature);
+
   const canReplaceSignature =
     draft.signature !== undefined &&
     hasEmailSignature(draft.body, draft.signature.body);
+
   const shouldAddFirstSignature =
     draft.signature === undefined &&
     createEmailSignatureBody(previousConfiguredSignature) === undefined;
+
   const body = canReplaceSignature
     ? removeEmailSignature(draft.body, draft.signature.body)
     : draft.body;
+
   const shouldApplySignature = canReplaceSignature || shouldAddFirstSignature;
 
   return {

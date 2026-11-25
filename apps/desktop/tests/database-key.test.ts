@@ -19,6 +19,7 @@ const makeProtector = (): DatabaseKeyProtector => ({
 const makeKeyPath = (): string => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-database-key-"));
   temporaryDirectories.push(directory);
+
   return path.join(directory, "app.sqlite.key");
 };
 

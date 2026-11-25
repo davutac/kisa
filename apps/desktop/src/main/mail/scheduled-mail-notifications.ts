@@ -29,6 +29,7 @@ const claimNotification = Effect.fn("claimScheduledMailNotification")(
   ) {
     return yield* withScheduledMailDatabase(async (database) => {
       const claimId = randomUUID();
+
       const rows = await database
         .update(scheduledMessages)
         .set({ notificationClaimId: claimId, notificationClaimedAt: now })
@@ -44,6 +45,7 @@ const claimNotification = Effect.fn("claimScheduledMailNotification")(
         )
         .returning({ draftId: scheduledMessages.draftId })
         .all();
+
       return rows.length === 1 ? claimId : undefined;
     });
   }
@@ -68,9 +70,11 @@ const completeNotification = Effect.fn("completeScheduledMailNotification")(
             )
           )
           .run();
+
         if (notification.kind !== "sent") {
           return [];
         }
+
         const draft = await transaction.query.mailDrafts.findFirst({
           columns: { attachments: true },
           where: {
@@ -78,6 +82,7 @@ const completeNotification = Effect.fn("completeScheduledMailNotification")(
             id: notification.draftId,
           },
         });
+
         await transaction
           .delete(mailDrafts)
           .where(
@@ -87,10 +92,13 @@ const completeNotification = Effect.fn("completeScheduledMailNotification")(
             )
           )
           .run();
+
         return decodeStoredOutgoingAttachmentsStrict(draft?.attachments) ?? [];
       })
     );
+
     const store = getOptionalDraftAttachmentStore();
+
     if (store !== undefined) {
       yield* bestEffortDraftAttachmentCleanup(store.delete(attachments));
       yield* bestEffortDraftAttachmentCleanup(
@@ -131,12 +139,13 @@ interface ScheduledMailOutcomeTarget {
   readonly id: number;
   readonly isDestroyed: () => boolean;
   readonly isLoadingMainFrame: () => boolean;
-  readonly on: (event: "did-start-loading", listener: () => void) => unknown;
-  readonly once: (event: "destroyed", listener: () => void) => unknown;
+  readonly on: (event: "did-start-loading", listener: () => void) => void;
+  readonly once: (event: "destroyed", listener: () => void) => void;
 }
 
 const readyOutcomeTargets = new WeakSet<ScheduledMailOutcomeTarget>();
 const trackedOutcomeTargets = new WeakSet<ScheduledMailOutcomeTarget>();
+
 const pendingOpens = new WeakMap<
   ScheduledMailOutcomeTarget,
   Map<string, ScheduledMailNotification>
@@ -149,6 +158,7 @@ const trackOutcomeTarget = (target: ScheduledMailOutcomeTarget): void => {
   if (trackedOutcomeTargets.has(target)) {
     return;
   }
+
   trackedOutcomeTargets.add(target);
   target.on("did-start-loading", () => {
     readyOutcomeTargets.delete(target);
@@ -172,6 +182,7 @@ const notifyRendererOfScheduledMailOutcome = (
   if (targetWindow.isDestroyed() || targetWindow.webContents.isDestroyed()) {
     return false;
   }
+
   sendRendererEvent(
     SCHEDULED_MAIL_OUTCOME_CHANNEL,
     ScheduledMailOutcome,
@@ -183,6 +194,7 @@ const notifyRendererOfScheduledMailOutcome = (
     },
     targetWindow
   );
+
   return true;
 };
 
@@ -191,17 +203,21 @@ const flushPendingOpens = (
   targetWindow: BrowserWindow
 ): void => {
   const notifications = pendingOpens.get(target);
+
   if (notifications === undefined || !isOutcomeTargetReady(target)) {
     return;
   }
+
   for (const [key, notification] of notifications) {
     if (
       !notifyRendererOfScheduledMailOutcome(notification, "open", targetWindow)
     ) {
       return;
     }
+
     notifications.delete(key);
   }
+
   if (notifications.size === 0) {
     pendingOpens.delete(target);
   }
@@ -221,12 +237,15 @@ const queueScheduledMailOpen = (
 
 const focusMainWindow = (notification: ScheduledMailNotification): void => {
   const window = getMainWindow() ?? createWindow();
+
   if (window.isDestroyed()) {
     return;
   }
+
   if (window.isMinimized()) {
     window.restore();
   }
+
   window.show();
   app.focus({ steal: true });
   window.focus();
@@ -240,11 +259,13 @@ const presentScheduledMailNotification = (
     catch: () => scheduledMailError("Could not show scheduled mail feedback"),
     try: () => {
       const mainWindow = getMainWindow();
+
       const hasVisibleMainWindow =
         mainWindow !== undefined &&
         !mainWindow.isDestroyed() &&
         mainWindow.isVisible() &&
         !mainWindow.isMinimized();
+
       if (
         hasVisibleMainWindow &&
         isOutcomeTargetReady(mainWindow.webContents)
@@ -265,21 +286,26 @@ const presentScheduledMailNotification = (
               ? "Scheduled email sent"
               : "Scheduled email needs attention",
         });
+
         activeScheduledNotifications.set(systemNotification, {
           accountId: notification.accountId,
           draftId: notification.draftId,
         });
+
         const forgetNotification = (): void => {
           activeScheduledNotifications.delete(systemNotification);
         };
+
         systemNotification.once("click", () => {
           forgetNotification();
           focusMainWindow(notification);
         });
         systemNotification.once("close", forgetNotification);
         systemNotification.show();
+
         return true;
       }
+
       return false;
     },
   });
@@ -291,16 +317,21 @@ const showScheduledMailNotificationEffect = Effect.fn(
 ) {
   const claimedAt = yield* Clock.currentTimeMillis;
   const claimId = yield* claimNotification(notification, claimedAt);
+
   if (claimId === undefined) {
     return;
   }
+
   const delivered = yield* presentScheduledMailNotification(notification).pipe(
     Effect.tapError(() => releaseNotificationClaim(notification, claimId))
   );
+
   if (!delivered) {
     yield* releaseNotificationClaim(notification, claimId);
+
     return;
   }
+
   const completedAt = yield* Clock.currentTimeMillis;
   yield* completeNotification(notification, claimId, completedAt);
 });
@@ -315,7 +346,9 @@ export const closeScheduledMailNotifications = (accountId: string): void => {
     if (key.accountId !== accountId) {
       continue;
     }
+
     activeScheduledNotifications.delete(notification);
+
     try {
       notification.close();
     } catch {
@@ -365,6 +398,7 @@ export const dispatchPendingScheduledMailNotifications = Effect.fn(
       .orderBy(asc(scheduledMessages.updatedAt))
       .all()
   );
+
   yield* Effect.forEach(
     rows,
     (row) =>
@@ -388,12 +422,16 @@ export const setScheduledMailOutcomeTargetReadyEffect = Effect.fn(
 ) {
   const shouldDispatch = yield* Effect.sync(() => {
     trackOutcomeTarget(target);
+
     if (!ready || target.isDestroyed() || target.isLoadingMainFrame()) {
       readyOutcomeTargets.delete(target);
+
       return false;
     }
+
     readyOutcomeTargets.add(target);
     const mainWindow = getMainWindow();
+
     if (
       mainWindow === undefined ||
       mainWindow.isDestroyed() ||
@@ -401,9 +439,12 @@ export const setScheduledMailOutcomeTargetReadyEffect = Effect.fn(
     ) {
       return false;
     }
+
     flushPendingOpens(target, mainWindow);
+
     return true;
   });
+
   if (shouldDispatch) {
     yield* dispatchPendingScheduledMailNotifications();
   }

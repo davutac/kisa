@@ -57,8 +57,7 @@ const toCategorizationLabels = (
   labels: readonly MailLabelSummary[]
 ): readonly AiCategorizationLabel[] =>
   labels
-    .filter((label) => label.type === "user")
-    .map(({ id, name }) => ({ id, name }))
+    .flatMap(({ id, name, type }) => (type === "user" ? [{ id, name }] : []))
     .toSorted(
       (left, right) =>
         left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
@@ -68,9 +67,11 @@ const selectThreadLabelIds = Effect.fn("selectThreadLabelIds")(
   function* selectThreadLabelIds(item: ThreadCategorizationItem) {
     const catalog = yield* listLabelCatalog({ accountId: item.accountId });
     const labels = toCategorizationLabels(catalog.labels);
+
     if (labels.length === 0) {
       return [];
     }
+
     // New mail may not have its bodies yet, and the model reads them.
     yield* inAccountEngine(
       item.accountId,
@@ -85,11 +86,14 @@ const selectThreadLabelIds = Effect.fn("selectThreadLabelIds")(
       ],
       { concurrency: "unbounded" }
     );
+
     const model = yield* requireAiModelSelection(settings);
     const availableIds = new Set(labels.map((label) => label.id));
+
     const currentUserLabelIds = [...currentLabelIds]
       .filter((labelId) => availableIds.has(labelId))
       .toSorted();
+
     const generated = yield* categorizationGenerationSemaphore.withPermit(
       generateStructuredText({
         model,
@@ -102,6 +106,7 @@ const selectThreadLabelIds = Effect.fn("selectThreadLabelIds")(
         }),
       }).pipe(Effect.scoped)
     );
+
     return yield* validateCategorizationLabelIds(generated.labelIds, labels);
   }
 );
@@ -116,9 +121,11 @@ const applyThreadLabelIds = Effect.fn("applyThreadLabelIds")(
     }
 
     const latestLabelIds = yield* loadCurrentThreadLabelIds(item);
+
     const missingLabelIds = selectedLabelIds.filter(
       (labelId) => !latestLabelIds.has(labelId)
     );
+
     yield* Effect.forEach(
       missingLabelIds,
       (labelId) =>
@@ -130,6 +137,7 @@ const applyThreadLabelIds = Effect.fn("applyThreadLabelIds")(
         }),
       { concurrency: 1, discard: true }
     );
+
     return missingLabelIds;
   }
 );
@@ -138,6 +146,7 @@ export const categorizeThread = Effect.fn("categorizeThread")(
   function* categorizeThread(request: AiThreadCategorizationRequest) {
     const selectedLabelIds = yield* selectThreadLabelIds(request);
     const labelIds = yield* applyThreadLabelIds(request, selectedLabelIds);
+
     return { labelIds };
   }
 );
@@ -149,6 +158,7 @@ const attemptThreadCategorization = Effect.fn("attemptThreadCategorization")(
     }
 
     const selectedLabelIds = yield* selectThreadLabelIds(item);
+
     if (
       selectedLabelIds.length === 0 ||
       !(yield* isAutomaticCategorizationEnabled(item.accountId))

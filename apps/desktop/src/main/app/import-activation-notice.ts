@@ -20,7 +20,7 @@ const NOTICES = {
 
 interface NoticeWindow {
   readonly isVisible: () => boolean;
-  readonly once: (event: "show", listener: () => void) => unknown;
+  readonly once: (event: "show", listener: () => void) => void;
 }
 
 interface ImportActivationNoticeOptions<Window extends NoticeWindow> {
@@ -41,16 +41,21 @@ export const announceImportActivation = <Window extends NoticeWindow>(
   if (activation !== "dropped" && activation !== "restored") {
     return;
   }
+
   const window = getWindow();
+
   if (window === undefined) {
     return;
   }
 
   const notice = NOTICES[activation];
+
   if (window.isVisible()) {
     show(window, notice);
+
     return;
   }
+
   window.once("show", () => {
     show(window, notice);
   });

@@ -44,6 +44,7 @@ const selectBoundedMessages = (
     const body = (row.bodyText ?? "")
       .slice(0, Math.min(MAX_MESSAGE_BODY_CHARS, remainingCharacters))
       .trim();
+
     remainingCharacters -= body.length;
     selected.push({
       body,

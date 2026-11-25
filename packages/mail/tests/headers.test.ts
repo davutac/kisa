@@ -74,6 +74,7 @@ describe(parseHeaderBlock, () => {
     const many = Buffer.from(
       Array.from({ length: 1200 }, (_, index) => `X-${index}: v`).join("\n")
     );
+
     expect(parseHeaderBlock(many)).toHaveLength(1000);
   });
 });

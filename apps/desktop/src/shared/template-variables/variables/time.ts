@@ -10,6 +10,7 @@ const resolveTime: TemplateVariableDefinition["resolve"] = ({
 }) => {
   const date = new Date(context.now);
   const pattern = match.groups?.format;
+
   if (pattern === undefined) {
     return {
       ok: true,
@@ -18,9 +19,11 @@ const resolveTime: TemplateVariableDefinition["resolve"] = ({
       }).format(date),
     };
   }
+
   if (pattern.length === 0) {
     return { message: "Date format cannot be empty", ok: false };
   }
+
   if (pattern.length > MAX_FORMAT_LENGTH) {
     return { message: "Date format is too long", ok: false };
   }

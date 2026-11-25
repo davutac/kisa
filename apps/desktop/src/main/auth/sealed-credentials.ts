@@ -22,6 +22,7 @@ const SealedCredentials = Schema.fromJsonString(
     }),
   ])
 );
+
 // Decoding to an option drops the parse issue, which would quote the input.
 const decodeSealedCredentials = Schema.decodeUnknownOption(SealedCredentials);
 
@@ -64,10 +65,12 @@ export const openSealedCredentials = Effect.fn("openSealedCredentials")(
     const failure = new CredentialStorageError({
       message: "Could not read the saved sign-in",
     });
+
     const { result } = yield* Effect.tryPromise({
       catch: () => failure,
       try: () => safeStorage.decryptStringAsync(credentials),
     });
+
     const decoded = decodeSealedCredentials(result);
 
     if (Option.isNone(decoded)) {

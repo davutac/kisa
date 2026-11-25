@@ -104,18 +104,23 @@ export const toCycleOutcome = (
   if (Exit.isSuccess(exit)) {
     return { kind: "done", moreWork: exit.value.moreWork };
   }
+
   const found = Cause.findError(exit.cause);
   const failure = Result.isSuccess(found) ? found.success : undefined;
+
   if (failure?._tag === "MailAuthError") {
     return { kind: "sign-in-refused" };
   }
+
   if (failure?._tag === "MailHiddenError") {
     return { kind: "mail-hidden" };
   }
+
   // The engine raises this for an account that is no longer connected.
   if (failure?._tag === "MailEngineError") {
     return { kind: "account-missing" };
   }
+
   return { kind: "failed", retryAfterMs: failure?.retryAfterMs };
 };
 
@@ -159,9 +164,11 @@ export const createAccountWorker = <R = never>({
     if (phase.kind === "idle") {
       return true;
     }
+
     if (phase.kind === "retrying") {
       return !phase.serverDelay;
     }
+
     return phase.kind === "needs-sign-in" && source !== "automatic";
   };
 
@@ -172,20 +179,25 @@ export const createAccountWorker = <R = never>({
     if (outcome.kind === "account-missing") {
       return { kind: "stopped" };
     }
+
     if (outcome.kind === "done") {
       failures = 0;
+
       return outcome.moreWork || pending !== undefined
         ? { kind: "syncing" }
         : { kind: "idle", until: now + pollIntervalMs };
     }
+
     if (outcome.kind === "sign-in-refused") {
       trouble = "sign-in";
+
       return pending === undefined || pending === "automatic"
         ? { kind: "needs-sign-in" }
         : { kind: "syncing" };
     }
 
     failures += 1;
+
     if (outcome.kind === "mail-hidden") {
       // Known at once, and retried like any failure: the loop finds the mail
       // again by itself once the user has shown it. Never called unreachable
@@ -195,6 +207,7 @@ export const createAccountWorker = <R = never>({
     } else if (!caughtUpThisCycle && failures >= retryDelaysMs.length) {
       trouble = "unreachable";
     }
+
     if (outcome.kind === "failed" && outcome.retryAfterMs !== undefined) {
       return {
         attempt: failures,
@@ -203,12 +216,15 @@ export const createAccountWorker = <R = never>({
         until: now + outcome.retryAfterMs,
       };
     }
+
     if (pending !== undefined) {
       return { kind: "syncing" };
     }
+
     const delay =
       retryDelaysMs[Math.min(failures, retryDelaysMs.length) - 1] ??
       pollIntervalMs;
+
     return {
       attempt: failures,
       kind: "retrying",
@@ -227,6 +243,7 @@ export const createAccountWorker = <R = never>({
     wake: Deferred.Deferred<void>
   ) {
     const delay = at - (yield* Clock.currentTimeMillis);
+
     if (delay > 0) {
       yield* Deferred.await(wake).pipe(
         Effect.timeoutOrElse({ duration: delay, orElse: () => Effect.void })
@@ -255,25 +272,33 @@ export const createAccountWorker = <R = never>({
   ) {
     if (waiting.kind === "needs-sign-in") {
       yield* Deferred.await(wake);
+
       return;
     }
+
     if (waiting.kind === "retrying" || watch === undefined) {
       yield* sleepUntil(waiting.until, wake);
+
       return;
     }
 
     const watched = yield* Effect.exit(Effect.suspend(() => watch(wake)));
+
     if (yield* Deferred.isDone(wake)) {
       return;
     }
+
     if (Exit.isFailure(watched) || watched.value === "unavailable") {
       yield* sleepUntil(waiting.until, wake);
+
       return;
     }
+
     const startsAt = Math.max(
       yield* Clock.currentTimeMillis,
       lastWatchedSyncAt + watchSpacingMs
     );
+
     lastWatchedSyncAt = startsAt;
     yield* sleepUntil(startsAt, wake);
   });
@@ -284,6 +309,7 @@ export const createAccountWorker = <R = never>({
         if (!caughtUp || phase.kind !== "syncing") {
           return;
         }
+
         caughtUpThisCycle = true;
         trouble = undefined;
         setPhase({ kind: "indexing" });
@@ -312,9 +338,11 @@ export const createAccountWorker = <R = never>({
       // that gap would be too late to count as pending and too early to end
       // the wait, and would be lost.
       const next = afterCycle(outcome, now);
+
       if (next.kind === "stopped") {
         return;
       }
+
       if (next.kind !== "syncing") {
         setPhase(next);
         const wake: Deferred.Deferred<void> = Deferred.makeUnsafe();
@@ -335,17 +363,21 @@ export const createAccountWorker = <R = never>({
       if (trouble === "sign-in") {
         return "paused";
       }
+
       if (trouble === "hidden") {
         return "hidden";
       }
+
       return trouble === "unreachable" ? "failed" : undefined;
     },
     phase: () => phase,
     requestSync: (source) => {
       if (waking !== undefined && endsWait(source)) {
         Deferred.doneUnsafe(waking, Effect.void);
+
         return;
       }
+
       if (
         pending === undefined ||
         REQUEST_RANK[source] > REQUEST_RANK[pending]

@@ -49,6 +49,7 @@ describe("composer template IPC", () => {
     Effect.gen(function* composerTemplateIpc() {
       const listReply = yield* listTemplates.handler(undefined);
       const saveReply = yield* saveTemplate.handler(template);
+
       const deleteReply = yield* deleteTemplate.handler({
         templateId: template.id,
       });

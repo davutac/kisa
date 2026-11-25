@@ -30,20 +30,25 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
   const importGeneration = useRef(0);
   const [pendingAction, setPendingAction] = useState<PendingAction>();
   const [importSession, setImportSession] = useState<ImportSession>();
+
   const [importProgress, setImportProgress] =
     useState<DatabaseImportProgress>();
+
   const [selectingKind, setSelectingKind] = useState<DatabaseImportFileKind>();
   // Whether an import waits for a restart is main's to say: it reads the
   // manifest each time. This is only the last answer, asked again on mount
   // and after everything here that can change it.
   const [importStatus, setImportStatus] = useState<DatabaseImportStatus>();
+
   const [pendingImportAction, setPendingImportAction] =
     useState<PendingImportAction>();
+
   const mountedRef = useRef(false);
 
   const refreshImportStatus = useCallback(async (): Promise<void> => {
     try {
       const reply = await settingsApi.getDatabaseImportStatus();
+
       if (mountedRef.current && reply.ok) {
         setImportStatus(reply.data);
       }
@@ -59,6 +64,7 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
         void refreshImportStatus();
       }
     });
+
     return () => {
       mountedRef.current = false;
     };
@@ -79,16 +85,20 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
       async () => {
         try {
           const reply = await settingsApi.discardDatabaseImport();
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
+
           // The Import row must stop saying a restart will activate it.
           setImportProgress(undefined);
           toast.success("Database import discarded");
         } catch {
           toast.error("Could not discard the import");
         }
+
         await refreshImportStatus();
       },
       () => {
@@ -103,12 +113,14 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
       async () => {
         try {
           const reply = await settingsApi.restartForDatabaseImport();
+
           if (!reply.ok) {
             toast.error(reply.error);
           }
         } catch {
           toast.error("Could not restart to finish the import");
         }
+
         await refreshImportStatus();
       },
       () => {
@@ -123,6 +135,7 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
       async () => {
         try {
           const reply = await settingsApi.exportDatabaseRecoveryKey();
+
           if (!reply.ok) {
             toast.error(reply.error);
           } else if (reply.data === "saved") {
@@ -143,19 +156,25 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
     importGeneration.current = generation;
     setImportSession({});
     setImportProgress(undefined);
+
     try {
       const reply = await settingsApi.beginDatabaseImport();
+
       if (importGeneration.current !== generation) {
         if (reply.ok) {
           await settingsApi.cancelDatabaseImport(reply.data);
         }
+
         return;
       }
+
       if (!reply.ok) {
         toast.error(reply.error);
         setImportSession(undefined);
+
         return;
       }
+
       setImportSession({ sessionId: reply.data.sessionId });
     } catch {
       if (importGeneration.current === generation) {
@@ -171,9 +190,11 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
     setImportSession(undefined);
     setImportProgress(undefined);
     setSelectingKind(undefined);
+
     try {
       if (sessionId !== undefined) {
         const reply = await settingsApi.cancelDatabaseImport({ sessionId });
+
         if (!reply.ok) {
           toast.error(reply.error);
         }
@@ -192,6 +213,7 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
       if (current?.sessionId !== sessionId) {
         return current;
       }
+
       return kind === "database"
         ? { ...current, databaseFileName: fileName }
         : { ...current, recoveryKeyFileName: fileName };
@@ -202,9 +224,11 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
     kind: DatabaseImportFileKind
   ): Promise<void> => {
     const sessionId = importSession?.sessionId;
+
     if (sessionId === undefined) {
       return;
     }
+
     setSelectingKind(kind);
     await runWithCleanup(
       async () => {
@@ -213,6 +237,7 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
             kind,
             sessionId,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
           } else if (reply.data !== null) {
@@ -233,24 +258,30 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
     file: File
   ): Promise<void> => {
     const sessionId = importSession?.sessionId;
+
     if (sessionId === undefined) {
       return;
     }
+
     const fileName = file.name.toLowerCase();
+
     const hasExpectedExtension =
       kind === "database"
         ? fileName.endsWith(".db") ||
           fileName.endsWith(".sqlite") ||
           fileName.endsWith(".sqlite3")
         : fileName.endsWith(".kisa-key");
+
     if (!hasExpectedExtension) {
       toast.error(
         kind === "database"
           ? "Drop a .sqlite, .sqlite3, or .db database"
           : "Drop a .kisa-key recovery key"
       );
+
       return;
     }
+
     setSelectingKind(kind);
     await runWithCleanup(
       async () => {
@@ -260,6 +291,7 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
             kind,
             sessionId,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
           } else if (reply.data !== null) {
@@ -277,15 +309,18 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
 
   const startImport = async (): Promise<void> => {
     const sessionId = importSession?.sessionId;
+
     if (sessionId === undefined) {
       return;
     }
+
     setPendingAction("import");
     setImportProgress(undefined);
     await runWithCleanup(
       async () => {
         try {
           const reply = await settingsApi.importDatabase({ sessionId });
+
           if (reply.ok) {
             setImportProgress("ready");
             toast.success("Database import ready", {
@@ -299,6 +334,7 @@ export const useSettingsDatabase = (settingsApi: SettingsApi) => {
           toast.error("Could not import the database");
           setImportProgress(undefined);
         }
+
         // Main reports "importing" until the restart dialog is answered,
         // which is when the reply above arrives.
         await refreshImportStatus();

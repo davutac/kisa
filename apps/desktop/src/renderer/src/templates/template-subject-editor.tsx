@@ -58,12 +58,15 @@ const SUBJECT_EDITOR_PROPS = {
     if (event.key !== "Enter" || event.isComposing) {
       return false;
     }
+
     event.preventDefault();
     view.dom.closest("form")?.requestSubmit();
+
     return true;
   },
   transformPastedText: (value, _plain, view) => {
     const { from, to } = view.state.selection;
+
     return truncateTemplateSubjectPaste(
       normalizePastedSubject(value),
       view.state.doc,
@@ -87,6 +90,7 @@ const TemplateSubjectEditor = ({
   previewContext,
 }: TemplateSubjectEditorProps) => {
   const contentKeyRef = useRef(contentKey);
+
   const [editorContent, setEditorContent] = useState(() =>
     templateTextToVariableDocument(defaultValue)
   );
@@ -105,6 +109,7 @@ const TemplateSubjectEditor = ({
     if (editor === null || contentKeyRef.current === contentKey) {
       return;
     }
+
     contentKeyRef.current = contentKey;
     const content = templateTextToVariableDocument(defaultValue);
     setEditorContent(content);

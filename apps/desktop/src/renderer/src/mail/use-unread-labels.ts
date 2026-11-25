@@ -45,6 +45,7 @@ const readUnreadLabelCounts = async (
   accountIds: readonly string[]
 ): Promise<UnreadLabelCounts | undefined> => {
   const reply = await mailApi.getUnreadLabels({ accountIds });
+
   return reply.ok ? toUnreadLabelCounts(reply.data) : undefined;
 };
 

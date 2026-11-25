@@ -88,6 +88,7 @@ const getFormats = (timeZone: string | undefined): MailDateFormats => {
   };
 
   formatsByTimeZone.set(timeZone, formats);
+
   return formats;
 };
 
@@ -106,8 +107,10 @@ const toCalendarDay = (
   format: Intl.DateTimeFormat
 ): CalendarDay => {
   const parts = format.formatToParts(timestamp);
+
   const read = (type: Intl.DateTimeFormatPartTypes): number =>
     Number(parts.find((part) => part.type === type)?.value);
+
   const year = read("year");
 
   return {

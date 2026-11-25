@@ -64,14 +64,19 @@ const MailReplyArea = ({
   const composerHandleRef = useRef<ComposerFocusHandle | null>(null);
   const replyInstructionsRef = useRef<HTMLTextAreaElement>(null);
   const [isReplyPopoverOpen, setIsReplyPopoverOpen] = useState(false);
+
   const replaceComposerContent = useCallback((content: string): boolean => {
     const replaceContent = composerHandleRef.current?.replaceContent;
+
     if (replaceContent === undefined) {
       return false;
     }
+
     replaceContent(content);
+
     return true;
   }, []);
+
   const workspace = useReplyWorkspace({
     accountId,
     action,
@@ -82,6 +87,7 @@ const MailReplyArea = ({
     replaceComposerContent,
     threadId,
   });
+
   const isForward = action === "forward";
   const handleDiscard = workspace.discard;
   const handleDismissCleanVersion = workspace.dismissCleanVersion;
@@ -91,6 +97,7 @@ const MailReplyArea = ({
   const handleSend = workspace.send;
   const canSend = workspace.canSend && !isReplyPopoverOpen;
   const handleSelectCleanVersion = workspace.selectCleanVersion;
+
   const handleComposerReady = useCallback(
     (handle: ComposerFocusHandle | null): void => {
       composerHandleRef.current = handle;
@@ -98,13 +105,17 @@ const MailReplyArea = ({
     },
     [onComposerReady]
   );
+
   const handleClose = (): void => {
     if (isReplyPopoverOpen) {
       setIsReplyPopoverOpen(false);
+
       return;
     }
+
     onClose(workspace.currentDraft);
   };
+
   const sender = parseMailboxAddress(message.from);
   const targetLabel = sender.name ?? sender.email;
   const { bcc, cc, to } = workspace.recipients;

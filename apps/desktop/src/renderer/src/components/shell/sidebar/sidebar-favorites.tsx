@@ -35,6 +35,7 @@ const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
   const accounts = useAccounts();
   const { catalogs, statuses } = useLabelCatalogSnapshot();
   const favorites = useFavoriteLabelsStore((state) => state.favorites);
+
   const accountIds = useMemo(
     () => accounts.map(({ email }) => email),
     [accounts]
@@ -51,6 +52,7 @@ const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
       accountIds.includes(accountId) &&
       !isMailboxLabelMissing(label, [accountId], catalogs, statuses)
   );
+
   const { labels: unreadLabels } = useUnreadLabels([
     ...new Set(visible.map(({ accountId }) => accountId)),
   ]);
@@ -64,6 +66,7 @@ const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
       {visible.map((favorite) => {
         const target = toFavoriteTarget(favorite);
         const key = normalizeMailboxLabelName(favorite.label);
+
         const color = catalogs
           .get(favorite.accountId)
           ?.find(
@@ -71,12 +74,14 @@ const SidebarFavorites = ({ onSelect, view }: SidebarFavoritesProps) => {
               candidate.type === "user" &&
               normalizeMailboxLabelName(candidate.name) === key
           )?.color;
+
         // The same label favorited in two accounts would read alike.
         const isNameShared = visible.some(
           (other) =>
             other.accountId !== favorite.accountId &&
             normalizeMailboxLabelName(other.label) === key
         );
+
         const unreadCount =
           unreadLabels.get(
             toUnreadLabelKey(favorite.accountId, favorite.label)

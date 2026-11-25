@@ -15,6 +15,7 @@ import { renderSignInCallbackPage } from "./sign-in-callback-page";
 
 const AUTHORIZE_URL =
   "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
+
 const TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 
 /**
@@ -24,6 +25,7 @@ const TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
  */
 const MAIL_SCOPE =
   "https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access";
+
 /**
  * Asked for at the browser sign-in only: who signed in, so a mailbox that
  * will not open can be told from another account picked on Microsoft's page.
@@ -33,6 +35,7 @@ const IDENTITY_SCOPE = "openid email";
 /** How long the user has to finish in the browser. */
 const SIGN_IN_TIMEOUT_MS = 10 * 60_000;
 const TOKEN_REQUEST_TIMEOUT_MS = 15_000;
+
 /** A token counts as expired this long before Microsoft says it is. */
 const EXPIRY_MARGIN_MS = 60_000;
 const DEFAULT_LIFETIME_SECONDS = 3600;
@@ -94,10 +97,12 @@ const TokenResponse = Schema.Struct({
   id_token: Schema.optional(Schema.String),
   refresh_token: Schema.optional(Schema.String),
 });
+
 const TokenFailure = Schema.Struct({
   error: Schema.String,
   error_codes: Schema.optional(Schema.Array(Schema.Finite)),
 });
+
 const IdentityClaims = Schema.Struct({
   email: Schema.optional(Schema.String),
   preferred_username: Schema.optional(Schema.String),
@@ -105,6 +110,7 @@ const IdentityClaims = Schema.Struct({
 
 const decodeTokenResponse = Schema.decodeUnknownOption(TokenResponse);
 const decodeTokenFailure = Schema.decodeUnknownOption(TokenFailure);
+
 const decodeIdentityClaims = Schema.decodeUnknownOption(
   Schema.fromJsonString(IdentityClaims)
 );
@@ -211,11 +217,14 @@ const requestTokens = Effect.fn("MicrosoftOAuth.requestTokens")(
             AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
           ]),
         });
+
         // The body holds tokens, so it is decoded here and never logged.
         const body: unknown = await reply.json().catch(() => null);
+
         return { body, status: reply.status };
       },
     });
+
     const tokens = decodeTokenResponse(response.body);
 
     if (
@@ -227,6 +236,7 @@ const requestTokens = Effect.fn("MicrosoftOAuth.requestTokens")(
     }
 
     const failure = decodeTokenFailure(response.body);
+
     const isTransient =
       response.status >= 500 ||
       response.status === 429 ||
@@ -302,6 +312,7 @@ const awaitRedirect = (
     // Aborted once the wait is over, however it ended: by its result, or by
     // the effect being interrupted.
     const ended = new AbortController();
+
     const settle = (
       result: Effect.Effect<Redirect, MicrosoftSignInError>
     ): void => {
@@ -320,16 +331,19 @@ const awaitRedirect = (
         url.searchParams.get("state") !== state
       ) {
         response.writeHead(404, { "content-length": "0" }).end();
+
         return;
       }
 
       const code = url.searchParams.get("code") ?? "";
       const error = url.searchParams.get("error") ?? "";
       const outcome = code.length > 0 ? undefined : error || "invalid_request";
+
       if (outcome !== undefined) {
         const entraCode = ENTRA_CODE_PATTERN.exec(
           url.searchParams.get("error_description") ?? ""
         )?.groups?.code;
+
         console.warn(
           `Microsoft sign-in came back refused: ${describeFailure(
             outcome,
@@ -355,6 +369,7 @@ const awaitRedirect = (
         );
       }
     });
+
     server.once("error", () => {
       closeListener(server);
       settle(Effect.fail(failWith("local")));
@@ -365,6 +380,7 @@ const awaitRedirect = (
       if (address === null || Predicate.isString(address)) {
         closeListener(server);
         settle(Effect.fail(failWith("local")));
+
         return;
       }
 
@@ -389,6 +405,7 @@ const awaitRedirect = (
           settle(Effect.fail(failWith("local")));
         }
       };
+
       void open();
     });
 

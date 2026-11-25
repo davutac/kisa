@@ -21,19 +21,23 @@ const formatBytes = (bytes: number): string => {
   if (bytes < 1000) {
     return `${bytes} B`;
   }
+
   if (bytes < 1_000_000) {
     return `${(bytes / 1000).toFixed(1)} KB`;
   }
+
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 };
 
 const AttachmentPreviewApp = () => {
   const bridge = window.attachmentPreview;
+
   const [state, setState] = useState<PreviewState>(() =>
     bridge === undefined
       ? { message: "Attachment preview is unavailable.", status: "error" }
       : { status: "loading" }
   );
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
 
@@ -41,10 +45,13 @@ const AttachmentPreviewApp = () => {
     if (bridge === undefined) {
       return;
     }
+
     let disposed = false;
+
     const load = async (): Promise<void> => {
       try {
         const reply = await bridge.load();
+
         if (!disposed) {
           setState(
             reply.ok
@@ -58,7 +65,9 @@ const AttachmentPreviewApp = () => {
         }
       }
     };
+
     void load();
+
     return () => {
       disposed = true;
     };
@@ -68,12 +77,14 @@ const AttachmentPreviewApp = () => {
     if (bridge === undefined || saving) {
       return;
     }
+
     setSaving(true);
     setSaveError(undefined);
     await runWithCleanup(
       async () => {
         try {
           const reply = await bridge.save();
+
           if (!reply.ok) {
             setSaveError(reply.error);
           }
@@ -89,6 +100,7 @@ const AttachmentPreviewApp = () => {
 
   const attachment = state.status === "ready" ? state.data : undefined;
   let content;
+
   if (state.status === "loading") {
     content = <PreviewPending label="Opening the envelope…" />;
   } else if (state.status === "error") {

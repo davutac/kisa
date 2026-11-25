@@ -27,6 +27,7 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
 
   const remove = (accountId: string, token: symbol): void => {
     const active = activeByAccount.get(accountId);
+
     if (active === undefined) {
       return;
     }
@@ -57,13 +58,16 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
 
     const controller = new AbortController();
     const token = Symbol(accountId);
+
     const abort = (): void => {
       controller.abort();
     };
+
     parentSignal?.addEventListener("abort", abort, { once: true });
 
     const completion = (async (): Promise<void> => {
       await Promise.resolve();
+
       try {
         await work(controller.signal);
       } catch (error) {
@@ -75,6 +79,7 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
         remove(accountId, token);
       }
     })();
+
     const active = activeByAccount.get(accountId) ?? new Set();
     active.add({ completion, controller, token });
     activeByAccount.set(accountId, active);
@@ -105,10 +110,13 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
 
   const resume = (accountId: string): void => {
     const count = suspensionCountByAccount.get(accountId) ?? 0;
+
     if (count <= 1) {
       suspensionCountByAccount.delete(accountId);
+
       return;
     }
+
     suspensionCountByAccount.set(accountId, count - 1);
   };
 

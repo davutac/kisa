@@ -1,6 +1,6 @@
 // oxlint-disable typescript/no-unsafe-type-assertion
 import { genericDialect, gmailDialect } from "@repo/mail/dialects";
-import { SystemLabel, ThreadId, userLabelId } from "@repo/mail/ids";
+import { LabelId, SystemLabel, ThreadId, userLabelId } from "@repo/mail/ids";
 import {
   applyThreadAction,
   partitionReportableThreads,
@@ -28,6 +28,7 @@ import {
   syncFully,
   threadRow,
 } from "./fixtures/mail-engine-harness";
+import { found, stringList } from "./fixtures/rows";
 
 const SPAM = "[Gmail]/Spam";
 
@@ -37,18 +38,21 @@ const act = (scope: SyncScope, threadId: string, action: ThreadAction) =>
 const label = (labelId: string, applied: boolean): ThreadAction => ({
   applied,
   kind: "setLabel",
-  labelId: labelId as never,
+  labelId: LabelId.make(labelId),
 });
 
 /** A synced Gmail account whose server files moves into INBOX in All Mail. */
 const syncGmail = async (...ids: readonly string[]) => {
   insertAccount("gmail");
   const server = new FakeImapServer(GMAIL_MAILBOXES, undefined, ALL_MAIL);
+
   for (const id of ids) {
     server.deliver(ALL_MAIL, gmailMessage(id, id));
   }
+
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
+
   return { scope, server };
 };
 
@@ -57,11 +61,14 @@ const syncIcloud = async (
 ) => {
   insertAccount("generic");
   const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+
   for (const { id, path } of messages) {
     server.deliver(path, genericMessage(id));
   }
+
   const scope = scopeFor(server, genericDialect);
   await syncFully(scope);
+
   return { scope, server };
 };
 
@@ -78,38 +85,41 @@ const genericReply = (id: string, parent: string) =>
 
 /** The cached ids of the generic message with this subject. */
 const genericIds = (subject: string) =>
-  connection
-    .prepare(
-      "SELECT message_id, thread_id FROM mail_messages WHERE subject = ?"
-    )
-    .get(subject) as { message_id: string; thread_id: string };
+  found(
+    connection
+      .prepare<unknown[], { message_id: string; thread_id: string }>(
+        "SELECT message_id, thread_id FROM mail_messages WHERE subject = ?"
+      )
+      .get(subject)
+  );
 
 const locationPaths = (messageId: string) =>
-  (
-    connection
-      .prepare(
-        "SELECT mailbox_path FROM mail_message_locations WHERE message_id = ? ORDER BY mailbox_path"
-      )
-      .all(messageId) as { mailbox_path: string }[]
-  ).map((row) => row.mailbox_path);
+  connection
+    .prepare<unknown[], { mailbox_path: string }>(
+      "SELECT mailbox_path FROM mail_message_locations WHERE message_id = ? ORDER BY mailbox_path"
+    )
+    .all(messageId)
+    .map((row) => row.mailbox_path);
 
 /** A message's cached copies: where each is, with its flags and labels. */
 const cachedCopiesOf = (messageId: string) =>
-  (
-    connection
-      .prepare(
-        "SELECT mailbox_path, flags, label_ids FROM mail_message_locations WHERE message_id = ? ORDER BY mailbox_path"
-      )
-      .all(messageId) as {
-      flags: string;
-      label_ids: string;
-      mailbox_path: string;
-    }[]
-  ).map((row) => ({
-    flags: JSON.parse(row.flags) as string[],
-    labelIds: JSON.parse(row.label_ids) as string[],
-    path: row.mailbox_path,
-  }));
+  connection
+    .prepare<
+      unknown[],
+      {
+        flags: string;
+        label_ids: string;
+        mailbox_path: string;
+      }
+    >(
+      "SELECT mailbox_path, flags, label_ids FROM mail_message_locations WHERE message_id = ? ORDER BY mailbox_path"
+    )
+    .all(messageId)
+    .map((row) => ({
+      flags: stringList(row.flags),
+      labelIds: stringList(row.label_ids),
+      path: row.mailbox_path,
+    }));
 
 describe("thread actions with the Gmail dialect", () => {
   beforeEach(resetDatabase);
@@ -218,9 +228,11 @@ describe("thread actions with the Gmail dialect", () => {
   it("deletes forever while older mail is still being walked", async () => {
     insertAccount("gmail");
     const server = new FakeImapServer(GMAIL_MAILBOXES);
+
     for (let id = 700; id < 1300; id += 1) {
       server.deliver(ALL_MAIL, gmailMessage(String(id), String(id)));
     }
+
     const scope = scopeFor(server, gmailDialect);
     await run(syncAccount(scope));
     await run(skeletonStep(scope));
@@ -381,6 +393,7 @@ describe("thread actions with the generic dialect", () => {
       { id: "b", path: "INBOX" },
       { id: "c", path: "Receipts" },
     ]);
+
     const kept = genericIds("b");
     const filed = genericIds("c");
 
@@ -402,10 +415,12 @@ describe("thread actions with the generic dialect", () => {
   // delete the only one there is.
   it("archives a folder's only copy though the server's All view shows it too", async () => {
     insertAccount("generic");
+
     const server = new FakeImapServer(
       [...ICLOUD_MAILBOXES, { path: "virtual/All", specialUse: "\\All" }],
       ["IDLE"]
     );
+
     server.deliver("Receipts", genericMessage("viewed"));
     server.deliver("virtual/All", genericMessage("viewed"));
     const scope = scopeFor(server, genericDialect);
@@ -424,6 +439,7 @@ describe("thread actions with the generic dialect", () => {
       { id: "e", path: "Receipts" },
       { id: "e", path: "Deleted Messages" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("e");
 
     await act(scope, threadId, label(userLabelId("Receipts"), false));
@@ -440,6 +456,7 @@ describe("thread actions with the generic dialect", () => {
       { id: "f", path: "Receipts" },
       { id: "f", path: "Receipts" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("f");
 
     await act(scope, threadId, label(userLabelId("Receipts"), false));
@@ -480,10 +497,12 @@ describe("thread actions with the generic dialect", () => {
     await syncFully(scope);
     const received = genericIds("h");
     const reply = genericIds("i");
+
     const copies = () => ({
       received: locationPaths(received.message_id),
       reply: locationPaths(reply.message_id),
     });
+
     expect(reply.thread_id).toBe(received.thread_id);
 
     await act(scope, received.thread_id, { kind: "moveToSpam" });
@@ -507,6 +526,7 @@ describe("thread actions with the generic dialect", () => {
     const { scope, server } = await syncIcloud([
       { id: "j", path: "Sent Messages" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("j");
 
     await expect(
@@ -527,6 +547,7 @@ describe("thread actions with the generic dialect", () => {
     await syncFully(scope);
     const received = genericIds("k");
     const reply = genericIds("l");
+
     const copies = () => [
       locationPaths(received.message_id),
       locationPaths(reply.message_id),
@@ -562,6 +583,7 @@ describe("thread actions with the generic dialect", () => {
       { id: "n", path: "INBOX" },
       { id: "n", path: "Sent Messages" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("n");
 
     await act(scope, threadId, { kind: "trash" });
@@ -578,6 +600,7 @@ describe("thread actions with the generic dialect", () => {
       { id: "t", path: "INBOX" },
       { id: "t", path: "Receipts" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("t");
 
     await act(scope, threadId, { kind: "trash" });
@@ -626,15 +649,16 @@ describe("thread actions with the generic dialect", () => {
       { id: "w", path: "Deleted Messages" },
       { id: "w", path: "INBOX" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("w");
+
     const uidsInTrash = () =>
-      (
-        connection
-          .prepare(
-            "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages' ORDER BY uid"
-          )
-          .all(messageId) as { uid: number }[]
-      ).map((row) => row.uid);
+      connection
+        .prepare<unknown[], { uid: number }>(
+          "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages' ORDER BY uid"
+        )
+        .all(messageId)
+        .map((row) => row.uid);
 
     await act(scope, threadId, { kind: "trash" });
     const trashed = uidsInTrash();
@@ -659,6 +683,7 @@ describe("thread actions with the generic dialect", () => {
       { id: "x", path: "INBOX" },
       { id: "x", path: "Receipts" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("x");
 
     await act(scope, threadId, { kind: "moveToSpam" });
@@ -701,15 +726,16 @@ describe("thread actions with the generic dialect", () => {
       { id: "aa", path: "Junk" },
       { id: "aa", path: "INBOX" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("aa");
+
     const uidsInSpam = () =>
-      (
-        connection
-          .prepare(
-            "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Junk' ORDER BY uid"
-          )
-          .all(messageId) as { uid: number }[]
-      ).map((row) => row.uid);
+      connection
+        .prepare<unknown[], { uid: number }>(
+          "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Junk' ORDER BY uid"
+        )
+        .all(messageId)
+        .map((row) => row.uid);
 
     await act(scope, threadId, { kind: "moveToSpam" });
     const reported = uidsInSpam();
@@ -749,13 +775,18 @@ describe("thread actions with the generic dialect", () => {
     const { scope, server } = await syncIcloud([
       { id: "ac", path: "Receipts" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("ac");
     await act(scope, threadId, { kind: "trash" });
-    const { uid } = connection
-      .prepare(
-        "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages'"
-      )
-      .get(messageId) as { uid: number };
+
+    const { uid } = found(
+      connection
+        .prepare<unknown[], { uid: number }>(
+          "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages'"
+        )
+        .get(messageId)
+    );
+
     server.move("Deleted Messages", uid, "Junk");
     await run(syncAccount(scope));
 
@@ -768,6 +799,7 @@ describe("thread actions with the generic dialect", () => {
     const { scope, server } = await syncIcloud([
       { id: "s", path: "Sent Messages" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("s");
     await act(scope, threadId, { kind: "trash" });
     server.removeMailbox("Sent Messages");
@@ -782,14 +814,19 @@ describe("thread actions with the generic dialect", () => {
     const { scope, server } = await syncIcloud([
       { id: "p", path: "Sent Messages" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("p");
     await act(scope, threadId, { kind: "trash" });
+
     // Another mail app files it in the Inbox; Kisa then trashes it from there.
-    const { uid } = connection
-      .prepare(
-        "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages'"
-      )
-      .get(messageId) as { uid: number };
+    const { uid } = found(
+      connection
+        .prepare<unknown[], { uid: number }>(
+          "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages'"
+        )
+        .get(messageId)
+    );
+
     server.move("Deleted Messages", uid, "INBOX");
     await run(syncAccount(scope));
     await act(scope, threadId, { kind: "trash" });
@@ -821,6 +858,7 @@ describe("thread actions with the generic dialect", () => {
       { id: "d", path: "INBOX" },
       { id: "d", path: "Receipts" },
     ]);
+
     const { message_id: messageId, thread_id: threadId } = genericIds("d");
 
     await act(scope, threadId, { kind: "trash" });

@@ -87,6 +87,7 @@ const MICROSOFT_CONSUMER_NAMES: ReadonlySet<string> = new Set([
 export const isMicrosoftConsumerAddress = (address: string): boolean => {
   const domain = toAddressDomain(address);
   const [name = ""] = domain?.split(".") ?? [];
+
   return (
     domain !== undefined &&
     domain.includes(".") &&
@@ -112,6 +113,7 @@ export const microsoftServersFor = (address: string): MailAccountServers => ({
 /** Whether a server is Microsoft's, which signs in through Microsoft only. */
 export const isMicrosoftMailHost = (host: string): boolean => {
   const name = host.trim().toLowerCase();
+
   return name === "outlook.office365.com" || name.endsWith(".outlook.com");
 };
 
@@ -144,10 +146,13 @@ export const toAccountProvider = ({
   if (provider !== "imap") {
     return provider;
   }
+
   const host = imapHost.trim().toLowerCase();
+
   if (host === GMAIL_PRESET.imap.host) {
     return "gmail";
   }
+
   return host === ICLOUD_PRESET.imap.host ? "icloud" : "imap";
 };
 
@@ -156,6 +161,7 @@ export const toAccountProvider = ({
  * other cannot claim, so the check stays linear in its input.
  */
 const ADDRESS_PATTERN = /^[^\s@"<>]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/iu;
+
 /** A DNS name or IPv4 address. */
 const HOST_PATTERN = /^[a-z0-9-]+(?:\.[a-z0-9-]+)*$/iu;
 
@@ -176,10 +182,12 @@ export const isMailPort = (port: number): boolean =>
 /** The lowercased domain of an address, or `undefined` when it has none. */
 export const toAddressDomain = (address: string): string | undefined => {
   const at = address.lastIndexOf("@");
+
   const domain = address
     .slice(at + 1)
     .trim()
     .toLowerCase();
+
   return at === -1 || domain.length === 0 ? undefined : domain;
 };
 
@@ -187,5 +195,6 @@ export const findMailAccountPreset = (
   address: string
 ): MailAccountPreset | undefined => {
   const domain = toAddressDomain(address);
+
   return domain === undefined ? undefined : PRESETS_BY_DOMAIN.get(domain);
 };

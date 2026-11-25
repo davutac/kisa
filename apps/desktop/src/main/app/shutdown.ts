@@ -2,7 +2,7 @@ interface QuitRequest {
   readonly preventDefault: () => void;
 }
 
-type ShutdownStep = () => Promise<unknown>;
+type ShutdownStep = () => Promise<void>;
 
 /**
  * `running` until the first quit request, `cleaning` while the stages run,
@@ -46,14 +46,17 @@ export const createShutdown = ({
 
   const runStage = async (stage: readonly ShutdownStep[]): Promise<void> => {
     const ended = Promise.withResolvers<null>();
+
     const deadline = scheduleDeadline(() => {
       ended.resolve(null);
     }, stageDeadlineMs);
+
     const settle = async (): Promise<void> => {
       await Promise.allSettled(stage.map(async (step) => await step()));
       deadline.cancel();
       ended.resolve(null);
     };
+
     void settle();
     await ended.promise;
   };
@@ -63,6 +66,7 @@ export const createShutdown = ({
       // oxlint-disable-next-line eslint/no-await-in-loop -- Stages are ordered: each stops what the next one depends on.
       await runStage(stage);
     }
+
     phase = "exiting";
     quit();
   };
@@ -74,6 +78,7 @@ export const createShutdown = ({
       }
 
       request.preventDefault();
+
       if (phase === "cleaning") {
         return;
       }

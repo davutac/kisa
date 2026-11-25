@@ -38,6 +38,7 @@ export const runScheduledComposerEditAction = async ({
   setPending,
 }: ScheduledComposerEditActionOptions): Promise<boolean> => {
   setPending(true);
+
   try {
     const request = (
       requested: ScheduledMailEditAction
@@ -46,7 +47,9 @@ export const runScheduledComposerEditAction = async ({
       action: requested,
       draftId: session.item.draftId,
     });
+
     let reply = await finishEdit(request(action));
+
     if (
       reply.ok &&
       reply.data.kind === "possible-duplicate" &&
@@ -55,30 +58,42 @@ export const runScheduledComposerEditAction = async ({
       if (!(await confirmPossibleDuplicate())) {
         return false;
       }
+
       reply = await finishEdit(
         request({ ...action, allowPossibleDuplicate: true })
       );
     }
+
     if (!reply.ok) {
       onError(reply.error);
+
       return false;
     }
+
     if (action.kind === "save" || action.kind === "reschedule") {
       if (reply.data.kind !== "saved") {
         onError(errorMessage);
+
         return false;
       }
+
       onSaved(reply.data.session);
+
       return true;
     }
+
     if (reply.data.kind !== "finished") {
       onError(errorMessage);
+
       return false;
     }
+
     onFinished?.();
+
     return true;
   } catch {
     onError(errorMessage);
+
     return false;
   } finally {
     setPending(false);

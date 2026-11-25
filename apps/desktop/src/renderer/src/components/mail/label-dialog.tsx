@@ -38,6 +38,7 @@ const resolveLabelColor = (
   name: string
 ) => {
   const saved = label?.color?.background;
+
   return {
     color: chosen ?? saved ?? seededLabelColor(name),
     colorChanged: chosen !== undefined && chosen !== saved,
@@ -78,20 +79,26 @@ const LabelDialog = ({
   // Until a colour is chosen, a new label shows the one sync would give it.
   const [chosenColor, setChosenColor] = useState<string>();
   const trimmedName = name.trim();
+
   const alreadyExists = existingLabels.some(
     (candidate) => candidate.id !== label?.id && candidate.name === trimmedName
   );
+
   const { color, colorChanged } = resolveLabelColor(
     label,
     chosenColor,
     trimmedName
   );
+
   const hasChanges =
     label === undefined || trimmedName !== label.name || colorChanged;
+
   const canSubmit =
     trimmedName.length > 0 && !alreadyExists && !isSaving && hasChanges;
+
   const copy =
     label === undefined ? LABEL_DIALOG_COPY.create : LABEL_DIALOG_COPY.edit;
+
   const submitLabel = isSaving ? copy.saving : copy.submit;
 
   useHotkeyLayer("blocking", isOpen);
@@ -109,6 +116,7 @@ const LabelDialog = ({
     if (!open) {
       reset();
     }
+
     onOpenChange(open);
   };
 
@@ -140,6 +148,7 @@ const LabelDialog = ({
 
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
 
@@ -199,14 +208,14 @@ const LabelDialog = ({
             value={color}
           />
 
-          <DialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">
+          <DialogFooter>
             <DialogClose
               disabled={isSaving}
-              render={<Button size="footer" type="button" variant="outline" />}
+              render={<Button type="button" variant="secondary" />}
             >
               Cancel
             </DialogClose>
-            <Button disabled={!canSubmit} size="footer" type="submit">
+            <Button disabled={!canSubmit} type="submit">
               {isSaving ? <LoaderCircleIcon className="animate-spin" /> : null}
               {submitLabel}
             </Button>

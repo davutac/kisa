@@ -33,12 +33,15 @@ export const listedMessages = <Message extends Labelled>(
   const outsideTrash = messages.filter(
     (message) => !isIn(message, SystemLabel.trash)
   );
+
   if (outsideTrash.length === 0) {
     return messages;
   }
+
   const outsideSpam = outsideTrash.filter(
     (message) => !isIn(message, SystemLabel.spam)
   );
+
   return outsideSpam.some((message) => isIn(message, SystemLabel.inbox))
     ? outsideSpam
     : outsideTrash;
@@ -76,6 +79,7 @@ export const conversationPlaces = (
   const labels = new Set(
     listedMessages(messages).flatMap((message) => message.labelIds)
   );
+
   return {
     isInInbox: labels.has(SystemLabel.inbox),
     isInSent: labels.has(SystemLabel.sent),

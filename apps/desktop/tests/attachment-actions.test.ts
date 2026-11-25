@@ -20,6 +20,8 @@ interface TestWindow {
   readonly options: Electron.BrowserWindowConstructorOptions;
 }
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const state = vi.hoisted(() => ({
   createdWindows: [] as TestWindow[],
   databaseReads: 0,
@@ -85,13 +87,14 @@ vi.mock("../src/main/database", () => ({
     run: (database: {
       readonly query: {
         readonly mailMessages: {
-          readonly findFirst: () => Promise<unknown>;
+          readonly findFirst: () => Promise<object>;
         };
       };
     }) => Promise<A>
   ) =>
     Effect.promise(() => {
       state.databaseReads += 1;
+
       return run({
         query: {
           mailMessages: {
@@ -183,6 +186,8 @@ describe("attachment actions", () => {
   it("opens Save As before any attachment fetch and stops on cancellation", async () => {
     state.saveDialog.mockResolvedValue({ canceled: true, filePath: "" });
 
+    // SAFETY: saveAttachment only hands the window to the mocked Save As
+    // dialog, and a cancelled dialog ends it there.
     await expect(
       Effect.runPromise(saveAttachment(request, {} as Electron.BrowserWindow))
     ).resolves.toBe("cancelled");

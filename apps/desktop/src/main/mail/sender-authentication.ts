@@ -40,6 +40,7 @@ export const extractSenderDomain = (from: string): string | null => {
   const angleBracketDomain = from.match(
     /<\s*[^<>\s@]+@(?<domain>[^\s<>,;@"']+)\s*>/u
   )?.groups?.domain;
+
   const domain = (
     angleBracketDomain ??
     from.match(/@(?<domain>[^\s<>,;@"']+)/u)?.groups?.domain
@@ -82,9 +83,11 @@ const getBimiAuthentication = (
   const bimiProperties = authentication.match(
     /\bbimi=pass\b(?<properties>[^;]*)/iu
   )?.groups?.properties;
+
   const bimiDomain = bimiProperties
     ?.match(/\bheader\.d=(?<domain>[^\s;]+)/iu)
     ?.groups?.domain?.toLowerCase();
+
   const selector =
     bimiProperties
       ?.match(/\bheader\.selector=(?<selector>[^\s;]+)/iu)
@@ -100,9 +103,11 @@ const hasEligibleDmarcPolicy = (dmarcProperties: string): boolean => {
   const policy = dmarcProperties
     .match(/\bp=(?<policy>none|quarantine|reject)\b/iu)
     ?.groups?.policy?.toLowerCase();
+
   const subdomainPolicy = dmarcProperties
     .match(/\bsp=(?<policy>none|quarantine|reject)\b/iu)
     ?.groups?.policy?.toLowerCase();
+
   const percentage = dmarcProperties.match(/\bpct=(?<value>\d{1,3})\b/iu)
     ?.groups?.value;
 
@@ -140,6 +145,7 @@ export const getGmailAuthentication = (
   const dmarcProperties = authentication.match(
     /\bdmarc=pass\b(?<properties>[^;]*)/iu
   )?.groups?.properties;
+
   const authenticatedFrom = dmarcProperties
     ?.match(/\bheader\.from=(?<domain>[^\s;]+)/iu)
     ?.groups?.domain?.toLowerCase();

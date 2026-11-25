@@ -34,7 +34,9 @@ const NewMessageStoreScope = ({
     accounts,
     scheduledEdit?.draft.accountId ?? initialAccountId
   );
+
   const { emailSignature } = useAccountSettings(initialComposerAccountId);
+
   // The parent keys each newly opened composer. Account changes while that
   // composer is open must not replace its draft store.
   const store = useInstanceValue(() =>
@@ -74,6 +76,7 @@ const NewMessagePageContent = ({
   // Set once the composer has finished with its draft itself, so the
   // navigation that closes the page is not held up to keep it again.
   const isReleasedRef = useRef(false);
+
   const workspace = useNewMessageWorkspace({
     accounts,
     isOpen: true,
@@ -86,6 +89,7 @@ const NewMessagePageContent = ({
     onScheduledEditChange,
     scheduledEdit,
   });
+
   const { getElement } = workspace.focus;
   const handleAccountSelect = workspace.selectAccount;
   const handleClean = workspace.cleanDraft;
@@ -96,6 +100,7 @@ const NewMessagePageContent = ({
   const handleSend = workspace.send;
   const handleSubjectChange = workspace.updateSubject;
   const { prepareToLeave } = workspace;
+
   const initialFocusTarget = useInstanceValue(() =>
     scheduledEdit === undefined
       ? "to"

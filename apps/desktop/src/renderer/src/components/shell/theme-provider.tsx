@@ -40,6 +40,7 @@ const applyColorScheme = ({ resolved }: ColorSchemeState): void => {
 const ThemeProvider = ({ children }: { readonly children: ReactNode }) => {
   useLayoutEffect(() => {
     applyColorScheme(themePreference.get());
+
     return themePreference.subscribe(applyColorScheme);
   }, []);
 

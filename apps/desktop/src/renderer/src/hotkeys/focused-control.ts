@@ -20,6 +20,7 @@ const TYPEAHEAD_ROLES = new Set([
   "menubar",
   "tree",
 ]);
+
 const ENTER_ROLES = new Set([
   ...TYPEAHEAD_ROLES,
   "button",
@@ -34,6 +35,7 @@ const ENTER_ROLES = new Set([
   "treegrid",
   "treeitem",
 ]);
+
 const VERTICAL_ROLES = new Set([
   ...TYPEAHEAD_ROLES,
   "grid",
@@ -50,12 +52,15 @@ const isTextField = (element: Element): boolean => {
   if (element instanceof HTMLInputElement) {
     return !NON_TEXT_INPUTS.has(element.type) && !element.readOnly;
   }
+
   if (element instanceof HTMLTextAreaElement) {
     return !element.readOnly;
   }
+
   if (element instanceof HTMLSelectElement) {
     return true;
   }
+
   const role = roleOf(element);
 
   return (
@@ -94,6 +99,7 @@ const keepsKey = (element: Element, key: string, shift: boolean): boolean => {
   if (key === "Enter") {
     return !shift && keepsEnter(element);
   }
+
   if (key === "ArrowDown" || key === "ArrowUp") {
     return keepsVerticalArrow(element, key);
   }

@@ -43,6 +43,7 @@ const MailLabelBadges = ({
 }: MailLabelBadgesProps) => {
   const { showSystemLabels } = useAccountSettings(accountId);
   const colorsByName = useLabelColors(accountId, labels);
+
   const visibleLabels = sortLabelNames(
     filterVisibleLabels(labels, showSystemLabels).filter(
       (label) => !isOmittedLabel(label, omitLabel)
@@ -55,6 +56,7 @@ const MailLabelBadges = ({
 
   return visibleLabels.map((label) => {
     const displayLabel = formatLabel(label);
+
     const canRemove =
       onRemoveLabel !== undefined && removableLabels?.has(label) === true;
 

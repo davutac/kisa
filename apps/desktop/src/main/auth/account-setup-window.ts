@@ -77,6 +77,7 @@ const focusWindow = (window: BrowserWindow): void => {
   if (window.isMinimized()) {
     window.restore();
   }
+
   window.show();
   window.focus();
 };
@@ -104,9 +105,11 @@ const setupQuery = (
     ["microsoft", microsoftAvailability()],
     ["presentation", presentation],
   ];
+
   if (target !== undefined) {
     query.push(["account", target.email], ["method", target.method]);
   }
+
   return query;
 };
 
@@ -121,9 +124,11 @@ const loadSetupRenderer = (
   if (is.dev && rendererUrl !== undefined) {
     const url = new URL(rendererUrl);
     url.pathname = `${url.pathname.replace(/\/$/u, "")}/account-setup.html`;
+
     for (const [name, value] of query) {
       url.searchParams.set(name, value);
     }
+
     return window.loadURL(url.toString());
   }
 
@@ -145,19 +150,24 @@ const openSetupWindow = Effect.fn("openSetupWindow")(function* openSetupWindow(
       session.signInAgain?.accountId === target?.accountId
     ) {
       focusWindow(session.window);
+
       return;
     }
+
     session.window.close();
   }
 
   const parent = getMainWindow();
+
   if (parent !== undefined) {
     focusWindow(parent);
+
     if (process.platform === "darwin") {
       // The sheet slides out below Kisa's own title bar.
       parent.setSheetOffset(TITLEBAR_HEIGHT);
     }
   }
+
   const presentation: SetupPresentation =
     parent !== undefined && process.platform === "darwin" ? "sheet" : "window";
 
@@ -169,12 +179,14 @@ const openSetupWindow = Effect.fn("openSetupWindow")(function* openSetupWindow(
     preload: path.join(import.meta.dirname, "../preload/account-setup.cjs"),
     title: `${target === undefined ? "Add account" : "Sign in again"} — ${APP_NAME}`,
   });
+
   window.setResizable(false);
   window.setMaximizable(false);
   window.setFullScreenable(false);
 
   const { promise: closed, resolve: markClosed } =
     Promise.withResolvers<undefined>();
+
   const current: SetupSession = {
     cancelMicrosoftSignIn: undefined,
     closed,
@@ -182,6 +194,7 @@ const openSetupWindow = Effect.fn("openSetupWindow")(function* openSetupWindow(
     submitting: false,
     window,
   };
+
   session = current;
 
   installNativeContextMenu(window);
@@ -190,6 +203,7 @@ const openSetupWindow = Effect.fn("openSetupWindow")(function* openSetupWindow(
     if (ACCOUNT_SETUP_HELP_URLS.has(url)) {
       openExternalUrl(url);
     }
+
     return { action: "deny" };
   });
   window.webContents.on("will-navigate", (event) => event.preventDefault());
@@ -201,6 +215,7 @@ const openSetupWindow = Effect.fn("openSetupWindow")(function* openSetupWindow(
   window.once("ready-to-show", () => window.show());
   window.on("closed", () => {
     markClosed(undefined);
+
     if (session === current) {
       session = undefined;
     }
@@ -254,6 +269,7 @@ export const openAccountSignInWindow = Effect.fn("openAccountSignInWindow")(
           })
       )
     );
+
     yield* openSetupWindow(target);
   }
 );
@@ -290,6 +306,7 @@ export const submitAccountSetup = Effect.fn("submitAccountSetup")(
         message: "Account setup is no longer open",
       });
     }
+
     if (current.submitting) {
       return yield* new PasswordAccountError({
         message: "Already signing in",
@@ -297,6 +314,7 @@ export const submitAccountSetup = Effect.fn("submitAccountSetup")(
     }
 
     const target = current.signInAgain;
+
     if (target?.method === "microsoft") {
       return yield* new PasswordAccountError({
         message: PASSWORD_ACCOUNT_MESSAGES.usesMicrosoft,
@@ -314,11 +332,13 @@ export const submitAccountSetup = Effect.fn("submitAccountSetup")(
               Effect.map(savePasswordAccount)
             );
           }
+
           if (request.email.toLowerCase() !== target.accountId) {
             return Effect.fail(
               new PasswordAccountError({ message: SIGN_IN_ELSEWHERE })
             );
           }
+
           return verifyPasswordSignInAgain(
             AccountId.make(target.accountId),
             request.password
@@ -353,9 +373,11 @@ export const submitAccountSetup = Effect.fn("submitAccountSetup")(
     );
 
     const mainWindow = getMainWindow();
+
     if (mainWindow !== undefined) {
       focusWindow(mainWindow);
     }
+
     if (!current.window.isDestroyed()) {
       current.window.close();
     }
@@ -394,11 +416,13 @@ export const startMicrosoftAccountSetup = Effect.fn(
       message: "Account setup is no longer open",
     });
   }
+
   if (current.submitting) {
     return yield* new MicrosoftAccountError({ message: "Already signing in" });
   }
 
   const target = current.signInAgain;
+
   if (target?.method === "password") {
     return yield* new MicrosoftAccountError({
       message: "This account signs in with a password.",
@@ -407,6 +431,7 @@ export const startMicrosoftAccountSetup = Effect.fn(
 
   const { promise: cancelled, resolve: cancel } =
     Promise.withResolvers<undefined>();
+
   current.submitting = true;
   current.cancelMicrosoftSignIn = () => cancel(undefined);
 
@@ -443,9 +468,11 @@ export const startMicrosoftAccountSetup = Effect.fn(
   );
 
   const mainWindow = getMainWindow();
+
   if (mainWindow !== undefined) {
     focusWindow(mainWindow);
   }
+
   if (!current.window.isDestroyed()) {
     current.window.close();
   }

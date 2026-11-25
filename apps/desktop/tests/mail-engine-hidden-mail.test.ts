@@ -68,6 +68,7 @@ const syncedGmail = async () => {
   const scope = scopeFor(server, gmailDialect);
   await syncFully(scope);
   await run(bodyStep(scope));
+
   return { scope, server };
 };
 

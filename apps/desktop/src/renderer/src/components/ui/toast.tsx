@@ -75,28 +75,36 @@ const Countdown = ({
   readonly countdown: ToastCountdown;
 }) => {
   const animated = useAnimationsEnabled();
+
   const [clock, setClock] = useState(() => {
     const at = Date.now();
+
     return { mountedAt: at, now: at };
   });
+
   const { mountedAt, now } = clock;
   const seconds = secondsLeft(endsAt, now);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     // Wakes as the whole second shown changes, until none is left.
     const schedule = (at: number): void => {
       const left = endsAt - at;
       timer = setTimeout(wake, left <= 0 ? 0 : left % 1000 || 1000);
     };
+
     const wake = (): void => {
       const at = Date.now();
       setClock((previous) => ({ ...previous, now: at }));
+
       if (endsAt > at) {
         schedule(at);
       }
     };
+
     schedule(Date.now());
+
     return () => clearTimeout(timer);
   }, [endsAt]);
 
@@ -143,6 +151,7 @@ const Toaster = ({
       const Icon = TOAST_ICONS[type];
       const isCounting = data instanceof ToastCountdown;
       let leading: React.ReactNode = null;
+
       if (isCounting) {
         leading = <Countdown countdown={data} />;
       } else if (Icon !== undefined) {

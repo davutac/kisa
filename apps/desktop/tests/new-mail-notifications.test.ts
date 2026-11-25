@@ -31,6 +31,8 @@ interface TestWindow {
   readonly show: ReturnType<typeof vi.fn<() => void>>;
 }
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const mocks = vi.hoisted(() => ({
   appFocus: vi.fn<typeof Electron.app.focus>(),
   brandIcon: { isEmpty: () => false },
@@ -60,6 +62,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock(import("electron"), async (importOriginal) => {
   const original = await importOriginal();
+
   class TestNotification {
     static isSupported = (): boolean => true;
     readonly id: string;
@@ -76,6 +79,7 @@ vi.mock(import("electron"), async (importOriginal) => {
       listener: Listener
     ): this {
       this.listeners.set(event, listener);
+
       return this;
     }
 
@@ -182,9 +186,12 @@ const emitNotification = (
   details?: { readonly actionIndex: number }
 ): void => {
   const listener = mocks.notificationListeners[notificationIndex]?.get(event);
+
   if (listener === undefined) {
     return;
   }
+
+  // oxlint-disable-next-line anti-slop/no-reflect-apply -- Listeners are kept as Notification registered them, each with its own parameters, so no single call signature fits them.
   Reflect.apply(listener, undefined, details === undefined ? [] : [details]);
 };
 
@@ -232,6 +239,7 @@ describe(showNewMailNotifications, () => {
 
   it("does no notification or brand work for a disabled account", async () => {
     mocks.notificationsEnabled = false;
+
     const resolveBrand = vi.fn<() => Effect.Effect<null>>(() =>
       Effect.succeed(null)
     );
@@ -282,6 +290,7 @@ describe(showNewMailNotifications, () => {
       makeMessage("archived", ["UNREAD"]),
     ];
     mocks.threads = [{ snippet: "A short preview", threadId: "thread-new" }];
+
     const resolveBrand = vi.fn<() => Effect.Effect<null>>(() =>
       Effect.succeed(null)
     );
@@ -334,6 +343,7 @@ describe(showNewMailNotifications, () => {
           kind: "remove" as const,
           threadId: "shared",
         };
+
         dismissInactiveThreadNotifications([removal, removal]);
       }
 
@@ -388,6 +398,7 @@ describe(showNewMailNotifications, () => {
         subject: "Subject",
         threadId: "thread-new",
       };
+
       dismissInactiveThreadNotifications([{ kind: "upsert", thread }]);
       // Unread and in the Inbox, though also in a folder a server calls
       // Trash: where it is listed is what main sent, not what a label reads.
@@ -509,6 +520,7 @@ describe(showNewMailNotifications, () => {
   it("rasterizes an authenticated BIMI logo for the native icon", async () => {
     mocks.messages = [makeMessage("branded", ["INBOX", "UNREAD"])];
     mocks.threads = [{ snippet: "Preview", threadId: "thread-branded" }];
+
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>'
     ).toString("base64");

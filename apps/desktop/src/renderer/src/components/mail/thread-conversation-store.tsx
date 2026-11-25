@@ -24,6 +24,7 @@ export const createThreadConversationStore = (initialMessageId: string) =>
         }
 
         const fallbackMessageId = messageIds.at(-1);
+
         return fallbackMessageId === undefined
           ? state
           : {
@@ -73,6 +74,7 @@ export const useThreadConversationStore = <Value,>(
   selector: (state: ThreadConversationState) => Value
 ): Value => {
   const store = useContext(ThreadConversationStoreContext);
+
   if (store === null) {
     throw new Error("ThreadConversationStoreProvider is missing");
   }

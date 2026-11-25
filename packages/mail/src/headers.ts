@@ -18,6 +18,7 @@ const HEADER_NAME_PATTERN = /^[!-9;-~]+$/u;
  */
 const ENCODED_WORD_PATTERN =
   /[=]\?(?<charset>[^?\s]+)\?(?<encoding>[BbQq])\?(?<text>[^?\s]*)\?=/gu;
+
 const LINEAR_WHITESPACE_PATTERN = /^[\t\n\r ]*$/u;
 
 const decodeWordBytes = (encoding: string, text: string): Uint8Array => {
@@ -74,6 +75,7 @@ export const decodeEncodedWords = (value: string): string => {
     const between = value.slice(lastIndex, match.index);
     // RFC 2231 allows a language after `*`; it does not change the bytes.
     const charset = (match.groups?.charset ?? "").split("*")[0] ?? "";
+
     const bytes = decodeWordBytes(
       match.groups?.encoding ?? "Q",
       match.groups?.text ?? ""
@@ -95,6 +97,7 @@ export const decodeEncodedWords = (value: string): string => {
   }
 
   flush();
+
   return output + value.slice(lastIndex);
 };
 
@@ -114,6 +117,7 @@ export const parseHeaderBlock = (
     if (name !== undefined && headers.length < MAX_HEADERS) {
       headers.push({ name, value: decodeEncodedWords(value.trim()) });
     }
+
     name = undefined;
     value = "";
   };
@@ -127,6 +131,7 @@ export const parseHeaderBlock = (
       if (name !== undefined) {
         value += line;
       }
+
       continue;
     }
 
@@ -146,6 +151,7 @@ export const parseHeaderBlock = (
   }
 
   flush();
+
   return headers;
 };
 
@@ -154,6 +160,7 @@ export const getHeaderValues = (
   name: string
 ): readonly string[] => {
   const lowerName = name.toLowerCase();
+
   return headers.flatMap((header) =>
     header.name.toLowerCase() === lowerName ? [header.value] : []
   );
@@ -185,5 +192,6 @@ export const parseMessageIds = (value?: string): readonly string[] => {
   }
 
   const bare = value.trim();
+
   return bare.length > 0 && !/\s/u.test(bare) ? [bare] : [];
 };

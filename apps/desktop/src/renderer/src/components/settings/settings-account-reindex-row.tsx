@@ -42,6 +42,7 @@ const SettingsAccountReindexRow = ({
   const signInAgain = async (): Promise<void> => {
     try {
       const reply = await accountsApi.openAccountSignIn({ email: accountId });
+
       if (!reply.ok) {
         toast.error(reply.error);
       }
@@ -79,6 +80,7 @@ const SettingsAccountReindexRow = ({
 
           if (!reply.ok) {
             toast.error(reply.error);
+
             return;
           }
 

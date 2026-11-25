@@ -19,6 +19,8 @@ import {
 } from "../src/main/mail/engine/mail-sessions";
 import { FakeImapServer } from "./fixtures/fake-imap-server";
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const signIn = vi.hoisted(() => ({
   forgotten: [] as string[],
   next: [] as ImapAuth[],
@@ -26,6 +28,7 @@ const signIn = vi.hoisted(() => ({
 
 vi.mock("../src/main/mail/engine/account-credentials", async () => {
   const { Effect: MockEffect } = await import("effect");
+
   return {
     forgetAccountSignIn: (accountId: string) => {
       signIn.forgotten.push(accountId);
@@ -33,6 +36,7 @@ vi.mock("../src/main/mail/engine/account-credentials", async () => {
     resolveImapAuth: () =>
       MockEffect.suspend(() => {
         const auth = signIn.next.shift();
+
         return auth === undefined
           ? MockEffect.die("no sign-in left to hand out")
           : MockEffect.succeed(auth);
@@ -56,6 +60,7 @@ const token = (value: string): ImapAuth => ({
   kind: "oauth",
   user: account.username,
 });
+
 const password: ImapAuth = {
   kind: "password",
   password: Redacted.make("app-password"),
@@ -82,6 +87,7 @@ const open = (refuses: (auth: ImapAuth) => "auth" | "network" | undefined) =>
                 > => {
                   requests.push(request);
                   const refusal = refuses(request.auth);
+
                   if (refusal === "auth") {
                     return Effect.fail(
                       new MailAuthError({
@@ -90,6 +96,7 @@ const open = (refuses: (auth: ImapAuth) => "auth" | "network" | undefined) =>
                       })
                     );
                   }
+
                   if (refusal === "network") {
                     return Effect.fail(
                       new MailConnectionError({
@@ -98,6 +105,7 @@ const open = (refuses: (auth: ImapAuth) => "auth" | "network" | undefined) =>
                       })
                     );
                   }
+
                   return Effect.succeed(
                     new FakeImapServer([{ path: "INBOX" }]).session()
                   );
@@ -113,8 +121,10 @@ const offered = () =>
   requests.map(({ auth }) =>
     auth.kind === "oauth" ? Redacted.value(auth.accessToken) : auth.kind
   );
+
 const tagOf = (exit: Exit.Exit<unknown, { readonly _tag: string }>) =>
   Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
+
 const isToken =
   (value: string) =>
   (auth: ImapAuth): boolean =>
@@ -192,6 +202,7 @@ describe("closing connections on quit", () => {
     // Opens only once every close has started: closing one connection after
     // another would wait here forever.
     const everyCloseStarted = Promise.withResolvers<null>();
+
     const connector = Layer.succeed(
       ImapConnector,
       ImapConnector.of({
@@ -201,14 +212,17 @@ describe("closing connections on quit", () => {
             () =>
               Effect.promise(() => {
                 closing += 1;
+
                 if (closing === connections) {
                   everyCloseStarted.resolve(null);
                 }
+
                 return everyCloseStarted.promise;
               })
           ),
       })
     );
+
     await Effect.runPromise(
       Effect.all([
         use(account, "background"),

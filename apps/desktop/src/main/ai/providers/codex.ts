@@ -36,6 +36,7 @@ import type {
 } from "./shared";
 
 const CodexRpcPayload = Schema.Record(Schema.String, Schema.Unknown);
+
 type CodexRpcPayload = typeof CodexRpcPayload.Type;
 
 const CodexRpcMessage = Schema.Union([
@@ -45,6 +46,7 @@ const CodexRpcMessage = Schema.Union([
     id: Schema.Finite,
   }),
 ]);
+
 const decodeCodexRpcMessage = Schema.decodeExit(
   Schema.fromJsonString(CodexRpcMessage)
 );
@@ -58,16 +60,19 @@ const CodexAccount = Schema.Union([
     type: Schema.Literal("chatgpt"),
   }),
 ]);
+
 const CodexAccountResponse = Schema.Struct({
   account: Schema.optional(Schema.NullOr(CodexAccount)),
   requiresOpenaiAuth: Schema.Boolean,
 });
+
 const decodeCodexAccountResponse =
   Schema.decodeUnknownExit(CodexAccountResponse);
 
 const CodexInitializeResponse = Schema.Struct({
   userAgent: Schema.optional(Schema.String),
 });
+
 const decodeCodexInitializeResponse = Schema.decodeUnknownExit(
   CodexInitializeResponse
 );
@@ -92,6 +97,7 @@ const CodexModelListResponse = Schema.Struct({
   ),
   nextCursor: Schema.optional(Schema.NullOr(Schema.String)),
 });
+
 const decodeCodexModelListResponse = Schema.decodeUnknownExit(
   CodexModelListResponse
 );
@@ -130,12 +136,15 @@ const codexAuthLabel = (
   if (account?.type === "apiKey") {
     return "OpenAI API Key";
   }
+
   if (account?.type === "amazonBedrock") {
     return "Amazon Bedrock";
   }
+
   if (account?.type !== "chatgpt") {
     return undefined;
   }
+
   const labels = {
     business: "ChatGPT Business Subscription",
     edu: "ChatGPT Edu Subscription",
@@ -155,6 +164,7 @@ const codexAuthLabel = (
     team: "ChatGPT Team Subscription",
     unknown: "ChatGPT Subscription",
   } satisfies Readonly<Record<string, string>>;
+
   return labels[account.planType] ?? "ChatGPT Subscription";
 };
 
@@ -171,18 +181,21 @@ type CodexRpcParams =
 
 const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
   const environment = yield* aiProcessEnvironment;
+
   return yield* Effect.callback<CodexProbe, never>((resume) => {
     const resolved = resolveAiSpawnCommand(
       "codex",
       ["app-server"],
       environment
     );
+
     const child = spawn(resolved.command, resolved.args, {
       env: environment,
       shell: resolved.shell,
       stdio: "pipe",
       windowsHide: true,
     });
+
     const pending = new Map<
       number,
       {
@@ -190,6 +203,7 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
         readonly resolve: (result: CodexRpcPayload) => void;
       }
     >();
+
     let buffer = "";
     let nextId = 1;
     let settled = false;
@@ -198,24 +212,30 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
       for (const waiter of pending.values()) {
         waiter.reject();
       }
+
       pending.clear();
     };
+
     const finish = (result: CodexProbe) => {
       if (settled) {
         return;
       }
+
       settled = true;
       rejectPendingRequests();
       terminateAiProcess(child);
       resume(Effect.succeed(result));
     };
+
     const fail = () => finish({ authentication: "unknown", models: [] });
+
     const request = (
       method: string,
       params: CodexRpcParams
     ): Promise<CodexRpcPayload> => {
       const id = nextId;
       nextId += 1;
+
       // oxlint-disable promise/avoid-new, promise/prefer-await-to-callbacks
       return new Promise((resolve, reject) => {
         pending.set(id, {
@@ -225,16 +245,22 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
         child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
       });
     };
+
     const handleLine = (line: string) => {
       const decoded = decodeCodexRpcMessage(line);
+
       if (Exit.isFailure(decoded)) {
         return;
       }
+
       const waiter = pending.get(decoded.value.id);
+
       if (waiter === undefined) {
         return;
       }
+
       pending.delete(decoded.value.id);
+
       if ("error" in decoded.value) {
         waiter.reject();
       } else {
@@ -246,11 +272,15 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
     child.stdout.setEncoding("utf-8");
     child.stdout.on("data", (chunk: string) => {
       buffer += chunk;
+
       if (buffer.length > 1024 * 1024) {
         fail();
+
         return;
       }
+
       let newline = buffer.indexOf("\n");
+
       while (newline >= 0) {
         handleLine(buffer.slice(0, newline));
         buffer = buffer.slice(newline + 1);
@@ -272,6 +302,7 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
             },
           })
         );
+
         child.stdin.write(`${JSON.stringify({ method: "initialized" })}\n`);
 
         const version = Exit.isSuccess(initialized)
@@ -281,37 +312,47 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
         const accountResult = decodeCodexAccountResponse(
           await request("account/read", {})
         );
+
         if (Exit.isFailure(accountResult)) {
           fail();
+
           return;
         }
+
         let authentication: AiAuthenticationStatus = "unknown";
+
         if (accountResult.value.account) {
           authentication = "authenticated";
         } else if (accountResult.value.requiresOpenaiAuth) {
           authentication = "unauthenticated";
         }
+
         if (authentication === "unauthenticated") {
           finish({
             authentication,
             models: [],
             version,
           });
+
           return;
         }
 
         const models: AiModel[] = [];
         let cursor: string | null | undefined;
+
         do {
           const page = decodeCodexModelListResponse(
             // Cursor pages must be fetched in order.
             // oxlint-disable-next-line eslint/no-await-in-loop
             await request("model/list", cursor ? { cursor } : {})
           );
+
           if (Exit.isFailure(page)) {
             fail();
+
             return;
           }
+
           models.push(
             ...page.value.data
               .filter((model) => !model.hidden)
@@ -362,8 +403,10 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
 export const getCodexStatus = Effect.fn("getCodexStatus")(
   function* getCodexStatus() {
     const probe = yield* probeCodex();
+
     const unavailable =
       probe.authentication === "unknown" && probe.models.length === 0;
+
     return {
       authEmail: probe.authEmail,
       authLabel: probe.authLabel,
@@ -405,6 +448,7 @@ export const generateWithCodex = Effect.fn("generateWithCodex")(
           "utf-8"
         ),
     });
+
     const result = yield* runAiCommand({
       args: [
         "exec",
@@ -428,21 +472,25 @@ export const generateWithCodex = Effect.fn("generateWithCodex")(
       stdin: makeFullPrompt(input.systemPrompt, input.userPrompt),
       timeoutMs: GENERATION_TIMEOUT_MS,
     }).pipe(Effect.mapError((error) => commandFailure("codex", error)));
+
     if (result.exitCode !== 0) {
       logDevelopmentAiCommandExit({
         exitCode: result.exitCode,
         operation: "Codex generation",
         stderr: result.stderr,
       });
+
       return yield* providerFailure(
         "codex",
         "Codex could not generate email text. Check its login and model settings"
       );
     }
+
     const output = yield* Effect.tryPromise({
       catch: () => providerFailure("codex", "Codex returned no email text"),
       try: () => readFile(outputPath, "utf-8"),
     });
+
     return yield* decodeGeneratedJson("codex", input.outputSchema, output);
   }
 );

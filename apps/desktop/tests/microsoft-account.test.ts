@@ -7,7 +7,7 @@
 // oxlint-disable typescript/no-unsafe-type-assertion vitest/prefer-import-in-mock
 import { ImapConnector } from "@repo/mail/session";
 import type { ImapConnectRequest } from "@repo/mail/session";
-import { Cause, Effect, Exit, Layer, Redacted } from "effect";
+import { Cause, Effect, Exit, Layer, Predicate, Redacted } from "effect";
 import type * as Electron from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,6 +37,7 @@ import {
 
 const seal = (value: string): Buffer =>
   Buffer.from(Buffer.from(value, "utf-8").toReversed());
+
 const unseal = (value: Buffer): string =>
   Buffer.from(value.toReversed()).toString("utf-8");
 
@@ -61,6 +62,7 @@ vi.mock("electron", () => ({
 vi.mock("../src/main/database", async () => {
   const { remoteDatabase } = await import("./fixtures/mail-engine-harness");
   const { Effect: MockEffect } = await import("effect");
+
   return {
     withDatabaseClient: <A>(
       run: (database: typeof remoteDatabase) => Promise<A>
@@ -68,9 +70,12 @@ vi.mock("../src/main/database", async () => {
   };
 });
 
+// SAFETY: each assertion in this object only widens an empty starting value,
+// `[]` or `undefined`, to the type the tests fill it with.
 const oauth = vi.hoisted(() => ({
   environment: undefined as MicrosoftOAuthEnvironment | undefined,
 }));
+
 vi.mock("../src/main/auth/microsoft-client", () => ({
   getMicrosoftOAuthEnvironment: () => oauth.environment,
   isMicrosoftSignInAvailable: () => oauth.environment !== undefined,
@@ -81,6 +86,7 @@ const REFRESH_TOKEN = "refresh-token-value";
 
 // What Microsoft's IMAP server offers: no CONDSTORE, no SPECIAL-USE.
 const OUTLOOK_CAPABILITIES = ["IDLE", "MOVE", "UIDPLUS"];
+
 const OUTLOOK_MAILBOXES = [
   { path: "INBOX" },
   { path: "Sent Items" },
@@ -116,13 +122,13 @@ interface AccountRow {
 
 const accountRows = () =>
   connection
-    .prepare(
+    .prepare<unknown[], AccountRow>(
       `SELECT account_id, credentials, dialect, display_name, email,
               imap_host, provider, smtp_host, smtp_port, smtp_security,
               username
        FROM mail_accounts ORDER BY account_id`
     )
-    .all() as AccountRow[];
+    .all();
 
 type ImapBehaviour = "accept" | "refuse" | "unreachable";
 
@@ -142,6 +148,7 @@ const layers = (imap: ImapBehaviour, smtpServer: FakeSmtpServer) =>
         connect: (request) =>
           Effect.suspend(() => {
             imapRequests.push(request);
+
             if (imap === "refuse") {
               return Effect.fail(
                 toTransportError(request.accountId, {
@@ -149,11 +156,13 @@ const layers = (imap: ImapBehaviour, smtpServer: FakeSmtpServer) =>
                 })
               );
             }
+
             if (imap === "unreachable") {
               return Effect.fail(
                 toTransportError(request.accountId, { code: "ECONNREFUSED" })
               );
             }
+
             return Effect.succeed(
               new FakeImapServer(
                 OUTLOOK_MAILBOXES,
@@ -199,6 +208,7 @@ const configureMicrosoft = (email: string, options: SignInOptions): void => {
     clientId: "11111111-2222-3333-4444-555555555555",
     fetch: (_url, init) => {
       tokenRequests.push(new URLSearchParams(String(init.body)));
+
       return Promise.resolve(
         Response.json(
           options.tokens ?? {
@@ -214,18 +224,22 @@ const configureMicrosoft = (email: string, options: SignInOptions): void => {
     openBrowser: async (url) => {
       browserOpened += 1;
       const authorize = new URL(url);
+
       const redirect = new URL(
         authorize.searchParams.get("redirect_uri") ?? ""
       );
+
       redirect.searchParams.set(
         "state",
         authorize.searchParams.get("state") ?? ""
       );
+
       if (options.browserError === undefined) {
         redirect.searchParams.set("code", "the-code");
       } else {
         redirect.searchParams.set("error", options.browserError);
       }
+
       await follow(redirect.toString());
     },
   };
@@ -238,6 +252,7 @@ const addAccount = async (
   smtp = await startFakeSmtpServer(options.smtp);
   configureMicrosoft(input.email.toLowerCase(), options);
   const all = layers(options.imap ?? "accept", smtp);
+
   return Effect.runPromiseExit(
     // As the setup window runs it: decode, verify, then save.
     decodeMicrosoftAccountRequest(input).pipe(
@@ -253,15 +268,24 @@ const exposed = (exit: Exit.Exit<unknown, unknown>): string =>
     ? `${Cause.pretty(exit.cause)}\n${JSON.stringify(Cause.squash(exit.cause))}`
     : JSON.stringify(exit.value);
 
-const failureMessage = (exit: Exit.Exit<unknown, unknown>) =>
-  Exit.isFailure(exit)
-    ? (Cause.squash(exit.cause) as { readonly message?: string }).message
+const failureMessage = (exit: Exit.Exit<unknown, unknown>) => {
+  if (!Exit.isFailure(exit)) {
+    return;
+  }
+
+  const failure = Cause.squash(exit.cause);
+
+  return Predicate.hasProperty(failure, "message") &&
+    Predicate.isString(failure.message)
+    ? failure.message
     : undefined;
+};
 
 const storedRefreshToken = async (row: AccountRow | undefined) => {
   const opened = await Effect.runPromise(
     openSealedCredentials(row?.credentials ?? Buffer.alloc(0))
   );
+
   return opened.kind === "microsoft-oauth"
     ? Redacted.value(opened.refreshToken)
     : opened.kind;

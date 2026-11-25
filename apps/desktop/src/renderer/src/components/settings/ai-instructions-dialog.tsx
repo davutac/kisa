@@ -39,6 +39,7 @@ const AiInstructionsDialog = ({
         if (open) {
           setDraft(value);
         }
+
         setIsOpen(open);
       }}
       open={isOpen}
@@ -69,10 +70,8 @@ const AiInstructionsDialog = ({
           placeholder={placeholder}
           value={draft}
         />
-        <DialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">
-          <DialogClose
-            render={<Button type="button" variant="outline" size="footer" />}
-          >
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="secondary" />}>
             Cancel
           </DialogClose>
           <Button
@@ -81,7 +80,6 @@ const AiInstructionsDialog = ({
               onSave(trimmedDraft);
               setIsOpen(false);
             }}
-            size="footer"
             type="button"
           >
             Save

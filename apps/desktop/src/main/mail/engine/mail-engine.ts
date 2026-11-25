@@ -177,6 +177,7 @@ export const inAccountEngine = <A, E>(
         },
         signal
       );
+
       return exit;
     }),
     (exit): Effect.Effect<A, E | MailEngineError> =>
@@ -206,23 +207,27 @@ export const forkAccountWork = <R>(
 
 /** Between cycles for an account whose server cannot be waited on. */
 const POLL_INTERVAL_MS = 2 * 60_000;
+
 /**
  * How long one wait on the server lasts. The cycle after it reads what the
  * wait does not report, which is everything outside the Inbox, and is how a
  * connection that died without a word is replaced.
  */
 const WATCH_SPAN_MS = 5 * 60_000;
+
 /**
  * Cycles that new mail starts begin at least this far apart, so a server
  * that reports mail on every wait cannot keep an account syncing.
  */
 const WATCH_SPACING_MS = 5000;
+
 /**
  * Refreshes that other reports start (mail gone, a flag changed) begin at
  * least this far apart. The first is immediate; a burst after it is read
  * together.
  */
 const WATCH_REFRESH_SPACING_MS = 2000;
+
 /**
  * The same for the second mailbox an account waits on. It is paced more
  * slowly: on Gmail that mailbox is All Mail, where a draft being written on
@@ -230,11 +235,14 @@ const WATCH_REFRESH_SPACING_MS = 2000;
  * and finding what was removed means listing the whole mailbox.
  */
 const EXTRA_WATCH_REFRESH_SPACING_MS = 10_000;
+
 /** How long one background cycle works before syncing new mail again. */
 const CYCLE_BUDGET_MS = 20_000;
+
 /** Bodies inside this window download first, before older mail. */
 const RECENT_BODY_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [5000, 15_000, 60_000, 5 * 60_000] as const;
+
 /** Renderer upserts per event; deeper threads arrive through paging. */
 const MAX_UPSERTS = 200;
 const PROGRESS_INTERVAL_MS = 1000;
@@ -249,6 +257,7 @@ const scopeOf = Effect.fnUntraced(function* scopeOf(
   session: ImapSession
 ) {
   const context = yield* Effect.context<MailDatabase>();
+
   return {
     accountId: account.accountId,
     dialect: dialects[account.dialect],
@@ -287,10 +296,12 @@ export const withCacheLock = <A, E, R>(
   effect: Effect.Effect<A, E, R>
 ): Effect.Effect<A, E, R> => {
   let lock = cacheLocks.get(accountId);
+
   if (lock === undefined) {
     lock = Semaphore.makeUnsafe(1);
     cacheLocks.set(accountId, lock);
   }
+
   return lock.withPermit(effect);
 };
 
@@ -325,10 +336,13 @@ export const publishChanges = Effect.fn("MailEngine.publishChanges")(
     }
 
     const database = yield* MailDatabase;
+
     const summaries = yield* database.use("Could not load updated mail", (db) =>
       readThreadSummaries(db, accountId, changes.changed)
     );
+
     const isActedOn = new Set(actedOn);
+
     const list: MailThreadListChange[] = [
       ...summaries
         .toSorted(
@@ -369,9 +383,9 @@ const workers = new Map<string, AccountWorker<EngineServices>>();
 
 /** The accounts whose loop is in its catch-up pass right now. */
 export const getMailEngineSyncStatus = (): MailSyncStatus => ({
-  accountIds: [...workers]
-    .filter(([, worker]) => worker.phase().kind === "syncing")
-    .map(([accountId]) => accountId),
+  accountIds: [...workers].flatMap(([accountId, worker]) =>
+    worker.phase().kind === "syncing" ? [accountId] : []
+  ),
 });
 
 const sendSyncStatus = (): void => {
@@ -411,6 +425,7 @@ export const toMailIndexProgress = (
 const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
   function* readIndexProgress(accountId: string) {
     const database = yield* MailDatabase;
+
     return yield* database.use(
       "Could not read indexing progress",
       async (db) => {
@@ -423,6 +438,7 @@ const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
           .from(mailMessages)
           .where(eq(mailMessages.accountId, accountId))
           .all();
+
         const [mailboxes] = await db
           .select({
             estimated: sql<number>`coalesce(sum(${mailMailboxes.messageCount}), 0)`,
@@ -436,6 +452,7 @@ const readIndexProgress = Effect.fn("MailEngine.readIndexProgress")(
             )
           )
           .all();
+
         return toMailIndexProgress(accountId, {
           estimatedMessages: mailboxes?.estimated ?? 0,
           oldestIndexedAt: messages?.oldest ?? undefined,
@@ -468,20 +485,24 @@ const sendIndexProgress = (): void => {
 const publishProgress = Effect.fn("MailEngine.publishProgress")(
   function* publishProgress(accountId: string, force = false) {
     const now = yield* Clock.currentTimeMillis;
+
     if (
       !force &&
       now - (progressPublishedAt.get(accountId) ?? 0) < PROGRESS_INTERVAL_MS
     ) {
       return;
     }
+
     progressPublishedAt.set(accountId, now);
     const progress = yield* readIndexProgress(accountId);
     // Read at write time: the account may have been disconnected, or its
     // loop may have moved on, while the counts were being read.
     const worker = workers.get(accountId);
+
     if (worker === undefined) {
       return;
     }
+
     latestProgress.set(accountId, {
       ...progress,
       status: worker.indexStatus() ?? progress.status,
@@ -574,6 +595,7 @@ const driftMemories = new Map<string, DriftMemory>();
 const driftMemoryOf = (accountId: string): DriftMemory => {
   const existing = driftMemories.get(accountId) ?? makeDriftMemory();
   driftMemories.set(accountId, existing);
+
   return existing;
 };
 
@@ -600,6 +622,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
                 // A folder or label added, renamed or deleted elsewhere.
                 yield* publishLabelCatalogChanged(accountId);
               }
+
               yield* publishChanges(accountId, changes);
             }).pipe(
               Effect.provideContext(context),
@@ -617,6 +640,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
             })
           )
         );
+
         yield* publishChanges(accountId, synced);
         yield* announceArrivals(
           accountId,
@@ -627,14 +651,17 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
         yield* clearUnusedInlineImagesWhenDue(accountId);
 
         const deadline = (yield* Clock.currentTimeMillis) + CYCLE_BUDGET_MS;
+
         while ((yield* Clock.currentTimeMillis) < deadline) {
           // Labels of mail already shown come before older mail.
           const relabeled = yield* withCacheLock(accountId, relabelStep(scope));
           const skeleton = yield* withCacheLock(accountId, skeletonStep(scope));
+
           const recent = yield* bodyStep(scope, {
             receivedAfter:
               (yield* Clock.currentTimeMillis) - RECENT_BODY_WINDOW_MS,
           });
+
           const older =
             skeleton === undefined && recent === undefined
               ? yield* bodyStep(scope)
@@ -647,6 +674,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
             older === undefined
           ) {
             yield* publishProgress(accountId, true);
+
             return { moreWork: false };
           }
 
@@ -707,6 +735,7 @@ const watchAccount = Effect.fn("MailEngine.watchAccount")(
     const account = yield* requireAccount(accountId);
     const store = yield* MailEngineStore;
     const targets = watchTargets(yield* store.getMailboxes(account.accountId));
+
     if (targets === undefined) {
       return "unavailable";
     }
@@ -733,6 +762,7 @@ const watchAccount = Effect.fn("MailEngine.watchAccount")(
           }
         )
       );
+
     const { extra } = targets;
 
     return yield* withAccountSession(account, "background", (session) =>
@@ -776,17 +806,21 @@ const startAccountWorker = (accountId: string): void => {
   let isSyncing = false;
   let indexStatus: ReturnType<AccountWorker["indexStatus"]>;
   let wasServerAhead = false;
+
   const worker: AccountWorker<EngineServices> = createAccountWorker({
     onPhaseChange: (phase) => {
       if (workers.get(accountId) !== worker) {
         return;
       }
+
       if (isSyncing !== (phase.kind === "syncing")) {
         isSyncing = phase.kind === "syncing";
         sendSyncStatus();
       }
+
       // The worker changes its phase whenever its trouble begins or ends.
       const nextIndexStatus = worker.indexStatus();
+
       if (indexStatus !== nextIndexStatus) {
         indexStatus = nextIndexStatus;
         // A cycle publishes progress only after a sync pass that worked, so
@@ -817,6 +851,7 @@ const startAccountWorker = (accountId: string): void => {
       ),
     watchSpacingMs: WATCH_SPACING_MS,
   });
+
   workers.set(accountId, worker);
 
   const runWorker = async (): Promise<void> => {
@@ -847,6 +882,7 @@ export const requestMailSync = (
 ): void => {
   const targets =
     accountId === undefined ? [...workers.values()] : [workers.get(accountId)];
+
   for (const worker of targets) {
     worker?.requestSync(source);
   }
@@ -885,6 +921,7 @@ let lastFocusSyncAt = 0;
  */
 export const syncOnFocus = (): void => {
   const now = Date.now();
+
   if (now - lastFocusSyncAt >= FOCUS_SYNC_INTERVAL_MS) {
     lastFocusSyncAt = now;
     requestMailSync();
@@ -895,6 +932,7 @@ export const startMailEngine = async (): Promise<void> => {
   if (isEngineRunning) {
     return;
   }
+
   isEngineRunning = true;
   stopListeningForAccounts = onAccountConnected((accountId) => {
     if (workers.has(accountId)) {
@@ -907,6 +945,7 @@ export const startMailEngine = async (): Promise<void> => {
   const accountIds = await runEngine(
     Effect.gen(function* listAccountIds() {
       const database = yield* MailDatabase;
+
       return yield* database.use("Could not load mail accounts", (db) =>
         db.query.mailAccounts.findMany({ columns: { accountId: true } })
       );
@@ -918,6 +957,7 @@ export const startMailEngine = async (): Promise<void> => {
       discard: true,
     })
   );
+
   for (const { accountId } of accountIds) {
     startAccountWorker(accountId);
   }
@@ -927,12 +967,14 @@ export const stopMailEngine = async (): Promise<void> => {
   isEngineRunning = false;
   stopListeningForAccounts?.();
   stopListeningForAccounts = undefined;
+
   // Work forked for an account, such as a Sent copy still being waited for,
   // can outlive the account's background loop, so both are stopped.
   const accountIds = new Set([
     ...workers.keys(),
     ...accountMailWorkSupervisor.activeAccountIds(),
   ]);
+
   await Promise.allSettled(
     [...accountIds].map((accountId) =>
       Effect.runPromise(accountMailWorkSupervisor.suspend(accountId)).finally(
@@ -942,6 +984,7 @@ export const stopMailEngine = async (): Promise<void> => {
       )
     )
   );
+
   try {
     await runEngine(closeAllSessions);
   } catch {
@@ -963,9 +1006,11 @@ export const forgetMailEngineAccount = Effect.fn("MailEngine.forgetAccount")(
     latestProgress.delete(accountId);
     progressPublishedAt.delete(accountId);
     sendIndexProgress();
+
     if (wasSyncing) {
       sendSyncStatus();
     }
+
     // Disconnect interrupts its caller; the goodbyes still finish.
     yield* Effect.uninterruptible(closeAccountSessions(accountId));
     yield* Effect.tryPromise({
@@ -1020,6 +1065,7 @@ const selectThreadInlineImages = (
 ) =>
   sources.flatMap((source, index) => {
     const html = messages[index]?.body.html;
+
     return html === undefined
       ? []
       : selectInlineImages(html, source.attachments).map((attachment) => ({
@@ -1093,6 +1139,7 @@ const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
     }
 
     const database = yield* MailDatabase;
+
     const cached = yield* database
       .use("Could not read kept inline images", (db) =>
         readCachedInlineImages(
@@ -1106,6 +1153,7 @@ const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
           (): ReadonlyMap<string, KeptInlineImage> => new Map()
         )
       );
+
     const now = yield* Clock.currentTimeMillis;
 
     if (
@@ -1128,6 +1176,7 @@ const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
     const missing = wanted.filter(
       ({ part }) => !cached.has(toInlineImageKey(part))
     );
+
     const fetched =
       fetchMissing && missing.length > 0
         ? yield* fetchInlineImages(
@@ -1147,16 +1196,20 @@ const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
     }
 
     const images = new Map<string, CachedInlineImage>(cached);
+
     for (const image of fetched) {
       images.set(toInlineImageKey(image), image);
     }
+
     const resolved = wanted.flatMap(
       ({ contentId, index, part }): readonly ResolvedInlineImage[] => {
         const image = images.get(toInlineImageKey(part));
+
         const dataUrl =
           image === undefined
             ? undefined
             : toImageDataUrl(image.mediaType, image.bytes);
+
         return dataUrl === undefined
           ? []
           : [{ contentId, dataUrl, index, section: part.section }];
@@ -1166,10 +1219,13 @@ const withInlineImages = Effect.fn("MailEngine.withInlineImages")(
     return {
       messages: messages.map((message, index) => {
         const shown = resolved.filter((image) => image.index === index);
+
         if (shown.length === 0 || message.body.html === undefined) {
           return message;
         }
+
         const sections = new Set(shown.map((image) => image.section));
+
         return {
           ...message,
           attachments: message.attachments.filter(
@@ -1308,12 +1364,15 @@ export const partitionReportable = (
 export const createAccountLabel = Effect.fn("MailEngine.createAccountLabel")(
   function* createAccountLabel(accountId: string, name: string) {
     const account = yield* requireAccount(accountId);
+
     const created = yield* runAction(
       account,
       (scope) => createLabel(scope, name),
       (result) => result.changes
     );
+
     yield* publishLabelCatalogChanged(accountId);
+
     return created.label;
   }
 );
@@ -1325,17 +1384,21 @@ export const renameAccountLabel = Effect.fn("MailEngine.renameAccountLabel")(
     name: string
   ) {
     const account = yield* requireAccount(accountId);
+
     const renamed = yield* runAction(
       account,
       (scope) => renameLabel(scope, LabelId.make(labelId), name),
       (result) => result.changes
     );
+
     yield* publishLabelCatalogChanged(accountId);
+
     if (account.dialect === "gmail") {
       // The rename leaves the labels of cached mail to be read again, which
       // the background cycle does.
       yield* Effect.sync(() => requestMailSync(accountId));
     }
+
     return renamed.label;
   }
 );
@@ -1364,10 +1427,12 @@ export const deleteAccountLabel = Effect.fn("MailEngine.deleteAccountLabel")(
 export const loadThread = Effect.fn("MailEngine.loadThread")(
   function* loadThread(request: MailThreadLoadRequest) {
     const database = yield* MailDatabase;
+
     const read = () =>
       database.use("Could not load email", (db) =>
         readConversation(db, request.accountId, request.threadId)
       );
+
     let conversation = yield* read();
 
     if (conversation === undefined) {
@@ -1382,6 +1447,7 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
       const fetched = yield* withForegroundRead(account, (scope) =>
         loadThreadBodies(scope, ThreadId.make(request.threadId))
       ).pipe(Effect.orElseSucceed(() => NO_THREAD_CHANGES));
+
       yield* publishChanges(request.accountId, fetched);
       conversation = (yield* read()) ?? conversation;
     }
@@ -1390,6 +1456,7 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
       request.accountId,
       conversation.messages
     );
+
     const shown = {
       accountId: request.accountId,
       labels: conversation.labels,
@@ -1433,9 +1500,11 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
 export const ensureThreadBodies = Effect.fn("MailEngine.ensureThreadBodies")(
   function* ensureThreadBodies(accountId: string, threadId: string) {
     const account = yield* requireAccount(accountId);
+
     const fetched = yield* withForegroundRead(account, (scope) =>
       loadThreadBodies(scope, ThreadId.make(threadId))
     );
+
     yield* publishChanges(accountId, fetched);
   }
 );
@@ -1457,6 +1526,7 @@ export const loadAttachment = Effect.fn("MailEngine.loadAttachment")(
     readonly section: string;
   }) {
     const account = yield* requireAccount(request.accountId);
+
     const attachment = yield* withForegroundRead(account, (scope) =>
       fetchAttachment(scope, MessageId.make(request.messageId), request.section)
     );

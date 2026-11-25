@@ -61,22 +61,27 @@ const CustomScheduleDialog = ({
   // The dialog reads the clock once when it opens.
   const initial = useInstanceValue(() => {
     const now = new Date();
+
     return {
       scheduledAt: getInitialCustomSchedule(now),
       startOfToday: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
     };
   });
+
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(
     initial.scheduledAt
   );
+
   // `null` while the time is empty or partly typed.
   const [time, setTime] = useState<string | null>(() =>
     toTimeInputValue(initial.scheduledAt)
   );
+
   const [error, setError] = useState<string | undefined>();
   const timeInputRef = useRef<HTMLDivElement>(null);
   const dayChosenRef = useRef(false);
   const errorId = error === undefined ? undefined : "scheduled-send-time-error";
+
   const firstTimeSegment = (): HTMLElement | null =>
     timeInputRef.current?.querySelector<HTMLElement>(
       '[data-slot="time-input-segment"]:not([data-type="literal"])'
@@ -84,10 +89,13 @@ const CustomScheduleDialog = ({
 
   const submit = (): void => {
     const resolved = resolveLocalScheduleTime(selectedDay, time ?? "");
+
     if (!resolved.ok) {
       setError(resolved.error);
+
       return;
     }
+
     setError(undefined);
     onChoose(resolved.scheduledAt);
     onOpenChange(false);
@@ -192,10 +200,12 @@ const ScheduleSendMenu = ({
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [customOpenings, setCustomOpenings] = useState(0);
   const [presets, setPresets] = useState(() => getSchedulePresets(new Date()));
+
   const triggerLabel =
     selectedScheduledAt === undefined
       ? "Schedule send"
       : `Selected send time: ${formatScheduledAt(selectedScheduledAt)}`;
+
   const scheduleDisplay = getHotkeyDisplay("composer.schedule");
 
   return (
@@ -206,8 +216,10 @@ const ScheduleSendMenu = ({
           // A disabled trigger refuses a press, not an agent's setOpen.
           if (nextOpen && disabled) {
             details.cancel();
+
             return;
           }
+
           if (nextOpen) {
             setPresets(getSchedulePresets(new Date()));
           }

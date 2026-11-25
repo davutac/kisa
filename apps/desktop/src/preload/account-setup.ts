@@ -7,8 +7,10 @@ import type { AccountSetupBridge } from "../shared/ipc/account-setup";
 // sandboxed Electron preload cannot require. A test keeps these in step
 // with `shared/ipc/channels.ts`.
 const ACCOUNT_SETUP_CLOSE_CHANNEL = "desktop:account-setup:close";
+
 const ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL =
   "desktop:account-setup:microsoft-cancel";
+
 const ACCOUNT_SETUP_MICROSOFT_CHANNEL = "desktop:account-setup:microsoft";
 const ACCOUNT_SETUP_SUBMIT_CHANNEL = "desktop:account-setup:submit";
 

@@ -29,21 +29,27 @@ const MailThreadMessage = ({
   onHeaderRef,
 }: MailThreadMessageProps) => {
   const [showRemoteImages, setShowRemoteImages] = useState(false);
+
   const expanded = useThreadConversationStore(
     (state) => state.expandedMessageId === message.id
   );
+
   const selected = useThreadConversationStore(
     (state) => state.selectedMessageId === message.id
   );
+
   const senderEmail = parseMailboxAddress(message.from).email;
   const canTrustSender = canApplySenderTrust(message);
   const isTrustedSender = useIsTrustedImageSender(accountId, senderEmail);
+
   const hasRemoteImages = useMemo(
     () => containsRemoteImages(message.body.html),
     [message.body.html]
   );
+
   const allowRemoteImages =
     (canTrustSender && isTrustedSender) || showRemoteImages;
+
   const setHeaderRef = useCallback(
     (header: HTMLButtonElement | null): void => {
       onHeaderRef?.(message.id, header);

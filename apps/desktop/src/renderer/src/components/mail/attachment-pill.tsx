@@ -57,6 +57,7 @@ export const MailAttachmentSummaryPill = ({
     attachment.filename,
     attachment.mediaType
   );
+
   const label = `${attachment.filename} (${typeLabel})`;
 
   // A name on a plain span is ignored, so the type is read out as text.
@@ -89,6 +90,7 @@ const MailAttachmentPill = ({
     attachment.filename,
     attachment.mediaType
   );
+
   const label = `${action === "preview" ? "Preview" : "Download"} ${attachment.filename} (${typeLabel})`;
   const Icon = action === "preview" ? EyeIcon : DownloadIcon;
 

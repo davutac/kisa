@@ -282,15 +282,19 @@ const toThreadSearchQuery = (
   }
 
   const filters = request.filters ?? [];
+
   const explicitlySearchesSpam = filters.some(
     (filter) =>
       filter.field === "label" && filter.value.toLowerCase() === "spam"
   );
+
   const accounts = toAccountList(request.accountIds);
   const matchQuery = toFtsMatchQuery(request.text ?? "");
   const messageConditions = toMessageConditions(filters);
+
   const needsMatchedMessages =
     matchQuery !== undefined || messageConditions.length > 0;
+
   const messageScopeConditions =
     explicitlySearchesSpam || !needsMatchedMessages
       ? []
@@ -303,16 +307,19 @@ const toThreadSearchQuery = (
             AND message_thread.is_in_spam = 0
         )`,
         ];
+
   const matched = toMatchedThreadsCte(accounts, matchQuery, [
     ...messageScopeConditions,
     ...messageConditions,
   ]);
+
   // Words are a question about relevance, answered by rank against a mild age
   // penalty; filters alone are a question about a mailbox, answered by date.
   const order =
     matched?.isRanked === true
       ? sql`matched.score + ${RECENCY_PENALTY} * (1.0 - 1.0 / (1.0 + max(0, ${Date.now()} - t.latest_at) * 1.0 / ${RECENCY_SPAN_MS})) ASC, t.latest_at DESC`
       : sql`t.latest_at DESC`;
+
   return {
     limit,
     statement: sql`
@@ -343,6 +350,7 @@ const loadMatchedThreads = async (
   matches: readonly SearchThreadTuple[]
 ) => {
   const byAccount = new Map<string, string[]>();
+
   for (const [accountId, threadId] of matches) {
     byAccount.set(accountId, [...(byAccount.get(accountId) ?? []), threadId]);
   }
@@ -361,13 +369,16 @@ const loadMatchedThreads = async (
         .all()
     )
   );
+
   const rows = rowGroups.flat();
+
   const rowsByKey = new Map(
     rows.map((row) => [`${row.accountId}\u0000${row.threadId}`, row])
   );
 
   return matches.flatMap(([accountId, threadId]) => {
     const row = rowsByKey.get(`${accountId}\u0000${threadId}`);
+
     return row === undefined ? [] : [toThreadSummary(row)];
   });
 };
@@ -432,6 +443,7 @@ const toSenderSuggestionQuery = (
     DEFAULT_SENDER_LIMIT,
     MAX_SENDER_LIMIT
   );
+
   const query = request.query?.trim() ?? "";
 
   if (request.accountIds.length === 0 || request.role === "correspondent") {
@@ -506,8 +518,10 @@ export const listIndexedSenders = Effect.fn("listIndexedSenders")(
         DEFAULT_SENDER_LIMIT,
         MAX_SENDER_LIMIT
       );
+
       const readCache = () =>
         listCachedCorrespondents(request.accountIds, request.query, limit);
+
       const cached = readCache();
 
       if (cached !== undefined) {

@@ -52,9 +52,11 @@ export const useScheduledComposer = ({
   }, [scheduledEdit]);
 
   const isEdit = scheduledEdit !== undefined;
+
   const isDirty =
     scheduledEdit !== undefined &&
     !areMailDraftInputsEqual(currentDraft, scheduledEdit.draft);
+
   const canSchedule = canSend && api !== undefined;
 
   const runEditAction = ({
@@ -73,9 +75,11 @@ export const useScheduledComposer = ({
     readonly setPending: (pending: boolean) => void;
   }): Promise<boolean> => {
     const session = sessionRef.current;
+
     if (!(session && api) || isBusy) {
       return Promise.resolve(false);
     }
+
     return runScheduledComposerEditAction({
       action,
       confirmPossibleDuplicate: () =>
@@ -112,6 +116,7 @@ export const useScheduledComposer = ({
         if (successMessage !== undefined) {
           toast.success(successMessage);
         }
+
         onOpenChange(false);
       },
       setPending: setIsScheduling,
@@ -121,6 +126,7 @@ export const useScheduledComposer = ({
     if (!(scheduledEdit && api && canSend)) {
       return;
     }
+
     await runEditAction({
       action: {
         allowPossibleDuplicate: false,
@@ -153,6 +159,7 @@ export const useScheduledComposer = ({
         "This permanently deletes the scheduled email and its draft. This cannot be undone.",
       title: "Discard scheduled email?",
     });
+
     return confirmed
       ? finishEdit({ kind: "discard" }, "Scheduled email discarded")
       : false;
@@ -162,7 +169,9 @@ export const useScheduledComposer = ({
     if (!(canSchedule && api)) {
       return false;
     }
+
     const draft = currentDraftRef.current;
+
     if (scheduledEdit !== undefined) {
       return runEditAction({
         action: {
@@ -180,6 +189,7 @@ export const useScheduledComposer = ({
     }
 
     setIsScheduling(true);
+
     return await runWithCleanup(
       async () => {
         try {
@@ -189,17 +199,22 @@ export const useScheduledComposer = ({
             draftId: draft.id,
             scheduledAt,
           });
+
           if (!reply.ok) {
             toast.error(reply.error);
+
             return false;
           }
+
           toast.success("Email scheduled", {
             description: formatScheduledAt(scheduledAt),
           });
           onOpenChange(false);
+
           return true;
         } catch {
           toast.error("Could not schedule email");
+
           return false;
         }
       },
@@ -218,9 +233,11 @@ export const useScheduledComposer = ({
     if (isBusy) {
       return false;
     }
+
     if (!shouldConfirmScheduledEditorClose(isDirty, hasPendingReschedule)) {
       return true;
     }
+
     return await confirm({
       cancelLabel: "Keep editing",
       confirmLabel: "Discard changes",

@@ -13,6 +13,7 @@ import type {
 } from "../src/shared/ipc/scheduled-mail";
 
 type RendererPayload = ScheduledMailChanged | ScheduledMailOutcome;
+
 type ScheduledMailInvokeRequest =
   | boolean
   | ScheduledMailFinishEditRequest
@@ -21,6 +22,7 @@ type ScheduledMailInvokeRequest =
   | ScheduledMailScheduleRequest
   | ScheduledMailScope
   | ScheduledMailSendNowRequest;
+
 type RendererListener = (
   event: IpcRendererEvent,
   payload: RendererPayload
@@ -42,6 +44,7 @@ vi.mock("electron", () => ({ ipcRenderer: electron }));
 const { scheduledMailApi } = await import("../src/preload/scheduled-mail-api");
 
 const key = { accountId: "person@example.com", draftId: "draft-1" };
+
 const draft = {
   accountId: key.accountId,
   attachments: [],
@@ -53,12 +56,15 @@ const draft = {
   subject: "Hello",
   to: ["friend@example.com"],
 };
+
 const scope = { accountIds: [key.accountId] };
 const scheduleRequest = { ...key, draft, scheduledAt: 2000 };
+
 const finishRequest = {
   ...key,
   action: { kind: "discard" as const },
 };
+
 const sendNowRequest = { ...key, allowPossibleDuplicate: false };
 
 const invokeCases = [
@@ -127,6 +133,7 @@ describe("scheduled mail preload bridge", () => {
       data: { count: 0, hasScheduledMail: true },
       ok: true as const,
     };
+
     electron.invoke.mockResolvedValue(reply);
 
     await expect(
@@ -156,6 +163,7 @@ describe("scheduled mail preload bridge", () => {
       const subscription = electron.on.mock.calls[0]?.[1];
 
       expect(subscription).toBeDefined();
+      // SAFETY: a preload subscription ignores the event and reads the payload.
       subscription?.({} as IpcRendererEvent, payload);
       expect(listener).toHaveBeenCalledExactlyOnceWith(payload);
 
@@ -172,6 +180,7 @@ describe("scheduled mail preload bridge", () => {
     const listener = vi.fn<(payload: ScheduledMailOutcome) => void>();
     const unsubscribe = scheduledMailApi.onScheduledMailOutcome(listener);
     const subscription = electron.on.mock.calls[0]?.[1];
+
     const payload = {
       accountId: "person@example.com",
       draftId: "draft-1",
@@ -180,6 +189,7 @@ describe("scheduled mail preload bridge", () => {
     };
 
     expect(subscription).toBeDefined();
+    // SAFETY: a preload subscription ignores the event and reads the payload.
     subscription?.({} as IpcRendererEvent, payload);
     expect(listener).toHaveBeenCalledExactlyOnceWith(payload);
     expect({

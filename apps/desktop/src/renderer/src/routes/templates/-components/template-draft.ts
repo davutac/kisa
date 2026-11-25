@@ -68,8 +68,10 @@ export const getVariablePreviewContext = (
     template.accountId === null
       ? undefined
       : accounts.find(({ email }) => email === template.accountId)?.displayName;
+
   const context =
     template.accountId === null ? {} : { accountEmail: template.accountId };
+
   const contextWithName =
     accountName === undefined ? context : { ...context, accountName };
 
@@ -83,9 +85,11 @@ export const getTemplateNameError = (
   templates: readonly ComposerTemplate[]
 ): string | undefined => {
   const name = draft.name.trim();
+
   if (name.length === 0) {
     return "Name is required";
   }
+
   if (
     templates.some(
       (template) =>
@@ -97,5 +101,6 @@ export const getTemplateNameError = (
   ) {
     return "Name must be unique";
   }
+
   return undefined;
 };

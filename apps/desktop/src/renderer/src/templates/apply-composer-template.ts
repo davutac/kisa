@@ -37,10 +37,13 @@ export const createTemplateVariableContext = (
   now: number
 ): TemplateVariableContext => {
   const accountEmail = template.accountId ?? currentAccountId;
+
   const accountName = accounts.find(
     (account) => account.email === accountEmail
   )?.displayName;
+
   const context = { accountEmail, now };
+
   const contextWithName =
     accountName === undefined ? context : { ...context, accountName };
 

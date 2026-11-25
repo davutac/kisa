@@ -26,6 +26,7 @@ describe("AI development logging", () => {
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
+
     configureDevelopmentAiLogging(true);
 
     logDevelopmentAiCommandExit({

@@ -55,6 +55,7 @@ export const PinnedDayHeading = ({
 
   const place = useCallback(() => {
     const band = bandRef.current;
+
     // The list's own ref attaches after this effect first runs, so the band
     // finds its scroller from where it sits.
     const scroller = band?.closest<HTMLElement>(
@@ -66,6 +67,7 @@ export const PinnedDayHeading = ({
     }
 
     const grid = scroller.querySelector<HTMLElement>('[role="grid"]');
+
     const pinned = getPinnedDayHeading(
       readDayRows(scroller),
       scroller.scrollTop - (grid?.offsetTop ?? 0),
@@ -84,6 +86,7 @@ export const PinnedDayHeading = ({
     );
 
     scroller?.addEventListener("scroll", place, { passive: true });
+
     return () => scroller?.removeEventListener("scroll", place);
   }, [place]);
 

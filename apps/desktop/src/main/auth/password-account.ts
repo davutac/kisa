@@ -116,6 +116,7 @@ const planAccount = Effect.fn("planPasswordAccount")(function* planAccount(
         : PASSWORD_ACCOUNT_MESSAGES.serversRequired
     );
   }
+
   if (isMicrosoftMailHost(servers.imap.host)) {
     return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.microsoft);
   }
@@ -159,6 +160,7 @@ const findProviderMessages = (plan: AccountPlan) => {
     imapHost: plan.imap.host,
     provider: plan.provider,
   });
+
   return provider === "gmail" || provider === "icloud"
     ? PROVIDER_MESSAGES[provider]
     : undefined;
@@ -179,6 +181,7 @@ const toSetupError = (
         provider?.passwordRefused ?? PASSWORD_ACCOUNT_MESSAGES.passwordRefused
       );
     }
+
     case "MailConnectionError": {
       return failWith(
         provider?.unreachable ??
@@ -187,9 +190,11 @@ const toSetupError = (
             : PASSWORD_ACCOUNT_MESSAGES.outgoingUnreachable)
       );
     }
+
     case "MailThrottledError": {
       return failWith(PASSWORD_ACCOUNT_MESSAGES.throttled);
     }
+
     default: {
       return failWith(
         provider?.unexpected ??
@@ -205,12 +210,14 @@ const isConnected = Effect.fn("isAccountConnected")(function* isConnected(
   accountId: AccountId
 ) {
   const database = yield* MailDatabase;
+
   const row = yield* database.use("Could not load accounts", (db) =>
     db.query.mailAccounts.findFirst({
       columns: { accountId: true },
       where: { accountId },
     })
   );
+
   return row !== undefined;
 });
 
@@ -227,6 +234,7 @@ const GMAIL_CAPABILITY = "X-GM-EXT-1";
 const verifyIncoming = Effect.fn("verifyIncomingSignIn")(
   function* verifyIncoming(plan: AccountPlan, auth: ImapAuth) {
     const connector = yield* ImapConnector;
+
     return yield* Effect.scoped(
       Effect.gen(function* listMailboxes() {
         const session = yield* connector.connect({
@@ -234,10 +242,13 @@ const verifyIncoming = Effect.fn("verifyIncomingSignIn")(
           auth,
           server: plan.imap,
         });
+
         const listed = yield* session.listMailboxes;
+
         const dialect: DialectKind = session.capabilities.has(GMAIL_CAPABILITY)
           ? "gmail"
           : "generic";
+
         return { dialect, hidden: dialects[dialect].unreadable?.(listed) };
       })
     ).pipe(Effect.mapError((error) => toSetupError(plan, "incoming", error)));
@@ -291,6 +302,7 @@ export const verifyPasswordAccount = Effect.fn("verifyPasswordAccount")(
     const alreadyConnected = yield* isConnected(plan.accountId).pipe(
       Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
     );
+
     if (alreadyConnected) {
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.alreadyConnected);
     }
@@ -298,11 +310,13 @@ export const verifyPasswordAccount = Effect.fn("verifyPasswordAccount")(
     const password = toSignInPassword(plan, request.password);
     const auth: ImapAuth = { kind: "password", password, user: plan.username };
     const { dialect, hidden } = yield* verifyIncoming(plan, auth);
+
     if (hidden !== undefined) {
       // Connected like this, the account would sync Spam and Trash alone
       // and report itself complete, with none of its mail.
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.gmailAllMailHidden);
     }
+
     yield* verifyOutgoing(plan, auth);
 
     const credentials = yield* encryptPasswordCredentials(password).pipe(
@@ -330,6 +344,7 @@ export const savePasswordAccount = Effect.fn("savePasswordAccount")(
   }: VerifiedPasswordAccount) {
     const database = yield* MailDatabase;
     const now = Date.now();
+
     const inserted = yield* database
       .use("Could not save the account", (db) =>
         db.transaction(async (transaction) => {
@@ -365,6 +380,7 @@ export const savePasswordAccount = Effect.fn("savePasswordAccount")(
               username: plan.username,
             })
             .run();
+
           return true;
         })
       )
@@ -377,6 +393,7 @@ export const savePasswordAccount = Effect.fn("savePasswordAccount")(
     }
 
     notifyAccountConnected(plan.accountId);
+
     return plan.accountId;
   },
   Effect.uninterruptible
@@ -392,17 +409,21 @@ export type AccountSignInMethod = "microsoft" | "password";
 export const findAccountSignIn = Effect.fn("findAccountSignIn")(
   function* findAccountSignIn(email: string) {
     const database = yield* MailDatabase;
+
     const row = yield* database.use("Could not load accounts", (db) =>
       db.query.mailAccounts.findFirst({
         columns: { accountId: true, email: true, provider: true },
         where: { accountId: email.toLowerCase() },
       })
     );
+
     if (row === undefined) {
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.notConnected);
     }
+
     const method: AccountSignInMethod =
       row.provider === "outlook" ? "microsoft" : "password";
+
     return {
       accountId: AccountId.make(row.accountId),
       email: row.email,
@@ -435,6 +456,7 @@ export const verifyPasswordSignInAgain = Effect.fn("verifyPasswordSignInAgain")(
       Effect.mapError(({ message }) => failWith(message))
     );
     const database = yield* MailDatabase;
+
     const stored = yield* database
       .use("Could not load the account", (db) =>
         db.query.mailAccounts.findFirst({ where: { accountId } })
@@ -442,9 +464,11 @@ export const verifyPasswordSignInAgain = Effect.fn("verifyPasswordSignInAgain")(
       .pipe(
         Effect.mapError(() => failWith(PASSWORD_ACCOUNT_MESSAGES.saveFailed))
       );
+
     if (stored === undefined) {
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.notConnected);
     }
+
     if (stored.provider === "outlook") {
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.usesMicrosoft);
     }
@@ -466,16 +490,20 @@ export const verifyPasswordSignInAgain = Effect.fn("verifyPasswordSignInAgain")(
       },
       username: stored.username,
     } satisfies AccountPlan;
+
     const signInPassword = toSignInPassword(plan, password);
+
     const auth: ImapAuth = {
       kind: "password",
       password: signInPassword,
       user: plan.username,
     };
+
     // Hidden mail does not stand in the way of a new password: the account
     // then says in Settings what to change, with one thing wrong, not two.
     const { dialect } = yield* verifyIncoming(plan, auth);
     yield* verifyOutgoing(plan, auth);
+
     if (dialect !== stored.dialect) {
       return yield* failWith(PASSWORD_ACCOUNT_MESSAGES.serverChanged);
     }
@@ -483,6 +511,7 @@ export const verifyPasswordSignInAgain = Effect.fn("verifyPasswordSignInAgain")(
     const credentials = yield* encryptPasswordCredentials(signInPassword).pipe(
       Effect.mapError(({ message }) => failWith(message))
     );
+
     return { accountId, credentials } satisfies VerifiedPasswordSignIn;
   }
 );
@@ -499,6 +528,7 @@ export const savePasswordSignInAgain = Effect.fn("savePasswordSignInAgain")(
     credentials,
   }: VerifiedPasswordSignIn) {
     const database = yield* MailDatabase;
+
     const updated = yield* database
       .use("Could not save the sign-in", (db) =>
         db
@@ -522,6 +552,7 @@ export const savePasswordSignInAgain = Effect.fn("savePasswordSignInAgain")(
     }
 
     notifyAccountConnected(accountId);
+
     return accountId;
   },
   Effect.uninterruptible

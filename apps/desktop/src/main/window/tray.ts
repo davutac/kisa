@@ -52,6 +52,7 @@ export const setBackgroundTray = (
 ): void => {
   if (enabled) {
     createBackgroundTray(getWindow);
+
     return;
   }
 

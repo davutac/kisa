@@ -7,6 +7,7 @@ import type {
 import { databaseRelations } from "./relations";
 
 export type DatabaseRemoteCallback = AsyncRemoteCallback;
+
 export type RemoteDatabaseClient = SqliteRemoteDatabase<
   typeof databaseRelations
 >;
