@@ -7,8 +7,18 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./app";
+import { validateHotkeyCommands } from "./hotkeys/commands";
 import { isWebEnvironment } from "./platform/desktop";
 import { getRouter } from "./router";
+
+// No test covers the hotkey registry, so a binding that collides with another
+// in a scope active beside it stops development here instead of shipping.
+if (import.meta.env.DEV) {
+  const hotkeyErrors = validateHotkeyCommands();
+  if (hotkeyErrors.length > 0) {
+    throw new Error(`Hotkey registry is invalid:\n${hotkeyErrors.join("\n")}`);
+  }
+}
 
 const APP_FONT = '1rem "Geist Variable"';
 const history = isWebEnvironment()

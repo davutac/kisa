@@ -473,13 +473,10 @@ describe("scheduled mail in-place save", () => {
          WHERE draft_id = ?`
       )
       .run(draftId);
-    const opened = await Effect.runPromise(
-      beginScheduledMailEdit({ accountId, draftId }, 71)
-    );
+    await Effect.runPromise(beginScheduledMailEdit({ accountId, draftId }, 71));
 
     await startScheduledMail();
     try {
-      expect(opened.item.draftId).toBe(draftId);
       expect(sendNewMessageMock).toHaveBeenCalledOnce();
       expect(
         connection

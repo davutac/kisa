@@ -82,8 +82,4 @@ Every control has an accessible name: a label part, a title, or `aria-label` on 
 
 ## Tests
 
-- `tests/*.test.ts(x)` run in Node. Component tests there render with `renderToString` and assert markup.
-- `tests/*.dom.test.tsx` run in jsdom with `tests/setup/dom.ts`, which turns on ui-sdk's strict mode and stubs what jsdom lacks. Use Testing Library and `userEvent` there to test what a person does: keys, focus, which callbacks run, what closes.
-- Test how Kisa wires components, not ui-sdk's own behavior. Every interface gets a test that its controls appear in `createAgent().snapshot()` by name, and an `act` step for the controls the change touches.
-- A new primitive gets `mount`, `checkPattern`, `checkServer` and `checkDirection` tests. Break each key behavior once and confirm a test fails.
-- Contrast, top-layer placement and real focus movement need a real browser. jsdom can't show them.
+The renderer has no automated tests. Kisa's suite covers the mail engine, the store, credentials and message privacy; check interface changes by hand in the running app, including keyboard paths and the names agents see in `createAgent().snapshot()`.

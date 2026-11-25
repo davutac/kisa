@@ -278,7 +278,7 @@ describe(watchForNews, () => {
     ]);
   });
 
-  it("holds a second refresh back, and gives way at once when asked to stop", async () => {
+  it("gives way at once when asked to stop while a refresh is held back", async () => {
     const { scope, server, uids } = await syncedInbox();
     const { options, refreshes, stop } = watching({
       refreshSpacingMs: 3_600_000,
@@ -297,6 +297,33 @@ describe(watchForNews, () => {
     expect(refreshes).toHaveLength(1);
     expect(unreadThreads()).toBe(1);
   });
+
+  it.effect("holds a second refresh back until the spacing has passed", () =>
+    Effect.gen(function* spaced() {
+      const { scope, server, uids } = yield* Effect.promise(() =>
+        syncedInbox()
+      );
+      const { options, refreshes, stop } = watching({ refreshSpacingMs: 2000 });
+
+      const waiting = server.nextWatch();
+      const fiber = yield* Effect.forkChild(watchInbox(scope, options));
+      yield* Effect.promise(() => waiting);
+      const waitingAgain = server.nextWatch();
+      server.setFlags("INBOX", uids[0], []);
+      yield* Effect.promise(() => waitingAgain);
+      const waitingOnceMore = server.nextWatch();
+      server.setFlags("INBOX", uids[1], []);
+      yield* TestClock.adjust(1999);
+
+      expect(refreshes).toHaveLength(1);
+      yield* TestClock.adjust(1);
+      yield* Effect.promise(() => waitingOnceMore);
+
+      expect(refreshes).toHaveLength(2);
+      stop();
+      expect(yield* Fiber.join(fiber)).toBe("quiet");
+    }).pipe(Effect.provide(TestStore))
+  );
 
   it.effect("refreshes again at once when the spacing has passed", () =>
     Effect.gen(function* spaced() {

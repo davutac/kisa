@@ -311,7 +311,7 @@ describe(getSenderBrand, () => {
     })
   );
 
-  it.effect("requires Gmail to report a successful BIMI check", () =>
+  it.effect("finds no brand for a DMARC pass that states no policy", () =>
     Effect.gen(function* requiresBimiPass() {
       const brand = yield* getSenderBrand({
         allowDiscovery: true,

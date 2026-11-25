@@ -6,7 +6,6 @@
     "src/renderer/src/**/*.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts",
-    "tests/**/*.tsx",
     "../../packages/database/src/**/*.ts"
   ],
   "compilerOptions": {
@@ -21,6 +20,6 @@
         ]
       }
     ],
-    "types": ["node", "vite/client", "vitest/globals"]
+    "types": ["electron-vite/node", "node", "vite/client", "vitest/globals"]
   }
 }

@@ -256,6 +256,7 @@ describe("the generic dialect", () => {
       });
     const identity = genericDialect.identify(bare(1));
 
+    expect(identity?.messageId).toMatch(/^h:[\da-f]{32}$/u);
     expect(identity).toStrictEqual(genericDialect.identify(bare(2)));
     expect(identity?.threadId).toBe(identity?.messageId);
     expect(genericDialect.identify(message())).toBeUndefined();

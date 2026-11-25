@@ -250,6 +250,11 @@ describe("database import", () => {
     await expect(
       Effect.runPromise(selectDatabaseImportFile(sessionId, "database"))
     ).resolves.toBeNull();
+    await expect(
+      Effect.runPromise(
+        attachDatabaseImportFile(sessionId, "database", sourceDatabasePath)
+      )
+    ).resolves.toStrictEqual({ fileName: "source.sqlite" });
     await Effect.runPromise(cancelDatabaseImportSelection(sessionId));
   });
 

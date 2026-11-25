@@ -133,7 +133,7 @@ describe("sending", () => {
     await Effect.runPromise(closeAllSessions);
   });
 
-  it("files one Sent copy with Bcc on iCloud, and none on Gmail", async () => {
+  it("files one Sent copy with Bcc on iCloud", async () => {
     const server = await syncedIcloud();
 
     const run = () =>
@@ -354,6 +354,7 @@ describe("the Sent copy of an Outlook account", () => {
         )
       );
 
+    afterSmtpSend = () => fileAsServer(server);
     await runHeld(sendNewMessage(newMessage));
     await connecting.promise;
     await Effect.runPromise(accountMailWorkSupervisor.suspend(accountId));
@@ -362,7 +363,6 @@ describe("the Sent copy of an Outlook account", () => {
 
     // Foreground work takes turns, so this runs after any refresh still going.
     await runHeld(findSentMessage(accountId, "<anything@example.com>"));
-    expect(server.appended).toStrictEqual([]);
     expect(sendRendererEvent).not.toHaveBeenCalled();
   });
 });

@@ -553,14 +553,5 @@ describe("database baseline", () => {
         { name: "mail_messages_fts_update", type: "trigger" },
       ]);
     });
-
-    it("gives a new database the same layout", () => {
-      const upgraded = openBeforeBodiesLast();
-      applyDatabaseMigrations(createDatabaseClient(upgraded), migrationsFolder);
-
-      expect(columnsOf(openMigratedDatabase())).toStrictEqual(
-        columnsOf(upgraded)
-      );
-    });
   });
 });

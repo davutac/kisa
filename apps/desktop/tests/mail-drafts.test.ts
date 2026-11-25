@@ -289,6 +289,10 @@ describe("mail drafts", () => {
           {
             ...newDraft,
             accountId: "person@example.com",
+            body: {
+              html: "<p>Hello</p><p>Signature</p>",
+              text: "Hello\n\nSignature",
+            },
             signature: {
               accountId: "other@example.com",
               body: { html: "<p>Signature</p>", text: "Signature" },

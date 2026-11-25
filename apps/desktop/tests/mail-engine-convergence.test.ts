@@ -1082,6 +1082,8 @@ describe.each(PROFILES)("random changes on $name", (profile) => {
   it("leave it so with the drift repair on as well", async () => {
     const found = await explore(profile, true);
 
+    expect(found.failures).toStrictEqual([]);
+    expect(found.withinCache).toStrictEqual([]);
     expect(found.afterPass).toStrictEqual([]);
   });
 

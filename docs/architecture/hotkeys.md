@@ -175,15 +175,7 @@ In a reply or reply-all composer, `Mod+Shift+R` creates a reply from thread cont
 
 Each registry binding becomes ui-sdk keys in one place, `toShortcutKeys`: `Mod+Shift+U` registers `mod+shift+u`. ui-sdk matches punctuation by the character typed, so a shifted bracket also registers the character Shift types on a US layout: `Mod+Shift+]` registers `mod+shift+]` and `mod+shift+}`. The pure registry validator resolves those keys for macOS, Windows, and Linux. It rejects bindings that press the same keys in scopes that can be active together, while allowing the same binding in mutually exclusive layers, and it rejects key sequences, which ui-sdk shortcuts don't support. ui-sdk also warns in development when two unguarded shortcuts share keys.
 
-Focused tests cover:
-
-- Layer priority, restoration, and Strict Mode registration cycles
-- Registry conflicts and platform formatting
-- Account command coverage: All accounts and eight accounts, with each account's number shared by the sidebar and the composer
-- Every binding matching the key press Chromium sends, alone among the commands active with it, on Apple platforms and elsewhere
-- Real key presses in `tests/hotkeys.dom.test.tsx`: text fields and focused controls, repeat, layers, the search bar and confirmation dialog, Escape precedence, the composer's `Mod+Enter`, every allowed command from the editor and the fields, and the held-`Mod` hint reveal
-- Thread message selection, expansion, navigation edges, and restoration
-- The mailbox and Scheduled lists in `tests/mail-list.dom.test.tsx`: mailbox focus and keyboard focus moving together, arrows inside and outside the list moving once, `X`, `Enter` with and without checked rows, `Escape`, focus after a row leaves, and drag painting
+Hotkeys have no automated tests: Kisa's suite covers the mail engine, not the renderer. Instead the renderer runs the registry validator when it starts in development and refuses to start while any binding is invalid or collides.
 
 Run the desktop checks with:
 

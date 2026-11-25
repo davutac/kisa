@@ -164,7 +164,10 @@ describe("outgoing attachment authorizations", () => {
     expect(() =>
       authorizations.serializeDraftAttachments(
         13,
-        Array.from({ length: 101 }, () => attachment)
+        Array.from({ length: 101 }, (_, index) => ({
+          ...attachment,
+          referenceId: `ref-${index}`,
+        }))
       )
     ).toThrow("invalid");
     expect(() =>

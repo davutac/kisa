@@ -43,7 +43,7 @@ describe(loadOrCreateDatabaseKey, () => {
   it("does not replace an unreadable saved key", async () => {
     const keyPath = makeKeyPath();
     const protector = makeProtector();
-    await loadOrCreateDatabaseKey(keyPath, protector);
+    const created = await loadOrCreateDatabaseKey(keyPath, protector);
 
     await expect(
       loadOrCreateDatabaseKey(keyPath, {
@@ -54,6 +54,6 @@ describe(loadOrCreateDatabaseKey, () => {
 
     await expect(
       loadOrCreateDatabaseKey(keyPath, protector)
-    ).resolves.toHaveLength(32);
+    ).resolves.toStrictEqual(created);
   });
 });

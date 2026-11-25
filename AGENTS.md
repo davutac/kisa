@@ -157,8 +157,7 @@ The main process owns privileged capabilities, including account sign-in and sea
 - IPC changes should test request decoding, result/error encoding, handler installation, and subscription cleanup where applicable.
 - Database tests use temporary directories and exercise migrations from an older schema when compatibility is involved. Check insert, update, delete, restart, and account isolation for cache/index changes.
 - Mail synchronization tests must cover partial pages, duplicate/replayed work, cancellation or disconnect, rate-limit/reauth paths, and renderer events when those behaviors change.
-- Renderer changes should test extracted state and domain logic directly. Keep React components declarative and avoid timers or arbitrary sleeps as a way to make asynchronous tests pass.
-- Interaction tests live in `tests/*.dom.test.tsx`, which run in jsdom with ui-sdk's strict mode; every other test runs in Node. Test what a person does there (keys, focus, callbacks) and that each control a change touches is named in `createAgent().snapshot()`.
+- Tests cover only what can lose, duplicate or mis-send mail, corrupt or mis-migrate the store, cross accounts, or leak credentials and message content: the mail engine, IMAP and SMTP adapters, sending and scheduled sending, the database, sign-in and credentials, every IPC method's channel, decoding and encoding (for any feature), and message privacy. Do not add tests for renderer views, renderer state, or the behavior behind settings, AI, updates or window chrome, and do not add a test that cannot fail. Avoid timers or arbitrary sleeps as a way to make asynchronous tests pass.
 - For a user-visible change, manually exercise the real desktop surface only when the developer requests or approves it. Report which account, lifecycle, and interaction paths were not exercised.
 
 ## Tooling, Documentation, and Releases

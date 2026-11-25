@@ -738,7 +738,10 @@ describe("the Add account window", () => {
         request
       );
 
-      expect(reply).toMatchObject({ ok: false });
+      expect(reply).toStrictEqual({
+        error: MICROSOFT_ACCOUNT_MESSAGES.mailboxRefused,
+        ok: false,
+      });
       expect(mocks.saveMicrosoft).not.toHaveBeenCalled();
       expect(window.isDestroyed()).toBeFalsy();
     });

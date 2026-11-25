@@ -78,7 +78,7 @@ describe("index progress for the renderer", () => {
     ).toBeTruthy();
   });
 
-  it("counts a body given up on as done, so the index can complete", () => {
+  it("completes once no body is pending and every mailbox is walked", () => {
     const counts = {
       estimatedMessages: 10,
       oldestIndexedAt: 5,
@@ -87,7 +87,6 @@ describe("index progress for the renderer", () => {
       unfinishedMailboxes: 0,
     };
 
-    // Of ten bodies, nine are ready and one failed: none is pending.
     expect(toMailIndexProgress("person@example.com", counts)).toMatchObject({
       indexedMessages: 10,
       status: "complete",
