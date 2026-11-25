@@ -5,7 +5,7 @@ import {
   createDatabaseClient,
   openDatabaseConnection,
 } from "@repo/database/client";
-import type { DatabaseRemoteCallback } from "@repo/database/remote-client";
+import type { RemoteDatabaseExecute } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import {
   afterAll,
@@ -34,26 +34,20 @@ vi.mock(import("../src/main/database"), () => ({
 const connection = openDatabaseConnection(":memory:");
 const database = createDatabaseClient(connection);
 
-const executeRemoteQuery: DatabaseRemoteCallback = (
+const executeRemoteQuery: RemoteDatabaseExecute = (
   query,
   parameters,
   method
 ) => {
-  const statement = connection.prepare(query).raw(true);
+  const statement = connection.prepare<unknown[], unknown[]>(query);
 
   if (method === "run") {
     statement.run(...parameters);
 
-    return Promise.resolve({ rows: [] });
+    return Promise.resolve([]);
   }
 
-  if (method === "get") {
-    const row = statement.get(...parameters);
-
-    return Promise.resolve({ rows: row === undefined ? [] : [row] });
-  }
-
-  return Promise.resolve({ rows: statement.all(...parameters) });
+  return Promise.resolve(statement.raw(true).all(...parameters));
 };
 
 const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);

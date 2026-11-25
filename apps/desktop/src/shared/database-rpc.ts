@@ -52,7 +52,7 @@ export const DatabaseExecuteResult = Schema.declare(
 export type DatabaseExecuteResult = typeof DatabaseExecuteResult.Type;
 
 export const DatabaseExecutePayload = Schema.Struct({
-  method: Schema.Literals(["all", "run", "values"]),
+  method: Schema.Literals(["all", "run"]),
   params: DatabaseRow,
   sql: Schema.String,
 });

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "astro build",
-    "deploy": "pnpm run build && cf deploy dist",
+    "deploy": "bun run build && cf deploy dist",
     "dev": "astro dev",
-    "preview": "pnpm run build && astro preview",
+    "preview": "bun run build && astro preview",
     "typecheck": "astro check"
   },
   "dependencies": {

@@ -4,7 +4,7 @@
 // slower. SQLite plans without statistics here, so an empty database plans as
 // a full one does.
 // oxlint-disable typescript/no-unsafe-type-assertion
-import type { DatabaseRemoteCallback } from "@repo/database/remote-client";
+import type { RemoteDatabaseExecute } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { MailStoreError } from "@repo/mail/errors";
 import { LabelId, MessageId, SystemLabel, ThreadId } from "@repo/mail/ids";
@@ -40,17 +40,17 @@ interface Statement {
 
 let statements: Statement[] = [];
 
-const execute: DatabaseRemoteCallback = (sql, params, method) => {
+const execute: RemoteDatabaseExecute = (sql, params, method) => {
   statements.push({ params, sql });
-  const statement = connection.prepare(sql);
+  const statement = connection.prepare<unknown[], unknown[]>(sql);
 
   if (method === "run") {
     statement.run(...params);
 
-    return Promise.resolve({ rows: [] });
+    return Promise.resolve([]);
   }
 
-  return Promise.resolve({ rows: statement.raw(true).all(...params) });
+  return Promise.resolve(statement.raw(true).all(...params));
 };
 
 const remote = createRemoteDatabaseClient(execute);

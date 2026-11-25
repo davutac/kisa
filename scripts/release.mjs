@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
+import { parseArgs } from "node:util";
 
 const APP_PACKAGE_PATH = path.join(
   import.meta.dirname,
@@ -14,11 +15,15 @@ const APP_PACKAGE_PATH = path.join(
   "package.json"
 );
 
+// bun.lock records each workspace package's version, so a release changes it
+// along with the manifest.
+const LOCKFILE_PATH = path.join(import.meta.dirname, "..", "bun.lock");
+
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
 
 const USAGE =
-  "Usage: pnpm release [major|minor|patch|x.y.z] [--dry-run] [--no-push] [--skip-check]";
+  "Usage: bun run release [major|minor|patch|x.y.z] [--dry-run] [--no-push] [--skip-check]";
 
 const writeLine = (message = "") => {
   process.stdout.write(`${message}\n`);
@@ -154,11 +159,33 @@ const promptForRelease = async () => {
   }
 };
 
-const args = process.argv.slice(2);
-const bump = args.find((arg) => !arg.startsWith("--"));
-const isDryRun = args.includes("--dry-run");
-const shouldPush = !args.includes("--no-push");
-const shouldCheck = !args.includes("--skip-check");
+// A mistyped flag must stop the release, not be ignored: `--dryrun` would
+// otherwise commit, tag, and push for real.
+const parseArguments = () => {
+  try {
+    return parseArgs({
+      allowPositionals: true,
+      options: {
+        "dry-run": { type: "boolean" },
+        "no-push": { type: "boolean" },
+        "skip-check": { type: "boolean" },
+      },
+    });
+  } catch (error) {
+    return fail(`${error.message}\n${USAGE}`);
+  }
+};
+
+const { positionals, values } = parseArguments();
+
+if (positionals.length > 1) {
+  fail(USAGE);
+}
+
+const [bump] = positionals;
+const isDryRun = values["dry-run"] === true;
+const shouldPush = values["no-push"] !== true;
+const shouldCheck = values["skip-check"] !== true;
 
 const currentVersion = readAppPackage().version;
 
@@ -189,11 +216,16 @@ if (isDryRun) {
   writeAppPackageVersion(nextVersion);
 }
 
+run("bun", ["install", "--lockfile-only"], {
+  dryRun: isDryRun,
+  inherit: true,
+});
+
 if (shouldCheck) {
-  run("pnpm", ["run", "check"], { dryRun: isDryRun, inherit: true });
+  run("bun", ["run", "check"], { dryRun: isDryRun, inherit: true });
 }
 
-run("git", ["add", APP_PACKAGE_PATH], { dryRun: isDryRun });
+run("git", ["add", APP_PACKAGE_PATH, LOCKFILE_PATH], { dryRun: isDryRun });
 
 run("git", ["commit", "-m", `Release ${tagName}`], {
   dryRun: isDryRun,

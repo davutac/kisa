@@ -44,10 +44,10 @@ An App Store Connect API key (`APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_IS
 
 ## Building signed locally
 
-`pnpm build:mac` picks up the Developer ID certificate from your login keychain automatically. To notarize a local build, export the same variables the workflow uses:
+`bun run build:mac` picks up the Developer ID certificate from your login keychain automatically. To notarize a local build, export the same variables the workflow uses:
 
 ```bash
-APPLE_ID=you@example.com APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx APPLE_TEAM_ID=XXXXXXXXXX pnpm build:mac
+APPLE_ID=you@example.com APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx APPLE_TEAM_ID=XXXXXXXXXX bun run build:mac
 ```
 
 Notarization adds a few minutes per build — Apple's service has to accept the upload and return a ticket, which electron-builder then staples to the app.

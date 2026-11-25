@@ -6,8 +6,8 @@ import {
   openDatabaseConnection,
 } from "@repo/database/client";
 import type {
-  DatabaseRemoteCallback,
   RemoteDatabaseClient,
+  RemoteDatabaseExecute,
 } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
 import { Effect, Option, Schema } from "effect";
@@ -48,28 +48,20 @@ applyDatabaseMigrations(
   fileURLToPath(new URL("../../../packages/database/drizzle", import.meta.url))
 );
 
-const executeRemoteQuery: DatabaseRemoteCallback = (
+const executeRemoteQuery: RemoteDatabaseExecute = (
   query,
   parameters,
   method
 ) => {
-  const statement = connection.prepare(query);
+  const statement = connection.prepare<unknown[], unknown[]>(query);
 
   if (method === "run") {
     statement.run(...parameters);
 
-    return Promise.resolve({ rows: [] });
+    return Promise.resolve([]);
   }
 
-  const dataStatement = statement.raw(true);
-
-  if (method === "get") {
-    const row = dataStatement.get(...parameters);
-
-    return Promise.resolve({ rows: Array.isArray(row) ? row : [] });
-  }
-
-  return Promise.resolve({ rows: dataStatement.all(...parameters) });
+  return Promise.resolve(statement.raw(true).all(...parameters));
 };
 
 const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
