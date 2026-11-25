@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
+import { parseArgs } from "node:util";
 
 const APP_PACKAGE_PATH = path.join(
   import.meta.dirname,
@@ -158,11 +159,33 @@ const promptForRelease = async () => {
   }
 };
 
-const args = process.argv.slice(2);
-const bump = args.find((arg) => !arg.startsWith("--"));
-const isDryRun = args.includes("--dry-run");
-const shouldPush = !args.includes("--no-push");
-const shouldCheck = !args.includes("--skip-check");
+// A mistyped flag must stop the release, not be ignored: `--dryrun` would
+// otherwise commit, tag, and push for real.
+const parseArguments = () => {
+  try {
+    return parseArgs({
+      allowPositionals: true,
+      options: {
+        "dry-run": { type: "boolean" },
+        "no-push": { type: "boolean" },
+        "skip-check": { type: "boolean" },
+      },
+    });
+  } catch (error) {
+    return fail(`${error.message}\n${USAGE}`);
+  }
+};
+
+const { positionals, values } = parseArguments();
+
+if (positionals.length > 1) {
+  fail(USAGE);
+}
+
+const [bump] = positionals;
+const isDryRun = values["dry-run"] === true;
+const shouldPush = values["no-push"] !== true;
+const shouldCheck = values["skip-check"] !== true;
 
 const currentVersion = readAppPackage().version;
 
