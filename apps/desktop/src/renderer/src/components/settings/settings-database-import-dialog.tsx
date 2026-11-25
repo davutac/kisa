@@ -4,6 +4,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
@@ -102,8 +103,8 @@ const SettingsDatabaseImportDialog = ({
               />
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button onClick={onCancel} type="button" variant="outline">
+            <DialogFooter>
+              <Button onClick={onCancel} type="button" variant="secondary">
                 Cancel
               </Button>
               <Button
@@ -118,7 +119,7 @@ const SettingsDatabaseImportDialog = ({
               >
                 Start import
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         )}
       </DialogContent>
