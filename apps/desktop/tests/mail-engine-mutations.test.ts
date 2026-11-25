@@ -652,6 +652,118 @@ describe("thread actions with the generic dialect", () => {
     });
   });
 
+  it("puts a reported message's copies back in the Inbox and its folder", async () => {
+    // Both copies went to Spam. Marked not spam into the Inbox alike, they
+    // would be two copies there, and the folder would have lost its mail.
+    const { scope } = await syncIcloud([
+      { id: "x", path: "INBOX" },
+      { id: "x", path: "Receipts" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("x");
+
+    await act(scope, threadId, { kind: "moveToSpam" });
+    const reported = locationPaths(messageId);
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect({ reported, restored: locationPaths(messageId) }).toStrictEqual({
+      reported: ["Junk", "Junk"],
+      restored: ["INBOX", "Receipts"],
+    });
+  });
+
+  it("puts reported mail that was archived back in Archive", async () => {
+    const { scope } = await syncIcloud([{ id: "y", path: "Archive" }]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("y");
+
+    await act(scope, threadId, { kind: "moveToSpam" });
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["Archive"]);
+    expect(threadRow(threadId)).toMatchObject({
+      is_in_inbox: 0,
+      is_in_spam: 0,
+    });
+  });
+
+  it("moves mail the server filed as spam to the Inbox", async () => {
+    // Nothing is remembered for it: Kisa never moved it.
+    const { scope } = await syncIcloud([{ id: "z", path: "Junk" }]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("z");
+
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["INBOX"]);
+  });
+
+  it("leaves a copy that was in Spam before there when Report spam is undone", async () => {
+    // The same mail delivered twice, and the server filed one copy as spam.
+    const { scope } = await syncIcloud([
+      { id: "aa", path: "Junk" },
+      { id: "aa", path: "INBOX" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("aa");
+    const uidsInSpam = () =>
+      (
+        connection
+          .prepare(
+            "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Junk' ORDER BY uid"
+          )
+          .all(messageId) as { uid: number }[]
+      ).map((row) => row.uid);
+
+    await act(scope, threadId, { kind: "moveToSpam" });
+    const reported = uidsInSpam();
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect({
+      copies: locationPaths(messageId),
+      inSpam: uidsInSpam(),
+      reported,
+    }).toStrictEqual({
+      copies: ["INBOX", "Junk"],
+      inSpam: [1],
+      reported: [1, 2],
+    });
+  });
+
+  it("leaves a copy in Trash alone when its message is marked not spam", async () => {
+    // One copy was deleted elsewhere, the other is reported here. What Report
+    // spam took is in Spam, and nothing it remembered is about Trash.
+    const { scope, server } = await syncIcloud([{ id: "ab", path: "INBOX" }]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("ab");
+    await act(scope, threadId, { kind: "moveToSpam" });
+    server.deliver("Deleted Messages", genericMessage("ab"));
+    await run(syncAccount(scope));
+
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual([
+      "Deleted Messages",
+      "INBOX",
+    ]);
+  });
+
+  it("restores to the Inbox when the mail is no longer where it was put", async () => {
+    // Trashed here, then moved from Trash to Spam elsewhere: what was
+    // remembered names copies in Trash, and none is left there.
+    const { scope, server } = await syncIcloud([
+      { id: "ac", path: "Receipts" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("ac");
+    await act(scope, threadId, { kind: "trash" });
+    const { uid } = connection
+      .prepare(
+        "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages'"
+      )
+      .get(messageId) as { uid: number };
+    server.move("Deleted Messages", uid, "Junk");
+    await run(syncAccount(scope));
+
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["INBOX"]);
+  });
+
   it("restores to the Inbox when the remembered mailbox is gone", async () => {
     const { scope, server } = await syncIcloud([
       { id: "s", path: "Sent Messages" },

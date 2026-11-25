@@ -17,7 +17,7 @@ const originsOf = (accountId: AccountId) =>
     return Object.fromEntries(origins);
   });
 
-describe("where trashed copies came from", () => {
+describe("where copies taken to Trash or Spam came from", () => {
   it("keeps each account's record apart, and forgets only what it is told to", async () => {
     const remembered = await run(
       Effect.gen(function* rememberAndForget() {
@@ -28,12 +28,14 @@ describe("where trashed copies came from", () => {
           [
             { mailboxPath: "Sent Messages", messageId: SHARED },
             { mailboxPath: "Drafts", messageId: OTHER },
-          ]
+          ],
+          "Deleted Messages"
         );
         yield* store.rememberCopyOrigins(
           BEN,
           [SHARED],
-          [{ mailboxPath: "Sent Items", messageId: SHARED }]
+          [{ mailboxPath: "Sent Items", messageId: SHARED }],
+          "Junk Email"
         );
         yield* store.forgetCopyOrigins(ANA, [OTHER]);
         return { ana: yield* originsOf(ANA), ben: yield* originsOf(BEN) };
@@ -41,8 +43,10 @@ describe("where trashed copies came from", () => {
     );
 
     expect(remembered).toStrictEqual({
-      ana: { shared: ["Sent Messages"] },
-      ben: { shared: ["Sent Items"] },
+      ana: {
+        shared: { heldIn: "Deleted Messages", origins: ["Sent Messages"] },
+      },
+      ben: { shared: { heldIn: "Junk Email", origins: ["Sent Items"] } },
     });
   });
 
@@ -53,12 +57,14 @@ describe("where trashed copies came from", () => {
         yield* store.rememberCopyOrigins(
           ANA,
           [SHARED],
-          [{ mailboxPath: "Sent Messages", messageId: SHARED }]
+          [{ mailboxPath: "Sent Messages", messageId: SHARED }],
+          "Deleted Messages"
         );
         yield* store.rememberCopyOrigins(
           BEN,
           [SHARED],
-          [{ mailboxPath: "Sent Items", messageId: SHARED }]
+          [{ mailboxPath: "Sent Items", messageId: SHARED }],
+          "Junk Email"
         );
         yield* store.clearAccount(ANA);
         const result = {
@@ -72,7 +78,7 @@ describe("where trashed copies came from", () => {
 
     expect(remembered).toStrictEqual({
       ana: {},
-      ben: { shared: ["Sent Items"] },
+      ben: { shared: { heldIn: "Junk Email", origins: ["Sent Items"] } },
     });
   });
 });

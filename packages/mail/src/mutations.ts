@@ -2,7 +2,13 @@ import { Effect } from "effect";
 
 import { MailProtocolError } from "./errors";
 import { SystemLabel, userLabelPath } from "./ids";
-import type { AccountId, LabelId, MailboxRole, ThreadId } from "./ids";
+import type {
+  AccountId,
+  LabelId,
+  MailboxRole,
+  MessageId,
+  ThreadId,
+} from "./ids";
 import { MailEngineStore } from "./store";
 import type { MailboxRecord, ThreadChanges, ThreadLocation } from "./store";
 import {
@@ -164,6 +170,32 @@ const isRestorable = (context: ActionContext, path: string): boolean =>
   context.mailboxes.some(
     (mailbox) => mailbox.path === path && mailbox.selectable
   ) && !isDiscarded(context, path);
+
+/**
+ * Remembers where the copies an action is about to move into Trash or Spam
+ * are, so its Undo can put each back. Outside Gmail a copy there no longer
+ * says where it was: restored into the Inbox alike, two copies of one message
+ * would both land there, a folder would lose its mail, and a reply would
+ * leave Sent. Gmail keeps a message's labels itself.
+ */
+const rememberTaken = Effect.fn("MailMutations.rememberTaken")(
+  function* rememberTaken(
+    context: ActionContext,
+    taken: readonly ThreadLocation[],
+    heldIn: string
+  ) {
+    if (context.scope.dialect.kind !== "generic") {
+      return;
+    }
+    const store = yield* MailEngineStore;
+    yield* store.rememberCopyOrigins(
+      context.scope.accountId,
+      [...new Set(taken.map((location) => location.messageId))],
+      taken.map(({ mailboxPath, messageId }) => ({ mailboxPath, messageId })),
+      heldIn
+    );
+  }
+);
 
 const labelNotAvailable = (context: ActionContext) =>
   new MailProtocolError({
@@ -474,18 +506,7 @@ const trash = Effect.fn("MailMutations.trash")(function* trash(
   const targets = context.locations.filter(
     (location) => roleOf(context, location.mailboxPath) !== "trash"
   );
-  // Outside Gmail a copy in Trash forgets its folder, so where each copy was
-  // is remembered first, for Undo to put it back. Restored into the Inbox
-  // alike, two copies of one message would both land there, a folder would
-  // lose its mail, and a reply would leave Sent.
-  if (context.scope.dialect.kind === "generic") {
-    const store = yield* MailEngineStore;
-    yield* store.rememberCopyOrigins(
-      context.scope.accountId,
-      [...new Set(targets.map((location) => location.messageId))],
-      targets.map(({ mailboxPath, messageId }) => ({ mailboxPath, messageId }))
-    );
-  }
+  yield* rememberTaken(context, targets, destination.path);
   return yield* moveCopies(context, targets, destination.path);
 });
 
@@ -506,21 +527,26 @@ const moveToSpam = Effect.fn("MailMutations.moveToSpam")(function* moveToSpam(
       message: "Only your own messages are in this conversation",
     });
   }
+  yield* rememberTaken(context, received, destination.path);
   return yield* moveCopies(context, received, destination.path);
 });
 
 /**
- * Out of Spam or Trash. Outside Gmail, each copy Trash took returns to the
- * mailbox it came from, one remembered origin per copy, while that mailbox is
- * still there and is not Spam or Trash itself. A message with nothing
- * remembered goes to the Inbox with every copy, as everything Spam held
- * does. Gmail's restore is unchanged: it was verified only into the Inbox.
+ * Out of Spam or Trash. Outside Gmail, each copy Trash or Report spam took
+ * returns to the mailbox it came from, one remembered origin per copy, while
+ * that mailbox is still there and is not Spam or Trash itself. A message
+ * with nothing remembered goes to the Inbox with every copy: mail the server
+ * filed as spam, mail trashed elsewhere, anything after a restart. Gmail's
+ * restore is unchanged: it was verified only into the Inbox.
  *
- * A message Trash took copies of gets back exactly as many: a copy that was
- * in Trash before (the same mail delivered twice, one copy deleted elsewhere)
- * stays there, or Undo would put a second copy in the Inbox. Copies of one
- * message cannot be told apart by what they hold, so the ones restored are
- * those with the highest UIDs, which are the ones Trash filed last.
+ * A message an action took copies of gets back exactly as many, out of the
+ * mailbox the action put them in. A copy that was there before (the same
+ * mail delivered twice, one copy deleted elsewhere) stays, or Undo would put
+ * a second copy in the Inbox, and so does a copy in the other of Trash and
+ * Spam. Copies of one message cannot be told apart by what they hold, so
+ * the ones restored are those with the highest UIDs, which the action filed
+ * last. When none of the message's copies is where the action put them any
+ * more, what was remembered says nothing, and every copy goes to the Inbox.
  */
 const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
   function* moveToInbox(context: ActionContext) {
@@ -532,37 +558,40 @@ const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
     }
 
     const store = yield* MailEngineStore;
-    const messageIds = [
-      ...new Set(discarded.map((location) => location.messageId)),
-    ];
-    const origins = yield* store.copyOrigins(
-      context.scope.accountId,
-      messageIds
-    );
-    const unclaimed = new Map(
-      [...origins].map(([messageId, paths]) => [messageId, [...paths]])
-    );
+    const copiesOf = new Map<MessageId, ThreadLocation[]>();
+    for (const location of discarded) {
+      copiesOf.set(location.messageId, [
+        ...(copiesOf.get(location.messageId) ?? []),
+        location,
+      ]);
+    }
+    const messageIds = [...copiesOf.keys()];
+    const taken = yield* store.copyOrigins(context.scope.accountId, messageIds);
     const byDestination = new Map<string, ThreadLocation[]>();
-    for (const location of discarded.toSorted(
-      (left, right) => right.uid - left.uid
-    )) {
-      const remembered =
-        roleOf(context, location.mailboxPath) === "trash"
-          ? unclaimed.get(location.messageId)
-          : undefined;
-      if (remembered?.length === 0) {
-        // Every copy Trash took of this message has its place again.
-        continue;
-      }
-      const origin = remembered?.shift();
-      const destination =
-        origin !== undefined && isRestorable(context, origin)
-          ? origin
-          : INBOX_PATH;
+    const restore = (location: ThreadLocation, destination: string): void => {
       byDestination.set(destination, [
         ...(byDestination.get(destination) ?? []),
         location,
       ]);
+    };
+
+    for (const [messageId, copies] of copiesOf) {
+      const remembered = taken.get(messageId);
+      const held = copies
+        .filter((copy) => copy.mailboxPath === remembered?.heldIn)
+        .toSorted((left, right) => right.uid - left.uid);
+      if (remembered === undefined || held.length === 0) {
+        for (const copy of copies) {
+          restore(copy, INBOX_PATH);
+        }
+        continue;
+      }
+      for (const [index, origin] of remembered.origins.entries()) {
+        const copy = held[index];
+        if (copy !== undefined) {
+          restore(copy, isRestorable(context, origin) ? origin : INBOX_PATH);
+        }
+      }
     }
 
     const changes = yield* moveCopiesTo(context, byDestination);

@@ -32,6 +32,7 @@ import type {
   MailboxRecord,
   MessageLocation,
   MessageMetadata,
+  TakenCopies,
   ThreadChanges,
 } from "@repo/mail/store";
 import {
@@ -1069,19 +1070,20 @@ const toCorrespondentMessages = (
 };
 
 /**
- * Where copies were before Trash took them, by account and message, one path
- * per copy. Only Undo reads it, seconds after the move, so it lives in memory
- * rather than SQLite; a restore it cannot answer goes to the Inbox, as one
- * after a restart does. Kept outside the layer so every runtime sees it.
+ * Where copies were before Trash or Report spam took them, by account and
+ * message, one path per copy, with the mailbox they were moved into. Only
+ * Undo reads it, seconds after the move, so it lives in memory rather than
+ * SQLite; a restore it cannot answer goes to the Inbox, as one after a
+ * restart does. Kept outside the layer so every runtime sees it.
  */
-const copyOriginsByAccount = new Map<string, Map<string, readonly string[]>>();
+const copyOriginsByAccount = new Map<string, Map<string, TakenCopies>>();
 
 /**
- * Messages remembered per account. Every message Trash takes outside Gmail
- * has an entry until its Undo consumes it, so this bounds what a session of
- * trashing without undoing leaves behind. The oldest go first, and a restore
- * of one of those goes to the Inbox: so does the oldest part of one bulk
- * Trash of more messages than this.
+ * Messages remembered per account. Every message Trash or Report spam takes
+ * outside Gmail has an entry until its Undo consumes it, so this bounds what
+ * a session of trashing without undoing leaves behind. The oldest go first,
+ * and a restore of one of those goes to the Inbox: so does the oldest part
+ * of one bulk Trash of more messages than this.
  */
 const MAX_REMEMBERED_MESSAGES = 10_000;
 
@@ -1091,18 +1093,20 @@ const rememberOrigins = (
   origins: readonly {
     readonly mailboxPath: string;
     readonly messageId: string;
-  }[]
+  }[],
+  heldIn: string
 ): void => {
-  const remembered = copyOriginsByAccount.get(accountId) ?? new Map();
+  const remembered =
+    copyOriginsByAccount.get(accountId) ?? new Map<string, TakenCopies>();
 
   for (const messageId of moved) {
     remembered.delete(messageId);
   }
   for (const { mailboxPath, messageId } of origins) {
-    remembered.set(messageId, [
-      ...(remembered.get(messageId) ?? []),
-      mailboxPath,
-    ]);
+    remembered.set(messageId, {
+      heldIn,
+      origins: [...(remembered.get(messageId)?.origins ?? []), mailboxPath],
+    });
   }
   for (const messageId of remembered.keys()) {
     if (remembered.size <= MAX_REMEMBERED_MESSAGES) {
@@ -1344,20 +1348,20 @@ export const MailEngineStoreLive = Layer.effect(
       copyOrigins: (accountId, messageIds) =>
         Effect.sync(() => {
           const remembered = copyOriginsByAccount.get(accountId);
-          const origins = new Map<MessageId, readonly string[]>();
+          const taken = new Map<MessageId, TakenCopies>();
 
           for (const messageId of messageIds) {
-            const paths = remembered?.get(messageId);
-            if (paths !== undefined) {
-              origins.set(messageId, paths);
+            const copies = remembered?.get(messageId);
+            if (copies !== undefined) {
+              taken.set(messageId, copies);
             }
           }
-          return origins;
+          return taken;
         }),
 
       forgetCopyOrigins: (accountId, messageIds) =>
         Effect.sync(() => {
-          rememberOrigins(accountId, messageIds, []);
+          rememberOrigins(accountId, messageIds, [], "");
         }),
 
       findAttachment: (accountId, messageId, section) =>
@@ -1521,9 +1525,9 @@ export const MailEngineStoreLive = Layer.effect(
               );
             }),
 
-      rememberCopyOrigins: (accountId, moved, origins) =>
+      rememberCopyOrigins: (accountId, moved, origins, heldIn) =>
         Effect.sync(() => {
-          rememberOrigins(accountId, moved, origins);
+          rememberOrigins(accountId, moved, origins, heldIn);
         }),
 
       removeMessagesWithoutCopies: (accountId, messageIds) =>

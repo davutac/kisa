@@ -235,7 +235,7 @@ export const useThreadActions = ({
           undo: {
             change: { kind: "moveToInbox" },
             failureMessage: "Could not restore the conversations",
-            undoneMessage: "Restored conversations to the inbox",
+            undoneMessage: "Restored the conversations",
           },
         });
       },
@@ -325,7 +325,9 @@ export const useThreadActions = ({
           {
             change: { kind: "moveToInbox" },
             failureMessage,
-            message: "Moved conversation to the inbox",
+            // Not "to the inbox": mail reported here from a folder or from
+            // Archive goes back there on iCloud and other IMAP accounts.
+            message: "Marked conversation as not spam",
             onLeave,
             undo: {
               change: { kind: "moveToSpam" },
@@ -354,7 +356,7 @@ export const useThreadActions = ({
             undo: {
               change: { kind: "moveToInbox" },
               failureMessage: "Could not restore the conversation",
-              undoneMessage: "Restored conversation to the inbox",
+              undoneMessage: "Restored the conversation",
             },
           },
           (request) =>

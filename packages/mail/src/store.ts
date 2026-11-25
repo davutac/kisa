@@ -165,10 +165,18 @@ export interface StoredAttachment {
   readonly uidValidity: bigint;
 }
 
-/** Where one copy of a message was before an action moved it to Trash. */
+/** Where one copy of a message was before an action moved it to Trash or Spam. */
 export interface CopyOrigin {
   readonly mailboxPath: string;
   readonly messageId: MessageId;
+}
+
+/** What is remembered of the copies an action took of one message. */
+export interface TakenCopies {
+  /** The mailbox the action moved them into. */
+  readonly heldIn: string;
+  /** Where each of them was, one path per copy. */
+  readonly origins: readonly string[];
 }
 
 /** A user label renamed on the server, with its mailbox. */
@@ -214,11 +222,11 @@ export interface MailEngineStoreService {
    * mailbox's skeleton is complete, because before then a missing copy may
    * only be one the walk has not reached.
    */
-  /** The mailboxes remembered for these messages, one entry per copy. */
+  /** What is remembered of these messages' copies, for those it is. */
   readonly copyOrigins: (
     accountId: AccountId,
     messageIds: readonly MessageId[]
-  ) => Effect.Effect<ReadonlyMap<MessageId, readonly string[]>>;
+  ) => Effect.Effect<ReadonlyMap<MessageId, TakenCopies>>;
   readonly collectOrphans: (
     accountId: AccountId
   ) => Effect.Effect<ThreadChanges, MailStoreError>;
@@ -257,15 +265,17 @@ export interface MailEngineStoreService {
    * user deleted for good.
    */
   /**
-   * Remembers where copies were before an action moved them to Trash, so
-   * Undo can put them back, and forgets whatever was remembered for every
-   * other message in `moved`. Kept in memory, not in SQLite: only Undo reads
-   * it, seconds later, and after a restart a restore falls back to the Inbox.
+   * Remembers where copies were before an action moved them into `heldIn`,
+   * Trash or Spam, so its Undo can put them back, and forgets whatever was
+   * remembered for every other message in `moved`. Kept in memory, not in
+   * SQLite: only Undo reads it, seconds later, and after a restart a restore
+   * falls back to the Inbox.
    */
   readonly rememberCopyOrigins: (
     accountId: AccountId,
     moved: readonly MessageId[],
-    origins: readonly CopyOrigin[]
+    origins: readonly CopyOrigin[],
+    heldIn: string
   ) => Effect.Effect<void>;
   readonly removeMessagesWithoutCopies: (
     accountId: AccountId,
