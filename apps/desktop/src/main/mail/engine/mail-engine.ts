@@ -239,10 +239,25 @@ const RETRY_DELAYS_MS = [5000, 15_000, 60_000, 5 * 60_000] as const;
 const MAX_UPSERTS = 200;
 const PROGRESS_INTERVAL_MS = 1000;
 
-const scopeOf = (account: MailAccount, session: ImapSession): SyncScope => ({
-  accountId: account.accountId,
-  dialect: dialects[account.dialect],
-  session,
+/**
+ * What engine work on one connection runs with. Mail that a pass, a refresh
+ * or a change had saved when it failed is shown and announced from here, for
+ * every lane alike: see `SyncScope.salvage`.
+ */
+const scopeOf = Effect.fnUntraced(function* scopeOf(
+  account: MailAccount,
+  session: ImapSession
+) {
+  const context = yield* Effect.context<MailDatabase>();
+  return {
+    accountId: account.accountId,
+    dialect: dialects[account.dialect],
+    salvage: (saved) =>
+      publishRefreshed(account.accountId, saved).pipe(
+        Effect.provideContext(context)
+      ),
+    session,
+  } satisfies SyncScope;
 });
 
 export const requireAccount = Effect.fn("MailEngine.requireAccount")(
@@ -571,7 +586,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
 
     return yield* withAccountSession(account, "background", (session) =>
       Effect.gen(function* runCycle() {
-        const scope = scopeOf(account, session);
+        const scope = yield* scopeOf(account, session);
         const context = yield* Effect.context<MailDatabase>();
 
         const synced = yield* syncAccount({
@@ -654,8 +669,9 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
 );
 
 /**
- * Shows what a refresh during a wait changed, and announces mail it was the
- * first to see: the pass that follows takes that mail as known.
+ * Shows what a refresh during a wait changed, or what failed work had saved,
+ * and announces mail it was the first to see: the pass that follows takes
+ * that mail as known.
  */
 const publishRefreshed = (accountId: string, changes: ThreadChanges) =>
   publishChanges(accountId, changes).pipe(
@@ -701,19 +717,21 @@ const watchAccount = Effect.fn("MailEngine.watchAccount")(
       refreshSpacingMs: number,
       stop: Deferred.Deferred<void>
     ) =>
-      watchForNews(
-        {
-          ...scopeOf(account, session),
-          exclusive: (effect) => withCacheLock(accountId, effect),
-        },
-        target,
-        {
-          compare: options.compare,
-          maxMs: WATCH_SPAN_MS,
-          refreshSpacingMs,
-          refreshed: (changes) => publishRefreshed(accountId, changes),
-          stop,
-        }
+      Effect.flatMap(scopeOf(account, session), (scope) =>
+        watchForNews(
+          {
+            ...scope,
+            exclusive: (effect) => withCacheLock(accountId, effect),
+          },
+          target,
+          {
+            compare: options.compare,
+            maxMs: WATCH_SPAN_MS,
+            refreshSpacingMs,
+            refreshed: (changes) => publishRefreshed(accountId, changes),
+            stop,
+          }
+        )
       );
     const { extra } = targets;
 
@@ -972,7 +990,7 @@ export const withForeground = <A, E>(
   use: (scope: SyncScope) => Effect.Effect<A, E, EngineServices>
 ): Effect.Effect<A, E | MailTransportError, EngineServices> =>
   withAccountSession(account, "foreground", (session) =>
-    use(scopeOf(account, session))
+    Effect.flatMap(scopeOf(account, session), use)
   );
 
 /**

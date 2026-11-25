@@ -11,6 +11,7 @@ import type {
   ImapMailbox,
   ImapSession,
   MailboxSearch,
+  MailboxState,
   MessageEnvelope,
   UidSelection,
   WatchOptions,
@@ -197,6 +198,12 @@ export class FakeImapServer {
   beforeCommand: ((call: string) => void) | undefined;
   /** Makes a FETCH fail as a dropped connection would, when it returns true. */
   dropFetch: ((path: string, selection: UidSelection) => boolean) | undefined;
+  /**
+   * Fails a STATUS instead of answering it: `refused`, as a server does for a
+   * mailbox it lists and will not open, or `dropped`, as a connection lost
+   * under the command.
+   */
+  failStatus: ((path: string) => "dropped" | "refused" | undefined) | undefined;
   /**
    * Applies a command that changes mail and then fails it, when it returns
    * true: a connection lost after the server acted and before it answered.
@@ -756,23 +763,42 @@ export class FakeImapServer {
           }
         ),
       status: (path) =>
-        withMailbox(path, (mailbox) => {
-          this.statuses.push(path);
-          this.onStatus?.(path);
-          return {
-            highestModseq: this.capabilities.has("CONDSTORE")
-              ? mailbox.highestModseq
-              : undefined,
-            messages: mailbox.messages.size,
-            path,
-            uidNext: mailbox.uidNext,
-            uidValidity: mailbox.uidValidity,
-            unseen:
-              [...mailbox.messages.values()].filter(
-                (message) => !message.flags.includes("\\Seen")
-              ).length + this.miscountedUnseen,
-          };
-        }),
+        Effect.suspend(
+          (): Effect.Effect<
+            MailboxState,
+            MailConnectionError | MailboxMissingError
+          > => {
+            const failure = this.failStatus?.(path);
+            if (failure === "dropped") {
+              return Effect.fail(
+                new MailConnectionError({
+                  accountId,
+                  message: "The connection to the mail server failed",
+                })
+              );
+            }
+            if (failure === "refused") {
+              return Effect.fail(new MailboxMissingError({ accountId, path }));
+            }
+            return withMailbox(path, (mailbox) => {
+              this.statuses.push(path);
+              this.onStatus?.(path);
+              return {
+                highestModseq: this.capabilities.has("CONDSTORE")
+                  ? mailbox.highestModseq
+                  : undefined,
+                messages: mailbox.messages.size,
+                path,
+                uidNext: mailbox.uidNext,
+                uidValidity: mailbox.uidValidity,
+                unseen:
+                  [...mailbox.messages.values()].filter(
+                    (message) => !message.flags.includes("\\Seen")
+                  ).length + this.miscountedUnseen,
+              };
+            });
+          }
+        ),
       watch: (path: string, options: WatchOptions) =>
         Effect.suspend(() => {
           this.calls.push(`watch ${path}`);

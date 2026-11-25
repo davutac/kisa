@@ -9,6 +9,7 @@ import {
   NO_THREAD_CHANGES,
   mergeThreadChanges,
   rereadCopies,
+  salvaging,
   syncMailbox,
   toImapMailbox,
 } from "./sync";
@@ -98,9 +99,13 @@ export const refreshMailboxes = Effect.fn("MailMutations.refreshMailboxes")(
     );
     const results: ThreadChanges[] = [];
 
-    for (const record of records) {
-      results.push(yield* syncMailbox(scope, toImapMailbox(record), record));
-    }
+    // A mailbox that fails takes the result with it, while the ones before
+    // it stay caught up: see `SyncScope.salvage`.
+    yield* Effect.gen(function* refreshEach() {
+      for (const record of records) {
+        results.push(yield* syncMailbox(scope, toImapMailbox(record), record));
+      }
+    }).pipe(salvaging(scope, results));
 
     return mergeThreadChanges(...results);
   }

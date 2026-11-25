@@ -134,7 +134,9 @@ export const toTransportError = <Failure>(
     });
   }
 
-  if (mailboxMissing === true && path !== undefined) {
+  // imapflow marks a mailbox it could not select, and raises `NotFound` for
+  // one whose STATUS was refused and that a LIST no longer shows.
+  if ((mailboxMissing === true || code === "NotFound") && path !== undefined) {
     return new MailboxMissingError({ accountId, path });
   }
 
@@ -637,11 +639,17 @@ const refuseCommand = (): never => {
 };
 
 /**
- * A mailbox that carries another UIDVALIDITY than the caller's, in the shape
- * errors are read from: the mailbox the caller means is not there.
+ * A mailbox that carries another UIDVALIDITY than the caller's, or that the
+ * server will not open, in the shape errors are read from: the mailbox the
+ * caller means is not there.
  */
 const refuseMailbox = (): never => {
-  throw Object.assign(new Error("mailbox rebuilt"), { mailboxMissing: true });
+  throw Object.assign(new Error("mailbox refused"), { mailboxMissing: true });
+};
+
+/** A connection lost under a command, in the shape errors are read from. */
+const loseConnection = (): never => {
+  throw Object.assign(new Error("connection lost"), { code: "NoConnection" });
 };
 
 export const makeSession = (
@@ -861,9 +869,12 @@ export const makeSession = (
         });
 
         if (status === false || status.uidValidity === undefined) {
-          throw Object.assign(new Error("status refused"), {
-            mailboxMissing: true,
-          });
+          // imapflow answers `false` for a STATUS the server refused and for
+          // one whose connection was lost before the answer came. Only the
+          // first says anything about the mailbox: a pass goes on without a
+          // mailbox that will not open, and must not go on without a
+          // connection.
+          return client.usable ? refuseMailbox() : loseConnection();
         }
 
         return {

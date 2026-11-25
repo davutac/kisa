@@ -102,10 +102,6 @@ export interface SyncScope {
   /** Set by the background pass; see `checkDrift`. */
   readonly drift?: DriftMemory | undefined;
   /**
-   * Runs one step of a full pass that writes cached copies, so the caller can
-   * keep other writers out for that step only, not for the whole pass.
-   */
-  /**
    * Told what a full pass's discovery saved as soon as it is saved, so the
    * caller can announce it even if a later step of the pass fails: the next
    * pass finds no difference to report again.
@@ -114,9 +110,21 @@ export interface SyncScope {
     readonly changes: ThreadChanges;
     readonly labelsChanged: boolean;
   }) => Effect.Effect<void>;
+  /**
+   * Runs one step of a full pass that writes cached copies, so the caller can
+   * keep other writers out for that step only, not for the whole pass.
+   */
   readonly exclusive?: <A, E, R>(
     effect: Effect.Effect<A, E, R>
   ) => Effect.Effect<A, E, R>;
+  /**
+   * Given what a pass or a refresh had saved when it failed. Its failure
+   * takes its result with it while the mail stays cached, so the next pass
+   * finds nothing new there to report: this is the one moment that mail can
+   * be shown and announced. Not called when the work is interrupted, as it is
+   * for an account being disconnected.
+   */
+  readonly salvage?: (saved: ThreadChanges) => Effect.Effect<void>;
   readonly session: ImapSession;
 }
 
@@ -147,6 +155,21 @@ const withoutArrivals = ({
   changed,
   removed,
 });
+
+/**
+ * Hands what steps had saved to `scope.salvage` when they fail. `saved` is
+ * read at that moment, so it holds whatever the steps added before failing.
+ */
+export const salvaging =
+  (scope: SyncScope, saved: readonly ThreadChanges[]) =>
+  <A, E, R>(steps: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    Effect.tapError(steps, () => {
+      const changes = mergeThreadChanges(...saved);
+      return scope.salvage === undefined ||
+        (changes.changed.length === 0 && changes.removed.length === 0)
+        ? Effect.void
+        : scope.salvage(changes);
+    });
 
 const MAILBOX_PRIORITY = {
   all: 0,
@@ -752,6 +775,10 @@ const checkDrift = Effect.fn("MailSync.checkDrift")(function* checkDrift(
  * background pass, `"newest"` for the newest copies alone. A refresh after
  * the user's own change asks for neither: a change to flags reads back the
  * copies it touched.
+ *
+ * Each step saves what it read before the next asks the server anything, so
+ * a failure part way leaves mail cached that the result never mentions: see
+ * `SyncScope.salvage`.
  */
 export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
   function* syncMailbox(
@@ -762,10 +789,13 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
       /** Check the mailbox for drift afterwards: the background pass only. */
       readonly drift?: DriftMemory | undefined;
       readonly rereadFlags?: boolean | "newest";
+      /** The mailbox's `STATUS`, when the caller has just asked for it. */
+      readonly status?: MailboxState | undefined;
     } = {}
   ) {
     const store = yield* MailEngineStore;
-    const status = yield* scope.session.status(mailbox.path);
+    const status =
+      options.status ?? (yield* scope.session.status(mailbox.path));
 
     if (
       cached?.uidValidity !== status.uidValidity ||
@@ -781,114 +811,149 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
       });
     }
 
+    const cachedUidNext = cached.uidNext;
     const results: ThreadChanges[] = [];
-    let arrivals = 0;
 
-    if (status.uidNext > cached.uidNext) {
-      // `n:*` always returns the newest message, even below n.
-      const newUids = (yield* scope.session.search(
-        mailbox.path,
-        status.uidValidity,
-        { from: cached.uidNext, kind: "uidRange", to: status.uidNext - 1 }
-      )).filter((uid) => uid >= (cached.uidNext ?? 1));
-      arrivals = newUids.length;
+    yield* Effect.gen(function* catchUp() {
+      let arrivals = 0;
 
-      // A pass cut short after caching new mail saved no progress for it, so
-      // the saved count below does not cover those copies. This search lists
-      // their range, and a copy it does not return has left the server.
-      const listed = new Set(newUids);
-      const left = (yield* store.locationUids(
-        scope.accountId,
-        mailbox.path,
-        cached.uidNext
-      )).filter((uid) => uid < status.uidNext && !listed.has(uid));
-      if (left.length > 0) {
-        results.push(
-          yield* store.removeLocations(scope.accountId, mailbox.path, left)
-        );
+      if (status.uidNext > cachedUidNext) {
+        // `n:*` always returns the newest message, even below n.
+        const newUids = (yield* scope.session.search(
+          mailbox.path,
+          status.uidValidity,
+          { from: cachedUidNext, kind: "uidRange", to: status.uidNext - 1 }
+        )).filter((uid) => uid >= cachedUidNext);
+        arrivals = newUids.length;
+
+        // A pass cut short after caching new mail saved no progress for it,
+        // so the saved count below does not cover those copies. This search
+        // lists their range, and a copy it does not return has left the
+        // server.
+        const listed = new Set(newUids);
+        const left = (yield* store.locationUids(
+          scope.accountId,
+          mailbox.path,
+          cachedUidNext
+        )).filter((uid) => uid < status.uidNext && !listed.has(uid));
+        if (left.length > 0) {
+          results.push(
+            yield* store.removeLocations(scope.accountId, mailbox.path, left)
+          );
+        }
+
+        const batches = chunk(newUids, SKELETON_BATCH_SIZE);
+        for (const uids of batches) {
+          results.push(
+            yield* storeSkeleton(scope, mailbox, status.uidValidity, uids, {})
+          );
+        }
       }
 
-      const batches = chunk(newUids, SKELETON_BATCH_SIZE);
-      for (const uids of batches) {
-        results.push(
-          yield* storeSkeleton(scope, mailbox, status.uidValidity, uids, {})
+      const floor = cached.skeletonFloor ?? cachedUidNext;
+      if (status.highestModseq === undefined) {
+        if (options.rereadFlags === true || options.rereadFlags === "newest") {
+          results.push(
+            yield* rereadFlags(
+              scope,
+              mailbox,
+              {
+                flagCursor: cached.flagCursor,
+                skeletonFloor: cached.skeletonFloor,
+                uidNext: cachedUidNext,
+                uidValidity: status.uidValidity,
+              },
+              options.rereadFlags === true ? "all" : "newest"
+            )
+          );
+        }
+      } else if (
+        cached.highestModseq !== undefined &&
+        status.highestModseq > cached.highestModseq &&
+        floor < cachedUidNext
+      ) {
+        const changed = yield* scope.session.fetch(
+          mailbox.path,
+          status.uidValidity,
+          { from: floor, kind: "range", to: cachedUidNext - 1 },
+          changeFields(scope.dialect),
+          { changedSince: cached.highestModseq }
         );
-      }
-    }
-
-    const floor = cached.skeletonFloor ?? cached.uidNext;
-    if (status.highestModseq === undefined) {
-      if (options.rereadFlags === true || options.rereadFlags === "newest") {
         results.push(
-          yield* rereadFlags(
-            scope,
-            mailbox,
-            {
-              flagCursor: cached.flagCursor,
-              skeletonFloor: cached.skeletonFloor,
-              uidNext: cached.uidNext,
-              uidValidity: status.uidValidity,
-            },
-            options.rereadFlags === true ? "all" : "newest"
+          yield* store.applyLocationChanges(
+            scope.accountId,
+            mailbox.path,
+            toLocationChanges(scope.dialect, mailbox, changed),
+            {}
           )
         );
       }
-    } else if (
-      cached.highestModseq !== undefined &&
-      status.highestModseq > cached.highestModseq &&
-      floor < cached.uidNext
-    ) {
-      const changed = yield* scope.session.fetch(
-        mailbox.path,
-        status.uidValidity,
-        { from: floor, kind: "range", to: cached.uidNext - 1 },
-        changeFields(scope.dialect),
-        { changedSince: cached.highestModseq }
-      );
-      results.push(
-        yield* store.applyLocationChanges(
-          scope.accountId,
-          mailbox.path,
-          toLocationChanges(scope.dialect, mailbox, changed),
-          {}
-        )
-      );
-    }
 
-    // Without QRESYNC an expunge is silent. Below the saved UIDNEXT a count
-    // lower than expected is the only sign, and only then is the full UID
-    // list compared with the cache. The saved count covers no copy at or
-    // above the saved UIDNEXT; those were compared with the search above.
-    const expected = (cached.messageCount ?? status.messages) + arrivals;
-    if (status.messages < expected) {
-      const present = new Set(
-        yield* scope.session.search(mailbox.path, status.uidValidity, {
-          kind: "all",
+      // Without QRESYNC an expunge is silent. Below the saved UIDNEXT a count
+      // lower than expected is the only sign, and only then is the full UID
+      // list compared with the cache. The saved count covers no copy at or
+      // above the saved UIDNEXT; those were compared with the search above.
+      const expected = (cached.messageCount ?? status.messages) + arrivals;
+      if (status.messages < expected) {
+        const present = new Set(
+          yield* scope.session.search(mailbox.path, status.uidValidity, {
+            kind: "all",
+          })
+        );
+        const vanished = (yield* store.locationUids(
+          scope.accountId,
+          mailbox.path
+        )).filter((uid) => !present.has(uid));
+        results.push(
+          yield* store.removeLocations(scope.accountId, mailbox.path, vanished)
+        );
+      }
+
+      results.push(
+        yield* store.applyLocationChanges(scope.accountId, mailbox.path, [], {
+          highestModseq: status.highestModseq,
+          messageCount: status.messages,
+          uidNext: status.uidNext,
         })
       );
-      const vanished = (yield* store.locationUids(
-        scope.accountId,
-        mailbox.path
-      )).filter((uid) => !present.has(uid));
-      results.push(
-        yield* store.removeLocations(scope.accountId, mailbox.path, vanished)
-      );
-    }
-
-    results.push(
-      yield* store.applyLocationChanges(scope.accountId, mailbox.path, [], {
-        highestModseq: status.highestModseq,
-        messageCount: status.messages,
-        uidNext: status.uidNext,
-      })
-    );
-    if (options.drift !== undefined) {
-      results.push(yield* checkDrift(scope, mailbox, status, options.drift));
-    }
+      if (options.drift !== undefined) {
+        results.push(yield* checkDrift(scope, mailbox, status, options.drift));
+      }
+    }).pipe(salvaging(scope, results));
 
     return mergeThreadChanges(...results);
   }
 );
+
+/**
+ * Whether a pass can go on without a mailbox the server will not open. Not
+ * without the one an account's new mail arrives in: the Inbox, or All Mail
+ * on Gmail. A pass that left that out would look caught up while the account
+ * receives nothing.
+ */
+const canLeaveOut = (mailbox: ImapMailbox): boolean =>
+  mailbox.role !== "inbox" && mailbox.role !== "all";
+
+/**
+ * A mailbox's `STATUS` at the start of its step, or `undefined` for one the
+ * pass goes on without: the server lists it and refuses to open it (a shared
+ * folder without access, one deleted since the list was read). Nothing of
+ * it has been read or saved at that point, so leaving it for the next pass
+ * loses nothing. Any other failure, and a refusal later in the step, fails
+ * the pass as before.
+ */
+const openMailbox = (scope: SyncScope, mailbox: ImapMailbox) =>
+  scope.session
+    .status(mailbox.path)
+    .pipe(
+      Effect.catchTag("MailboxMissingError", (refusal) =>
+        canLeaveOut(mailbox)
+          ? Effect.logWarning(
+              `A mailbox (${mailbox.role}) would not open and was left out of the pass`
+            )
+          : Effect.fail(refusal)
+      )
+    );
 
 /**
  * One pass over every synced mailbox. A copy that vanished from one mailbox
@@ -897,6 +962,10 @@ export const syncMailbox = Effect.fn("MailSync.syncMailbox")(
  * bodies when its new copy is read later in the same pass. Discovery's
  * changes go to `scope.discovered` when it is given, and are otherwise
  * returned with the rest.
+ *
+ * A mailbox that will not open is left out: see `openMailbox`. The pass then
+ * deletes no message for having no copy, since a copy may be in the mailbox
+ * it could not read.
  */
 export const syncAccount = Effect.fn("MailSync.syncAccount")(
   function* syncAccount(scope: SyncScope) {
@@ -905,30 +974,44 @@ export const syncAccount = Effect.fn("MailSync.syncAccount")(
       scope.exclusive ?? (<A, E, R>(effect: Effect.Effect<A, E, R>) => effect);
     const discovered = yield* exclusive(discoverMailboxes(scope));
     yield* scope.discovered?.(discovered) ?? Effect.void;
-    const results: ThreadChanges[] = [];
+    const results: ThreadChanges[] =
+      scope.discovered === undefined ? [discovered.changes] : [];
 
-    for (const mailbox of discovered.mailboxes) {
-      // Read under the same turn as the step: a change made between steps
-      // may have moved this mailbox's progress on.
-      results.push(
-        yield* exclusive(
+    yield* Effect.gen(function* readMailboxes() {
+      let isComplete = true;
+
+      for (const mailbox of discovered.mailboxes) {
+        // Read under the same turn as the step: a change made between steps
+        // may have moved this mailbox's progress on.
+        const changes = yield* exclusive(
           Effect.gen(function* syncOneMailbox() {
+            const status = yield* openMailbox(scope, mailbox);
+            if (status === undefined) {
+              return;
+            }
             const cached = (yield* store.getMailboxes(scope.accountId)).find(
               (record) => record.path === mailbox.path
             );
             return yield* syncMailbox(scope, mailbox, cached, {
               drift: scope.drift,
               rereadFlags: true,
+              status,
             });
           })
-        )
-      );
-    }
+        );
+        if (changes === undefined) {
+          isComplete = false;
+        } else {
+          results.push(changes);
+        }
+      }
 
-    results.push(yield* exclusive(store.collectOrphans(scope.accountId)));
-    return scope.discovered === undefined
-      ? mergeThreadChanges(discovered.changes, ...results)
-      : mergeThreadChanges(...results);
+      if (isComplete) {
+        results.push(yield* exclusive(store.collectOrphans(scope.accountId)));
+      }
+    }).pipe(salvaging(scope, results));
+
+    return mergeThreadChanges(...results);
   }
 );
 

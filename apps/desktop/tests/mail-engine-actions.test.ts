@@ -4,7 +4,7 @@
 import { gmailDialect } from "@repo/mail/dialects";
 import { ImapConnector } from "@repo/mail/session";
 import { SmtpTransport } from "@repo/mail/smtp";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Exit, Layer, Schema } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendRendererEvent } from "../src/main/electron/renderer-events";
@@ -72,6 +72,19 @@ const layers = (server: FakeImapServer) =>
     )
   );
 
+/** The conversations the thread list events sent to the windows upsert. */
+const listedUpserts = () => {
+  const isListUpdate = Schema.is(MailThreadListUpdated);
+  return vi
+    .mocked(sendRendererEvent)
+    .mock.calls.flatMap(([channel, , payload]) =>
+      channel === MAIL_THREAD_LIST_UPDATED_CHANNEL && isListUpdate(payload)
+        ? payload.changes
+        : []
+    )
+    .flatMap((change) => (change.kind === "upsert" ? [change.thread] : []));
+};
+
 describe("thread actions in the engine", () => {
   beforeEach(() => {
     resetDatabase();
@@ -121,19 +134,40 @@ describe("thread actions in the engine", () => {
       )
     );
 
-    const isListUpdate = Schema.is(MailThreadListUpdated);
-    const upserts = vi
-      .mocked(sendRendererEvent)
-      .mock.calls.flatMap(([channel, , payload]) =>
-        channel === MAIL_THREAD_LIST_UPDATED_CHANNEL && isListUpdate(payload)
-          ? payload.changes
-          : []
-      )
-      .flatMap((change) => (change.kind === "upsert" ? [change.thread] : []));
+    const upserts = listedUpserts();
 
     expect(upserts).toHaveLength(200);
     expect(
       upserts.find((thread) => thread.threadId === "1000")?.labels
     ).toContain("TRASH");
+  });
+
+  // The refresh saved the new mail before it failed, and the pass that
+  // follows finds it cached and reports nothing: only the failing action can
+  // show and announce it.
+  it("shows and announces mail it had saved when it failed", async () => {
+    insertAccount("gmail");
+    const server = new FakeImapServer(GMAIL_MAILBOXES);
+    server.deliver(ALL_MAIL, gmailMessage("1000", "1000"));
+    await syncFully(scopeFor(server, gmailDialect));
+    server.deliver(ALL_MAIL, gmailMessage("1001", "1001", { flags: [] }));
+    // The refresh fetches the new mail by UID and saves it. The fetch of
+    // changed flags that follows, over a range, loses the connection.
+    server.dropFetch = (_path, selection) => selection.kind === "range";
+    vi.mocked(sendRendererEvent).mockClear();
+
+    const exit = await Effect.runPromiseExit(
+      applyThreadActions(accountId, ["1000"], { kind: "trash" }).pipe(
+        Effect.provide(layers(server))
+      )
+    );
+
+    expect(Exit.isFailure(exit)).toBeTruthy();
+    expect(listedUpserts().map((thread) => thread.threadId)).toContain("1001");
+    expect(announceArrivals).toHaveBeenCalledWith(
+      accountId,
+      ["1001"],
+      expect.anything()
+    );
   });
 });
