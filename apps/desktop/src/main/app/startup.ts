@@ -1,3 +1,4 @@
+import { is } from "@electron-toolkit/utils";
 import { Effect, Exit, Option } from "effect";
 import { app, dialog, powerMonitor } from "electron";
 
@@ -24,6 +25,7 @@ import { refreshUnreadBadge } from "../mail/unread-badge";
 import { getCurrentAppSettings } from "../settings/app-settings";
 import { getMainWindow } from "../window/create-window";
 import { announceImportActivation } from "./import-activation-notice";
+import { hasLegacyDatabase } from "./legacy-database-notice";
 
 let startupPromise: Promise<AppStartupExit> | null = null;
 const CORRESPONDENT_WARM_DELAY_MS = 1000;
@@ -92,9 +94,18 @@ const serializeStartupError = (
   tag: error._tag,
 });
 
-const toStartupReply = (exit: AppStartupExit): AppStartupReply => {
+const toStartupReply = async (
+  exit: AppStartupExit
+): Promise<AppStartupReply> => {
   if (Exit.isSuccess(exit)) {
-    return { appSettings: getCurrentAppSettings(), ok: true };
+    return {
+      appSettings: getCurrentAppSettings(),
+      legacyDatabaseNotice: await hasLegacyDatabase({
+        isDevelopment: is.dev,
+        userDataPath: app.getPath("userData"),
+      }),
+      ok: true,
+    };
   }
 
   const error = Option.getOrUndefined(Exit.findErrorOption(exit));

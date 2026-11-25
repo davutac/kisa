@@ -43,6 +43,7 @@ vi.mock(import("../src/main/app/startup"), () => ({
   getAppStartupReply: vi.fn<
     () => Promise<{
       readonly appSettings: AppSettings;
+      readonly legacyDatabaseNotice: boolean;
       readonly ok: true;
     }>
   >(),

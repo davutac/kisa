@@ -10,7 +10,7 @@ export type AuthGateState =
       accounts: readonly Account[];
       status: "authenticated";
     }
-  | { status: "unauthenticated" };
+  | { legacyDatabaseNotice: boolean; status: "unauthenticated" };
 
 type AuthGateCapabilities = Pick<RuntimeCapabilities, "isWeb" | "startup"> & {
   accounts?: Pick<AccountsApi, "listAccounts">;
@@ -53,7 +53,10 @@ const loadAuthGateState = async (
 
   return reply.data.length > 0
     ? { accounts: reply.data, status: "authenticated" }
-    : { status: "unauthenticated" };
+    : {
+        legacyDatabaseNotice: startup.legacyDatabaseNotice,
+        status: "unauthenticated",
+      };
 };
 
 export const createAuthGateStateResolver = (

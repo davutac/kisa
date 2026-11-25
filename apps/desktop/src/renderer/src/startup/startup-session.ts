@@ -6,7 +6,11 @@ type StartupAdapter = AppStartupApi;
 export type StartupSessionOutcome =
   | { state: "aborted" }
   | { state: "failed"; message: string }
-  | { appSettings?: AppSettings; state: "started" };
+  | {
+      appSettings?: AppSettings;
+      legacyDatabaseNotice: boolean;
+      state: "started";
+    };
 
 interface RequestStartupSessionArgs {
   abortSignal?: AbortSignal;
@@ -20,7 +24,11 @@ const isAborted = (abortSignal?: AbortSignal): boolean =>
 
 const toOutcome = (reply: AppStartupReply): StartupSessionOutcome => {
   if (reply.ok) {
-    return { appSettings: reply.appSettings, state: "started" };
+    return {
+      appSettings: reply.appSettings,
+      legacyDatabaseNotice: reply.legacyDatabaseNotice,
+      state: "started",
+    };
   }
 
   return {
@@ -38,7 +46,7 @@ export const requestStartupSession = async ({
   }
 
   if (startupAdapter === undefined) {
-    return { state: "started" };
+    return { legacyDatabaseNotice: false, state: "started" };
   }
 
   let reply: AppStartupReply;

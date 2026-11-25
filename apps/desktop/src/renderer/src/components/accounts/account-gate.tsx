@@ -95,7 +95,14 @@ const AccountGate = ({ children, initialState }: AccountGateProps) => {
   );
 
   if (!isAuthenticated) {
-    return <LoginScreen />;
+    return (
+      <LoginScreen
+        legacyDatabaseNotice={
+          initialState.status === "unauthenticated" &&
+          initialState.legacyDatabaseNotice
+        }
+      />
+    );
   }
 
   return (

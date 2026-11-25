@@ -100,7 +100,7 @@ pnpm --dir apps/desktop dev
 
 Outlook accounts need Kisa's Microsoft Entra client ID at build time: copy `apps/desktop/.env.example` to `apps/desktop/.env.local` and fill in `MAIN_VITE_MICROSOFT_CLIENT_ID`, or set it in the shell. Without it, everything else works and Microsoft sign-in is not offered. Release builds take it from the `MICROSOFT_CLIENT_ID` secret of the GitHub `Prod` environment.
 
-Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, separate from the installed app's `mail.sqlite` database and key. Databases from before the mail engine (`app.sqlite`, `app.dev.sqlite`) are left as they are and never opened.
+Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, separate from the installed app's `mail.sqlite` database and key. Databases from before the mail engine (`app.sqlite`, `app.dev.sqlite`) are left as they are and never opened. When one exists, the sign-in screen notes that Kisa starts fresh and everything needs setting up again, for as long as that file is on disk.
 
 Running from source needs no provider setup: accounts connect with an app password as described in [Add an account](#add-an-account).
 

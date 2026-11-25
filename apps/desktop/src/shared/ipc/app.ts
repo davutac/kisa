@@ -74,7 +74,15 @@ export const AppStartupErrorPayload = Schema.Struct({
 export type AppStartupErrorPayload = typeof AppStartupErrorPayload.Type;
 
 export const AppStartupReply = Schema.Union([
-  Schema.Struct({ appSettings: AppSettings, ok: Schema.Literal(true) }),
+  Schema.Struct({
+    appSettings: AppSettings,
+    /**
+     * Whether a database from before the mail engine is on disk, so the
+     * sign-in screen says what did not carry over.
+     */
+    legacyDatabaseNotice: Schema.Boolean,
+    ok: Schema.Literal(true),
+  }),
   Schema.Struct({ error: AppStartupErrorPayload, ok: Schema.Literal(false) }),
 ]);
 export type AppStartupReply = typeof AppStartupReply.Type;
