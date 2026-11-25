@@ -15,6 +15,7 @@ const migrationsFolder = fileURLToPath(
   new URL("../../../packages/database/drizzle", import.meta.url)
 );
 const temporaryDirectories: string[] = [];
+const openConnections: ReturnType<typeof openDatabaseConnection>[] = [];
 
 const BASELINE = "20261121231100_baseline";
 const DROP_OAUTH_COLUMNS = "20261122102513_drop_oauth_columns";
@@ -28,10 +29,17 @@ const makeTemporaryDirectory = () => {
   return directory;
 };
 
-const openMigratedDatabase = () => {
+/** Closed before cleanup: Windows will not remove a file SQLite holds open. */
+const openTemporaryConnection = () => {
   const connection = openDatabaseConnection(
     path.join(makeTemporaryDirectory(), "mail.sqlite")
   );
+  openConnections.push(connection);
+  return connection;
+};
+
+const openMigratedDatabase = () => {
+  const connection = openTemporaryConnection();
   applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
   return connection;
 };
@@ -46,9 +54,7 @@ const openDatabaseWith = (...migrations: readonly string[]) => {
       { recursive: true }
     );
   }
-  const connection = openDatabaseConnection(
-    path.join(makeTemporaryDirectory(), "mail.sqlite")
-  );
+  const connection = openTemporaryConnection();
   applyDatabaseMigrations(createDatabaseClient(connection), earlierFolder);
   return connection;
 };
@@ -226,6 +232,9 @@ const columnsOf = (connection: ReturnType<typeof openDatabaseConnection>) =>
 
 describe("database baseline", () => {
   afterEach(() => {
+    for (const connection of openConnections.splice(0)) {
+      connection.close();
+    }
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { force: true, recursive: true });
     }
