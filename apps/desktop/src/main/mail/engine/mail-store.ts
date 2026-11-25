@@ -1066,11 +1066,13 @@ const toCorrespondentMessages = (
 const copyOriginsByAccount = new Map<string, Map<string, readonly string[]>>();
 
 /**
- * Messages remembered per account. Undo consumes its own entries, so this
- * only bounds what a session of trashing without undoing leaves behind; the
- * oldest go first.
+ * Messages remembered per account. Every message Trash takes outside Gmail
+ * has an entry until its Undo consumes it, so this bounds what a session of
+ * trashing without undoing leaves behind. The oldest go first, and a restore
+ * of one of those goes to the Inbox: so does the oldest part of one bulk
+ * Trash of more messages than this.
  */
-const MAX_REMEMBERED_MESSAGES = 2000;
+const MAX_REMEMBERED_MESSAGES = 10_000;
 
 const rememberOrigins = (
   accountId: string,

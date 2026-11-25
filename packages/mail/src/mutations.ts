@@ -474,17 +474,16 @@ const trash = Effect.fn("MailMutations.trash")(function* trash(
   const targets = context.locations.filter(
     (location) => roleOf(context, location.mailboxPath) !== "trash"
   );
-  // Outside Gmail a copy in Trash forgets its folder, so where the user's own
-  // copies were is remembered first, for Undo to put them back.
+  // Outside Gmail a copy in Trash forgets its folder, so where each copy was
+  // is remembered first, for Undo to put it back. Restored into the Inbox
+  // alike, two copies of one message would both land there, a folder would
+  // lose its mail, and a reply would leave Sent.
   if (context.scope.dialect.kind === "generic") {
     const store = yield* MailEngineStore;
     yield* store.rememberCopyOrigins(
       context.scope.accountId,
       [...new Set(targets.map((location) => location.messageId))],
-      targets.filter(isOwnCopy).map(({ mailboxPath, messageId }) => ({
-        mailboxPath,
-        messageId,
-      }))
+      targets.map(({ mailboxPath, messageId }) => ({ mailboxPath, messageId }))
     );
   }
   return yield* moveCopies(context, targets, destination.path);
@@ -511,10 +510,17 @@ const moveToSpam = Effect.fn("MailMutations.moveToSpam")(function* moveToSpam(
 });
 
 /**
- * Out of Spam or Trash and back into the Inbox. Outside Gmail, the user's own
- * copies that Trash took return to the Sent or Drafts mailbox they came from,
- * one remembered origin per copy, while it is still there. Gmail's restore
- * is unchanged: it was verified only into the Inbox.
+ * Out of Spam or Trash. Outside Gmail, each copy Trash took returns to the
+ * mailbox it came from, one remembered origin per copy, while that mailbox is
+ * still there and is not Spam or Trash itself. A message with nothing
+ * remembered goes to the Inbox with every copy, as everything Spam held
+ * does. Gmail's restore is unchanged: it was verified only into the Inbox.
+ *
+ * A message Trash took copies of gets back exactly as many: a copy that was
+ * in Trash before (the same mail delivered twice, one copy deleted elsewhere)
+ * stays there, or Undo would put a second copy in the Inbox. Copies of one
+ * message cannot be told apart by what they hold, so the ones restored are
+ * those with the highest UIDs, which are the ones Trash filed last.
  */
 const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
   function* moveToInbox(context: ActionContext) {
@@ -537,8 +543,18 @@ const moveToInbox = Effect.fn("MailMutations.moveToInbox")(
       [...origins].map(([messageId, paths]) => [messageId, [...paths]])
     );
     const byDestination = new Map<string, ThreadLocation[]>();
-    for (const location of discarded) {
-      const origin = unclaimed.get(location.messageId)?.shift();
+    for (const location of discarded.toSorted(
+      (left, right) => right.uid - left.uid
+    )) {
+      const remembered =
+        roleOf(context, location.mailboxPath) === "trash"
+          ? unclaimed.get(location.messageId)
+          : undefined;
+      if (remembered?.length === 0) {
+        // Every copy Trash took of this message has its place again.
+        continue;
+      }
+      const origin = remembered?.shift();
       const destination =
         origin !== undefined && isRestorable(context, origin)
           ? origin

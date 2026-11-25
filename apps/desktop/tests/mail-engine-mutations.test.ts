@@ -548,6 +548,88 @@ describe("thread actions with the generic dialect", () => {
     expect(locationPaths(messageId)).toStrictEqual(["INBOX", "Sent Messages"]);
   });
 
+  it("puts a labelled message's copies back in the Inbox and its folder", async () => {
+    // Both copies went to Trash. Restored into the Inbox alike, they would
+    // be two copies there and none in the folder: a duplicate, and the label
+    // lost.
+    const { scope } = await syncIcloud([
+      { id: "t", path: "INBOX" },
+      { id: "t", path: "Receipts" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("t");
+
+    await act(scope, threadId, { kind: "trash" });
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["INBOX", "Receipts"]);
+    expect(threadRow(threadId)).toMatchObject({
+      is_in_inbox: 1,
+      is_in_trash: 0,
+      label_ids: JSON.stringify(["INBOX", "u:Receipts"]),
+    });
+  });
+
+  it.each([
+    { from: "Receipts", name: "filed only in a folder" },
+    { from: "Archive", name: "archived" },
+  ])(
+    "puts mail $name back where it was, not in the Inbox",
+    async ({ from }) => {
+      const { scope } = await syncIcloud([{ id: "u", path: from }]);
+      const { message_id: messageId, thread_id: threadId } = genericIds("u");
+
+      await act(scope, threadId, { kind: "trash" });
+      await act(scope, threadId, { kind: "moveToInbox" });
+
+      expect(locationPaths(messageId)).toStrictEqual([from]);
+      expect(threadRow(threadId)).toMatchObject({ is_in_inbox: 0 });
+    }
+  );
+
+  it("restores mail trashed out of Spam to the Inbox, never back to Spam", async () => {
+    const { scope } = await syncIcloud([{ id: "v", path: "Junk" }]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("v");
+
+    await act(scope, threadId, { kind: "trash" });
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect(locationPaths(messageId)).toStrictEqual(["INBOX"]);
+  });
+
+  it("leaves a copy that was in Trash before there when Trash is undone", async () => {
+    // The same mail delivered twice, with one copy deleted elsewhere. Trash
+    // takes the Inbox copy, and its Undo must bring back that one alone:
+    // restoring both would put two copies in the Inbox.
+    const { scope } = await syncIcloud([
+      { id: "w", path: "Deleted Messages" },
+      { id: "w", path: "INBOX" },
+    ]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("w");
+    const uidsInTrash = () =>
+      (
+        connection
+          .prepare(
+            "SELECT uid FROM mail_message_locations WHERE message_id = ? AND mailbox_path = 'Deleted Messages' ORDER BY uid"
+          )
+          .all(messageId) as { uid: number }[]
+      ).map((row) => row.uid);
+
+    await act(scope, threadId, { kind: "trash" });
+    const trashed = uidsInTrash();
+    await act(scope, threadId, { kind: "moveToInbox" });
+
+    expect({
+      copies: locationPaths(messageId),
+      inTrash: uidsInTrash(),
+      trashed,
+    }).toStrictEqual({
+      copies: ["Deleted Messages", "INBOX"],
+      // The copy Trash took got the higher UID, and is the one that left.
+      inTrash: [1],
+      trashed: [1, 2],
+    });
+  });
+
   it("restores to the Inbox when the remembered mailbox is gone", async () => {
     const { scope, server } = await syncIcloud([
       { id: "s", path: "Sent Messages" },
