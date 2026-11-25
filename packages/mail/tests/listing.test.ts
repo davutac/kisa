@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { conversationPlaces, listedMessages } from "../src/listing";
+import {
+  conversationPlaces,
+  labelsOfCopies,
+  listedMessages,
+} from "../src/listing";
 
 const PLACES = ["INBOX", "SENT", "SPAM", "TRASH"] as const;
 
@@ -105,5 +109,97 @@ describe("where a conversation is listed", () => {
     });
 
     expect(unsettled.map(describing)).toStrictEqual([]);
+  });
+});
+
+// One message can have several copies: mail to oneself, a list echoing a
+// post, the same mail delivered twice, a copy another program left behind.
+// Each copy is filed like a message is, and the message carries the labels of
+// the copies it is listed by.
+describe("the labels a message takes from its copies", () => {
+  /** Every way one message's one or two copies can be filed. */
+  const COPY_SETS: readonly (readonly Message[])[] = [
+    ...MESSAGES.map((only) => [only]),
+    ...MESSAGES.flatMap((first) => MESSAGES.map((second) => [first, second])),
+  ];
+
+  const labelled = (copies: readonly Message[]): Message => ({
+    labelIds: labelsOfCopies(copies),
+  });
+
+  const describingCopies = (copySets: readonly (readonly Message[])[]) =>
+    copySets.map((copies) => `{${describing(copies)}}`).join(" & ");
+
+  it("are its copy's own when it has one copy", () => {
+    const changed = MESSAGES.filter(
+      (copy) =>
+        labelsOfCopies([copy]).toSorted().join(" ") !==
+        copy.labelIds.toSorted().join(" ")
+    );
+
+    expect(changed.map((copy) => describing([copy]))).toStrictEqual([]);
+  });
+
+  // The failure this guards against: one copy of a message is in Trash or
+  // Spam, and it files the copy in the Inbox out of sight with it.
+  it("list every conversation with a copy in the Inbox in the Inbox", () => {
+    const conversations = [
+      ...COPY_SETS.map((first) => [first]),
+      ...COPY_SETS.flatMap((first) =>
+        COPY_SETS.map((second) => [first, second])
+      ),
+    ];
+
+    const hidden = conversations.filter(
+      (conversation) =>
+        conversation.some((copies) => copies.some(isInboxMail)) &&
+        !isListedInInbox(conversation.map(labelled))
+    );
+
+    expect(hidden.map(describingCopies)).toStrictEqual([]);
+  });
+
+  it("keep a message under Trash while every copy of it is there", () => {
+    const escaped = COPY_SETS.filter(
+      (copies) =>
+        copies.every((copy) => isIn(copy, "TRASH")) &&
+        !isIn(labelled(copies), "TRASH")
+    );
+
+    expect(escaped.map(describing)).toStrictEqual([]);
+  });
+
+  // Reporting mail to oneself leaves its copy in Sent, which must not take
+  // the message out of Spam.
+  it("keep a reported message under Spam while no copy is in the Inbox", () => {
+    const escaped = COPY_SETS.filter(
+      (copies) =>
+        !copies.some(isInboxMail) &&
+        copies.some((copy) => isIn(copy, "SPAM") && !isIn(copy, "TRASH")) &&
+        !isIn(labelled(copies), "SPAM")
+    );
+
+    expect(escaped.map(describing)).toStrictEqual([]);
+    expect(
+      labelsOfCopies([
+        { labelIds: ["SPAM"] },
+        { labelIds: ["SENT"] },
+      ]).toSorted()
+    ).toStrictEqual(["SENT", "SPAM"]);
+  });
+
+  it("leave out a copy in Trash or Spam beside one in the Inbox", () => {
+    expect(
+      labelsOfCopies([
+        { labelIds: ["INBOX", "UNREAD"] },
+        { labelIds: ["TRASH"] },
+      ])
+    ).toStrictEqual(["INBOX", "UNREAD"]);
+    expect(
+      labelsOfCopies([
+        { labelIds: ["SPAM", "UNREAD"] },
+        { labelIds: ["INBOX"] },
+      ])
+    ).toStrictEqual(["INBOX"]);
   });
 });

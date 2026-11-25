@@ -58,7 +58,7 @@ How the three hard cases resolve:
 
 - **A Gmail message moves from All Mail to Trash.** Its `X-GM-MSGID` is unchanged, so the message keeps its id and bodies. Its All Mail location vanishes and a Trash location appears.
 - **Another client moves an iCloud message.** The copy vanishes from one folder and appears in another with the same `Message-ID`. A message left without a location is deleted only at the end of a pass, after every mailbox has been read, so the message survives and its bodies are not downloaded again.
-- **One `Message-ID` sits in two folders.** That is one message with two locations, and it carries both folders' labels. A change to the message (read state, trash) is applied to every location, which is Gmail's model too.
+- **One `Message-ID` sits in two folders.** That is one message with two locations, and it carries both folders' labels, except that a copy in Trash or Spam can take no part (see [Labels](#labels)). A change to the message (read state, trash) is applied to every location, which is Gmail's model too.
 
 A message is deleted only when a complete pass over its account's mailboxes leaves it with no location.
 
@@ -85,6 +85,8 @@ The row (its labels, count, snippet and unread state) is built from the messages
 - The message left out is not listed under Trash or Spam in Kisa until the rest of its conversation joins it.
 - Actions still see every copy, so restoring a conversation brings such a message back, and trashing the rest and then undoing brings back the earlier one too.
 - Rows written before this rule are found and rebuilt each time the engine starts, from the rows under Trash and Spam, which afterwards finds nothing.
+
+**A message's copies are held to the same rule.** One message can have several copies: mail to oneself, the same mail delivered twice, a copy another program left in Trash. A message carries the labels of the copies it is listed by, and those are chosen as a conversation's messages are (`labelsOfCopies` in `listing.ts`): a copy in Trash takes no part while another copy is outside Trash, nor one in Spam while another is in the Inbox. So a message with a copy in the Inbox and one in Trash is Inbox mail, read or unread as its Inbox copy is, where it once carried both labels and was listed under Trash alone. A copy in Spam beside one in Sent still files the message under Spam, as reporting mail to oneself leaves it. A message with one copy carries that copy's labels, so nothing changes on Gmail, where a message is in exactly one of All Mail, Spam and Trash. `tests/listing.test.ts` checks this for every way one or two copies can be filed. Messages labelled before this rule are found each time the engine starts, from the copies in Trash and Spam whose message has a copy in another mailbox, and only those the rule labels otherwise are written, so a second start finds nothing.
 
 **Where a row is listed is decided once, in main.** A row's labels and its four projections (`is_in_inbox`, `is_in_sent`, `is_in_spam`, `is_in_trash`) say where its mail is. Which places list it follows from them by one rule, `listingPlaces` in `apps/desktop/src/shared/mailbox-places.ts`:
 

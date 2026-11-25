@@ -286,11 +286,12 @@ export interface MailEngineStoreService {
     rename: LabelRename
   ) => Effect.Effect<ThreadChanges, MailStoreError>;
   /**
-   * Lists again the conversations a row files under Trash or Spam against
-   * the rule in `listing.ts`: ones with mail outside Trash, or with mail in
-   * the Inbox. A row is rebuilt only when one of its messages changes, so
-   * rows written before that rule would keep such mail out of the Inbox
-   * until then.
+   * Lists again what was filed before the rules in `listing.ts`: the
+   * conversations a row files under Trash or Spam although they have mail
+   * outside Trash, or in the Inbox, and the messages labelled by every copy
+   * although one of their copies is in Trash or Spam. A row is rebuilt only
+   * when one of its messages changes, and a message when one of its copies
+   * does, so without this such mail would stay out of the Inbox until then.
    */
   readonly relistHidden: (
     accountId: AccountId

@@ -240,3 +240,129 @@ describe("labelling such a conversation outside Gmail", () => {
     });
   });
 });
+
+/** The cached ids of the generic message with this subject. */
+const idsOf = (subject: string) =>
+  connection
+    .prepare(
+      "SELECT message_id, thread_id FROM mail_messages WHERE subject = ?"
+    )
+    .get(subject) as { message_id: string; thread_id: string };
+
+/** The same mail delivered twice, with one copy deleted elsewhere. */
+const twiceDelivered = async (discarded: string) => {
+  insertAccount("generic");
+  const server = new FakeImapServer(ICLOUD_MAILBOXES, ["IDLE"]);
+  server.deliver("INBOX", genericMessage("twice", { flags: [] }));
+  server.deliver(discarded, genericMessage("twice"));
+  const scope = scopeFor(server, genericDialect);
+  await syncFully(scope);
+  return { ...idsOf("twice"), scope, server };
+};
+
+// One Message-ID in two mailboxes is one message with two copies. A copy in
+// Trash must not file the copy in the Inbox there with it.
+describe("a message with one copy in Trash and another outside it", () => {
+  beforeEach(resetDatabase);
+
+  it.each(["Deleted Messages", "Junk"])(
+    "is listed in the Inbox by its copy there, beside one in %s",
+    async (discarded) => {
+      const { message_id: messageId, thread_id: threadId } =
+        await twiceDelivered(discarded);
+
+      expect(threadRow(threadId)).toMatchObject({
+        is_in_inbox: 1,
+        is_in_spam: 0,
+        is_in_trash: 0,
+        is_unread: 1,
+        message_count: 1,
+      });
+      expect(
+        JSON.parse(messageRow(messageId)?.label_ids ?? "[]")
+      ).toStrictEqual(["INBOX", "UNREAD"]);
+      await expect(placesOf(threadId)).resolves.toStrictEqual(["inbox"]);
+    }
+  );
+
+  it("is filed under Trash once its Inbox copy is trashed too", async () => {
+    const { scope, thread_id: threadId } =
+      await twiceDelivered("Deleted Messages");
+
+    await act(scope, threadId, { kind: "trash" });
+
+    expect(threadRow(threadId)).toMatchObject({
+      is_in_inbox: 0,
+      is_in_trash: 1,
+    });
+  });
+
+  it("is listed again when an earlier build filed it under Trash", async () => {
+    const { message_id: messageId, thread_id: threadId } =
+      await twiceDelivered("Deleted Messages");
+    // The rows as they were written when a message carried the labels of
+    // every copy.
+    connection
+      .prepare(
+        `UPDATE mail_messages SET label_ids = '["INBOX","TRASH"]', is_unread = 0
+         WHERE message_id = ?`
+      )
+      .run(messageId);
+    connection
+      .prepare(
+        "UPDATE mail_threads SET is_in_trash = 1, is_unread = 0 WHERE thread_id = ?"
+      )
+      .run(threadId);
+
+    const changes = await relist();
+
+    expect(changes.changed).toStrictEqual([threadId]);
+    expect(threadRow(threadId)).toMatchObject({
+      is_in_inbox: 1,
+      is_in_trash: 0,
+      is_unread: 1,
+    });
+    await expect(relist()).resolves.toMatchObject({ changed: [] });
+  });
+
+  it("is listed again beside mail that already listed its conversation", async () => {
+    const {
+      message_id: messageId,
+      scope,
+      server,
+      thread_id: threadId,
+    } = await twiceDelivered("Deleted Messages");
+    server.deliver(
+      "INBOX",
+      genericMessage("answer", {
+        envelope: envelope({
+          inReplyTo: "<twice@example.com>",
+          messageId: "<answer@example.com>",
+          subject: "answer",
+        }),
+        headers: { references: "<twice@example.com>" },
+      })
+    );
+    await run(syncAccount(scope));
+    // Under the old rule the answer alone listed the conversation, which
+    // was in the Inbox already: no row under Trash leads to this message.
+    connection
+      .prepare(
+        `UPDATE mail_messages SET label_ids = '["INBOX","TRASH"]'
+         WHERE message_id = ?`
+      )
+      .run(messageId);
+    connection
+      .prepare("UPDATE mail_threads SET message_count = 1 WHERE thread_id = ?")
+      .run(threadId);
+
+    const changes = await relist();
+
+    expect(changes.changed).toStrictEqual([threadId]);
+    expect(threadRow(threadId)).toMatchObject({
+      is_in_inbox: 1,
+      message_count: 2,
+    });
+    await expect(relist()).resolves.toMatchObject({ changed: [] });
+  });
+});

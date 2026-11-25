@@ -19,7 +19,11 @@ import {
   SystemLabel,
   ThreadId,
 } from "@repo/mail/ids";
-import { conversationPlaces, listedMessages } from "@repo/mail/listing";
+import {
+  conversationPlaces,
+  labelsOfCopies,
+  listedMessages,
+} from "@repo/mail/listing";
 import { MailEngineStore } from "@repo/mail/store";
 import type {
   BodyCandidate,
@@ -113,15 +117,17 @@ const decodeRole = Schema.decodeUnknownOption(MailboxRole);
 // ------------------------------------------------------------ projections
 
 /**
- * A message's labels are the union of what its copies give it. A message
- * with no copy left keeps empty labels until `collectOrphans` removes it.
- * Returns the threads of every message it looked at.
+ * A message's labels are what the copies it is listed by give it: see
+ * `labelsOfCopies`. A message with no copy left keeps empty labels until
+ * `collectOrphans` removes it. Returns the threads of every message it
+ * looked at, or with `relabelled` only of those whose labels it changed.
  */
 const recomputeMessages = async (
   transaction: MailTransaction,
   accountId: string,
   messageIds: readonly string[],
-  now: number
+  now: number,
+  threadsOf: "looked-at" | "relabelled" = "looked-at"
 ): Promise<readonly string[]> => {
   const threadIds = new Set<string>();
 
@@ -155,20 +161,25 @@ const recomputeMessages = async (
         )
       )
       .all();
-    const labelsByMessage = new Map<string, string[]>();
+    const copiesByMessage = new Map<string, (typeof locations)[number][]>();
 
     for (const location of locations) {
-      const labels = labelsByMessage.get(location.messageId) ?? [];
-      labels.push(...location.labelIds);
-      labelsByMessage.set(location.messageId, labels);
+      const copies = copiesByMessage.get(location.messageId) ?? [];
+      copies.push(location);
+      copiesByMessage.set(location.messageId, copies);
     }
 
     const relabelled: (readonly unknown[])[] = [];
     for (const message of messages) {
-      threadIds.add(message.threadId);
-      const labels = sortLabels(labelsByMessage.get(message.messageId) ?? []);
+      const labels = sortLabels(
+        labelsOfCopies(copiesByMessage.get(message.messageId) ?? [])
+      );
+      const isRelabelled = !sameLabels(labels, message.labelIds);
 
-      if (!sameLabels(labels, message.labelIds)) {
+      if (isRelabelled || threadsOf === "looked-at") {
+        threadIds.add(message.threadId);
+      }
+      if (isRelabelled) {
         relabelled.push([
           message.messageId,
           labels,
@@ -1278,8 +1289,38 @@ export const MailEngineStoreLive = Layer.effect(
                   AND ${mailMessages.threadId} = ${mailThreads.threadId}
                   AND ${listedElsewhere}
               `);
+            // A message once carried the labels of every copy, so one with
+            // a copy in Trash or Spam and another elsewhere may still be
+            // filed with the discarded one. No row under Trash leads to it
+            // when other mail lists its conversation, so these are found
+            // from the copies in Trash and Spam, and only those the rule
+            // labels otherwise are written.
+            const besideDiscarded = await transaction.values<[string]>(sql`
+              SELECT DISTINCT ${mailMessageLocations.messageId}
+              FROM ${mailMailboxes}
+              CROSS JOIN ${mailMessageLocations}
+              WHERE ${mailMailboxes.accountId} = ${accountId}
+                AND ${mailMailboxes.role} IN ('junk', 'trash')
+                AND ${mailMessageLocations.accountId} = ${mailMailboxes.accountId}
+                AND ${mailMessageLocations.mailboxPath} = ${mailMailboxes.path}
+                AND EXISTS (
+                  SELECT 1 FROM ${mailMessageLocations} AS other
+                  WHERE other.account_id = ${mailMessageLocations.accountId}
+                    AND other.message_id = ${mailMessageLocations.messageId}
+                    AND other.mailbox_path <> ${mailMessageLocations.mailboxPath}
+                )
+            `);
+            const relabelled = await recomputeMessages(
+              transaction,
+              accountId,
+              besideDiscarded.map(([messageId]) => messageId),
+              now,
+              "relabelled"
+            );
+
             const outsideTrash = sql`NOT ${messageHasLabel(SystemLabel.trash)}`;
             const hidden = [
+              ...relabelled.map((threadId) => [threadId] as const),
               ...(await hiddenUnder(
                 "mail_threads_trash_idx",
                 sql`${mailThreads.isInTrash} = 1`,
@@ -1296,7 +1337,7 @@ export const MailEngineStoreLive = Layer.effect(
 
             return hidden.length === 0
               ? NO_CHANGES
-              : recomputeThreads(transaction, accountId, hidden, now);
+              : recomputeThreads(transaction, accountId, unique(hidden), now);
           }
         ),
 

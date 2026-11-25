@@ -147,10 +147,19 @@ describe("the store's lookups by message", () => {
   });
 
   // Runs for every account each time the engine starts.
-  it("finds conversations to list again from the rows under Trash and Spam", async () => {
+  it("finds conversations to list again from what Trash and Spam hold", async () => {
     const plans = await plansOf((store) => store.relistHidden(accountId));
 
-    expect(plans.filter(readsWholeAccount)).toStrictEqual([]);
+    // Two reads are of a whole something, and both are small: the account's
+    // mailboxes, to find Trash and Spam, and the copies those two hold. A
+    // message's other copies are then reached by its id.
+    expect(plans.filter(readsWholeAccount)).toStrictEqual([
+      "SEARCH mail_mailboxes USING INDEX sqlite_autoindex_mail_mailboxes_1 (account_id=?)",
+      "SEARCH mail_message_locations USING INDEX sqlite_autoindex_mail_message_locations_1 (account_id=? AND mailbox_path=?)",
+    ]);
+    expect(plans.join("\n")).toMatch(
+      /SEARCH other EXISTS USING INDEX mail_message_locations_message_idx/u
+    );
     expect(plans.join("\n")).toMatch(/mail_threads_trash_idx/u);
     expect(plans.join("\n")).toMatch(/mail_threads_spam_idx/u);
   });

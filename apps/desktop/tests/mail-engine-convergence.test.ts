@@ -18,7 +18,11 @@ import type { Dialect } from "@repo/mail/dialects";
 import { SystemLabel, ThreadId } from "@repo/mail/ids";
 import type { LabelId } from "@repo/mail/ids";
 import { createLabel, deleteLabel, renameLabel } from "@repo/mail/labels";
-import { conversationPlaces, listedMessages } from "@repo/mail/listing";
+import {
+  conversationPlaces,
+  labelsOfCopies,
+  listedMessages,
+} from "@repo/mail/listing";
 import { applyThreadAction } from "@repo/mail/mutations";
 import type { ThreadAction } from "@repo/mail/mutations";
 import type { FetchedMessage } from "@repo/mail/session";
@@ -315,7 +319,7 @@ const cachedMessages = (): readonly MessageRow[] =>
     )
     .all(accountId) as MessageRow[];
 
-/** A message's labels are those of its copies, and it has a copy. */
+/** A message's labels are those of the copies it is listed by, and it has a copy. */
 const messageRowDifferences = (
   copies: readonly Copy[],
   messages: readonly MessageRow[]
@@ -327,7 +331,7 @@ const messageRowDifferences = (
   });
   const fromCopies = messages.map((message) => {
     const own = copies.filter((copy) => copy.messageId === message.messageId);
-    const labels = own.flatMap((copy) => copy.labelIds);
+    const labels = labelsOfCopies(own);
     return own.length === 0
       ? `message ${message.messageId}: no copy`
       : `message ${message.messageId}: labels [${listed(labels)}], ${labels.includes(SystemLabel.unread) ? "unread" : "read"}`;

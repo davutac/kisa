@@ -44,6 +44,23 @@ export const listedMessages = <Message extends Labelled>(
     : outsideTrash;
 };
 
+/**
+ * The labels a message carries, from the copies it is listed by. One message
+ * can have several copies (mail to oneself, the same mail delivered twice, a
+ * copy another program left in Trash), and each is filed like a message is,
+ * so the same rule decides between them: a copy in Trash takes no part while
+ * another is outside it, nor one in Spam while another is in the Inbox.
+ * Otherwise a copy in Trash would file the one in the Inbox there with it,
+ * out of sight. A message with one copy carries that copy's labels.
+ *
+ * In the order the copies give them, each label once.
+ */
+export const labelsOfCopies = (
+  copies: readonly Labelled[]
+): readonly string[] => [
+  ...new Set(listedMessages(copies).flatMap((copy) => copy.labelIds)),
+];
+
 /** The places a conversation's row files it under. */
 export interface ConversationPlaces {
   readonly isInInbox: boolean;
