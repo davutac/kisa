@@ -3,10 +3,13 @@ import * as Schema from "effect/Schema";
 import {
   SETTINGS_BEGIN_DATABASE_IMPORT_CHANNEL,
   SETTINGS_CANCEL_DATABASE_IMPORT_CHANNEL,
+  SETTINGS_DATABASE_IMPORT_STATUS_CHANNEL,
+  SETTINGS_DISCARD_DATABASE_IMPORT_CHANNEL,
   SETTINGS_DROP_DATABASE_IMPORT_FILE_CHANNEL,
   SETTINGS_EXPORT_DATABASE_RECOVERY_KEY_CHANNEL,
   SETTINGS_IMPORT_DATABASE_CHANNEL,
   SETTINGS_LIST_ACCOUNT_SETTINGS_CHANNEL,
+  SETTINGS_RESTART_FOR_DATABASE_IMPORT_CHANNEL,
   SETTINGS_SELECT_DATABASE_IMPORT_FILE_CHANNEL,
   SETTINGS_UPDATE_ACCOUNT_SETTINGS_CHANNEL,
 } from "../../../shared/ipc/channels";
@@ -14,20 +17,26 @@ import {
   AccountSettingsReply,
   AccountSettingsUpdateRequest,
   DatabaseImportCancelReply,
+  DatabaseImportDiscardReply,
   DatabaseImportDroppedFileRequest,
   DatabaseImportFileSelectionReply,
   DatabaseImportFileSelectionRequest,
   DatabaseImportReply,
+  DatabaseImportRestartReply,
   DatabaseImportSession,
   DatabaseImportSessionReply,
+  DatabaseImportStatusReply,
   DatabaseRecoveryKeyExportReply,
 } from "../../../shared/ipc/settings";
 import {
   beginDatabaseImport,
   cancelDatabaseImport,
+  discardDatabaseImport,
   dropDatabaseImportFile,
   exportDatabaseRecoveryKey,
+  getDatabaseImportStatus,
   importDatabase,
+  restartForDatabaseImport,
   selectDatabaseImportFile,
 } from "../../database";
 import {
@@ -111,4 +120,34 @@ export const updateSettings = makeIpcMethod({
     ),
   payload: AccountSettingsUpdateRequest,
   result: AccountSettingsReply,
+});
+
+export const getImportStatus = makeIpcMethod({
+  channel: SETTINGS_DATABASE_IMPORT_STATUS_CHANNEL,
+  handler: () =>
+    toIpcReply(
+      getDatabaseImportStatus(),
+      "Could not check for a waiting database import"
+    ),
+  payload: Schema.Void,
+  result: DatabaseImportStatusReply,
+});
+
+export const discardImport = makeIpcMethod({
+  channel: SETTINGS_DISCARD_DATABASE_IMPORT_CHANNEL,
+  handler: () =>
+    toIpcReply(discardDatabaseImport(), "Could not discard the import"),
+  payload: Schema.Void,
+  result: DatabaseImportDiscardReply,
+});
+
+export const restartForImport = makeIpcMethod({
+  channel: SETTINGS_RESTART_FOR_DATABASE_IMPORT_CHANNEL,
+  handler: () =>
+    toIpcReply(
+      restartForDatabaseImport(),
+      "Could not restart to finish the import"
+    ),
+  payload: Schema.Void,
+  result: DatabaseImportRestartReply,
 });

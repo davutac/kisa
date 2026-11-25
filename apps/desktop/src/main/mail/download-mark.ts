@@ -17,10 +17,10 @@ const execFileAsync = promisify(execFile);
 const WINDOWS_ZONE_IDENTIFIER = "[ZoneTransfer]\r\nZoneId=3\r\n";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class DownloadMarkError extends Schema.TaggedError<DownloadMarkError>()(
-  "DownloadMarkError",
-  { message: Schema.String }
-) {}
+export class DownloadMarkError extends Schema.TaggedError<
+  DownloadMarkError,
+  { readonly brand: unique symbol }
+>()("DownloadMarkError", { message: Schema.String }) {}
 
 const createQuarantineValue = (now: number): string =>
   `0081;${Math.floor(now / 1000).toString(16)};${APP_NAME};`;

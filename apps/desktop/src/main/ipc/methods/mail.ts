@@ -10,7 +10,8 @@ import {
   MAIL_UPDATE_LABEL_CHANNEL,
   MAIL_DELETE_THREAD_FOREVER_CHANNEL,
   MAIL_BULK_MUTATE_THREADS_CHANNEL,
-  MAIL_GET_SPAM_STATUS_CHANNEL,
+  MAIL_GET_UNREAD_COUNTS_CHANNEL,
+  MAIL_GET_UNREAD_LABELS_CHANNEL,
   MAIL_DISCARD_DRAFT_CHANNEL,
   MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   MAIL_LIST_LABELS_CHANNEL,
@@ -21,12 +22,14 @@ import {
   MAIL_LOAD_THREAD_CHANNEL,
   MAIL_LOAD_THREAD_DRAFT_CHANNEL,
   MAIL_MARK_THREAD_NOT_SPAM_CHANNEL,
+  MAIL_REPORT_THREAD_SPAM_CHANNEL,
   MAIL_OPEN_ATTACHMENT_PREVIEW_CHANNEL,
   MAIL_PREPARE_OUTGOING_ATTACHMENTS_CHANNEL,
   MAIL_SAVE_ATTACHMENT_CHANNEL,
   MAIL_SAVE_DRAFT_CHANNEL,
   MAIL_SEARCH_THREADS_CHANNEL,
   MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL,
+  MAIL_CANCEL_SEND_CHANNEL,
   MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SEND_THREAD_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
@@ -37,46 +40,51 @@ import {
   MAIL_TRUST_IMAGE_SENDER_CHANNEL,
 } from "../../../shared/ipc/channels";
 import {
-  GmailAttachmentActionReply,
-  GmailAttachmentPreviewReply,
-  GmailAttachmentRequest,
-  GmailAttachmentSaveReply,
-  GmailBulkThreadMutationReply,
-  GmailBulkThreadMutationRequest,
-  GmailCachedThreadPageReply,
-  GmailCachedThreadPageRequest,
-  GmailLabelCatalogReply,
-  GmailLabelCatalogRequest,
-  GmailLabelCreateReply,
-  GmailLabelCreateRequest,
-  GmailLabelDeleteReply,
-  GmailLabelDeleteRequest,
-  GmailLabelUpdateReply,
-  GmailLabelUpdateRequest,
-  GmailMessageSendReply,
-  GmailMessageSendRequest,
-  GmailOutgoingAttachmentPrepareReply,
-  GmailOutgoingAttachmentPrepareRequest,
-  GmailOutgoingAttachmentSelectionReply,
-  GmailOutgoingAttachmentSelectionRequest,
-  GmailOutgoingInlineImagePreviewReply,
-  GmailOutgoingInlineImagePreviewRequest,
-  GmailSearchRequest,
-  GmailSearchResultsReply,
-  GmailSenderSuggestionRequest,
-  GmailSenderSuggestionsReply,
-  GmailSpamStatusReply,
-  GmailSpamStatusRequest,
-  GmailSyncStatus,
-  GmailThreadLabelRequest,
-  GmailThreadMessageSendReply,
-  GmailThreadMessageSendRequest,
-  GmailThreadMutationReply,
-  GmailThreadReadStateRequest,
-  GmailThreadReply,
-  GmailThreadRequest,
-  GmailTrustedImageSenderRequest,
-  GmailTrustedImageSendersReply,
+  MailAttachmentActionReply,
+  MailAttachmentPreviewReply,
+  MailAttachmentRequest,
+  MailAttachmentSaveReply,
+  MailBulkThreadMutationReply,
+  MailBulkThreadMutationRequest,
+  MailCachedThreadPageReply,
+  MailCachedThreadPageRequest,
+  MailLabelCatalogReply,
+  MailLabelCatalogRequest,
+  MailLabelCreateReply,
+  MailLabelCreateRequest,
+  MailLabelDeleteReply,
+  MailLabelDeleteRequest,
+  MailLabelUpdateReply,
+  MailLabelUpdateRequest,
+  MailMessageSendReply,
+  MailMessageSendRequest,
+  MailSendCancelReply,
+  MailSendCancelRequest,
+  MailOutgoingAttachmentPrepareReply,
+  MailOutgoingAttachmentPrepareRequest,
+  MailOutgoingAttachmentSelectionReply,
+  MailOutgoingAttachmentSelectionRequest,
+  MailOutgoingInlineImagePreviewReply,
+  MailOutgoingInlineImagePreviewRequest,
+  MailSearchRequest,
+  MailSearchResultsReply,
+  MailSenderSuggestionRequest,
+  MailSenderSuggestionsReply,
+  MailUnreadCountsReply,
+  MailUnreadCountsRequest,
+  MailSyncStatus,
+  MailUnreadLabelsReply,
+  MailUnreadLabelsRequest,
+  MailThreadLabelRequest,
+  MailThreadMessageSendReply,
+  MailThreadMessageSendRequest,
+  MailThreadMutationReply,
+  MailThreadLoadRequest,
+  MailThreadReadStateRequest,
+  MailThreadReply,
+  MailThreadRequest,
+  MailTrustedImageSenderRequest,
+  MailTrustedImageSendersReply,
   MailDraftDiscardReply,
   MailDraftDiscardRequest,
   MailDraftInput,
@@ -91,6 +99,28 @@ import {
   saveAttachment as saveAttachmentAction,
   saveAttachmentPreview as saveAttachmentPreviewAction,
 } from "../../mail/attachment-actions";
+import { getMailEngineSyncStatus } from "../../mail/engine/mail-engine";
+import {
+  bulkMutateThreads,
+  cancelSendFromRequest,
+  changeThreadReadState,
+  createAccountLabelFromRequest,
+  deleteAccountLabelFromRequest,
+  deleteThreadForever,
+  listCachedThreadPage,
+  listLabelCatalog,
+  loadUnreadCounts,
+  loadUnreadLabels,
+  markThreadNotSpam as recoverThreadFromSpam,
+  openThread,
+  refreshLabelCatalog,
+  reportThreadSpam as moveThreadToSpam,
+  sendNewMessageFromRequest,
+  sendThreadMessageFromRequest,
+  setThreadLabel,
+  trashThread,
+  updateAccountLabel,
+} from "../../mail/engine/mail-ipc";
 import {
   discardMailDraft,
   listStashedDrafts as listStashedDraftsAction,
@@ -101,25 +131,6 @@ import {
   listIndexedSenders,
   searchIndexedThreads,
 } from "../../mail/mail-search";
-import {
-  bulkMutateThreads,
-  createGmailLabel,
-  deleteGmailLabel,
-  deleteThreadForever,
-  getMailSyncStatus,
-  getSpamStatus as loadSpamStatus,
-  listCachedThreadPage,
-  listGmailLabelCatalog,
-  loadFullThread,
-  markThreadNotSpam as recoverThreadFromSpam,
-  sendNewMessage,
-  sendThreadMessage,
-  setThreadLabel,
-  setThreadReadState,
-  syncGmailLabelCatalog,
-  trashThread,
-  updateGmailLabel,
-} from "../../mail/mail-sync";
 import {
   bindOutgoingAttachmentOwner,
   OutgoingAttachmentAuthorizationError,
@@ -156,8 +167,8 @@ export const authorizeOutgoingAttachments = makeIpcMethod({
           }),
           "Could not authorize attachments"
         ),
-  payload: GmailOutgoingAttachmentSelectionRequest,
-  result: GmailOutgoingAttachmentSelectionReply,
+  payload: MailOutgoingAttachmentSelectionRequest,
+  result: MailOutgoingAttachmentSelectionReply,
 });
 
 export const prepareOutgoingAttachments = makeIpcMethod({
@@ -184,8 +195,8 @@ export const prepareOutgoingAttachments = makeIpcMethod({
           }),
           "Could not prepare attachments"
         ),
-  payload: GmailOutgoingAttachmentPrepareRequest,
-  result: GmailOutgoingAttachmentPrepareReply,
+  payload: MailOutgoingAttachmentPrepareRequest,
+  result: MailOutgoingAttachmentPrepareReply,
 });
 
 export const loadOutgoingInlineImagePreview = makeIpcMethod({
@@ -203,8 +214,8 @@ export const loadOutgoingInlineImagePreview = makeIpcMethod({
           ),
           "Could not load inline image preview"
         ),
-  payload: GmailOutgoingInlineImagePreviewRequest,
-  result: GmailOutgoingInlineImagePreviewReply,
+  payload: MailOutgoingInlineImagePreviewRequest,
+  result: MailOutgoingInlineImagePreviewReply,
 });
 
 export const openAttachmentPreview = makeIpcMethod({
@@ -214,8 +225,8 @@ export const openAttachmentPreview = makeIpcMethod({
       openAttachmentPreviewAction(request),
       "Could not open attachment preview"
     ),
-  payload: GmailAttachmentRequest,
-  result: GmailAttachmentActionReply,
+  payload: MailAttachmentRequest,
+  result: MailAttachmentActionReply,
 });
 
 export const saveAttachment = makeIpcMethod({
@@ -236,8 +247,8 @@ export const saveAttachment = makeIpcMethod({
           "Could not save attachment"
         );
   },
-  payload: GmailAttachmentRequest,
-  result: GmailAttachmentSaveReply,
+  payload: MailAttachmentRequest,
+  result: MailAttachmentSaveReply,
 });
 
 export const loadAttachmentPreview = makeIpcMethod({
@@ -253,7 +264,7 @@ export const loadAttachmentPreview = makeIpcMethod({
           "Could not load attachment"
         ),
   payload: Schema.Void,
-  result: GmailAttachmentPreviewReply,
+  result: MailAttachmentPreviewReply,
 });
 
 export const saveAttachmentPreview = makeIpcMethod({
@@ -269,94 +280,107 @@ export const saveAttachmentPreview = makeIpcMethod({
           "Could not save attachment"
         ),
   payload: Schema.Void,
-  result: GmailAttachmentSaveReply,
+  result: MailAttachmentSaveReply,
 });
 
 export const getSyncStatus = makeIpcMethod({
   channel: MAIL_SYNC_STATUS_CHANNEL,
-  handler: () => Effect.sync(getMailSyncStatus),
+  handler: () => Effect.sync(getMailEngineSyncStatus),
   payload: Schema.Void,
-  result: GmailSyncStatus,
+  result: MailSyncStatus,
 });
 
-export const getSpamStatus = makeIpcMethod({
-  channel: MAIL_GET_SPAM_STATUS_CHANNEL,
+export const getUnreadCounts = makeIpcMethod({
+  channel: MAIL_GET_UNREAD_COUNTS_CHANNEL,
   handler: (request) =>
-    toIpcReply(loadSpamStatus(request), "Could not check spam"),
-  payload: GmailSpamStatusRequest,
-  result: GmailSpamStatusReply,
+    toIpcReply(loadUnreadCounts(request), "Could not count unread email"),
+  payload: MailUnreadCountsRequest,
+  result: MailUnreadCountsReply,
+});
+
+export const getUnreadLabels = makeIpcMethod({
+  channel: MAIL_GET_UNREAD_LABELS_CHANNEL,
+  handler: (request) =>
+    toIpcReply(loadUnreadLabels(request), "Could not check labels"),
+  payload: MailUnreadLabelsRequest,
+  result: MailUnreadLabelsReply,
 });
 
 export const listCachedPage = makeIpcMethod({
   channel: MAIL_LIST_CACHED_THREAD_PAGE_CHANNEL,
   handler: (request) =>
     toIpcReply(listCachedThreadPage(request), "Could not load email"),
-  payload: GmailCachedThreadPageRequest,
-  result: GmailCachedThreadPageReply,
+  payload: MailCachedThreadPageRequest,
+  result: MailCachedThreadPageReply,
 });
 
 export const listLabels = makeIpcMethod({
   channel: MAIL_LIST_LABELS_CHANNEL,
   handler: (request) =>
-    toIpcReply(listGmailLabelCatalog(request), "Could not load Gmail labels"),
-  payload: GmailLabelCatalogRequest,
-  result: GmailLabelCatalogReply,
+    toIpcReply(listLabelCatalog(request), "Could not load labels"),
+  payload: MailLabelCatalogRequest,
+  result: MailLabelCatalogReply,
 });
 
 export const createLabel = makeIpcMethod({
   channel: MAIL_CREATE_LABEL_CHANNEL,
   handler: (request) =>
-    toIpcReply(createGmailLabel(request), "Could not create Gmail label"),
-  payload: GmailLabelCreateRequest,
-  result: GmailLabelCreateReply,
+    toIpcReply(
+      createAccountLabelFromRequest(request),
+      "Could not create label"
+    ),
+  payload: MailLabelCreateRequest,
+  result: MailLabelCreateReply,
 });
 
 export const deleteLabel = makeIpcMethod({
   channel: MAIL_DELETE_LABEL_CHANNEL,
   handler: (request) =>
-    toIpcReply(deleteGmailLabel(request), "Could not delete Gmail label"),
-  payload: GmailLabelDeleteRequest,
-  result: GmailLabelDeleteReply,
+    toIpcReply(
+      deleteAccountLabelFromRequest(request),
+      "Could not delete label"
+    ),
+  payload: MailLabelDeleteRequest,
+  result: MailLabelDeleteReply,
 });
 
 export const updateLabel = makeIpcMethod({
   channel: MAIL_UPDATE_LABEL_CHANNEL,
   handler: (request) =>
-    toIpcReply(updateGmailLabel(request), "Could not update Gmail label"),
-  payload: GmailLabelUpdateRequest,
-  result: GmailLabelUpdateReply,
+    toIpcReply(updateAccountLabel(request), "Could not update label"),
+  payload: MailLabelUpdateRequest,
+  result: MailLabelUpdateReply,
 });
 
 export const syncLabels = makeIpcMethod({
   channel: MAIL_SYNC_LABELS_CHANNEL,
   handler: (request) =>
-    toIpcReply(syncGmailLabelCatalog(request), "Could not sync Gmail labels"),
-  payload: GmailLabelCatalogRequest,
-  result: GmailLabelCatalogReply,
+    toIpcReply(refreshLabelCatalog(request), "Could not sync labels"),
+  payload: MailLabelCatalogRequest,
+  result: MailLabelCatalogReply,
 });
 
 export const searchThreads = makeIpcMethod({
   channel: MAIL_SEARCH_THREADS_CHANNEL,
   handler: (request) =>
     toIpcReply(searchIndexedThreads(request), "Could not search your email"),
-  payload: GmailSearchRequest,
-  result: GmailSearchResultsReply,
+  payload: MailSearchRequest,
+  result: MailSearchResultsReply,
 });
 
 export const listSenders = makeIpcMethod({
   channel: MAIL_LIST_SENDERS_CHANNEL,
   handler: (request) =>
     toIpcReply(listIndexedSenders(request), "Could not load senders"),
-  payload: GmailSenderSuggestionRequest,
-  result: GmailSenderSuggestionsReply,
+  payload: MailSenderSuggestionRequest,
+  result: MailSenderSuggestionsReply,
 });
 
 export const loadThread = makeIpcMethod({
   channel: MAIL_LOAD_THREAD_CHANNEL,
-  handler: (request) =>
-    toIpcReply(loadFullThread(request), "Could not load email"),
-  payload: GmailThreadRequest,
-  result: GmailThreadReply,
+  handler: (request) => toIpcReply(openThread(request), "Could not load email"),
+  payload: MailThreadLoadRequest,
+  result: MailThreadReply,
 });
 
 export const listStashedDrafts = makeIpcMethod({
@@ -394,7 +418,7 @@ export const loadThreadDraft = makeIpcMethod({
           ),
           "Could not load saved reply"
         ),
-  payload: GmailThreadRequest,
+  payload: MailThreadRequest,
   result: MailDraftLoadReply,
 });
 
@@ -425,25 +449,25 @@ export const discardDraft = makeIpcMethod({
 export const setReadState = makeIpcMethod({
   channel: MAIL_SET_THREAD_READ_CHANNEL,
   handler: (request) =>
-    toIpcReply(setThreadReadState(request), "Could not update email"),
-  payload: GmailThreadReadStateRequest,
-  result: GmailThreadMutationReply,
+    toIpcReply(changeThreadReadState(request), "Could not update email"),
+  payload: MailThreadReadStateRequest,
+  result: MailThreadMutationReply,
 });
 
 export const bulkMutate = makeIpcMethod({
   channel: MAIL_BULK_MUTATE_THREADS_CHANNEL,
   handler: (request) =>
     toIpcReply(bulkMutateThreads(request), "Could not update selected emails"),
-  payload: GmailBulkThreadMutationRequest,
-  result: GmailBulkThreadMutationReply,
+  payload: MailBulkThreadMutationRequest,
+  result: MailBulkThreadMutationReply,
 });
 
 export const setLabel = makeIpcMethod({
   channel: MAIL_SET_THREAD_LABEL_CHANNEL,
   handler: (request) =>
     toIpcReply(setThreadLabel(request), "Could not update email labels"),
-  payload: GmailThreadLabelRequest,
-  result: GmailThreadMutationReply,
+  payload: MailThreadLabelRequest,
+  result: MailThreadMutationReply,
 });
 
 export const sendNew = makeIpcMethod({
@@ -455,11 +479,33 @@ export const sendNew = makeIpcMethod({
           ok: false as const,
         })
       : toIpcReply(
-          sendNewMessage(request, bindOutgoingAttachmentOwner(event.sender)),
+          sendNewMessageFromRequest(
+            request,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
           "Could not send message"
         ),
-  payload: GmailMessageSendRequest,
-  result: GmailMessageSendReply,
+  payload: MailMessageSendRequest,
+  result: MailMessageSendReply,
+});
+
+export const cancelSend = makeIpcMethod({
+  channel: MAIL_CANCEL_SEND_CHANNEL,
+  handler: (request, event) =>
+    event === undefined
+      ? Effect.succeed({
+          error: "Could not identify this window",
+          ok: false as const,
+        })
+      : toIpcReply(
+          cancelSendFromRequest(
+            request,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
+          "Could not undo sending"
+        ),
+  payload: MailSendCancelRequest,
+  result: MailSendCancelReply,
 });
 
 export const sendThread = makeIpcMethod({
@@ -471,19 +517,22 @@ export const sendThread = makeIpcMethod({
           ok: false as const,
         })
       : toIpcReply(
-          sendThreadMessage(request, bindOutgoingAttachmentOwner(event.sender)),
+          sendThreadMessageFromRequest(
+            request,
+            bindOutgoingAttachmentOwner(event.sender)
+          ),
           "Could not send message"
         ),
-  payload: GmailThreadMessageSendRequest,
-  result: GmailThreadMessageSendReply,
+  payload: MailThreadMessageSendRequest,
+  result: MailThreadMessageSendReply,
 });
 
 export const trash = makeIpcMethod({
   channel: MAIL_TRASH_THREAD_CHANNEL,
   handler: (request) =>
     toIpcReply(trashThread(request), "Could not move email to trash"),
-  payload: GmailThreadRequest,
-  result: GmailThreadMutationReply,
+  payload: MailThreadRequest,
+  result: MailThreadMutationReply,
 });
 
 export const deleteForever = makeIpcMethod({
@@ -493,8 +542,8 @@ export const deleteForever = makeIpcMethod({
       deleteThreadForever(request),
       "Could not permanently delete email"
     ),
-  payload: GmailThreadRequest,
-  result: GmailThreadMutationReply,
+  payload: MailThreadRequest,
+  result: MailThreadMutationReply,
 });
 
 export const markThreadNotSpam = makeIpcMethod({
@@ -504,8 +553,16 @@ export const markThreadNotSpam = makeIpcMethod({
       recoverThreadFromSpam(request),
       "Could not mark email as not spam"
     ),
-  payload: GmailThreadRequest,
-  result: GmailThreadMutationReply,
+  payload: MailThreadRequest,
+  result: MailThreadMutationReply,
+});
+
+export const reportThreadSpam = makeIpcMethod({
+  channel: MAIL_REPORT_THREAD_SPAM_CHANNEL,
+  handler: (request) =>
+    toIpcReply(moveThreadToSpam(request), "Could not report email as spam"),
+  payload: MailThreadRequest,
+  result: MailThreadMutationReply,
 });
 
 export const listImageSenders = makeIpcMethod({
@@ -516,13 +573,13 @@ export const listImageSenders = makeIpcMethod({
       "Could not load the senders you trust with images"
     ),
   payload: Schema.Void,
-  result: GmailTrustedImageSendersReply,
+  result: MailTrustedImageSendersReply,
 });
 
 export const trustImages = makeIpcMethod({
   channel: MAIL_TRUST_IMAGE_SENDER_CHANNEL,
   handler: (request) =>
     toIpcReply(trustImageSender(request), "Could not remember this sender"),
-  payload: GmailTrustedImageSenderRequest,
-  result: GmailTrustedImageSendersReply,
+  payload: MailTrustedImageSenderRequest,
+  result: MailTrustedImageSendersReply,
 });

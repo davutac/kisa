@@ -1,1 +1,0 @@
-ALTER TABLE `gmail_messages` ADD `sender_authenticated` integer;

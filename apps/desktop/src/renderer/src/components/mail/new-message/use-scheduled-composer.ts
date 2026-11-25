@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
-import { toast } from "sonner";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { toast } from "@/components/ui/toast";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { areMailDraftInputsEqual } from "@/mail/mail-draft";
 import { getScheduledMailApi } from "@/platform/desktop";
 import { formatScheduledAt } from "@/scheduled/schedule-time";
@@ -56,30 +57,16 @@ export const useScheduledComposer = ({
     !areMailDraftInputsEqual(currentDraft, scheduledEdit.draft);
   const canSchedule = canSend && api !== undefined;
 
-  const confirmPossibleDuplicate = (
-    actionLabel: "Reschedule" | "Send again"
-  ): Promise<boolean> => {
-    if (scheduledEdit?.item.attentionReason !== "outcome-unknown") {
-      return Promise.resolve(true);
-    }
-    return confirm({
-      cancelLabel: "Keep scheduled",
-      confirmLabel: actionLabel,
-      confirmVariant: "destructive",
-      description:
-        "Gmail may already have sent this email. Check Sent first; continuing can create a duplicate.",
-      title: "Delivery could not be confirmed",
-    });
-  };
-
   const runEditAction = ({
     action,
+    duplicateConfirmLabel = "Send again",
     errorMessage,
     onFinished,
     onSaved,
     setPending,
   }: {
     readonly action: ScheduledMailEditAction;
+    readonly duplicateConfirmLabel?: "Reschedule" | "Send again";
     readonly errorMessage: string;
     readonly onFinished?: () => void;
     readonly onSaved?: () => void;
@@ -91,6 +78,15 @@ export const useScheduledComposer = ({
     }
     return runScheduledComposerEditAction({
       action,
+      confirmPossibleDuplicate: () =>
+        confirm({
+          cancelLabel: "Keep scheduled",
+          confirmLabel: duplicateConfirmLabel,
+          confirmVariant: "destructive",
+          description:
+            "This email may already have been sent. Check Sent first; continuing can create a duplicate.",
+          title: "Delivery could not be confirmed",
+        }),
       errorMessage,
       finishEdit: api.finishEdit,
       onError: (message) => toast.error(message),
@@ -125,13 +121,9 @@ export const useScheduledComposer = ({
     if (!(scheduledEdit && api && canSend)) {
       return;
     }
-    const allowPossibleDuplicate = await confirmPossibleDuplicate("Send again");
-    if (!allowPossibleDuplicate) {
-      return;
-    }
     await runEditAction({
       action: {
-        allowPossibleDuplicate,
+        allowPossibleDuplicate: false,
         draft: currentDraftRef.current,
         kind: "send-now",
       },
@@ -172,81 +164,79 @@ export const useScheduledComposer = ({
     }
     const draft = currentDraftRef.current;
     if (scheduledEdit !== undefined) {
-      const allowPossibleDuplicate =
-        await confirmPossibleDuplicate("Reschedule");
-      return allowPossibleDuplicate
-        ? runEditAction({
-            action: {
-              allowPossibleDuplicate,
-              draft,
-              kind: "reschedule",
-              scheduledAt,
-            },
-            errorMessage: "Could not reschedule email",
-            onSaved: () =>
-              toast.success(
-                `Rescheduled for ${formatScheduledAt(scheduledAt)}`
-              ),
-            setPending: setIsScheduling,
-          })
-        : false;
+      return runEditAction({
+        action: {
+          allowPossibleDuplicate: false,
+          draft,
+          kind: "reschedule",
+          scheduledAt,
+        },
+        duplicateConfirmLabel: "Reschedule",
+        errorMessage: "Could not reschedule email",
+        onSaved: () =>
+          toast.success(`Rescheduled for ${formatScheduledAt(scheduledAt)}`),
+        setPending: setIsScheduling,
+      });
     }
 
     setIsScheduling(true);
-    try {
-      const reply = await api.schedule({
-        accountId: selectedAccountId,
-        draft,
-        draftId: draft.id,
-        scheduledAt,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return false;
+    return await runWithCleanup(
+      async () => {
+        try {
+          const reply = await api.schedule({
+            accountId: selectedAccountId,
+            draft,
+            draftId: draft.id,
+            scheduledAt,
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return false;
+          }
+          toast.success("Email scheduled", {
+            description: formatScheduledAt(scheduledAt),
+          });
+          onOpenChange(false);
+          return true;
+        } catch {
+          toast.error("Could not schedule email");
+          return false;
+        }
+      },
+      () => {
+        setIsScheduling(false);
       }
-      toast.success("Email scheduled", {
-        description: formatScheduledAt(scheduledAt),
-      });
-      onOpenChange(false);
-      return true;
-    } catch {
-      toast.error("Could not schedule email");
-      return false;
-    } finally {
-      setIsScheduling(false);
-    }
+    );
   };
 
-  const requestClose = async (): Promise<void> => {
+  /**
+   * Whether the editor may go away: never while an action is pending, and
+   * with unsaved edits only once the user agrees to abandon them. Leaving
+   * never stashes, because the email stays queued as it was last saved.
+   */
+  const confirmLeave = async (): Promise<boolean> => {
     if (isBusy) {
-      return;
+      return false;
     }
-    if (scheduledEdit === undefined) {
-      onOpenChange(false);
-      return;
+    if (!shouldConfirmScheduledEditorClose(isDirty, hasPendingReschedule)) {
+      return true;
     }
-    if (
-      shouldConfirmScheduledEditorClose(isDirty, hasPendingReschedule) &&
-      !(await confirm({
-        cancelLabel: "Keep editing",
-        confirmLabel: "Discard changes",
-        confirmVariant: "destructive",
-        description:
-          "Your unsaved edits will be lost. The original scheduled email will remain queued.",
-        title: "Discard unsaved changes?",
-      }))
-    ) {
-      return;
-    }
-    onOpenChange(false);
+    return await confirm({
+      cancelLabel: "Keep editing",
+      confirmLabel: "Discard changes",
+      confirmVariant: "destructive",
+      description:
+        "Your unsaved edits will be lost. The original scheduled email will remain queued.",
+      title: "Discard unsaved changes?",
+    });
   };
 
   return {
     canSchedule,
+    confirmLeave,
     discard,
     isDirty,
     isEdit,
-    requestClose,
     save,
     schedule,
     sendNow,

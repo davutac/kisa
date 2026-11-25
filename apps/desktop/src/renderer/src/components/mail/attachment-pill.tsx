@@ -4,7 +4,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { getAttachmentTypeLabel } from "@/shared/attachments";
-import type { GmailAttachmentSummary } from "@/shared/ipc/mail";
+import type { MailAttachmentSummary } from "@/shared/ipc/mail";
 
 interface MailAttachmentPresentation {
   readonly filename: string;
@@ -13,7 +13,7 @@ interface MailAttachmentPresentation {
 
 interface MailAttachmentPillProps {
   action: "download" | "preview";
-  attachment: GmailAttachmentSummary;
+  attachment: MailAttachmentSummary;
   disabled?: boolean;
   loading?: boolean;
   onClick: () => void;
@@ -59,9 +59,9 @@ export const MailAttachmentSummaryPill = ({
   );
   const label = `${attachment.filename} (${typeLabel})`;
 
+  // A name on a plain span is ignored, so the type is read out as text.
   return (
     <span
-      aria-label={label}
       className={cn(
         buttonVariants({ size: "sm", variant: "secondary" }),
         PILL_CLASS,
@@ -73,6 +73,7 @@ export const MailAttachmentSummaryPill = ({
         attachment={attachment}
         icon={<PaperclipIcon aria-hidden="true" data-icon="inline-start" />}
       />
+      <span className="sr-only"> ({typeLabel})</span>
     </span>
   );
 };

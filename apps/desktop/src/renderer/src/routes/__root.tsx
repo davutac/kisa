@@ -9,7 +9,8 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 
 import AccountGate from "@/components/accounts/account-gate";
 import ScheduledMailOutcomeListener from "@/components/scheduled/scheduled-mail-outcome-listener";
-import Titlebar from "@/components/shell/titlebar";
+import AppShell from "@/components/shell/app-shell";
+import { WindowTitlebar } from "@/components/shell/window-titlebar";
 import StartupSplash from "@/components/startup/startup-splash";
 import { resolveInitialAuthGateState } from "@/startup/auth-gate";
 
@@ -32,19 +33,21 @@ function RootLayout() {
   return (
     <AccountGate initialState={authGateState}>
       <ScheduledMailOutcomeListener />
-      <div className="app-content flex h-svh flex-col scroll-smooth antialiased">
-        {isThreadWindow ? (
-          <header
+      {isThreadWindow ? (
+        <div className="app-content flex h-svh flex-col scroll-smooth antialiased">
+          <WindowTitlebar
             aria-hidden="true"
-            className="app-titlebar bg-background fixed inset-x-0 top-0 z-30"
+            className="bg-background fixed inset-x-0 top-0 z-30"
           />
-        ) : (
-          <Titlebar />
-        )}
-        <main className="scroll-fade-y flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+          <main className="scroll-fade-y flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+            <Outlet />
+          </main>
+        </div>
+      ) : (
+        <AppShell>
           <Outlet />
-        </main>
-      </div>
+        </AppShell>
+      )}
     </AccountGate>
   );
 }

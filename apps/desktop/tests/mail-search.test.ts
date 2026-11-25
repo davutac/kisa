@@ -55,6 +55,11 @@ const executeRemoteQuery: DatabaseRemoteCallback = (
 };
 const remoteDatabase = createRemoteDatabaseClient(executeRemoteQuery);
 
+const emptyAccountAddresses = (query: string, limit: number) =>
+  listCachedCorrespondents(["empty@example.com"], query, limit)?.senders.map(
+    ({ address }) => address
+  );
+
 describe("mail search", () => {
   beforeAll(() => {
     applyDatabaseMigrations(
@@ -64,10 +69,12 @@ describe("mail search", () => {
       )
     );
     const insert = connection.prepare(`
-      INSERT INTO gmail_threads (
-        account_email, "from", is_in_inbox, is_in_spam, is_unread, labels,
-        latest_at, message_count, snippet, subject, thread_id, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO mail_threads (
+        account_id, attachments, from_address, has_attachments, is_in_inbox,
+        is_in_sent, is_in_spam, is_in_trash, is_unread, label_ids, latest_at,
+        latest_message_id, message_count, snippet, subject, thread_id,
+        updated_at
+      ) VALUES (?, '[]', ?, 0, ?, 0, ?, 0, ?, ?, ?, 'latest', 1, ?, ?, ?, ?)
     `);
 
     insert.run(
@@ -76,9 +83,8 @@ describe("mail search", () => {
       1,
       0,
       1,
-      '["INBOX","Important"]',
+      '["INBOX","u:Important"]',
       2,
-      1,
       "Inbox thread",
       "Inbox thread",
       "inbox-thread",
@@ -90,10 +96,9 @@ describe("mail search", () => {
       0,
       0,
       1,
-      '["Important"]',
+      '["u:Important"]',
       1,
-      1,
-      "Archived &lt;thread&gt; it&#39;s",
+      "Archived <thread> it's",
       "Archived thread",
       "archived-thread",
       1
@@ -106,18 +111,17 @@ describe("mail search", () => {
       1,
       '["SPAM","UNREAD"]',
       3,
-      1,
       "Spam thread",
       "Spam thread",
       "spam-thread",
       3
     );
     const insertMessage = connection.prepare(`
-      INSERT INTO gmail_messages (
-        account_email, bcc_addresses, cc_addresses, from_address, from_name,
-        internal_date, message_id, schema_version, subject, thread_id,
-        to_addresses, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO mail_messages (
+        account_id, bcc_addresses, cc_addresses, from_address, from_name,
+        is_draft, is_starred, is_unread, label_ids, message_id, received_at,
+        size, subject, thread_id, to_addresses, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, '[]', ?, ?, 1, ?, ?, ?, ?)
     `);
 
     insertMessage.run(
@@ -126,7 +130,6 @@ describe("mail search", () => {
       '["copy@example.com"]',
       "alice@example.com",
       "Alice",
-      1,
       "message-one",
       1,
       "First",
@@ -140,9 +143,8 @@ describe("mail search", () => {
       "[]",
       "alice@example.com",
       "Alice",
-      2,
       "message-two",
-      1,
+      2,
       "Second",
       "message-thread-two",
       '["bob@example.com"]',
@@ -154,9 +156,8 @@ describe("mail search", () => {
       "[]",
       "other@example.com",
       "Other",
-      3,
       "message-three",
-      1,
+      3,
       "Third",
       "message-thread-three",
       '["bob@example.com"]',
@@ -168,9 +169,8 @@ describe("mail search", () => {
       "[]",
       "spam@example.com",
       "Spam Sender",
-      3,
       "spam-message",
-      1,
+      3,
       "Spam needle",
       "spam-thread",
       "[]",
@@ -204,7 +204,75 @@ describe("mail search", () => {
     ]);
   });
 
-  it("decodes Gmail's HTML-escaped snippets in results", async () => {
+  it("searches a label by its id, so a folder named Spam is not the Spam mailbox", async () => {
+    connection
+      .prepare(
+        `INSERT INTO mail_threads (
+          account_id, attachments, from_address, has_attachments, is_in_inbox,
+          is_in_sent, is_in_spam, is_in_trash, is_unread, label_ids, latest_at,
+          latest_message_id, message_count, snippet, subject, thread_id,
+          updated_at
+        ) VALUES ('one@example.com', '[]', 'folder@example.com', 0, 0, 0, 0,
+          0, 0, '["u:Spam"]', 4, 'latest', 1, '', 'Filed', 'folder-thread', 4)`
+      )
+      .run();
+
+    try {
+      const folder = await runIndexedThreadSearchRemote(remoteDatabase, {
+        accountIds: ["one@example.com"],
+        filters: [{ field: "label", value: "u:Spam" }],
+      });
+
+      expect(folder.threads.map(({ threadId }) => threadId)).toStrictEqual([
+        "folder-thread",
+      ]);
+    } finally {
+      connection
+        .prepare("DELETE FROM mail_threads WHERE thread_id = 'folder-thread'")
+        .run();
+    }
+  });
+
+  it("finds starred mail by its system id, and the Starred place's scope leaves Trash out", async () => {
+    const insert = connection.prepare(
+      `INSERT INTO mail_threads (
+        account_id, attachments, from_address, has_attachments, is_in_inbox,
+        is_in_sent, is_in_spam, is_in_trash, is_unread, label_ids, latest_at,
+        latest_message_id, message_count, snippet, subject, thread_id,
+        updated_at
+      ) VALUES ('one@example.com', '[]', 'star@example.com', 0, 0, 0, 0,
+        ?, 0, ?, ?, 'latest', 1, '', 'Starred', ?, 4)`
+    );
+    insert.run(0, '["STARRED"]', 7, "starred-thread");
+    insert.run(1, '["STARRED","TRASH"]', 6, "trashed-star");
+    insert.run(0, '["u:starred"]', 5, "folder-star");
+
+    try {
+      const search = async (field: "is" | "label") => {
+        const results = await runIndexedThreadSearchRemote(remoteDatabase, {
+          accountIds: ["one@example.com"],
+          filters: [{ field, value: "starred" }],
+        });
+        return results.threads.map(({ threadId }) => threadId);
+      };
+
+      expect({
+        is: await search("is"),
+        label: await search("label"),
+      }).toStrictEqual({
+        is: ["starred-thread", "trashed-star"],
+        label: ["starred-thread"],
+      });
+    } finally {
+      connection
+        .prepare(
+          "DELETE FROM mail_threads WHERE thread_id IN ('starred-thread', 'trashed-star', 'folder-star')"
+        )
+        .run();
+    }
+  });
+
+  it("returns snippets as stored, without HTML escaping", async () => {
     const important = await runIndexedThreadSearchRemote(remoteDatabase, {
       accountIds: ["one@example.com"],
       filters: [{ field: "label", value: "important" }],
@@ -312,6 +380,32 @@ describe("mail search", () => {
     expect(
       listCachedCorrespondents(["one@example.com"], "new@", 10)
     ).toBeUndefined();
+  });
+
+  it("matches letters in order and ranks the closest match before the limit", async () => {
+    await loadCachedCorrespondentsRemote(remoteDatabase, ["empty@example.com"]);
+
+    rememberCorrespondentMessages("empty@example.com", [
+      {
+        bcc: [],
+        cc: [],
+        from: { address: "dana.t@example.com" },
+        to: [
+          { address: "dt@example.com" },
+          { address: "ines@example.com", name: "Dario Toma" },
+          { address: "nobody@example.com" },
+        ],
+      },
+    ]);
+    expect({
+      initials: emptyAccountAddresses("DT", 10),
+      limited: emptyAccountAddresses("dt@", 1),
+      scattered: emptyAccountAddresses("dt@", 10),
+    }).toStrictEqual({
+      initials: ["dt@example.com", "dana.t@example.com", "ines@example.com"],
+      limited: ["dt@example.com"],
+      scattered: ["dt@example.com", "dana.t@example.com"],
+    });
   });
 
   it("keeps the in-memory snapshot bounded per account", async () => {

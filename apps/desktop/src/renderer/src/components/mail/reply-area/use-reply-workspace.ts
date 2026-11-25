@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
 import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
+import { toast } from "@/components/ui/toast";
 import { useAiModelSelection } from "@/hooks/use-ai-model-selection";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import {
   isDraftBodyOnlySignature,
   isThreadMailDraftEmpty,
@@ -13,11 +14,24 @@ import {
 } from "@/mail/mail-draft";
 import { getInitialReplyRecipients } from "@/mail/reply-recipients";
 import type { MailMessageAction } from "@/mail/reply-recipients";
+import { describeSendOutcome } from "@/mail/send-outcome";
+import {
+  restoreReplyDraft,
+  takeReplyDraft,
+  toUndoSendOffer,
+} from "@/mail/undo-send";
 import { getAiApi, getMailApi } from "@/platform/desktop";
 import { appendEmailSignatureHtml } from "@/shared/email-signature";
 import type { AiModelSelection } from "@/shared/ipc/ai";
-import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type {
+  MailDraftInput,
+  MailThreadMessageSendRequest,
+  ThreadMessage,
+} from "@/shared/ipc/mail";
+import { getAppSettingsState } from "@/state/app-settings";
+import { useOfferUndo } from "@/undo/undo-provider";
 
+import { createReplyDraftPersistence } from "./reply-draft-persistence";
 import { useReplyCleanHistory } from "./use-reply-clean-history";
 
 export const canCreateAiReply = (
@@ -39,7 +53,7 @@ export const useReplyWorkspace = ({
   accountId: string;
   action: MailMessageAction;
   draft: MailDraftInput;
-  message: GmailThreadMessage;
+  message: ThreadMessage;
   onCancel: () => void;
   onSent: () => void;
   replaceComposerContent: (content: string) => boolean;
@@ -48,6 +62,7 @@ export const useReplyWorkspace = ({
   const aiApi = useMemo(() => getAiApi(), []);
   const aiModel = useAiModelSelection();
   const mailApi = useMemo(() => getMailApi(), []);
+  const offerUndo = useOfferUndo();
   const outgoingAttachments = useOutgoingAttachments(
     mailApi,
     draft.attachments,
@@ -70,7 +85,21 @@ export const useReplyWorkspace = ({
     () => getInitialReplyRecipients(accountId, action, message),
     [accountId, action, message]
   );
-  const finalizedRef = useRef(false);
+  // One per mounted composer. The reply area is keyed by its draft's id, and
+  // the conversation never replaces the draft while its composer is open, so
+  // `draft` is the copy this composer opened with for as long as it is open.
+  const persistence = useMemo(
+    () =>
+      mailApi === undefined
+        ? undefined
+        : createReplyDraftPersistence({
+            accountId,
+            api: mailApi,
+            initial: draft,
+            onError: (error) => toast.error(error),
+          }),
+    [accountId, draft, mailApi]
+  );
   const mountedRef = useRef(false);
   const cleanHistory = useReplyCleanHistory({
     aiApi,
@@ -114,168 +143,213 @@ export const useReplyWorkspace = ({
   }, [currentDraft]);
 
   useEffect(() => {
-    if (mailApi === undefined) {
+    if (persistence === undefined) {
       return;
     }
-    const save = async (): Promise<void> => {
-      try {
-        const reply = await mailApi.saveDraft(currentDraftRef.current);
-        if (!reply.ok) {
-          toast.error(reply.error);
-        }
-      } catch {
-        toast.error("Could not save draft");
-      }
-    };
-    const timeout = window.setTimeout(save, 450);
+    const timeout = window.setTimeout(() => {
+      void persistence.save(currentDraft);
+    }, 450);
     return () => window.clearTimeout(timeout);
-  }, [currentDraft, mailApi]);
+  }, [currentDraft, persistence]);
+
+  useEffect(() => {
+    if (mailApi === undefined || persistence === undefined) {
+      return;
+    }
+    return mailApi.onDraftChanged(persistence.observe);
+  }, [mailApi, persistence]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       queueMicrotask(() => {
-        if (
-          mountedRef.current ||
-          finalizedRef.current ||
-          mailApi === undefined
-        ) {
+        if (mountedRef.current || persistence === undefined) {
           return;
         }
         const latest = currentDraftRef.current;
-        const settle = async (): Promise<void> => {
-          try {
-            const reply = isThreadMailDraftEmpty(latest, initialRecipients)
-              ? await mailApi.discardDraft({
-                  accountId: latest.accountId,
-                  draftId: latest.id,
-                })
-              : await mailApi.saveDraft(latest);
-            if (!reply.ok) {
-              toast.error(reply.error);
-            }
-          } catch {
-            toast.error("Could not save draft");
-          }
-        };
-        void settle();
+        void persistence.settle(
+          latest,
+          isThreadMailDraftEmpty(latest, initialRecipients)
+        );
       });
     };
-  }, [initialRecipients, mailApi]);
+  }, [initialRecipients, persistence]);
+
+  /**
+   * With Undo send on, the reply's draft is saved as it stands and kept, out
+   * of sight, while main holds the message; Undo or a failure brings it back
+   * to the conversation, and main removes it once the server has the
+   * message. The composer closes at once.
+   */
+  const sendWithUndo = async (
+    request: MailThreadMessageSendRequest,
+    delayMs: number
+  ): Promise<void> => {
+    if (mailApi === undefined || persistence === undefined) {
+      return;
+    }
+    if (!(await persistence.save(currentDraft))) {
+      return;
+    }
+    persistence.finalize();
+    const draftId = currentDraft.id;
+    offerUndo(
+      toUndoSendOffer({
+        cancel: () => mailApi.cancelSend({ accountId, draftId }),
+        delayMs,
+        // Marked before Undo asks main, which puts the draft back before it
+        // answers: the conversation opens it again as it arrives.
+        expectRestore: () => {
+          restoreReplyDraft(draftId);
+          return () => {
+            takeReplyDraft(draftId);
+          };
+        },
+        keptIn: "Your reply is back in the conversation.",
+        recipients: [...request.to, ...request.cc, ...request.bcc],
+        send: () => mailApi.sendThreadMessage({ ...request, draftId }),
+        subject: currentDraft.subject,
+      })
+    );
+    onSent();
+  };
 
   const send = async (): Promise<void> => {
     if (mailApi === undefined || isBusy) {
       return;
     }
     setIsSending(true);
-    try {
-      const preparedAttachments = await prepareAttachments(
-        currentDraft.attachments
-      );
-      if (preparedAttachments === undefined) {
-        return;
-      }
-      const reply = await mailApi.sendThreadMessage({
-        accountId,
-        action,
-        attachments: preparedAttachments,
-        bcc: recipients.bcc,
-        body: { html: composer.html, text: composer.text },
-        cc: recipients.cc,
-        messageId: message.id,
-        threadId,
-        to: recipients.to,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      finalizedRef.current = true;
-      try {
-        const discarded = await mailApi.discardDraft({
-          accountId,
-          draftId: draft.id,
-        });
-        if (!discarded.ok) {
-          toast.error(discarded.error);
+    await runWithCleanup(
+      async () => {
+        try {
+          const preparedAttachments = await prepareAttachments(
+            currentDraft.attachments
+          );
+          if (preparedAttachments === undefined) {
+            return;
+          }
+          const request = {
+            accountId,
+            action,
+            attachments: preparedAttachments,
+            bcc: recipients.bcc,
+            body: { html: composer.html, text: composer.text },
+            cc: recipients.cc,
+            messageId: message.id,
+            threadId,
+            to: recipients.to,
+          };
+          const delayMs = getAppSettingsState().undoSendSeconds * 1000;
+          if (delayMs > 0 && persistence !== undefined) {
+            await sendWithUndo(request, delayMs);
+            return;
+          }
+          const reply = await mailApi.sendThreadMessage(request);
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          if (reply.data.kind === "canceled") {
+            return;
+          }
+          persistence?.finalize();
+          try {
+            const discarded = await mailApi.discardDraft({
+              accountId,
+              draftId: draft.id,
+            });
+            if (!discarded.ok) {
+              toast.error(discarded.error);
+            }
+          } catch {
+            toast.error(
+              "Message sent, but its local draft could not be removed"
+            );
+          }
+          const notice = describeSendOutcome(reply.data);
+          toast[notice.tone](notice.message);
+          onSent();
+        } catch (error) {
+          toast.error(
+            error instanceof Error ? error.message : "Could not send message"
+          );
         }
-      } catch {
-        toast.error("Message sent, but its local draft could not be removed");
+      },
+      () => {
+        setIsSending(false);
       }
-      toast.success("Message sent");
-      onSent();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not send message"
-      );
-    } finally {
-      setIsSending(false);
-    }
+    );
   };
 
   const discard = async (): Promise<void> => {
     if (mailApi === undefined || isBusy) {
       return;
     }
-    finalizedRef.current = true;
+    persistence?.finalize();
     try {
       const reply = await mailApi.discardDraft({
         accountId,
         draftId: draft.id,
       });
       if (!reply.ok) {
-        finalizedRef.current = false;
+        persistence?.reopen();
         toast.error(reply.error);
         return;
       }
       onCancel();
     } catch {
-      finalizedRef.current = false;
+      persistence?.reopen();
       toast.error("Could not discard draft");
     }
   };
 
   const createReply = async (instructions?: string): Promise<void> => {
-    if (!(aiApi && aiModel.selection && canCreateReply)) {
+    const model = aiModel.selection;
+    if (!(aiApi && model && canCreateReply)) {
       return;
     }
     setIsCreatingReply(true);
-    try {
-      const reply = await aiApi.generateReply({
-        accountId,
-        instructions,
-        model: aiModel.selection,
-        threadId,
-      });
-      if (!mountedRef.current) {
-        return;
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await aiApi.generateReply({
+            accountId,
+            instructions,
+            model,
+            threadId,
+          });
+          if (!mountedRef.current) {
+            return;
+          }
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          const replyBody =
+            signature === undefined
+              ? reply.data.body
+              : appendEmailSignatureHtml(reply.data.body, signature.body);
+          if (!replaceComposerContent(replyBody)) {
+            toast.error("Could not update the reply draft");
+            return;
+          }
+          cleanHistory.reset();
+          toast.success("Reply created");
+        } catch (error) {
+          if (mountedRef.current) {
+            toast.error(
+              error instanceof Error ? error.message : "Could not create reply"
+            );
+          }
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsCreatingReply(false);
+        }
       }
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      const replyBody =
-        signature === undefined
-          ? reply.data.body
-          : appendEmailSignatureHtml(reply.data.body, signature.body);
-      if (!replaceComposerContent(replyBody)) {
-        toast.error("Could not update the reply draft");
-        return;
-      }
-      cleanHistory.reset();
-      toast.success("Reply created");
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error ? error.message : "Could not create reply"
-        );
-      }
-    } finally {
-      if (mountedRef.current) {
-        setIsCreatingReply(false);
-      }
-    }
+    );
   };
 
   const updateComposer = (nextComposer: EmailComposerValue): void => {

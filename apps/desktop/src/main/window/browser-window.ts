@@ -13,6 +13,8 @@ interface CreateBrowserWindowOptions {
   readonly height: number;
   readonly minHeight: number;
   readonly minWidth: number;
+  /** Shows the window as a dialog over `parent`: a sheet on macOS. */
+  readonly modalTo?: BrowserWindow;
   readonly preload?: string;
   readonly title: string;
   readonly width: number;
@@ -24,6 +26,7 @@ export const createBrowserWindow = ({
   height,
   minHeight,
   minWidth,
+  modalTo,
   preload = path.join(import.meta.dirname, "../preload/index.cjs"),
   title,
   width,
@@ -37,6 +40,8 @@ export const createBrowserWindow = ({
     icon: process.platform === "linux" ? icon : undefined,
     minHeight,
     minWidth,
+    modal: modalTo !== undefined,
+    parent: modalTo,
     show: false,
     title,
     titleBarOverlay: {

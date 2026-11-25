@@ -11,4 +11,7 @@ export default defineConfig({
       { find: "@", replacement: path.resolve("src/renderer/src") },
     ],
   },
+  test: {
+    include: ["tests/**/*.test.ts"],
+  },
 });

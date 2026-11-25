@@ -1,6 +1,8 @@
-import type { GmailMailbox, GmailSearchFilterField } from "@/shared/ipc/mail";
+import type { MailboxPlace, MailSearchFilterField } from "@/shared/ipc/mail";
 
-export type SearchFilterField = GmailSearchFilterField;
+import { isLabelPlace, toLabelSearchValue } from "./mailbox-place";
+
+export type SearchFilterField = MailSearchFilterField;
 
 export interface SearchFilter {
   field: SearchFilterField;
@@ -32,9 +34,23 @@ export const SEARCH_FILTER_FIELDS = [
   "to",
   "subject",
   "has",
+  "is",
 ] as const satisfies readonly SearchFilterField[];
 
 const FILTER_FIELDS = new Set<string>(SEARCH_FILTER_FIELDS);
+
+/**
+ * The states `is:` takes when typed. Read state belongs to the Unread toggle
+ * and a label to its place, so `is:unread` and `label:` stay free text; no
+ * control owns a star, so `is:starred` finds starred mail in any scope.
+ */
+export const TYPED_SEARCH_STATES = ["starred"] as const;
+
+const TYPED_STATES = new Set<string>(TYPED_SEARCH_STATES);
+
+const isTypedFilter = (field: string, value: string): boolean =>
+  FILTER_FIELDS.has(field) &&
+  (field !== "is" || TYPED_STATES.has(value.toLowerCase()));
 
 interface RawToken {
   /** Index just past the token, so a caller can tell "typed" from "finished". */
@@ -86,7 +102,7 @@ const toFilter = (token: string): SearchFilter | undefined => {
 
   const field = token.slice(0, separatorIndex).toLowerCase();
   const value = token.slice(separatorIndex + 1).trim();
-  return FILTER_FIELDS.has(field) && value.length > 0
+  return isTypedFilter(field, value) && value.length > 0
     ? { field: field as SearchFilterField, value }
     : undefined;
 };
@@ -98,8 +114,8 @@ export const formatSearchFilter = (filter: SearchFilter): string =>
   `${filter.field}:${formatFilterValue(filter.value)}`;
 
 /**
- * Serialises back to Gmail's own query syntax, so the same string can be handed
- * to Gmail search when the inline field hands off to the mailbox list.
+ * Serialises back to the Gmail-style query syntax, so the sidebar can name
+ * the search whose results fill the mailbox list.
  */
 export const formatSearchQuery = (query: SearchQuery): string =>
   [...query.filters.map(formatSearchFilter), query.text.trim()]
@@ -131,24 +147,29 @@ export const addSearchFilters = (
   return next;
 };
 
+/**
+ * Adds the mailbox view's scope to a search: the Inbox searches all non-Spam
+ * mail, another mailbox or a label only itself, and the Unread filter only
+ * unread mail.
+ */
 export const applyExternalMailSearchScope = (
   query: SearchQuery,
   {
-    labelNames,
     mailbox,
     unreadOnly,
   }: {
-    readonly labelNames: readonly string[];
-    readonly mailbox: GmailMailbox;
+    readonly mailbox: MailboxPlace;
     readonly unreadOnly: boolean;
   }
 ): SearchQuery => {
-  const scopeFilters: SearchFilter[] = labelNames.map((value) => ({
-    field: "label",
-    value,
-  }));
+  const scopeFilters: SearchFilter[] = [];
 
-  if (mailbox !== "inbox") {
+  if (isLabelPlace(mailbox)) {
+    scopeFilters.push({
+      field: "label",
+      value: toLabelSearchValue(mailbox.label),
+    });
+  } else if (mailbox !== "inbox") {
     scopeFilters.push({ field: "label", value: mailbox });
   }
   if (unreadOnly) {
@@ -256,12 +277,18 @@ export const removeFilterDraft = (draft: string): string => {
   return rest.length === 0 ? "" : `${rest.join(" ")} `;
 };
 
+/** The operator being typed as a filter, once its value is one it takes. */
 export const toMailSearchDraftFilter = (
   draft: FilterDraft | undefined
-): SearchFilter | undefined =>
-  draft === undefined || draft.value.trim().length === 0
+): SearchFilter | undefined => {
+  const value = draft?.value.trim() ?? "";
+
+  return draft === undefined ||
+    value.length === 0 ||
+    !isTypedFilter(draft.field, value)
     ? undefined
-    : { field: draft.field, value: draft.value.trim() };
+    : { field: draft.field, value };
+};
 
 export const toLiveMailSearchQuery = (query: SearchQuery): SearchQuery => {
   const draft = parseFilterDraft(query.text);

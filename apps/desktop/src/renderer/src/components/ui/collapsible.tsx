@@ -1,15 +1,30 @@
-import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
+import { CollapsibleTrigger as CollapsibleTriggerPrimitive } from "@ui-sdk/react/collapsible";
 
-function Collapsible({ ...props }: CollapsiblePrimitive.Root.Props) {
-  return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />;
-}
+import { buttonVariants } from "@/components/ui/button";
+import type { ButtonProps } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-function CollapsibleTrigger({ ...props }: CollapsiblePrimitive.Trigger.Props) {
-  return <CollapsiblePrimitive.Trigger data-slot="collapsible-trigger" {...props} />;
-}
+export { Collapsible, CollapsiblePanel } from "@ui-sdk/react/collapsible";
 
-function CollapsibleContent({ ...props }: CollapsiblePrimitive.Panel.Props) {
-  return <CollapsiblePrimitive.Panel data-slot="collapsible-content" {...props} />;
-}
+// Styled like a Button rather than rendered as one: the agent bridge would
+// list a Kisa Button inside the trigger as a second control.
+const CollapsibleTrigger = ({
+  className,
+  size = "default",
+  variant = "ghost",
+  ...props
+}: Omit<
+  React.ComponentProps<typeof CollapsibleTriggerPrimitive>,
+  "className"
+> & {
+  className?: string;
+  size?: ButtonProps["size"];
+  variant?: ButtonProps["variant"];
+}) => (
+  <CollapsibleTriggerPrimitive
+    className={cn(buttonVariants({ size, variant }), className)}
+    {...props}
+  />
+);
 
-export { Collapsible, CollapsibleTrigger, CollapsibleContent };
+export { CollapsibleTrigger };

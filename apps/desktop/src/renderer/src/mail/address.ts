@@ -1,3 +1,5 @@
+import { rankAddressMatches, toAddressQuery } from "@/shared/address-match";
+
 // A local part only starts where a run of local-part characters starts. Every
 // later position in the same run reaches the same `@`, so trying them all would
 // rescan a long run once per character on the renderer thread.
@@ -70,30 +72,37 @@ export const getThreadEmailAddresses = (
   );
 };
 
-/** Finds the first longer address whose beginning is exactly what was typed. */
-export const findEmailAddressCompletion = (
+export interface EmailAddressSuggestion {
+  address: string;
+  name?: string;
+}
+
+// Ranked as main ranks correspondents, so the conversation's own addresses
+// and indexed ones interleave by how well they match; an exact one comes
+// first, and within a tier the given order holds.
+export const findEmailAddressSuggestions = (
   draft: string,
-  candidates: readonly string[],
-  excluded: readonly string[] = []
-): string | undefined => {
+  candidates: readonly EmailAddressSuggestion[],
+  excluded: readonly string[] = [],
+  limit = 8
+): readonly EmailAddressSuggestion[] => {
   if (draft.length === 0 || draft.trim() !== draft) {
-    return undefined;
+    return [];
   }
 
-  const prefix = draft.toLowerCase();
-  const excludedAddresses = new Set(
-    excluded.map((address) => address.toLowerCase())
-  );
+  const seen = new Set(excluded.map((address) => address.toLowerCase()));
+  const unique = candidates.filter(({ address }) => {
+    const normalizedAddress = address.toLowerCase();
 
-  return candidates.find((candidate) => {
-    const address = candidate.toLowerCase();
+    if (seen.has(normalizedAddress)) {
+      return false;
+    }
 
-    return (
-      address.length > prefix.length &&
-      address.startsWith(prefix) &&
-      !excludedAddresses.has(address)
-    );
+    seen.add(normalizedAddress);
+    return true;
   });
+
+  return rankAddressMatches(toAddressQuery(draft), unique).slice(0, limit);
 };
 
 export interface MailboxAddress {

@@ -1,4 +1,4 @@
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { createController } from "@ui-sdk/core";
 import {
   useCallback,
   useEffect,
@@ -7,37 +7,30 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
 
 import { useConfirm } from "@/components/confirm-dialog";
-import { useRemeasureOnScrollSettle } from "@/hooks/use-remeasure-on-scroll-settle";
+import { toast } from "@/components/ui/toast";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
-import type { ThreadSelectionDirection } from "@/mail/thread-selection";
-import {
-  getThreadSelectionScrollBehavior,
-  getVisibleThreadSelectionIndex,
-} from "@/mail/thread-selection";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { useMailboxAccountScope } from "@/mail/use-mailbox-account-scope";
+import type { MailListController } from "@/primitives/mail-list";
 import {
   getScheduledMailKey,
   orderScheduledMailItems,
   shouldCloseScheduledMailEditor,
 } from "@/scheduled/scheduled-mail-view";
-import {
-  focusScheduledMailTarget,
-  getScheduledMailSelectionIndex,
-  useScheduledMailNavigation,
-} from "@/scheduled/scheduled-navigation";
+import { useScheduledMailNavigation } from "@/scheduled/scheduled-navigation";
 import { useScheduledMailPage } from "@/scheduled/use-scheduled-mail-page";
 import type {
   ScheduledMailEditSession,
   ScheduledMailSummary,
 } from "@/shared/ipc/scheduled-mail";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import { useAccounts } from "@/state/accounts";
 
 export const useScheduledMailWorkspace = () => {
   const confirm = useConfirm();
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const { accountIds, selectedAccountId } = useMailboxAccountScope();
   const {
     api,
@@ -52,110 +45,34 @@ export const useScheduledMailWorkspace = () => {
   } = useScheduledMailPage(accountIds);
   const items = useMemo(() => orderScheduledMailItems(pageItems), [pageItems]);
   const itemKeys = useMemo(() => items.map(getScheduledMailKey), [items]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const selectedItem = useMemo(
-    () =>
-      items.find((item) => getScheduledMailKey(item) === selectedKey) ?? null,
-    [items, selectedKey]
+  const itemsByKey = useMemo(
+    () => new Map(items.map((item) => [getScheduledMailKey(item), item])),
+    [items]
   );
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selectedItem =
+    selectedKey === null ? null : (itemsByKey.get(selectedKey) ?? null);
   const [quickActionResetRevision, setQuickActionResetRevision] = useState(0);
-  const [focusRevision, setFocusRevision] = useState(0);
   const [editSession, setEditSession] =
     useState<ScheduledMailEditSession | null>(null);
+  const [lastRenderedIndex, setLastRenderedIndex] = useState<number>();
   const pendingNavigation = useScheduledMailNavigation((state) => state.target);
   const clearPendingNavigation = useScheduledMailNavigation(
     (state) => state.clear
   );
-  const scrollRef = useRef<HTMLElement>(null);
-  const listRef = useRef<HTMLOListElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
-  const lastSelectionMoveAtRef = useRef<number | null>(null);
+  const list = useInstanceValue(() => createController<MailListController>());
   const openingKeyRef = useRef<string | null>(null);
-  const pendingFocusKeyRef = useRef<string | null | false>(false);
-  const editOriginKeyRef = useRef<string | null>(null);
-  const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
-  const virtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
-    count:
-      items.length + (nextCursor === undefined || error !== undefined ? 0 : 1),
-    estimateSize: () => 105,
-    getItemKey: (index) => {
-      const item = items[index];
-      return item === undefined
-        ? "scheduled-mail-next-page"
-        : getScheduledMailKey(item);
-    },
-    getScrollElement: () => scrollRef.current,
-    onChange: remeasureOnScrollSettle,
-    overscan: 8,
-    scrollPaddingEnd: 24,
-    scrollPaddingStart: 24,
-  });
-  const virtualItems = virtualizer.getVirtualItems();
-  const lastVirtualIndex = virtualItems.at(-1)?.index;
+  const previousEditSessionRef = useRef(editSession);
 
-  const focusAfterMutation = (key: string | null): void => {
-    pendingFocusKeyRef.current = key;
-    setFocusRevision((revision) => revision + 1);
-  };
-
+  // However the editor closes, focus returns to the row it was opened from,
+  // once the list behind it can take focus again.
   useLayoutEffect(() => {
-    const pending = pendingFocusKeyRef.current;
-    if (pending === false) {
-      return;
+    const wasEditing = previousEditSessionRef.current !== null;
+    previousEditSessionRef.current = editSession;
+    if (wasEditing && editSession === null) {
+      list.focusCurrent();
     }
-    pendingFocusKeyRef.current = false;
-    focusScheduledMailTarget(pending, rowRefs.current, headingRef.current);
-  }, [focusRevision, items]);
-
-  const getVisibleSelectionIndex = (
-    direction: ThreadSelectionDirection
-  ): number | null => {
-    const scrollElement = scrollRef.current;
-    const listElement = listRef.current;
-
-    if (scrollElement === null || listElement === null) {
-      return null;
-    }
-
-    const viewportStart = scrollElement.scrollTop - listElement.offsetTop;
-
-    return getVisibleThreadSelectionIndex(
-      virtualItems.filter((row) => row.index < items.length),
-      viewportStart,
-      viewportStart + scrollElement.clientHeight,
-      direction
-    );
-  };
-
-  const moveSelection = (direction: ThreadSelectionDirection): void => {
-    const index = getScheduledMailSelectionIndex(
-      itemKeys,
-      selectedKey,
-      getVisibleSelectionIndex(direction),
-      direction
-    );
-    if (index === null) {
-      return;
-    }
-    const item = items[index];
-    if (item === undefined) {
-      return;
-    }
-    const key = getScheduledMailKey(item);
-    setSelectedKey(key);
-    const now = performance.now();
-    const scrollBehavior = getThreadSelectionScrollBehavior(
-      lastSelectionMoveAtRef.current,
-      now
-    );
-    lastSelectionMoveAtRef.current = now;
-    virtualizer.scrollToIndex(index, {
-      align: "center",
-      behavior: scrollBehavior,
-    });
-    focusAfterMutation(key);
-  };
+  }, [editSession, list]);
 
   const openEditor = useCallback(
     async (item: ScheduledMailSummary): Promise<void> => {
@@ -167,24 +84,28 @@ export const useScheduledMailWorkspace = () => {
         return;
       }
       const key = getScheduledMailKey(item);
-      setSelectedKey(key);
       openingKeyRef.current = key;
-      try {
-        const reply = await api.beginEdit({
-          accountId: item.accountId,
-          draftId: item.draftId,
-        });
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return;
+      await runWithCleanup(
+        async () => {
+          try {
+            const reply = await api.beginEdit({
+              accountId: item.accountId,
+              draftId: item.draftId,
+            });
+            if (!reply.ok) {
+              toast.error(reply.error);
+              return;
+            }
+            setSelectedKey(key);
+            setEditSession(reply.data);
+          } catch {
+            toast.error("Could not open scheduled email");
+          }
+        },
+        () => {
+          openingKeyRef.current = null;
         }
-        editOriginKeyRef.current = key;
-        setEditSession(reply.data);
-      } catch {
-        toast.error("Could not open scheduled email");
-      } finally {
-        openingKeyRef.current = null;
-      }
+      );
     },
     [api]
   );
@@ -193,11 +114,6 @@ export const useScheduledMailWorkspace = () => {
     if (api === undefined) {
       return;
     }
-    const index = items.findIndex(
-      (candidate) =>
-        getScheduledMailKey(candidate) === getScheduledMailKey(item)
-    );
-    const nextItem = items[index + 1] ?? items[index - 1];
     try {
       const reply = await api.cancelToStash({
         accountId: item.accountId,
@@ -207,11 +123,8 @@ export const useScheduledMailWorkspace = () => {
         toast.error(reply.error);
         return;
       }
+      // The list moves the active row, and focus, to the one taking its place.
       removeOptimistically(item);
-      const nextKey =
-        nextItem === undefined ? null : getScheduledMailKey(nextItem);
-      setSelectedKey(nextKey);
-      focusAfterMutation(nextKey);
       toast.success("Schedule canceled. Draft moved to Stash.");
     } catch {
       toast.error("Could not cancel scheduled email");
@@ -235,11 +148,6 @@ export const useScheduledMailWorkspace = () => {
     if (!confirmed) {
       return;
     }
-    const index = items.findIndex(
-      (candidate) =>
-        getScheduledMailKey(candidate) === getScheduledMailKey(item)
-    );
-    const nextItem = items[index + 1] ?? items[index - 1];
     try {
       const reply = await api.discard({
         accountId: item.accountId,
@@ -250,10 +158,6 @@ export const useScheduledMailWorkspace = () => {
         return;
       }
       removeOptimistically(item);
-      const nextKey =
-        nextItem === undefined ? null : getScheduledMailKey(nextItem);
-      setSelectedKey(nextKey);
-      focusAfterMutation(nextKey);
       toast.success("Scheduled email discarded.");
     } catch {
       toast.error("Could not discard scheduled email");
@@ -262,9 +166,8 @@ export const useScheduledMailWorkspace = () => {
 
   useHotkeyLayer("scheduled", true);
   useAppCommand("scheduled.clearActiveRow", () => {
-    setSelectedKey(null);
     setQuickActionResetRevision((revision) => revision + 1);
-    focusAfterMutation(null);
+    list.clear();
   });
   useAppCommand(
     "scheduled.cancel",
@@ -290,10 +193,10 @@ export const useScheduledMailWorkspace = () => {
         selectedItem !== null && selectedItem.deliveryState !== "sending",
     }
   );
-  useAppCommand("scheduled.next", () => moveSelection(1), {
+  useAppCommand("scheduled.next", () => list.move(1), {
     enabled: items.length > 0,
   });
-  useAppCommand("scheduled.previous", () => moveSelection(-1), {
+  useAppCommand("scheduled.previous", () => list.move(-1), {
     enabled: items.length > 0,
   });
   useAppCommand(
@@ -312,17 +215,15 @@ export const useScheduledMailWorkspace = () => {
     }
     return api.onChanged((change) => {
       if (shouldCloseScheduledMailEditor(change, editSession)) {
-        pendingFocusKeyRef.current = null;
         setEditSession(null);
-        setFocusRevision((revision) => revision + 1);
       }
     });
   }, [api, editSession]);
 
   useEffect(() => {
     if (
-      lastVirtualIndex !== undefined &&
-      lastVirtualIndex >= items.length - 1 &&
+      lastRenderedIndex !== undefined &&
+      lastRenderedIndex >= items.length - 1 &&
       nextCursor !== undefined &&
       !isLoadingMore &&
       error === undefined
@@ -333,19 +234,10 @@ export const useScheduledMailWorkspace = () => {
     error,
     isLoadingMore,
     items.length,
-    lastVirtualIndex,
+    lastRenderedIndex,
     loadMore,
     nextCursor,
   ]);
-
-  useEffect(() => {
-    if (
-      selectedKey !== null &&
-      !items.some((item) => getScheduledMailKey(item) === selectedKey)
-    ) {
-      setSelectedKey(null);
-    }
-  }, [items, selectedKey]);
 
   useEffect(() => {
     if (pendingNavigation === null || isInitialLoading || error !== undefined) {
@@ -383,20 +275,26 @@ export const useScheduledMailWorkspace = () => {
 
   return {
     accounts,
+    activate: (key: string): void => {
+      const item = itemsByKey.get(key);
+      if (item !== undefined) {
+        void openEditor(item);
+      }
+    },
     cancelSchedule,
     closeEditor: () => {
-      const origin = editOriginKeyRef.current;
       setEditSession(null);
-      focusAfterMutation(origin);
     },
     editSession,
     error,
     discardScheduledEmail,
-    headingRef,
     isInitialLoading,
+    itemKeys,
     items,
-    listRef,
-    measureElement: virtualizer.measureElement,
+    itemsByKey,
+    labelOf: (key: string): string =>
+      itemsByKey.get(key)?.subject.trim() || "No subject",
+    list,
     openEditor,
     quickActionResetRevision,
     reload,
@@ -408,18 +306,10 @@ export const useScheduledMailWorkspace = () => {
           : current
       );
     },
-    scrollRef,
+    rowCount: nextCursor === undefined ? items.length : -1,
     selectedAccountId,
     selectedKey,
-    setSize: nextCursor === undefined ? items.length : -1,
-    setRowRef: (key: string, element: HTMLButtonElement | null) => {
-      if (element === null) {
-        rowRefs.current.delete(key);
-      } else {
-        rowRefs.current.set(key, element);
-      }
-    },
-    totalSize: virtualizer.getTotalSize(),
-    virtualItems,
+    setLastRenderedIndex,
+    setSelectedKey,
   };
 };

@@ -17,10 +17,10 @@ import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class AccountSettingsError extends Schema.TaggedError<AccountSettingsError>()(
-  "AccountSettingsError",
-  { message: Schema.String }
-) {}
+class AccountSettingsError extends Schema.TaggedError<
+  AccountSettingsError,
+  { readonly brand: unique symbol }
+>()("AccountSettingsError", { message: Schema.String }) {}
 
 export const notifyAccountSettingsChanged = (
   reply: AccountSettingsReply

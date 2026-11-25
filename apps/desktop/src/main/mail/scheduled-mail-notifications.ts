@@ -295,11 +295,7 @@ const showScheduledMailNotificationEffect = Effect.fn(
     return;
   }
   const delivered = yield* presentScheduledMailNotification(notification).pipe(
-    Effect.catch((error) =>
-      releaseNotificationClaim(notification, claimId).pipe(
-        Effect.andThen(Effect.fail(error))
-      )
-    )
+    Effect.tapError(() => releaseNotificationClaim(notification, claimId))
   );
   if (!delivered) {
     yield* releaseNotificationClaim(notification, claimId);
@@ -328,9 +324,9 @@ export const closeScheduledMailNotifications = (accountId: string): void => {
   }
 };
 
-const releaseStaleScheduledMailNotificationClaimsEffect = Effect.fn(
+export const releaseStaleScheduledMailNotificationClaims = Effect.fn(
   "releaseStaleScheduledMailNotificationClaims"
-)(function* releaseStaleScheduledMailNotificationClaimsEffect() {
+)(function* releaseStaleScheduledMailNotificationClaims() {
   yield* withScheduledMailDatabase(async (database) => {
     await database
       .update(scheduledMessages)
@@ -346,12 +342,9 @@ const releaseStaleScheduledMailNotificationClaimsEffect = Effect.fn(
   });
 });
 
-export const releaseStaleScheduledMailNotificationClaims = (): Promise<void> =>
-  Effect.runPromise(releaseStaleScheduledMailNotificationClaimsEffect());
-
-const dispatchPendingScheduledMailNotificationsEffect = Effect.fn(
+export const dispatchPendingScheduledMailNotifications = Effect.fn(
   "dispatchPendingScheduledMailNotifications"
-)(function* dispatchPendingScheduledMailNotificationsEffect() {
+)(function* dispatchPendingScheduledMailNotifications() {
   const rows = yield* withScheduledMailDatabase((database) =>
     database
       .select({
@@ -387,9 +380,6 @@ const dispatchPendingScheduledMailNotificationsEffect = Effect.fn(
   );
 });
 
-export const dispatchPendingScheduledMailNotifications = (): Promise<void> =>
-  Effect.runPromise(dispatchPendingScheduledMailNotificationsEffect());
-
 export const setScheduledMailOutcomeTargetReadyEffect = Effect.fn(
   "setScheduledMailOutcomeTargetReady"
 )(function* setScheduledMailOutcomeTargetReadyEffect(
@@ -415,7 +405,7 @@ export const setScheduledMailOutcomeTargetReadyEffect = Effect.fn(
     return true;
   });
   if (shouldDispatch) {
-    yield* dispatchPendingScheduledMailNotificationsEffect();
+    yield* dispatchPendingScheduledMailNotifications();
   }
 });
 

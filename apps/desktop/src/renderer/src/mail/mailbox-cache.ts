@@ -1,7 +1,7 @@
 import type {
-  GmailThreadCursor,
-  GmailThreadListChange,
-  GmailThreadSummary,
+  MailThreadCursor,
+  MailThreadListChange,
+  MailThreadSummary,
 } from "@/shared/ipc/mail";
 
 import {
@@ -10,11 +10,11 @@ import {
 } from "./mailbox-model";
 
 export interface MailboxThreadsSnapshot {
-  cacheCursor: GmailThreadCursor | null;
+  cacheCursor: MailThreadCursor | null;
   isInitialLoading: boolean;
   isLoadingNextPage: boolean;
   scopeKey: string;
-  threads: readonly GmailThreadSummary[];
+  threads: readonly MailThreadSummary[];
 }
 
 // Keyed by mailbox scope alone: the list has no query of its own now that
@@ -52,7 +52,7 @@ const getSnapshotAccountIds = (snapshot: MailboxThreadsSnapshot): string[] => {
 };
 
 export const updateMailboxThreadsSnapshots = (
-  changes: readonly GmailThreadListChange[]
+  changes: readonly MailThreadListChange[]
 ): void => {
   for (const [key, snapshot] of mailboxSnapshots) {
     const accountIds = getSnapshotAccountIds(snapshot);
@@ -61,11 +61,6 @@ export const updateMailboxThreadsSnapshots = (
     );
 
     if (relevantChanges.length === 0) {
-      continue;
-    }
-
-    if (relevantChanges.some((change) => change.kind === "reload")) {
-      mailboxSnapshots.delete(key);
       continue;
     }
 

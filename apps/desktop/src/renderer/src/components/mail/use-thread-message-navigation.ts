@@ -4,10 +4,10 @@ import { useThreadConversationStore } from "@/components/mail/thread-conversatio
 import { useAppCommand } from "@/hotkeys";
 import { getAdjacentMessageId } from "@/mail/message-selection";
 import type { MessageSelectionDirection } from "@/mail/message-selection";
-import type { GmailThreadMessage } from "@/shared/ipc/mail";
+import type { ThreadMessage } from "@/shared/ipc/mail";
 
 export const useThreadMessageNavigation = (
-  messages: readonly GmailThreadMessage[]
+  messages: readonly ThreadMessage[]
 ) => {
   const messageHeaderRefs = useRef(new Map<string, HTMLButtonElement>());
   const expandedMessageId = useThreadConversationStore(

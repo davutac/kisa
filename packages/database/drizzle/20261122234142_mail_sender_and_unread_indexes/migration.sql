@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS `mail_messages_sender_idx`;--> statement-breakpoint
+CREATE INDEX `mail_messages_from_idx` ON `mail_messages` (`account_id`,`from_address`,`from_name`,`received_at`,`thread_id`);--> statement-breakpoint
+CREATE INDEX `mail_threads_unread_idx` ON `mail_threads` (`account_id`,`is_in_inbox`) WHERE "mail_threads"."is_unread" = 1 and "mail_threads"."is_in_spam" = 0 and "mail_threads"."is_in_trash" = 0;

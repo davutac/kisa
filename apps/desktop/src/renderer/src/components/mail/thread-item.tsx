@@ -1,10 +1,10 @@
-import { MessagesSquareIcon, SendIcon } from "lucide-react";
-import type { HTMLMotionProps } from "motion/react";
+import { MessagesSquareIcon, SendIcon, StarIcon } from "lucide-react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { memo, useState } from "react";
-import type { MouseEvent, PointerEvent } from "react";
 
+import AccountChip from "@/components/accounts/account-chip";
 import MailAttachmentList from "@/components/mail/attachment-list";
+import { DayHeading } from "@/components/mail/day-heading";
 import MailLabelBadges from "@/components/mail/label-badges";
 import MailDate from "@/components/mail/mail-date";
 import MailThreadQuickActions, {
@@ -25,67 +25,108 @@ import type { Calendar } from "@/hooks/use-calendar";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
-import { hasSentLabel } from "@/mail/label";
+import { hasSentLabel, hasStarredLabel } from "@/mail/label";
 import { formatMailDate } from "@/mail/mail-date";
-import type { GmailThreadSummary } from "@/shared/ipc/mail";
+import { getThreadSelectionKey } from "@/mail/thread-selection";
+import {
+  MailListCell,
+  MailListCheck,
+  MailListOpen,
+  MailListRow,
+} from "@/primitives/mail-list";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
 
 const VISIBLE_ATTACHMENT_COUNT = 3;
 
-interface MailThreadItemProps extends Omit<
-  HTMLMotionProps<"li">,
-  "children" | "style"
-> {
+interface MailThreadItemProps {
+  /** The row's day heading, in a list grouped by day. */
+  day?: string;
   hasCheckedThreads?: boolean;
   isChecked?: boolean;
+  /** Draws the day heading over the first row of each day. */
+  isFirstOfDay?: boolean;
   isSelected?: boolean;
   /** The listed mailbox's own system label, which every row would repeat. */
   mailboxLabel?: string;
-  onDeleteForever?: (thread: GmailThreadSummary) => void;
-  onOpen: (
-    thread: GmailThreadSummary,
-    event: MouseEvent<HTMLButtonElement>
-  ) => void;
-  onRowPointerDown: (
-    thread: GmailThreadSummary,
-    event: PointerEvent<HTMLButtonElement>
-  ) => void;
-  onSelectionPointerDown: (
-    thread: GmailThreadSummary,
-    event: PointerEvent
-  ) => void;
-  onSelectionPointerEnter: (thread: GmailThreadSummary) => void;
-  onNotSpam?: (thread: GmailThreadSummary) => void;
-  onToggleRead?: (thread: GmailThreadSummary) => void;
-  onToggleSelection: (thread: GmailThreadSummary) => void;
-  onTrash?: (thread: GmailThreadSummary) => void;
-  position: number;
-  setSize: number;
+  onArchive?: (thread: MailThreadSummary) => void;
+  onDeleteForever?: (thread: MailThreadSummary) => void;
+  onNotSpam?: (thread: MailThreadSummary) => void;
+  onToggleRead?: (thread: MailThreadSummary) => void;
+  onToggleSelection: (thread: MailThreadSummary) => void;
+  onToggleStar?: (thread: MailThreadSummary) => void;
+  onTrash?: (thread: MailThreadSummary) => void;
   showAccount?: boolean;
-  thread: GmailThreadSummary;
+  thread: MailThreadSummary;
   /** Virtual row offset, passed as a number so memoized rows compare equal. */
   top: number;
 }
 
 const getThreadRowLabel = (
-  thread: GmailThreadSummary,
-  calendar: Calendar
+  thread: MailThreadSummary,
+  calendar: Calendar,
+  showAccount: boolean
 ): string =>
   [
     thread.subject,
     `from ${thread.from}`,
+    showAccount ? `in ${thread.accountId}` : undefined,
     formatMailDate(thread.latestAt, calendar, "detailed"),
     thread.isUnread ? "unread" : undefined,
+    hasStarredLabel(thread.labels) ? "starred" : undefined,
     thread.messageCount > 1 ? `${thread.messageCount} messages` : undefined,
     hasSentLabel(thread.labels) ? "sent" : undefined,
   ]
     .filter((part) => part !== undefined)
     .join(", ");
 
+// Names each row's controls apart, also across accounts that share a subject.
+export const getThreadControlName = (
+  thread: Pick<MailThreadSummary, "accountId" | "subject">,
+  showAccount: boolean
+): string => {
+  const subject = thread.subject.trim() || "No subject";
+  return showAccount ? `${subject} in ${thread.accountId}` : subject;
+};
+
 const bindThreadAction = (
-  action: ((thread: GmailThreadSummary) => void) | undefined,
-  thread: GmailThreadSummary
+  action: ((thread: MailThreadSummary) => void) | undefined,
+  thread: MailThreadSummary
 ): (() => void) | undefined =>
   action === undefined ? undefined : () => action(thread);
+
+type ThreadRowActions = Pick<
+  MailThreadItemProps,
+  | "onArchive"
+  | "onDeleteForever"
+  | "onNotSpam"
+  | "onToggleRead"
+  | "onToggleStar"
+  | "onTrash"
+>;
+
+/** The row's quick actions, bound to it, and how far the row slides aside. */
+const bindQuickActions = (
+  actions: ThreadRowActions,
+  thread: MailThreadSummary
+) => {
+  const bound = {
+    onArchive: bindThreadAction(actions.onArchive, thread),
+    onDeleteForever: bindThreadAction(actions.onDeleteForever, thread),
+    onNotSpam: bindThreadAction(actions.onNotSpam, thread),
+    onToggleRead: bindThreadAction(actions.onToggleRead, thread),
+    onToggleStar: bindThreadAction(actions.onToggleStar, thread),
+    onTrash: bindThreadAction(actions.onTrash, thread),
+  };
+
+  return {
+    bound,
+    width: getMailThreadQuickActionsWidth({
+      hasArchive: bound.onArchive !== undefined,
+      hasDestructive: (bound.onDeleteForever ?? bound.onTrash) !== undefined,
+      hasSecondary: (bound.onNotSpam ?? bound.onToggleStar) !== undefined,
+    }),
+  };
+};
 
 const getThreadItemRevealState = (
   hasCheckedThreads: boolean,
@@ -100,51 +141,50 @@ const getThreadItemRevealState = (
 const ThreadSelectionCheckbox = ({
   isChecked,
   isRevealed,
-  onPointerDown,
+  name,
   onToggle,
-  subject,
 }: {
   isChecked: boolean;
   isRevealed: boolean;
-  onPointerDown: (event: PointerEvent) => void;
+  name: string;
   onToggle: () => void;
-  subject: string;
 }) => {
   const shouldReduceMotion = useReducedMotionConfig();
 
   return (
-    <m.span
-      initial={{
-        marginRight: -8,
-        opacity: 0,
-        width: 0,
-      }}
-      animate={{
-        marginRight: isRevealed ? 2 : -8,
-        opacity: isRevealed ? 1 : 0,
-        width: isRevealed ? 16 : 0,
-      }}
+    <MailListCheck
       className="pointer-events-auto relative flex shrink-0 overflow-visible"
       inert={!isRevealed}
-      transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+      render={
+        <m.span
+          animate={{
+            marginRight: isRevealed ? 2 : -8,
+            opacity: isRevealed ? 1 : 0,
+            width: isRevealed ? 16 : 0,
+          }}
+          initial={{
+            marginRight: -8,
+            opacity: 0,
+            width: 0,
+          }}
+          transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+        />
+      }
     >
       <Checkbox
-        aria-label={`${isChecked ? "Deselect" : "Select"} ${subject}`}
+        aria-label={`Select ${name}`}
         checked={isChecked}
         onCheckedChange={() => onToggle()}
         onClick={(event) => {
           event.stopPropagation();
-          // Pointer-down toggles immediately for drag painting. Base UI still
-          // handles synthesized keyboard and assistive activation.
+          // Pressing it already painted the row for a drag; preventDefault
+          // skips the checkbox's own toggle. Keyboard clicks have detail 0.
           if (event.detail > 0) {
             event.preventDefault();
-            event.preventBaseUIHandler();
           }
         }}
-        onPointerDown={onPointerDown}
-        tabIndex={isRevealed ? 0 : -1}
       />
-    </m.span>
+    </MailListCheck>
   );
 };
 
@@ -152,7 +192,6 @@ const ThreadSenderHeader = ({
   isChecked,
   isSelectionRevealed,
   mailboxLabel,
-  onSelectionPointerDown,
   onToggleSelection,
   showAccount,
   thread,
@@ -160,10 +199,9 @@ const ThreadSenderHeader = ({
   isChecked: boolean;
   isSelectionRevealed: boolean;
   mailboxLabel?: string;
-  onSelectionPointerDown: (event: PointerEvent) => void;
   onToggleSelection: () => void;
   showAccount: boolean;
-  thread: GmailThreadSummary;
+  thread: MailThreadSummary;
 }) => {
   const senderMailbox = parseMailboxAddress(thread.from);
   const hasSenderName = senderMailbox.name !== undefined;
@@ -178,9 +216,8 @@ const ThreadSenderHeader = ({
       <ThreadSelectionCheckbox
         isChecked={isChecked}
         isRevealed={isSelectionRevealed}
-        onPointerDown={onSelectionPointerDown}
+        name={getThreadControlName(thread, showAccount)}
         onToggle={onToggleSelection}
-        subject={thread.subject}
       />
       <ItemTitle
         className="max-w-full min-w-0 gap-1.5 overflow-hidden text-xs"
@@ -200,6 +237,15 @@ const ThreadSenderHeader = ({
           {senderMailbox.email}
         </span>
       </ItemTitle>
+      {hasStarredLabel(thread.labels) && mailboxLabel !== "STARRED" ? (
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground inline-flex shrink-0"
+          title="Starred"
+        >
+          <StarIcon className="size-3.5 fill-current stroke-[1.8]" />
+        </span>
+      ) : null}
       {hasSentLabel(thread.labels) && mailboxLabel !== "SENT" ? (
         <span
           aria-hidden="true"
@@ -217,36 +263,64 @@ const ThreadSenderHeader = ({
       />
       {showAccount ? (
         <Badge
-          className="bg-muted text-muted-foreground ml-auto h-auto shrink-0 rounded-sm px-1.5 text-[10px] leading-none"
+          className="bg-muted text-muted-foreground ml-auto h-auto max-w-full shrink-0 rounded-sm px-1.5 text-[10px] leading-3"
           variant="secondary"
         >
-          {thread.accountId}
+          <AccountChip accountId={thread.accountId} />
         </Badge>
       ) : null}
     </ItemHeader>
   );
 };
 
+const ThreadAttachments = ({ thread }: { thread: MailThreadSummary }) => {
+  if (thread.attachments.length === 0) {
+    return null;
+  }
+
+  const visibleAttachments = thread.attachments.slice(
+    0,
+    VISIBLE_ATTACHMENT_COUNT
+  );
+  const hiddenAttachmentCount =
+    thread.attachments.length - visibleAttachments.length;
+
+  return (
+    <div
+      aria-label="Attachments"
+      className="flex flex-wrap items-center gap-1.5 pt-1"
+    >
+      <MailAttachmentList
+        accountId={thread.accountId}
+        attachments={visibleAttachments}
+      />
+      {hiddenAttachmentCount > 0 ? (
+        <Badge
+          className="bg-muted text-muted-foreground shrink-0"
+          variant="secondary"
+        >
+          <span aria-hidden="true">+{hiddenAttachmentCount}</span>
+          <span className="sr-only">
+            {hiddenAttachmentCount} more attachments
+          </span>
+        </Badge>
+      ) : null}
+    </div>
+  );
+};
+
 const MailThreadItem = ({
+  day,
   hasCheckedThreads = false,
   isChecked = false,
+  isFirstOfDay = false,
   isSelected = false,
   mailboxLabel,
-  onDeleteForever,
-  onOpen,
-  onRowPointerDown,
-  onSelectionPointerDown,
-  onSelectionPointerEnter,
-  onNotSpam,
-  onToggleRead,
   onToggleSelection,
-  onTrash,
-  position,
-  setSize,
   showAccount = false,
   thread,
   top,
-  ...props
+  ...rowActions
 }: MailThreadItemProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
   const calendar = useCalendar();
@@ -258,44 +332,36 @@ const MailThreadItem = ({
     isHovered
   );
   const revealTransition = shouldReduceMotion ? NO_MOTION : easeInOut(0.26);
-  const visibleAttachments = thread.attachments.slice(
-    0,
-    VISIBLE_ATTACHMENT_COUNT
-  );
-  const hiddenAttachmentCount =
-    thread.attachments.length - visibleAttachments.length;
-  const handleNotSpam = bindThreadAction(onNotSpam, thread);
-  const hasDestructiveAction =
-    onDeleteForever !== undefined || onTrash !== undefined;
-  const quickActionsWidth = getMailThreadQuickActionsWidth(
-    handleNotSpam !== undefined,
-    hasDestructiveAction
+  const { bound: quickActions, width: quickActionsWidth } = bindQuickActions(
+    rowActions,
+    thread
   );
 
   return (
-    <m.li
-      animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-      aria-posinset={position}
-      aria-setsize={setSize}
-      className="absolute left-0 w-full pb-px"
-      exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-      initial={shouldReduceMotion ? false : { opacity: 0 }}
-      layout={shouldReduceMotion ? false : "position"}
-      layoutId={
-        shouldReduceMotion
-          ? undefined
-          : `mail-thread:${thread.accountId}:${thread.threadId}`
+    <MailListRow
+      className="border-border/60 absolute left-0 w-full border-b"
+      render={
+        <m.div
+          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+          initial={shouldReduceMotion ? false : { opacity: 0 }}
+          layout={shouldReduceMotion ? false : "position"}
+          layoutId={
+            shouldReduceMotion
+              ? undefined
+              : `mail-thread:${thread.accountId}:${thread.threadId}`
+          }
+          transition={{
+            layout: easeInOut(0.24),
+            opacity: easeInOut(0.16),
+          }}
+        />
       }
-      transition={{
-        layout: easeInOut(0.24),
-        opacity: easeInOut(0.16),
-      }}
-      onPointerEnter={() => {
-        onSelectionPointerEnter(thread);
-      }}
+      data-day={day}
       style={{ top }}
-      {...props}
+      value={getThreadSelectionKey(thread)}
     >
+      {day !== undefined && isFirstOfDay ? <DayHeading day={day} /> : null}
       <m.div
         className="relative"
         initial={false}
@@ -306,53 +372,34 @@ const MailThreadItem = ({
           setIsHovered(true);
         }}
       >
-        <MailThreadQuickActions
-          hotkeysEnabled={isSelected}
-          isRevealed={areQuickActionsRevealed}
-          isUnread={thread.isUnread}
-          onDeleteForever={bindThreadAction(onDeleteForever, thread)}
-          onNotSpam={handleNotSpam}
-          onToggleRead={bindThreadAction(onToggleRead, thread)}
-          onTrash={bindThreadAction(onTrash, thread)}
-        />
         {/* Opaque, so the row hides the panel edge it overlaps. */}
-        <m.div
-          animate={{
-            marginRight: areQuickActionsRevealed ? quickActionsWidth : 0,
-          }}
-          className="bg-background relative z-10 rounded-md"
-          initial={false}
-          transition={revealTransition}
+        <MailListCell
+          className="bg-background relative z-10"
+          render={
+            <m.div
+              animate={{
+                marginRight: areQuickActionsRevealed ? quickActionsWidth : 0,
+              }}
+              initial={false}
+              transition={revealTransition}
+            />
+          }
         >
           <Item
-            className={cn(
-              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3",
-              thread.isUnread && "bg-muted/30"
-            )}
+            className="data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 rounded-none border-0 px-4 py-3"
             data-active={isActive}
             data-checked={isChecked}
             data-selected={isSelected}
           >
-            <button
-              aria-current={isSelected}
-              aria-label={getThreadRowLabel(thread, calendar)}
-              className="absolute inset-0 z-0 rounded-md text-left outline-none"
-              onClick={(event) => {
-                onOpen(thread, event);
-              }}
-              onPointerDown={(event) => {
-                onRowPointerDown(thread, event);
-              }}
-              type="button"
+            <MailListOpen
+              aria-label={getThreadRowLabel(thread, calendar, showAccount)}
+              className="absolute inset-0 z-0 text-left outline-none"
             />
             <ItemContent className="pointer-events-none relative z-10 min-w-0 gap-1">
               <ThreadSenderHeader
                 isChecked={isChecked}
                 isSelectionRevealed={isActive}
                 mailboxLabel={mailboxLabel}
-                onSelectionPointerDown={(event) => {
-                  onSelectionPointerDown(thread, event);
-                }}
                 onToggleSelection={() => {
                   onToggleSelection(thread);
                 }}
@@ -384,26 +431,7 @@ const MailThreadItem = ({
               <ItemDescription className="line-clamp-1 text-sm">
                 {thread.snippet}
               </ItemDescription>
-              {thread.attachments.length === 0 ? null : (
-                <div
-                  aria-label="Attachments"
-                  className="flex flex-wrap items-center gap-1.5 pt-1"
-                >
-                  <MailAttachmentList
-                    accountId={thread.accountId}
-                    attachments={visibleAttachments}
-                  />
-                  {hiddenAttachmentCount > 0 ? (
-                    <Badge
-                      aria-label={`${hiddenAttachmentCount} more attachments`}
-                      className="bg-muted text-muted-foreground shrink-0"
-                      variant="secondary"
-                    >
-                      +{hiddenAttachmentCount}
-                    </Badge>
-                  ) : null}
-                </div>
-              )}
+              <ThreadAttachments thread={thread} />
             </ItemContent>
             <ItemActions className="pointer-events-none relative z-10 gap-1.5 self-start pt-0.5">
               {thread.isUnread ? (
@@ -423,9 +451,18 @@ const MailThreadItem = ({
               />
             </ItemActions>
           </Item>
-        </m.div>
+        </MailListCell>
+        <MailThreadQuickActions
+          hotkeysEnabled={isSelected}
+          isRevealed={areQuickActionsRevealed}
+          isStarred={hasStarredLabel(thread.labels)}
+          isUnread={thread.isUnread}
+          name={getThreadControlName(thread, showAccount)}
+          subject={thread.subject}
+          {...quickActions}
+        />
       </m.div>
-    </m.li>
+    </MailListRow>
   );
 };
 

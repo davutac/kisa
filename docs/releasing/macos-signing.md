@@ -52,6 +52,19 @@ APPLE_ID=you@example.com APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx APPLE_T
 
 Notarization adds a few minutes per build — Apple's service has to accept the upload and return a ticket, which electron-builder then staples to the app.
 
+## Installing a signed build on this Mac
+
+`scripts/install-mac.sh` builds Kisa, packages and signs it with electron-builder (never publishing), and installs it in `/Applications`. It refuses to install unless the bundle is signed with a Developer ID Application certificate, has the hardened runtime, and passes `codesign --verify --deep --strict`. If Kisa is running, the script quits it first, waits for it to exit, and reopens it after the install. Only the bundle is replaced; mail data in the userData folder is left alone.
+
+Notarization happens whenever electron-builder finds Apple credentials. A notarytool keychain profile keeps the app-specific password out of your shell history:
+
+```bash
+xcrun notarytool store-credentials kisa-notary --apple-id you@example.com --team-id XXXXXXXXXX
+APPLE_KEYCHAIN_PROFILE=kisa-notary scripts/install-mac.sh --notarize
+```
+
+With `--notarize`, the script fails unless the build ends up with a stapled ticket that Gatekeeper accepts. Without it, a build that is signed but not notarized still installs: a locally built app has no quarantine attribute, so Gatekeeper lets it run.
+
 ## Verifying an artifact
 
 ```bash

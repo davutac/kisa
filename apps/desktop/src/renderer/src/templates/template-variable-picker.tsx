@@ -7,10 +7,11 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
+  CommandGroupLabel,
   CommandInput,
   CommandItem,
   CommandList,
-  CommandShortcut,
+  CommandSearch,
 } from "@/components/ui/command";
 import {
   Dialog,
@@ -18,6 +19,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import type { TemplateVariableContext } from "@/shared/template-variables";
 import {
@@ -33,6 +35,7 @@ const TEMPLATE_VARIABLE_GROUPS = [
 interface TemplateVariablePickerProps {
   readonly disabled: boolean;
   readonly editor: Editor | null;
+  readonly field: "message" | "subject";
   readonly previewContext?: Omit<TemplateVariableContext, "now">;
 }
 
@@ -47,7 +50,8 @@ export const TemplateVariableCommandItems = ({
 }: TemplateVariableCommandItemsProps) => (
   <>
     {TEMPLATE_VARIABLE_GROUPS.map((group) => (
-      <CommandGroup heading={group} key={group}>
+      <CommandGroup key={group}>
+        <CommandGroupLabel>{group}</CommandGroupLabel>
         {TEMPLATE_VARIABLE_INSERTIONS.filter(
           (insertion) => insertion.group === group
         ).map((insertion) => {
@@ -64,8 +68,10 @@ export const TemplateVariableCommandItems = ({
             <CommandItem
               className="h-auto items-start gap-4 py-2"
               key={expression}
+              keywords={[expression, description, preview]}
+              label={label}
               onSelect={() => onSelect(expression)}
-              value={[label, expression, description, preview].join(" ")}
+              value={expression}
             >
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="font-medium">{label}</span>
@@ -76,7 +82,7 @@ export const TemplateVariableCommandItems = ({
                   {description}
                 </span>
               </span>
-              <CommandShortcut className="flex max-w-48 shrink-0 flex-col items-end gap-0.5 text-right tracking-normal">
+              <span className="text-muted-foreground group-data-highlighted/command-item:text-foreground ml-auto flex max-w-48 shrink-0 flex-col items-end gap-0.5 text-right text-[0.625rem]">
                 <span className="text-[9px] font-medium tracking-wide uppercase">
                   Preview
                 </span>
@@ -86,7 +92,7 @@ export const TemplateVariableCommandItems = ({
                 >
                   {preview}
                 </span>
-              </CommandShortcut>
+              </span>
             </CommandItem>
           );
         })}
@@ -98,6 +104,7 @@ export const TemplateVariableCommandItems = ({
 export const TemplateVariablePicker = ({
   disabled,
   editor,
+  field,
   previewContext,
 }: TemplateVariablePickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -106,10 +113,14 @@ export const TemplateVariablePicker = ({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
-  const open = (): void => {
-    returnFocusRef.current = triggerRef.current;
-    setPreviewNow(Date.now());
-    setIsOpen(true);
+  const label = `Insert variable in ${field}`;
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) {
+      returnFocusRef.current = triggerRef.current;
+      setPreviewNow(Date.now());
+    }
+    setIsOpen(nextOpen);
   };
 
   const insert = (expression: string): void => {
@@ -127,51 +138,57 @@ export const TemplateVariablePicker = ({
   };
 
   return (
-    <>
-      <Button
-        aria-expanded={isOpen}
-        aria-haspopup="dialog"
-        aria-label="Insert variable"
+    <Dialog onOpenChange={handleOpenChange} open={isOpen}>
+      <DialogTrigger
+        aria-label={label}
         disabled={disabled}
-        onClick={open}
-        ref={triggerRef}
-        size="icon"
-        title="Insert variable"
-        type="button"
-        variant="ghost"
+        render={
+          <Button
+            ref={triggerRef}
+            size="icon"
+            title={label}
+            type="button"
+            variant="ghost"
+          />
+        }
       >
         <BracesIcon />
-      </Button>
-      <Dialog onOpenChange={setIsOpen} open={isOpen}>
-        <DialogHeader className="sr-only">
-          <DialogTitle>Insert variable</DialogTitle>
-          <DialogDescription>
-            Search template variables and preview their current values.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogContent
-          className="top-[calc(var(--app-titlebar-height)+1rem)] translate-y-0 overflow-hidden p-0 sm:max-w-xl"
-          finalFocus={() => returnFocusRef.current}
-          initialFocus={searchInputRef}
-          showCloseButton={false}
-        >
-          <Command key={isOpen ? "open" : "closed"} loop>
-            <CommandInput placeholder="Search variables" ref={searchInputRef} />
-            <CommandList className="max-h-96 px-1 py-2">
-              <CommandEmpty>No variable answers to that name.</CommandEmpty>
-              <TemplateVariableCommandItems
-                context={{ ...previewContext, now: previewNow }}
-                onSelect={insert}
-              />
-            </CommandList>
-            <div className="text-muted-foreground bg-card border-border/40 flex items-center gap-3 border-t px-4 py-2 text-[0.625rem]">
-              <span>↑↓ navigate</span>
-              <span>↵ insert</span>
-              <span>esc close</span>
-            </div>
-          </Command>
-        </DialogContent>
-      </Dialog>
-    </>
+      </DialogTrigger>
+      <DialogHeader className="sr-only">
+        <DialogTitle>{label}</DialogTitle>
+        <DialogDescription>
+          Search template variables and preview their current values.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogContent
+        className="top-[calc(var(--app-titlebar-height)+1rem)] translate-y-0 overflow-hidden p-0 sm:max-w-xl"
+        finalFocus={() => returnFocusRef.current}
+        initialFocus={() => searchInputRef.current}
+        showCloseButton={false}
+      >
+        <Command loop>
+          <CommandSearch>
+            <CommandInput
+              aria-label="Search variables"
+              onEscape={() => setIsOpen(false)}
+              placeholder="Search variables"
+              ref={searchInputRef}
+            />
+          </CommandSearch>
+          <CommandEmpty>No variable answers to that name.</CommandEmpty>
+          <CommandList className="max-h-96 px-1 py-2">
+            <TemplateVariableCommandItems
+              context={{ ...previewContext, now: previewNow }}
+              onSelect={insert}
+            />
+          </CommandList>
+          <div className="text-muted-foreground bg-card border-border/40 flex items-center gap-3 border-t px-4 py-2 text-[0.625rem]">
+            <span>↑↓ navigate</span>
+            <span>↵ insert</span>
+            <span>esc close</span>
+          </div>
+        </Command>
+      </DialogContent>
+    </Dialog>
   );
 };

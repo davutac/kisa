@@ -26,9 +26,13 @@ import {
   activatePendingDatabaseImport,
   attachDatabaseImportFile,
   cancelDatabaseImportSelection,
+  discardPendingDatabaseImport,
+  getDatabaseImportStatus as readDatabaseImportStatus,
   importExistingDatabase,
+  restartForPendingDatabaseImport,
   selectDatabaseImportFile as selectImportFile,
 } from "./database-import";
+import type { DatabaseImportActivation } from "./database-import";
 import { loadOrCreateDatabaseKey } from "./database-key";
 import { getDatabaseKeyPath, getDatabasePath } from "./database-path";
 import type { DatabaseProcessClient } from "./database-process/client";
@@ -147,6 +151,18 @@ let databaseClient: DatabaseProcessClient | null = null;
 let databaseKey: Buffer | null = null;
 let databaseRuntime: DatabaseManagedRuntime | null = null;
 
+// An import that was not activated at this start, until startup has told
+// the user. Kept in memory only: if the process ends first, the notice is
+// lost and the app simply starts with the database it had.
+let unannouncedImportActivation: DatabaseImportActivation = "none";
+
+/** What startup still has to tell the user about an import, once. */
+export const takeImportActivation = (): DatabaseImportActivation => {
+  const activation = unannouncedImportActivation;
+  unannouncedImportActivation = "none";
+  return activation;
+};
+
 const getDatabaseRuntime = Effect.fn("getDatabaseRuntime")(
   function* getDatabaseRuntimeEffect() {
     if (databaseRuntime !== null) {
@@ -154,10 +170,13 @@ const getDatabaseRuntime = Effect.fn("getDatabaseRuntime")(
     }
 
     const databasePath = getActiveDatabasePath();
-    yield* Effect.tryPromise({
+    const activation = yield* Effect.tryPromise({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
       try: () => activatePendingDatabaseImport(databasePath),
     });
+    if (activation === "dropped" || activation === "restored") {
+      unannouncedImportActivation = activation;
+    }
     const nextDatabaseKey = yield* Effect.tryPromise({
       catch: (cause) => DatabaseError.new({ cause, reason: "open" }),
       try: () => loadDatabaseKey(databasePath),
@@ -270,6 +289,33 @@ export const importDatabase = Effect.fn("importDatabase")(
       },
       sessionId: request.sessionId,
       validate: validateImportedDatabase,
+    });
+  }
+);
+
+// These three work from the database's path alone. They must not go through
+// `getDatabaseRuntime`, which activates a waiting import whenever no runtime
+// exists, as after the database has closed during quit.
+export const getDatabaseImportStatus = Effect.fn("getDatabaseImportStatus")(
+  function* getDatabaseImportStatusEffect() {
+    return yield* readDatabaseImportStatus({
+      activeDatabasePath: getActiveDatabasePath(),
+      isDevelopment: is.dev,
+    });
+  }
+);
+
+export const discardDatabaseImport = Effect.fn("discardDatabaseImport")(
+  function* discardDatabaseImportEffect() {
+    yield* discardPendingDatabaseImport(getActiveDatabasePath());
+  }
+);
+
+export const restartForDatabaseImport = Effect.fn("restartForDatabaseImport")(
+  function* restartForDatabaseImportEffect() {
+    yield* restartForPendingDatabaseImport({
+      activeDatabasePath: getActiveDatabasePath(),
+      isDevelopment: is.dev,
     });
   }
 );

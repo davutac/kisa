@@ -1,11 +1,15 @@
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
-import type { GmailMessage } from "@repo/gmail/models";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
+import {
+  isAddressMatch,
+  rankAddressMatches,
+  toAddressQuery,
+} from "../../shared/address-match";
 import type {
-  GmailSenderSuggestion,
-  GmailSenderSuggestions,
+  MailSenderSuggestion,
+  MailSenderSuggestions,
 } from "../../shared/ipc/mail";
 
 /**
@@ -14,7 +18,17 @@ import type {
  */
 const MAX_CORRESPONDENTS_PER_ACCOUNT = 10_000;
 
-type CorrespondentMessage = Pick<GmailMessage, "bcc" | "cc" | "from" | "to">;
+interface CorrespondentMailbox {
+  readonly address: string;
+  readonly name?: string | undefined;
+}
+
+export interface CorrespondentMessage {
+  readonly bcc: readonly CorrespondentMailbox[];
+  readonly cc: readonly CorrespondentMailbox[];
+  readonly from: CorrespondentMailbox;
+  readonly to: readonly CorrespondentMailbox[];
+}
 
 type CorrespondentTuple = [
   accountId: string,
@@ -25,7 +39,7 @@ type CorrespondentTuple = [
 
 const correspondentsByAccount = new Map<
   string,
-  Map<string, GmailSenderSuggestion>
+  Map<string, MailSenderSuggestion>
 >();
 
 const toAccountList = (accountIds: readonly string[]): SQL =>
@@ -37,8 +51,8 @@ const toAccountList = (accountIds: readonly string[]): SQL =>
 const toCacheKey = (address: string): string => address.trim().toLowerCase();
 
 const compareSuggestions = (
-  left: GmailSenderSuggestion,
-  right: GmailSenderSuggestion
+  left: MailSenderSuggestion,
+  right: MailSenderSuggestion
 ): number =>
   right.messageCount - left.messageCount ||
   left.address.localeCompare(right.address);
@@ -50,14 +64,14 @@ const loadAccountSnapshots = async (
   const accounts = toAccountList(accountIds);
   const tuples = await database.values<CorrespondentTuple>(sql`
     WITH visible_messages AS (
-      SELECT m.account_email, m.from_address, m.from_name,
+      SELECT m.account_id AS account_email, m.from_address, m.from_name,
              m.to_addresses, m.cc_addresses, m.bcc_addresses
-      FROM gmail_messages m
-      WHERE m.account_email IN (${accounts})
+      FROM mail_messages m
+      WHERE m.account_id IN (${accounts})
         AND NOT EXISTS (
           SELECT 1
-          FROM gmail_threads t
-          WHERE t.account_email = m.account_email
+          FROM mail_threads t
+          WHERE t.account_id = m.account_id
             AND t.thread_id = m.thread_id
             AND t.is_in_spam = 1
         )
@@ -105,7 +119,7 @@ const loadAccountSnapshots = async (
   const nextByAccount = new Map(
     accountIds.map(
       (accountId) =>
-        [accountId, new Map<string, GmailSenderSuggestion>()] as const
+        [accountId, new Map<string, MailSenderSuggestion>()] as const
     )
   );
 
@@ -156,13 +170,13 @@ export const listCachedCorrespondents = (
   accountIds: readonly string[],
   query: string | undefined,
   limit: number
-): GmailSenderSuggestions | undefined => {
+): MailSenderSuggestions | undefined => {
   if (accountIds.length === 0) {
     return { senders: [] };
   }
 
-  const needle = query?.trim().toLowerCase() ?? "";
-  const merged = new Map<string, GmailSenderSuggestion>();
+  const needle = toAddressQuery(query ?? "");
+  const merged = new Map<string, MailSenderSuggestion>();
 
   for (const accountId of new Set(accountIds)) {
     const account = correspondentsByAccount.get(accountId);
@@ -172,7 +186,7 @@ export const listCachedCorrespondents = (
     }
 
     for (const [key, suggestion] of account) {
-      if (needle.length > 0 && !key.includes(needle)) {
+      if (needle.length > 0 && !isAddressMatch(needle, suggestion)) {
         continue;
       }
 
@@ -196,8 +210,12 @@ export const listCachedCorrespondents = (
     }
   }
 
+  const byCount = [...merged.values()].toSorted(compareSuggestions);
   return {
-    senders: [...merged.values()].toSorted(compareSuggestions).slice(0, limit),
+    senders: (needle.length === 0
+      ? byCount
+      : rankAddressMatches(needle, byCount)
+    ).slice(0, limit),
   };
 };
 
@@ -217,7 +235,7 @@ export const rememberCorrespondentMessages = (
     return;
   }
 
-  const rememberMailbox = (mailbox: GmailMessage["from"]): void => {
+  const rememberMailbox = (mailbox: CorrespondentMailbox): void => {
     const key = toCacheKey(mailbox.address);
 
     if (key.length === 0) {

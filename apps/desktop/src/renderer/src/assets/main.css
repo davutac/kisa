@@ -1,7 +1,9 @@
+@layer ui-sdk;
+
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./utilities.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -47,6 +49,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 }
 
 :root {
@@ -112,7 +115,7 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 5%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.828 0.111 230.318);
@@ -126,7 +129,7 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 5%);
   --sidebar-ring: oklch(0.556 0 0);
 }
 
@@ -164,7 +167,6 @@
   }
 
   button:not(:disabled),
-  [data-slot="sidebar-menu-button"],
   [role="button"]:not(:disabled) {
     cursor: default;
   }
@@ -181,12 +183,46 @@
   transition: none !important;
 }
 
+/* ui-sdk writes a Progress root's value here; registered, a ring that reads
+   it can ease between readings. */
+@property --progress-value {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
+}
+
+/* A toast's countdown bar, filling from the left. */
+@keyframes toast-countdown {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .app-titlebar {
   height: var(--app-titlebar-height);
   padding-right: max(0.5rem, var(--app-titlebar-right));
   padding-left: max(0.5rem, var(--app-titlebar-x));
   app-region: drag;
   -webkit-app-region: drag;
+}
+
+/*
+ * The main window splits its titlebar between the sidebar and the content
+ * column: the sidebar header clears the leading window controls (the macOS
+ * traffic lights) and the content titlebar clears the trailing overlay
+ * controls. A collapsed sidebar hands both insets to the content titlebar.
+ * Beside the sidebar the content titlebar has no leading padding, so a
+ * view's toolbar in it lines up with the view's own content.
+ */
+.app-titlebar[data-titlebar-inset="leading"] {
+  padding-right: 0.5rem;
+}
+
+.app-titlebar[data-titlebar-inset="trailing"] {
+  padding-left: 0;
 }
 
 .app-titlebar-interactive {

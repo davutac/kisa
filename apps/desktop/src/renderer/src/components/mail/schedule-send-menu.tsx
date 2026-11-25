@@ -1,13 +1,15 @@
-import {
-  CalendarClockIcon,
-  CalendarDaysIcon,
-  ChevronDownIcon,
-} from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { dateParts, isISODate, toISODate } from "@ui-sdk/core/date";
+import { CalendarClockIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import {
+  DatePicker,
+  DatePickerContent,
+  DatePickerInput,
+  DatePickerTrigger,
+} from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -16,28 +18,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Menu,
+  MenuContent,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/menu";
+import type { MenuController } from "@/components/ui/menu";
+import { TimeInput } from "@/components/ui/time-input";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { getHotkeyAriaLabel, getHotkeyDisplay } from "@/hotkeys";
 import {
   formatScheduledAt,
@@ -49,39 +42,48 @@ import {
 } from "@/scheduled/schedule-time";
 
 interface ScheduleSendMenuProps {
+  readonly controller: MenuController;
   readonly disabled: boolean;
   readonly onChoose: (scheduledAt: number) => void;
-  readonly onOpenChange: (open: boolean) => void;
-  readonly open: boolean;
   readonly selectedScheduledAt: number | undefined;
 }
 
 type CustomScheduleDialogProps = Pick<ScheduleSendMenuProps, "onChoose"> & {
   readonly onOpenChange: (open: boolean) => void;
+  readonly open: boolean;
 };
 
 const CustomScheduleDialog = ({
   onChoose,
   onOpenChange,
+  open,
 }: CustomScheduleDialogProps) => {
-  const initial = useMemo(() => {
+  // The dialog reads the clock once when it opens.
+  const initial = useInstanceValue(() => {
     const now = new Date();
     return {
       scheduledAt: getInitialCustomSchedule(now),
       startOfToday: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
     };
-  }, []);
+  });
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(
     initial.scheduledAt
   );
-  const [time, setTime] = useState(() => toTimeInputValue(initial.scheduledAt));
+  // `null` while the time is empty or partly typed.
+  const [time, setTime] = useState<string | null>(() =>
+    toTimeInputValue(initial.scheduledAt)
+  );
   const [error, setError] = useState<string | undefined>();
-  const [isDateOpen, setIsDateOpen] = useState(false);
-  const timeInputRef = useRef<HTMLInputElement>(null);
+  const timeInputRef = useRef<HTMLDivElement>(null);
+  const dayChosenRef = useRef(false);
   const errorId = error === undefined ? undefined : "scheduled-send-time-error";
+  const firstTimeSegment = (): HTMLElement | null =>
+    timeInputRef.current?.querySelector<HTMLElement>(
+      '[data-slot="time-input-segment"]:not([data-type="literal"])'
+    ) ?? null;
 
   const submit = (): void => {
-    const resolved = resolveLocalScheduleTime(selectedDay, time);
+    const resolved = resolveLocalScheduleTime(selectedDay, time ?? "");
     if (!resolved.ok) {
       setError(resolved.error);
       return;
@@ -92,154 +94,127 @@ const CustomScheduleDialog = ({
   };
 
   return (
-    <Dialog onOpenChange={onOpenChange} open>
-      <DialogContent
-        className="sm:max-w-sm"
-        initialFocus={timeInputRef}
-        onKeyDown={(event) => {
-          if (
-            event.key === "Enter" &&
-            event.target instanceof HTMLInputElement
-          ) {
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="sm:max-w-sm" initialFocus={firstTimeSegment}>
+        {/* Enter in the time submits the form, as TimeInput does in any form. */}
+        <form
+          className="contents"
+          onSubmit={(event) => {
             event.preventDefault();
             submit();
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Pick date and time</DialogTitle>
-          <DialogDescription>
-            The email will use one fixed instant. Times are shown in{" "}
-            {LOCAL_TIME_ZONE}.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup className="grid grid-cols-[minmax(0,1fr)_7rem] items-start gap-3">
-          <Field data-invalid={error === undefined ? undefined : true}>
-            <FieldLabel htmlFor="scheduled-send-date">Date</FieldLabel>
-            <Popover onOpenChange={setIsDateOpen} open={isDateOpen}>
-              <PopoverTrigger
-                render={
-                  <Button
-                    aria-describedby={errorId}
-                    aria-invalid={error === undefined ? undefined : true}
-                    className="w-full justify-start"
-                    id="scheduled-send-date"
-                    type="button"
-                    variant="outline"
-                  />
-                }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Pick date and time</DialogTitle>
+            <DialogDescription>
+              The email will use one fixed instant. Times are shown in{" "}
+              {LOCAL_TIME_ZONE}.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="grid grid-cols-[minmax(0,1fr)_7rem] items-start gap-3">
+            <Field invalid={error !== undefined}>
+              <FieldLabel>Date</FieldLabel>
+              <DatePicker
+                min={toISODate(initial.startOfToday)}
+                onOpenChange={(dateOpen) => {
+                  if (dateOpen) {
+                    dayChosenRef.current = false;
+                  }
+                }}
+                onValueChange={(value, details) => {
+                  const day = isISODate(value) ? dateParts(value) : undefined;
+                  setError(undefined);
+                  setSelectedDay(
+                    day === undefined
+                      ? undefined
+                      : new Date(day.year, day.month - 1, day.day)
+                  );
+                  dayChosenRef.current = details.reason === "item-press";
+                }}
+                value={toISODate(selectedDay) ?? null}
               >
-                <CalendarDaysIcon />
-                <span className="truncate">
-                  {selectedDay === undefined
-                    ? "Choose date"
-                    : selectedDay.toLocaleDateString(undefined, {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                </span>
-                <ChevronDownIcon className="text-muted-foreground ml-auto" />
-              </PopoverTrigger>
-              {isDateOpen ? (
-                <PopoverContent align="start" className="w-auto gap-0 p-0">
-                  <PopoverTitle className="sr-only">Delivery date</PopoverTitle>
-                  <Calendar
-                    disabled={{ before: initial.startOfToday }}
-                    mode="single"
-                    onSelect={(day) => {
-                      setError(undefined);
-                      setSelectedDay(day);
-                      if (day !== undefined) {
-                        setIsDateOpen(false);
-                        queueMicrotask(() => timeInputRef.current?.focus());
-                      }
-                    }}
-                    selected={selectedDay}
-                  />
-                </PopoverContent>
-              ) : null}
-            </Popover>
-          </Field>
-          <Field data-invalid={error === undefined ? undefined : true}>
-            <FieldLabel htmlFor="scheduled-send-time">Time</FieldLabel>
-            <Input
-              aria-describedby={errorId}
-              aria-invalid={error === undefined ? undefined : true}
-              id="scheduled-send-time"
-              onChange={(event) => {
-                setError(undefined);
-                setTime(event.currentTarget.value);
-              }}
-              ref={timeInputRef}
-              step={60}
-              type="time"
-              value={time}
-            />
-          </Field>
-          <FieldError className="col-span-2" id="scheduled-send-time-error">
-            {error}
-          </FieldError>
-        </FieldGroup>
-        <DialogFooter>
-          <Button
-            onClick={() => onOpenChange(false)}
-            type="button"
-            variant="secondary"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              submit();
-            }}
-            type="button"
-          >
-            <CalendarClockIcon />
-            Use this time
-          </Button>
-        </DialogFooter>
+                <DatePickerInput aria-describedby={errorId} />
+                <DatePickerTrigger />
+                <DatePickerContent
+                  finalFocus={() =>
+                    dayChosenRef.current ? firstTimeSegment() : undefined
+                  }
+                />
+              </DatePicker>
+            </Field>
+            <Field invalid={error !== undefined}>
+              <FieldLabel>Time</FieldLabel>
+              <TimeInput
+                aria-describedby={errorId}
+                onValueChange={(value) => {
+                  setError(undefined);
+                  setTime(value);
+                }}
+                ref={timeInputRef}
+                value={time}
+              />
+            </Field>
+            {error === undefined ? null : (
+              <p
+                className="text-destructive col-span-2 text-xs/relaxed"
+                id="scheduled-send-time-error"
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
+          </FieldGroup>
+          <DialogFooter>
+            <Button
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              <CalendarClockIcon />
+              Use this time
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
 };
 
 const ScheduleSendMenu = ({
+  controller,
   disabled,
   onChoose,
-  onOpenChange,
-  open,
   selectedScheduledAt,
 }: ScheduleSendMenuProps) => {
   const [isCustomOpen, setIsCustomOpen] = useState(false);
+  const [customOpenings, setCustomOpenings] = useState(0);
   const [presets, setPresets] = useState(() => getSchedulePresets(new Date()));
   const triggerLabel =
     selectedScheduledAt === undefined
       ? "Schedule send"
       : `Selected send time: ${formatScheduledAt(selectedScheduledAt)}`;
   const scheduleDisplay = getHotkeyDisplay("composer.schedule");
-  let customDialog: ReactNode = null;
-  if (isCustomOpen) {
-    customDialog = (
-      <CustomScheduleDialog
-        onChoose={onChoose}
-        onOpenChange={setIsCustomOpen}
-      />
-    );
-  }
 
   return (
     <>
-      <DropdownMenu
-        onOpenChange={(nextOpen) => {
-          onOpenChange(nextOpen);
+      <Menu
+        controller={controller}
+        onOpenChange={(nextOpen, details) => {
+          // A disabled trigger refuses a press, not an agent's setOpen.
+          if (nextOpen && disabled) {
+            details.cancel();
+            return;
+          }
           if (nextOpen) {
             setPresets(getSchedulePresets(new Date()));
           }
         }}
-        open={open}
       >
-        <DropdownMenuTrigger
+        <MenuTrigger
+          disabled={disabled}
           render={
             <Button
               aria-keyshortcuts={
@@ -248,12 +223,8 @@ const ScheduleSendMenu = ({
                   : undefined
               }
               aria-label={triggerLabel}
-              aria-pressed={
-                selectedScheduledAt === undefined ? undefined : true
-              }
-              className="rounded-none!"
-              disabled={disabled}
-              size="footer-icon"
+              className="rounded-l-none"
+              size="icon"
               title={
                 selectedScheduledAt === undefined
                   ? `${triggerLabel} (${scheduleDisplay.bindings[0]})`
@@ -265,49 +236,60 @@ const ScheduleSendMenu = ({
           }
         >
           <CalendarClockIcon />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64" side="top">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Schedule send</DropdownMenuLabel>
+        </MenuTrigger>
+        <MenuContent align="end" className="w-64" side="top">
+          <MenuGroup>
+            <MenuGroupLabel>Schedule send</MenuGroupLabel>
             {presets.map((preset) => (
-              <DropdownMenuItem
+              <MenuItem
                 key={preset.id}
-                onClick={() => {
+                onSelect={() => {
                   onChoose(preset.scheduledAt);
                 }}
               >
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span>{preset.label}</span>
+                  <span>{preset.label}</span>{" "}
                   <span className="text-muted-foreground">
                     {formatScheduledAt(preset.scheduledAt)}
                   </span>
                 </span>
-              </DropdownMenuItem>
+              </MenuItem>
             ))}
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => {
+          </MenuGroup>
+          <MenuSeparator />
+          <MenuItem
+            onSelect={() => {
+              setCustomOpenings((count) => count + 1);
               setIsCustomOpen(true);
             }}
           >
             <CalendarClockIcon />
             Pick date &amp; time
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {customDialog}
+          </MenuItem>
+        </MenuContent>
+      </Menu>
+      {/* Kept mounted so it can animate out; a new key on each opening
+          reads the clock again and starts from an empty form. */}
+      <CustomScheduleDialog
+        key={customOpenings}
+        onChoose={onChoose}
+        onOpenChange={setIsCustomOpen}
+        open={isCustomOpen}
+      />
     </>
   );
 };
 
+/** Send beside its schedule menu, as a split button sized to its content. */
 export const SendWithScheduleMenu = ({
   children,
   ...menuProps
-}: ScheduleSendMenuProps & { readonly children: ReactNode }) => (
+}: ScheduleSendMenuProps & {
+  readonly children: ReactNode;
+}) => (
   <fieldset
     aria-label="Send options"
-    className="m-0 flex min-w-0 flex-1 items-stretch gap-px border-0 p-0"
+    className="m-0 flex min-w-0 flex-none items-stretch gap-px border-0 p-0"
   >
     {children}
     <ScheduleSendMenu {...menuProps} />

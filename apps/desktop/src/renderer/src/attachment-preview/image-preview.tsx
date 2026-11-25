@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { GmailAttachmentPreview } from "@/shared/ipc/mail";
+import type { MailAttachmentPreview } from "@/shared/ipc/mail";
 
 import { PreviewError } from "./preview-status";
 
 const ImagePreview = ({
   attachment,
 }: {
-  attachment: GmailAttachmentPreview;
+  attachment: MailAttachmentPreview;
 }) => {
   const [failed, setFailed] = useState(false);
   const url = useMemo(

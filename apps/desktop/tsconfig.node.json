@@ -11,7 +11,12 @@
   ],
   "compilerOptions": {
     "composite": true,
-    "plugins": [{ "name": "@effect/language-service" }],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": ["effect/rpc", "effect/workers"]
+      }
+    ],
     "paths": {
       "@/shared/*": ["./src/shared/*"],
       "@/constants": ["./src/constants.ts"]

@@ -1,4 +1,4 @@
-import type { GmailThreadSummary } from "@/shared/ipc/mail";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
 
 export type ThreadSelectionDirection = -1 | 1;
 
@@ -7,50 +7,12 @@ export interface ThreadSelection {
   threadId: string;
 }
 
-interface ThreadSelectionDragPoint {
-  readonly x: number;
-  readonly y: number;
-}
-
-const THREAD_SELECTION_DRAG_THRESHOLD = 15;
+/** How far a press on a row moves, in CSS pixels, before it paints rows. */
+export const THREAD_SELECTION_DRAG_THRESHOLD = 15;
 const THREAD_SELECTION_RAPID_NAVIGATION_INTERVAL_MS = 150;
-const THREAD_SELECTION_SCROLL_EDGE = 64;
-const THREAD_SELECTION_MAX_SCROLL_SPEED = 18;
-
-export const hasThreadSelectionDragStarted = (
-  start: ThreadSelectionDragPoint,
-  current: ThreadSelectionDragPoint
-): boolean =>
-  Math.hypot(current.x - start.x, current.y - start.y) >=
-  THREAD_SELECTION_DRAG_THRESHOLD;
-
-export const getThreadSelectionAutoScrollDelta = (
-  pointerY: number,
-  viewportStart: number,
-  viewportEnd: number
-): number => {
-  const topDistance = viewportStart + THREAD_SELECTION_SCROLL_EDGE - pointerY;
-
-  if (topDistance > 0) {
-    return -Math.ceil(
-      THREAD_SELECTION_MAX_SCROLL_SPEED *
-        Math.min(1, topDistance / THREAD_SELECTION_SCROLL_EDGE)
-    );
-  }
-
-  const bottomDistance =
-    pointerY - (viewportEnd - THREAD_SELECTION_SCROLL_EDGE);
-
-  return bottomDistance > 0
-    ? Math.ceil(
-        THREAD_SELECTION_MAX_SCROLL_SPEED *
-          Math.min(1, bottomDistance / THREAD_SELECTION_SCROLL_EDGE)
-      )
-    : 0;
-};
 
 export const getThreadSelectionKey = (
-  thread: Pick<GmailThreadSummary, "accountId" | "threadId">
+  thread: Pick<MailThreadSummary, "accountId" | "threadId">
 ): string => `${thread.accountId}:${thread.threadId}`;
 
 export const getThreadSelectionScrollBehavior = (
@@ -83,50 +45,6 @@ export interface ThreadRowBounds {
   start: number;
 }
 
-export interface ThreadSelectionRangeChange {
-  readonly checked: boolean;
-  readonly threadKey: string;
-}
-
-export const getThreadSelectionRangeChanges = (
-  threadKeys: readonly string[],
-  initiallyCheckedThreadIds: ReadonlySet<string>,
-  anchorIndex: number,
-  previousIndex: number,
-  nextIndex: number,
-  checked: boolean
-): readonly ThreadSelectionRangeChange[] => {
-  const previousStart = Math.min(anchorIndex, previousIndex);
-  const previousEnd = Math.max(anchorIndex, previousIndex);
-  const nextStart = Math.min(anchorIndex, nextIndex);
-  const nextEnd = Math.max(anchorIndex, nextIndex);
-  const changes: ThreadSelectionRangeChange[] = [];
-
-  for (
-    let index = Math.min(previousIndex, nextIndex);
-    index <= Math.max(previousIndex, nextIndex);
-    index += 1
-  ) {
-    const wasInRange = index >= previousStart && index <= previousEnd;
-    const isInRange = index >= nextStart && index <= nextEnd;
-
-    if (wasInRange === isInRange) {
-      continue;
-    }
-
-    const threadKey = threadKeys[index];
-
-    if (threadKey !== undefined) {
-      changes.push({
-        checked: isInRange ? checked : initiallyCheckedThreadIds.has(threadKey),
-        threadKey,
-      });
-    }
-  }
-
-  return changes;
-};
-
 /**
  * Where a fresh selection lands while the list is scrolled: the first row in
  * view going down, the last one going up. Rows count as in view by their
@@ -158,24 +76,31 @@ export const getVisibleThreadSelectionIndex = (
   return match;
 };
 
-export const getNextThreadSelectionIndex = (
+/**
+ * The row to select when the selected one leaves the list, as an action on it
+ * shows at once: the next row still listed, or the one before it at the end.
+ * `undefined` keeps the selection as it is.
+ */
+export const getSelectionAfterRemoval = (
+  previousKeys: readonly string[],
   threadKeys: readonly string[],
-  selectedThreadKey: string | null,
-  direction: ThreadSelectionDirection
-): number | null => {
-  if (threadKeys.length === 0) {
-    return null;
+  selectedThreadKey: string | null
+): string | undefined => {
+  if (selectedThreadKey === null || threadKeys.includes(selectedThreadKey)) {
+    return undefined;
   }
 
-  const selectedIndex =
-    selectedThreadKey === null ? -1 : threadKeys.indexOf(selectedThreadKey);
+  const removedIndex = previousKeys.indexOf(selectedThreadKey);
 
-  if (selectedIndex === -1) {
-    return direction === 1 ? 0 : threadKeys.length - 1;
+  if (removedIndex === -1) {
+    return undefined;
   }
 
-  return Math.max(
-    0,
-    Math.min(threadKeys.length - 1, selectedIndex + direction)
+  const listed = new Set(threadKeys);
+  const isListed = (key: string): boolean => listed.has(key);
+
+  return (
+    previousKeys.slice(removedIndex + 1).find(isListed) ??
+    previousKeys.slice(0, removedIndex).findLast(isListed)
   );
 };

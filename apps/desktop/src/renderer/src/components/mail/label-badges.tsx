@@ -2,12 +2,24 @@ import type { ReactNode } from "react";
 
 import MailLabelBadge from "@/components/mail/mail-label-badge";
 import {
-  formatGmailLabel,
-  sortGmailLabelNames,
-  visibleGmailLabels,
+  formatLabel,
+  isSystemLabel,
+  sortLabelNames,
+  filterVisibleLabels,
 } from "@/mail/label";
+import { normalizeMailboxLabelName } from "@/mail/mailbox-labels";
 import { useAccountSettings } from "@/state/account-settings";
-import { useGmailLabelColors } from "@/state/gmail-labels";
+import { useLabelColors } from "@/state/labels";
+
+// A label place spans accounts whose label names differ only in case, so user
+// labels compare without it; a system id never matches a user label.
+const isOmittedLabel = (label: string, omitLabel: string | undefined) =>
+  omitLabel !== undefined &&
+  (label === omitLabel ||
+    (!isSystemLabel(label) &&
+      !isSystemLabel(omitLabel) &&
+      normalizeMailboxLabelName(label) ===
+        normalizeMailboxLabelName(omitLabel)));
 
 interface MailLabelBadgesProps {
   accountId: string;
@@ -30,10 +42,10 @@ const MailLabelBadges = ({
   size = "default",
 }: MailLabelBadgesProps) => {
   const { showSystemLabels } = useAccountSettings(accountId);
-  const colorsByName = useGmailLabelColors(accountId, labels);
-  const visibleLabels = sortGmailLabelNames(
-    visibleGmailLabels(labels, showSystemLabels).filter(
-      (label) => label !== omitLabel
+  const colorsByName = useLabelColors(accountId, labels);
+  const visibleLabels = sortLabelNames(
+    filterVisibleLabels(labels, showSystemLabels).filter(
+      (label) => !isOmittedLabel(label, omitLabel)
     )
   );
 
@@ -42,7 +54,7 @@ const MailLabelBadges = ({
   }
 
   return visibleLabels.map((label) => {
-    const displayLabel = formatGmailLabel(label);
+    const displayLabel = formatLabel(label);
     const canRemove =
       onRemoveLabel !== undefined && removableLabels?.has(label) === true;
 

@@ -4,15 +4,13 @@ import {
   getInitialReplyRecipients,
   shouldShowReplyAll,
 } from "../src/renderer/src/mail/reply-recipients";
-import type { GmailThreadMessage } from "../src/shared/ipc/mail";
+import type { ThreadMessage } from "../src/shared/ipc/mail";
 
 const messageFrom = (
   id: string,
   from: string,
-  headers: Partial<
-    Pick<GmailThreadMessage, "bcc" | "cc" | "replyTo" | "to">
-  > = {}
-): GmailThreadMessage => ({
+  headers: Partial<Pick<ThreadMessage, "bcc" | "cc" | "replyTo" | "to">> = {}
+): ThreadMessage => ({
   attachments: [],
   body: {},
   from,

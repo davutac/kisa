@@ -1,7 +1,7 @@
 import { mailDrafts, scheduledMessages } from "@repo/database/schemas";
 
-import { truncateGmailSubject } from "../../shared/gmail-subject";
 import type { ScheduledMailSummary } from "../../shared/ipc/scheduled-mail";
+import { truncateSubject } from "../../shared/mail-subject";
 import type {
   MailDraftRow,
   ScheduledMessageRow,
@@ -89,7 +89,7 @@ export const toScheduledMailSummary = (
     recipients: [...draft.to, ...draft.cc, ...draft.bcc],
     revision: schedule.revision,
     scheduledAt: schedule.scheduledAt,
-    subject: truncateGmailSubject(draft.subject),
+    subject: truncateSubject(draft.subject),
   };
   if (schedule.attentionReason !== null) {
     summary = { ...summary, attentionReason: schedule.attentionReason };

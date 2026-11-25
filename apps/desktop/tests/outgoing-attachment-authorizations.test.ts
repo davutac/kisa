@@ -164,7 +164,10 @@ describe("outgoing attachment authorizations", () => {
     expect(() =>
       authorizations.serializeDraftAttachments(
         13,
-        Array.from({ length: 101 }, () => attachment)
+        Array.from({ length: 101 }, (_, index) => ({
+          ...attachment,
+          referenceId: `ref-${index}`,
+        }))
       )
     ).toThrow("invalid");
     expect(() =>
@@ -352,6 +355,34 @@ describe("outgoing attachment authorizations", () => {
     ).rejects.toThrow("expired");
 
     await authorizations.releaseOwner(21);
+  });
+
+  it("prepares an attachment again after a send used it, as Undo then Send does", async () => {
+    const { filePath } = await makeAttachment("kept for a second try");
+    const authorizations = new OutgoingAttachmentAuthorizations();
+    const [attachment] = await authorizations.authorizeSelections(41, {
+      files: [{ mediaType: "text/plain", path: filePath }],
+    });
+    if (attachment === undefined) {
+      throw new Error("Expected an authorized attachment");
+    }
+    const prepareAndSend = async () => {
+      const prepared = await authorizations.prepare(41, [
+        { referenceId: attachment.referenceId },
+      ]);
+      const loaded = await authorizations.consume(
+        41,
+        prepared.map(({ capability }) => capability)
+      );
+      return loaded.map(({ bytes }) => Buffer.from(bytes).toString());
+    };
+
+    expect([await prepareAndSend(), await prepareAndSend()]).toStrictEqual([
+      ["kept for a second try"],
+      ["kept for a second try"],
+    ]);
+
+    await authorizations.releaseOwner(41);
   });
 
   it("rejects replacement and expired authorizations", async () => {

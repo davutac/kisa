@@ -9,7 +9,7 @@ export interface AccountSamples {
 }
 
 /**
- * Structurally satisfied by `GmailIndexProgress`. Taking the minimum shape
+ * Structurally satisfied by `MailIndexProgress`. Taking the minimum shape
  * keeps this module free of the IPC contract and trivially testable.
  */
 export interface IndexEtaInput {
@@ -37,7 +37,7 @@ const DAY_MS = 86_400_000;
  * rather than from the configured rate.
  *
  * Measuring beats calculating here: the indexer's real pace is shaped by
- * governor backoff, foreground contention and Gmail's own latency, and a
+ * governor backoff, foreground contention and the server's own latency, and a
  * figure derived from `units per second` would confidently disagree with what
  * the user can see happening.
  *

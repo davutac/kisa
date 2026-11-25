@@ -1,7 +1,7 @@
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 
 export const getInitialComposerAccountId = (
-  accounts: readonly Pick<GoogleAccount, "email">[],
+  accounts: readonly Pick<Account, "email">[],
   initialAccountId: string | null
 ): string => {
   if (

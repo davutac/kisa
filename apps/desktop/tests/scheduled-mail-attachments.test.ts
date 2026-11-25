@@ -21,7 +21,7 @@ import {
   decodeScheduledAttachments,
   loadScheduledAttachments,
 } from "../src/main/mail/scheduled-mail-attachments";
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "../src/shared/ipc/mail";
+import { MAX_OUTGOING_ATTACHMENT_BYTES } from "../src/shared/ipc/mail";
 
 const temporaryDirectories: string[] = [];
 
@@ -150,7 +150,7 @@ describe("scheduled attachment loading", () => {
   it("rejects an aggregate oversized collection before opening its paths", async () => {
     expect.hasAssertions();
     const { record } = await authorizeAttachment();
-    const halfLimit = Math.floor(MAX_GMAIL_ATTACHMENT_BYTES / 2) + 1;
+    const halfLimit = Math.floor(MAX_OUTGOING_ATTACHMENT_BYTES / 2) + 1;
     const oversized = [
       {
         ...record,

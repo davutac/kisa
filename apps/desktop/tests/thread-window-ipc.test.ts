@@ -1,5 +1,5 @@
 // oxlint-disable typescript/no-unsafe-type-assertion
-import { Effect, Exit } from "effect";
+import { Effect, Schema } from "effect";
 import type { BrowserWindow } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,8 +29,10 @@ vi.mock(import("../src/main/window/tray"), () => ({
 vi.mock(import("../src/main/settings/app-settings"), () => ({
   getCurrentAppSettings: (): AppSettings => ({
     animationsEnabled: true,
+    inlineImageRetentionDays: 90,
     openThreadsInNewWindows: false,
     runInBackground: false,
+    undoSendSeconds: 10,
   }),
   writeAppSettings: vi.fn<() => void>(),
 }));
@@ -41,6 +43,7 @@ vi.mock(import("../src/main/app/startup"), () => ({
   getAppStartupReply: vi.fn<
     () => Promise<{
       readonly appSettings: AppSettings;
+      readonly legacyDatabaseNotice: boolean;
       readonly ok: true;
     }>
   >(),
@@ -83,11 +86,13 @@ describe("openThreadWindow IPC", () => {
   });
 
   it("rejects an empty account or thread identifier", async () => {
-    const exit = await Effect.runPromiseExit(
-      openThreadWindowMethod.handler({ accountId: "", threadId: "" })
+    const error = await Effect.runPromise(
+      Effect.flip(
+        openThreadWindowMethod.handler({ accountId: "", threadId: "" })
+      )
     );
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
+    expect(Schema.isSchemaError(error)).toBeTruthy();
     expect(mocks.openThreadWindow).not.toHaveBeenCalled();
   });
 });

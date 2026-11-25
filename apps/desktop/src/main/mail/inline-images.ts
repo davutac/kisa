@@ -12,6 +12,10 @@ import {
 const CID_URL_PATTERN = /cid:(?<id>[^"'\s)>]+)/giu;
 const IMAGE_MEDIA_TYPE_PATTERN = /^image\/[\w.+-]+$/iu;
 
+/** Whether a part's media type can be shown as an image data url. */
+export const isInlineImageMediaType = (mediaType: string): boolean =>
+  IMAGE_MEDIA_TYPE_PATTERN.test(mediaType);
+
 export interface InlineImageCandidate {
   readonly contentId?: string;
   readonly mediaType: string;
@@ -79,7 +83,7 @@ export const selectInlineImages = <A extends InlineImageCandidate>(
     if (
       seen.has(contentId) ||
       !referenced.has(contentId) ||
-      !IMAGE_MEDIA_TYPE_PATTERN.test(attachment.mediaType) ||
+      !isInlineImageMediaType(attachment.mediaType) ||
       attachment.size > MAX_INLINE_IMAGE_BYTES ||
       attachment.size > budget
     ) {
@@ -98,7 +102,7 @@ export const toImageDataUrl = (
   mediaType: string,
   bytes: Uint8Array
 ): string | undefined =>
-  IMAGE_MEDIA_TYPE_PATTERN.test(mediaType)
+  isInlineImageMediaType(mediaType)
     ? `data:${mediaType};base64,${Buffer.from(bytes).toString("base64")}`
     : undefined;
 

@@ -4,9 +4,8 @@ import {
   LoaderCircleIcon,
   Trash2Icon,
 } from "lucide-react";
-import { m, useReducedMotionConfig } from "motion/react";
+import { m, useIsPresent, useReducedMotionConfig } from "motion/react";
 import { useState } from "react";
-import type { CSSProperties, Ref } from "react";
 
 import { MailAttachmentSummaryPill } from "@/components/mail/attachment-pill";
 import MailDate from "@/components/mail/mail-date";
@@ -28,7 +27,14 @@ import { easeInOut, NO_MOTION } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { formatExactMailDate, formatMailDate } from "@/mail/mail-date";
 import {
+  MailListActions,
+  MailListCell,
+  MailListOpen,
+  MailListRow,
+} from "@/primitives/mail-list";
+import {
   getScheduledMailAttentionCopy,
+  getScheduledMailKey,
   getScheduledRecipientSummary,
 } from "@/scheduled/scheduled-mail-view";
 import type { ScheduledMailSummary } from "@/shared/ipc/scheduled-mail";
@@ -96,16 +102,19 @@ const ScheduledMailQuickAction = ({
   return (
     // Like mailbox thread actions, this stays parked behind the opaque row.
     // `inert` keeps its covered button out of the focus order.
-    <m.div
-      animate={isRevealed ? "revealed" : "idle"}
-      className="bg-card absolute inset-y-0 right-0 z-0 grid w-15 grid-cols-[60px] grid-rows-2 overflow-hidden rounded-r-md"
-      data-slot="scheduled-mail-quick-action"
+    <MailListActions
+      className="bg-card absolute inset-y-0 right-0 z-0 grid w-15 grid-cols-[60px] grid-rows-2 overflow-hidden"
       inert={!isRevealed}
-      initial={false}
-      transition={
-        shouldReduceMotion ? NO_MOTION : { ...easeInOut(0.18), delay: 0.05 }
+      render={
+        <m.div
+          animate={isRevealed ? "revealed" : "idle"}
+          initial={false}
+          transition={
+            shouldReduceMotion ? NO_MOTION : { ...easeInOut(0.18), delay: 0.05 }
+          }
+          variants={quickActionVariants}
+        />
       }
-      variants={quickActionVariants}
     >
       <Button
         aria-keyshortcuts={getHotkeyAriaLabel("scheduled.cancel")}
@@ -136,7 +145,7 @@ const ScheduledMailQuickAction = ({
       >
         <Trash2Icon />
       </Button>
-    </m.div>
+    </MailListActions>
   );
 };
 
@@ -201,11 +210,13 @@ const ScheduledMailDetails = ({
           ))}
           {hiddenAttachmentCount > 0 ? (
             <Badge
-              aria-label={`${hiddenAttachmentCount} more attachments`}
               className="bg-muted text-muted-foreground shrink-0"
               variant="secondary"
             >
-              +{hiddenAttachmentCount}
+              <span aria-hidden="true">+{hiddenAttachmentCount}</span>
+              <span className="sr-only">
+                {hiddenAttachmentCount} more attachments
+              </span>
             </Badge>
           ) : null}
         </div>
@@ -227,34 +238,25 @@ const ScheduledMailDetails = ({
 
 interface ScheduledMailRowProps {
   readonly item: ScheduledMailSummary;
-  readonly measureElement: (element: HTMLLIElement | null) => void;
   readonly onCancel: (item: ScheduledMailSummary) => void;
   readonly onDiscard: (item: ScheduledMailSummary) => void;
   readonly onOpen: (item: ScheduledMailSummary) => void;
-  readonly position: number;
   readonly quickActionResetRevision: number;
-  readonly ref?: Ref<HTMLButtonElement>;
   readonly selected: boolean;
-  readonly setSize: number;
-  readonly style?: CSSProperties;
-  readonly virtualIndex: number;
+  readonly top: number;
 }
 
 const ScheduledMailRow = ({
   item,
-  measureElement,
   onCancel,
   onDiscard,
   onOpen,
-  position,
   quickActionResetRevision,
-  ref,
   selected,
-  setSize,
-  style,
-  virtualIndex,
+  top,
 }: ScheduledMailRowProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
+  const isPresent = useIsPresent();
   const [hoveredAtRevision, setHoveredAtRevision] = useState<number | null>(
     null
   );
@@ -276,13 +278,30 @@ const ScheduledMailRow = ({
   const areQuickActionsRevealed = selected || isHovered;
 
   return (
-    <li
-      aria-posinset={position}
-      aria-setsize={setSize}
-      className="absolute top-0 left-0 w-full pb-px"
-      data-index={virtualIndex}
-      ref={measureElement}
-      style={style}
+    // A row fading out after main canceled or discarded it is inert, so a
+    // second press can't ask again.
+    <MailListRow
+      className="border-border/60 absolute left-0 w-full border-b"
+      inert={!isPresent}
+      render={
+        <m.div
+          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+          initial={shouldReduceMotion ? false : { opacity: 0 }}
+          layout={shouldReduceMotion ? false : "position"}
+          layoutId={
+            shouldReduceMotion
+              ? undefined
+              : `scheduled-mail:${getScheduledMailKey(item)}`
+          }
+          transition={{
+            layout: easeInOut(0.24),
+            opacity: easeInOut(0.16),
+          }}
+        />
+      }
+      style={{ top }}
+      value={getScheduledMailKey(item)}
     >
       <m.div
         className="relative"
@@ -294,26 +313,23 @@ const ScheduledMailRow = ({
           setHoveredAtRevision(quickActionResetRevision);
         }}
       >
-        <ScheduledMailQuickAction
-          disabled={item.deliveryState === "sending"}
-          isRevealed={areQuickActionsRevealed}
-          onCancel={() => onCancel(item)}
-          onDiscard={() => onDiscard(item)}
-          subject={subject}
-        />
-        <m.div
-          animate={{
-            marginRight: areQuickActionsRevealed
-              ? SCHEDULED_MAIL_QUICK_ACTION_WIDTH
-              : 0,
-          }}
-          className="bg-background relative z-10 rounded-md"
-          initial={false}
-          transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+        <MailListCell
+          className="bg-background relative z-10"
+          render={
+            <m.div
+              animate={{
+                marginRight: areQuickActionsRevealed
+                  ? SCHEDULED_MAIL_QUICK_ACTION_WIDTH
+                  : 0,
+              }}
+              initial={false}
+              transition={shouldReduceMotion ? NO_MOTION : easeInOut(0.26)}
+            />
+          }
         >
           <Item
             className={cn(
-              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 border-0 px-4 py-3",
+              "data-[active=true]:bg-muted/60 relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 rounded-none border-0 px-4 py-3",
               item.deliveryState === "attention" &&
                 !(selected || isHovered) &&
                 "bg-[color-mix(in_oklch,var(--card)_95%,var(--destructive))]"
@@ -322,18 +338,10 @@ const ScheduledMailRow = ({
             data-selected={selected}
             render={<article />}
           >
-            <button
-              aria-current={selected ? "true" : undefined}
+            <MailListOpen
               aria-disabled={!canOpen}
               aria-label={`Edit scheduled email: ${subject}, from ${item.accountId}, to ${recipientLabel}, ${deliverySummary}`}
-              className="absolute inset-0 rounded-md text-left outline-none"
-              onClick={() => {
-                if (canOpen) {
-                  onOpen(item);
-                }
-              }}
-              ref={ref}
-              type="button"
+              className="absolute inset-0 text-left outline-none"
             />
             <ScheduledMailDetails
               deliveryNotice={deliveryNotice}
@@ -357,9 +365,16 @@ const ScheduledMailRow = ({
               />
             </ItemActions>
           </Item>
-        </m.div>
+        </MailListCell>
+        <ScheduledMailQuickAction
+          disabled={item.deliveryState === "sending"}
+          isRevealed={areQuickActionsRevealed}
+          onCancel={() => onCancel(item)}
+          onDiscard={() => onDiscard(item)}
+          subject={subject}
+        />
       </m.div>
-    </li>
+    </MailListRow>
   );
 };
 

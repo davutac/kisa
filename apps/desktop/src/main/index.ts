@@ -11,12 +11,14 @@ import { registerAppActivation } from "./app/app-activation";
 import { setDevelopmentDockIcon } from "./app/app-icon";
 import { configureLinuxSecretStorage } from "./app/linux-secret-storage";
 import { beginQuit } from "./app/quit-state";
+import { createShutdown } from "./app/shutdown";
 import { shouldQuitAfterAllWindowsClose } from "./app/window-lifecycle";
-import { stopGoogleAuth } from "./auth/auth";
 import { closeDatabase } from "./database";
+import { stopDatabaseImport } from "./database-import";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
-import { stopMailSync } from "./mail/mail-sync";
+import { stopMailEngine } from "./mail/engine/mail-engine";
+import { releaseHeldSends } from "./mail/held-sends";
 import { stopScheduledMail } from "./mail/scheduled-mail";
 import {
   flushAppSettings,
@@ -24,7 +26,7 @@ import {
   hydrateAppSettings,
 } from "./settings/app-settings";
 import { createWindow, getMainWindow } from "./window/create-window";
-import { installMessageFrameCookiePolicy } from "./window/message-frame-requests";
+import { installMessageFrameRequestPolicy } from "./window/message-frame-requests";
 import { destroyBackgroundTray, setBackgroundTray } from "./window/tray";
 import { installWindowVisibility } from "./window/window-visibility";
 
@@ -63,7 +65,7 @@ if (hasSingleInstanceLock) {
       installWindowVisibility(window);
     });
 
-    installMessageFrameCookiePolicy(session.defaultSession);
+    installMessageFrameRequestPolicy(session.defaultSession);
     await startDesktopIpc();
     hydrateAppSettings();
     createWindow();
@@ -94,33 +96,52 @@ if (hasSingleInstanceLock) {
   app.quit();
 }
 
-let shutdownStarted = false;
+// Above the database process's own five-second close wait, so an orderly
+// close always fits. A stage still running past it is left behind, so one
+// hung stop can neither skip the database close nor keep the app open.
+const SHUTDOWN_STAGE_DEADLINE_MS = 10_000;
 
-const finishShutdown = async (): Promise<void> => {
-  stopGoogleAuth();
-  destroyBackgroundTray();
-  await stopThreadCategorization();
-  await stopScheduledMail();
-  await Promise.allSettled([
-    flushAppSettings(),
-    Effect.runPromise(closeDatabase()),
-    stopDesktopIpc(),
-  ]);
-  app.quit();
-};
-
-app.on("before-quit", (event) => {
-  if (shutdownStarted) {
-    return;
-  }
-
-  event.preventDefault();
-  beginQuit();
-  shutdownStarted = true;
-  sendRendererEvent(APP_CLOSING_CHANNEL, AppClosingEvent, "closing");
-  stopMailSync();
-  void finishShutdown();
+const shutdown = createShutdown({
+  begin: () => {
+    beginQuit();
+    sendRendererEvent(APP_CLOSING_CHANNEL, AppClosingEvent, "closing");
+    destroyBackgroundTray();
+  },
+  quit: () => {
+    app.quit();
+  },
+  scheduleDeadline: (run, delayMs) => {
+    const timeout = setTimeout(run, delayMs);
+    return {
+      cancel: () => {
+        clearTimeout(timeout);
+      },
+    };
+  },
+  stageDeadlineMs: SHUTDOWN_STAGE_DEADLINE_MS,
+  // The mail engine stops after scheduled mail, because its stop is what
+  // waits for an interrupted send's recovery write; the database closes last.
+  // An import still copying is stopped here; one already staged just waits
+  // for the next start.
+  // Held messages go out before anything that could stop them: the user
+  // sent them, so quitting must not leave them for the next start.
+  stages: [
+    [
+      stopThreadCategorization,
+      stopDatabaseImport,
+      () => Effect.runPromise(releaseHeldSends()),
+    ],
+    [stopScheduledMail],
+    [stopMailEngine],
+    [
+      flushAppSettings,
+      () => Effect.runPromise(closeDatabase()),
+      stopDesktopIpc,
+    ],
+  ],
 });
+
+app.on("before-quit", shutdown.handleQuitRequest);
 
 // The event only fires after the last native window closes. Background mode
 // keeps the main window hidden, so reaching this path with it disabled should

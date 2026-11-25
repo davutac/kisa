@@ -4,9 +4,10 @@ import { describe, expect, it } from "@effect/vitest";
 import { openDatabaseConnection } from "@repo/database/client";
 import { eq, sql } from "drizzle-orm";
 import { integer, sqliteTable } from "drizzle-orm/sqlite-core";
-import { Deferred, Effect, Fiber, Schema } from "effect";
+import { Deferred, Effect, Exit, Fiber, Schema } from "effect";
 
 import { createDatabaseProcessClient } from "../src/main/database-process/client";
+import { MAX_BOUND_PARAMETERS } from "../src/main/mail/engine/mail-database";
 import {
   DatabaseExecutePayload,
   DatabaseExecuteResult,
@@ -124,5 +125,69 @@ describe(createDatabaseProcessClient, () => {
 
       expect(secondEntered).toBeTruthy();
     })
+  );
+});
+
+describe("the database RPC codec", () => {
+  const resultCodec = Schema.toCodecJson(DatabaseExecuteResult);
+
+  it("carries every value SQLite holds unchanged", () => {
+    const rows: DatabaseExecuteResult = [
+      [
+        "text",
+        42,
+        1.5,
+        null,
+        true,
+        9_007_199_254_740_993n,
+        new Uint8Array([1, 2]),
+      ],
+    ];
+
+    expect(
+      Schema.decodeExit(resultCodec)(
+        structuredClone(Schema.encodeSync(resultCodec)(rows))
+      )
+    ).toStrictEqual(Exit.succeed(rows));
+  });
+
+  it("refuses what SQLite cannot hold", () => {
+    for (const rows of [
+      [[Number.NaN]],
+      [[{ value: 1 }]],
+      [[["nested"]]],
+      ["row"],
+    ]) {
+      expect(Exit.isFailure(Schema.decodeExit(resultCodec)(rows))).toBeTruthy();
+    }
+  });
+});
+
+describe(makeDatabaseExecutor, () => {
+  it.effect(
+    "binds as many parameters as the mail store sends in one statement",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* bindsMaxParameters() {
+          const connection = yield* Effect.acquireRelease(
+            Effect.sync(() => openDatabaseConnection(":memory:")),
+            (databaseConnection) =>
+              Effect.sync(() => databaseConnection.close())
+          );
+          const executor = makeDatabaseExecutor(connection);
+          const params = Array.from(
+            { length: MAX_BOUND_PARAMETERS },
+            (_, index) => index
+          );
+
+          const rows = yield* executor.execute({
+            method: "values",
+            params,
+            sql: `SELECT count(*) FROM (SELECT 1 WHERE 0 NOT IN (${params.map(() => "?").join(", ")}))`,
+          });
+
+          expect(rows).toStrictEqual([[0]]);
+        })
+      )
   );
 });

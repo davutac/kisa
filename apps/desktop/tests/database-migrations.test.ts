@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,374 +15,529 @@ const migrationsFolder = fileURLToPath(
   new URL("../../../packages/database/drizzle", import.meta.url)
 );
 const temporaryDirectories: string[] = [];
+const openConnections: ReturnType<typeof openDatabaseConnection>[] = [];
 
-const createLegacyDatabase = () => {
+const BASELINE = "20261121231100_baseline";
+const DROP_OAUTH_COLUMNS = "20261122102513_drop_oauth_columns";
+const FLAG_CURSOR = "20261122123610_flag_cursor";
+const RESET_GENERIC_BODIES = "20261122205708_reset_generic_bodies";
+const LABEL_CURSOR = "20261124083947_mail_mailboxes_label_cursor";
+
+const makeTemporaryDirectory = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "kisa-migration-"));
-  const connection = openDatabaseConnection(path.join(directory, "app.sqlite"));
-
   temporaryDirectories.push(directory);
-  connection.exec(`
-    CREATE TABLE "__drizzle_migrations" (
-      id SERIAL PRIMARY KEY,
-      hash text NOT NULL,
-      created_at numeric
-    );
-    INSERT INTO "__drizzle_migrations" (hash, created_at)
-    VALUES
-      ('9f79c2de858fd84cd6ecbceb148491961c7f2dff8d6f67d7e1343053ad14f891', 1777491900375),
-      ('81e1101cdfb3af7f3aac611fad3cd74587816d9580a764b83105f5de4bba4630', 1786034147254),
-      ('efdab5a8371e6f13c737d64d9ea41a984bbec806403f2a222a0f00b04b6889a9', 1786037347379),
-      ('aa74875a01bdd9d1883f746ace1ff4764ccb0a877da65109e33fc208d5509c70', 1786039655116),
-      ('c1873b78f738e2d28eaa30e3c8f0f1b8dfad32a128d0c69a71ee719a5401331e', 1786040185904),
-      ('048de4d537a6e2c151c236637078997c7695cfad886a778b2433f1e09b1ac340', 1786043976396),
-      ('01eac87b103902f053bd336b735caad86adeda1f930b2626be94c4bce209a184', 1786044374073),
-      ('b12684e47a2bcc5cd944ee6b7cc1d13e318ea06f1e7cbeb722b58f35ab651efe', 1786048788803),
-      ('0890bf99d966ac1f9954126c358b5bbfe8acc81223e93fcc151e8f25331b338b', 1786050816456),
-      ('5c8cd5c74db86c458eca444811b90c2c38e551b9727a9586e20709982ccc4860', 1786053026919);
-    CREATE TABLE google_accounts (
-      avatar_url text,
-      created_at integer NOT NULL,
-      credentials blob NOT NULL,
-      display_name text,
-      email text PRIMARY KEY NOT NULL,
-      scopes text NOT NULL,
-      updated_at integer NOT NULL
-    );
-    INSERT INTO google_accounts (
-      created_at,
-      credentials,
-      email,
-      scopes,
-      updated_at
-    ) VALUES
-      (20, X'00', 'second@example.com', '[]', 20),
-      (10, X'00', 'first@example.com', '[]', 10);
-    CREATE TABLE gmail_labels (
-      account_email text NOT NULL,
-      label_id text NOT NULL,
-      name text NOT NULL,
-      type text,
-      updated_at integer NOT NULL,
-      PRIMARY KEY (account_email, label_id)
-    );
-    INSERT INTO gmail_labels (
-      account_email,
-      label_id,
-      name,
-      type,
-      updated_at
-    ) VALUES (
-      'user@example.com',
-      'Label_1',
-      'Receipts',
-      'user',
-      1
-    );
-    CREATE TABLE gmail_threads (
-      account_email text NOT NULL,
-      attachments text,
-      "from" text NOT NULL,
-      has_attachments integer,
-      is_unread integer NOT NULL,
-      labels text,
-      latest_at integer NOT NULL,
-      message_count integer NOT NULL,
-      snippet text NOT NULL,
-      subject text NOT NULL,
-      thread_id text NOT NULL,
-      updated_at integer NOT NULL,
-      PRIMARY KEY (account_email, thread_id)
-    );
-    CREATE TABLE gmail_sync_state (
-      account_email text PRIMARY KEY NOT NULL,
-      history_id text NOT NULL,
-      updated_at integer NOT NULL
-    );
-    INSERT INTO gmail_threads (
-      account_email,
-      "from",
-      is_unread,
-      labels,
-      latest_at,
-      message_count,
-      snippet,
-      subject,
-      thread_id,
-      updated_at
-    ) VALUES
-      ('user@example.com', 'a@example.com', 0, '["INBOX","IMPORTANT"]', 20, 1, 's', 'Inbox thread', 't-inbox', 1),
-      ('user@example.com', 'b@example.com', 0, '["ARCHIVE"]', 10, 1, 's', 'Archived thread', 't-archived', 1),
-      ('user@example.com', 'd@example.com', 0, '["SENT"]', 40, 1, 's', 'Sent thread', 't-sent', 1),
-      ('user@example.com', 'c@example.com', 1, '["SPAM","UNREAD"]', 30, 1, 's', 'Spam thread', 't-spam', 1),
-      ('user@example.com', 'e@example.com', 0, '["SENT","TRASH"]', 50, 1, 's', 'Trash thread', 't-trash', 1);
-    CREATE TABLE gmail_sender_brands (
-      authority_url text,
-      domain text PRIMARY KEY NOT NULL,
-      expires_at integer NOT NULL,
-      logo_data blob,
-      logo_url text,
-      status text NOT NULL,
-      updated_at integer NOT NULL
-    );
-    INSERT INTO gmail_sender_brands (
-      authority_url,
-      domain,
-      expires_at,
-      logo_data,
-      logo_url,
-      status,
-      updated_at
-    ) VALUES (
-      NULL,
-      'example.com',
-      1,
-      NULL,
-      'https://example.com/logo.svg',
-      'available',
-      1
-    );
-  `);
+  return directory;
+};
 
+/** Closed before cleanup: Windows will not remove a file SQLite holds open. */
+const openTemporaryConnection = () => {
+  const connection = openDatabaseConnection(
+    path.join(makeTemporaryDirectory(), "mail.sqlite")
+  );
+  openConnections.push(connection);
   return connection;
 };
 
-describe("database migrations", () => {
+const openMigratedDatabase = () => {
+  const connection = openTemporaryConnection();
+  applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+  return connection;
+};
+
+/** A database an earlier build left, migrated only as far as `migrations`. */
+const openDatabaseWith = (...migrations: readonly string[]) => {
+  const earlierFolder = makeTemporaryDirectory();
+  for (const migration of migrations) {
+    cpSync(
+      path.join(migrationsFolder, migration),
+      path.join(earlierFolder, migration),
+      { recursive: true }
+    );
+  }
+  const connection = openTemporaryConnection();
+  applyDatabaseMigrations(createDatabaseClient(connection), earlierFolder);
+  return connection;
+};
+
+/** A database as the first IMAP build left it: the baseline and nothing else. */
+const openBaselineDatabase = () => openDatabaseWith(BASELINE);
+
+const insertMessage = (
+  connection: ReturnType<typeof openDatabaseConnection>,
+  messageId: string,
+  subject: string,
+  bodyText: string
+) =>
+  connection
+    .prepare(
+      `INSERT INTO mail_messages (account_id, bcc_addresses, body_text,
+        cc_addresses, from_address, is_draft, is_starred, is_unread, label_ids,
+        message_id, received_at, size, subject, thread_id, to_addresses,
+        updated_at)
+       VALUES ('a@example.com', '[]', ?, '[]', 'sender@example.com', 0, 0, 1,
+        '["INBOX"]', ?, 1, 1, ?, 't', '[]', 1)`
+    )
+    .run(bodyText, messageId, subject);
+
+const matches = (
+  connection: ReturnType<typeof openDatabaseConnection>,
+  term: string
+) =>
+  connection
+    .prepare(
+      `SELECT m.message_id AS messageId FROM mail_messages_fts f
+       JOIN mail_messages m ON m.rowid = f.rowid
+       WHERE mail_messages_fts MATCH ? ORDER BY m.message_id`
+    )
+    .all(term);
+
+/**
+ * A database the previous build left, with a non-Gmail account and a
+ * Gmail one, each holding a downloaded body, and the non-Gmail one also
+ * a failed body and one never downloaded.
+ */
+const openDatabaseWithBodies = () => {
+  const connection = openDatabaseWith(
+    BASELINE,
+    DROP_OAUTH_COLUMNS,
+    FLAG_CURSOR
+  );
+  const insertAccount = connection.prepare(
+    `INSERT INTO mail_accounts (account_id, created_at, credentials,
+      dialect, email, imap_host, imap_port, imap_security, provider,
+      smtp_host, smtp_port, smtp_security, sort_order, updated_at,
+      username)
+     VALUES (?, 0, X'00', ?, ?, 'imap.example.com', 993, 'tls', ?,
+      'smtp.example.com', 465, 'tls', 0, 0, ?)`
+  );
+  insertAccount.run(
+    "g@example.com",
+    "generic",
+    "g@example.com",
+    "icloud",
+    "g@example.com"
+  );
+  insertAccount.run(
+    "m@gmail.com",
+    "gmail",
+    "m@gmail.com",
+    "gmail",
+    "m@gmail.com"
+  );
+  const insertBody = connection.prepare(
+    `INSERT INTO mail_messages (account_id, attachments, bcc_addresses,
+      body_html, body_state, body_text, cc_addresses, from_address,
+      has_attachments, has_blocked_remote_images, headers, is_draft,
+      is_starred, is_unread, label_ids, message_id, received_at,
+      schema_version, sender_authenticated, size, snippet, subject,
+      thread_id, to_addresses, updated_at)
+     VALUES (?, '[{"filename":"a.pdf","mediaType":"application/pdf","section":"2","size":1}]',
+      '[]', X'00', ?, ?, '[]', 'sender@example.com', 1, 1,
+      '[{"name":"List-Unsubscribe","value":"<x>"}]', 0, 0, 1,
+      '["INBOX"]', ?, 1, 3, 1, 1, ?, ?, 't', '[]', 1)`
+  );
+  insertBody.run(
+    "g@example.com",
+    "ready",
+    "wrongbody",
+    "g-ready",
+    "wrongbody",
+    "Genericsubject"
+  );
+  insertBody.run(
+    "g@example.com",
+    "failed",
+    null,
+    "g-failed",
+    "",
+    "Failedsubject"
+  );
+  insertBody.run(
+    "m@gmail.com",
+    "ready",
+    "gmailbody",
+    "m-ready",
+    "gmailbody",
+    "Gmailsubject"
+  );
+  connection
+    .prepare(
+      `INSERT INTO mail_messages (account_id, bcc_addresses, body_state,
+        cc_addresses, from_address, is_draft, is_starred, is_unread,
+        label_ids, message_id, received_at, size, subject, thread_id,
+        to_addresses, updated_at)
+       VALUES ('g@example.com', '[]', 'none', '[]', 'sender@example.com',
+        0, 0, 1, '["INBOX"]', 'g-none', 1, 1, 'Pending', 't', '[]', 1)`
+    )
+    .run();
+  const insertThread = connection.prepare(
+    `INSERT INTO mail_threads (account_id, attachments, from_address,
+      has_attachments, is_in_inbox, is_in_sent, is_in_spam, is_in_trash,
+      is_unread, label_ids, latest_at, latest_message_id, message_count,
+      snippet, subject, thread_id, updated_at)
+     VALUES (?, '[{"filename":"a.pdf"}]', 'sender@example.com', 1, 1, 0, 0,
+      0, 1, '["INBOX"]', 1, ?, 1, ?, 'Subject', 't', 1)`
+  );
+  insertThread.run("g@example.com", "g-ready", "wrongbody");
+  insertThread.run("m@gmail.com", "m-ready", "gmailbody");
+
+  applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+  return connection;
+};
+
+const bodyOf = (
+  connection: ReturnType<typeof openDatabaseConnection>,
+  messageId: string
+) =>
+  connection
+    .prepare(
+      `SELECT attachments, body_html AS bodyHtml, body_state AS bodyState,
+              body_text AS bodyText, has_attachments AS hasAttachments,
+              has_blocked_remote_images AS hasBlockedRemoteImages,
+              headers, schema_version AS schemaVersion,
+              sender_authenticated AS senderAuthenticated, snippet
+       FROM mail_messages WHERE message_id = ?`
+    )
+    .get(messageId);
+
+/** A database the build before left: messages, one with a whole body. */
+const openBeforeBodiesLast = () => {
+  const connection = openDatabaseWith(
+    BASELINE,
+    DROP_OAUTH_COLUMNS,
+    FLAG_CURSOR,
+    RESET_GENERIC_BODIES
+  );
+  insertMessage(connection, "m1", "Quarterly report", "numbers inside");
+  insertMessage(connection, "m2", "Lunch", "café on friday");
+  connection
+    .prepare(
+      `UPDATE mail_messages
+       SET attachments = '[]', body_html = X'1f8b08', body_state = 'ready',
+           from_name = 'Ann', headers = '[]', snippet = 'numbers inside'
+       WHERE message_id = 'm1'`
+    )
+    .run();
+  return connection;
+};
+
+const rowsOf = (connection: ReturnType<typeof openDatabaseConnection>) =>
+  connection.prepare("SELECT rowid, * FROM mail_messages ORDER BY rowid").all();
+
+const columnsOf = (connection: ReturnType<typeof openDatabaseConnection>) =>
+  connection
+    .prepare("SELECT name FROM pragma_table_info('mail_messages')")
+    .all()
+    .map((row) => (row as { readonly name: string }).name);
+
+describe("database baseline", () => {
   afterEach(() => {
+    for (const connection of openConnections.splice(0)) {
+      connection.close();
+    }
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { force: true, recursive: true });
     }
   });
 
-  it("upgrades the original sender-brand table without losing cached brands", () => {
-    const connection = createLegacyDatabase();
+  it("creates the mail engine's tables, and applying it again changes nothing", () => {
+    const connection = openMigratedDatabase();
+    applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
 
-    try {
-      applyDatabaseMigrations(
-        createDatabaseClient(connection),
-        migrationsFolder
-      );
+    const tables = connection
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mail_%' AND name NOT LIKE 'mail_messages_fts_%' ORDER BY name"
+      )
+      .all();
 
-      expect(
-        connection
-          .prepare("SELECT domain, selector, status FROM gmail_sender_brands")
-          .all()
-      ).toStrictEqual([
-        {
-          domain: "example.com",
-          selector: "default",
-          status: "available",
-        },
-      ]);
-    } finally {
-      connection.close();
-    }
+    expect(tables).toStrictEqual(
+      [
+        "mail_accounts",
+        "mail_drafts",
+        "mail_inline_images",
+        "mail_labels",
+        "mail_mailboxes",
+        "mail_message_locations",
+        "mail_messages",
+        "mail_messages_fts",
+        "mail_sender_brands",
+        "mail_threads",
+        "mail_trusted_image_senders",
+      ].map((name) => ({ name }))
+    );
   });
 
-  it("derives mailbox projections for previously cached threads", () => {
-    const connection = createLegacyDatabase();
+  it("keeps full-text search in step as messages are written and deleted", () => {
+    const connection = openMigratedDatabase();
+    insertMessage(connection, "m1", "Quarterly report", "numbers inside");
+    insertMessage(connection, "m2", "Lunch", "café on friday");
 
-    try {
-      applyDatabaseMigrations(
-        createDatabaseClient(connection),
-        migrationsFolder
-      );
+    expect(matches(connection, "quarterly")).toStrictEqual([
+      { messageId: "m1" },
+    ]);
+    // Diacritics are folded, so "cafe" finds "café".
+    expect(matches(connection, "cafe")).toStrictEqual([{ messageId: "m2" }]);
 
-      expect(
-        connection
-          .prepare(
-            `SELECT thread_id, is_in_inbox, is_in_sent, is_in_trash,
-                    is_index_seen
-             FROM gmail_threads
-             ORDER BY thread_id`
-          )
-          .all()
-      ).toStrictEqual([
-        {
-          is_in_inbox: 0,
-          is_in_sent: 0,
-          is_in_trash: 0,
-          is_index_seen: 1,
-          thread_id: "t-archived",
-        },
-        {
-          is_in_inbox: 1,
-          is_in_sent: 0,
-          is_in_trash: 0,
-          is_index_seen: 1,
-          thread_id: "t-inbox",
-        },
-        {
-          is_in_inbox: 0,
-          is_in_sent: 1,
-          is_in_trash: 0,
-          is_index_seen: 1,
-          thread_id: "t-sent",
-        },
-        {
-          is_in_inbox: 0,
-          is_in_sent: 0,
-          is_in_trash: 0,
-          is_index_seen: 1,
-          thread_id: "t-spam",
-        },
-        {
-          is_in_inbox: 0,
-          is_in_sent: 1,
-          is_in_trash: 1,
-          is_index_seen: 1,
-          thread_id: "t-trash",
-        },
-      ]);
-    } finally {
-      connection.close();
-    }
+    connection
+      .prepare(
+        "UPDATE mail_messages SET subject = 'Annual report' WHERE message_id = 'm1'"
+      )
+      .run();
+    connection
+      .prepare(
+        "UPDATE mail_messages SET label_ids = '[]' WHERE message_id = 'm2'"
+      )
+      .run();
+    connection
+      .prepare("DELETE FROM mail_messages WHERE message_id = 'm2'")
+      .run();
+
+    expect(matches(connection, "quarterly")).toStrictEqual([]);
+    expect(matches(connection, "annual")).toStrictEqual([{ messageId: "m1" }]);
+    expect(matches(connection, "friday")).toStrictEqual([]);
   });
 
-  it("derives the Spam mailbox state for previously cached threads", () => {
-    const connection = createLegacyDatabase();
+  it("drops the sign-in kind and avatars but keeps the account and its templates", () => {
+    const connection = openBaselineDatabase();
+    connection
+      .prepare(
+        `INSERT INTO mail_accounts (account_id, auth_kind, avatar_url,
+          created_at, credentials, dialect, display_name, email, imap_host,
+          imap_port, imap_security, provider, smtp_host, smtp_port,
+          smtp_security, sort_order, updated_at, username)
+         VALUES ('a@example.com', 'password', 'https://example.com/a.png', 1,
+          x'00', 'generic', 'A', 'a@example.com', 'imap.example.com', 993,
+          'tls', 'imap', 'smtp.example.com', 465, 'tls', 1, 1, 'a@example.com')`
+      )
+      .run();
+    connection
+      .prepare(
+        `INSERT INTO composer_templates (account_email, bcc, body_html,
+          body_text, cc, created_at, id, name, subject, "to", updated_at)
+         VALUES ('a@example.com', '[]', '', '', '[]', 1, 't1', 'Hello', '',
+          '[]', 1)`
+      )
+      .run();
 
-    try {
-      applyDatabaseMigrations(
-        createDatabaseClient(connection),
-        migrationsFolder
-      );
+    applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
 
-      expect(
-        connection
-          .prepare(
-            `SELECT is_in_spam, spam_added_at
-             FROM gmail_threads
-             WHERE thread_id = 't-spam'`
-          )
-          .get()
-      ).toStrictEqual({ is_in_spam: 1, spam_added_at: 1 });
-    } finally {
-      connection.close();
-    }
+    const columns = connection
+      .prepare("SELECT name FROM pragma_table_info('mail_accounts')")
+      .all()
+      .map((column) => (column as { name: string }).name);
+    expect(columns).not.toContain("auth_kind");
+    expect(columns.filter((name) => name.startsWith("avatar_"))).toStrictEqual(
+      []
+    );
+    expect(
+      connection
+        .prepare("SELECT account_id, display_name FROM mail_accounts")
+        .all()
+    ).toStrictEqual([{ account_id: "a@example.com", display_name: "A" }]);
+    expect(
+      connection.prepare("SELECT account_email FROM composer_templates").all()
+    ).toStrictEqual([{ account_email: "a@example.com" }]);
   });
 
-  it("preserves account creation order when adding persisted sorting", () => {
-    const connection = createLegacyDatabase();
+  it("adds an empty flag cursor to mailboxes, keeping their sync progress", () => {
+    const connection = openDatabaseWith(BASELINE, DROP_OAUTH_COLUMNS);
+    connection
+      .prepare(
+        `INSERT INTO mail_mailboxes (account_id, delimiter, path, role,
+          selectable, skeleton_floor, synced, uid_next, uid_validity,
+          updated_at)
+         VALUES ('a@example.com', '/', 'INBOX', 'inbox', 1, 1, 1, 42, '7', 1)`
+      )
+      .run();
 
-    try {
-      applyDatabaseMigrations(
-        createDatabaseClient(connection),
-        migrationsFolder
-      );
+    applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
 
-      expect(
-        connection
-          .prepare(
-            "SELECT email, sort_order FROM google_accounts ORDER BY sort_order"
-          )
-          .all()
-      ).toStrictEqual([
-        { email: "first@example.com", sort_order: 10 },
-        { email: "second@example.com", sort_order: 20 },
-      ]);
-    } finally {
-      connection.close();
-    }
-  });
-
-  it("applies new defaults to existing account settings", () => {
-    const connection = createLegacyDatabase();
-
-    try {
-      applyDatabaseMigrations(
-        createDatabaseClient(connection),
-        migrationsFolder
-      );
+    expect(
       connection
         .prepare(
-          `INSERT INTO account_settings (
-            account_email,
-            show_system_labels,
-            updated_at
-          ) VALUES (?, ?, ?)`
+          "SELECT path, flag_cursor, skeleton_floor, uid_next FROM mail_mailboxes"
         )
-        .run("user@example.com", 1, 1);
-
-      expect(
-        connection
-          .prepare(
-            `SELECT categorization_enabled, email_signature, notifications_enabled
-             FROM account_settings
-             WHERE account_email = ?`
-          )
-          .get("user@example.com")
-      ).toStrictEqual({
-        categorization_enabled: 0,
-        email_signature: '{"html":"","text":""}',
-        notifications_enabled: 1,
-      });
-    } finally {
-      connection.close();
-    }
+        .all()
+    ).toStrictEqual([
+      { flag_cursor: null, path: "INBOX", skeleton_floor: 1, uid_next: 42 },
+    ]);
   });
 
-  it("adds a singleton store for customizable AI writing settings", () => {
-    const connection = createLegacyDatabase();
+  it("adds an empty label cursor to mailboxes, keeping their sync progress", () => {
+    const connection = openDatabaseWith(
+      ...readdirSync(migrationsFolder).filter((name) => name < LABEL_CURSOR)
+    );
+    connection
+      .prepare(
+        `INSERT INTO mail_mailboxes (account_id, delimiter, flag_cursor, path,
+          role, selectable, skeleton_floor, synced, uid_next, uid_validity,
+          updated_at)
+         VALUES ('a@example.com', '/', 30, 'INBOX', 'inbox', 1, 1, 1, 42, '7',
+          1)`
+      )
+      .run();
 
-    try {
-      applyDatabaseMigrations(
-        createDatabaseClient(connection),
-        migrationsFolder
-      );
+    applyDatabaseMigrations(createDatabaseClient(connection), migrationsFolder);
+
+    expect(
       connection
         .prepare(
-          `INSERT INTO ai_settings (
-            active_provider,
-            claude_model,
-            cleanup_instructions,
-            codex_model,
-            id,
-            opencode_model,
-            reply_instructions,
-            updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          "SELECT path, flag_cursor, label_cursor, skeleton_floor, uid_next FROM mail_mailboxes"
         )
-        .run(
-          "codex",
-          "claude-sonnet-5",
-          "Cleanup",
-          "gpt-5.6-luna",
-          1,
-          "openai/gpt-5",
-          "Reply",
-          1
-        );
+        .all()
+    ).toStrictEqual([
+      {
+        flag_cursor: 30,
+        label_cursor: null,
+        path: "INBOX",
+        skeleton_floor: 1,
+        uid_next: 42,
+      },
+    ]);
+  });
+
+  describe("resetting bodies on non-Gmail accounts", () => {
+    const CLEARED = {
+      attachments: null,
+      bodyHtml: null,
+      bodyState: "none",
+      bodyText: null,
+      hasAttachments: 0,
+      hasBlockedRemoteImages: 0,
+      headers: null,
+      schemaVersion: 0,
+      senderAuthenticated: 0,
+      snippet: "",
+    };
+
+    it("clears every downloaded or failed body on a non-Gmail account, and nothing on Gmail", () => {
+      const connection = openDatabaseWithBodies();
+
+      expect(bodyOf(connection, "g-ready")).toStrictEqual(CLEARED);
+      expect(bodyOf(connection, "g-failed")).toStrictEqual(CLEARED);
+      expect(bodyOf(connection, "g-none")).toMatchObject({
+        bodyState: "none",
+        snippet: "",
+      });
+      expect(bodyOf(connection, "m-ready")).toMatchObject({
+        bodyState: "ready",
+        bodyText: "gmailbody",
+        senderAuthenticated: 1,
+      });
+    });
+
+    it("stops finding the cleared text, while subjects and Gmail bodies are still found", () => {
+      const connection = openDatabaseWithBodies();
+
+      expect(matches(connection, "wrongbody")).toStrictEqual([]);
+      expect(matches(connection, "Genericsubject")).toStrictEqual([
+        { messageId: "g-ready" },
+      ]);
+      expect(matches(connection, "gmailbody")).toStrictEqual([
+        { messageId: "m-ready" },
+      ]);
+    });
+
+    it("clears the list's snippet and attachments for the non-Gmail account only", () => {
+      const connection = openDatabaseWithBodies();
 
       expect(
         connection
           .prepare(
-            `SELECT active_provider, claude_model, claude_reasoning,
-                    codex_model, codex_reasoning, cleanup_instructions,
-                    opencode_model, opencode_reasoning, reply_instructions
-             FROM ai_settings
-             WHERE id = 1`
+            `SELECT account_id AS accountId, attachments,
+                    has_attachments AS hasAttachments, snippet
+             FROM mail_threads ORDER BY account_id`
           )
-          .get()
-      ).toStrictEqual({
-        active_provider: "codex",
-        claude_model: "claude-sonnet-5",
-        claude_reasoning: null,
-        cleanup_instructions: "Cleanup",
-        codex_model: "gpt-5.6-luna",
-        codex_reasoning: "low",
-        opencode_model: "openai/gpt-5",
-        opencode_reasoning: null,
-        reply_instructions: "Reply",
-      });
-    } finally {
-      connection.close();
-    }
+          .all()
+      ).toStrictEqual([
+        {
+          accountId: "g@example.com",
+          attachments: "[]",
+          hasAttachments: 0,
+          snippet: "",
+        },
+        {
+          accountId: "m@gmail.com",
+          attachments: '[{"filename":"a.pdf"}]',
+          hasAttachments: 1,
+          snippet: "gmailbody",
+        },
+      ]);
+    });
   });
 
-  it("adds label colors without losing the existing catalog", () => {
-    const connection = createLegacyDatabase();
+  describe("putting message bodies at the end of their rows", () => {
+    it("keeps every message, value and rowid, and moves the bodies last", () => {
+      const connection = openBeforeBodiesLast();
+      const before = rowsOf(connection);
 
-    try {
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      expect(rowsOf(connection)).toStrictEqual(before);
+      expect(columnsOf(connection).slice(0, 3)).toStrictEqual([
+        "account_id",
+        "message_id",
+        "thread_id",
+      ]);
+      expect(columnsOf(connection).slice(-2)).toStrictEqual([
+        "body_text",
+        "body_html",
+      ]);
+    });
+
+    it("keeps full-text search whole", () => {
+      const connection = openBeforeBodiesLast();
+
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      // Throws if the index and the rows it names disagree.
+      connection
+        .prepare(
+          "INSERT INTO mail_messages_fts(mail_messages_fts, rank) VALUES ('integrity-check', 1)"
+        )
+        .run();
+      expect(matches(connection, "quarterly")).toStrictEqual([
+        { messageId: "m1" },
+      ]);
+      expect(matches(connection, "cafe")).toStrictEqual([{ messageId: "m2" }]);
+    });
+
+    it("keeps full-text search in step with later writes", () => {
+      const connection = openBeforeBodiesLast();
+      applyDatabaseMigrations(
+        createDatabaseClient(connection),
+        migrationsFolder
+      );
+
+      insertMessage(connection, "m3", "Offsite", "agenda attached");
+      connection
+        .prepare(
+          "UPDATE mail_messages SET subject = 'Annual report' WHERE message_id = 'm1'"
+        )
+        .run();
+      connection
+        .prepare("DELETE FROM mail_messages WHERE message_id = 'm2'")
+        .run();
+
+      expect(matches(connection, "agenda")).toStrictEqual([
+        { messageId: "m3" },
+      ]);
+      expect(matches(connection, "quarterly")).toStrictEqual([]);
+      expect(matches(connection, "annual")).toStrictEqual([
+        { messageId: "m1" },
+      ]);
+      expect(matches(connection, "friday")).toStrictEqual([]);
+    });
+
+    it("keeps the table's indexes and triggers", () => {
+      const connection = openBeforeBodiesLast();
+
       applyDatabaseMigrations(
         createDatabaseClient(connection),
         migrationsFolder
@@ -391,18 +546,21 @@ describe("database migrations", () => {
       expect(
         connection
           .prepare(
-            `SELECT background_color, label_id, name, text_color
-             FROM gmail_labels`
+            `SELECT type, name FROM sqlite_master
+             WHERE tbl_name = 'mail_messages' AND sql IS NOT NULL
+               AND type IN ('index', 'trigger')
+             ORDER BY type, name`
           )
-          .get()
-      ).toStrictEqual({
-        background_color: null,
-        label_id: "Label_1",
-        name: "Receipts",
-        text_color: null,
-      });
-    } finally {
-      connection.close();
-    }
+          .all()
+      ).toStrictEqual([
+        { name: "mail_messages_body_queue_idx", type: "index" },
+        { name: "mail_messages_from_idx", type: "index" },
+        { name: "mail_messages_rfc822_idx", type: "index" },
+        { name: "mail_messages_thread_idx", type: "index" },
+        { name: "mail_messages_fts_delete", type: "trigger" },
+        { name: "mail_messages_fts_insert", type: "trigger" },
+        { name: "mail_messages_fts_update", type: "trigger" },
+      ]);
+    });
   });
 });

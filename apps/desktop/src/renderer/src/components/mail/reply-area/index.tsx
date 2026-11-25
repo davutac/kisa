@@ -29,7 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { parseMailboxAddress } from "@/mail/address";
 import type { MailMessageAction } from "@/mail/reply-recipients";
-import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 import CreateReplyForm from "./create-reply-form";
 import { useReplyWorkspace } from "./use-reply-workspace";
@@ -38,7 +38,7 @@ interface MailReplyAreaProps {
   accountId: string;
   action: MailMessageAction;
   draft: MailDraftInput;
-  message: GmailThreadMessage;
+  message: ThreadMessage;
   onCancel: () => void;
   onClose: (draft: MailDraftInput) => void;
   onSent: () => void;
@@ -107,6 +107,9 @@ const MailReplyArea = ({
   };
   const sender = parseMailboxAddress(message.from);
   const targetLabel = sender.name ?? sender.email;
+  const { bcc, cc, to } = workspace.recipients;
+  const addresses = [...to, ...cc, ...bcc].join(", ");
+  const sendConfirmation = `${isForward ? "Forwards this message" : "Sends this reply"}${addresses === "" ? "" : ` to ${addresses}`}`;
 
   useHotkeyLayer("thread-composer", true);
   useAppCommand("threadComposer.close", handleClose, {
@@ -222,6 +225,7 @@ const MailReplyArea = ({
         <Button
           aria-label="Discard draft"
           className={quietDestructiveClassName}
+          data-agent-confirm={`Deletes this ${isForward ? "forward" : "reply"} and what it says`}
           disabled={workspace.isBusy}
           onClick={handleDiscard}
           size="footer-icon"
@@ -234,6 +238,7 @@ const MailReplyArea = ({
         <Button
           aria-keyshortcuts={getHotkeyAriaLabel("threadComposer.send")}
           className={primaryFooterActionClassName}
+          data-agent-confirm={sendConfirmation}
           disabled={!canSend}
           onClick={handleSend}
           size="footer"

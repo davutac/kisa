@@ -1,4 +1,4 @@
-import { gmailMessages } from "@repo/database/schemas";
+import { mailMessages } from "@repo/database/schemas";
 import { and, desc, eq } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 
@@ -28,7 +28,7 @@ const selectBoundedMessages = (
   rows: readonly {
     readonly bodyText: string | null;
     readonly fromAddress: string;
-    readonly internalDate: number;
+    readonly receivedAt: number;
     readonly subject: string;
     readonly toAddresses: readonly string[] | null;
   }[]
@@ -48,7 +48,7 @@ const selectBoundedMessages = (
     selected.push({
       body,
       from: row.fromAddress,
-      sentAt: row.internalDate,
+      sentAt: row.receivedAt,
       subject: row.subject,
       to: row.toAddresses ?? [],
     });
@@ -62,9 +62,9 @@ export const loadAiThreadContext = Effect.fn("loadAiThreadContext")(
     request: Pick<AiReplyRequest, "accountId" | "threadId">
   ) {
     const result = yield* withDatabaseClient(async (database) => {
-      const thread = await database.query.gmailThreads.findFirst({
+      const thread = await database.query.mailThreads.findFirst({
         where: {
-          accountEmail: request.accountId,
+          accountId: request.accountId,
           threadId: request.threadId,
         },
       });
@@ -75,20 +75,20 @@ export const loadAiThreadContext = Effect.fn("loadAiThreadContext")(
 
       const rows = await database
         .select({
-          bodyText: gmailMessages.bodyText,
-          fromAddress: gmailMessages.fromAddress,
-          internalDate: gmailMessages.internalDate,
-          subject: gmailMessages.subject,
-          toAddresses: gmailMessages.toAddresses,
+          bodyText: mailMessages.bodyText,
+          fromAddress: mailMessages.fromAddress,
+          receivedAt: mailMessages.receivedAt,
+          subject: mailMessages.subject,
+          toAddresses: mailMessages.toAddresses,
         })
-        .from(gmailMessages)
+        .from(mailMessages)
         .where(
           and(
-            eq(gmailMessages.accountEmail, request.accountId),
-            eq(gmailMessages.threadId, request.threadId)
+            eq(mailMessages.accountId, request.accountId),
+            eq(mailMessages.threadId, request.threadId)
           )
         )
-        .orderBy(desc(gmailMessages.internalDate))
+        .orderBy(desc(mailMessages.receivedAt))
         .limit(MAX_CONTEXT_MESSAGES);
 
       return {

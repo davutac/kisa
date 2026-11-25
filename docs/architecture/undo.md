@@ -1,26 +1,35 @@
 # Undoable actions
 
-Kisa offers one level of application Undo for selected Gmail mutations. The latest successful undoable action appears in a toast for eight seconds and can be reversed from its Undo button or with `Mod+Z`. Text inputs and mail editors keep their native local Undo history; the application command is ignored while they have focus.
+Kisa offers one level of application Undo for selected mail mutations. Thread actions show as done before the server answers (see [Desktop](desktop.md#optimistic-thread-actions)), so the latest undoable action's toast appears with the action itself, for eight seconds, and can be reversed from its Undo button or with `Mod+Z`. Text inputs and mail editors keep their native local Undo history; the application command is ignored while they have focus.
 
-The renderer owns only the short-lived opportunity to Undo. Gmail and the account-scoped cache still perform both the original mutation and its inverse through the normal typed IPC and mail synchronization path. A slow older action cannot replace a newer completed action. Starting an inverse clears the Undo opportunity immediately, so double clicks and repeated shortcuts cannot run it twice.
+The renderer owns only the short-lived opportunity to Undo. The mail server and the account-scoped cache still perform both the original mutation and its inverse through the normal typed IPC and mail synchronization path. The server's answer then amends the offer: a refused action withdraws its Undo and turns the toast into the error, and a partly refused bulk action keeps Undo with the failure described. Undo is available before that answer: the conversations show as restored at once, and the inverse waits for the answer, then reverses only the conversations that changed, so an action the server refused never gets an inverse. Starting an inverse clears the Undo opportunity immediately, so double clicks and repeated shortcuts cannot run it twice; its own toast appears at once and becomes the error if the inverse fails.
 
 ## Actions with Undo
 
-| Action                     | Inverse                               |
-| -------------------------- | ------------------------------------- |
+| Action | Inverse |
+| --- | --- |
 | Add or remove a user label | Restore the previous label membership |
-| Move to Trash              | Remove Trash and restore Inbox        |
-| Mark as not spam           | Move the conversation back to Spam    |
+| Archive | Add the conversation back to Inbox |
+| Move to Trash | Remove Trash. Gmail restores the Inbox; elsewhere each message returns to the folders it was in |
+| Report spam | Take it out of Spam. Gmail restores the Inbox; elsewhere each message returns to the folders it was in |
+| Mark as not spam | Move the conversation back to Spam |
+| Send, with Undo send on | Take the message back before it leaves, and open its draft again |
 
-Single and bulk interaction paths use the same renderer module. Bulk label changes omit conversations already in the requested state, making the inverse exact for mixed selections. If part of a bulk request fails, Undo is offered only for the conversations Gmail reports as successfully changed.
+Single and bulk interaction paths use the same renderer module. Bulk label changes omit conversations already in the requested state, making the inverse exact for mixed selections; bulk Archive likewise sends only the selected conversations in the Inbox, so its Undo returns nothing that was not there. The Undo of Report spam and of Trash depends on the provider. On iCloud and other IMAP servers a copy in Spam or Trash no longer says where it was, so main remembers, while either action moves them, which mailbox each copy came from, and Undo puts each back there (see [Mail engine](mail-engine.md)): a message in the Inbox and a folder returns to both, mail that was archived or filed only in a folder returns there without entering the Inbox, and the user's own replies and drafts that Trash took return to Sent and Drafts. A copy that was in Spam or Trash before the action stays there. Not spam does the same for mail reported in Kisa while that is still remembered, and moves mail the server filed as spam to the Inbox. The window predicts the Inbox for every restore, so a conversation that was not in it shows there until the server answers. Gmail moves everything to the Inbox, even a conversation that was archived before, so a trashed conversation of only sent mail comes back with the Inbox label. The user's own sent mail and drafts never move to Spam, so they stay in Sent and Drafts throughout, and a selected conversation of only the user's own mail is refused alone, counted in the toast among those that could not be updated. If part of a bulk request fails, Undo reverses only the conversations main reports as successfully changed.
 
 ## Actions without Undo
 
 - Permanent deletion from Spam remains behind confirmation because Gmail does not provide an inverse.
 - Deleting a Gmail label remains behind confirmation because recreating its name would not restore the original label id or thread memberships.
 - Disconnecting an account remains behind confirmation because credentials and all account-scoped local data are removed.
-- Sending is not reversible after Gmail accepts it.
+- Sending is not reversible once the message has left: with Undo send off, or once its delay has run out. See [Undo send](#undo-send).
 - Draft cleanup keeps its existing version history, which is a deeper and more useful recovery model than a single toast action.
-- Marking conversations read or unread remains directly reversible with the same control and does not create an Undo opportunity.
+- Marking conversations read or unread, starring them, and moving an archived conversation back to the Inbox remain directly reversible with the same control (Archive is Move to Inbox's reverse) and do not create an Undo opportunity.
 
 Bulk Move to Trash no longer asks for confirmation because it has a provider and cache inverse. Existing confirmations remain for destructive actions without an inverse.
+
+## Undo send
+
+Settings › General › Sending sets how long a sent message waits before it leaves: Off, 5, 10, 20 or 30 seconds, 10 by default. Main owns the setting, in the app settings file, and a file written before it existed reads as 10 seconds. While a message waits, its Undo is on offer for exactly that delay rather than the usual eight seconds, through the same toast and `Mod+Z`. The toast counts the delay down: a bar fills its background from left to right while the seconds left roll down at its start, with NumberFlow. Beside them, a caption names who the message goes to, the first recipient and how many more, over its subject; the subject stays when the toast turns to say the message was sent. Both follow main's deadline rather than the toast's own timer, which pauses under the pointer, and a spinner takes the number's place if the delay has run out before main answers. The bar and number are decorative, so screen readers are not told every second. When the delay runs out, the offer is withdrawn as the toast says the message was sent, or names the recipients the server refused. An Undo that arrives after main has started sending says it was too late, and the toast that follows says the message went.
+
+The rule that keeps this safe is that the saved draft outlives the hold. A reply's draft already exists; the composer saves its final content and stops writing before it sends. A new email is put in Stash first. Either way main holds the draft out of sight (out of the stash picker and the conversation's draft, and refusing saves and discards of it) and deletes it, by its id, only once the server has the message. Undo, a failure, a quit that could not finish, and a crash all therefore leave the draft where the user can find it; Undo also opens it again, in the new-email page or in its conversation, and a failure's toast says where it is. See [Desktop](desktop.md#undo-send) for the hold itself.

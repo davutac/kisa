@@ -14,19 +14,21 @@ export const AI_GET_SETTINGS_CHANNEL = "desktop:ai:get-settings";
 export const AI_LIST_PROVIDERS_CHANNEL = "desktop:ai:list-providers";
 export const AI_UPDATE_SETTINGS_CHANNEL = "desktop:ai:update-settings";
 
-export const AUTH_GOOGLE_ACCOUNTS_CHANGED_CHANNEL =
-  "desktop:auth:google-accounts-changed";
-export const AUTH_GOOGLE_DISCONNECT_ACCOUNT_CHANNEL =
-  "desktop:auth:google-disconnect-account";
-export const AUTH_GOOGLE_LIST_ACCOUNTS_CHANNEL =
-  "desktop:auth:google-list-accounts";
-export const AUTH_GOOGLE_OAUTH_CLIENT_SETUP_CHANNEL =
-  "desktop:auth:google-oauth-client-setup";
-export const AUTH_GOOGLE_OAUTH_CLIENT_STATUS_CHANNEL =
-  "desktop:auth:google-oauth-client-status";
-export const AUTH_GOOGLE_REORDER_ACCOUNTS_CHANNEL =
-  "desktop:auth:google-reorder-accounts";
-export const AUTH_GOOGLE_START_CHANNEL = "desktop:auth:google-start";
+export const ACCOUNTS_CHANGED_CHANNEL = "desktop:accounts:changed";
+export const ACCOUNTS_DISCONNECT_CHANNEL = "desktop:accounts:disconnect";
+export const ACCOUNTS_LIST_CHANNEL = "desktop:accounts:list";
+export const ACCOUNTS_OPEN_SETUP_CHANNEL = "desktop:accounts:open-setup";
+export const ACCOUNTS_OPEN_SIGN_IN_CHANNEL = "desktop:accounts:open-sign-in";
+export const ACCOUNTS_REORDER_CHANNEL = "desktop:accounts:reorder";
+export const ACCOUNTS_UPDATE_NAME_CHANNEL = "desktop:accounts:update-name";
+
+// Only the Add account window's preload uses these, and it inlines them.
+export const ACCOUNT_SETUP_CLOSE_CHANNEL = "desktop:account-setup:close";
+export const ACCOUNT_SETUP_MICROSOFT_CANCEL_CHANNEL =
+  "desktop:account-setup:microsoft-cancel";
+export const ACCOUNT_SETUP_MICROSOFT_CHANNEL =
+  "desktop:account-setup:microsoft";
+export const ACCOUNT_SETUP_SUBMIT_CHANNEL = "desktop:account-setup:submit";
 
 export const COMPOSER_TEMPLATE_CHANGED_CHANNEL =
   "desktop:composer-template:changed";
@@ -66,13 +68,17 @@ export const MAIL_LIST_SENDERS_CHANNEL = "desktop:mail:list-senders";
 export const MAIL_LIST_TRUSTED_IMAGE_SENDERS_CHANNEL =
   "desktop:mail:list-trusted-image-senders";
 export const MAIL_LOAD_THREAD_CHANNEL = "desktop:mail:load-thread";
-export const MAIL_GET_SPAM_STATUS_CHANNEL = "desktop:mail:get-spam-status";
+export const MAIL_GET_UNREAD_COUNTS_CHANNEL = "desktop:mail:get-unread-counts";
+export const MAIL_GET_UNREAD_LABELS_CHANNEL = "desktop:mail:get-unread-labels";
 export const MAIL_MARK_THREAD_NOT_SPAM_CHANNEL =
   "desktop:mail:mark-thread-not-spam";
+export const MAIL_REPORT_THREAD_SPAM_CHANNEL =
+  "desktop:mail:report-thread-spam";
 export const MAIL_SEARCH_THREADS_CHANNEL = "desktop:mail:search-threads";
 export const MAIL_AUTHORIZE_OUTGOING_ATTACHMENTS_CHANNEL =
   "desktop:mail:authorize-outgoing-attachments";
 export const MAIL_SEND_MESSAGE_CHANNEL = "desktop:mail:send-message";
+export const MAIL_CANCEL_SEND_CHANNEL = "desktop:mail:cancel-send";
 export const MAIL_SEND_THREAD_MESSAGE_CHANNEL =
   "desktop:mail:send-thread-message";
 export const MAIL_SET_THREAD_LABEL_CHANNEL = "desktop:mail:set-thread-label";
@@ -81,7 +87,6 @@ export const MAIL_SYNC_LABELS_CHANNEL = "desktop:mail:sync-labels";
 export const MAIL_SYNC_STATUS_CHANNEL = "desktop:mail:sync-status";
 export const MAIL_THREAD_LIST_UPDATED_CHANNEL =
   "desktop:mail:thread-list-updated";
-export const MAIL_THREAD_UPDATED_CHANNEL = "desktop:mail:thread-updated";
 export const MAIL_TRASH_THREAD_CHANNEL = "desktop:mail:trash-thread";
 export const MAIL_TRUST_IMAGE_SENDER_CHANNEL =
   "desktop:mail:trust-image-sender";
@@ -123,6 +128,12 @@ export const SETTINGS_EXPORT_DATABASE_RECOVERY_KEY_CHANNEL =
   "desktop:settings:export-database-recovery-key";
 export const SETTINGS_IMPORT_DATABASE_CHANNEL =
   "desktop:settings:import-database";
+export const SETTINGS_DATABASE_IMPORT_STATUS_CHANNEL =
+  "desktop:settings:database-import-status";
+export const SETTINGS_DISCARD_DATABASE_IMPORT_CHANNEL =
+  "desktop:settings:discard-database-import";
+export const SETTINGS_RESTART_FOR_DATABASE_IMPORT_CHANNEL =
+  "desktop:settings:restart-for-database-import";
 export const SETTINGS_DATABASE_IMPORT_PROGRESS_CHANNEL =
   "desktop:settings:database-import-progress";
 export const SETTINGS_DROP_DATABASE_IMPORT_FILE_CHANNEL =

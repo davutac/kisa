@@ -6,12 +6,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
+import { useStore } from "zustand";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import { useComposerFocus } from "@/components/mail/use-composer-focus";
 import { useOutgoingAttachments } from "@/components/mail/use-outgoing-attachments";
+import { toast } from "@/components/ui/toast";
 import { getHotkeyDisplay, useAppCommand } from "@/hotkeys";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import {
   changeNewMailDraftAccount,
   createNewMailDraft,
@@ -21,6 +24,13 @@ import {
   toMailDraftComposerValue,
   updateMailDraftBody,
 } from "@/mail/mail-draft";
+import { describeSendOutcome } from "@/mail/send-outcome";
+import {
+  restoreComposeDraft,
+  takeComposeDraft,
+  toUndoSendOffer,
+  undoneDrafts,
+} from "@/mail/undo-send";
 import { getMailApi } from "@/platform/desktop";
 import {
   appendEmailSignatureBody,
@@ -28,13 +38,15 @@ import {
   EMPTY_EMAIL_SIGNATURE_BODY,
 } from "@/shared/email-signature";
 import type { EmailSignatureBody } from "@/shared/email-signature";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type { MailDraft, MailDraftInput } from "@/shared/ipc/mail";
 import type { ScheduledMailEditSession } from "@/shared/ipc/scheduled-mail";
 import type { ComposerTemplateInput } from "@/shared/ipc/templates";
 import { useAllAccountSettings } from "@/state/account-settings";
+import { getAppSettingsState } from "@/state/app-settings";
 import { useComposerTemplates } from "@/state/composer-templates";
 import { applyComposerTemplate } from "@/templates/apply-composer-template";
+import { useOfferUndo } from "@/undo/undo-provider";
 
 import {
   runQueuedDraftOperation,
@@ -42,6 +54,7 @@ import {
   upsertStash,
   useDraftPersistence,
 } from "./new-message-draft-persistence";
+import { getNewMessageLeave } from "./new-message-leave";
 import { useNewMessageStore, useNewMessageStoreApi } from "./new-message-store";
 import { useNewMessageCleanHistory } from "./use-new-message-clean-history";
 import { useScheduledComposer } from "./use-scheduled-composer";
@@ -53,7 +66,7 @@ export const useNewMessageWorkspace = ({
   onScheduledEditChange,
   scheduledEdit,
 }: {
-  accounts: readonly GoogleAccount[];
+  accounts: readonly Account[];
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onScheduledEditChange?: (session: ScheduledMailEditSession) => void;
@@ -86,6 +99,10 @@ export const useNewMessageWorkspace = ({
   const draftOperationQueueRef = useRef(Promise.resolve());
   const stashPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [hasPendingReschedule, setHasPendingReschedule] = useState(false);
+  // Leaving stashes over IPC before the composer closes; this keeps Send and
+  // a second leave out until that save settles.
+  const [isLeaving, setIsLeaving] = useState(false);
+  const confirm = useConfirm();
   const mailApi = useMemo(() => getMailApi(), []);
   const outgoingAttachments = useOutgoingAttachments(
     mailApi,
@@ -99,6 +116,7 @@ export const useNewMessageWorkspace = ({
     replaceAttachments,
   } = outgoingAttachments;
   const { persistDraft, popDraft } = useDraftPersistence(mailApi);
+  const offerUndo = useOfferUndo();
   const focus = useComposerFocus();
   const cleanup = useNewMessageCleanHistory({ focus, isOpen });
   const selectedAccountId = accounts.some(({ email }) => email === accountId)
@@ -160,6 +178,7 @@ export const useNewMessageWorkspace = ({
 
   useLayoutEffect(() => {
     focus.restorePending();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A swapped-in draft remounts its fields, so pending focus is restored after each draft change.
   }, [draftId, focus]);
 
   const availableStashes = stashes.filter(({ id }) => id !== draftId);
@@ -170,6 +189,7 @@ export const useNewMessageWorkspace = ({
   const isBusy = [
     cleanup.isCleaning,
     isAuthorizing,
+    isLeaving,
     isScheduling,
     isSending,
   ].some(Boolean);
@@ -340,6 +360,95 @@ export const useNewMessageWorkspace = ({
     });
   };
 
+  /**
+   * Readies the composer to go away, without closing it. A new email keeps
+   * anything written in Stash; a scheduled email's editor asks before
+   * abandoning unsaved edits instead, since the email itself stays queued.
+   * Resolves false while the composer is busy, when the save failed, or when
+   * the user keeps editing, so the composer stays open and nothing is lost.
+   */
+  const prepareToLeave = async (): Promise<boolean> => {
+    if (scheduled.isEdit) {
+      return await scheduled.confirmLeave();
+    }
+    const draft = currentDraftRef.current;
+    const action = getNewMessageLeave(draft, isBusy);
+    if (action !== "stash") {
+      return action === "close";
+    }
+    let succeeded = false;
+    setIsLeaving(true);
+    // Queued behind any earlier stash, so the saves land in order.
+    enqueueDraftOperation(async () => {
+      succeeded = await persistDraft(draft);
+    });
+    await draftOperationQueueRef.current;
+    setIsLeaving(false);
+    if (succeeded) {
+      toast.success("Draft stashed");
+    }
+    return succeeded;
+  };
+
+  /** Closes the composer as Escape does, once `prepareToLeave` allows it. */
+  const leave = async (): Promise<void> => {
+    if (await prepareToLeave()) {
+      onOpenChange(false);
+    }
+  };
+
+  /** Closes without keeping the draft, after confirming if it has content. */
+  const discard = async (): Promise<void> => {
+    const draft = currentDraftRef.current;
+    if (isBusy) {
+      return;
+    }
+    if (
+      !isNewMailDraftEmpty(draft) &&
+      !(await confirm({
+        cancelLabel: "Keep editing",
+        confirmLabel: "Discard",
+        confirmVariant: "destructive",
+        description: "This email will not be kept in Stash.",
+        title: "Discard this email?",
+      }))
+    ) {
+      return;
+    }
+    enqueueDraftOperation(async () => {
+      await popDraft(draft);
+    });
+    onOpenChange(false);
+  };
+
+  /**
+   * Deletes a stash the composer is not holding, and any attachment copies
+   * Kisa owns for it, after confirming. The picker drops it at once and takes it back if the delete
+   * fails.
+   */
+  const discardStash = async (stash: MailDraft): Promise<void> => {
+    if (
+      isBusy ||
+      !(await confirm({
+        cancelLabel: "Keep stash",
+        confirmLabel: "Discard",
+        confirmVariant: "destructive",
+        description: "This stashed email will be deleted.",
+        title: "Discard this stash?",
+      }))
+    ) {
+      return;
+    }
+    updateStashes((current) => current.filter(({ id }) => id !== stash.id));
+    enqueueDraftOperation(async () => {
+      if (await popDraft(stash)) {
+        toast.success("Stash discarded");
+        return;
+      }
+      updateStashes((current) => upsertStash(current, stash));
+    });
+  };
+
   const switchDraft = (next: MailDraft): void => {
     if (next.id === draftId || isBusy) {
       return;
@@ -355,6 +464,68 @@ export const useNewMessageWorkspace = ({
     });
   };
 
+  // Undo took a sent email back: it opens here again, or waits in Stash
+  // while something else is being written.
+  const undoneCompose = useStore(undoneDrafts, (state) => state.compose);
+  useEffect(() => {
+    if (undoneCompose === undefined || isBusy || scheduled.isEdit) {
+      return;
+    }
+    const undone = takeComposeDraft();
+    if (undone === undefined) {
+      return;
+    }
+    if (isNewMailDraftEmpty(currentDraftRef.current)) {
+      switchDraft(toOptimisticStash(undone));
+      return;
+    }
+    updateStashes((current) => upsertStash(current, toOptimisticStash(undone)));
+    toast.info("Sending undone. The email is in Stash.");
+  });
+
+  /**
+   * With Undo send on, the email is kept in Stash first, out of sight while
+   * main holds it, so Undo, a failure or a crash leaves it there; main
+   * removes it once the server has the message. The page closes at once.
+   */
+  const sendWithUndo = async (
+    request: Parameters<NonNullable<typeof mailApi>["sendMessage"]>[0],
+    delayMs: number
+  ): Promise<void> => {
+    if (mailApi === undefined) {
+      return;
+    }
+    const draft = currentDraft;
+    let isKept = false;
+    enqueueDraftOperation(async () => {
+      isKept = await persistDraft(draft);
+    });
+    await draftOperationQueueRef.current;
+    if (!isKept) {
+      return;
+    }
+    offerUndo(
+      toUndoSendOffer({
+        cancel: () =>
+          mailApi.cancelSend({
+            accountId: request.accountId,
+            draftId: draft.id,
+          }),
+        delayMs,
+        keptIn: "It is in Stash.",
+        // The shell opens the page to take it back up, from wherever the
+        // user is by then.
+        restore: () => {
+          restoreComposeDraft(draft);
+        },
+        recipients: [...request.to, ...request.cc, ...request.bcc],
+        send: () => mailApi.sendMessage({ ...request, draftId: draft.id }),
+        subject: request.subject,
+      })
+    );
+    onOpenChange(false);
+  };
+
   const send = async (): Promise<void> => {
     if (!(canSend && mailApi)) {
       return;
@@ -364,38 +535,53 @@ export const useNewMessageWorkspace = ({
       return;
     }
     setIsSending(true);
-    try {
-      const preparedAttachments = await prepareAttachments(
-        currentDraft.attachments
-      );
-      if (preparedAttachments === undefined) {
-        return;
+    await runWithCleanup(
+      async () => {
+        try {
+          const preparedAttachments = await prepareAttachments(
+            currentDraft.attachments
+          );
+          if (preparedAttachments === undefined) {
+            return;
+          }
+          const request = {
+            accountId: selectedAccountId,
+            attachments: preparedAttachments,
+            bcc: recipients.bcc,
+            body: currentDraft.body,
+            cc: recipients.cc,
+            subject,
+            to: recipients.to,
+          };
+          const delayMs = getAppSettingsState().undoSendSeconds * 1000;
+          if (delayMs > 0) {
+            await sendWithUndo(request, delayMs);
+            return;
+          }
+          const reply = await mailApi.sendMessage(request);
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          if (reply.data.kind === "canceled") {
+            return;
+          }
+          enqueueDraftOperation(async () => {
+            await popDraft(currentDraft);
+          });
+          const notice = describeSendOutcome(reply.data);
+          toast[notice.tone](notice.message);
+          onOpenChange(false);
+        } catch (error) {
+          toast.error(
+            error instanceof Error ? error.message : "Could not send message"
+          );
+        }
+      },
+      () => {
+        setIsSending(false);
       }
-      const reply = await mailApi.sendMessage({
-        accountId: selectedAccountId,
-        attachments: preparedAttachments,
-        bcc: recipients.bcc,
-        body: currentDraft.body,
-        cc: recipients.cc,
-        subject,
-        to: recipients.to,
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
-      }
-      enqueueDraftOperation(async () => {
-        await popDraft(currentDraft);
-      });
-      toast.success("Message sent");
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not send message"
-      );
-    } finally {
-      setIsSending(false);
-    }
+    );
   };
 
   const updateComposer = (nextComposer: EmailComposerValue): void => {
@@ -444,11 +630,15 @@ export const useNewMessageWorkspace = ({
     canStash,
     cleanDraft: cleanup.cleanDraft,
     cleanupModelLabel: cleanup.modelLabel,
+    discard,
+    discardStash,
     dismissCleanVersion: cleanup.dismissVersion,
     focus,
+    isBusy,
     isCleaning: cleanup.isCleaning,
+    leave,
     outgoingAttachments,
-    requestClose: scheduled.requestClose,
+    prepareToLeave,
     scheduled: {
       canSchedule: scheduled.canSchedule,
       isDirty: scheduled.isDirty,

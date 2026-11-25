@@ -1,9 +1,9 @@
 import type {
-  GmailAttachmentPreviewReply,
-  GmailAttachmentSaveReply,
+  MailAttachmentPreviewReply,
+  MailAttachmentSaveReply,
 } from "./mail";
 
 export interface AttachmentPreviewBridge {
-  load: () => Promise<GmailAttachmentPreviewReply>;
-  save: () => Promise<GmailAttachmentSaveReply>;
+  load: () => Promise<MailAttachmentPreviewReply>;
+  save: () => Promise<MailAttachmentSaveReply>;
 }

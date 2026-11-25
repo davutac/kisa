@@ -1,11 +1,8 @@
 import { LoaderCircleIcon } from "lucide-react";
 import { useId, useState } from "react";
 import type { SubmitEvent } from "react";
-import { toast } from "sonner";
 
-import LabelColorField, {
-  isGmailLabelColorValue,
-} from "@/components/mail/label-color-field";
+import LabelColorField from "@/components/mail/label-color-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,47 +15,34 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/toast";
 import { useHotkeyLayer } from "@/hotkeys";
-import { gmailLabelTextColor } from "@/mail/label";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { MailApi } from "@/platform/desktop";
-import type {
-  GmailLabelInputColor,
-  GmailLabelSummary,
-} from "@/shared/ipc/mail";
+import type { MailLabelSummary } from "@/shared/ipc/mail";
+import { seededLabelColor } from "@/shared/label-color";
 
 interface LabelDialogProps {
   readonly accountId: string;
-  readonly existingLabels: readonly GmailLabelSummary[];
+  readonly existingLabels: readonly MailLabelSummary[];
   readonly isOpen: boolean;
-  readonly label?: GmailLabelSummary;
+  readonly label?: MailLabelSummary;
   readonly mailApi: MailApi;
-  readonly onSaved: (label: GmailLabelSummary) => void;
+  readonly onSaved: (label: MailLabelSummary) => void;
   readonly onOpenChange: (isOpen: boolean) => void;
 }
 
-const toGmailLabelInputColor = (
-  background: string | undefined,
-  text: string | undefined
-): GmailLabelInputColor | undefined => {
-  if (
-    background === undefined ||
-    text === undefined ||
-    !isGmailLabelColorValue(background) ||
-    !isGmailLabelColorValue(text)
-  ) {
-    return;
-  }
-
-  return { background, text };
+const resolveLabelColor = (
+  label: MailLabelSummary | undefined,
+  chosen: string | undefined,
+  name: string
+) => {
+  const saved = label?.color?.background;
+  return {
+    color: chosen ?? saved ?? seededLabelColor(name),
+    colorChanged: chosen !== undefined && chosen !== saved,
+  };
 };
-
-const isLabelColorChanged = (
-  label: GmailLabelSummary | undefined,
-  color: GmailLabelInputColor | undefined
-): boolean =>
-  color !== undefined &&
-  (color.background !== label?.color?.background ||
-    color.text !== label?.color?.text);
 
 const LABEL_DIALOG_COPY = {
   create: {
@@ -91,21 +75,17 @@ const LabelDialog = ({
   const inputId = useId();
   const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState(label?.name ?? "");
-  const [selectedBackground, setSelectedBackground] = useState<
-    string | undefined
-  >(label?.color?.background);
-  const [selectedText, setSelectedText] = useState<string | undefined>(
-    label?.color?.text
-  );
+  // Until a colour is chosen, a new label shows the one sync would give it.
+  const [chosenColor, setChosenColor] = useState<string>();
   const trimmedName = name.trim();
   const alreadyExists = existingLabels.some(
     (candidate) => candidate.id !== label?.id && candidate.name === trimmedName
   );
-  const selectedColor = toGmailLabelInputColor(
-    selectedBackground,
-    selectedText
+  const { color, colorChanged } = resolveLabelColor(
+    label,
+    chosenColor,
+    trimmedName
   );
-  const colorChanged = isLabelColorChanged(label, selectedColor);
   const hasChanges =
     label === undefined || trimmedName !== label.name || colorChanged;
   const canSubmit =
@@ -118,8 +98,7 @@ const LabelDialog = ({
 
   const reset = (): void => {
     setName(label?.name ?? "");
-    setSelectedBackground(label?.color?.background);
-    setSelectedText(label?.color?.text);
+    setChosenColor(undefined);
   };
 
   const setOpen = (open: boolean): void => {
@@ -142,37 +121,42 @@ const LabelDialog = ({
 
     setIsSaving(true);
 
-    try {
-      const reply =
-        label === undefined
-          ? await mailApi.createLabel({
-              accountId,
-              color: selectedColor,
-              name: trimmedName,
-            })
-          : await mailApi.updateLabel({
-              accountId,
-              color: colorChanged ? selectedColor : undefined,
-              labelId: label.id,
-              name: trimmedName,
-            });
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply =
+            label === undefined
+              ? await mailApi.createLabel({
+                  accountId,
+                  color,
+                  name: trimmedName,
+                })
+              : await mailApi.updateLabel({
+                  accountId,
+                  color: colorChanged ? chosenColor : undefined,
+                  labelId: label.id,
+                  name: trimmedName,
+                });
 
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+
+          onSaved(reply.data);
+          toast.success(`${copy.success} “${reply.data.name}”`);
+          reset();
+          onOpenChange(false);
+        } catch {
+          toast.error(copy.error, {
+            description: "Please try again.",
+          });
+        }
+      },
+      () => {
+        setIsSaving(false);
       }
-
-      onSaved(reply.data);
-      toast.success(`${copy.success} “${reply.data.name}”`);
-      reset();
-      onOpenChange(false);
-    } catch {
-      toast.error(copy.error, {
-        description: "Please try again.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   return (
@@ -182,7 +166,8 @@ const LabelDialog = ({
           <DialogHeader>
             <DialogTitle>{copy.title}</DialogTitle>
             <DialogDescription>
-              {copy.description} {accountId}. Changes are also saved to Gmail.
+              {copy.description} {accountId}. The label also changes on the mail
+              server.
             </DialogDescription>
           </DialogHeader>
 
@@ -210,32 +195,8 @@ const LabelDialog = ({
           <LabelColorField
             disabled={isSaving}
             label={trimmedName || "New label"}
-            onClear={
-              label?.color === undefined
-                ? () => {
-                    setSelectedBackground(undefined);
-                    setSelectedText(undefined);
-                  }
-                : undefined
-            }
-            onSelectBackground={(background) => {
-              setSelectedBackground(background);
-              setSelectedText((current) =>
-                current !== undefined && isGmailLabelColorValue(current)
-                  ? current
-                  : gmailLabelTextColor(background)
-              );
-            }}
-            onSelectText={(text) => {
-              setSelectedText(text);
-              setSelectedBackground((current) =>
-                current !== undefined && isGmailLabelColorValue(current)
-                  ? current
-                  : gmailLabelTextColor(text)
-              );
-            }}
-            selectedBackground={selectedBackground}
-            selectedText={selectedText}
+            onValueChange={setChosenColor}
+            value={color}
           />
 
           <DialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">

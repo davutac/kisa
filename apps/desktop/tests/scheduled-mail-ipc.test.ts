@@ -1,7 +1,6 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 
-import { MAX_GMAIL_SUBJECT_LENGTH } from "../src/shared/gmail-subject";
 import {
   MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT,
   MAX_SCHEDULED_MAIL_PREVIEW_LENGTH,
@@ -16,6 +15,7 @@ import {
   ScheduledMailOutcomeReadiness,
   ScheduledMailSummary,
 } from "../src/shared/ipc/scheduled-mail";
+import { MAX_SUBJECT_LENGTH } from "../src/shared/mail-subject";
 
 const draft = {
   accountId: "person@example.com",
@@ -105,7 +105,7 @@ describe("scheduled mail IPC", () => {
     expect(() =>
       Schema.decodeSync(ScheduledMailSummary)({
         ...summary,
-        subject: "x".repeat(MAX_GMAIL_SUBJECT_LENGTH + 1),
+        subject: "x".repeat(MAX_SUBJECT_LENGTH + 1),
       })
     ).toThrow(/./u);
     expect(
@@ -141,7 +141,7 @@ describe("scheduled mail IPC", () => {
       Schema.encodeUnknownSync(ScheduledMailChanged)({
         ...changed,
         body: "private body",
-        rawGmailError: "private error",
+        rawSendError: "private error",
       })
     ).toStrictEqual(changed);
     expect(
@@ -197,6 +197,11 @@ describe("scheduled mail IPC", () => {
     expect(
       Schema.decodeSync(ScheduledMailFinishEditResult)({ kind: "finished" })
     ).toStrictEqual({ kind: "finished" });
+    expect(
+      Schema.decodeSync(ScheduledMailFinishEditResult)({
+        kind: "possible-duplicate",
+      })
+    ).toStrictEqual({ kind: "possible-duplicate" });
     expect(() =>
       Schema.decodeUnknownSync(ScheduledMailFinishEditResult)({ kind: "saved" })
     ).toThrow(/./u);

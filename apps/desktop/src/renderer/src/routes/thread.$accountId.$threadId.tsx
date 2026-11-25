@@ -14,8 +14,9 @@ function closeWindow(): void {
 
 function ThreadWindowRoute() {
   const { accountId, threadId } = Route.useParams();
-  const { deleteForever, notSpam, setLabel, toggleRead, trash } =
-    useThreadActions();
+  // Closing this window is how its actions leave the conversation, and a
+  // closed window cannot report a failure: it closes once the server agrees.
+  const actions = useThreadActions({ leaveAfterConfirmation: true });
 
   useHotkeyLayer("thread", true);
 
@@ -23,13 +24,9 @@ function ThreadWindowRoute() {
     <div className="bg-background min-h-full overflow-x-hidden overflow-y-auto">
       <MailThreadView
         accountId={accountId}
+        actions={actions}
         closeLabel="Close window"
         onClose={closeWindow}
-        onDeleteForever={deleteForever}
-        onNotSpam={notSpam}
-        onSetLabel={setLabel}
-        onToggleRead={toggleRead}
-        onTrash={trash}
         showCloseButton={false}
         threadId={threadId}
       />

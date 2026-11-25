@@ -8,8 +8,8 @@ export const getDeleteForeverConfirmation = (
   confirmVariant: "destructive",
   description: (
     <ConfirmMessage subject={subject}>
-      This conversation will be permanently deleted from Gmail. This action
-      cannot be undone.
+      This conversation will be permanently deleted from the mail server. This
+      action cannot be undone.
     </ConfirmMessage>
   ),
   title: "Delete conversation?",
@@ -23,6 +23,6 @@ export const getBulkDeleteForeverConfirmation = (
 ): ConfirmOptions => ({
   confirmLabel: "Delete forever",
   confirmVariant: "destructive",
-  description: `${conversationCount(count)} will be permanently deleted from Gmail. This action cannot be undone.`,
+  description: `${conversationCount(count)} will be permanently deleted from the mail server. This action cannot be undone.`,
   title: `Delete ${conversationCount(count)}?`,
 });

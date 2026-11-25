@@ -6,7 +6,7 @@ A template has a required name and a complete set of composer-owned values: an o
 
 ## Applying a template
 
-Typing `/` in the new-email Body opens a keyboard-accessible menu filtered by template name. Choosing a template replaces To, Cc, Bcc, Subject, and Body, including replacing them with empty values. A stored Account changes the From account; a null Account preserves the account already selected in the composer. Existing attachments are preserved because they are outside the template model. Reply, reply-all, forward, and template-editing composers do not expose the template menu.
+Typing `/` in the new-email Body, at the start of a paragraph or after a space or line break, opens a keyboard-accessible menu filtered by template name. It is ui-sdk's Trigger Menu, connected to the Tiptap editor by the adapter in `renderer/src/editor`, which reads ProseMirror positions as text offsets. Choosing a template replaces To, Cc, Bcc, Subject, and Body, including replacing them with empty values. A stored Account changes the From account; a null Account preserves the account already selected in the composer. Existing attachments are preserved because they are outside the template model. Applying a template restarts the Body's undo history, so undo never brings back the text the template replaced, the typed `/` and query included. Reply, reply-all, forward, and template-editing composers do not expose the template menu.
 
 The renderer captures one timestamp for the application. It resolves Subject and Body variables from that same timestamp before the new composer state becomes visible. Resolved values are ordinary editable text and never execute or render as HTML.
 
@@ -15,7 +15,7 @@ The renderer captures one timestamp for the application. It resolves Subject and
 Variables are lowercase expressions. The automatic registry contains:
 
 - `{{date}}`, `{{time}}`, and `{{datetime}}`, each with an optional date-fns format such as `{{date:dd.MM.yyyy}}` or `{{time:HH:mm}}`.
-- `{{account.email}}` and `{{account.name}}`, resolved from the template Account or, when that is null, the account already selected in the composer. The name is the connected Google profile's display name and resolves to an empty value when unavailable.
+- `{{account.email}}` and `{{account.name}}`, resolved from the template Account or, when that is null, the account already selected in the composer. The name is the account's display name, the optional Name entered when the account was added, and resolves to an empty value when it is blank.
 - `{{to.email}}`, resolved only when the template contains exactly one To recipient. It is empty for zero or multiple recipients.
 
 Custom temporal formats use date-fns tokens, where `MM` is month and `mm` is minute. Default forms use the operating system's locale, and all temporal forms use its local time zone. Unknown variables, malformed expressions, and unsupported formats prevent an explicit save.
@@ -32,4 +32,4 @@ Adding a variable should therefore require one registry definition plus behavior
 
 The nullable template account references the connected-account row with `ON DELETE SET NULL`. Disconnect therefore keeps the template but makes it preserve whichever account is selected when it is next applied. Template upserts and removals are broadcast to renderer windows so the management page and an open slash menu share one current list.
 
-Editing uses explicit Save. Unsaved route changes require confirmation, and Delete requires confirmation. The renderer crosses a narrow template interface: list, save, delete, and subscribe to changes.
+The Templates page sets the list on the page like the thread list, and the editor beside it like an open conversation: a stack of cards whose header holds the template name and Delete, then From, the recipients, Subject, and the body. New and Save sit in the content titlebar. With no templates the list is left out, and the editor area alone explains templates and offers New template. Editing uses explicit Save. Unsaved route changes require confirmation, and Delete requires confirmation. The renderer crosses a narrow template interface: list, save, delete, and subscribe to changes.

@@ -8,7 +8,7 @@ export default defineConfig({
   extends: [core, react, tanstack, vitest],
   ignorePatterns: [
     ...(core.ignorePatterns ?? []),
-    "**/components/ui/**",
+    "apps/marketing/src/components/ui/**",
     "packages/database/drizzle/**/snapshot.json",
     "repos/**",
   ],
@@ -45,5 +45,7 @@ export default defineConfig({
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-unsafe-dictionary-type": "error",
     "anti-slop/no-widen-then-assert": "error",
+    // Schema values share names with their `typeof X.Type` aliases; TypeScript rejects genuine redeclarations.
+    "no-redeclare": "off",
   },
 });

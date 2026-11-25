@@ -1,52 +1,74 @@
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { createController } from "@ui-sdk/core";
+import type { VirtualItem } from "@ui-sdk/core";
 import {
+  CircleAlertIcon,
   InboxIcon,
   SearchIcon,
   SendIcon,
   ShieldAlertIcon,
+  StarIcon,
+  TagIcon,
   Trash2Icon,
 } from "lucide-react";
 import { AnimatePresence } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { MouseEvent, PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { PinnedDayHeading } from "@/components/mail/day-heading";
 import {
   getBulkDeleteForeverConfirmation,
   getDeleteForeverConfirmation,
 } from "@/components/mail/delete-forever-confirmation";
 import MailThreadItem from "@/components/mail/thread-item";
 import ThreadSelectionBar from "@/components/mail/thread-selection-bar";
+import { Button } from "@/components/ui/button";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { useRemeasureOnScrollSettle } from "@/hooks/use-remeasure-on-scroll-settle";
+import { useCalendar } from "@/hooks/use-calendar";
+import type { Calendar } from "@/hooks/use-calendar";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand, useHotkeyLayer } from "@/hotkeys";
-import { getMailboxSystemLabel } from "@/mail/label";
+import { cn } from "@/lib/utils";
+import { getMailboxSystemLabel, hasStarredLabel } from "@/mail/label";
+import { formatMailDayHeading } from "@/mail/mail-date";
+import { isLabelPlace } from "@/mail/mailbox-place";
+import type { MailboxPlace } from "@/mail/mailbox-place";
+import {
+  getThreadListPlaceholder,
+  shouldLoadNextPage,
+} from "@/mail/mailbox-threads-load";
+import type { ThreadListPlaceholder } from "@/mail/mailbox-threads-load";
+import {
+  canArchiveThread,
+  canReportThreadSpam,
+  canStarThread,
+  getBulkStarTarget,
+} from "@/mail/thread-action-availability";
+import { isFirstOfDay, isNewestFirst } from "@/mail/thread-day-headings";
 import {
   getBulkThreadDestructiveAction,
   getThreadDestructiveAction,
 } from "@/mail/thread-destructive-action";
-import type { ThreadSelectionDirection } from "@/mail/thread-selection";
-import {
-  getNextThreadSelectionIndex,
-  getThreadSelectionKey,
-  getThreadSelectionScrollBehavior,
-  getVisibleThreadSelectionIndex,
-} from "@/mail/thread-selection";
-import { blurFocusedMailboxLabel } from "@/mail/use-mailbox-label-navigation";
+import { getThreadSelectionKey } from "@/mail/thread-selection";
 import { useOpenThread } from "@/mail/use-open-thread";
 import type { ThreadActions } from "@/mail/use-thread-actions";
-import { useThreadDragSelection } from "@/mail/use-thread-drag-selection";
-import type { GmailMailbox, GmailThreadSummary } from "@/shared/ipc/mail";
+import type {
+  MailListActivateDetails,
+  MailListController,
+} from "@/primitives/mail-list";
+import { MailListRoot } from "@/primitives/mail-list-root";
+import type { MailThreadSummary } from "@/shared/ipc/mail";
 import {
   useCheckedThreadIds,
   useMailboxStore,
+  useOpenThreadId,
   useSelectedThreadId,
 } from "@/state/mailbox";
 
@@ -59,28 +81,60 @@ export interface MailThreadListProps {
   trailingMessage?: string;
   isInitialLoading: boolean;
   isLoadingNextPage?: boolean;
+  /** Why the last load of this list failed, while it has not been retried. */
+  loadError?: string;
+  /** The heading for a failed load with nothing to show. */
+  loadErrorTitle?: string;
   loadingTitle?: string;
   loadNextPage?: () => Promise<boolean>;
-  mailbox?: GmailMailbox;
+  mailbox?: MailboxPlace;
+  onRetryLoad?: () => void;
   scrollResetKey: number | string;
   searchResults?: boolean;
   showAccount?: boolean;
-  threads: readonly GmailThreadSummary[];
+  threads: readonly MailThreadSummary[];
 }
 
+const renderPinnedDayHeading = (rows: readonly VirtualItem[]) => (
+  <PinnedDayHeading revision={rows} />
+);
+
+// The pinned heading marks the top edge of a grouped list, so only its
+// bottom fades.
+const getScrollerClassName = (isGroupedByDay: boolean) =>
+  cn(
+    "scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden! outline-none",
+    isGroupedByDay && "[--scroll-fade-t-size:0px]"
+  );
+
+const getPinnedDayHeading = (isGroupedByDay: boolean, threadCount: number) =>
+  isGroupedByDay && threadCount > 0 ? renderPinnedDayHeading : undefined;
+
+/** A rendered row's day, and whether it opens that day, in a grouped list. */
+const getRowDay = (
+  threads: readonly MailThreadSummary[],
+  index: number,
+  thread: MailThreadSummary,
+  calendar: Calendar
+) => ({
+  day: formatMailDayHeading(thread.latestAt, calendar),
+  isFirstOfDay:
+    threads[index] === thread && isFirstOfDay(threads, index, calendar),
+});
+
 const getRowDestructiveActions = (
-  thread: GmailThreadSummary,
-  onDeleteForever: (thread: GmailThreadSummary) => void,
+  thread: MailThreadSummary,
+  onDeleteForever: (thread: MailThreadSummary) => void,
   onTrash: ThreadActions["trash"]
 ) =>
-  getThreadDestructiveAction(thread.labels) === "deleteForever"
+  getThreadDestructiveAction(thread.places) === "deleteForever"
     ? { onDeleteForever, onTrash: undefined }
     : { onDeleteForever: undefined, onTrash };
 
 const hasDestructiveTarget = (
   checkedCount: number,
   bulkAction: ReturnType<typeof getBulkThreadDestructiveAction>,
-  selectedThread: GmailThreadSummary | undefined
+  selectedThread: MailThreadSummary | undefined
 ): boolean =>
   checkedCount === 0 ? selectedThread !== undefined : bulkAction !== undefined;
 
@@ -88,18 +142,25 @@ interface ThreadListPresentation {
   readonly emptyIcon: React.ReactNode;
   readonly label: string;
   /**
-   * The mailbox's own system label, left off its rows. Search spans every
-   * mailbox, so its rows keep the label that says where each one lives.
+   * The mailbox's own label, left off its rows. Search spans every mailbox,
+   * so its rows keep the label that says where each one lives.
    */
   readonly mailboxLabel?: string;
 }
 
 const getThreadListPresentation = (
   searchResults: boolean,
-  mailbox: GmailMailbox
+  mailbox: MailboxPlace
 ): ThreadListPresentation => {
   if (searchResults) {
     return { emptyIcon: <SearchIcon />, label: "Search results" };
+  }
+  if (isLabelPlace(mailbox)) {
+    return {
+      emptyIcon: <TagIcon />,
+      label: mailbox.label,
+      mailboxLabel: mailbox.label,
+    };
   }
   const mailboxLabel = getMailboxSystemLabel(mailbox);
   if (mailbox === "spam") {
@@ -111,7 +172,222 @@ const getThreadListPresentation = (
   if (mailbox === "trash") {
     return { emptyIcon: <Trash2Icon />, label: "Trash", mailboxLabel };
   }
+  if (mailbox === "starred") {
+    return { emptyIcon: <StarIcon />, label: "Starred", mailboxLabel };
+  }
   return { emptyIcon: <InboxIcon />, label: "Inbox", mailboxLabel };
+};
+
+interface ThreadListPlaceholderView {
+  readonly description?: string;
+  readonly icon: React.ReactNode;
+  readonly title: string;
+}
+
+interface ThreadListPlaceholderCopy {
+  readonly emptyIcon: React.ReactNode;
+  readonly emptyMessage: string;
+  readonly emptyTitle: string;
+  readonly loadError: string | undefined;
+  readonly loadErrorTitle: string;
+  readonly loadingTitle: string;
+}
+
+const getThreadListPlaceholderView = (
+  placeholder: ThreadListPlaceholder,
+  copy: ThreadListPlaceholderCopy
+): ThreadListPlaceholderView => {
+  if (placeholder === "loading") {
+    return { icon: <Spinner />, title: copy.loadingTitle };
+  }
+  if (placeholder === "failed") {
+    return {
+      description: copy.loadError,
+      icon: <CircleAlertIcon />,
+      title: copy.loadErrorTitle,
+    };
+  }
+  return {
+    description: copy.emptyMessage,
+    icon: copy.emptyIcon,
+    title: copy.emptyTitle,
+  };
+};
+
+const RetryLoadButton = ({ onRetry }: { readonly onRetry?: () => void }) =>
+  onRetry === undefined ? null : (
+    <Button onClick={onRetry} size="xs" type="button" variant="secondary">
+      Try again
+    </Button>
+  );
+
+/** What the list shows in place of rows: loading, empty, or a failed load. */
+const ThreadListPlaceholderPane = ({
+  copy,
+  isInitialLoading,
+  onRetryLoad,
+  threadCount,
+}: {
+  readonly copy: ThreadListPlaceholderCopy;
+  readonly isInitialLoading: boolean;
+  readonly onRetryLoad: (() => void) | undefined;
+  readonly threadCount: number;
+}) => {
+  const placeholder = getThreadListPlaceholder({
+    hasLoadError: copy.loadError !== undefined,
+    isInitialLoading,
+    threadCount,
+  });
+  if (placeholder === undefined) {
+    return null;
+  }
+  const view = getThreadListPlaceholderView(placeholder, copy);
+
+  return (
+    <Empty aria-live="polite" className="absolute inset-4 w-auto border-0">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">{view.icon}</EmptyMedia>
+        <EmptyTitle>{view.title}</EmptyTitle>
+        {view.description === undefined ? null : (
+          <EmptyDescription>{view.description}</EmptyDescription>
+        )}
+      </EmptyHeader>
+      {placeholder === "failed" ? (
+        <EmptyContent>
+          <RetryLoadButton onRetry={onRetryLoad} />
+        </EmptyContent>
+      ) : null}
+    </Empty>
+  );
+};
+
+/** The row after the last conversation: a failed load, paging, or a note. */
+const ThreadListTrailingNote = ({
+  hasNextPage,
+  loadError,
+  onRetryLoad,
+  trailingMessage,
+}: {
+  readonly hasNextPage: boolean;
+  readonly loadError: string | undefined;
+  readonly onRetryLoad: (() => void) | undefined;
+  readonly trailingMessage: string | undefined;
+}) =>
+  loadError === undefined ? (
+    <p aria-live="polite" className="text-muted-foreground text-center text-sm">
+      {hasNextPage ? "Fetching the next chapter…" : trailingMessage}
+    </p>
+  ) : (
+    <div className="flex items-center justify-center gap-2">
+      <output className="text-destructive text-sm">{loadError}</output>
+      <RetryLoadButton onRetry={onRetryLoad} />
+    </div>
+  );
+
+const conversationCount = (count: number): string =>
+  `${count} conversation${count === 1 ? "" : "s"}`;
+
+const selectedMessage = (count: number): string =>
+  count === 0 ? "Selection cleared" : `${conversationCount(count)} selected`;
+
+/**
+ * Archive, Star and Report spam for the focused conversation or the checked
+ * ones, through their shortcuts, and the same actions for the selection bar.
+ * A selection acts on the conversations each applies to: Archive on those in
+ * the Inbox, so Undo returns only what left it.
+ */
+const useMailboxThreadCommands = ({
+  actions,
+  bulkDestructiveAction,
+  checkedThreads,
+  selectedThread,
+}: {
+  readonly actions: ThreadActions;
+  readonly bulkDestructiveAction: ReturnType<
+    typeof getBulkThreadDestructiveAction
+  >;
+  readonly checkedThreads: readonly MailThreadSummary[];
+  readonly selectedThread: MailThreadSummary | undefined;
+}) => {
+  const toggleStar = useCallback(
+    (thread: MailThreadSummary): void => {
+      actions.toggleStar({
+        accountId: thread.accountId,
+        isStarred: hasStarredLabel(thread.labels),
+        threadId: thread.threadId,
+      });
+    },
+    [actions]
+  );
+  const isChecking = checkedThreads.length > 0;
+  const archivable = checkedThreads.filter((thread) =>
+    canArchiveThread(thread.places)
+  );
+  const starrable = checkedThreads.filter((thread) =>
+    canStarThread(thread.places)
+  );
+  const canReportChecked = bulkDestructiveAction === "trash";
+  /** Whether a command has a target: the selection, or the focused row. */
+  const hasTarget = (
+    hasCheckedTarget: boolean,
+    appliesTo: (places: readonly string[]) => boolean
+  ): boolean =>
+    isChecking
+      ? hasCheckedTarget
+      : selectedThread !== undefined && appliesTo(selectedThread.places);
+  const archiveChecked = (): void => {
+    actions.bulkArchive(archivable);
+  };
+  const toggleCheckedStar = (): void => {
+    actions.bulkSetStarred(starrable, getBulkStarTarget(starrable));
+  };
+  const reportCheckedSpam = (): void => {
+    actions.bulkReportSpam(checkedThreads);
+  };
+
+  useAppCommand(
+    "mailbox.archiveThread",
+    () => {
+      if (isChecking) {
+        archiveChecked();
+      } else if (selectedThread !== undefined) {
+        actions.archive(selectedThread);
+      }
+    },
+    { enabled: hasTarget(archivable.length > 0, canArchiveThread) }
+  );
+  useAppCommand(
+    "mailbox.toggleThreadStar",
+    () => {
+      if (isChecking) {
+        toggleCheckedStar();
+      } else if (selectedThread !== undefined) {
+        toggleStar(selectedThread);
+      }
+    },
+    { enabled: hasTarget(starrable.length > 0, canStarThread) }
+  );
+  useAppCommand(
+    "mailbox.reportSpam",
+    () => {
+      if (isChecking) {
+        reportCheckedSpam();
+      } else if (selectedThread !== undefined) {
+        actions.reportSpam(selectedThread);
+      }
+    },
+    { enabled: hasTarget(canReportChecked, canReportThreadSpam) }
+  );
+
+  return {
+    selectionBar: {
+      isStarred: !getBulkStarTarget(starrable),
+      onArchive: archivable.length === 0 ? undefined : archiveChecked,
+      onReportSpam: canReportChecked ? reportCheckedSpam : undefined,
+      onToggleStar: starrable.length === 0 ? undefined : toggleCheckedStar,
+    },
+    toggleStar,
+  };
 };
 
 const MailThreadList = ({
@@ -122,9 +398,12 @@ const MailThreadList = ({
   trailingMessage,
   isInitialLoading,
   isLoadingNextPage = false,
+  loadError,
+  loadErrorTitle = "Could not load this mailbox",
   loadingTitle = "Checking the post…",
   loadNextPage,
   mailbox = "inbox",
+  onRetryLoad,
   scrollResetKey,
   searchResults = false,
   showAccount = false,
@@ -132,59 +411,47 @@ const MailThreadList = ({
 }: MailThreadListProps) => {
   const confirm = useConfirm();
   const scrollElementRef = useRef<HTMLElement>(null);
-  const listElementRef = useRef<HTMLOListElement>(null);
+  const list = useInstanceValue(() => createController<MailListController>());
   const selectedThreadKey = useSelectedThreadId();
   const checkedThreadIds = useCheckedThreadIds();
+  // A conversation read over the list covers it, so the list keeps no keys.
+  const isCovered = useOpenThreadId() !== null;
   const openThread = useOpenThread();
   const checkThread = useMailboxStore((state) => state.checkThread);
   const clearCheckedThreads = useMailboxStore(
     (state) => state.clearCheckedThreads
   );
-  const retainCheckedThreads = useMailboxStore(
-    (state) => state.retainCheckedThreads
-  );
+  const setCheckedThreads = useMailboxStore((state) => state.setCheckedThreads);
   const selectThread = useMailboxStore((state) => state.selectThread);
-  const lastSelectionMoveAtRef = useRef<number | null>(null);
   const previousScrollResetKeyRef = useRef(scrollResetKey);
   const threadKeys = useMemo(
     () => threads.map((thread) => getThreadSelectionKey(thread)),
     [threads]
   );
-  const dragSelection = useThreadDragSelection({
-    checkThread,
-    checkedThreadIds,
-    scrollElementRef,
-    selectThread,
-    threadKeys,
-  });
+  const threadsByKey = useMemo(
+    () =>
+      new Map(threads.map((thread) => [getThreadSelectionKey(thread), thread])),
+    [threads]
+  );
+  const checkedKeys = useMemo(() => [...checkedThreadIds], [checkedThreadIds]);
+  const calendar = useCalendar();
+  const isGroupedByDay = useMemo(() => isNewestFirst(threads), [threads]);
   // The trailing row can be a paging trigger or a passive note. Auto-load still
   // keys off `hasNextPage`, so a note cannot start a paging loop.
-  const hasTrailingRow = hasNextPage || trailingMessage !== undefined;
+  // A failure with rows on screen is reported after them; without rows the
+  // placeholder reports it.
+  const trailingError = threads.length > 0 ? loadError : undefined;
+  const hasTrailingRow =
+    hasNextPage || trailingMessage !== undefined || trailingError !== undefined;
   const presentation = getThreadListPresentation(searchResults, mailbox);
   // The floating selection bar (bottom-4 plus its 44px height) would cover
   // the last row, so the list reserves room below it while it is shown.
   const bottomClearance = checkedThreadIds.size > 0 ? 80 : 16;
-  const remeasureOnScrollSettle = useRemeasureOnScrollSettle();
-  const rowVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
-    count: threads.length + (hasTrailingRow ? 1 : 0),
-    estimateSize: () => 88,
-    getItemKey: (index) => {
-      const thread = threads[index];
-      return thread === undefined
-        ? "next-page-loader"
-        : `${thread.accountId}:${thread.threadId}`;
-    },
-    getScrollElement: () => scrollElementRef.current,
-    onChange: remeasureOnScrollSettle,
-    overscan: 8,
-    scrollPaddingEnd: bottomClearance + 8,
-    scrollPaddingStart: 24,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const selectedThreadIndex = threads.findIndex(
-    (thread) => getThreadSelectionKey(thread) === selectedThreadKey
-  );
-  const selectedThread = threads[selectedThreadIndex];
+  const [lastRenderedIndex, setLastRenderedIndex] = useState<number>();
+  const selectedThread =
+    selectedThreadKey === null
+      ? undefined
+      : threadsByKey.get(selectedThreadKey);
   const checkedThreads = useMemo(
     () =>
       threads.filter((thread) =>
@@ -193,65 +460,50 @@ const MailThreadList = ({
     [checkedThreadIds, threads]
   );
   const bulkDestructiveAction = getBulkThreadDestructiveAction(checkedThreads);
-  // This component calls `useVirtualizer`, so React Compiler skips it and every
-  // scroll range change re-renders it. Row props stay referentially stable so
-  // memoized rows skip that render; checked state is read at event time rather
-  // than captured, so toggling one row does not re-render the others.
-  const {
-    consumeSuppressedOpen,
-    onRowPointerDown,
-    onSelectionPointerDown,
-    onSelectionPointerEnter,
-  } = dragSelection;
-  const handleOpen = useCallback(
-    (target: GmailThreadSummary, event: MouseEvent): void => {
-      if (consumeSuppressedOpen(event.detail)) {
+  // Checked state is read at event time, not captured, so these props stay
+  // stable and toggling one row doesn't re-render the memoized others.
+  const handleActivate = useCallback(
+    (key: string, { source }: MailListActivateDetails): void => {
+      const target = threadsByKey.get(key);
+      const { checkedThreadIds: checked } = useMailboxStore.getState();
+
+      if (target === undefined) {
         return;
       }
-
-      const { checkedThreadIds: currentCheckedThreadIds } =
-        useMailboxStore.getState();
-
-      if (currentCheckedThreadIds.size === 0) {
+      if (checked.size === 0 || source === "agent") {
         openThread(target);
         return;
       }
-
-      const key = getThreadSelectionKey(target);
-      checkThread(key, !currentCheckedThreadIds.has(key));
-      selectThread(key);
+      // With conversations checked a click adds or removes the row, as X
+      // does; Enter opens nothing until the selection is cleared.
+      if (source === "pointer") {
+        checkThread(key, !checked.has(key));
+        selectThread(key);
+      }
     },
-    [checkThread, consumeSuppressedOpen, openThread, selectThread]
+    [checkThread, openThread, selectThread, threadsByKey]
+  );
+  const handleCheckedChange = useCallback(
+    (keys: readonly string[]): void => {
+      setCheckedThreads(new Set(keys));
+    },
+    [setCheckedThreads]
   );
   const handleToggleSelection = useCallback(
-    (target: GmailThreadSummary): void => {
+    (target: MailThreadSummary): void => {
       const key = getThreadSelectionKey(target);
       checkThread(key, !useMailboxStore.getState().checkedThreadIds.has(key));
       selectThread(key);
     },
     [checkThread, selectThread]
   );
-  const handleRowPointerDown = useCallback(
-    (target: GmailThreadSummary, event: PointerEvent<HTMLButtonElement>) => {
-      onRowPointerDown(getThreadSelectionKey(target), event);
-    },
-    [onRowPointerDown]
-  );
-  const handleSelectionPointerDown = useCallback(
-    (target: GmailThreadSummary, event: PointerEvent) => {
-      onSelectionPointerDown(getThreadSelectionKey(target), event);
-    },
-    [onSelectionPointerDown]
-  );
-  const handleSelectionPointerEnter = useCallback(
-    (target: GmailThreadSummary) => {
-      onSelectionPointerEnter(getThreadSelectionKey(target));
-    },
-    [onSelectionPointerEnter]
+  const labelOf = useCallback(
+    (key: string): string => threadsByKey.get(key)?.subject ?? key,
+    [threadsByKey]
   );
   const handleToggleRead = actions.toggleRead;
   const requestDeleteForever = useCallback(
-    async (thread: GmailThreadSummary): Promise<void> => {
+    async (thread: MailThreadSummary): Promise<void> => {
       const confirmed = await confirm(
         getDeleteForeverConfirmation(thread.subject)
       );
@@ -263,7 +515,7 @@ const MailThreadList = ({
     [actions, confirm]
   );
   const handleDeleteForever = useCallback(
-    (thread: GmailThreadSummary): void => {
+    (thread: MailThreadSummary): void => {
       void requestDeleteForever(thread);
     },
     [requestDeleteForever]
@@ -274,116 +526,42 @@ const MailThreadList = ({
     );
 
     if (confirmed) {
-      await actions.bulkDeleteForever(checkedThreads);
+      actions.bulkDeleteForever(checkedThreads);
     }
   }, [actions, checkedThreads, confirm]);
-  const requestBulkTrash = useCallback(async (): Promise<void> => {
-    await actions.bulkTrash(checkedThreads);
+  const requestBulkTrash = useCallback((): void => {
+    actions.bulkTrash(checkedThreads);
   }, [actions, checkedThreads]);
-  const getVisibleSelectionIndex = (
-    direction: ThreadSelectionDirection
-  ): number | null => {
-    const scrollElement = scrollElementRef.current;
-    const listElement = listElementRef.current;
-
-    if (scrollElement === null || listElement === null) {
-      return null;
-    }
-
-    // Virtual row offsets are measured from the list, which sits inside the
-    // scroller's padding, so the viewport has to be moved into that space.
-    const viewportStart = scrollElement.scrollTop - listElement.offsetTop;
-
-    return getVisibleThreadSelectionIndex(
-      // Drop the next-page loader row; it is not selectable.
-      virtualRows.filter((row) => row.index < threads.length),
-      viewportStart,
-      viewportStart + scrollElement.clientHeight,
-      direction
-    );
-  };
-
-  const moveSelection = (direction: ThreadSelectionDirection): void => {
-    // With nothing selected the keys pick up from what is on screen rather than
-    // teleporting to a list edge the reader has already scrolled away from.
-    const nextIndex =
-      (selectedThreadIndex === -1
-        ? getVisibleSelectionIndex(direction)
-        : null) ??
-      getNextThreadSelectionIndex(threadKeys, selectedThreadKey, direction);
-
-    if (nextIndex === null) {
-      return;
-    }
-
-    const nextThread = threads[nextIndex];
-
-    if (nextThread === undefined) {
-      return;
-    }
-
-    selectThread(getThreadSelectionKey(nextThread));
-    const now = performance.now();
-    const scrollBehavior = getThreadSelectionScrollBehavior(
-      lastSelectionMoveAtRef.current,
-      now
-    );
-    lastSelectionMoveAtRef.current = now;
-    rowVirtualizer.scrollToIndex(nextIndex, {
-      align: "center",
-      behavior: scrollBehavior,
+  const { selectionBar, toggleStar: handleToggleStar } =
+    useMailboxThreadCommands({
+      actions,
+      bulkDestructiveAction,
+      checkedThreads,
+      selectedThread,
     });
-  };
-
-  const handoffSearchSelection = (
-    direction: ThreadSelectionDirection
-  ): void => {
-    moveSelection(direction);
-    if (document.activeElement instanceof HTMLInputElement) {
-      document.activeElement.blur();
-    }
-  };
-
   useHotkeyLayer("mailbox", true);
-  useAppCommand(
-    "search.nextThread",
-    () => {
-      handoffSearchSelection(1);
-    },
-    { enabled: threads.length > 0 }
-  );
-  useAppCommand(
-    "search.previousThread",
-    () => {
-      handoffSearchSelection(-1);
-    },
-    { enabled: threads.length > 0 }
-  );
   useAppCommand(
     "mailbox.nextThread",
     () => {
-      moveSelection(1);
+      list.move(1);
     },
     { enabled: threads.length > 0 }
   );
   useAppCommand(
     "mailbox.previousThread",
     () => {
-      moveSelection(-1);
+      list.move(-1);
     },
     { enabled: threads.length > 0 }
   );
   useAppCommand("mailbox.clearSelection", () => {
-    clearCheckedThreads();
-    selectThread(null);
-    blurFocusedMailboxLabel();
+    list.clear();
   });
   useAppCommand(
     "mailbox.toggleThreadSelection",
     () => {
-      if (selectedThread !== undefined) {
-        const key = getThreadSelectionKey(selectedThread);
-        checkThread(key, !checkedThreadIds.has(key));
+      if (selectedThreadKey !== null) {
+        list.toggle(selectedThreadKey);
       }
     },
     { enabled: selectedThread !== undefined }
@@ -402,7 +580,7 @@ const MailThreadList = ({
     () => {
       if (checkedThreads.length > 0) {
         const markUnread = checkedThreads.every((thread) => !thread.isUnread);
-        void actions.bulkSetReadState(checkedThreads, markUnread);
+        actions.bulkSetReadState(checkedThreads, markUnread);
       } else if (selectedThread !== undefined) {
         actions.toggleRead(selectedThread);
       }
@@ -416,11 +594,11 @@ const MailThreadList = ({
         if (bulkDestructiveAction === "deleteForever") {
           void requestBulkDeleteForever();
         } else if (bulkDestructiveAction === "trash") {
-          void requestBulkTrash();
+          requestBulkTrash();
         }
       } else if (selectedThread !== undefined) {
         if (
-          getThreadDestructiveAction(selectedThread.labels) === "deleteForever"
+          getThreadDestructiveAction(selectedThread.places) === "deleteForever"
         ) {
           void requestDeleteForever(selectedThread);
         } else {
@@ -438,10 +616,6 @@ const MailThreadList = ({
   );
 
   useEffect(() => {
-    retainCheckedThreads(new Set(threadKeys));
-  }, [retainCheckedThreads, threadKeys]);
-
-  useEffect(() => {
     if (previousScrollResetKeyRef.current === scrollResetKey) {
       return;
     }
@@ -451,119 +625,130 @@ const MailThreadList = ({
   }, [scrollResetKey]);
 
   useEffect(() => {
-    const lastRow = virtualRows.at(-1);
-
     if (
-      lastRow !== undefined &&
-      lastRow.index >= threads.length - 1 &&
-      hasNextPage &&
-      !isLoadingNextPage &&
-      loadNextPage !== undefined
+      loadNextPage !== undefined &&
+      shouldLoadNextPage({
+        hasLoadError: loadError !== undefined,
+        hasNextPage,
+        isLoadingNextPage,
+        lastVisibleIndex: lastRenderedIndex,
+        threadCount: threads.length,
+      })
     ) {
       void loadNextPage();
     }
   }, [
     hasNextPage,
     isLoadingNextPage,
+    lastRenderedIndex,
+    loadError,
     loadNextPage,
     threads.length,
-    virtualRows,
   ]);
 
   return (
-    <>
-      <section
+    // Positioned and clipped, but not a scroll container: the selection bar
+    // rests against this box, so nothing it holds can lengthen the scrolling
+    // <main>. Tooltips and the label menu show in the top layer, which the
+    // clip leaves alone.
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-clip">
+      <MailListRoot
+        after={
+          hasTrailingRow ? (
+            <div className="py-4">
+              <ThreadListTrailingNote
+                hasNextPage={hasNextPage}
+                loadError={trailingError}
+                onRetryLoad={onRetryLoad}
+                trailingMessage={trailingMessage}
+              />
+            </div>
+          ) : null
+        }
         aria-label={presentation.label}
-        className="scroll-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4"
+        before={
+          <ThreadListPlaceholderPane
+            copy={{
+              emptyIcon: presentation.emptyIcon,
+              emptyMessage,
+              emptyTitle,
+              loadError,
+              loadErrorTitle,
+              loadingTitle,
+            }}
+            isInitialLoading={isInitialLoading}
+            onRetryLoad={onRetryLoad}
+            threadCount={threads.length}
+          />
+        }
+        checkable
+        checked={checkedKeys}
+        className={getScrollerClassName(isGroupedByDay)}
+        controller={list}
+        current={selectedThreadKey}
+        estimate={88}
+        gridLabel="Conversations"
+        inert={isCovered}
+        keys={threadKeys}
+        labelOf={labelOf}
+        onActivate={handleActivate}
+        onCheckedChange={handleCheckedChange}
+        onCurrentChange={selectThread}
+        onRowsRendered={(rows) => {
+          setLastRenderedIndex(rows.at(-1)?.index);
+        }}
+        pinned={getPinnedDayHeading(isGroupedByDay, threads.length)}
         ref={scrollElementRef}
+        rowCount={threads.length}
+        selectedMessage={selectedMessage}
         style={{ paddingBottom: bottomClearance }}
         tabIndex={-1}
       >
-        {threads.length === 0 ? (
-          <Empty
-            aria-live="polite"
-            className="absolute inset-4 w-auto border-0"
-          >
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                {isInitialLoading ? <Spinner /> : presentation.emptyIcon}
-              </EmptyMedia>
-              <EmptyTitle>
-                {isInitialLoading ? loadingTitle : emptyTitle}
-              </EmptyTitle>
-              {isInitialLoading ? null : (
-                <EmptyDescription>{emptyMessage}</EmptyDescription>
-              )}
-            </EmptyHeader>
-          </Empty>
-        ) : null}
-        <ol
-          className="relative"
-          ref={listElementRef}
-          style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
-        >
+        {(rows) => (
           <AnimatePresence initial={false}>
-            {virtualRows.map((virtualRow) => {
-              const thread = threads[virtualRow.index];
+            {rows.map((row) => {
+              const thread = threadsByKey.get(row.key);
 
-              return thread === undefined ? (
-                <li
-                  className="absolute top-0 left-0 w-full py-4"
-                  data-index={virtualRow.index}
-                  key={virtualRow.key}
-                  ref={rowVirtualizer.measureElement}
-                  style={{ transform: `translateY(${virtualRow.start}px)` }}
-                >
-                  <p
-                    aria-live="polite"
-                    className="text-muted-foreground text-center text-sm"
-                  >
-                    {hasNextPage
-                      ? "Fetching the next chapter…"
-                      : trailingMessage}
-                  </p>
-                </li>
-              ) : (
+              return thread === undefined ? null : (
                 <MailThreadItem
-                  data-index={virtualRow.index}
-                  data-thread-selection-key={getThreadSelectionKey(thread)}
+                  {...(isGroupedByDay
+                    ? getRowDay(threads, row.index, thread, calendar)
+                    : undefined)}
                   hasCheckedThreads={checkedThreadIds.size > 0}
-                  isChecked={checkedThreadIds.has(
-                    getThreadSelectionKey(thread)
-                  )}
-                  isSelected={
-                    getThreadSelectionKey(thread) === selectedThreadKey
-                  }
-                  key={virtualRow.key}
+                  isChecked={checkedThreadIds.has(row.key)}
+                  isSelected={row.key === selectedThreadKey}
+                  key={row.key}
                   mailboxLabel={presentation.mailboxLabel}
                   {...getRowDestructiveActions(
                     thread,
                     handleDeleteForever,
                     actions.trash
                   )}
-                  onOpen={handleOpen}
-                  onRowPointerDown={handleRowPointerDown}
+                  onArchive={
+                    canArchiveThread(thread.places)
+                      ? actions.archive
+                      : undefined
+                  }
                   onNotSpam={mailbox === "spam" ? actions.notSpam : undefined}
-                  onSelectionPointerDown={handleSelectionPointerDown}
-                  onSelectionPointerEnter={handleSelectionPointerEnter}
                   onToggleRead={handleToggleRead}
                   onToggleSelection={handleToggleSelection}
-                  position={virtualRow.index + 1}
-                  ref={rowVirtualizer.measureElement}
-                  setSize={threads.length}
+                  onToggleStar={
+                    canStarThread(thread.places) ? handleToggleStar : undefined
+                  }
                   showAccount={showAccount}
-                  top={virtualRow.start}
+                  top={row.start}
                   thread={thread}
                 />
               );
             })}
           </AnimatePresence>
-        </ol>
-      </section>
+        )}
+      </MailListRoot>
       <AnimatePresence initial={false}>
         {checkedThreads.length === 0 ? null : (
           <ThreadSelectionBar
             actions={actions}
+            {...selectionBar}
             key="thread-selection-bar"
             onClear={clearCheckedThreads}
             onDeleteForever={
@@ -578,7 +763,7 @@ const MailThreadList = ({
           />
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 };
 

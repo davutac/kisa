@@ -2,13 +2,13 @@ import MailCopyEmailButton from "@/components/mail/copy-email-button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { extractEmailAddresses, parseMailboxAddress } from "@/mail/address";
-import type { GmailThreadMessage } from "@/shared/ipc/mail";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import type { ThreadMessage } from "@/shared/ipc/mail";
+import { useAccounts } from "@/state/accounts";
 
 interface MailMessageParticipantsProps {
   className?: string;
   fallbackRecipient: string;
-  message: GmailThreadMessage;
+  message: ThreadMessage;
 }
 
 interface ParticipantRowProps {
@@ -38,7 +38,7 @@ const MailMessageParticipants = ({
   fallbackRecipient,
   message,
 }: MailMessageParticipantsProps) => {
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const senderMailbox = parseMailboxAddress(message.from);
   const senderEmail = senderMailbox.email;
   const recipientEmails = extractEmailAddresses(message.to);
@@ -49,8 +49,7 @@ const MailMessageParticipants = ({
   const senderAccount = accounts.find(
     ({ email }) => email.toLowerCase() === senderEmail.toLowerCase()
   );
-  const senderImageUrl =
-    senderAccount?.avatarUrl ?? message.senderBrand?.imageDataUrl;
+  const senderImageUrl = message.senderBrand?.imageDataUrl;
   const senderName = senderMailbox.name ?? senderAccount?.displayName;
   const fallbackText =
     (senderName ?? senderEmail).trim().charAt(0).toUpperCase() || "?";
@@ -59,7 +58,7 @@ const MailMessageParticipants = ({
 
   return (
     <div className={cn("items-top flex min-w-0 gap-3", className)}>
-      <Avatar>
+      <Avatar aria-hidden="true">
         {senderImageUrl === undefined ? null : (
           <AvatarImage alt="" src={senderImageUrl} />
         )}

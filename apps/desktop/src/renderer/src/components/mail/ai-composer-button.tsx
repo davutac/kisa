@@ -52,8 +52,9 @@ const AiComposerButton = ({
       aria-busy={isWorking}
       aria-keyshortcuts={getHotkeyAriaLabel(command)}
       aria-label={display.label}
-      disabled={disabled}
-      onClick={onClick}
+      disabled={popover === undefined ? disabled : undefined}
+      focusableWhenDisabled
+      onClick={disabled ? undefined : onClick}
       type="button"
       variant={grouped ? "ghost" : "ai"}
     >
@@ -66,11 +67,23 @@ const AiComposerButton = ({
     </Button>
   );
   const trigger =
-    popover === undefined ? button : <PopoverTrigger render={button} />;
+    popover === undefined ? (
+      button
+    ) : (
+      <PopoverTrigger
+        disabled={disabled}
+        focusableWhenDisabled
+        render={button}
+      />
+    );
   const tooltip = (
     <Tooltip disabled={popover?.open}>
       <TooltipTrigger render={trigger} />
-      <TooltipContent className="flex-col items-start gap-1" side="top">
+      <TooltipContent
+        className="flex-col items-start gap-1"
+        data-agent-hidden={popover === undefined ? undefined : true}
+        side="top"
+      >
         <span className="flex items-center gap-2">
           {display.label}
           <HotkeyHint command={command} />
@@ -93,7 +106,7 @@ const AiComposerButton = ({
       <PopoverContent
         align="start"
         className="max-h-[calc(100dvh-2rem)] w-80 gap-2 overflow-y-auto"
-        initialFocus={popover.initialFocus}
+        initialFocus={() => popover.initialFocus.current}
         side="top"
       >
         {popover.content}

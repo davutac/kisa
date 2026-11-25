@@ -23,6 +23,7 @@ import {
   bestEffortDraftAttachmentCleanup,
   getOptionalDraftAttachmentStore,
 } from "./draft-attachment-store";
+import { isHeldDraft } from "./held-sends";
 import {
   bindOutgoingAttachmentOwner,
   outgoingAttachmentAuthorizations,
@@ -30,10 +31,10 @@ import {
 import { decodeStoredOutgoingAttachmentsStrict } from "./outgoing-attachment-files";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class MailDraftError extends Schema.TaggedError<MailDraftError>()(
-  "MailDraftError",
-  { message: Schema.String }
-) {}
+class MailDraftError extends Schema.TaggedError<
+  MailDraftError,
+  { readonly brand: unique symbol }
+>()("MailDraftError", { message: Schema.String }) {}
 
 type MailDraftRow = typeof mailDrafts.$inferSelect;
 
@@ -204,9 +205,10 @@ export const listStashedDrafts = Effect.fn("listStashedDrafts")(
       )
     );
 
-    return rows.map(({ mail_drafts: row }) =>
-      toMailDraft(row, ownerWebContentsId)
-    );
+    // A message waiting out its Undo send delay is not a stash yet.
+    return rows
+      .filter(({ mail_drafts: row }) => !isHeldDraft(row.accountEmail, row.id))
+      .map(({ mail_drafts: row }) => toMailDraft(row, ownerWebContentsId));
   }
 );
 
@@ -236,14 +238,60 @@ export const loadThreadDraft = Effect.fn("loadThreadDraft")(
     );
     const [row] = rows;
 
-    return row === undefined ? null : toMailDraft(row, ownerWebContentsId);
+    // A reply waiting out its Undo send delay is not a draft to continue.
+    return row === undefined || isHeldDraft(row.accountEmail, row.id)
+      ? null
+      : toMailDraft(row, ownerWebContentsId);
   }
 );
+
+const findDraftRow = (accountId: string, draftId: string) =>
+  withDatabaseClient((database) =>
+    database
+      .select()
+      .from(mailDrafts)
+      .where(
+        and(eq(mailDrafts.id, draftId), eq(mailDrafts.accountEmail, accountId))
+      )
+      .limit(1)
+      .all()
+  ).pipe(
+    Effect.map(([row]) => row),
+    Effect.mapError(
+      () => new MailDraftError({ message: "Could not load the draft" })
+    )
+  );
+
+/**
+ * Shows a draft to every window again, as its hold ends without the message
+ * going out: Undo took it back, or sending failed. Nothing when it is gone,
+ * as when a newer reply replaced it.
+ */
+export const republishDraft = Effect.fn("republishDraft")(
+  function* republishDraft(accountId: string, draftId: string) {
+    const row = yield* findDraftRow(accountId, draftId);
+    if (row !== undefined) {
+      notifyStoredDraftUpserted(row);
+    }
+  }
+);
+
+/** Whether the account still has this draft. */
+export const hasDraft = (accountId: string, draftId: string) =>
+  findDraftRow(accountId, draftId).pipe(Effect.map((row) => row !== undefined));
+
+const heldDraftError = () =>
+  new MailDraftError({
+    message: "This message is being sent; undo it to make changes",
+  });
 
 export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
   input: MailDraftInput,
   ownerWebContentsId: number
 ) {
+  if (isHeldDraft(input.accountId, input.id)) {
+    return yield* heldDraftError();
+  }
   const updatedAt = yield* Clock.currentTimeMillis;
   const storedAttachments = yield* Effect.try({
     catch: (error) =>
@@ -264,8 +312,9 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
       }
 
       if (input.accountId !== undefined) {
-        const account = await transaction.query.googleAccounts.findFirst({
-          where: { email: input.accountId },
+        const account = await transaction.query.mailAccounts.findFirst({
+          columns: { accountId: true },
+          where: { accountId: input.accountId },
         });
         if (account === undefined) {
           throw new Error("Draft account is not connected");
@@ -389,6 +438,9 @@ export const saveMailDraft = Effect.fn("saveMailDraft")(function* saveMailDraft(
 
 export const discardMailDraft = Effect.fn("discardMailDraft")(
   function* discardMailDraft(request: MailDraftDiscardRequest) {
+    if (isHeldDraft(request.accountId, request.draftId)) {
+      return yield* heldDraftError();
+    }
     const removed = yield* withDatabaseClient((database) =>
       database.transaction(async (transaction) => {
         const drafts = await transaction

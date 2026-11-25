@@ -4,20 +4,20 @@ import type { NativeImage } from "electron";
 import sharp from "sharp";
 
 import type {
-  GmailSenderBrand,
-  GmailThreadListChange,
-  GmailThreadRequest,
+  MailSenderBrand,
+  MailThreadListChange,
+  MailThreadRequest,
 } from "../../shared/ipc/mail";
+import { isListedIn } from "../../shared/mailbox-places";
 import { withDatabaseClient } from "../database-query";
 import {
   createWindow,
   getMainWindow,
   openThreadWindow,
 } from "../window/create-window";
-import { decodeGmailSnippet } from "./html-entities";
 
-const GMAIL_INBOX_LABEL = "INBOX";
-const GMAIL_UNREAD_LABEL = "UNREAD";
+const INBOX_LABEL = "INBOX";
+const UNREAD_LABEL = "UNREAD";
 const MAX_NOTIFICATION_CANDIDATES = 25;
 const MAX_NOTIFICATIONS_PER_SYNC = 5;
 const MAX_NOTIFICATION_BODY_BYTES = 128;
@@ -70,7 +70,7 @@ export interface NewMailNotificationDependencies {
     NewMailNotificationError
   >;
   readonly openThreadWindow: (
-    request: GmailThreadRequest
+    request: MailThreadRequest
   ) => Promise<NewMailNotificationWindow>;
 }
 
@@ -90,10 +90,10 @@ export interface NewMailNotificationThreadRow {
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class NewMailNotificationError extends Schema.TaggedError<NewMailNotificationError>()(
-  "NewMailNotificationError",
-  { message: Schema.String }
-) {}
+class NewMailNotificationError extends Schema.TaggedError<
+  NewMailNotificationError,
+  { readonly brand: unique symbol }
+>()("NewMailNotificationError", { message: Schema.String }) {}
 
 const cleanNotificationText = (value: string): string =>
   [...value]
@@ -250,17 +250,15 @@ export const dismissThreadNotifications = (
 };
 
 export const dismissInactiveThreadNotifications = (
-  changes: readonly GmailThreadListChange[]
+  changes: readonly MailThreadListChange[]
 ): void => {
   for (const change of changes) {
     if (change.kind === "remove") {
       dismissThreadNotifications(change.accountId, change.threadId);
     } else if (
       change.kind === "upsert" &&
-      (!change.thread.isUnread ||
-        !change.thread.labels.includes(GMAIL_INBOX_LABEL) ||
-        change.thread.labels.includes("TRASH") ||
-        change.thread.labels.includes("SPAM"))
+      // The Inbox lists nothing that is in Spam or Trash.
+      (!change.thread.isUnread || !isListedIn(change.thread.places, "inbox"))
     ) {
       dismissThreadNotifications(
         change.thread.accountId,
@@ -271,7 +269,7 @@ export const dismissInactiveThreadNotifications = (
 };
 
 const toBrandIcon = Effect.fn("toBrandIcon")(function* toBrandIcon(
-  brand: GmailSenderBrand
+  brand: MailSenderBrand
 ) {
   const cached = brandIcons.get(brand.imageDataUrl);
 
@@ -330,8 +328,8 @@ const toBrandIcon = Effect.fn("toBrandIcon")(function* toBrandIcon(
 const showNotification = (
   message: NewMailNotificationMessage,
   brandIcon: NativeImage | null,
-  markThreadRead: (request: GmailThreadRequest) => void,
-  trashThread: (request: GmailThreadRequest) => void,
+  markThreadRead: (request: MailThreadRequest) => void,
+  trashThread: (request: MailThreadRequest) => void,
   dependencies: NewMailNotificationDependencies
 ): void => {
   const copy = toNewMailNotificationCopy(message);
@@ -434,14 +432,12 @@ export const selectNewMailNotificationMessages = (
   const eligible = messages
     .filter(
       (message) =>
-        message.labelIds?.includes(GMAIL_INBOX_LABEL) === true &&
-        message.labelIds.includes(GMAIL_UNREAD_LABEL)
+        message.labelIds?.includes(INBOX_LABEL) === true &&
+        message.labelIds.includes(UNREAD_LABEL)
     )
     .slice(0, MAX_NOTIFICATIONS_PER_SYNC);
   const snippetsByThread = new Map(
-    threads.map(
-      (thread) => [thread.threadId, decodeGmailSnippet(thread.snippet)] as const
-    )
+    threads.map((thread) => [thread.threadId, thread.snippet] as const)
   );
 
   return eligible.map((message) => {
@@ -481,29 +477,39 @@ const loadNotificationMessages = Effect.fn("loadNotificationMessages")(
         return [];
       }
 
-      const messages = await database.query.gmailMessages.findMany({
-        orderBy: { internalDate: "desc" },
-        where: {
-          accountEmail: accountId,
-          messageId: { in: candidateIds },
+      const messages = await database.query.mailMessages.findMany({
+        columns: {
+          fromAddress: true,
+          fromName: true,
+          labelIds: true,
+          messageId: true,
+          receivedAt: true,
+          subject: true,
+          threadId: true,
         },
+        orderBy: { receivedAt: "desc" },
+        where: { accountId, messageId: { in: candidateIds } },
       });
       const eligible = messages
         .filter(
           (message) =>
-            message.labelIds?.includes(GMAIL_INBOX_LABEL) === true &&
-            message.labelIds.includes(GMAIL_UNREAD_LABEL)
+            message.labelIds.includes(INBOX_LABEL) &&
+            message.labelIds.includes(UNREAD_LABEL)
         )
-        .slice(0, MAX_NOTIFICATIONS_PER_SYNC);
+        .slice(0, MAX_NOTIFICATIONS_PER_SYNC)
+        .map(({ receivedAt, ...message }) => ({
+          ...message,
+          internalDate: receivedAt,
+        }));
 
       if (eligible.length === 0) {
         return [];
       }
 
-      const threads = await database.query.gmailThreads.findMany({
+      const threads = await database.query.mailThreads.findMany({
         columns: { snippet: true, threadId: true },
         where: {
-          accountEmail: accountId,
+          accountId,
           threadId: {
             in: [...new Set(eligible.map(({ threadId }) => threadId))],
           },
@@ -532,15 +538,15 @@ const liveNotificationDependencies: NewMailNotificationDependencies = {
 
 type ResolveSenderBrand = (
   message: NewMailNotificationMessage
-) => Effect.Effect<GmailSenderBrand | null, unknown>;
+) => Effect.Effect<MailSenderBrand | null, unknown>;
 
 export const showNewMailNotifications = Effect.fn("showNewMailNotifications")(
   function* showNewMailNotifications(
     accountId: string,
     addedMessageIds: readonly string[],
     resolveSenderBrand: ResolveSenderBrand,
-    markThreadRead: (request: GmailThreadRequest) => void,
-    trashThread: (request: GmailThreadRequest) => void,
+    markThreadRead: (request: MailThreadRequest) => void,
+    trashThread: (request: MailThreadRequest) => void,
     dependencies: NewMailNotificationDependencies = liveNotificationDependencies
   ) {
     if (!Notification.isSupported()) {

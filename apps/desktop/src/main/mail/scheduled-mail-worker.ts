@@ -3,9 +3,9 @@ import type {
   ScheduledMessageAttentionReason,
   StoredMailDraftAttachment,
 } from "@repo/database/schemas";
-import type { OutgoingAttachment } from "@repo/gmail/models";
 import { Effect, Fiber } from "effect";
 
+import type { OutgoingAttachment } from "./engine/outgoing-message";
 import { ScheduledMailAttachmentError } from "./scheduled-mail-attachment-error";
 import { getScheduledMailKeyId } from "./scheduled-mail-keyed-serial";
 import type { ScheduledMailWorkerError } from "./scheduled-mail-worker-error";
@@ -183,12 +183,12 @@ export class ScheduledMailWorker {
     this.#dependencies = dependencies;
   }
 
-  start(): Promise<void> {
-    return Effect.runPromise(this.#start());
+  start(): Effect.Effect<void, ScheduledMailWorkerError> {
+    return this.#start();
   }
 
-  stop(): Promise<void> {
-    return Effect.runPromise(this.#stop());
+  stop(): Effect.Effect<void> {
+    return this.#stop();
   }
 
   wake(): Promise<void> {
@@ -204,10 +204,10 @@ export class ScheduledMailWorker {
       yield* promiseEffect(() =>
         this.#store.resetPreparing(this.#dependencies.now())
       ).pipe(
-        Effect.catch((error) =>
+        Effect.tapError(() =>
           Effect.sync(() => {
             this.#running = false;
-          }).pipe(Effect.andThen(Effect.fail(error)))
+          })
         )
       );
       yield* this.#wake();
@@ -417,25 +417,9 @@ export class ScheduledMailWorker {
         return;
       }
 
-      const startedAt = item.rateLimitStartedAt;
-      if (
-        startedAt !== undefined &&
-        this.#dependencies.now() - startedAt >=
-          SCHEDULED_MAIL_RATE_LIMIT_WINDOW_MS
-      ) {
-        yield* promiseEffect(() =>
-          this.#store.markAttention(
-            item,
-            item.attemptId,
-            "rate-limit-exhausted",
-            this.#dependencies.now()
-          )
-        );
-        phase = "terminal";
-        yield* this.#notify(item, "attention");
-        return;
-      }
-
+      // The 24-hour retry window is judged after an attempt that fails,
+      // never before one: an email whose window ran out while the app was
+      // closed or offline is still tried once.
       if (!this.#dependencies.isOnline()) {
         const now = this.#dependencies.now();
         yield* promiseEffect(() =>
@@ -562,6 +546,17 @@ export class ScheduledMailWorker {
         return;
       }
 
+      if (outcome.error.kind === "outcome-unknown") {
+        // Left `sending` for the lookup in sent mail that a restart runs,
+        // after the server has had time to file it there.
+        this.#reconcileAfter.set(
+          getScheduledMailKeyId(item),
+          now + SCHEDULED_MAIL_POLL_INTERVAL_MS
+        );
+        phase = "terminal";
+        return;
+      }
+
       const attentionReason = outcome.error.kind;
       yield* promiseEffect(() =>
         this.#store.markAttention(item, item.attemptId, attentionReason, now)
@@ -579,27 +574,20 @@ export class ScheduledMailWorker {
     item: ClaimedScheduledMail,
     phase: "preparing" | "sending" | "terminal"
   ): Effect.Effect<void, ScheduledMailWorkerError> {
-    if (phase === "terminal") {
+    // A send cut short may have reached the server, so it stays `sending`:
+    // the next start looks for it in sent mail before saying anything.
+    if (phase !== "preparing") {
       return Effect.void;
     }
     const now = this.#dependencies.now();
-    if (phase === "preparing") {
-      return promiseEffect(() =>
-        this.#store.releasePreparation(
-          item,
-          item.attemptId,
-          now + SCHEDULED_MAIL_POLL_INTERVAL_MS,
-          now
-        )
-      ).pipe(Effect.asVoid);
-    }
     return promiseEffect(() =>
-      this.#store.markAttention(item, item.attemptId, "outcome-unknown", now)
-    ).pipe(
-      Effect.flatMap((changed) =>
-        changed ? this.#notify(item, "attention") : Effect.void
+      this.#store.releasePreparation(
+        item,
+        item.attemptId,
+        now + SCHEDULED_MAIL_POLL_INTERVAL_MS,
+        now
       )
-    );
+    ).pipe(Effect.asVoid);
   }
 
   #recoverSending(): Effect.Effect<void, ScheduledMailWorkerError> {

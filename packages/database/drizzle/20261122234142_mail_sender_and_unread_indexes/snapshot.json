@@ -1,0 +1,2277 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "e58f59b9-83ec-4a5e-9a08-0327c89b241a",
+  "prevIds": [
+    "cb2dc146-dea5-4517-aacc-62873ddf1229"
+  ],
+  "ddl": [
+    {
+      "name": "account_settings",
+      "entityType": "tables"
+    },
+    {
+      "name": "ai_settings",
+      "entityType": "tables"
+    },
+    {
+      "name": "composer_templates",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_accounts",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_drafts",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_labels",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_mailboxes",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_message_locations",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_messages",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_sender_brands",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_threads",
+      "entityType": "tables"
+    },
+    {
+      "name": "mail_trusted_image_senders",
+      "entityType": "tables"
+    },
+    {
+      "name": "scheduled_messages",
+      "entityType": "tables"
+    },
+    {
+      "name": "test",
+      "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "categorization_enabled",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'{\"html\":\"\",\"text\":\"\"}'",
+      "generated": null,
+      "name": "email_signature",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "notifications_enabled",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "show_system_labels",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "spam_last_checked_at",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "account_settings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "active_provider",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'claude-sonnet-5'",
+      "generated": null,
+      "name": "claude_model",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "claude_reasoning",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "cleanup_instructions",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'gpt-5.6-luna'",
+      "generated": null,
+      "name": "codex_model",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "'low'",
+      "generated": null,
+      "name": "codex_reasoning",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "opencode_model",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "opencode_reasoning",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "reply_instructions",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "ai_settings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bcc",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_html",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_text",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cc",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subject",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "composer_templates"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "blob",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "credentials",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "dialect",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "display_name",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "email",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "imap_host",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "imap_port",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "imap_security",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "smtp_host",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "smtp_port",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "smtp_security",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sort_order",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "username",
+      "entityType": "columns",
+      "table": "mail_accounts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attachments",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bcc",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_html",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_text",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cc",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "signature_account_email",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "signature_html",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "signature_text",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subject",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thread_id",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_drafts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "background_color",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label_id",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "mailbox_path",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "text_color",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "delimiter",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "flag_cursor",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "highest_modseq",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_count",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "path",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "role",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selectable",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "skeleton_floor",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "synced",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "uid_next",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "uid_validity",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_mailboxes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "flags",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label_ids",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "mailbox_path",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "modseq",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "uid",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "uid_validity",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_message_locations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thread_id",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "received_at",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_unread",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_starred",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_draft",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'none'",
+      "generated": null,
+      "name": "body_state",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "size",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label_ids",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_address",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_name",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subject",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "snippet",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attachments",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "has_attachments",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "has_blocked_remote_images",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "sender_authenticated",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "schema_version",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sent_at",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rfc822_message_id",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "in_reply_to",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "first_reference",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reply_to_address",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to_addresses",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cc_addresses",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bcc_addresses",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "headers",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_text",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "blob",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body_html",
+      "entityType": "columns",
+      "table": "mail_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authority_url",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "domain",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "blob",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "logo_data",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "logo_url",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selector",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_sender_brands"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attachments",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_address",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_name",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "has_attachments",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_in_inbox",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_in_sent",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_in_spam",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_in_trash",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "is_unread",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label_ids",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "latest_at",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "latest_message_id",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_count",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snippet",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "spam_added_at",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subject",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thread_id",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "mail_threads"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "account_email",
+      "entityType": "columns",
+      "table": "mail_trusted_image_senders"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "mail_trusted_image_senders"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sender_email",
+      "entityType": "columns",
+      "table": "mail_trusted_image_senders"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "attempt_count",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attempt_id",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attention_reason",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "draft_id",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_attempt_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "next_attempt_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "notification_claim_id",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "notification_claimed_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "notified_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rate_limit_started_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rfc_message_id",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scheduled_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "scheduled_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "test"
+    },
+    {
+      "columns": [
+        "account_email"
+      ],
+      "tableTo": "mail_accounts",
+      "columnsTo": [
+        "account_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_composer_templates_account_email_mail_accounts_account_id_fk",
+      "entityType": "fks",
+      "table": "composer_templates"
+    },
+    {
+      "columns": [
+        "draft_id"
+      ],
+      "tableTo": "mail_drafts",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_scheduled_messages_draft_id_mail_drafts_id_fk",
+      "entityType": "fks",
+      "table": "scheduled_messages"
+    },
+    {
+      "columns": [
+        "account_id",
+        "label_id"
+      ],
+      "nameExplicit": false,
+      "name": "mail_labels_pk",
+      "entityType": "pks",
+      "table": "mail_labels"
+    },
+    {
+      "columns": [
+        "account_id",
+        "path"
+      ],
+      "nameExplicit": false,
+      "name": "mail_mailboxes_pk",
+      "entityType": "pks",
+      "table": "mail_mailboxes"
+    },
+    {
+      "columns": [
+        "account_id",
+        "mailbox_path",
+        "uid"
+      ],
+      "nameExplicit": false,
+      "name": "mail_message_locations_pk",
+      "entityType": "pks",
+      "table": "mail_message_locations"
+    },
+    {
+      "columns": [
+        "account_id",
+        "message_id"
+      ],
+      "nameExplicit": false,
+      "name": "mail_messages_pk",
+      "entityType": "pks",
+      "table": "mail_messages"
+    },
+    {
+      "columns": [
+        "domain",
+        "selector"
+      ],
+      "nameExplicit": false,
+      "name": "mail_sender_brands_pk",
+      "entityType": "pks",
+      "table": "mail_sender_brands"
+    },
+    {
+      "columns": [
+        "account_id",
+        "thread_id"
+      ],
+      "nameExplicit": false,
+      "name": "mail_threads_pk",
+      "entityType": "pks",
+      "table": "mail_threads"
+    },
+    {
+      "columns": [
+        "account_email",
+        "sender_email"
+      ],
+      "nameExplicit": false,
+      "name": "mail_trusted_image_senders_pk",
+      "entityType": "pks",
+      "table": "mail_trusted_image_senders"
+    },
+    {
+      "columns": [
+        "account_email"
+      ],
+      "nameExplicit": false,
+      "name": "account_settings_pk",
+      "table": "account_settings",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "ai_settings_pk",
+      "table": "ai_settings",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "composer_templates_pk",
+      "table": "composer_templates",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "account_id"
+      ],
+      "nameExplicit": false,
+      "name": "mail_accounts_pk",
+      "table": "mail_accounts",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "mail_drafts_pk",
+      "table": "mail_drafts",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "draft_id"
+      ],
+      "nameExplicit": false,
+      "name": "scheduled_messages_pk",
+      "table": "scheduled_messages",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "test_pk",
+      "table": "test",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "composer_templates_name_idx",
+      "entityType": "indexes",
+      "table": "composer_templates"
+    },
+    {
+      "columns": [
+        {
+          "value": "kind",
+          "isExpression": false
+        },
+        {
+          "value": "updated_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_drafts_stashes_idx",
+      "entityType": "indexes",
+      "table": "mail_drafts"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_email",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"mail_drafts\".\"thread_id\" is not null",
+      "origin": "manual",
+      "name": "mail_drafts_thread_idx",
+      "entityType": "indexes",
+      "table": "mail_drafts"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_message_locations_message_idx",
+      "entityType": "indexes",
+      "table": "mail_message_locations"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_messages_thread_idx",
+      "entityType": "indexes",
+      "table": "mail_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "body_state",
+          "isExpression": false
+        },
+        {
+          "value": "\"received_at\" desc",
+          "isExpression": true
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_messages_body_queue_idx",
+      "entityType": "indexes",
+      "table": "mail_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "rfc822_message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_messages_rfc822_idx",
+      "entityType": "indexes",
+      "table": "mail_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "from_address",
+          "isExpression": false
+        },
+        {
+          "value": "from_name",
+          "isExpression": false
+        },
+        {
+          "value": "received_at",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_messages_from_idx",
+      "entityType": "indexes",
+      "table": "mail_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "is_in_inbox",
+          "isExpression": false
+        },
+        {
+          "value": "\"latest_at\" desc",
+          "isExpression": true
+        },
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_threads_inbox_idx",
+      "entityType": "indexes",
+      "table": "mail_threads"
+    },
+    {
+      "columns": [
+        {
+          "value": "is_in_sent",
+          "isExpression": false
+        },
+        {
+          "value": "\"latest_at\" desc",
+          "isExpression": true
+        },
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_threads_sent_idx",
+      "entityType": "indexes",
+      "table": "mail_threads"
+    },
+    {
+      "columns": [
+        {
+          "value": "is_in_spam",
+          "isExpression": false
+        },
+        {
+          "value": "\"latest_at\" desc",
+          "isExpression": true
+        },
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_threads_spam_idx",
+      "entityType": "indexes",
+      "table": "mail_threads"
+    },
+    {
+      "columns": [
+        {
+          "value": "is_in_trash",
+          "isExpression": false
+        },
+        {
+          "value": "\"latest_at\" desc",
+          "isExpression": true
+        },
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "thread_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "mail_threads_trash_idx",
+      "entityType": "indexes",
+      "table": "mail_threads"
+    },
+    {
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "is_in_inbox",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "\"mail_threads\".\"is_unread\" = 1 and \"mail_threads\".\"is_in_spam\" = 0 and \"mail_threads\".\"is_in_trash\" = 0",
+      "origin": "manual",
+      "name": "mail_threads_unread_idx",
+      "entityType": "indexes",
+      "table": "mail_threads"
+    },
+    {
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false
+        },
+        {
+          "value": "next_attempt_at",
+          "isExpression": false
+        },
+        {
+          "value": "scheduled_at",
+          "isExpression": false
+        },
+        {
+          "value": "draft_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "scheduled_messages_due_idx",
+      "entityType": "indexes",
+      "table": "scheduled_messages"
+    },
+    {
+      "value": "\"attempt_count\" >= 0",
+      "name": "scheduled_messages_attempt_count_check",
+      "entityType": "checks",
+      "table": "scheduled_messages"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "scheduled_messages_revision_check",
+      "entityType": "checks",
+      "table": "scheduled_messages"
+    },
+    {
+      "value": "length(\"rfc_message_id\") > 0",
+      "name": "scheduled_messages_rfc_message_id_check",
+      "entityType": "checks",
+      "table": "scheduled_messages"
+    },
+    {
+      "value": "(\n        (\"status\" = 'scheduled' AND \"next_attempt_at\" IS NOT NULL AND \"attempt_id\" IS NULL AND \"attention_reason\" IS NULL)\n        OR (\"status\" = 'preparing' AND \"next_attempt_at\" IS NULL AND \"attempt_id\" IS NOT NULL AND \"attention_reason\" IS NULL)\n        OR (\"status\" = 'sending' AND \"next_attempt_at\" IS NULL AND \"attempt_id\" IS NOT NULL AND \"attention_reason\" IS NULL)\n        OR (\"status\" = 'sent' AND \"next_attempt_at\" IS NULL AND \"attempt_id\" IS NULL AND \"attention_reason\" IS NULL)\n        OR (\"status\" = 'attention' AND \"next_attempt_at\" IS NULL AND \"attempt_id\" IS NULL AND \"attention_reason\" IS NOT NULL)\n      )",
+      "name": "scheduled_messages_state_check",
+      "entityType": "checks",
+      "table": "scheduled_messages"
+    },
+    {
+      "value": "\"attention_reason\" IS NULL OR \"attention_reason\" IN (\n        'account-action-required',\n        'attachment-missing',\n        'attachment-changed',\n        'attachment-invalid',\n        'attachment-too-large',\n        'message-invalid',\n        'delivery-rejected',\n        'rate-limit-exhausted',\n        'outcome-unknown'\n      )",
+      "name": "scheduled_messages_attention_reason_check",
+      "entityType": "checks",
+      "table": "scheduled_messages"
+    },
+    {
+      "value": "(\n        (\"notification_claim_id\" IS NULL AND \"notification_claimed_at\" IS NULL)\n        OR (\"notification_claim_id\" IS NOT NULL AND \"notification_claimed_at\" IS NOT NULL)\n      )",
+      "name": "scheduled_messages_notification_claim_check",
+      "entityType": "checks",
+      "table": "scheduled_messages"
+    },
+    {
+      "value": "(\n        (\"notification_claim_id\" IS NULL AND \"notification_claimed_at\" IS NULL AND \"notified_at\" IS NULL)\n        OR \"status\" IN ('sent', 'attention')\n      )",
+      "name": "scheduled_messages_notification_terminal_check",
+      "entityType": "checks",
+      "table": "scheduled_messages"
+    }
+  ],
+  "renames": []
+}

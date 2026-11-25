@@ -17,7 +17,12 @@ import {
 import type { ReactNode } from "react";
 
 import EmailComposerLinkButton from "@/components/mail/email-composer-link-button";
-import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
+import {
+  Toolbar,
+  ToolbarButton,
+  ToolbarSeparator,
+} from "@/components/ui/toolbar";
 
 interface EmailComposerToolbarProps {
   actions?: ReactNode;
@@ -25,37 +30,50 @@ interface EmailComposerToolbarProps {
   editor: Editor | null;
 }
 
-interface ToolbarButtonProps {
-  active?: boolean;
+interface FormatToggleProps {
   children: ReactNode;
-  disabled: boolean;
+  label: string;
+  onToggle: () => void;
+  pressed: boolean;
+}
+
+const FormatToggle = ({
+  children,
+  label,
+  onToggle,
+  pressed,
+}: FormatToggleProps) => (
+  <Toggle
+    aria-label={label}
+    onPressedChange={onToggle}
+    pressed={pressed}
+    title={label}
+  >
+    {children}
+  </Toggle>
+);
+
+interface FormatButtonProps {
+  children: ReactNode;
+  disabled?: boolean;
   label: string;
   onClick: () => void;
 }
 
-const ToolbarSeparator = () => (
-  <span aria-hidden className="bg-border mx-1 h-4 w-px" />
-);
-
-const ToolbarButton = ({
-  active,
+const FormatButton = ({
   children,
   disabled,
   label,
   onClick,
-}: ToolbarButtonProps) => (
-  <Button
+}: FormatButtonProps) => (
+  <ToolbarButton
     aria-label={label}
-    aria-pressed={active}
     disabled={disabled}
     onClick={onClick}
-    size="icon"
     title={label}
-    type="button"
-    variant={active ? "secondary" : "ghost"}
   >
     {children}
-  </Button>
+  </ToolbarButton>
 );
 
 const EmailComposerToolbar = ({
@@ -92,111 +110,102 @@ const EmailComposerToolbar = ({
   }
 
   return (
-    <div
-      aria-label="Formatting"
-      className="border-background flex flex-wrap items-center gap-0.5 border-t px-2 py-1"
-      role="toolbar"
-    >
-      <ToolbarButton
-        active={editorState.isBold}
+    <div className="flex flex-wrap items-center gap-0.5 px-2 py-1">
+      <Toolbar
+        aria-label="Formatting"
+        className="flex-wrap"
         disabled={disabled}
-        label="Bold"
-        onClick={() => editor.chain().focus().toggleBold().run()}
       >
-        <BoldIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        active={editorState.isItalic}
-        disabled={disabled}
-        label="Italic"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-      >
-        <ItalicIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        active={editorState.isUnderline}
-        disabled={disabled}
-        label="Underline"
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-      >
-        <UnderlineIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        active={editorState.isStrike}
-        disabled={disabled}
-        label="Strikethrough"
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-      >
-        <StrikethroughIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        active={editorState.isCode}
-        disabled={disabled}
-        label="Inline code"
-        onClick={() => editor.chain().focus().toggleCode().run()}
-      >
-        <CodeIcon />
-      </ToolbarButton>
-      <EmailComposerLinkButton
-        disabled={disabled}
-        editor={editor}
-        isActive={editorState.isLink}
-      />
-      <ToolbarSeparator />
-      <ToolbarButton
-        active={editorState.isBulletList}
-        disabled={disabled}
-        label="Bulleted list"
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-      >
-        <ListIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        active={editorState.isOrderedList}
-        disabled={disabled}
-        label="Numbered list"
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-      >
-        <ListOrderedIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        active={editorState.isBlockquote}
-        disabled={disabled}
-        label="Quote"
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-      >
-        <QuoteIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        active={editorState.isCodeBlock}
-        disabled={disabled}
-        label="Code block"
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-      >
-        <FileCodeIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        disabled={disabled}
-        label="Horizontal rule"
-        onClick={() => editor.chain().focus().setHorizontalRule().run()}
-      >
-        <MinusIcon />
-      </ToolbarButton>
-      <ToolbarSeparator />
-      <ToolbarButton
-        disabled={disabled || !editorState.canUndo}
-        label="Undo"
-        onClick={() => editor.chain().focus().undo().run()}
-      >
-        <Undo2Icon />
-      </ToolbarButton>
-      <ToolbarButton
-        disabled={disabled || !editorState.canRedo}
-        label="Redo"
-        onClick={() => editor.chain().focus().redo().run()}
-      >
-        <Redo2Icon />
-      </ToolbarButton>
+        <FormatToggle
+          label="Bold"
+          onToggle={() => editor.chain().focus().toggleBold().run()}
+          pressed={editorState.isBold}
+        >
+          <BoldIcon />
+        </FormatToggle>
+        <FormatToggle
+          label="Italic"
+          onToggle={() => editor.chain().focus().toggleItalic().run()}
+          pressed={editorState.isItalic}
+        >
+          <ItalicIcon />
+        </FormatToggle>
+        <FormatToggle
+          label="Underline"
+          onToggle={() => editor.chain().focus().toggleUnderline().run()}
+          pressed={editorState.isUnderline}
+        >
+          <UnderlineIcon />
+        </FormatToggle>
+        <FormatToggle
+          label="Strikethrough"
+          onToggle={() => editor.chain().focus().toggleStrike().run()}
+          pressed={editorState.isStrike}
+        >
+          <StrikethroughIcon />
+        </FormatToggle>
+        <FormatToggle
+          label="Inline code"
+          onToggle={() => editor.chain().focus().toggleCode().run()}
+          pressed={editorState.isCode}
+        >
+          <CodeIcon />
+        </FormatToggle>
+        <EmailComposerLinkButton
+          editor={editor}
+          isActive={editorState.isLink}
+        />
+        <ToolbarSeparator />
+        <FormatToggle
+          label="Bulleted list"
+          onToggle={() => editor.chain().focus().toggleBulletList().run()}
+          pressed={editorState.isBulletList}
+        >
+          <ListIcon />
+        </FormatToggle>
+        <FormatToggle
+          label="Numbered list"
+          onToggle={() => editor.chain().focus().toggleOrderedList().run()}
+          pressed={editorState.isOrderedList}
+        >
+          <ListOrderedIcon />
+        </FormatToggle>
+        <FormatToggle
+          label="Quote"
+          onToggle={() => editor.chain().focus().toggleBlockquote().run()}
+          pressed={editorState.isBlockquote}
+        >
+          <QuoteIcon />
+        </FormatToggle>
+        <FormatToggle
+          label="Code block"
+          onToggle={() => editor.chain().focus().toggleCodeBlock().run()}
+          pressed={editorState.isCodeBlock}
+        >
+          <FileCodeIcon />
+        </FormatToggle>
+        <FormatButton
+          label="Horizontal rule"
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        >
+          <MinusIcon />
+        </FormatButton>
+        <ToolbarSeparator />
+        <FormatButton
+          disabled={!editorState.canUndo}
+          label="Undo"
+          onClick={() => editor.chain().focus().undo().run()}
+        >
+          <Undo2Icon />
+        </FormatButton>
+        <FormatButton
+          disabled={!editorState.canRedo}
+          label="Redo"
+          onClick={() => editor.chain().focus().redo().run()}
+        >
+          <Redo2Icon />
+        </FormatButton>
+      </Toolbar>
       {actions === undefined ? null : (
         <div className="ml-auto flex items-center gap-1">{actions}</div>
       )}

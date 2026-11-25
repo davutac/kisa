@@ -1,6 +1,6 @@
 // oxlint-disable unicorn/no-useless-undefined vitest/no-standalone-expect
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Exit } from "effect";
+import { Effect, Schema } from "effect";
 import { beforeEach, vi } from "vitest";
 
 import type { LoginItemSettings } from "../src/shared/ipc/app";
@@ -69,14 +69,16 @@ describe("login item settings IPC", () => {
     })
   );
 
-  it("rejects a non-boolean launch-at-login value", async () => {
-    const exit = await Effect.runPromiseExit(
-      setLoginItemSettings.handler({ openAtLogin: "yes" })
-    );
+  it.effect("rejects a non-boolean launch-at-login value", () =>
+    Effect.gen(function* rejectsANonBooleanLaunchAtLoginValue() {
+      const error = yield* Effect.flip(
+        setLoginItemSettings.handler({ openAtLogin: "yes" })
+      );
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
-    expect(mocks.update).not.toHaveBeenCalled();
-  });
+      expect(Schema.isSchemaError(error)).toBeTruthy();
+      expect(mocks.update).not.toHaveBeenCalled();
+    })
+  );
 
   it.effect(
     "returns a narrow error when Electron cannot read the setting",

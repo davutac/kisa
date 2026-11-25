@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { Effect } from "effect";
+import { Cause, Effect, Exit, Result } from "effect";
 import { net } from "electron";
 
 import { accountMailWorkSupervisor } from "./account-mail-work-supervisor";
@@ -8,11 +8,8 @@ import {
   bestEffortDraftAttachmentCleanup,
   getOptionalDraftAttachmentStore,
 } from "./draft-attachment-store";
-import {
-  deliverNewMessage,
-  findSentNewMessageByRfc822MessageId,
-  MailSyncError,
-} from "./mail-sync";
+import { runEngineExit } from "./engine/mail-engine";
+import { findSentMessage, sendNewMessage } from "./engine/mail-send";
 import { decodeStoredOutgoingAttachmentsStrict } from "./outgoing-attachment-files";
 import { loadScheduledAttachments } from "./scheduled-mail-attachments";
 import {
@@ -53,22 +50,48 @@ const deleteSentAttachmentCopies = Effect.fn("deleteSentAttachmentCopies")(
   }
 );
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This catch boundary narrows adapter failures to the durable delivery failure union.
-const toDeliveryFailure = (error: unknown): ScheduledMailDeliveryFailure => {
-  if (!(error instanceof MailSyncError)) {
-    return { kind: "outcome-unknown" };
+/** The engine's failure, if the send failed with one. */
+const failureOf = <A, E>(exit: Exit.Exit<A, E>): E | undefined => {
+  if (Exit.isSuccess(exit)) {
+    return;
   }
-  switch (error.kind) {
-    case "rate-limited": {
-      return error.retryAfterMs === undefined
-        ? { kind: "rate-limited" }
-        : { kind: "rate-limited", retryAfterMs: error.retryAfterMs };
+  const found = Cause.findError(exit.cause);
+  return Result.isSuccess(found) ? found.success : undefined;
+};
+
+type SendFailure = ReturnType<
+  typeof failureOf<unknown, Effect.Error<ReturnType<typeof sendNewMessage>>>
+>;
+
+/**
+ * What a failed send means for the scheduled message. Only a failure that
+ * may have delivered it is "outcome unknown", which looks in sent mail
+ * before anything is sent again; a failure before the hand-over is retried.
+ */
+const toDeliveryFailure = (
+  failure: SendFailure
+): ScheduledMailDeliveryFailure => {
+  switch (failure?._tag) {
+    case "MailAuthError":
+    case "MailEngineError": {
+      return { kind: "account-action-required" };
     }
-    case "account-action-required":
-    case "delivery-rejected":
-    case "message-invalid":
-    case "outcome-unknown": {
-      return { kind: error.kind };
+    // A store failure happens only before the message is handed to the
+    // mail server: reading the account and its sender. Nothing was sent.
+    case "MailConnectionError":
+    case "MailStoreError": {
+      return { kind: "rate-limited" };
+    }
+    case "MailThrottledError": {
+      return failure.retryAfterMs === undefined
+        ? { kind: "rate-limited" }
+        : { kind: "rate-limited", retryAfterMs: failure.retryAfterMs };
+    }
+    case "MailSendRejectedError": {
+      return { kind: "delivery-rejected" };
+    }
+    case "MailProtocolError": {
+      return { kind: "message-invalid" };
     }
     default: {
       return { kind: "outcome-unknown" };
@@ -86,26 +109,22 @@ export const createScheduledMailDelivery = ({
   });
   const worker = new ScheduledMailWorker(store, {
     deliver: async (item, attachments, signal) => {
-      try {
-        await Effect.runPromise(
-          deliverNewMessage(
-            {
-              accountId: item.accountId,
-              bcc: item.bcc,
-              body: item.body,
-              cc: item.cc,
-              rfc822MessageId: item.rfcMessageId,
-              subject: item.subject,
-              to: item.to,
-            },
-            attachments
-          ),
-          { signal }
-        );
-        return { ok: true as const };
-      } catch (error) {
-        return { error: toDeliveryFailure(error), ok: false as const };
-      }
+      const exit = await runEngineExit(
+        sendNewMessage({
+          accountId: item.accountId,
+          attachments,
+          bcc: item.bcc,
+          body: item.body,
+          cc: item.cc,
+          rfc822MessageId: item.rfcMessageId,
+          subject: item.subject,
+          to: item.to,
+        }),
+        { signal }
+      );
+      return Exit.isSuccess(exit)
+        ? { ok: true as const }
+        : { error: toDeliveryFailure(failureOf(exit)), ok: false as const };
     },
     isOnline: () => net.isOnline(),
     loadAttachments: loadScheduledAttachments,
@@ -120,23 +139,28 @@ export const createScheduledMailDelivery = ({
     now: Date.now,
     randomId: randomUUID,
     reconcile: async (item, signal) => {
-      try {
-        const sent = await Effect.runPromise(
-          findSentNewMessageByRfc822MessageId(
-            item.accountId,
-            item.rfcMessageId
-          ),
-          { signal }
-        );
-        return sent === undefined
-          ? { kind: "missing" as const }
-          : { kind: "found" as const };
-      } catch (error) {
-        return error instanceof MailSyncError &&
-          error.retryAfterMs !== undefined
-          ? { kind: "defer" as const, retryAfterMs: error.retryAfterMs }
-          : { kind: "defer" as const };
+      const exit = await runEngineExit(
+        findSentMessage(item.accountId, item.rfcMessageId),
+        { signal }
+      );
+      if (Exit.isSuccess(exit)) {
+        return exit.value
+          ? { kind: "found" as const }
+          : { kind: "missing" as const };
       }
+      const failure = failureOf(exit);
+      // A refused sign-in or an account that is gone will not let the look
+      // be made by waiting. The outcome stays unknown, and the user is asked.
+      if (
+        failure?._tag === "MailAuthError" ||
+        failure?._tag === "MailEngineError"
+      ) {
+        return { kind: "missing" as const };
+      }
+      return failure?._tag === "MailThrottledError" &&
+        failure.retryAfterMs !== undefined
+        ? { kind: "defer" as const, retryAfterMs: failure.retryAfterMs }
+        : { kind: "defer" as const };
     },
     runAccountWork: (accountId, work, parentSignal) =>
       accountMailWorkSupervisor.run(accountId, work, parentSignal),

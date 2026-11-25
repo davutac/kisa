@@ -36,12 +36,12 @@ describe("account mail work supervisor", () => {
     await started.promise;
 
     let suspensionCompleted = false;
-    const suspension = Effect.runPromise(
-      supervisor.suspend("user@example.com")
-    ).then(() => {
+    const suspendAndRecord = async (): Promise<void> => {
+      await Effect.runPromise(supervisor.suspend("user@example.com"));
       suspensionCompleted = true;
       events.push("suspended");
-    });
+    };
+    const suspension = suspendAndRecord();
     await Promise.resolve();
 
     expect(signals).toHaveLength(2);
@@ -147,5 +147,23 @@ describe("account mail work supervisor", () => {
     await completion;
 
     expect(signal.aborted).toBeTruthy();
+  });
+
+  it("names the accounts with work running, and no others", async () => {
+    const supervisor = makeAccountMailWorkSupervisor();
+    const release = Promise.withResolvers<null>();
+    const running = supervisor.run("busy@example.com", async () => {
+      await release.promise;
+    });
+    await supervisor.run("done@example.com", async () => {});
+
+    const whileRunning = supervisor.activeAccountIds();
+    release.resolve(null);
+    await running;
+
+    expect({
+      after: supervisor.activeAccountIds(),
+      whileRunning,
+    }).toStrictEqual({ after: [], whileRunning: ["busy@example.com"] });
   });
 });

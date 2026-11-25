@@ -1,63 +1,63 @@
-import { googleAccounts } from "@repo/database/schemas";
+import { mailAccounts } from "@repo/database/schemas";
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import { cancelThreadCategorization } from "../ai/thread-categorization";
 import { withDatabaseClient } from "../database";
 import { accountMailWorkSupervisor } from "../mail/account-mail-work-supervisor";
-import { cancelMailBackfill } from "../mail/mail-backfill";
+import { forgetAccountSignIn } from "../mail/engine/account-credentials";
+import { forgetMailEngineAccount } from "../mail/engine/mail-engine";
 import { forgetAccountDrafts } from "../mail/mail-drafts";
-import { forgetAccountMailData } from "../mail/mail-sync";
 import { forgetAccountScheduledMail } from "../mail/scheduled-mail";
 import { forgetTrustedImageSenders } from "../mail/trusted-image-senders";
 import { forgetAccountSettings } from "../settings/account-settings";
 import { notifyComposerTemplatesChanged } from "../templates/composer-templates";
-import {
-  listGoogleAccounts,
-  notifyGoogleAccountsChanged,
-  revokeGoogleAccountAccess,
-} from "./auth";
+import { listAccounts, notifyAccountsChanged } from "./accounts";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class GoogleAccountDisconnectError extends Schema.TaggedError<GoogleAccountDisconnectError>()(
-  "GoogleAccountDisconnectError",
-  { message: Schema.String }
-) {}
+class AccountDisconnectError extends Schema.TaggedError<
+  AccountDisconnectError,
+  { readonly brand: unique symbol }
+>()("AccountDisconnectError", { message: Schema.String }) {}
 
 const toDisconnectError = (error: { readonly message: string }) =>
-  new GoogleAccountDisconnectError({ message: error.message });
+  new AccountDisconnectError({ message: error.message });
 
 const deleteAccountRecord = Effect.fn("deleteAccountRecord")(
   function* deleteAccountRecord(email: string) {
     yield* withDatabaseClient((database) =>
       database
-        .delete(googleAccounts)
-        .where(eq(googleAccounts.email, email))
+        .delete(mailAccounts)
+        .where(eq(mailAccounts.accountId, email.toLowerCase()))
         .run()
     ).pipe(
       Effect.mapError(
         () =>
-          new GoogleAccountDisconnectError({
-            message: "Could not remove the Google account",
+          new AccountDisconnectError({
+            message: "Could not remove the account",
           })
       )
     );
   }
 );
 
-export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
-  function* disconnectGoogleAccount(email: string) {
+/**
+ * Removes an account and everything Kisa keeps for it. Nothing is revoked
+ * remotely: the user revokes the app password, or Kisa's access to a
+ * Microsoft account, in their provider's settings.
+ */
+export const disconnectAccount = Effect.fn("disconnectAccount")(
+  function* disconnectAccount(email: string) {
     // Prevent another poll or index run from starting, then wait until
     // every already-authorized writer has stopped before deleting local data.
-    cancelMailBackfill(email);
     cancelThreadCategorization(email);
     return yield* Effect.acquireUseRelease(
       accountMailWorkSupervisor.suspend(email),
       () =>
         Effect.gen(function* disconnectSuspendedAccount() {
-          yield* revokeGoogleAccountAccess(email);
           yield* deleteAccountRecord(email);
-          yield* forgetAccountMailData(email).pipe(
+          forgetAccountSignIn(email.toLowerCase());
+          yield* forgetMailEngineAccount(email).pipe(
             Effect.mapError(toDisconnectError)
           );
           yield* forgetAccountScheduledMail(email).pipe(
@@ -76,10 +76,10 @@ export const disconnectGoogleAccount = Effect.fn("disconnectGoogleAccount")(
             Effect.mapError(toDisconnectError)
           );
 
-          const accounts = yield* listGoogleAccounts().pipe(
+          const accounts = yield* listAccounts().pipe(
             Effect.mapError(toDisconnectError)
           );
-          notifyGoogleAccountsChanged({ data: accounts, ok: true });
+          notifyAccountsChanged({ data: accounts, ok: true });
           return accounts;
         }),
       () =>

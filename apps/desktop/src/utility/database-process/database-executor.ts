@@ -25,17 +25,52 @@ export class DatabaseExecutor extends Context.Service<
 const causeMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
+/**
+ * Prepared statements kept by their SQL. Drizzle sends the same text for the
+ * same query shape, so most are prepared once rather than on every call. A
+ * multi-row write's text varies with its row count, so the cache is bounded,
+ * dropping the statement used longest ago.
+ */
+export const STATEMENT_CACHE_SIZE = 200;
+
+const makeStatementCache = (connection: DatabaseConnection) => {
+  const prepareStatement = (sql: string) => connection.prepare<unknown[]>(sql);
+  const statements = new Map<string, ReturnType<typeof prepareStatement>>();
+
+  return (sql: string) => {
+    const cached = statements.get(sql);
+    if (cached !== undefined) {
+      // Map keeps insertion order; moving the entry last marks it recent.
+      statements.delete(sql);
+      statements.set(sql, cached);
+      return cached;
+    }
+
+    const statement = prepareStatement(sql);
+    statements.set(sql, statement);
+    if (statements.size > STATEMENT_CACHE_SIZE) {
+      const [oldest] = statements.keys();
+      if (oldest !== undefined) {
+        statements.delete(oldest);
+      }
+    }
+    return statement;
+  };
+};
+
 export const makeDatabaseExecutor = (
   connection: DatabaseConnection
-): DatabaseExecutor["Service"] =>
-  DatabaseExecutor.of({
+): DatabaseExecutor["Service"] => {
+  const prepare = makeStatementCache(connection);
+
+  return DatabaseExecutor.of({
     execute: Effect.fn("DatabaseExecutor.execute")(
       function* executeDatabase(payload) {
         return yield* Effect.try({
           catch: (cause) =>
             new DatabaseQueryError({ message: causeMessage(cause) }),
           try: (): DatabaseExecuteResult => {
-            const statement = connection.prepare(payload.sql);
+            const statement = prepare(payload.sql);
 
             if (payload.method === "run") {
               statement.run(...payload.params);
@@ -48,6 +83,7 @@ export const makeDatabaseExecutor = (
       }
     ),
   });
+};
 
 export const layerDatabaseExecutor = (
   paths: DatabaseRuntimePaths

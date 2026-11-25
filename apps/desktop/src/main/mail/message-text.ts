@@ -87,8 +87,8 @@ const removeComments = (markup: string): string => {
 const MARKUP_STEPS: readonly ((markup: string) => string)[] = [
   removeRawTextElements,
   removeComments,
-  (markup) => markup.replace(BLOCK_BOUNDARY_PATTERN, " "),
-  (markup) => markup.replace(TAG_PATTERN, ""),
+  (markup) => markup.replaceAll(BLOCK_BOUNDARY_PATTERN, " "),
+  (markup) => markup.replaceAll(TAG_PATTERN, ""),
 ];
 
 /**
@@ -123,5 +123,5 @@ export const toIndexText = (html: string): string => {
     text = withinMarkup(text, step);
   }
 
-  return decodeHtmlEntities(text).replace(WHITESPACE_PATTERN, " ").trim();
+  return decodeHtmlEntities(text).replaceAll(WHITESPACE_PATTERN, " ").trim();
 };

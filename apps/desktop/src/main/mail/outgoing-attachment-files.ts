@@ -12,15 +12,14 @@ import {
   MAX_INLINE_IMAGE_BYTES,
 } from "../../shared/attachments";
 import {
-  GmailOutgoingInlineContentId,
-  MAX_GMAIL_ATTACHMENT_BYTES,
+  MailOutgoingInlineContentId,
+  MAX_OUTGOING_ATTACHMENT_BYTES,
 } from "../../shared/ipc/mail";
-import type { GmailOutgoingAttachmentSelectionRequest } from "../../shared/ipc/mail";
+import type { MailOutgoingAttachmentSelectionRequest } from "../../shared/ipc/mail";
 import { OutgoingAttachmentAuthorizationError } from "./outgoing-attachment-authorization-error";
 
 const AUTHORIZATION_VERSION = 1 as const;
 const MEDIA_TYPE_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/u;
-const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 const MediaType = Schema.String.check(Schema.isPattern(MEDIA_TYPE_PATTERN));
 const COMPOSER_INLINE_IMAGE_TAG = /<img\b(?<attributes>[^>]*)>/giu;
@@ -32,7 +31,7 @@ const COMPOSER_INLINE_IMAGE_ALT =
 const StoredAuthorizedAttachment = Schema.Struct({
   authorizationVersion: Schema.Literal(AUTHORIZATION_VERSION),
   birthtimeMs: NonNegativeNumber,
-  contentId: Schema.optional(GmailOutgoingInlineContentId),
+  contentId: Schema.optional(MailOutgoingInlineContentId),
   device: Schema.NonEmptyString,
   filename: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
@@ -40,7 +39,7 @@ const StoredAuthorizedAttachment = Schema.Struct({
   mediaType: MediaType,
   mtimeMs: NonNegativeNumber,
   path: Schema.NonEmptyString,
-  size: NonNegativeInt,
+  size: Schema.Natural,
   storage: Schema.optional(Schema.Literal("app-owned")),
 });
 
@@ -53,7 +52,7 @@ const decodeStoredAttachmentArray = Schema.decodeUnknownOption(
 const decodeStrictStoredAttachmentArray = Schema.decodeUnknownOption(
   Schema.Array(StoredAuthorizedAttachment)
 );
-const isGmailOutgoingInlineContentId = Schema.is(GmailOutgoingInlineContentId);
+const isOutgoingInlineContentId = Schema.is(MailOutgoingInlineContentId);
 const decodeFileSystemError = Schema.decodeUnknownOption(
   Schema.Struct({ code: Schema.optional(Schema.String) })
 );
@@ -102,7 +101,7 @@ const isSameFile = (record: StoredMailDraftAttachment, stats: Stats): boolean =>
   stats.size === record.size;
 
 export const authorizeOutgoingAttachmentFiles = async (
-  selections: GmailOutgoingAttachmentSelectionRequest["files"],
+  selections: MailOutgoingAttachmentSelectionRequest["files"],
   randomId: () => string
 ): Promise<readonly StoredMailDraftAttachment[]> => {
   const records = await Promise.all(
@@ -149,7 +148,7 @@ export const authorizeOutgoingAttachmentFiles = async (
     })
   );
   const totalBytes = records.reduce((total, record) => total + record.size, 0);
-  if (totalBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
+  if (totalBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
     throw authorizationError("Attachments can total up to 25 MB");
   }
   return records;
@@ -205,7 +204,7 @@ export const recoverMissingInlineContentIds = (
     if (
       contentId === undefined ||
       filename === undefined ||
-      !isGmailOutgoingInlineContentId(contentId) ||
+      !isOutgoingInlineContentId(contentId) ||
       assignedContentIds.has(contentId)
     ) {
       continue;

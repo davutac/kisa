@@ -1,14 +1,16 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 
 import { useTheme } from "@/components/shell/theme-provider";
+import type { Theme } from "@/components/shell/theme-provider";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Menu,
+  MenuContent,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/menu";
 
 const themeOptions = {
   dark: {
@@ -25,13 +27,15 @@ const themeOptions = {
   },
 } as const;
 
+const isTheme = (value: string): value is Theme => value in themeOptions;
+
 const ModeToggle = () => {
   const { setTheme, theme } = useTheme();
   const { Icon: ThemeIcon, label: themeLabel } = themeOptions[theme];
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Menu>
+      <MenuTrigger
         render={
           <Button
             aria-label={`Change theme, current theme is ${themeLabel}`}
@@ -41,23 +45,32 @@ const ModeToggle = () => {
       >
         <ThemeIcon aria-hidden="true" data-icon="inline-start" />
         {themeLabel}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          <Sun aria-hidden="true" data-icon="inline-start" />
-          Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          <Moon aria-hidden="true" data-icon="inline-start" />
-          Dark
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          <Monitor aria-hidden="true" data-icon="inline-start" />
-          System
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </MenuTrigger>
+      <MenuContent align="end">
+        <MenuRadioGroup
+          onValueChange={(value) => {
+            if (isTheme(value)) {
+              setTheme(value);
+            }
+          }}
+          value={theme}
+        >
+          <MenuRadioItem closeOnSelect value="light">
+            <Sun aria-hidden="true" data-icon="inline-start" />
+            Light
+          </MenuRadioItem>
+          <MenuRadioItem closeOnSelect value="dark">
+            <Moon aria-hidden="true" data-icon="inline-start" />
+            Dark
+          </MenuRadioItem>
+          <MenuSeparator />
+          <MenuRadioItem closeOnSelect value="system">
+            <Monitor aria-hidden="true" data-icon="inline-start" />
+            System
+          </MenuRadioItem>
+        </MenuRadioGroup>
+      </MenuContent>
+    </Menu>
   );
 };
 

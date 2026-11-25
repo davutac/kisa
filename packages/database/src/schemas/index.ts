@@ -2,18 +2,18 @@
 export { accountSettings } from "./account-settings";
 export { aiSettings } from "./ai-settings";
 export { composerTemplates } from "./composer-templates";
-export { googleAccounts } from "./google-accounts";
-export { gmailBackfillState } from "./gmail-backfill-state";
-export type { GmailBackfillStatus } from "./gmail-backfill-state";
-export { gmailLabels } from "./gmail-labels";
-export { gmailMessages } from "./gmail-messages";
-export type { CachedGmailMessageAttachment } from "./gmail-messages";
-export { gmailSenderBrands } from "./gmail-sender-brands";
-export { gmailSyncState } from "./gmail-sync-state";
-export { gmailTrustedImageSenders } from "./gmail-trusted-image-senders";
-export { gmailThreads } from "./gmail-threads";
+export { mailAccounts } from "./mail-accounts";
 export { mailDrafts } from "./mail-drafts";
 export type { MailDraftKind, StoredMailDraftAttachment } from "./mail-drafts";
+export { mailLabels } from "./mail-labels";
+export { mailInlineImages } from "./mail-inline-images";
+export { mailMailboxes } from "./mail-mailboxes";
+export { mailMessageLocations } from "./mail-message-locations";
+export { mailMessages } from "./mail-messages";
+export type { StoredMailAttachment, StoredMailHeader } from "./mail-messages";
+export { mailSenderBrands } from "./mail-sender-brands";
+export { mailThreads } from "./mail-threads";
+export { mailTrustedImageSenders } from "./mail-trusted-image-senders";
 export { scheduledMessages } from "./scheduled-messages";
 export type {
   ScheduledMessageAttentionReason,

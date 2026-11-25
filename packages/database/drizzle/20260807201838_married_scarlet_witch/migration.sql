@@ -1,1 +1,0 @@
-CREATE INDEX `gmail_messages_sender_idx` ON `gmail_messages` (`account_email`,`from_address`);

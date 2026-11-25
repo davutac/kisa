@@ -7,6 +7,7 @@ import { UPDATES_STATUS_CHANNEL } from "../../shared/ipc/channels";
 import { UpdateStatus } from "../../shared/update-status";
 import { beginQuit } from "../app/quit-state";
 import { sendRendererEvent } from "../electron/renderer-events";
+import { createUpdateSimulation } from "./dev-update-simulation";
 import { createUpdateLifecycle } from "./update-lifecycle";
 
 const { autoUpdater } = electronUpdater;
@@ -32,16 +33,37 @@ const emitUpdateStatus = (status: UpdateStatus): void => {
   sendRendererEvent(UPDATES_STATUS_CHANNEL, UpdateStatus, status);
 };
 
+/** `KISA_SIMULATE_UPDATE=1` shows the update UI in development; see the module. */
+const simulation =
+  is.dev && process.env["KISA_SIMULATE_UPDATE"] === "1"
+    ? createUpdateSimulation(() => updateLifecycle)
+    : undefined;
+
 const updateLifecycle = createUpdateLifecycle({
-  canSelfUpdate,
+  canSelfUpdate: () => simulation !== undefined || canSelfUpdate(),
   checkForUpdates: async () => {
+    if (simulation !== undefined) {
+      await simulation.check();
+      return;
+    }
+
     await autoUpdater.checkForUpdates();
   },
   downloadUpdate: async () => {
+    if (simulation !== undefined) {
+      await simulation.download();
+      return;
+    }
+
     await autoUpdater.downloadUpdate();
   },
   emitStatus: emitUpdateStatus,
   installUpdate: () => {
+    if (simulation !== undefined) {
+      simulation.install();
+      return;
+    }
+
     // The updater closes windows before `before-quit`, so background mode must
     // observe the install as a real quit before that sequence starts.
     beginQuit();

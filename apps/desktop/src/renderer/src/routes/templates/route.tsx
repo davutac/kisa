@@ -5,26 +5,44 @@ import { useHotkeyLayer } from "@/hotkeys";
 import TemplateEditor from "./-components/template-editor";
 import TemplateEmptyState from "./-components/template-empty-state";
 import TemplatesSidebar from "./-components/templates-sidebar";
+import TemplatesTitlebar from "./-components/templates-titlebar";
 import { useTemplateWorkspace } from "./-components/use-template-workspace";
 
 export const Route = createFileRoute("/templates")({
   component: TemplatesRoute,
 });
 
+/**
+ * Templates as a list beside an editor card (or its empty state, in the same
+ * card), with the title, New, and Save in the content titlebar.
+ */
 function TemplatesRoute() {
   useHotkeyLayer("templates", true);
-  const workspace = useTemplateWorkspace();
+  const { createTemplate, editor, sidebar } = useTemplateWorkspace();
 
   return (
     <section
       aria-labelledby="templates-title"
-      className="bg-background flex min-h-0 flex-1 gap-2 overflow-hidden p-2"
+      className="bg-background flex min-h-0 flex-1 overflow-hidden"
     >
-      <TemplatesSidebar {...workspace.sidebar} />
-      {workspace.editor === null ? (
-        <TemplateEmptyState />
+      <TemplatesTitlebar
+        editor={editor}
+        onCreate={createTemplate}
+        titleId="templates-title"
+      />
+      {/* With no templates the empty state alone explains them; an empty
+          list beside it would only be a blank column. */}
+      {sidebar.isLoading || sidebar.totalTemplateCount > 0 ? (
+        <TemplatesSidebar {...sidebar} />
+      ) : null}
+      {editor === null ? (
+        <TemplateEmptyState
+          isLoading={sidebar.isLoading}
+          onCreate={createTemplate}
+          templateCount={sidebar.totalTemplateCount}
+        />
       ) : (
-        <TemplateEditor {...workspace.editor} />
+        <TemplateEditor {...editor} />
       )}
     </section>
   );

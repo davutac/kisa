@@ -27,6 +27,9 @@ describe(toIndexText, () => {
 
   it("strips comments, including conditional wrappers", () => {
     expect(toIndexText("<!-- hidden note -->visible")).toBe("visible");
+    expect(toIndexText("<!--[if mso]><p>outlook</p><![endif]-->visible")).toBe(
+      "visible"
+    );
   });
 
   it("decodes the entities that survive into indexed text", () => {

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 
 import type { CleanDraftVersion } from "@/components/mail/clean-draft-history";
 import {
@@ -7,6 +6,8 @@ import {
   completePendingCleanDraftVersion,
   dismissCleanDraftVersion,
 } from "@/components/mail/clean-draft-history";
+import { toast } from "@/components/ui/toast";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { getAiApi } from "@/platform/desktop";
 import type { AiModelSelection } from "@/shared/ipc/ai";
 
@@ -96,53 +97,60 @@ export const useCleanDraftHistory = ({
     }
 
     setActiveRequestCount((current) => current + 1);
-    try {
-      const reply = await aiApi.cleanupDraft({
-        body: snapshot.body,
-        model,
-        subject: snapshot.subject,
-      });
-      if (!isActive()) {
-        return;
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await aiApi.cleanupDraft({
+            body: snapshot.body,
+            model,
+            subject: snapshot.subject,
+          });
+          if (!isActive()) {
+            return;
+          }
+          if (!reply.ok) {
+            removePendingVersion(pending.version.id);
+            toast.error(reply.error);
+            return;
+          }
+          const latest = getState();
+          const completed = completePendingCleanDraftVersion(
+            latest.history,
+            pending.version.id,
+            reply.data
+          );
+          if (completed === undefined) {
+            return;
+          }
+          setHistory(completed.history);
+          const shouldApply =
+            latest.history.at(-1)?.id === pending.version.id &&
+            latest.selectedVersionId === requestedSelectionId &&
+            isSameDraft(latest.draft, snapshot);
+          if (!shouldApply) {
+            toast.success("Clean version ready");
+            return;
+          }
+          if (!applyVersion(completed.version)) {
+            setSelectedVersionId(null);
+            toast.error(messages.applyError);
+            return;
+          }
+          setSelectedVersionId(completed.version.id);
+          toast.success(messages.cleaned);
+        } catch (error) {
+          if (isActive()) {
+            removePendingVersion(pending.version.id);
+            toast.error(
+              error instanceof Error ? error.message : messages.failed
+            );
+          }
+        }
+      },
+      () => {
+        setActiveRequestCount((current) => Math.max(0, current - 1));
       }
-      if (!reply.ok) {
-        removePendingVersion(pending.version.id);
-        toast.error(reply.error);
-        return;
-      }
-      const latest = getState();
-      const completed = completePendingCleanDraftVersion(
-        latest.history,
-        pending.version.id,
-        reply.data
-      );
-      if (completed === undefined) {
-        return;
-      }
-      setHistory(completed.history);
-      const shouldApply =
-        latest.history.at(-1)?.id === pending.version.id &&
-        latest.selectedVersionId === requestedSelectionId &&
-        isSameDraft(latest.draft, snapshot);
-      if (!shouldApply) {
-        toast.success("Clean version ready");
-        return;
-      }
-      if (!applyVersion(completed.version)) {
-        setSelectedVersionId(null);
-        toast.error(messages.applyError);
-        return;
-      }
-      setSelectedVersionId(completed.version.id);
-      toast.success(messages.cleaned);
-    } catch (error) {
-      if (isActive()) {
-        removePendingVersion(pending.version.id);
-        toast.error(error instanceof Error ? error.message : messages.failed);
-      }
-    } finally {
-      setActiveRequestCount((current) => Math.max(0, current - 1));
-    }
+    );
   };
 
   const selectVersion = (version: CleanDraftVersion): void => {

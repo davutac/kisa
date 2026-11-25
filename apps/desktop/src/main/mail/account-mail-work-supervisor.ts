@@ -9,6 +9,8 @@ interface ActiveAccountMailWork {
 }
 
 export interface AccountMailWorkSupervisor {
+  /** The accounts with work running now. */
+  readonly activeAccountIds: () => readonly string[];
   readonly isSuspended: (accountId: string) => boolean;
   readonly resume: (accountId: string) => void;
   readonly run: (
@@ -113,7 +115,9 @@ export const makeAccountMailWorkSupervisor = (): AccountMailWorkSupervisor => {
   const isSuspended = (accountId: string): boolean =>
     (suspensionCountByAccount.get(accountId) ?? 0) > 0;
 
-  return { isSuspended, resume, run, suspend };
+  const activeAccountIds = (): readonly string[] => [...activeByAccount.keys()];
+
+  return { activeAccountIds, isSuspended, resume, run, suspend };
 };
 
 export const accountMailWorkSupervisor = makeAccountMailWorkSupervisor();

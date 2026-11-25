@@ -3,56 +3,41 @@ import { create } from "zustand";
 import { createMailSearchQuery } from "@/mail/search-query";
 import type { SearchQuery } from "@/mail/search-query";
 
+/**
+ * The search whose results fill the mailbox list. The search bar edits its own
+ * draft and only touches this when the user asks to show every result.
+ */
 interface MailSearchState {
+  /** Whether the mailbox list shows search results instead of the mailbox. */
   readonly isActive: boolean;
-  readonly isDirty: boolean;
   readonly query: SearchQuery;
+  /** Bumped on every new result set, so the list resets its scroll and selection. */
   readonly revision: number;
-  readonly activate: () => void;
   readonly exit: () => void;
-  readonly updateQuery: (query: SearchQuery) => void;
+  readonly showResults: (query: SearchQuery) => void;
 }
 
-const INITIAL_QUERY = createMailSearchQuery();
-
 export const useMailSearchStore = create<MailSearchState>()((set) => ({
-  activate: () => {
-    set((state) =>
-      state.isActive
-        ? state
-        : {
-            isActive: true,
-            isDirty: false,
-            query: createMailSearchQuery(),
-            revision: state.revision + 1,
-          }
-    );
-  },
   exit: () => {
     set((state) =>
       state.isActive
         ? {
             isActive: false,
-            isDirty: false,
+            query: createMailSearchQuery(),
             revision: state.revision + 1,
           }
         : state
     );
   },
   isActive: false,
-  isDirty: false,
-  query: INITIAL_QUERY,
+  query: createMailSearchQuery(),
   revision: 0,
-  updateQuery: (query) => {
-    set((state) =>
-      state.isActive
-        ? {
-            isDirty: true,
-            query,
-            revision: state.revision + 1,
-          }
-        : state
-    );
+  showResults: (query) => {
+    set((state) => ({
+      isActive: true,
+      query,
+      revision: state.revision + 1,
+    }));
   },
 }));
 

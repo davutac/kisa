@@ -1,8 +1,8 @@
 # Kisa
 
-**A fast, local-first Gmail client built for the desktop.**
+**A fast, local-first mail client for Gmail, iCloud, and other IMAP accounts, built for the desktop.**
 
-Kisa caches and indexes mail locally for fast search, handles multiple Google accounts, and isolates untrusted content behind a narrow Electron security boundary.
+Kisa caches and indexes mail locally for fast search, handles multiple accounts, each connected over IMAP and SMTP with an app password, and isolates untrusted content behind a narrow Electron security boundary.
 
 > Kisa is under active development.
 
@@ -18,14 +18,26 @@ Download the latest release:
 
 See the [latest release](https://github.com/davutac/kisa/releases/latest) for release notes and checksums.
 
+## Add an account
+
+Every account connects in Kisa's **Add account** window, which first asks for the provider: Gmail, Apple (iCloud Mail), Outlook, or any other IMAP provider. Gmail, Apple and Outlook need only your name, address and sign-in; Other also asks for your provider's IMAP and SMTP server settings. Most sign in with an app password: a separate password your provider issues for one app, not the password you sign in to its website with. Outlook signs in with Microsoft in your browser instead. Kisa checks the sign-in against the mail servers before saving it, encrypted, on your device. Kisa runs no server of its own.
+
+- **Gmail** (`gmail.com`, `googlemail.com`, or a Google Workspace domain): turn on 2-Step Verification for your Google Account, then create an app password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords). Google shows it in groups of four; paste it with or without the spaces. Google doesn't offer app passwords to accounts that use only security keys for 2-Step Verification, to work, school or other organization accounts, or to accounts with Advanced Protection ([Google's help](https://support.google.com/accounts/answer/185833)), so those accounts can't connect to Kisa for now.
+- **Apple** (`icloud.com`, `me.com`, `mac.com`): create an app-specific password as [Apple describes](https://support.apple.com/en-us/102654).
+- **Outlook** (`outlook.com`, `hotmail.com`, `live.com`, `msn.com` and their country domains, or a Microsoft 365 work or school address): choose **Sign in with Microsoft** and finish in your browser. Outlook.com has IMAP off by default: turn it on under **Settings › Mail › Forwarding and IMAP** first. For a Microsoft 365 address, your organization may need to allow Kisa, or have sending from mail apps turned off.
+- **Other** (any other address, including an iCloud+ custom domain): create an app password with your provider, then enter its IMAP and SMTP servers. Kisa offers TLS and STARTTLS only.
+
+The optional Name is the sender name your outgoing mail carries; change it any time under **Settings**, on the account's page. Disconnecting an account deletes its sign-in and everything Kisa cached for it on this device; revoke the app password, or Kisa's access to your Microsoft account, in your provider's settings if you no longer want it to work.
+
 ## Why Kisa
 
 I started Kisa when Notion announced that [Notion Mail will shut down on September 22, 2026](https://www.notion.com/help/notion-mail-inbox-is-going-away-what-to-do-next). Rather than return to Gmail in a browser, I began building the fast, keyboard-first client I wanted.
 
 - **Mailbox-scale performance.** Local caching, full-text search, virtualized lists, and resumable indexing keep large mailboxes responsive.
-- **Recoverable spam.** A dedicated Spam mailbox surfaces newly classified mail without adding notifications or Inbox noise, and **Not spam** returns false positives to Inbox.
+- **Recoverable spam.** A dedicated Spam mailbox surfaces newly classified mail without adding notifications or Inbox noise. **Report spam** moves a conversation there, with Undo, and leaves your own replies in Sent; **Not spam** returns false positives to Inbox.
 - **Keyboard-first workflow.** Switch accounts, search, compose, and navigate without the mouse.
-- **Privacy by default.** OAuth credentials stay in the main process, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
+- **Undo send.** A sent message waits a few seconds, 10 by default and set in Settings, so you can take it back; quitting Kisa sends it at once.
+- **Privacy by default.** App passwords and Microsoft sign-ins are sealed in the main process and never reach the mail window, and the local database is encrypted. Message HTML is isolated, and remote images are blocked until allowed.
 - **Built for multiple accounts.** Caches, indexes, sync state, and mutations stay account-scoped, with an All Accounts view across them.
 
 ## Tech stack
@@ -33,18 +45,18 @@ I started Kisa when Notion announced that [Notion Mail will shut down on Septemb
 | Area | Technology |
 | --- | --- |
 | Desktop | [Electron](https://github.com/electron/electron) |
-| Interface | [React](https://github.com/react/react), [TypeScript](https://github.com/microsoft/TypeScript), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss), [shadcn](https://github.com/shadcn-ui/ui) |
+| Interface | [React](https://github.com/react/react), [TypeScript](https://github.com/microsoft/TypeScript), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss), [ui-sdk](https://ui-sdk.dev) |
 | Application runtime | [Effect](https://github.com/Effect-TS/effect) |
 | Routing and state | [TanStack Router](https://github.com/TanStack/router), [Zustand](https://github.com/pmndrs/zustand) |
 | Local data | [better-sqlite3-multiple-ciphers](https://github.com/m4heshd/better-sqlite3-multiple-ciphers), [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm), FTS5 |
-| Gmail integration | [Gmail API client](https://github.com/googleapis/google-api-nodejs-client), OAuth 2.0 with PKCE |
+| Mail transport | IMAP with [ImapFlow](https://github.com/postalsys/imapflow), SMTP with [Nodemailer](https://github.com/nodemailer/nodemailer) |
 | Tooling | [pnpm](https://github.com/pnpm/pnpm), [Turborepo](https://github.com/vercel/turborepo), [Vite](https://github.com/vitejs/vite), [Vitest](https://github.com/vitest-dev/vitest), [Ultracite](https://github.com/haydenbleasel/ultracite) |
 
 ## Architecture
 
 Privileged capabilities stay in Electron's main process. The sandboxed renderer accesses them only through the typed `window.desktopBridge`; Effect Schema validates every IPC request, result, and event.
 
-Synchronous database work runs in a utility process, keeping Electron's main thread unblocked. Gmail sync and indexing are bounded, resumable, and yield to foreground actions.
+Synchronous database work runs in a utility process, keeping Electron's main thread unblocked. Mail sync and indexing are bounded, resumable, and yield to foreground actions.
 
 ```text
 React feature or hook
@@ -52,28 +64,28 @@ React feature or hook
   -> typed preload bridge
   -> schema-validated Electron IPC
   -> main-process service
-     -> Gmail API, or
+     -> mail server over IMAP and SMTP, or
      -> database utility process -> SQLite
 ```
 
-See the [desktop architecture](docs/architecture/desktop.md) and [Gmail API capabilities](docs/architecture/gmail-api.md) for details.
+See the [desktop architecture](docs/architecture/desktop.md) and the [mail engine](docs/architecture/mail-engine.md) for details.
 
 ## Repository
 
 - `apps/desktop` — Electron main, preload, database process, and React renderer.
 - `packages/database` — database client, runtime, schemas, and migrations.
-- `packages/gmail` — Gmail domain models, services, and boundaries.
+- `packages/mail` — the mail engine: provider dialects, sync, changes, MIME planning, and the IMAP, SMTP and store ports.
 - `docs/architecture` — current architecture and feature contracts.
 
 ## Run from source
 
-pnpm 12.4.2 is pinned through `packageManager`.
+pnpm 12.21.0 is pinned through `packageManager`.
 
-Dependency versions live in `pnpm-workspace.yaml`. Effect and `@effect/vitest` use the same stable v4 release (currently 4.1.4) with Vitest 5. Astro's checker uses the separate TypeScript 6 catalog because it requires the JavaScript compiler API. Upgrade `@effect/tsgo`, TypeScript, Oxlint, and `oxlint-tsgolint` together after checking the matching patch artifacts.
+Dependency versions live in `pnpm-workspace.yaml`. Effect and `@effect/vitest` use the same stable v4 release (currently 4.1.5) with Vitest 5. Astro's checker uses the separate TypeScript 6 catalog because it requires the JavaScript compiler API. Upgrade `@effect/tsgo`, TypeScript, Oxlint, and `oxlint-tsgolint` together after checking the matching patch artifacts.
 
-The verified lint toolchain is `@effect/tsgo` 0.36.5, Oxlint 1.78.0, and Ultracite 7.10.5. Newer releases require a separate React Compiler lint migration and currently flag valid TypeScript schema/type name pairs as redeclarations. Keep these versions together until they can pass the existing checks without additional suppressions.
+The verified compiler and lint toolchain is `@effect/tsgo` 0.73.2, TypeScript 7.0.2, Oxlint 1.94.0, `oxlint-tsgolint` 7.0.2007, and Ultracite 8.3.1. `effect-tsgo patch` in that release accepts `oxlint-tsgolint` only up to 7.0.2007, so `update.ignoreDeps` keeps this cohort out of `pnpm update --latest`. Each tsconfig allows only the unstable Effect modules its code uses (`effect/rpc`, `effect/workers`, and `@effect/vitest`), so any other unstable API still fails the typecheck. Ultracite 8 adds React Compiler diagnostics; the [desktop architecture](docs/architecture/desktop.md#renderer-organization-and-routing) describes the renderer patterns they require. The migration added line-level suppressions, each with its reason, for intentional effect triggers, TanStack Virtual, the store-once idiom, and one buffer synchronized from other windows. `no-redeclare` is off because schema values share names with their `typeof X.Type` aliases.
 
-OpenCode uses the 2.3.0 client and requires an OpenCode 2.2 or later service. Scoped overrides keep its Effect peer and schema/protocol dependencies on the workspace Effect catalog. See [AI writing](docs/architecture/ai-writing.md) for provider lifecycle and isolation details.
+OpenCode uses the 2.3.2 client and requires an OpenCode 2.2 or later service. Scoped overrides keep its Effect peer and schema/protocol dependencies on the workspace Effect catalog. See [AI writing](docs/architecture/ai-writing.md) for provider lifecycle and isolation details.
 
 ```bash
 pnpm install
@@ -86,9 +98,13 @@ To run only the desktop:
 pnpm --dir apps/desktop dev
 ```
 
-Development uses `<userData>/database/app.dev.sqlite` and its own sealed key, separate from the installed app's `app.sqlite` database and key.
+Outlook accounts need Kisa's Microsoft Entra client ID at build time: copy `apps/desktop/.env.example` to `apps/desktop/.env.local` and fill in `MAIN_VITE_MICROSOFT_CLIENT_ID`, or set it in the shell. Without it, everything else works and Microsoft sign-in is not offered. Release builds take it from the `MICROSOFT_CLIENT_ID` secret of the GitHub `Prod` environment.
 
-Google authorization uses the user's own Desktop OAuth client, the system browser, PKCE, and a temporary loopback callback. Kisa does not ship shared Google credentials. Follow [Connect Kisa to Google](docs/google-oauth-setup.md) to create a personal Google Cloud project and import its credentials JSON.
+Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, separate from the installed app's `mail.sqlite` database and key. Databases from before the mail engine (`app.sqlite`, `app.dev.sqlite`) are left as they are and never opened. When one exists, the sign-in screen notes that Kisa starts fresh and everything needs setting up again, for as long as that file is on disk.
+
+Running from source needs no provider setup: accounts connect with an app password as described in [Add an account](#add-an-account).
+
+Auto-update is off when running from source. To see the sidebar's update button go through its states anyway, start with `KISA_SIMULATE_UPDATE=1 pnpm --dir apps/desktop dev`: a pretend update to 99.0.0 appears a few seconds after launch and can be downloaded and "installed" without contacting the update server or changing the app.
 
 ## Verification
 
@@ -104,6 +120,8 @@ pnpm build
 ## Packaging and releases
 
 Build packages with `pnpm build:mac`, `pnpm build:win`, or `pnpm build:linux`. `pnpm build:unpack` creates an unpacked app.
+
+To build a signed production app and install it in `/Applications` on this Mac, run `scripts/install-mac.sh` (add `--notarize` to require notarization). See [macOS signing](docs/releasing/macos-signing.md#installing-a-signed-build-on-this-mac).
 
 Release by exact version or bump type:
 

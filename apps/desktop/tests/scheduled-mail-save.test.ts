@@ -13,7 +13,12 @@ import type {
   RemoteDatabaseClient,
 } from "@repo/database/remote-client";
 import { createRemoteDatabaseClient } from "@repo/database/remote-client";
-import { MessageId, SentMessage, ThreadId } from "@repo/gmail/models";
+import {
+  MailAuthError,
+  MailSendUnknownError,
+  MailStoreError,
+} from "@repo/mail/errors";
+import { AccountId } from "@repo/mail/ids";
 import { Effect } from "effect";
 import {
   afterAll,
@@ -26,9 +31,9 @@ import {
 } from "vitest";
 
 import type {
-  deliverNewMessage,
-  findSentNewMessageByRfc822MessageId,
-} from "../src/main/mail/mail-sync";
+  findSentMessage,
+  sendNewMessage,
+} from "../src/main/mail/engine/mail-send";
 import { decodeStoredOutgoingAttachmentsStrict } from "../src/main/mail/outgoing-attachment-files";
 import type {
   closeScheduledMailNotifications,
@@ -37,6 +42,7 @@ import type {
   showScheduledMailNotification,
 } from "../src/main/mail/scheduled-mail-notifications";
 import type { ScheduledMailEditSession } from "../src/shared/ipc/scheduled-mail";
+import { insertGmailAccount } from "./fixtures/mail-accounts";
 
 const connection = openDatabaseConnection(":memory:");
 applyDatabaseMigrations(
@@ -95,44 +101,29 @@ vi.mock(import("../src/main/electron/renderer-events"), () => ({
   sendRendererEventToEachWindow: vi.fn<() => void>(),
 }));
 
-vi.mock(import("../src/main/mail/mail-sync"), async () => {
-  const { Schema } = await import("effect");
-  // oxlint-disable-next-line unicorn/throw-new-error -- Effect Schema tagged errors are declared as generated classes.
-  class TestMailSyncError extends Schema.TaggedError<TestMailSyncError>()(
-    "MailSyncError",
-    {
-      kind: Schema.optional(
-        Schema.Literals([
-          "account-action-required",
-          "delivery-rejected",
-          "message-invalid",
-          "outcome-unknown",
-          "rate-limited",
-        ])
-      ),
-      message: Schema.String,
-      retryAfterMs: Schema.optional(Schema.Int),
-      retryable: Schema.optional(Schema.Boolean),
-      status: Schema.optional(Schema.Int),
-    }
-  ) {}
+vi.mock(import("../src/main/mail/engine/mail-engine"), async () => {
+  const { Effect: EffectModule } = await import("effect");
   return {
-    MailSyncError: TestMailSyncError,
-    deliverNewMessage: vi.fn<typeof deliverNewMessage>(),
-    findSentNewMessageByRfc822MessageId:
-      vi.fn<typeof findSentNewMessageByRfc822MessageId>(),
-  };
+    runEngineExit: (
+      effect: Parameters<typeof EffectModule.runPromiseExit>[0]
+    ) => EffectModule.runPromiseExit(effect),
+  } as never;
 });
+
+vi.mock(import("../src/main/mail/engine/mail-send"), () => ({
+  findSentMessage: vi.fn<typeof findSentMessage>(),
+  sendNewMessage: vi.fn<typeof sendNewMessage>(),
+}));
 
 vi.mock(import("../src/main/mail/scheduled-mail-notifications"), () => ({
   closeScheduledMailNotifications:
     vi.fn<typeof closeScheduledMailNotifications>(),
   dispatchPendingScheduledMailNotifications: vi.fn<
     typeof dispatchPendingScheduledMailNotifications
-  >(async () => {}),
+  >(() => Effect.void),
   releaseStaleScheduledMailNotificationClaims: vi.fn<
     typeof releaseStaleScheduledMailNotificationClaims
-  >(async () => {}),
+  >(() => Effect.void),
   showScheduledMailNotification: vi.fn<typeof showScheduledMailNotification>(
     async () => {}
   ),
@@ -141,29 +132,29 @@ vi.mock(import("../src/main/mail/scheduled-mail-notifications"), () => ({
 const {
   adoptLegacyScheduledMailAttachments,
   beginScheduledMailEdit,
+  cancelScheduledMailToStash,
   discardScheduledMail,
   finishScheduledMailEdit,
+  sendScheduledMailNow,
   startScheduledMail,
   stopScheduledMail,
 } = await import("../src/main/mail/scheduled-mail");
+const { makeDatabaseScheduledMailWorkerStore } =
+  await import("../src/main/mail/scheduled-mail-database");
 const { configureDraftAttachmentStore } =
   await import("../src/main/mail/draft-attachment-store");
 const { outgoingAttachmentAuthorizations } =
   await import("../src/main/mail/outgoing-attachment-authorizations");
-const { deliverNewMessage: deliverNewMessageMock } =
-  await import("../src/main/mail/mail-sync");
+const {
+  findSentMessage: findSentMessageMock,
+  sendNewMessage: sendNewMessageMock,
+} = await import("../src/main/mail/engine/mail-send");
 
 const accountId = "person@example.com";
 const draftId = "scheduled-save-draft";
 const temporaryDirectories: string[] = [];
 
-connection
-  .prepare(
-    `INSERT INTO google_accounts (
-      created_at, credentials, email, scopes, sort_order, updated_at
-    ) VALUES (1, ?, ?, '[]', 1, 1)`
-  )
-  .run(Buffer.from([1]), accountId);
+insertGmailAccount(connection, accountId);
 
 const insertScheduledDraft = (): void => {
   const scheduledAt = Date.now() + 60_000;
@@ -230,8 +221,6 @@ describe("scheduled mail in-place save", () => {
     );
   });
 
-  afterAll(() => connection.close());
-
   it("reschedules from an older open editor snapshot", async () => {
     const opened = await Effect.runPromise(
       beginScheduledMailEdit({ accountId, draftId }, 71)
@@ -271,6 +260,63 @@ describe("scheduled mail in-place save", () => {
         draft: { subject: "Latest editor" },
         item: { revision: 3, scheduledAt },
       },
+    });
+  });
+
+  it("asks for an acknowledgement before sending an email whose outcome became unknown after its editor opened", async () => {
+    const opened = await Effect.runPromise(
+      beginScheduledMailEdit({ accountId, draftId }, 71)
+    );
+    // The worker's attempt ends without a known outcome while the editor
+    // still shows the snapshot from before it.
+    connection
+      .prepare(
+        `UPDATE scheduled_messages
+         SET attempt_count = 1, attention_reason = 'outcome-unknown',
+             next_attempt_at = NULL, status = 'attention'
+         WHERE draft_id = ?`
+      )
+      .run(draftId);
+    const sendNow = (allowPossibleDuplicate: boolean) =>
+      Effect.runPromise(
+        finishScheduledMailEdit(
+          {
+            accountId,
+            action: {
+              allowPossibleDuplicate,
+              draft: opened.draft,
+              kind: "send-now",
+            },
+            draftId,
+          },
+          71
+        )
+      );
+    const storedSchedule = () =>
+      connection
+        .prepare(
+          `SELECT attention_reason AS attentionReason,
+                  rfc_message_id AS rfcMessageId, status
+           FROM scheduled_messages WHERE draft_id = ?`
+        )
+        .get(draftId);
+
+    await expect(sendNow(false)).resolves.toStrictEqual({
+      kind: "possible-duplicate",
+    });
+    expect(storedSchedule()).toStrictEqual({
+      attentionReason: "outcome-unknown",
+      rfcMessageId: "<stable@scheduled.kisa.invalid>",
+      status: "attention",
+    });
+
+    await expect(sendNow(true)).resolves.toStrictEqual({ kind: "finished" });
+    expect(storedSchedule()).toMatchObject({
+      attentionReason: null,
+      status: "scheduled",
+    });
+    expect(storedSchedule()).not.toMatchObject({
+      rfcMessageId: "<stable@scheduled.kisa.invalid>",
     });
   });
 
@@ -328,12 +374,14 @@ describe("scheduled mail in-place save", () => {
     });
   });
 
-  it("delivers a due message while its editor snapshot is open", async () => {
-    vi.mocked(deliverNewMessageMock).mockReturnValue(
-      Effect.succeed(
-        new SentMessage({
-          id: MessageId.make("sent-message"),
-          threadId: ThreadId.make("sent-thread"),
+  // A local failure before the message reached any server: nothing was sent,
+  // so it is retried rather than reported as possibly sent.
+  it("retries a send that failed before reaching the mail server", async () => {
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.fail(
+        new MailStoreError({
+          cause: "disk",
+          message: "Could not load the account",
         })
       )
     );
@@ -344,14 +392,92 @@ describe("scheduled mail in-place save", () => {
          WHERE draft_id = ?`
       )
       .run(draftId);
-    const opened = await Effect.runPromise(
-      beginScheduledMailEdit({ accountId, draftId }, 71)
-    );
 
     await startScheduledMail();
     try {
-      expect(opened.item.draftId).toBe(draftId);
-      expect(deliverNewMessageMock).toHaveBeenCalledOnce();
+      expect(sendNewMessageMock).toHaveBeenCalledOnce();
+      expect(
+        connection
+          .prepare(
+            `SELECT attention_reason AS attentionReason, status
+             FROM scheduled_messages WHERE draft_id = ?`
+          )
+          .get(draftId)
+      ).toStrictEqual({ attentionReason: null, status: "scheduled" });
+    } finally {
+      await stopScheduledMail();
+    }
+  });
+
+  // An unknown outcome waits for a look in sent mail. One that can never be
+  // made must not leave the email "sending", where every action is refused.
+  it("reports an unknown outcome when sent mail cannot be searched for a lasting reason", async () => {
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.fail(
+        new MailSendUnknownError({
+          accountId: AccountId.make(accountId),
+          message: "Connection lost after the message was handed over",
+        })
+      )
+    );
+    vi.mocked(findSentMessageMock).mockReturnValue(
+      Effect.fail(
+        new MailAuthError({
+          accountId: AccountId.make(accountId),
+          message: "Sign-in refused",
+        })
+      )
+    );
+    connection
+      .prepare(
+        `UPDATE scheduled_messages
+         SET next_attempt_at = 1, scheduled_at = 1
+         WHERE draft_id = ?`
+      )
+      .run(draftId);
+    const deliveryStatus = () =>
+      connection
+        .prepare(
+          `SELECT attention_reason AS attentionReason, status
+           FROM scheduled_messages WHERE draft_id = ?`
+        )
+        .get(draftId);
+
+    await startScheduledMail();
+    const afterSend = deliveryStatus();
+    // The next start looks in sent mail at once.
+    await stopScheduledMail();
+    await startScheduledMail();
+    try {
+      expect(afterSend).toStrictEqual({
+        attentionReason: null,
+        status: "sending",
+      });
+      expect(deliveryStatus()).toStrictEqual({
+        attentionReason: "outcome-unknown",
+        status: "attention",
+      });
+    } finally {
+      await stopScheduledMail();
+    }
+  });
+
+  it("delivers a due message while its editor snapshot is open", async () => {
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.succeed({ refused: [] })
+    );
+    connection
+      .prepare(
+        `UPDATE scheduled_messages
+         SET next_attempt_at = 1, scheduled_at = 1
+         WHERE draft_id = ?`
+      )
+      .run(draftId);
+    await Effect.runPromise(beginScheduledMailEdit({ accountId, draftId }, 71));
+
+    await startScheduledMail();
+    try {
+      expect(sendNewMessageMock).toHaveBeenCalledOnce();
       expect(
         connection
           .prepare(
@@ -412,13 +538,8 @@ describe("scheduled mail in-place save", () => {
     }
 
     await unlink(sourcePath);
-    vi.mocked(deliverNewMessageMock).mockReturnValue(
-      Effect.succeed(
-        new SentMessage({
-          id: MessageId.make("sent-with-attachment"),
-          threadId: ThreadId.make("sent-thread-with-attachment"),
-        })
-      )
+    vi.mocked(sendNewMessageMock).mockReturnValue(
+      Effect.succeed({ refused: [] })
     );
     connection
       .prepare(
@@ -430,15 +551,17 @@ describe("scheduled mail in-place save", () => {
 
     await startScheduledMail();
     try {
-      expect(deliverNewMessageMock).toHaveBeenCalledWith(
-        expect.objectContaining({ accountId }),
-        [
-          expect.objectContaining({
-            bytes: Buffer.from("scheduled contents"),
-            filename: "notes.txt",
-            mediaType: "text/plain",
-          }),
-        ]
+      expect(sendNewMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId,
+          attachments: [
+            expect.objectContaining({
+              bytes: Buffer.from("scheduled contents"),
+              filename: "notes.txt",
+              mediaType: "text/plain",
+            }),
+          ],
+        })
       );
       await expect(access(ownedAttachment.path)).rejects.toMatchObject({
         code: "ENOENT",
@@ -724,6 +847,240 @@ describe("scheduled mail in-place save", () => {
       revision: 2,
       rfcMessageId: "<stable@scheduled.kisa.invalid>",
       status: "scheduled",
+    });
+  });
+});
+
+const ATTEMPT_ID = "attempt-1";
+
+const workerStore = makeDatabaseScheduledMailWorkerStore({
+  notifyChanged: () => {},
+  withKeyLock: (_key, run) => run(),
+});
+
+/** Puts the stored email where the worker's attempt would have left it. */
+const setDeliveryStatus = (status: "preparing" | "sending" | "sent"): void => {
+  connection
+    .prepare(
+      `UPDATE scheduled_messages
+       SET attempt_id = ?, attention_reason = NULL, next_attempt_at = NULL,
+           status = ?
+       WHERE draft_id = ?`
+    )
+    .run(status === "sent" ? null : ATTEMPT_ID, status, draftId);
+};
+
+const deliveryRow = () =>
+  connection
+    .prepare(
+      `SELECT attempt_count AS attemptCount, attempt_id AS attemptId,
+              attention_reason AS attentionReason,
+              last_attempt_at AS lastAttemptAt,
+              next_attempt_at AS nextAttemptAt,
+              rate_limit_started_at AS rateLimitStartedAt, status
+       FROM scheduled_messages WHERE draft_id = ?`
+    )
+    .get(draftId);
+
+const BEING_SENT = { message: "The scheduled email is already being sent" };
+const GONE = { message: "The scheduled email no longer exists" };
+const key = { accountId, draftId };
+
+describe("scheduled mail delivery status", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connection.prepare("DELETE FROM mail_drafts").run();
+    insertScheduledDraft();
+  });
+
+  // The last suite in the file closes the database both suites share.
+  afterAll(() => connection.close());
+
+  it("refuses every user action on an email that is being sent", async () => {
+    setDeliveryStatus("sending");
+
+    await expect(
+      Effect.runPromise(beginScheduledMailEdit(key, 71))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(cancelScheduledMailToStash(key))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(discardScheduledMail(key))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(
+        sendScheduledMailNow({ ...key, allowPossibleDuplicate: false })
+      )
+    ).rejects.toMatchObject(BEING_SENT);
+    expect(deliveryRow()).toMatchObject({ status: "sending" });
+  });
+
+  it("finds a sent email gone, whatever the user asks", async () => {
+    setDeliveryStatus("sent");
+
+    await expect(
+      Effect.runPromise(beginScheduledMailEdit(key, 71))
+    ).rejects.toMatchObject(GONE);
+    await expect(
+      Effect.runPromise(cancelScheduledMailToStash(key))
+    ).rejects.toMatchObject(GONE);
+    await expect(
+      Effect.runPromise(
+        sendScheduledMailNow({ ...key, allowPossibleDuplicate: false })
+      )
+    ).rejects.toMatchObject(GONE);
+  });
+
+  // The list already shows a claimed email as being sent, so every action
+  // refuses it, from the editor and from the row alike.
+  it("refuses every user action on an email the worker has claimed", async () => {
+    setDeliveryStatus("preparing");
+
+    await expect(
+      Effect.runPromise(beginScheduledMailEdit(key, 71))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(cancelScheduledMailToStash(key))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(discardScheduledMail(key))
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      Effect.runPromise(
+        sendScheduledMailNow({ ...key, allowPossibleDuplicate: false })
+      )
+    ).rejects.toMatchObject(BEING_SENT);
+    await expect(
+      workerStore.markSending(key, ATTEMPT_ID, Date.now())
+    ).resolves.toBeTruthy();
+  });
+
+  it("starts delivery over when the list row sends an email that needs attention now", async () => {
+    connection
+      .prepare(
+        `UPDATE scheduled_messages
+         SET attempt_count = 3, last_attempt_at = 5, next_attempt_at = NULL,
+             rate_limit_started_at = 4, status = 'attention',
+             attention_reason = 'rate-limit-exhausted'
+         WHERE draft_id = ?`
+      )
+      .run(draftId);
+
+    await Effect.runPromise(
+      sendScheduledMailNow({ ...key, allowPossibleDuplicate: false })
+    );
+
+    expect(deliveryRow()).toMatchObject({
+      attemptCount: 0,
+      attemptId: null,
+      attentionReason: null,
+      lastAttemptAt: null,
+      rateLimitStartedAt: null,
+      status: "scheduled",
+    });
+  });
+
+  it("walks an attempt from claim through a rate-limit retry to sent", async () => {
+    connection
+      .prepare(
+        "UPDATE scheduled_messages SET next_attempt_at = 1 WHERE draft_id = ?"
+      )
+      .run(draftId);
+
+    await workerStore.claimDue(10, ATTEMPT_ID);
+    const claimed = deliveryRow();
+    await workerStore.markSending(key, ATTEMPT_ID, 20);
+    const sending = deliveryRow();
+    await workerStore.retryAfterRateLimit(
+      { ...key, attemptId: ATTEMPT_ID } as never,
+      500,
+      30,
+      40
+    );
+    const retrying = deliveryRow();
+    await workerStore.claimDue(600, ATTEMPT_ID);
+    await workerStore.markSending(key, ATTEMPT_ID, 610);
+    await workerStore.markSent(key, ATTEMPT_ID, 620);
+
+    expect(claimed).toMatchObject({
+      attemptId: ATTEMPT_ID,
+      nextAttemptAt: null,
+      status: "preparing",
+    });
+    expect(sending).toMatchObject({
+      attemptCount: 1,
+      attemptId: ATTEMPT_ID,
+      lastAttemptAt: 20,
+      status: "sending",
+    });
+    expect(retrying).toStrictEqual({
+      attemptCount: 1,
+      attemptId: null,
+      attentionReason: null,
+      lastAttemptAt: 20,
+      nextAttemptAt: 500,
+      rateLimitStartedAt: 30,
+      status: "scheduled",
+    });
+    expect(deliveryRow()).toMatchObject({
+      attemptCount: 2,
+      attemptId: null,
+      nextAttemptAt: null,
+      status: "sent",
+    });
+  });
+
+  it("returns a claimed email to the queue on release and at startup", async () => {
+    setDeliveryStatus("preparing");
+    await workerStore.releasePreparation(key, ATTEMPT_ID, 900, 50);
+    const released = deliveryRow();
+
+    setDeliveryStatus("preparing");
+    await workerStore.resetPreparing(60);
+    const scheduledAt = connection
+      .prepare(
+        "SELECT scheduled_at AS scheduledAt FROM scheduled_messages WHERE draft_id = ?"
+      )
+      .get(draftId) as { scheduledAt: number };
+
+    expect(released).toMatchObject({
+      attemptId: null,
+      nextAttemptAt: 900,
+      status: "scheduled",
+    });
+    expect(deliveryRow()).toMatchObject({
+      attemptId: null,
+      nextAttemptAt: scheduledAt.scheduledAt,
+      status: "scheduled",
+    });
+  });
+
+  it("moves an attempt to attention from preparing or sending, and a send without one only from sending", async () => {
+    setDeliveryStatus("preparing");
+    await expect(
+      workerStore.markAttention(key, undefined, "outcome-unknown", 70)
+    ).resolves.toBeFalsy();
+    await expect(
+      workerStore.markAttention(key, ATTEMPT_ID, "message-invalid", 70)
+    ).resolves.toBeTruthy();
+    const fromPreparing = deliveryRow();
+
+    setDeliveryStatus("sending");
+    await expect(
+      workerStore.markAttention(key, undefined, "outcome-unknown", 80)
+    ).resolves.toBeTruthy();
+
+    expect(fromPreparing).toMatchObject({
+      attemptId: null,
+      attentionReason: "message-invalid",
+      nextAttemptAt: null,
+      status: "attention",
+    });
+    expect(deliveryRow()).toMatchObject({
+      attemptId: null,
+      attentionReason: "outcome-unknown",
+      status: "attention",
     });
   });
 });

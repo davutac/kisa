@@ -2,6 +2,20 @@ import * as Effect from "effect/Effect";
 
 import { DesktopIpc } from "./desktop-ipc";
 import {
+  cancelMicrosoftAccountSignIn,
+  closeAccountSetupWindow,
+  signInMicrosoftAccount,
+  submitPasswordAccount,
+} from "./methods/account-setup";
+import {
+  disconnectAccount,
+  listAccounts,
+  openAccountSetup,
+  openAccountSignIn,
+  reorderAccounts,
+  updateAccountName,
+} from "./methods/accounts";
+import {
   categorizeMailThread,
   cleanupDraft,
   generateReply,
@@ -10,14 +24,6 @@ import {
   updateAiWritingSettings,
 } from "./methods/ai";
 import { openThreadWindow, startApp, updateAppSettings } from "./methods/app";
-import {
-  disconnectAccount,
-  getGoogleOAuthStatus,
-  listAccounts,
-  reorderAccounts,
-  setupGoogleOAuth,
-  startGoogle,
-} from "./methods/auth";
 import {
   getLoginItemSettings,
   setLoginItemSettings,
@@ -29,8 +35,9 @@ import {
   deleteLabel,
   deleteForever,
   discardDraft,
-  getSpamStatus,
+  getUnreadCounts,
   getSyncStatus,
+  getUnreadLabels,
   loadAttachmentPreview,
   loadOutgoingInlineImagePreview,
   listCachedPage,
@@ -43,10 +50,12 @@ import {
   openAttachmentPreview,
   markThreadNotSpam,
   prepareOutgoingAttachments,
+  reportThreadSpam,
   searchThreads,
   saveAttachment,
   saveAttachmentPreview,
   saveDraft,
+  cancelSend,
   sendNew,
   sendThread,
   setLabel,
@@ -71,10 +80,13 @@ import {
 import {
   beginImport,
   cancelImport,
+  discardImport,
   dropImportFile,
   exportRecoveryKey,
+  getImportStatus,
   importExistingDatabase,
   listSettings,
+  restartForImport,
   selectImportFile,
   updateSettings,
 } from "./methods/settings";
@@ -101,19 +113,24 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(getLoginItemSettings);
   yield* ipc.handle(setLoginItemSettings);
   yield* ipc.handle(updateAppSettings);
-  yield* ipc.handle(getGoogleOAuthStatus);
-  yield* ipc.handle(setupGoogleOAuth);
-  yield* ipc.handle(startGoogle);
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);
+  yield* ipc.handle(updateAccountName);
   yield* ipc.handle(disconnectAccount);
+  yield* ipc.handle(openAccountSetup);
+  yield* ipc.handle(openAccountSignIn);
+  yield* ipc.handle(submitPasswordAccount);
+  yield* ipc.handle(signInMicrosoftAccount);
+  yield* ipc.handle(cancelMicrosoftAccountSignIn);
+  yield* ipc.handle(closeAccountSetupWindow);
   yield* ipc.handle(listTemplates);
   yield* ipc.handle(saveTemplate);
   yield* ipc.handle(deleteTemplate);
   yield* ipc.handle(getSyncStatus);
   yield* ipc.handle(getIndexProgress);
   yield* ipc.handle(reindexMail);
-  yield* ipc.handle(getSpamStatus);
+  yield* ipc.handle(getUnreadCounts);
+  yield* ipc.handle(getUnreadLabels);
   yield* ipc.handle(listCachedPage);
   yield* ipc.handle(listLabels);
   yield* ipc.handle(createLabel);
@@ -135,6 +152,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(searchThreads);
   yield* ipc.handle(sendNew);
   yield* ipc.handle(sendThread);
+  yield* ipc.handle(cancelSend);
   yield* ipc.handle(listSenders);
   yield* ipc.handle(bulkMutate);
   yield* ipc.handle(setLabel);
@@ -142,6 +160,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(trash);
   yield* ipc.handle(deleteForever);
   yield* ipc.handle(markThreadNotSpam);
+  yield* ipc.handle(reportThreadSpam);
   yield* ipc.handle(listImageSenders);
   yield* ipc.handle(trustImages);
   yield* ipc.handle(listScheduledMailPage);
@@ -158,6 +177,9 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(dropImportFile);
   yield* ipc.handle(exportRecoveryKey);
   yield* ipc.handle(importExistingDatabase);
+  yield* ipc.handle(getImportStatus);
+  yield* ipc.handle(discardImport);
+  yield* ipc.handle(restartForImport);
   yield* ipc.handle(selectImportFile);
   yield* ipc.handle(listSettings);
   yield* ipc.handle(updateSettings);

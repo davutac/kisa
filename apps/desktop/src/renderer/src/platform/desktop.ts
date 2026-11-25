@@ -35,42 +35,43 @@ export interface WindowApi {
   openThread: DesktopBridge["openThreadWindow"];
 }
 
-export interface AuthApi {
-  disconnectGoogleAccount: DesktopBridge["disconnectGoogleAccount"];
-  getGoogleOAuthClientStatus: DesktopBridge["getGoogleOAuthClientStatus"];
-  listGoogleAccounts: DesktopBridge["listGoogleAccounts"];
-  onGoogleAccountsChanged: DesktopBridge["onGoogleAccountsChanged"];
-  reorderGoogleAccounts: DesktopBridge["reorderGoogleAccounts"];
-  setupGoogleOAuthClient: DesktopBridge["setupGoogleOAuthClient"];
-  startGoogle: DesktopBridge["startGoogleAuth"];
+export interface AccountsApi {
+  disconnectAccount: DesktopBridge["disconnectAccount"];
+  listAccounts: DesktopBridge["listAccounts"];
+  onAccountsChanged: DesktopBridge["onAccountsChanged"];
+  openAccountSetup: DesktopBridge["openAccountSetup"];
+  openAccountSignIn: DesktopBridge["openAccountSignIn"];
+  reorderAccounts: DesktopBridge["reorderAccounts"];
+  updateAccountName: DesktopBridge["updateAccountName"];
 }
 
 export interface MailApi {
   authorizeOutgoingAttachments: DesktopBridge["authorizeOutgoingAttachments"];
   bulkMutateThreads: DesktopBridge["bulkMutateThreads"];
-  createLabel: DesktopBridge["createGmailLabel"];
-  deleteLabel: DesktopBridge["deleteGmailLabel"];
-  updateLabel: DesktopBridge["updateGmailLabel"];
+  createLabel: DesktopBridge["createLabel"];
+  deleteLabel: DesktopBridge["deleteLabel"];
+  updateLabel: DesktopBridge["updateLabel"];
   deleteThreadForever: DesktopBridge["deleteThreadForever"];
   discardDraft: DesktopBridge["discardMailDraft"];
   getIndexProgress: DesktopBridge["getMailIndexProgress"];
   getSyncStatus: DesktopBridge["getMailSyncStatus"];
-  getSpamStatus: DesktopBridge["getSpamStatus"];
+  getUnreadCounts: DesktopBridge["getUnreadCounts"];
+  getUnreadLabels: DesktopBridge["getUnreadLabels"];
   listCachedThreadPage: DesktopBridge["listCachedThreadPage"];
-  listLabels: DesktopBridge["listGmailLabels"];
-  listSenders: DesktopBridge["listGmailSenders"];
+  listLabels: DesktopBridge["listLabels"];
+  listSenders: DesktopBridge["listSenders"];
   listStashedDrafts: DesktopBridge["listStashedDrafts"];
   listTrustedImageSenders: DesktopBridge["listTrustedImageSenders"];
   loadOutgoingInlineImagePreview: DesktopBridge["loadOutgoingInlineImagePreview"];
   loadThread: DesktopBridge["loadThread"];
   loadThreadDraft: DesktopBridge["loadThreadDraft"];
   markThreadNotSpam: DesktopBridge["markThreadNotSpam"];
+  reportThreadSpam: DesktopBridge["reportThreadSpam"];
   onDraftChanged: DesktopBridge["onMailDraftChanged"];
   onIndexProgressChanged: DesktopBridge["onMailIndexProgressChanged"];
   onLabelCatalogChanged: DesktopBridge["onMailLabelCatalogChanged"];
   onSyncStatusChanged: DesktopBridge["onMailSyncStatusChanged"];
   onThreadListUpdated: DesktopBridge["onMailThreadListUpdated"];
-  onThreadUpdated: DesktopBridge["onMailThreadUpdated"];
   onTrustedImageSendersChanged: DesktopBridge["onTrustedImageSendersChanged"];
   openAttachmentPreview: DesktopBridge["openAttachmentPreview"];
   prepareOutgoingAttachments: DesktopBridge["prepareOutgoingAttachments"];
@@ -78,11 +79,12 @@ export interface MailApi {
   search: DesktopBridge["searchMail"];
   saveAttachment: DesktopBridge["saveAttachment"];
   saveDraft: DesktopBridge["saveMailDraft"];
+  cancelSend: DesktopBridge["cancelSend"];
   sendMessage: DesktopBridge["sendMessage"];
   sendThreadMessage: DesktopBridge["sendThreadMessage"];
   setThreadLabel: DesktopBridge["setThreadLabel"];
   setThreadReadState: DesktopBridge["setThreadReadState"];
-  syncLabels: DesktopBridge["syncGmailLabels"];
+  syncLabels: DesktopBridge["syncLabels"];
   trashThread: DesktopBridge["trashThread"];
   trustImageSender: DesktopBridge["trustImageSender"];
 }
@@ -103,12 +105,15 @@ export interface ScheduledMailApi {
 export interface SettingsApi {
   beginDatabaseImport: DesktopBridge["beginDatabaseImport"];
   cancelDatabaseImport: DesktopBridge["cancelDatabaseImport"];
+  discardDatabaseImport: DesktopBridge["discardDatabaseImport"];
   dropDatabaseImportFile: DesktopBridge["dropDatabaseImportFile"];
   exportDatabaseRecoveryKey: DesktopBridge["exportDatabaseRecoveryKey"];
+  getDatabaseImportStatus: DesktopBridge["getDatabaseImportStatus"];
   importDatabase: DesktopBridge["importDatabase"];
   listAccountSettings: DesktopBridge["listAccountSettings"];
   onAccountSettingsChanged: DesktopBridge["onAccountSettingsChanged"];
   onDatabaseImportProgress: DesktopBridge["onDatabaseImportProgress"];
+  restartForDatabaseImport: DesktopBridge["restartForDatabaseImport"];
   selectDatabaseImportFile: DesktopBridge["selectDatabaseImportFile"];
   updateAccountSettings: DesktopBridge["updateAccountSettings"];
 }
@@ -129,9 +134,9 @@ export interface TemplateApi {
 }
 
 export interface RuntimeCapabilities {
+  accounts?: AccountsApi;
   ai?: AiApi;
   appSettings?: AppSettingsApi;
-  auth?: AuthApi;
   isWeb: boolean;
   lifecycle?: AppLifecycleApi;
   loginItemSettings?: LoginItemSettingsApi;
@@ -146,9 +151,9 @@ export interface RuntimeCapabilities {
 }
 
 interface DesktopCapabilities {
+  accounts: AccountsApi;
   ai: AiApi;
   appSettings: AppSettingsApi;
-  auth: AuthApi;
   lifecycle: AppLifecycleApi;
   loginItemSettings?: LoginItemSettingsApi;
   mail: MailApi;
@@ -173,6 +178,15 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
   }
 
   const capabilities: DesktopCapabilities = {
+    accounts: {
+      disconnectAccount: bridge.disconnectAccount,
+      listAccounts: bridge.listAccounts,
+      onAccountsChanged: bridge.onAccountsChanged,
+      openAccountSetup: bridge.openAccountSetup,
+      openAccountSignIn: bridge.openAccountSignIn,
+      reorderAccounts: bridge.reorderAccounts,
+      updateAccountName: bridge.updateAccountName,
+    },
     ai: {
       categorizeThread: bridge.categorizeThread,
       cleanupDraft: bridge.cleanupEmailDraft,
@@ -184,15 +198,6 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     appSettings: {
       set: bridge.setAppSettings,
     },
-    auth: {
-      disconnectGoogleAccount: bridge.disconnectGoogleAccount,
-      getGoogleOAuthClientStatus: bridge.getGoogleOAuthClientStatus,
-      listGoogleAccounts: bridge.listGoogleAccounts,
-      onGoogleAccountsChanged: bridge.onGoogleAccountsChanged,
-      reorderGoogleAccounts: bridge.reorderGoogleAccounts,
-      setupGoogleOAuthClient: bridge.setupGoogleOAuthClient,
-      startGoogle: bridge.startGoogleAuth,
-    },
     lifecycle: { onClosing: bridge.onAppClosing },
     loginItemSettings: bridge.launchAtLoginSupported
       ? {
@@ -203,28 +208,29 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     mail: {
       authorizeOutgoingAttachments: bridge.authorizeOutgoingAttachments,
       bulkMutateThreads: bridge.bulkMutateThreads,
-      createLabel: bridge.createGmailLabel,
-      deleteLabel: bridge.deleteGmailLabel,
+      createLabel: bridge.createLabel,
+      deleteLabel: bridge.deleteLabel,
       deleteThreadForever: bridge.deleteThreadForever,
       discardDraft: bridge.discardMailDraft,
       getIndexProgress: bridge.getMailIndexProgress,
-      getSpamStatus: bridge.getSpamStatus,
+      getUnreadCounts: bridge.getUnreadCounts,
       getSyncStatus: bridge.getMailSyncStatus,
+      getUnreadLabels: bridge.getUnreadLabels,
       listCachedThreadPage: bridge.listCachedThreadPage,
-      listLabels: bridge.listGmailLabels,
-      listSenders: bridge.listGmailSenders,
+      listLabels: bridge.listLabels,
+      listSenders: bridge.listSenders,
       listStashedDrafts: bridge.listStashedDrafts,
       listTrustedImageSenders: bridge.listTrustedImageSenders,
       loadOutgoingInlineImagePreview: bridge.loadOutgoingInlineImagePreview,
       loadThread: bridge.loadThread,
       loadThreadDraft: bridge.loadThreadDraft,
       markThreadNotSpam: bridge.markThreadNotSpam,
+      reportThreadSpam: bridge.reportThreadSpam,
       onDraftChanged: bridge.onMailDraftChanged,
       onIndexProgressChanged: bridge.onMailIndexProgressChanged,
       onLabelCatalogChanged: bridge.onMailLabelCatalogChanged,
       onSyncStatusChanged: bridge.onMailSyncStatusChanged,
       onThreadListUpdated: bridge.onMailThreadListUpdated,
-      onThreadUpdated: bridge.onMailThreadUpdated,
       onTrustedImageSendersChanged: bridge.onTrustedImageSendersChanged,
       openAttachmentPreview: bridge.openAttachmentPreview,
       prepareOutgoingAttachments: bridge.prepareOutgoingAttachments,
@@ -232,14 +238,15 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
       saveAttachment: bridge.saveAttachment,
       saveDraft: bridge.saveMailDraft,
       search: bridge.searchMail,
+      cancelSend: bridge.cancelSend,
       sendMessage: bridge.sendMessage,
       sendThreadMessage: bridge.sendThreadMessage,
       setThreadLabel: bridge.setThreadLabel,
       setThreadReadState: bridge.setThreadReadState,
-      syncLabels: bridge.syncGmailLabels,
+      syncLabels: bridge.syncLabels,
       trashThread: bridge.trashThread,
       trustImageSender: bridge.trustImageSender,
-      updateLabel: bridge.updateGmailLabel,
+      updateLabel: bridge.updateLabel,
     },
     scheduledMail: {
       beginEdit: bridge.beginScheduledMailEdit,
@@ -256,12 +263,15 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     settings: {
       beginDatabaseImport: bridge.beginDatabaseImport,
       cancelDatabaseImport: bridge.cancelDatabaseImport,
+      discardDatabaseImport: bridge.discardDatabaseImport,
       dropDatabaseImportFile: bridge.dropDatabaseImportFile,
       exportDatabaseRecoveryKey: bridge.exportDatabaseRecoveryKey,
+      getDatabaseImportStatus: bridge.getDatabaseImportStatus,
       importDatabase: bridge.importDatabase,
       listAccountSettings: bridge.listAccountSettings,
       onAccountSettingsChanged: bridge.onAccountSettingsChanged,
       onDatabaseImportProgress: bridge.onDatabaseImportProgress,
+      restartForDatabaseImport: bridge.restartForDatabaseImport,
       selectDatabaseImportFile: bridge.selectDatabaseImportFile,
       updateAccountSettings: bridge.updateAccountSettings,
     },
@@ -296,9 +306,9 @@ export const getRuntimeCapabilities = (
 
   if (bridge === undefined) {
     return {
+      accounts: undefined,
       ai: undefined,
       appSettings: undefined,
-      auth: undefined,
       isWeb: !isElectron,
       lifecycle: undefined,
       loginItemSettings: undefined,
@@ -325,8 +335,8 @@ export const getAppSettingsApi = (): AppSettingsApi | undefined =>
 export const getAppLifecycleApi = (): AppLifecycleApi | undefined =>
   getRuntimeCapabilities().lifecycle;
 
-export const getAuthApi = (): AuthApi | undefined =>
-  getRuntimeCapabilities().auth;
+export const getAccountsApi = (): AccountsApi | undefined =>
+  getRuntimeCapabilities().accounts;
 
 export const getAiApi = (): AiApi | undefined => getRuntimeCapabilities().ai;
 

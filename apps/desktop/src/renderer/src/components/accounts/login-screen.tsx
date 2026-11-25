@@ -1,31 +1,33 @@
-import { useState } from "react";
+import { InfoIcon } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 import appIcon from "../../../../../build/icon.png";
-import googleLogo from "../../assets/google.svg";
-import { GoogleOAuthSetupDialog } from "./google-oauth-setup";
+import FloatingProviderIcons from "./floating-provider-icons";
+import { openAccountSetup } from "./open-account-setup";
 
 interface LoginScreenProps {
-  hasGoogleSetup: boolean;
-  isSettingUp: boolean;
-  isStarting: boolean;
-  onLogin: () => void;
-  onSetup: () => Promise<boolean>;
+  /** A database from before the mail engine is on disk; say what was left. */
+  readonly legacyDatabaseNotice: boolean;
 }
 
-const LoginScreen = ({
-  hasGoogleSetup,
-  isSettingUp,
-  isStarting,
-  onLogin,
-  onSetup,
-}: LoginScreenProps) => {
-  const [isSetupOpen, setIsSetupOpen] = useState(false);
+const LegacyDatabaseNotice = () => (
+  // A note, not an alert: it is read with the page, not announced over it.
+  <Alert className="mb-5 px-3 py-2.5" role="note">
+    <InfoIcon aria-hidden />
+    <AlertTitle>Kisa starts fresh in this version</AlertTitle>
+    <AlertDescription>
+      Add your accounts and set things up again.
+    </AlertDescription>
+  </Alert>
+);
 
-  return (
-    <main className="bg-background fixed inset-0 h-svh overflow-y-auto p-6 [-webkit-app-region:drag]">
-      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center py-8">
+const LoginScreen = ({ legacyDatabaseNotice }: LoginScreenProps) => (
+  <main className="bg-background fixed inset-0 h-svh overflow-y-auto p-6 [-webkit-app-region:drag]">
+    <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center py-8">
+      <div className="relative">
+        <FloatingProviderIcons />
         <div className="mb-6 flex items-center justify-center gap-2.5">
           <img
             alt=""
@@ -41,49 +43,29 @@ const LoginScreen = ({
         <section className="[-webkit-app-region:no-drag]">
           <header className="mb-5 text-center">
             <h2 className="font-heading text-base font-medium">
-              Connect Gmail
+              Connect your mail
             </h2>
             <p className="text-muted-foreground mt-1 text-xs/relaxed">
-              Set up your personal Google client once, then sign in to Gmail.
+              Gmail, iCloud and other accounts sign in with an app password.
             </p>
           </header>
 
-          <div className="space-y-2">
-            <Button
-              className="h-10 w-full"
-              disabled={isSettingUp || isStarting}
-              onClick={() => setIsSetupOpen(true)}
-              type="button"
-              variant="outline"
-            >
-              Set up Google
-            </Button>
-            <Button
-              className="h-10 w-full gap-2.5"
-              disabled={!hasGoogleSetup || isSettingUp || isStarting}
-              onClick={onLogin}
-              size="lg"
-              type="button"
-            >
-              <img
-                alt=""
-                aria-hidden="true"
-                className="size-4"
-                src={googleLogo}
-              />
-              {isStarting ? "Opening Google…" : "Login with Google"}
-            </Button>
-          </div>
+          {legacyDatabaseNotice ? <LegacyDatabaseNotice /> : null}
+
+          <Button
+            className="h-10 w-full"
+            onClick={() => {
+              void openAccountSetup();
+            }}
+            size="lg"
+            type="button"
+          >
+            Add account
+          </Button>
         </section>
       </div>
-      <GoogleOAuthSetupDialog
-        isUploading={isSettingUp}
-        onOpenChange={setIsSetupOpen}
-        onUpload={onSetup}
-        open={isSetupOpen}
-      />
-    </main>
-  );
-};
+    </div>
+  </main>
+);
 
 export default LoginScreen;

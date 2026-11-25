@@ -1,9 +1,11 @@
 import { DownloadIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { WindowTitlebar } from "@/components/shell/window-titlebar";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { GmailAttachmentPreview } from "@/shared/ipc/mail";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
+import type { MailAttachmentPreview } from "@/shared/ipc/mail";
 import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import ImagePreview from "./image-preview";
@@ -13,7 +15,7 @@ import { PreviewError, PreviewPending } from "./preview-status";
 type PreviewState =
   | { readonly status: "error"; readonly message: string }
   | { readonly status: "loading" }
-  | { readonly data: GmailAttachmentPreview; readonly status: "ready" };
+  | { readonly data: MailAttachmentPreview; readonly status: "ready" };
 
 const formatBytes = (bytes: number): string => {
   if (bytes < 1000) {
@@ -68,16 +70,21 @@ const AttachmentPreviewApp = () => {
     }
     setSaving(true);
     setSaveError(undefined);
-    try {
-      const reply = await bridge.save();
-      if (!reply.ok) {
-        setSaveError(reply.error);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await bridge.save();
+          if (!reply.ok) {
+            setSaveError(reply.error);
+          }
+        } catch {
+          setSaveError("Could not save attachment.");
+        }
+      },
+      () => {
+        setSaving(false);
       }
-    } catch {
-      setSaveError("Could not save attachment.");
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   const attachment = state.status === "ready" ? state.data : undefined;
@@ -97,7 +104,7 @@ const AttachmentPreviewApp = () => {
       className="grid h-svh overflow-hidden"
       style={{ gridTemplateRows: `${TITLEBAR_HEIGHT}px minmax(0, 1fr)` }}
     >
-      <header className="app-titlebar bg-background flex items-center justify-between gap-2">
+      <WindowTitlebar className="bg-background flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-xs font-medium">
@@ -127,7 +134,7 @@ const AttachmentPreviewApp = () => {
           {saving ? <Spinner /> : <DownloadIcon data-icon="inline-start" />}
           Download
         </Button>
-      </header>
+      </WindowTitlebar>
       <section className="min-h-0 overflow-auto">{content}</section>
     </main>
   );

@@ -1,14 +1,16 @@
 import type { UpdateStatus } from "@/shared/update-status";
 import { clampUpdateProgress } from "@/shared/update-status";
 
-export type TitlebarUpdateView =
+/**
+ * The sidebar's round update button. It stays in the footer wherever updates
+ * are supported, so checking is always one click away, and its icon and
+ * label follow the update from available through downloaded.
+ */
+export type SidebarUpdateView =
   | { kind: "hidden" }
-  | {
-      kind: "download" | "install";
-      label: string;
-      version: string;
-    }
-  | { kind: "progress"; percent: number };
+  | { isChecking: boolean; kind: "check"; label: string }
+  | { kind: "download" | "install"; label: string; version: string }
+  | { kind: "progress"; label: string; percent: number };
 
 export type SettingsUpdateView =
   | {
@@ -29,36 +31,46 @@ export interface ManualUpdateFeedback {
   type: "info" | "success";
 }
 
-export const getTitlebarUpdateView = (
-  status: UpdateStatus
-): TitlebarUpdateView => {
-  if (
-    status.state === "idle" ||
-    status.state === "checking" ||
-    status.state === "unsupported"
-  ) {
+export const getSidebarUpdateView = (
+  status: UpdateStatus,
+  isCheckPending: boolean
+): SidebarUpdateView => {
+  if (status.state === "unsupported") {
     return { kind: "hidden" };
-  }
-
-  if (status.state === "downloading") {
-    return {
-      kind: "progress",
-      percent: clampUpdateProgress(status.percent),
-    };
   }
 
   if (status.state === "available") {
     return {
       kind: "download",
-      label: "Update",
+      label: `Download update ${status.version}`,
       version: status.version,
     };
   }
 
+  if (status.state === "downloading") {
+    const percent = clampUpdateProgress(status.percent);
+
+    return {
+      kind: "progress",
+      label: `Downloading update (${percent}%)`,
+      percent,
+    };
+  }
+
+  if (status.state === "ready") {
+    return {
+      kind: "install",
+      label: `Restart to install update ${status.version}`,
+      version: status.version,
+    };
+  }
+
+  const isChecking = status.state === "checking" || isCheckPending;
+
   return {
-    kind: "install",
-    label: "Install",
-    version: status.version,
+    isChecking,
+    kind: "check",
+    label: isChecking ? "Checking for updates…" : "Check for updates",
   };
 };
 

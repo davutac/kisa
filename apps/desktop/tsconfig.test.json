@@ -6,12 +6,20 @@
     "src/renderer/src/**/*.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts",
-    "tests/**/*.tsx",
     "../../packages/database/src/**/*.ts"
   ],
   "compilerOptions": {
     "composite": true,
-    "plugins": [{ "name": "@effect/language-service" }],
-    "types": ["node", "vite/client", "vitest/globals"]
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "@effect/vitest",
+          "effect/rpc",
+          "effect/workers"
+        ]
+      }
+    ],
+    "types": ["electron-vite/node", "node", "vite/client", "vitest/globals"]
   }
 }

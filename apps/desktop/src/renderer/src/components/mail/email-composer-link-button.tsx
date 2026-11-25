@@ -3,21 +3,20 @@ import { LinkIcon } from "lucide-react";
 import type { SubmitEvent } from "react";
 import { useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupInput,
 } from "@/components/ui/input-group";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ToolbarButton } from "@/components/ui/toolbar";
 
 interface EmailComposerLinkButtonProps {
-  disabled: boolean;
   editor: Editor;
   isActive: boolean;
 }
@@ -28,7 +27,6 @@ const normalizeLinkHref = (value: string): string => {
 };
 
 const EmailComposerLinkButton = ({
-  disabled,
   editor,
   isActive,
 }: EmailComposerLinkButtonProps) => {
@@ -69,17 +67,17 @@ const EmailComposerLinkButton = ({
     setIsOpen(false);
   };
 
+  // A popup trigger can't also be pressed, so the name says that the caret
+  // is in a link; the fill shows it.
+  const triggerLabel = isActive ? "Edit link" : "Link";
+
   return (
     <Popover onOpenChange={handleOpenChange} open={isOpen}>
       <PopoverTrigger
         render={
-          <Button
-            aria-label="Link"
-            aria-pressed={isActive}
-            disabled={disabled}
-            size="icon"
-            title="Link"
-            type="button"
+          <ToolbarButton
+            aria-label={triggerLabel}
+            title={triggerLabel}
             variant={isActive ? "secondary" : "ghost"}
           />
         }
@@ -89,12 +87,12 @@ const EmailComposerLinkButton = ({
       <PopoverContent
         align="start"
         className="w-80 gap-1.5 p-2"
-        initialFocus={inputRef}
+        initialFocus={() => inputRef.current}
         side="top"
       >
         <form className="flex flex-col gap-1.5" onSubmit={applyLink}>
           <InputGroup>
-            <InputGroupInput
+            <Input
               aria-invalid={validationError.length > 0}
               aria-label="Link address"
               onChange={(event) => {

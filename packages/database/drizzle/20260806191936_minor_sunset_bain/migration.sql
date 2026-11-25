@@ -1,1 +1,0 @@
-ALTER TABLE `gmail_threads` ADD `has_attachments` integer;

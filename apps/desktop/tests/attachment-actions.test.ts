@@ -1,5 +1,5 @@
 // These intentionally partial module adapters keep the test at the attachment
-// action seam rather than constructing Gmail and Electron runtimes.
+// action seam rather than constructing the mail engine and Electron runtimes.
 // oxlint-disable typescript/no-unsafe-type-assertion vitest/prefer-import-in-mock
 import { Effect } from "effect";
 import type * as Electron from "electron";
@@ -34,20 +34,15 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@electron-toolkit/utils", () => ({ is: { dev: false } }));
 
-vi.mock("../src/main/mail/gmail-gateway", async () => {
-  const { Layer } = await import("effect");
-  return { GmailGatewayLive: Layer.empty };
-});
-
-vi.mock("../src/main/mail/gmail-mime", async () => {
-  const { Layer } = await import("effect");
-  return { GmailMimeLive: Layer.empty };
-});
-
-vi.mock("../src/main/mail/gmail-store", async () => {
-  const { Layer } = await import("effect");
-  return { GmailStoreLive: Layer.empty };
-});
+vi.mock("../src/main/mail/engine/mail-engine", () => ({
+  inEngine: <A>(effect: A): A => effect,
+  loadAttachment: () =>
+    Effect.succeed({
+      bytes: new Uint8Array([37, 80, 68, 70]),
+      filename: "report.pdf",
+      mediaType: "application/pdf",
+    }),
+}));
 
 vi.mock("electron", () => ({
   BrowserWindow: class BrowserWindow {
@@ -89,7 +84,7 @@ vi.mock("../src/main/database", () => ({
   withDatabaseClient: <A>(
     run: (database: {
       readonly query: {
-        readonly gmailMessages: {
+        readonly mailMessages: {
           readonly findFirst: () => Promise<unknown>;
         };
       };
@@ -99,19 +94,18 @@ vi.mock("../src/main/database", () => ({
       state.databaseReads += 1;
       return run({
         query: {
-          gmailMessages: {
+          mailMessages: {
             findFirst: () =>
               Promise.resolve({
                 attachments: [
                   {
-                    attachmentId: "attachment-1",
                     filename: "report.pdf",
                     mediaType: "application/pdf",
-                    messageId: "message-1",
-                    partId: "1",
+                    section: "2",
                     size: 1024,
                   },
                 ],
+                threadId: "thread-1",
               }),
           },
         },
@@ -129,7 +123,7 @@ vi.mock("../src/main/window/window-state", () => ({
 
 const request = {
   accountId: "person@example.com",
-  attachmentId: "attachment-1",
+  attachmentId: "2",
   messageId: "message-1",
 };
 
@@ -161,17 +155,17 @@ describe("attachment actions", () => {
     expect(state.databaseReads).toBe(2);
   });
 
-  it("resolves an attachment whose Gmail id was reminted by its stable part id", async () => {
-    const stale = { ...request, attachmentId: "attachment-from-earlier-fetch" };
+  it("addresses an attachment by its part number, preferring the part id", async () => {
+    const stale = { ...request, attachmentId: "attachment-from-elsewhere" };
 
-    await Effect.runPromise(openAttachmentPreview({ ...stale, partId: "1" }));
+    await Effect.runPromise(openAttachmentPreview({ ...stale, partId: "2" }));
     expect(state.createdWindows).toHaveLength(1);
 
     await expect(
       Effect.runPromise(openAttachmentPreview(stale))
     ).rejects.toThrow("This attachment is not available yet");
     await expect(
-      Effect.runPromise(openAttachmentPreview({ ...stale, partId: "2" }))
+      Effect.runPromise(openAttachmentPreview({ ...request, partId: "3" }))
     ).rejects.toThrow("This attachment is not available yet");
   });
 

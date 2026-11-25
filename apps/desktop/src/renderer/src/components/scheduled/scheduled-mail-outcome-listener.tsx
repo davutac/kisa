@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import { getScheduledMailApi } from "@/platform/desktop";
 import { handleScheduledMailOutcome } from "@/scheduled/scheduled-mail-outcome";
 import { useScheduledMailNavigation } from "@/scheduled/scheduled-navigation";

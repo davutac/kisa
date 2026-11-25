@@ -1,3 +1,5 @@
+import { isProviderRequestError } from "@opencode/client";
+import type { ProviderRequestError } from "@opencode/client";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -52,6 +54,47 @@ export const extractJsonObject = (raw: string): string => {
   return trimmed.slice(start);
 };
 
+const describeRetryDelay = (milliseconds: number): string => {
+  const minutes = Math.ceil(milliseconds / 60_000);
+  if (minutes < 60) {
+    return minutes <= 1 ? "a minute" : `${minutes} minutes`;
+  }
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? "an hour" : `${hours} hours`;
+};
+
+// The upstream message stays out: it is the provider's own text, may carry
+// links or account details, and the typed reason already says what to do.
+export const describeProviderRequestError = ({
+  providerID,
+  reason,
+  retryAfterMs,
+}: ProviderRequestError): string => {
+  const source = `OpenCode (${providerID})`;
+  switch (reason) {
+    case "authentication": {
+      return `${source} sign-in expired or was refused. Sign in again in OpenCode`;
+    }
+    case "rate_limit": {
+      return retryAfterMs === undefined
+        ? `${source} usage limit reached. Try again later`
+        : `${source} usage limit reached. Try again in about ${describeRetryDelay(retryAfterMs)}`;
+    }
+    case "content_filter": {
+      return `${source} refused this text`;
+    }
+    case "invalid_request": {
+      return `${source} rejected the request. Check the model in AI settings`;
+    }
+    case "overloaded": {
+      return `${source} is overloaded. Try again shortly`;
+    }
+    default: {
+      return `${source} could not generate email text`;
+    }
+  }
+};
+
 export const generateWithOpenCode = Effect.fn("generateWithOpenCode")(
   function* generateWithOpenCode<S extends Schema.Top>(
     input: StructuredGenerationInput<S>
@@ -65,8 +108,13 @@ export const generateWithOpenCode = Effect.fn("generateWithOpenCode")(
     }
     const client = yield* connectOpenCode();
     const result = yield* Effect.tryPromise({
-      catch: () =>
-        providerFailure("opencode", "OpenCode could not generate email text"),
+      catch: (error) =>
+        providerFailure(
+          "opencode",
+          isProviderRequestError(error)
+            ? describeProviderRequestError(error)
+            : "OpenCode could not generate email text"
+        ),
       try: (signal) =>
         client.experimental.generate.text(
           {

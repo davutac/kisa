@@ -1,6 +1,7 @@
 import { CopyIcon } from "lucide-react";
-import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 interface MailCopyEmailButtonProps {
@@ -21,16 +22,16 @@ const MailCopyEmailButton = ({
   className,
   email,
 }: MailCopyEmailButtonProps) => (
-  <button
+  <Button
+    aria-label={`Copy ${email}`}
     className={cn(
-      "group/email hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-ring/30 pointer-events-auto relative -mx-1 inline-flex min-w-0 cursor-copy items-center overflow-hidden rounded-sm px-1 text-left transition-colors outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid",
+      "group/email focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-ring/30 dark:hover:bg-muted pointer-events-auto relative -mx-1 h-auto min-w-0 shrink cursor-copy justify-start gap-0 overflow-hidden rounded-sm border-0 px-1 text-left text-[length:inherit] leading-[inherit] font-normal transition-colors focus-visible:ring-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid active:not-aria-[haspopup]:translate-y-0",
       className
     )}
-    onClick={async () => {
-      await copyEmail(email);
-    }}
+    onClick={() => copyEmail(email)}
     title={`Copy ${email}`}
     type="button"
+    variant="ghost"
   >
     <span className="truncate">{email}</span>
     {/* Fades in over the end of this address, inside the pill: a laid-out
@@ -43,7 +44,7 @@ const MailCopyEmailButton = ({
     >
       <CopyIcon className="size-3" />
     </span>
-  </button>
+  </Button>
 );
 
 export default MailCopyEmailButton;

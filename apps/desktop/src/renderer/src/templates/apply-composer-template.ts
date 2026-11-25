@@ -1,4 +1,4 @@
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
 import type {
   ComposerTemplateBody,
@@ -32,7 +32,7 @@ export const applyComposerTemplate = (
 
 export const createTemplateVariableContext = (
   currentAccountId: string,
-  accounts: readonly Pick<GoogleAccount, "displayName" | "email">[],
+  accounts: readonly Pick<Account, "displayName" | "email">[],
   template: ComposerTemplateInput,
   now: number
 ): TemplateVariableContext => {

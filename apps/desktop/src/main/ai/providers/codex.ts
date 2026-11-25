@@ -200,22 +200,11 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
       }
       pending.clear();
     };
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        rejectPendingRequests();
-        terminateAiProcess(child);
-        resume(Effect.succeed({ authentication: "unknown", models: [] }));
-      }
-    }, PROVIDER_PROBE_TIMEOUT_MS);
-    timeout.unref();
-
     const finish = (result: CodexProbe) => {
       if (settled) {
         return;
       }
       settled = true;
-      clearTimeout(timeout);
       rejectPendingRequests();
       terminateAiProcess(child);
       resume(Effect.succeed(result));
@@ -356,12 +345,18 @@ const probeCodex = Effect.fn("probeCodex")(function* probeCodex() {
       }
     })();
 
+    // Interruption, including the timeout below, ends the probe.
     return Effect.sync(() => {
-      clearTimeout(timeout);
       rejectPendingRequests();
       terminateAiProcess(child);
     });
-  });
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: PROVIDER_PROBE_TIMEOUT_MS,
+      orElse: () =>
+        Effect.succeed<CodexProbe>({ authentication: "unknown", models: [] }),
+    })
+  );
 });
 
 export const getCodexStatus = Effect.fn("getCodexStatus")(

@@ -3,11 +3,11 @@ import { get as httpsGet } from "node:https";
 import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 
-import { gmailSenderBrands } from "@repo/database/schemas";
+import { mailSenderBrands } from "@repo/database/schemas";
 import { Effect, Option, Schema } from "effect";
 import { getDomain } from "tldts";
 
-import type { GmailSenderBrand } from "../../shared/ipc/mail";
+import type { MailSenderBrand } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import {
   extractSenderDomain,
@@ -56,7 +56,7 @@ interface ResolvedSenderBrand {
 }
 
 interface CachedSenderBrand {
-  readonly brand: GmailSenderBrand | null;
+  readonly brand: MailSenderBrand | null;
 }
 
 type SenderBrandDiscovery =
@@ -67,10 +67,10 @@ type SenderBrandDiscovery =
     };
 
 // oxlint-disable-next-line unicorn/throw-new-error
-export class SenderBrandError extends Schema.TaggedError<SenderBrandError>()(
-  "SenderBrandError",
-  { message: Schema.String }
-) {}
+export class SenderBrandError extends Schema.TaggedError<
+  SenderBrandError,
+  { readonly brand: unique symbol }
+>()("SenderBrandError", { message: Schema.String }) {}
 
 const isValidSelector = (selector: string): boolean =>
   selector.length <= 253 &&
@@ -163,7 +163,7 @@ export const hasCachedSenderBrand = Effect.fn("hasCachedSenderBrand")(
 
     const domains = getBimiLookupDomains(senderDomain);
     const rows = yield* withDatabaseClient((database) =>
-      database.query.gmailSenderBrands.findMany({
+      database.query.mailSenderBrands.findMany({
         where: {
           domain: { in: [...domains] },
           expiresAt: { gt: Date.now() },
@@ -465,7 +465,7 @@ const validateSvgIndicator = (data: Buffer): Buffer | null => {
   return /<svg(?:\s|>)/iu.test(source) ? data : null;
 };
 
-const toSenderBrand = (domain: string, logoData: Buffer): GmailSenderBrand => ({
+const toSenderBrand = (domain: string, logoData: Buffer): MailSenderBrand => ({
   domain,
   imageDataUrl: `data:image/svg+xml;base64,${logoData.toString("base64")}`,
   source: "bimi",
@@ -474,7 +474,7 @@ const toSenderBrand = (domain: string, logoData: Buffer): GmailSenderBrand => ({
 const loadCachedSenderBrand = Effect.fn("loadCachedSenderBrand")(
   function* loadCachedSenderBrand(domain: string, selector: string) {
     const row = yield* withDatabaseClient((database) =>
-      database.query.gmailSenderBrands.findFirst({
+      database.query.mailSenderBrands.findFirst({
         where: { domain, selector },
       })
     ).pipe(
@@ -528,11 +528,11 @@ const storeSenderBrand = Effect.fn("storeSenderBrand")(
 
     yield* withDatabaseClient((database) =>
       database
-        .insert(gmailSenderBrands)
+        .insert(mailSenderBrands)
         .values(values)
         .onConflictDoUpdate({
           set: values,
-          target: [gmailSenderBrands.domain, gmailSenderBrands.selector],
+          target: [mailSenderBrands.domain, mailSenderBrands.selector],
         })
         .run()
     ).pipe(

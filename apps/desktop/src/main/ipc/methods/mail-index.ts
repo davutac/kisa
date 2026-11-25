@@ -6,31 +6,37 @@ import {
   MAIL_REINDEX_CHANNEL,
 } from "../../../shared/ipc/channels";
 import {
-  GmailIndexProgressList,
-  GmailReindexReply,
-  GmailReindexRequest,
+  MailIndexProgressList,
+  MailReindexReply,
+  MailReindexRequest,
 } from "../../../shared/ipc/mail";
 import {
-  getMailIndexProgress,
-  reindexMailAccount,
-} from "../../mail/mail-backfill";
+  getMailEngineIndexProgress,
+  requestMailSync,
+} from "../../mail/engine/mail-engine";
 import { makeIpcMethod } from "../desktop-ipc";
 import { toIpcReply } from "../reply";
 
 export const getIndexProgress = makeIpcMethod({
   channel: MAIL_INDEX_PROGRESS_CHANNEL,
-  handler: () => Effect.sync(() => ({ accounts: getMailIndexProgress() })),
+  handler: () =>
+    Effect.sync(() => ({ accounts: getMailEngineIndexProgress() })),
   payload: Schema.Void,
-  result: GmailIndexProgressList,
+  result: MailIndexProgressList,
 });
 
 export const reindexMail = makeIpcMethod({
   channel: MAIL_REINDEX_CHANNEL,
   handler: (request) =>
+    // The engine keeps the whole account in step on its own; a reindex
+    // request wakes it so it catches up now. It is the user asking, which
+    // also retries a sign-in the server refused.
     toIpcReply(
-      reindexMailAccount(request.accountId),
-      "Could not start mail reindex"
+      Effect.sync(() => {
+        requestMailSync(request.accountId, "user");
+      }),
+      "Could not check for new mail"
     ),
-  payload: GmailReindexRequest,
-  result: GmailReindexReply,
+  payload: MailReindexRequest,
+  result: MailReindexReply,
 });

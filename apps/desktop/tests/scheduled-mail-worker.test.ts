@@ -1,7 +1,8 @@
 import type { StoredMailDraftAttachment } from "@repo/database/schemas";
-import type { OutgoingAttachment } from "@repo/gmail/models";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
 
+import type { OutgoingAttachment } from "../src/main/mail/engine/outgoing-message";
 import { scheduledMailAttachmentError } from "../src/main/mail/scheduled-mail-attachment-error";
 import { loadScheduledAttachments } from "../src/main/mail/scheduled-mail-attachments";
 import {
@@ -258,25 +259,28 @@ describe(ScheduledMailWorker, () => {
     const store = new FakeStore();
     const harness = makeHarness(store);
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
 
     expect(store.status).toBe("sent");
     expect(harness.clock.scheduledDelays).toStrictEqual([]);
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it("claims and delivers a due item exactly once across concurrent wakes", async () => {
     const store = new FakeStore();
     const harness = makeHarness(store);
 
-    await Promise.all([harness.worker.start(), harness.worker.wake()]);
+    await Promise.all([
+      Effect.runPromise(harness.worker.start()),
+      harness.worker.wake(),
+    ]);
     await harness.worker.wake();
 
     expect(store.claimCount).toBe(1);
     expect(store.attemptCount).toBe(1);
     expect(harness.deliver).toHaveBeenCalledOnce();
     expect(store.status).toBe("sent");
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it("runs an immediate follow-up cycle when woken after the last claim", async () => {
@@ -296,7 +300,7 @@ describe(ScheduledMailWorker, () => {
     };
     const harness = makeHarness(store);
 
-    const start = harness.worker.start();
+    const start = Effect.runPromise(harness.worker.start());
     await firstClaimStarted.promise;
     const racedWake = harness.worker.wake();
     releaseFirstClaim.resolve(true);
@@ -307,14 +311,14 @@ describe(ScheduledMailWorker, () => {
     expect(harness.deliver).toHaveBeenCalledOnce();
     expect(store.status).toBe("sent");
     expect(harness.clock.scheduledDelays).toStrictEqual([]);
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
-  it("releases an offline claim without consuming a Gmail attempt", async () => {
+  it("releases an offline claim without consuming a send attempt", async () => {
     const store = new FakeStore();
     const harness = makeHarness(store, { isOnline: () => false });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
 
     expect(harness.deliver).not.toHaveBeenCalled();
     expect(store).toMatchObject({
@@ -323,10 +327,10 @@ describe(ScheduledMailWorker, () => {
       nextAttemptAt: harness.clock.now + SCHEDULED_MAIL_POLL_INTERVAL_MS,
       status: "scheduled",
     });
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
-  it("honors Retry-After and stops at the 24-hour rate-limit boundary", async () => {
+  it("honors Retry-After and stops after the attempt at the 24-hour rate-limit boundary", async () => {
     const store = new FakeStore();
     const rateLimited = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
       Promise.resolve({
@@ -336,7 +340,7 @@ describe(ScheduledMailWorker, () => {
     );
     const harness = makeHarness(store, { deliver: rateLimited });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
     expect(store).toMatchObject({
       attemptCount: 1,
       nextAttemptAt: harness.clock.now + 5 * 60_000,
@@ -347,13 +351,66 @@ describe(ScheduledMailWorker, () => {
     harness.clock.advance(SCHEDULED_MAIL_RATE_LIMIT_WINDOW_MS);
     await harness.worker.wake();
 
-    expect(rateLimited).toHaveBeenCalledOnce();
+    // The window ends after an attempt that still fails, not before it.
+    expect(rateLimited).toHaveBeenCalledTimes(2);
     expect(store).toMatchObject({
-      attemptCount: 1,
+      attemptCount: 2,
       attentionReason: "rate-limit-exhausted",
       status: "attention",
     });
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
+  });
+
+  // One failed connection, then a day asleep: the email is still tried.
+  it("sends an email whose retry window ran out while nothing could be tried", async () => {
+    const store = new FakeStore();
+    store.rateLimitStartedAt = 1000;
+    const harness = makeHarness(store);
+    harness.clock.advance(SCHEDULED_MAIL_RATE_LIMIT_WINDOW_MS + 60_000);
+
+    await Effect.runPromise(harness.worker.start());
+
+    expect(harness.deliver).toHaveBeenCalledOnce();
+    expect(store.status).toBe("sent");
+    expect(harness.notifications).toStrictEqual([
+      { ...store.key, kind: "sent" },
+    ]);
+    await Effect.runPromise(harness.worker.stop());
+  });
+
+  // The server may have the message, so sent mail is looked at first, after
+  // the server has had time to file it.
+  it("looks in sent mail before reporting an unknown send outcome", async () => {
+    const store = new FakeStore();
+    const deliver = vi.fn<ScheduledMailWorkerDependencies["deliver"]>(() =>
+      Promise.resolve({ error: { kind: "outcome-unknown" }, ok: false })
+    );
+    const reconcile = vi.fn<ScheduledMailWorkerDependencies["reconcile"]>(() =>
+      Promise.resolve({ kind: "found" })
+    );
+    const harness = makeHarness(store, { deliver, reconcile });
+
+    await Effect.runPromise(harness.worker.start());
+    const beforeLookup = {
+      lookups: reconcile.mock.calls.length,
+      notifications: [...harness.notifications],
+      status: store.status,
+    };
+
+    harness.clock.advance(SCHEDULED_MAIL_POLL_INTERVAL_MS);
+    await harness.worker.wake();
+
+    expect(beforeLookup).toStrictEqual({
+      lookups: 0,
+      notifications: [],
+      status: "sending",
+    });
+    expect(deliver).toHaveBeenCalledOnce();
+    expect(store.status).toBe("sent");
+    expect(harness.notifications).toStrictEqual([
+      { ...store.key, kind: "sent" },
+    ]);
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it("never retries an unknown send outcome", async () => {
@@ -364,7 +421,7 @@ describe(ScheduledMailWorker, () => {
     );
     const harness = makeHarness(store, { deliver });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
     harness.clock.advance(SCHEDULED_MAIL_RATE_LIMIT_WINDOW_MS);
     await harness.worker.wake();
 
@@ -376,7 +433,7 @@ describe(ScheduledMailWorker, () => {
     expect(harness.notifications).toStrictEqual([
       { ...store.key, kind: "attention" },
     ]);
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it.each([
@@ -401,7 +458,7 @@ describe(ScheduledMailWorker, () => {
       );
       const harness = makeHarness(store, { reconcile });
 
-      await harness.worker.start();
+      await Effect.runPromise(harness.worker.start());
 
       expect(reconcile).toHaveBeenCalledWith(
         expect.objectContaining({ rfcMessageId: store.rfcMessageId }),
@@ -410,7 +467,7 @@ describe(ScheduledMailWorker, () => {
       expect(store.status).toBe(expectedStatus);
       expect(store.attentionReason).toBe(expectedReason);
       expect(harness.deliver).not.toHaveBeenCalled();
-      await harness.worker.stop();
+      await Effect.runPromise(harness.worker.stop());
     }
   );
 
@@ -434,7 +491,7 @@ describe(ScheduledMailWorker, () => {
       },
     });
 
-    const start = harness.worker.start();
+    const start = Effect.runPromise(harness.worker.start());
     await notificationStarted.promise;
     expect(store.status).toBe("sent");
     expect(supervisedWorkCompleted).toBeFalsy();
@@ -442,7 +499,7 @@ describe(ScheduledMailWorker, () => {
     releaseNotification.resolve(true);
     await start;
     expect(supervisedWorkCompleted).toBeTruthy();
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it("defers a failed reconciliation lookup without changing durable outcome", async () => {
@@ -455,7 +512,7 @@ describe(ScheduledMailWorker, () => {
     );
     const harness = makeHarness(store, { reconcile });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
     harness.clock.advance(SCHEDULED_MAIL_POLL_INTERVAL_MS);
     await harness.worker.wake();
 
@@ -463,10 +520,10 @@ describe(ScheduledMailWorker, () => {
     expect(store.status).toBe("sending");
     expect(store.attentionReason).toBeUndefined();
     expect(harness.notifications).toStrictEqual([]);
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
-  it("fails stored-invalid content before attachment loading or Gmail", async () => {
+  it("fails stored-invalid content before attachment loading or sending", async () => {
     const store = new FakeStore();
     const originalClaimDue = store.claimDue.bind(store);
     store.claimDue = async (now, attemptId) => {
@@ -480,7 +537,7 @@ describe(ScheduledMailWorker, () => {
     >(() => Promise.resolve([]));
     const harness = makeHarness(store, { loadAttachments });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
 
     expect(loadAttachments).not.toHaveBeenCalled();
     expect(harness.deliver).not.toHaveBeenCalled();
@@ -489,10 +546,10 @@ describe(ScheduledMailWorker, () => {
       attentionReason: "message-invalid",
       status: "attention",
     });
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
-  it("rejects oversized stored attachments before opening files or calling Gmail", async () => {
+  it("rejects oversized stored attachments before opening files or sending", async () => {
     const store = new FakeStore();
     store.attachments = [1, 2, 3].map((index) => ({
       authorizationVersion: 1,
@@ -511,7 +568,7 @@ describe(ScheduledMailWorker, () => {
       loadAttachments: loadScheduledAttachments,
     });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
 
     expect(harness.deliver).not.toHaveBeenCalled();
     expect(store).toMatchObject({
@@ -519,7 +576,7 @@ describe(ScheduledMailWorker, () => {
       attentionReason: "attachment-too-large",
       status: "attention",
     });
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it.each([
@@ -528,7 +585,7 @@ describe(ScheduledMailWorker, () => {
     "attachment-changed",
     "attachment-too-large",
   ] as const)(
-    "moves %s preparation failures to attention without dispatching to Gmail",
+    "moves %s preparation failures to attention without sending",
     async (reason) => {
       const store = new FakeStore();
       const harness = makeHarness(store, {
@@ -536,7 +593,7 @@ describe(ScheduledMailWorker, () => {
           Promise.reject(scheduledMailAttachmentError(reason)),
       });
 
-      await harness.worker.start();
+      await Effect.runPromise(harness.worker.start());
 
       expect(harness.deliver).not.toHaveBeenCalled();
       expect(store).toMatchObject({
@@ -544,7 +601,7 @@ describe(ScheduledMailWorker, () => {
         attentionReason: reason,
         status: "attention",
       });
-      await harness.worker.stop();
+      await Effect.runPromise(harness.worker.stop());
     }
   );
 
@@ -554,7 +611,7 @@ describe(ScheduledMailWorker, () => {
       runAccountWork: () => Promise.resolve(),
     });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
 
     expect(harness.deliver).not.toHaveBeenCalled();
     expect(store).toMatchObject({
@@ -562,7 +619,7 @@ describe(ScheduledMailWorker, () => {
       lastAttemptAt: undefined,
       status: "scheduled",
     });
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it("defers stale-send reconciliation while offline", async () => {
@@ -575,12 +632,12 @@ describe(ScheduledMailWorker, () => {
       reconcile,
     });
 
-    await harness.worker.start();
+    await Effect.runPromise(harness.worker.start());
 
     expect(reconcile).not.toHaveBeenCalled();
     expect(store.status).toBe("sending");
     expect(harness.notifications).toStrictEqual([]);
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
   });
 
   it("does not enter sending when shutdown aborts attachment preparation", async () => {
@@ -594,9 +651,9 @@ describe(ScheduledMailWorker, () => {
       },
     });
 
-    const start = harness.worker.start();
+    const start = Effect.runPromise(harness.worker.start());
     await started.promise;
-    const stop = harness.worker.stop();
+    const stop = Effect.runPromise(harness.worker.stop());
     loading.resolve([]);
     await Promise.all([start, stop]);
 
@@ -605,7 +662,7 @@ describe(ScheduledMailWorker, () => {
     expect(store.status).toBe("scheduled");
   });
 
-  it("records an aborted in-flight dispatch as unknown and never restarts", async () => {
+  it("leaves an interrupted dispatch for the sent-mail lookup and never restarts it", async () => {
     const store = new FakeStore();
     const started = Promise.withResolvers<null>();
     const outcome =
@@ -629,18 +686,20 @@ describe(ScheduledMailWorker, () => {
     );
     const harness = makeHarness(store, { deliver });
 
-    const start = harness.worker.start();
+    const start = Effect.runPromise(harness.worker.start());
     await started.promise;
-    await harness.worker.stop();
+    await Effect.runPromise(harness.worker.stop());
     await start;
     harness.clock.advance(SCHEDULED_MAIL_POLL_INTERVAL_MS);
     await harness.worker.wake();
 
     expect(deliver).toHaveBeenCalledOnce();
+    // The next start looks in sent mail, as it does after a crash.
     expect(store).toMatchObject({
       attemptCount: 1,
-      attentionReason: "outcome-unknown",
-      status: "attention",
+      attentionReason: undefined,
+      status: "sending",
     });
+    expect(harness.notifications).toStrictEqual([]);
   });
 });

@@ -3,6 +3,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["MAIN_VITE_*"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["out/**", "dist/**"]
     },
     "build:linux": {
@@ -23,6 +25,7 @@
     },
     "dev": {
       "cache": false,
+      "passThroughEnv": ["MAIN_VITE_*"],
       "persistent": true
     },
     "start": {

@@ -15,6 +15,9 @@ const DAY_MS = 86_400_000;
 interface MailDateFormats {
   readonly day: Intl.DateTimeFormat;
   readonly exact: Intl.DateTimeFormat;
+  readonly longMonthDay: Intl.DateTimeFormat;
+  readonly longWeekday: Intl.DateTimeFormat;
+  readonly longYearDate: Intl.DateTimeFormat;
   readonly monthDay: Intl.DateTimeFormat;
   readonly time: Intl.DateTimeFormat;
   readonly weekday: Intl.DateTimeFormat;
@@ -46,6 +49,21 @@ const getFormats = (timeZone: string | undefined): MailDateFormats => {
       dateStyle: "full",
       timeStyle: "short",
       timeZone,
+    }),
+    longMonthDay: new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      month: "long",
+      timeZone,
+    }),
+    longWeekday: new Intl.DateTimeFormat(undefined, {
+      timeZone,
+      weekday: "long",
+    }),
+    longYearDate: new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      month: "long",
+      timeZone,
+      year: "numeric",
     }),
     monthDay: new Intl.DateTimeFormat(undefined, {
       day: "numeric",
@@ -154,3 +172,35 @@ export const formatExactMailDate = (
   timestamp: number,
   { timeZone }: Pick<Calendar, "timeZone">
 ): string => getFormats(timeZone).exact.format(timestamp);
+
+/** The calendar day a timestamp falls on, comparable between timestamps. */
+export const getMailDayIndex = (
+  timestamp: number,
+  { timeZone }: Pick<Calendar, "timeZone">
+): number => toCalendarDay(timestamp, getFormats(timeZone).day).index;
+
+/**
+ * A heading for the day a list's mail arrived on, spelled out in full:
+ * "Today", "Yesterday", a weekday for the week behind us, then a date.
+ */
+export const formatMailDayHeading = (
+  timestamp: number,
+  { now, timeZone }: Calendar
+): string => {
+  const formats = getFormats(timeZone);
+  const day = toCalendarDay(timestamp, formats.day);
+  const today = toCalendarDay(now, formats.day);
+  const dayOffset = day.index - today.index;
+
+  if (Math.abs(dayOffset) <= 1) {
+    return capitalize(relativeDayFormat.format(dayOffset, "day"));
+  }
+
+  if (dayOffset < 0 && dayOffset >= -WEEKDAY_WINDOW_DAYS) {
+    return formats.longWeekday.format(timestamp);
+  }
+
+  return day.year === today.year
+    ? formats.longMonthDay.format(timestamp)
+    : formats.longYearDate.format(timestamp);
+};

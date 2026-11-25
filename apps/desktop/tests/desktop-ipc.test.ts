@@ -14,19 +14,27 @@ import {
 import {
   AI_CATEGORIZE_THREAD_CHANNEL,
   MAIL_CREATE_LABEL_CHANNEL,
+  MAIL_CANCEL_SEND_CHANNEL,
   MAIL_DELETE_LABEL_CHANNEL,
+  MAIL_REPORT_THREAD_SPAM_CHANNEL,
+  MAIL_SEND_MESSAGE_CHANNEL,
   MAIL_SET_THREAD_LABEL_CHANNEL,
   MAIL_UPDATE_LABEL_CHANNEL,
 } from "../src/shared/ipc/channels";
 import {
-  GmailLabelCreateReply,
-  GmailLabelCreateRequest,
-  GmailLabelDeleteReply,
-  GmailLabelDeleteRequest,
-  GmailLabelUpdateReply,
-  GmailLabelUpdateRequest,
-  GmailThreadLabelRequest,
-  GmailThreadMutationReply,
+  MailLabelCreateReply,
+  MailLabelCreateRequest,
+  MailLabelDeleteReply,
+  MailLabelDeleteRequest,
+  MailLabelUpdateReply,
+  MailLabelUpdateRequest,
+  MailMessageSendReply,
+  MailMessageSendRequest,
+  MailSendCancelReply,
+  MailSendCancelRequest,
+  MailThreadLabelRequest,
+  MailThreadMutationReply,
+  MailThreadRequest,
 } from "../src/shared/ipc/mail";
 
 const createIpcMain = () => {
@@ -134,8 +142,8 @@ describe(DesktopIpc.DesktopIpc, () => {
             requests.push(request);
             return { data: undefined, ok: true as const };
           }),
-        payload: GmailThreadLabelRequest,
-        result: GmailThreadMutationReply,
+        payload: MailThreadLabelRequest,
+        result: MailThreadMutationReply,
       });
       const request = {
         accountId: "person@example.com",
@@ -154,6 +162,94 @@ describe(DesktopIpc.DesktopIpc, () => {
         (yield* Effect.exit(method.handler({ ...request, labelId: "" })))._tag
       ).toBe("Failure");
     })
+  );
+
+  it.effect(
+    "validates the report spam boundary and passes its refusal on",
+    () =>
+      Effect.gen(function* validatesReportSpam() {
+        const requests: unknown[] = [];
+        const method = DesktopIpc.makeIpcMethod({
+          channel: MAIL_REPORT_THREAD_SPAM_CHANNEL,
+          handler: (request) =>
+            Effect.sync(() => {
+              requests.push(request);
+              return {
+                error: "Only your own messages are in this conversation",
+                ok: false as const,
+              };
+            }),
+          payload: MailThreadRequest,
+          result: MailThreadMutationReply,
+        });
+        const request = {
+          accountId: "person@example.com",
+          threadId: "thread-1",
+        };
+
+        expect(method.channel).toBe("desktop:mail:report-thread-spam");
+        expect(yield* method.handler(request)).toStrictEqual({
+          error: "Only your own messages are in this conversation",
+          ok: false,
+        });
+        expect(requests).toStrictEqual([request]);
+        expect(
+          (yield* Effect.exit(method.handler({ ...request, accountId: "" })))
+            ._tag
+        ).toBe("Failure");
+      })
+  );
+
+  it.effect(
+    "carries a held send's draft, its Undo, and a taken-back answer",
+    () =>
+      Effect.gen(function* validatesUndoSend() {
+        const send = DesktopIpc.makeIpcMethod({
+          channel: MAIL_SEND_MESSAGE_CHANNEL,
+          handler: () =>
+            Effect.succeed({
+              data: { kind: "canceled" as const },
+              ok: true as const,
+            }),
+          payload: MailMessageSendRequest,
+          result: MailMessageSendReply,
+        });
+        const cancel = DesktopIpc.makeIpcMethod({
+          channel: MAIL_CANCEL_SEND_CHANNEL,
+          handler: () =>
+            Effect.succeed({ data: "too-late" as const, ok: true as const }),
+          payload: MailSendCancelRequest,
+          result: MailSendCancelReply,
+        });
+        const message = {
+          accountId: "person@example.com",
+          attachments: [],
+          bcc: [],
+          body: { html: "<p>Hi</p>", text: "Hi" },
+          cc: [],
+          draftId: "draft-1",
+          subject: "Lunch",
+          to: ["friend@example.com"],
+        };
+
+        expect({
+          canceled: yield* send.handler(message),
+          cancelChannel: cancel.channel,
+          tooLate: yield* cancel.handler({
+            accountId: "person@example.com",
+            draftId: "draft-1",
+          }),
+        }).toStrictEqual({
+          cancelChannel: "desktop:mail:cancel-send",
+          canceled: { data: { kind: "canceled" }, ok: true },
+          tooLate: { data: "too-late", ok: true },
+        });
+        expect(
+          (yield* Effect.exit(
+            cancel.handler({ accountId: "person@example.com", draftId: "" })
+          ))._tag
+        ).toBe("Failure");
+      })
   );
 
   it.effect("validates the manual categorization boundary", () =>
@@ -193,7 +289,10 @@ describe(DesktopIpc.DesktopIpc, () => {
         handler: (request) =>
           Effect.succeed({
             data: {
-              color: request.color,
+              color:
+                request.color === undefined
+                  ? undefined
+                  : { background: request.color, text: "#000000" },
               id: "Label_1",
               name: request.name,
               threadCount: 0,
@@ -201,40 +300,43 @@ describe(DesktopIpc.DesktopIpc, () => {
             },
             ok: true as const,
           }),
-        payload: GmailLabelCreateRequest,
-        result: GmailLabelCreateReply,
+        payload: MailLabelCreateRequest,
+        result: MailLabelCreateReply,
       });
       const remove = DesktopIpc.makeIpcMethod({
         channel: MAIL_DELETE_LABEL_CHANNEL,
         handler: () => Effect.succeed({ data: undefined, ok: true as const }),
-        payload: GmailLabelDeleteRequest,
-        result: GmailLabelDeleteReply,
+        payload: MailLabelDeleteRequest,
+        result: MailLabelDeleteReply,
       });
       const update = DesktopIpc.makeIpcMethod({
         channel: MAIL_UPDATE_LABEL_CHANNEL,
         handler: (request) =>
           Effect.succeed({
             data: {
-              color: request.color,
+              color:
+                request.color === undefined
+                  ? undefined
+                  : { background: request.color, text: "#ffffff" },
               id: request.labelId,
               name: request.name,
               type: "user",
             },
             ok: true as const,
           }),
-        payload: GmailLabelUpdateRequest,
-        result: GmailLabelUpdateReply,
+        payload: MailLabelUpdateRequest,
+        result: MailLabelUpdateReply,
       });
 
       expect(
         yield* create.handler({
           accountId: "person@example.com",
-          color: { background: "#fef1d1", text: "#0d3472" },
+          color: "#fef1d1",
           name: "Projects/Kisa",
         })
       ).toStrictEqual({
         data: {
-          color: { background: "#fef1d1", text: "#0d3472" },
+          color: { background: "#fef1d1", text: "#000000" },
           id: "Label_1",
           name: "Projects/Kisa",
           threadCount: 0,
@@ -251,7 +353,7 @@ describe(DesktopIpc.DesktopIpc, () => {
       expect(
         yield* update.handler({
           accountId: "person@example.com",
-          color: { background: "#4a86e8", text: "#ffffff" },
+          color: "#4a86e8",
           labelId: "Label_1",
           name: "Projects/Kisa 2",
         })
@@ -271,7 +373,14 @@ describe(DesktopIpc.DesktopIpc, () => {
         Effect.exit(
           create.handler({
             accountId: "person@example.com",
-            color: { background: "#123456", text: "#ffffff" },
+            color: "#4A86E8",
+            name: "Projects/Kisa",
+          })
+        ),
+        Effect.exit(
+          create.handler({
+            accountId: "person@example.com",
+            color: "red; background: url(https://example.com)",
             name: "Projects/Kisa",
           })
         ),
@@ -288,6 +397,7 @@ describe(DesktopIpc.DesktopIpc, () => {
       ]);
 
       expect(invalid.map((exit) => exit._tag)).toStrictEqual([
+        "Failure",
         "Failure",
         "Failure",
         "Failure",

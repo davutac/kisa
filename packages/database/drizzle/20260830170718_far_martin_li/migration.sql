@@ -1,1 +1,0 @@
-ALTER TABLE `gmail_threads` ADD `is_index_seen` integer DEFAULT true NOT NULL;

@@ -1,5 +1,5 @@
 import { extractEmailAddresses, parseMailboxAddress } from "@/mail/address";
-import type { GmailThreadMessage } from "@/shared/ipc/mail";
+import type { ThreadMessage } from "@/shared/ipc/mail";
 
 export type MailMessageAction = "forward" | "reply" | "reply-all";
 
@@ -42,7 +42,7 @@ const uniqueAddresses = (
 export const getInitialReplyRecipients = (
   accountId: string,
   action: MailMessageAction,
-  latestMessage: GmailThreadMessage
+  latestMessage: ThreadMessage
 ): MailReplyRecipients => {
   if (action === "forward") {
     return { bcc: [], cc: [], to: [] };
@@ -81,7 +81,7 @@ export const getInitialReplyRecipients = (
 
 export const shouldShowReplyAll = (
   accountId: string,
-  message: GmailThreadMessage
+  message: ThreadMessage
 ): boolean => {
   const recipients = getInitialReplyRecipients(accountId, "reply-all", message);
 

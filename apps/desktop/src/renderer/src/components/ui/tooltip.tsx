@@ -1,20 +1,78 @@
-import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import {
+  createTooltipController,
+  Tooltip as TooltipPrimitive,
+  TooltipArrow,
+  TooltipContent as TooltipContentPrimitive,
+} from "@ui-sdk/react/tooltip";
+import { createContext, use, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { cn } from "@/lib/utils";
 
-function TooltipProvider({ delay = 0, ...props }: TooltipPrimitive.Provider.Props) {
-  return <TooltipPrimitive.Provider data-slot="tooltip-provider" delay={delay} {...props} />;
-}
+export { TooltipTrigger } from "@ui-sdk/react/tooltip";
 
-function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
-}
+const ClosesAtOnceContext = createContext(false);
 
-function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
-}
+// Open without ui-sdk's 600 ms delay, and close before an Escape arrives, so
+// a tooltip under a resting pointer doesn't swallow the app's Escape. A press
+// closes it at once: the popup or change the press opens animates in at the
+// same spot, and the two shouldn't overlap.
+const Tooltip = ({
+  controller,
+  delay = 0,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive>) => {
+  const ownController = useInstanceValue(createTooltipController);
+  const tooltip = controller ?? ownController;
+  const [isOpen, setIsOpen] = useState(false);
+  const [closesAtOnce, setClosesAtOnce] = useState(false);
 
-function TooltipContent({
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const releaseEscape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        tooltip.close();
+      }
+    };
+    document.addEventListener("keydown", releaseEscape, true);
+    return () => document.removeEventListener("keydown", releaseEscape, true);
+  }, [isOpen, tooltip]);
+
+  return (
+    <ClosesAtOnceContext value={closesAtOnce}>
+      <TooltipPrimitive
+        controller={tooltip}
+        delay={delay}
+        onOpenChange={(open, details) => {
+          onOpenChange?.(open, details);
+          if (open) {
+            setClosesAtOnce(false);
+          } else if (details.reason === "trigger-press") {
+            // Committed before ui-sdk starts the exit, which then has no
+            // transition to wait for.
+            flushSync(() => {
+              setClosesAtOnce(true);
+            });
+          }
+          setIsOpen(open);
+        }}
+        {...props}
+      />
+    </ClosesAtOnceContext>
+  );
+};
+
+// ui-sdk renders the content in place and shows it as a popover in the top
+// layer. A class that sets `display` overrides the browser's own rule that
+// hides a closed popover, and `hidden` is written only a render after the
+// popover closes. Without `not-open:hidden` the content is laid out in between
+// as a fixed box against any transformed ancestor, far from its trigger, and
+// lengthens whatever scrolls around it.
+const TooltipContent = ({
   className,
   side = "top",
   sideOffset = 4,
@@ -22,31 +80,28 @@ function TooltipContent({
   alignOffset = 0,
   children,
   ...props
-}: TooltipPrimitive.Popup.Props &
-  Pick<TooltipPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
-  return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner
-        align={align}
-        alignOffset={alignOffset}
-        side={side}
-        sideOffset={sideOffset}
-        className="isolate z-50"
-      >
-        <TooltipPrimitive.Popup
-          data-slot="tooltip-content"
-          className={cn(
-            "z-50 inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs text-background has-data-[slot=kbd]:pr-1.5 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-            className,
-          )}
-          {...props}
-        >
-          {children}
-          <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground data-[side=bottom]:top-1 data-[side=inline-end]:top-1/2! data-[side=inline-end]:-left-1 data-[side=inline-end]:-translate-y-1/2 data-[side=inline-start]:top-1/2! data-[side=inline-start]:-right-1 data-[side=inline-start]:-translate-y-1/2 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
-        </TooltipPrimitive.Popup>
-      </TooltipPrimitive.Positioner>
-    </TooltipPrimitive.Portal>
-  );
-}
+}: Omit<
+  React.ComponentProps<typeof TooltipContentPrimitive>,
+  "children" | "className"
+> & {
+  children?: React.ReactNode;
+  className?: string;
+}) => (
+  <TooltipContentPrimitive
+    align={align}
+    alignOffset={alignOffset}
+    data-closes-at-once={use(ClosesAtOnceContext) ? "" : undefined}
+    side={side}
+    sideOffset={sideOffset}
+    className={cn(
+      "bg-foreground text-background inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 overflow-visible rounded-md px-3 py-1.5 text-xs transition-[opacity,scale] duration-100 not-open:hidden has-data-[slot=kbd]:pr-1.5 data-closes-at-once:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-instant:transition-none data-starting-style:scale-95 data-starting-style:opacity-0 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm",
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <TooltipArrow className="bg-foreground size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-[2px] data-[side=bottom]:top-1 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
+  </TooltipContentPrimitive>
+);
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
+export { Tooltip, TooltipContent };

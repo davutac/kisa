@@ -1,21 +1,17 @@
 import {
   getSearchFilterLabel,
   SEARCH_FILTER_FIELDS,
+  TYPED_SEARCH_STATES,
 } from "@/mail/search-query";
 import type {
   FilterDraft,
   SearchFilter,
   SearchFilterField,
 } from "@/mail/search-query";
-import type {
-  GmailAddressRole,
-  GmailSenderSuggestion,
-} from "@/shared/ipc/mail";
-
-export type MailSearchCompletionIcon = "address" | "attachment" | "operator";
+import type { MailAddressRole, MailSenderSuggestion } from "@/shared/ipc/mail";
 
 export interface MailSearchCompletionItem {
-  icon: MailSearchCompletionIcon;
+  field: SearchFilterField;
   label: string;
   onSelect: () => void;
   shortcut?: string;
@@ -34,15 +30,22 @@ interface CompletionInputs {
   draftFilter?: SearchFilter;
   onSelectField: (field: SearchFilterField) => void;
   onSelectFilter: (filter: SearchFilter) => void;
-  senders: readonly GmailSenderSuggestion[];
+  senders: readonly MailSenderSuggestion[];
   typedWord: string;
 }
 
-const ATTACHMENT_FILTER_VALUES = ["attachment"] as const;
+/** The values a field takes from a short list rather than free text. */
+const FILTER_VALUES = {
+  has: ["attachment"],
+  is: TYPED_SEARCH_STATES,
+} as const satisfies Partial<
+  Record<(typeof SEARCH_FILTER_FIELDS)[number], readonly string[]>
+>;
 
 const FILTER_EXAMPLES = {
   from: "person@example.com",
   has: "attachment",
+  is: "starred",
   subject: "invoice",
   to: "person@example.com",
 } satisfies Record<(typeof SEARCH_FILTER_FIELDS)[number], string>;
@@ -56,7 +59,7 @@ const ADDRESS_EMPTY = {
 
 export const getMailSearchAddressRole = (
   field: SearchFilterField | undefined
-): GmailAddressRole | undefined => {
+): MailAddressRole | undefined => {
   if (field === "from") {
     return "sender";
   }
@@ -65,7 +68,7 @@ export const getMailSearchAddressRole = (
 
 const toAddressItems = (
   field: "from" | "to",
-  senders: readonly GmailSenderSuggestion[],
+  senders: readonly MailSenderSuggestion[],
   typedValue: string,
   onSelectFilter: (filter: SearchFilter) => void
 ): MailSearchCompletions => ({
@@ -73,7 +76,7 @@ const toAddressItems = (
   heading: ADDRESS_HEADINGS[field],
   items: [
     ...senders.map((sender) => ({
-      icon: "address" as const,
+      field,
       label: sender.name ?? sender.address,
       onSelect: () => onSelectFilter({ field, value: sender.address }),
       shortcut: NUMBER_FORMAT.format(sender.messageCount),
@@ -88,7 +91,7 @@ const toAddressItems = (
       ? []
       : [
           {
-            icon: "operator" as const,
+            field,
             label: `Use “${typedValue}” as typed`,
             onSelect: () => onSelectFilter({ field, value: typedValue }),
             value: "address:as-typed",
@@ -115,7 +118,7 @@ export const getMailSearchCompletions = ({
     return {
       heading: "Filters",
       items: fields.map((field) => ({
-        icon: "operator" as const,
+        field,
         label: `${field}:`,
         onSelect: () => onSelectField(field),
         sublabel: FILTER_EXAMPLES[field],
@@ -128,17 +131,18 @@ export const getMailSearchCompletions = ({
   if (draft.field === "from" || draft.field === "to") {
     return toAddressItems(draft.field, senders, typedValue, onSelectFilter);
   }
-  if (draft.field === "has") {
-    const matches = ATTACHMENT_FILTER_VALUES.filter((value) =>
+  if (draft.field === "has" || draft.field === "is") {
+    const { field } = draft;
+    const matches = FILTER_VALUES[field].filter((value) =>
       value.startsWith(typedValue.toLowerCase())
     );
     return {
       empty: "No search options match that value.",
       heading: getSearchFilterLabel(draft.field),
       items: matches.map((value) => ({
-        icon: "attachment" as const,
-        label: `${draft.field}:${value}`,
-        onSelect: () => onSelectFilter({ field: draft.field, value }),
+        field,
+        label: `${field}:${value}`,
+        onSelect: () => onSelectFilter({ field, value }),
         value: `value:${value}`,
       })),
     };
@@ -154,7 +158,7 @@ export const getMailSearchCompletions = ({
         heading: getSearchFilterLabel(draftFilter.field),
         items: [
           {
-            icon: "operator",
+            field: draftFilter.field,
             label: `${draftFilter.field}: ${draftFilter.value}`,
             onSelect: () => onSelectFilter(draftFilter),
             value: "draft:commit",

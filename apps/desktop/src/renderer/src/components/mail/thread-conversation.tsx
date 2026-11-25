@@ -1,37 +1,66 @@
-// The scoped store intentionally lives for one keyed conversation instance.
-// oxlint-disable react/react-compiler
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import MailMessageActions from "@/components/mail/message-actions";
 import MailReplyArea from "@/components/mail/reply-area";
 import {
   createThreadConversationStore,
   ThreadConversationStoreProvider,
+  useThreadConversationStore,
 } from "@/components/mail/thread-conversation-store";
 import MailThreadDraftActions from "@/components/mail/thread-draft-actions";
+import { getThreadDraftAction } from "@/components/mail/thread-draft-state";
 import MailThreadMessage from "@/components/mail/thread-message";
 import type { ComposerFocusHandle } from "@/components/mail/use-composer-focus";
-import {
-  getThreadDraftAction,
-  useThreadDraft,
-} from "@/components/mail/use-thread-draft";
+import { useThreadDraft } from "@/components/mail/use-thread-draft";
 import { useThreadMessageNavigation } from "@/components/mail/use-thread-message-navigation";
+import { Accordion } from "@/components/ui/accordion";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand } from "@/hotkeys";
 import { getThreadEmailAddresses, parseMailboxAddress } from "@/mail/address";
 import { shouldShowReplyAll } from "@/mail/reply-recipients";
-import type { GmailThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
+import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
 interface MailThreadConversationProps {
   accountId: string;
-  messages: readonly GmailThreadMessage[];
+  messages: readonly ThreadMessage[];
   threadId: string;
 }
 
 interface NonEmptyMailThreadConversationProps extends MailThreadConversationProps {
   initialMessageId: string;
-  latestMessage: GmailThreadMessage;
+  latestMessage: ThreadMessage;
 }
+
+// The open message is always the selected one, or none, so a press on any
+// header is the store's toggle: it opens and selects another message, or
+// opens or closes the selected one. `contents` keeps the messages in the
+// conversation's own flex layout.
+const MessageAccordion = ({ children }: { readonly children: ReactNode }) => {
+  const expandedMessageId = useThreadConversationStore(
+    (state) => state.expandedMessageId
+  );
+  const toggleMessage = useThreadConversationStore(
+    (state) => state.toggleMessage
+  );
+
+  return (
+    <Accordion
+      aria-label="Messages"
+      className="contents"
+      collapsible
+      onValueChange={(value) => {
+        const messageId = value[0] ?? expandedMessageId;
+        if (messageId !== undefined && messageId !== null) {
+          toggleMessage(messageId);
+        }
+      }}
+      value={expandedMessageId === null ? [] : [expandedMessageId]}
+    >
+      {children}
+    </Accordion>
+  );
+};
 
 const MailThreadConversationContent = ({
   accountId,
@@ -159,15 +188,17 @@ const MailThreadConversationContent = ({
 
   return (
     <>
-      {messages.map((message) => (
-        <MailThreadMessage
-          accountId={accountId}
-          fallbackRecipient={accountId}
-          key={message.id}
-          message={message}
-          onHeaderRef={registerMessageHeader}
-        />
-      ))}
+      <MessageAccordion>
+        {messages.map((message) => (
+          <MailThreadMessage
+            accountId={accountId}
+            fallbackRecipient={accountId}
+            key={message.id}
+            message={message}
+            onHeaderRef={registerMessageHeader}
+          />
+        ))}
+      </MessageAccordion>
       {conversationFooter}
     </>
   );
@@ -177,12 +208,10 @@ const NonEmptyMailThreadConversation = ({
   initialMessageId,
   ...props
 }: NonEmptyMailThreadConversationProps) => {
-  const store = useMemo(
-    () => createThreadConversationStore(initialMessageId),
-    // The parent key changes with the account and thread. New messages must not
-    // replace this store and reset an existing selection.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    []
+  // The parent key changes with the account and thread. New messages must not
+  // replace this store and reset an existing selection.
+  const store = useInstanceValue(() =>
+    createThreadConversationStore(initialMessageId)
   );
 
   return (

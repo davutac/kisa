@@ -1,6 +1,6 @@
 // oxlint-disable unicorn/no-useless-undefined vitest/no-standalone-expect vitest/prefer-import-in-mock
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Exit } from "effect";
+import { Effect, Schema } from "effect";
 import type { BrowserWindow } from "electron";
 import { beforeEach, vi } from "vitest";
 
@@ -14,8 +14,10 @@ import { APP_UPDATE_SETTINGS_CHANNEL } from "../src/shared/ipc/channels";
 const mocks = vi.hoisted(() => ({
   getCurrentAppSettings: vi.fn<() => AppSettings>(() => ({
     animationsEnabled: true,
+    inlineImageRetentionDays: 90,
     openThreadsInNewWindows: false,
     runInBackground: true,
+    undoSendSeconds: 10,
   })),
   getMainWindow: vi.fn<() => BrowserWindow | undefined>(),
   setBackgroundTray:
@@ -46,6 +48,7 @@ vi.mock(import("../src/main/app/startup"), () => ({
   getAppStartupReply: vi.fn<
     () => Promise<{
       readonly appSettings: AppSettings;
+      readonly legacyDatabaseNotice: boolean;
       readonly ok: true;
     }>
   >(),
@@ -59,7 +62,7 @@ describe("app settings IPC", () => {
       ...DEFAULT_APP_SETTINGS,
       runInBackground: false,
     });
-    mocks.writeAppSettings.mockClear();
+    mocks.writeAppSettings.mockReset();
     mocks.setBackgroundTray.mockClear();
   });
 
@@ -82,15 +85,53 @@ describe("app settings IPC", () => {
     })
   );
 
-  it("rejects a non-boolean run-in-background value", async () => {
-    const exit = await Effect.runPromiseExit(
-      updateAppSettings.handler({
-        ...DEFAULT_APP_SETTINGS,
-        runInBackground: "yes",
-      })
-    );
+  it.effect("rejects a non-boolean run-in-background value", () =>
+    Effect.gen(function* rejectsANonBooleanRunInBackgroundValue() {
+      const error = yield* Effect.flip(
+        updateAppSettings.handler({
+          ...DEFAULT_APP_SETTINGS,
+          runInBackground: "yes",
+        })
+      );
 
-    expect(Exit.isFailure(exit)).toBeTruthy();
-    expect(mocks.writeAppSettings).not.toHaveBeenCalled();
-  });
+      expect(Schema.isSchemaError(error)).toBeTruthy();
+      expect(mocks.writeAppSettings).not.toHaveBeenCalled();
+    })
+  );
+
+  it.effect(
+    "saves and returns how long images from opened emails are kept",
+    () =>
+      Effect.gen(function* updateInlineImageRetentionThroughIpc() {
+        mocks.writeAppSettings.mockImplementation((next) => {
+          mocks.getCurrentAppSettings.mockReturnValue(next);
+        });
+
+        for (const inlineImageRetentionDays of [30, null] as const) {
+          const reply = yield* updateAppSettings.handler({
+            ...DEFAULT_APP_SETTINGS,
+            inlineImageRetentionDays,
+          });
+
+          expect(reply).toStrictEqual({
+            data: { ...DEFAULT_APP_SETTINGS, inlineImageRetentionDays },
+            ok: true,
+          });
+        }
+      })
+  );
+
+  it.effect("rejects a period the setting does not offer", () =>
+    Effect.gen(function* rejectsAPeriodTheSettingDoesNotOffer() {
+      const error = yield* Effect.flip(
+        updateAppSettings.handler({
+          ...DEFAULT_APP_SETTINGS,
+          inlineImageRetentionDays: 45,
+        })
+      );
+
+      expect(Schema.isSchemaError(error)).toBeTruthy();
+      expect(mocks.writeAppSettings).not.toHaveBeenCalled();
+    })
+  );
 });

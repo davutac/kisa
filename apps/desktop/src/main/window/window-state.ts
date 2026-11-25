@@ -84,15 +84,15 @@ const getWindowStateErrorMessage = (args: {
 };
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class WindowStateError extends Schema.TaggedError<WindowStateError>()(
-  "WindowStateError",
-  {
-    cause: Schema.optional(Schema.Defect()),
-    message: Schema.String,
-    path: Schema.String,
-    reason: Schema.Literals(["decode", "read", "write"]),
-  }
-) {
+class WindowStateError extends Schema.TaggedError<
+  WindowStateError,
+  { readonly brand: unique symbol }
+>()("WindowStateError", {
+  cause: Schema.optional(Schema.Defect()),
+  message: Schema.String,
+  path: Schema.String,
+  reason: Schema.Literals(["decode", "read", "write"]),
+}) {
   static readonly new = (args: {
     cause?: unknown;
     path: string;

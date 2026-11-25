@@ -1,22 +1,22 @@
-import { gmailTrustedImageSenders } from "@repo/database/schemas";
+import { mailTrustedImageSenders } from "@repo/database/schemas";
 import { eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import { MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL } from "../../shared/ipc/channels";
 import type {
-  GmailTrustedImageSender,
-  GmailTrustedImageSenderRequest,
-  GmailTrustedImageSendersReply,
+  MailTrustedImageSender,
+  MailTrustedImageSenderRequest,
+  MailTrustedImageSendersReply,
 } from "../../shared/ipc/mail";
-import { GmailTrustedImageSendersReply as GmailTrustedImageSendersReplySchema } from "../../shared/ipc/mail";
+import { MailTrustedImageSendersReply as MailTrustedImageSendersReplySchema } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { sendRendererEvent } from "../electron/renderer-events";
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class TrustedImageSenderError extends Schema.TaggedError<TrustedImageSenderError>()(
-  "TrustedImageSenderError",
-  { message: Schema.String }
-) {}
+class TrustedImageSenderError extends Schema.TaggedError<
+  TrustedImageSenderError,
+  { readonly brand: unique symbol }
+>()("TrustedImageSenderError", { message: Schema.String }) {}
 
 // Addresses arrive from headers and from the renderer, so both sides have to
 // agree on one spelling before they are compared.
@@ -24,11 +24,11 @@ const normalizeAddress = (address: string): string =>
   address.trim().toLowerCase();
 
 export const notifyTrustedImageSendersChanged = (
-  reply: GmailTrustedImageSendersReply
+  reply: MailTrustedImageSendersReply
 ): void => {
   sendRendererEvent(
     MAIL_TRUSTED_IMAGE_SENDERS_CHANGED_CHANNEL,
-    GmailTrustedImageSendersReplySchema,
+    MailTrustedImageSendersReplySchema,
     reply
   );
 };
@@ -36,7 +36,7 @@ export const notifyTrustedImageSendersChanged = (
 export const listTrustedImageSenders = Effect.fn("listTrustedImageSenders")(
   function* listTrustedImageSenders() {
     const rows = yield* withDatabaseClient((database) =>
-      database.query.gmailTrustedImageSenders.findMany()
+      database.query.mailTrustedImageSenders.findMany()
     ).pipe(
       Effect.mapError(
         () =>
@@ -51,7 +51,7 @@ export const listTrustedImageSenders = Effect.fn("listTrustedImageSenders")(
         ({
           accountId: row.accountEmail,
           senderEmail: row.senderEmail,
-        }) satisfies GmailTrustedImageSender
+        }) satisfies MailTrustedImageSender
     );
   }
 );
@@ -64,7 +64,7 @@ export const loadTrustedImageSenderCheck = Effect.fn(
   "loadTrustedImageSenderCheck"
 )(function* loadTrustedImageSenderCheck(accountId: string) {
   const rows = yield* withDatabaseClient((database) =>
-    database.query.gmailTrustedImageSenders.findMany({
+    database.query.mailTrustedImageSenders.findMany({
       where: { accountEmail: normalizeAddress(accountId) },
     })
   ).pipe(
@@ -82,10 +82,10 @@ export const loadTrustedImageSenderCheck = Effect.fn(
 });
 
 export const trustImageSender = Effect.fn("trustImageSender")(
-  function* trustImageSender(request: GmailTrustedImageSenderRequest) {
+  function* trustImageSender(request: MailTrustedImageSenderRequest) {
     yield* withDatabaseClient((database) =>
       database
-        .insert(gmailTrustedImageSenders)
+        .insert(mailTrustedImageSenders)
         .values({
           accountEmail: normalizeAddress(request.accountId),
           createdAt: Date.now(),
@@ -114,9 +114,9 @@ export const forgetTrustedImageSenders = Effect.fn("forgetTrustedImageSenders")(
   function* forgetTrustedImageSenders(accountId: string) {
     yield* withDatabaseClient((database) =>
       database
-        .delete(gmailTrustedImageSenders)
+        .delete(mailTrustedImageSenders)
         .where(
-          eq(gmailTrustedImageSenders.accountEmail, normalizeAddress(accountId))
+          eq(mailTrustedImageSenders.accountEmail, normalizeAddress(accountId))
         )
         .run()
     ).pipe(

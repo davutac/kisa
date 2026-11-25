@@ -1,9 +1,9 @@
-import { truncateGmailSubject } from "@/shared/gmail-subject";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import type { Account } from "@/shared/ipc/accounts";
 import type {
   ComposerTemplate,
   ComposerTemplateInput,
 } from "@/shared/ipc/templates";
+import { truncateSubject } from "@/shared/mail-subject";
 import type { TemplateVariableContext } from "@/shared/template-variables";
 
 export const createEmptyTemplate = (): ComposerTemplateInput => ({
@@ -30,7 +30,7 @@ export const toTemplateInput = (
   cc: template.cc,
   id: template.id,
   name: template.name,
-  subject: truncateGmailSubject(template.subject),
+  subject: truncateSubject(template.subject),
   to: template.to,
 });
 
@@ -62,7 +62,7 @@ export const getTemplateSummary = (template: ComposerTemplate): string =>
 
 export const getVariablePreviewContext = (
   template: ComposerTemplateInput,
-  accounts: readonly Pick<GoogleAccount, "displayName" | "email">[]
+  accounts: readonly Pick<Account, "displayName" | "email">[]
 ): Omit<TemplateVariableContext, "now"> => {
   const accountName =
     template.accountId === null

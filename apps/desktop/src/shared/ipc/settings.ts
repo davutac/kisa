@@ -14,7 +14,7 @@ export const AccountSettings = Schema.Struct({
   emailSignature: EmailSignatureBody,
   /** Whether newly synced unread Inbox messages may produce an OS alert. */
   notificationsEnabled: Schema.Boolean,
-  /** Gmail's own labels (INBOX, UNREAD, CATEGORY_*, …) shown next to threads. */
+  /** System labels (INBOX, UNREAD, STARRED, …) shown next to threads. */
   showSystemLabels: Schema.Boolean,
 });
 export type AccountSettings = typeof AccountSettings.Type;
@@ -113,6 +113,25 @@ export type DatabaseImportFileSelectionReply =
 
 export const DatabaseImportCancelReply = IpcReply(Schema.Void);
 export type DatabaseImportCancelReply = typeof DatabaseImportCancelReply.Type;
+
+/**
+ * Whether an import is running or waiting for a restart, and what restarting
+ * will do: a development build can only quit. It carries no path or name.
+ */
+export const DatabaseImportStatus = Schema.Struct({
+  restart: Schema.Literals(["quit", "relaunch"]),
+  state: Schema.Literals(["importing", "none", "restart-pending"]),
+});
+export type DatabaseImportStatus = typeof DatabaseImportStatus.Type;
+
+export const DatabaseImportStatusReply = IpcReply(DatabaseImportStatus);
+export type DatabaseImportStatusReply = typeof DatabaseImportStatusReply.Type;
+
+export const DatabaseImportDiscardReply = IpcReply(Schema.Void);
+export type DatabaseImportDiscardReply = typeof DatabaseImportDiscardReply.Type;
+
+export const DatabaseImportRestartReply = IpcReply(Schema.Void);
+export type DatabaseImportRestartReply = typeof DatabaseImportRestartReply.Type;
 
 export const DatabaseImportProgress = Schema.Literals([
   "copying",

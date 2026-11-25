@@ -1,10 +1,10 @@
-import type { GmailIndexProgress } from "../../shared/ipc/mail";
+import type { MailIndexProgress } from "../../shared/ipc/mail";
 import { toOverallMailIndexRatio } from "../../shared/mail-index-progress";
 
 export const HIDDEN_MAIL_INDEX_PROGRESS = -1;
 export const INDETERMINATE_MAIL_INDEX_PROGRESS = 2;
 
-const isActive = (progress: GmailIndexProgress): boolean =>
+const isActive = (progress: MailIndexProgress): boolean =>
   progress.status === "running";
 
 /**
@@ -13,7 +13,7 @@ const isActive = (progress: GmailIndexProgress): boolean =>
  * totals so a small mailbox does not count as much as a large one.
  */
 export const getNativeMailIndexProgress = (
-  progress: readonly GmailIndexProgress[]
+  progress: readonly MailIndexProgress[]
 ): number => {
   const active = progress.filter(isActive);
 

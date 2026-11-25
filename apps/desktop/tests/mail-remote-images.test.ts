@@ -66,9 +66,12 @@ describe(blockRemoteImages, () => {
   });
 
   it("does not treat scripts and frames as images", () => {
-    const html = '<script src="https://cdn.example/a.js"></script>';
+    const html =
+      '<script src="https://cdn.example/a.js"></script><iframe src="https://cdn.example/a.html"></iframe>';
+    const result = blockRemoteImages(html);
 
-    expect(blockRemoteImages(html).hasRemoteImages).toBeFalsy();
+    expect(result.hasRemoteImages).toBeFalsy();
+    expect(result.html).toBe(html);
   });
 
   it("reads a raw `<` inside an attribute as part of the tag", () => {

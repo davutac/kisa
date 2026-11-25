@@ -1,29 +1,30 @@
 import { CopyIcon } from "lucide-react";
 import {
   createContext,
+  isValidElement,
   useCallback,
   useContext,
-  useEffect,
   useId,
-  useRef,
   useState,
 } from "react";
 import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
-import { toast } from "sonner";
 
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AlertDialogClose,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  createConfirm,
 } from "@/components/ui/alert-dialog";
+import type { AlertDialogController } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/toast";
+import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useHotkeyLayer } from "@/hotkeys";
 
 export interface ConfirmationTextOptions {
@@ -47,17 +48,21 @@ interface ConfirmMessageProps {
 
 type Confirm = (options: ConfirmOptions) => Promise<boolean>;
 
+// A fresh object per question, so a caller reusing one options object still
+// gets a new payload and an empty confirmation field.
 interface ConfirmRequest {
-  focusTarget: HTMLElement | null;
-  id: number;
-  options: ConfirmOptions;
-  resolve: (confirmed: boolean) => void;
+  readonly options: ConfirmOptions;
 }
 
 interface ConfirmDialogViewProps {
-  onCancel: () => void;
+  inputValue: string;
   onConfirm: () => void;
   options: ConfirmOptions;
+  setInputValue: (value: string) => void;
+}
+
+interface ConfirmDialogProps {
+  controller: AlertDialogController<ConfirmRequest>;
 }
 
 interface ConfirmDialogProviderProps {
@@ -73,10 +78,52 @@ export const ConfirmMessage = ({ children, subject }: ConfirmMessageProps) => (
   </span>
 );
 
+const isConfirmationEntered = (
+  options: ConfirmOptions,
+  inputValue: string
+): boolean =>
+  options.confirmationText === undefined ||
+  inputValue === options.confirmationText.value;
+
+const textOf = (node: ReactNode): string => {
+  if (node === null || node === undefined || node === true || node === false) {
+    return "";
+  }
+  if (Array.isArray(node)) {
+    return node.map(textOf).join("");
+  }
+  if (!isValidElement<Partial<ConfirmMessageProps>>(node)) {
+    return String(node);
+  }
+  const { children, subject } = node.props;
+  return subject === undefined
+    ? textOf(children)
+    : `${textOf(subject)}: ${textOf(children)}`;
+};
+
+const describeConfirmation = (options: ConfirmOptions): string =>
+  [options.title, options.description]
+    .map(textOf)
+    .join(" ")
+    .replaceAll(/\s+/gu, " ")
+    .trim() || textOf(options.confirmLabel ?? "Confirm");
+
+// Focus starts where Return is safe: the typed confirmation, Cancel before
+// a destructive action, or the confirming button.
+const getInitialFocus = (
+  options: ConfirmOptions
+): "cancel" | "confirm" | "text" => {
+  if (options.confirmationText !== undefined) {
+    return "text";
+  }
+  return options.confirmVariant === "destructive" ? "cancel" : "confirm";
+};
+
 const ConfirmDialogView = ({
-  onCancel,
+  inputValue,
   onConfirm,
   options,
+  setInputValue,
 }: ConfirmDialogViewProps) => {
   const {
     cancelLabel = "Cancel",
@@ -88,28 +135,8 @@ const ConfirmDialogView = ({
   } = options;
   const inputId = useId();
   const inputDescriptionId = useId();
-  const [inputValue, setInputValue] = useState("");
-  const isConfirmed =
-    confirmationText === undefined || inputValue === confirmationText.value;
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (
-      event.key !== "Enter" ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.repeat ||
-      event.shiftKey ||
-      event.nativeEvent.isComposing ||
-      !isConfirmed
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    onConfirm();
-  };
+  const isConfirmed = isConfirmationEntered(options, inputValue);
+  const initialFocus = getInitialFocus(options);
 
   const handleCopyConfirmationText = async (): Promise<void> => {
     if (!confirmationText) {
@@ -125,72 +152,109 @@ const ConfirmDialogView = ({
   };
 
   return (
-    <AlertDialog
-      onOpenChange={(open) => {
-        if (!open) {
-          onCancel();
-        }
-      }}
-      open
-    >
-      <AlertDialogContent onKeyDown={handleKeyDown}>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          {description === undefined ? null : (
-            <AlertDialogDescription>{description}</AlertDialogDescription>
-          )}
-        </AlertDialogHeader>
+    <>
+      <AlertDialogHeader>
+        <AlertDialogTitle>{title}</AlertDialogTitle>
+        {description === undefined ? null : (
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        )}
+      </AlertDialogHeader>
 
-        {confirmationText ? (
-          <div className="grid gap-2">
-            <Label className="sr-only" htmlFor={inputId}>
-              {confirmationText.label ?? "Enter the confirmation text"}
-            </Label>
-            <div
-              className="grid gap-1.5 text-sm leading-relaxed"
-              id={inputDescriptionId}
-            >
-              <span>Enter this text to confirm:</span>
-              <Button
-                aria-label={`Copy ${confirmationText.value}`}
-                className="max-w-full min-w-0 justify-self-start overflow-hidden"
-                onClick={() => {
-                  void handleCopyConfirmationText();
-                }}
-                size="xs"
-                title="Copy confirmation text"
-                type="button"
-                variant="outline"
-              >
-                <span className="min-w-0 truncate">
-                  {confirmationText.value}
-                </span>
-                <CopyIcon className="size-2.5 shrink-0 opacity-80" />
-              </Button>
-            </div>
-            <Input
-              aria-describedby={inputDescriptionId}
-              autoComplete="off"
-              id={inputId}
-              onChange={(event) => setInputValue(event.target.value)}
-              placeholder={confirmationText.value}
-              value={inputValue}
-            />
-          </div>
-        ) : null}
-
-        <AlertDialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">
-          <AlertDialogCancel size="footer">{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={!isConfirmed}
-            onClick={onConfirm}
-            size="footer"
-            type="button"
-            variant={confirmVariant ?? "default"}
+      {confirmationText ? (
+        <div className="grid gap-2">
+          <Label className="sr-only" htmlFor={inputId}>
+            {confirmationText.label ?? "Enter the confirmation text"}
+          </Label>
+          <div
+            className="grid gap-1.5 text-sm leading-relaxed"
+            id={inputDescriptionId}
           >
-            {confirmLabel}
-          </AlertDialogAction>
-        </AlertDialogFooter>
+            <span>Enter this text to confirm:</span>
+            <Button
+              aria-label={`Copy ${confirmationText.value}`}
+              className="max-w-full min-w-0 justify-self-start overflow-hidden"
+              onClick={() => {
+                void handleCopyConfirmationText();
+              }}
+              size="xs"
+              title="Copy confirmation text"
+              type="button"
+              variant="outline"
+            >
+              <span className="min-w-0 truncate">{confirmationText.value}</span>
+              <CopyIcon className="size-2.5 shrink-0 opacity-80" />
+            </Button>
+          </div>
+          <Input
+            aria-describedby={inputDescriptionId}
+            autoComplete="off"
+            data-confirm-focus={initialFocus === "text" ? "" : undefined}
+            id={inputId}
+            onChange={(event) => setInputValue(event.target.value)}
+            onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+              if (
+                event.key === "Enter" &&
+                !event.nativeEvent.isComposing &&
+                isConfirmed
+              ) {
+                event.preventDefault();
+                onConfirm();
+              }
+            }}
+            placeholder={confirmationText.value}
+            value={inputValue}
+          />
+        </div>
+      ) : null}
+
+      <AlertDialogFooter className="-mx-4 -mb-4 gap-px overflow-hidden rounded-b-lg">
+        <AlertDialogClose
+          data-confirm-focus={initialFocus === "cancel" ? "" : undefined}
+          size="footer"
+        >
+          {cancelLabel}
+        </AlertDialogClose>
+        <AlertDialogClose
+          data-agent-confirm={describeConfirmation(options)}
+          data-confirm-focus={initialFocus === "confirm" ? "" : undefined}
+          disabled={!isConfirmed}
+          size="footer"
+          value="confirm"
+          variant={confirmVariant}
+        >
+          {confirmLabel}
+        </AlertDialogClose>
+      </AlertDialogFooter>
+    </>
+  );
+};
+
+const ConfirmDialog = ({ controller }: ConfirmDialogProps) => {
+  const [inputValue, setInputValue] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  useHotkeyLayer("blocking", isOpen);
+
+  const confirm = (): void => {
+    controller.close({ returnValue: "confirm" });
+  };
+
+  return (
+    <AlertDialog
+      controller={controller}
+      onOpenChange={setIsOpen}
+      onPayloadChange={() => setInputValue("")}
+    >
+      <AlertDialogContent<ConfirmRequest> initialFocus="[data-confirm-focus]">
+        {({ payload }) =>
+          payload === undefined ? null : (
+            <ConfirmDialogView
+              inputValue={inputValue}
+              onConfirm={confirm}
+              options={payload.options}
+              setInputValue={setInputValue}
+            />
+          )
+        }
       </AlertDialogContent>
     </AlertDialog>
   );
@@ -199,91 +263,13 @@ const ConfirmDialogView = ({
 export const ConfirmDialogProvider = ({
   children,
 }: ConfirmDialogProviderProps) => {
-  const [activeRequest, setActiveRequest] = useState<ConfirmRequest | null>(
-    null
-  );
-  const activeRequestRef = useRef<ConfirmRequest | null>(null);
-  const queuedRequestsRef = useRef<ConfirmRequest[]>([]);
-  const nextRequestIdRef = useRef(0);
-  useHotkeyLayer("blocking", activeRequest !== null);
-
-  const confirm = useCallback<Confirm>(
-    (options) =>
-      // oxlint-disable-next-line promise/avoid-new -- The imperative confirm interface exposes the dialog result to its caller.
-      new Promise<boolean>((resolve) => {
-        nextRequestIdRef.current += 1;
-
-        const request: ConfirmRequest = {
-          focusTarget:
-            document.activeElement instanceof HTMLElement
-              ? document.activeElement
-              : null,
-          id: nextRequestIdRef.current,
-          options,
-          resolve,
-        };
-
-        if (activeRequestRef.current) {
-          queuedRequestsRef.current.push(request);
-          return;
-        }
-
-        activeRequestRef.current = request;
-        setActiveRequest(request);
-      }),
-    []
-  );
-
-  const settleActiveRequest = useCallback((confirmed: boolean) => {
-    const settledRequest = activeRequestRef.current;
-
-    if (!settledRequest) {
-      return;
-    }
-
-    const nextRequest = queuedRequestsRef.current.shift() ?? null;
-    activeRequestRef.current = nextRequest;
-    setActiveRequest(nextRequest);
-    settledRequest.resolve(confirmed);
-
-    if (!nextRequest) {
-      requestAnimationFrame(() => {
-        if (settledRequest.focusTarget?.isConnected) {
-          settledRequest.focusTarget.focus();
-        }
-      });
-    }
-  }, []);
-
-  useEffect(
-    () => () => {
-      const pendingRequests = [
-        activeRequestRef.current,
-        ...queuedRequestsRef.current,
-      ];
-
-      activeRequestRef.current = null;
-      queuedRequestsRef.current = [];
-
-      for (const request of pendingRequests) {
-        request?.resolve(false);
-      }
-    },
-    []
-  );
+  const ask = useInstanceValue(() => createConfirm<ConfirmRequest>());
+  const confirm = useCallback<Confirm>((options) => ask({ options }), [ask]);
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-
-      {activeRequest ? (
-        <ConfirmDialogView
-          key={activeRequest.id}
-          onCancel={() => settleActiveRequest(false)}
-          onConfirm={() => settleActiveRequest(true)}
-          options={activeRequest.options}
-        />
-      ) : null}
+      <ConfirmDialog controller={ask.controller} />
     </ConfirmContext.Provider>
   );
 };

@@ -11,7 +11,7 @@ import {
   toNewMailNotificationCopy,
 } from "../src/main/mail/new-mail-notifications";
 import type { NewMailNotificationDependencies } from "../src/main/mail/new-mail-notifications";
-import type { GmailThreadRequest } from "../src/shared/ipc/mail";
+import type { MailThreadRequest } from "../src/shared/ipc/mail";
 
 interface TestMessageRow {
   readonly fromAddress: string;
@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => ({
     restore: vi.fn<() => void>(),
     show: vi.fn<() => void>(),
   },
-  markThreadRead: vi.fn<(request: GmailThreadRequest) => void>(),
+  markThreadRead: vi.fn<(request: MailThreadRequest) => void>(),
   messages: [] as TestMessageRow[],
   notificationListeners: [] as Map<string, (...arguments_: never[]) => void>[],
   notificationsEnabled: true,
@@ -55,7 +55,7 @@ const mocks = vi.hoisted(() => ({
       }) => Promise<TestWindow>
     >(),
   threads: [] as { readonly snippet: string; readonly threadId: string }[],
-  trashThread: vi.fn<(request: GmailThreadRequest) => void>(),
+  trashThread: vi.fn<(request: MailThreadRequest) => void>(),
 }));
 
 vi.mock(import("electron"), async (importOriginal) => {
@@ -244,14 +244,14 @@ describe(showNewMailNotifications, () => {
     expect(mocks.createdNotifications).toStrictEqual([]);
   });
 
-  it("shows Gmail's HTML-escaped snippet as plain text", () => {
+  it("shows the stored snippet as the plain text it is", () => {
     const [notification] = selectNewMailNotificationMessages(
       "user@example.com",
       [makeMessage("new", ["INBOX", "UNREAD"])],
-      [{ snippet: "it&#39;s &lt;here&gt; &amp; now", threadId: "thread-new" }]
+      [{ snippet: "it's <here> & &amp; now", threadId: "thread-new" }]
     );
 
-    expect(notification?.snippet).toBe("it's <here> & now");
+    expect(notification?.snippet).toBe("it's <here> & &amp; now");
   });
 
   it("escapes the decoded body back to text only for Linux markup servers", () => {
@@ -345,23 +345,25 @@ describe(showNewMailNotifications, () => {
   );
 
   it.each([
-    { isUnread: false, labels: ["INBOX"], state: "read" },
-    { isUnread: true, labels: [], state: "archived" },
-    { isUnread: true, labels: ["TRASH"], state: "trashed" },
-    { isUnread: true, labels: ["SPAM"], state: "spam" },
+    { isUnread: false, labels: ["INBOX"], places: ["inbox"], state: "read" },
+    { isUnread: true, labels: [], places: [], state: "archived" },
+    { isUnread: true, labels: ["TRASH"], places: ["trash"], state: "trashed" },
+    { isUnread: true, labels: ["SPAM"], places: ["spam"], state: "spam" },
     {
       isUnread: true,
       labels: ["INBOX", "TRASH"],
+      places: ["trash"],
       state: "trashed with Inbox label",
     },
     {
       isUnread: true,
       labels: ["INBOX", "SPAM"],
+      places: ["spam"],
       state: "spam with Inbox label",
     },
   ])(
     "dismisses $state threads while preserving unread Inbox and other-account alerts",
-    async ({ isUnread, labels }) => {
+    async ({ isUnread, labels, places }) => {
       mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
       mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
       await Promise.all(
@@ -381,18 +383,28 @@ describe(showNewMailNotifications, () => {
         labels: ["INBOX"],
         latestAt: 1,
         messageCount: 1,
+        places: ["inbox"],
         snippet: "Preview",
         subject: "Subject",
         threadId: "thread-new",
       };
+      dismissInactiveThreadNotifications([{ kind: "upsert", thread }]);
+      // Unread and in the Inbox, though also in a folder a server calls
+      // Trash: where it is listed is what main sent, not what a label reads.
       dismissInactiveThreadNotifications([
-        { accountId: thread.accountId, kind: "reload" },
-        { kind: "upsert", thread },
+        {
+          kind: "upsert",
+          thread: {
+            ...thread,
+            labels: ["INBOX", "TRASH"],
+            places: ["inbox", "label:trash"],
+          },
+        },
       ]);
       expect(mocks.closedNotificationIds).toStrictEqual([]);
 
       dismissInactiveThreadNotifications([
-        { kind: "upsert", thread: { ...thread, isUnread, labels } },
+        { kind: "upsert", thread: { ...thread, isUnread, labels, places } },
       ]);
       expect(mocks.closedNotificationIds).toStrictEqual([
         "user@example.com:new",
@@ -400,7 +412,7 @@ describe(showNewMailNotifications, () => {
 
       // Replayed sync results must not close an already dismissed alert again.
       dismissInactiveThreadNotifications([
-        { kind: "upsert", thread: { ...thread, isUnread, labels } },
+        { kind: "upsert", thread: { ...thread, isUnread, labels, places } },
       ]);
       expect(mocks.closedNotificationIds).toStrictEqual([
         "user@example.com:new",
@@ -416,6 +428,12 @@ describe(showNewMailNotifications, () => {
     async (_activation, event, details) => {
       mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
       mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
+      const focused = Promise.withResolvers<null>();
+      mocks.openThreadWindow.mockResolvedValueOnce({
+        focus: vi.fn<() => void>(() => focused.resolve(null)),
+        isDestroyed: () => false,
+        show: vi.fn<() => void>(),
+      });
 
       await Effect.runPromise(
         showNotifications("user@example.com", ["new"], () =>
@@ -425,11 +443,10 @@ describe(showNewMailNotifications, () => {
 
       emitNotification(0, event, details);
 
-      await vi.waitFor(() => {
-        expect(mocks.openThreadWindow).toHaveBeenCalledWith({
-          accountId: "user@example.com",
-          threadId: "thread-new",
-        });
+      await focused.promise;
+      expect(mocks.openThreadWindow).toHaveBeenCalledWith({
+        accountId: "user@example.com",
+        threadId: "thread-new",
       });
       expect(mocks.appFocus).toHaveBeenCalledWith({ steal: true });
     }
@@ -474,6 +491,10 @@ describe(showNewMailNotifications, () => {
     mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
     mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
     mocks.openThreadWindow.mockRejectedValue(new Error("load failed"));
+    const focused = Promise.withResolvers<null>();
+    mocks.mainWindow.focus.mockImplementationOnce(() => {
+      focused.resolve(null);
+    });
 
     await Effect.runPromise(
       showNotifications("user@example.com", ["new"], () => Effect.succeed(null))
@@ -481,9 +502,8 @@ describe(showNewMailNotifications, () => {
 
     mocks.notificationListeners[0]?.get("click")?.();
 
-    await vi.waitFor(() => {
-      expect(mocks.mainWindow.focus).toHaveBeenCalledOnce();
-    });
+    await focused.promise;
+    expect(mocks.mainWindow.focus).toHaveBeenCalledOnce();
   });
 
   it("rasterizes an authenticated BIMI logo for the native icon", async () => {

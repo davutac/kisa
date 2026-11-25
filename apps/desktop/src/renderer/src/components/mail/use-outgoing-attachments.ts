@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import {
   assignComposerInlineContentIds,
@@ -9,8 +8,12 @@ import {
   getRetainedComposerInlineBytes,
 } from "@/components/mail/composer-inline-images";
 import type { ComposerInlineImage } from "@/components/mail/composer-inline-images";
+import { createFileInputController } from "@/components/ui/file-input";
+import { toast } from "@/components/ui/toast";
+import { useInstanceValue } from "@/hooks/use-instance-value";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import type { MailApi } from "@/platform/desktop";
-import { MAX_GMAIL_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
+import { MAX_OUTGOING_ATTACHMENT_BYTES } from "@/shared/ipc/mail";
 import type { MailDraftAttachment } from "@/shared/ipc/mail";
 
 const makeInlineContentId = (): string =>
@@ -37,7 +40,7 @@ export const useOutgoingAttachments = (
   const [pendingAuthorizations, setPendingAuthorizations] = useState(0);
   const activeRef = useRef(true);
   const attachmentsRef = useRef(attachmentState);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const picker = useInstanceValue(createFileInputController);
   const previewLoadsRef = useRef(new Map<string, Promise<string | null>>());
   const previewUrlsRef = useRef(new Map<string, string>());
   const [referencedContentIds, setReferencedContentIds] = useState(() =>
@@ -105,42 +108,51 @@ export const useOutgoingAttachments = (
 
       const revision = revisionRef.current;
       setPendingAuthorizations((current) => current + 1);
-      try {
-        const reply = await mailApi.authorizeOutgoingAttachments(files);
-        if (!activeRef.current || revisionRef.current !== revision) {
-          return [];
+      return await runWithCleanup(
+        async () => {
+          try {
+            const reply = await mailApi.authorizeOutgoingAttachments(files);
+            if (!activeRef.current || revisionRef.current !== revision) {
+              return [];
+            }
+            if (!reply.ok) {
+              toast.error(reply.error);
+              return [];
+            }
+            const additions = inline
+              ? assignComposerInlineContentIds(
+                  reply.data,
+                  getRetainedComposerInlineBytes(attachmentsRef.current),
+                  makeInlineContentId
+                )
+              : reply.data;
+            const currentBytes = getComposerAttachmentBytes(
+              attachmentsRef.current
+            );
+            const selectedBytes = getComposerAttachmentBytes(additions);
+            if (currentBytes + selectedBytes > MAX_OUTGOING_ATTACHMENT_BYTES) {
+              toast.error("Attachments can total up to 25 MB");
+              return [];
+            }
+            updateAttachments((current) => [...current, ...additions]);
+            return additions;
+          } catch (error) {
+            if (activeRef.current && revisionRef.current === revision) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Could not attach files"
+              );
+            }
+            return [];
+          }
+        },
+        () => {
+          if (activeRef.current) {
+            setPendingAuthorizations((current) => Math.max(current - 1, 0));
+          }
         }
-        if (!reply.ok) {
-          toast.error(reply.error);
-          return [];
-        }
-        const additions = inline
-          ? assignComposerInlineContentIds(
-              reply.data,
-              getRetainedComposerInlineBytes(attachmentsRef.current),
-              makeInlineContentId
-            )
-          : reply.data;
-        const currentBytes = getComposerAttachmentBytes(attachmentsRef.current);
-        const selectedBytes = getComposerAttachmentBytes(additions);
-        if (currentBytes + selectedBytes > MAX_GMAIL_ATTACHMENT_BYTES) {
-          toast.error("Attachments can total up to 25 MB");
-          return [];
-        }
-        updateAttachments((current) => [...current, ...additions]);
-        return additions;
-      } catch (error) {
-        if (activeRef.current && revisionRef.current === revision) {
-          toast.error(
-            error instanceof Error ? error.message : "Could not attach files"
-          );
-        }
-        return [];
-      } finally {
-        if (activeRef.current) {
-          setPendingAuthorizations((current) => Math.max(current - 1, 0));
-        }
-      }
+      );
     },
     [mailApi, updateAttachments]
   );
@@ -148,9 +160,6 @@ export const useOutgoingAttachments = (
   const addAttachments = useCallback(
     async (fileList: FileList | readonly File[] | null): Promise<void> => {
       await authorizeAttachments([...(fileList ?? [])], false);
-      if (inputRef.current !== null) {
-        inputRef.current.value = "";
-      }
     },
     [authorizeAttachments]
   );
@@ -331,9 +340,9 @@ export const useOutgoingAttachments = (
     discardInlineImages,
     fallbackInlineImagesToAttachments,
     getInlineImagePreview,
-    inputRef,
     isAuthorizing: pendingAuthorizations > 0,
     loadInlineImagePreview,
+    picker,
     prepareAttachments,
     removeAttachment,
     replaceAttachments,

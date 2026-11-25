@@ -8,7 +8,7 @@ export default defineConfig({
     "apps/desktop/src/renderer/src/routeTree.gen.ts",
     "packages/database/drizzle/**/snapshot.json",
     "repos/**",
-    "**/components/ui/**",
+    "apps/marketing/src/components/ui/**",
   ],
   sortTailwindcss: {
     functions: ["cn", "clsx"],

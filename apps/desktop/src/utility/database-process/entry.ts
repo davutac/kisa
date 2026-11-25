@@ -1,4 +1,4 @@
-import { Cause, Effect, Layer, Schema } from "effect";
+import { Cause, Effect, Layer, Predicate, Schema } from "effect";
 import * as RpcServer from "effect/rpc/RpcServer";
 
 import { DatabaseRpcs } from "../../shared/database-rpc";
@@ -9,10 +9,10 @@ import * as ElectronUtilityRunner from "./electron-utility-runner";
 const DatabasePaths = Schema.Tuple([Schema.String, Schema.String]);
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class DatabaseUnlockError extends Schema.TaggedError<DatabaseUnlockError>()(
-  "DatabaseUnlockError",
-  { message: Schema.String }
-) {}
+class DatabaseUnlockError extends Schema.TaggedError<
+  DatabaseUnlockError,
+  { readonly brand: unique symbol }
+>()("DatabaseUnlockError", { message: Schema.String }) {}
 
 const receiveDatabaseKey = Effect.fn("receiveDatabaseKey")(
   function* receiveDatabaseKeyEffect() {
@@ -91,6 +91,15 @@ const main = async (): Promise<void> => {
   if (exit._tag === "Failure" && !Cause.hasInterruptsOnly(exit.cause)) {
     console.error("Database utility process failed", Cause.squash(exit.cause));
     process.exitCode = 1;
+  }
+
+  // The program ends when main asks the server to close, or when it cannot
+  // start, after its finalizers have closed SQLite. Electron keeps a utility
+  // process alive while its parent port is open, so without this main waits
+  // out its whole close timeout on every quit and then kills the process.
+  // Only a utility process has that port; anywhere else, nothing lingers.
+  if (Predicate.isNotNullish(Reflect.get(process, "parentPort"))) {
+    process.exit();
   }
 };
 

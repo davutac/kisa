@@ -10,8 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ComposeRouteImport } from './routes/compose'
 import { Route as ScheduledRouteRouteImport } from './routes/scheduled/route'
-import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as TemplatesRouteRouteImport } from './routes/templates/route'
 import { Route as ThreadAccountIdThreadIdRouteImport } from './routes/thread.$accountId.$threadId'
 
@@ -20,14 +20,14 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ComposeRoute = ComposeRouteImport.update({
+  id: '/compose',
+  path: '/compose',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScheduledRouteRoute = ScheduledRouteRouteImport.update({
   id: '/scheduled',
   path: '/scheduled',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRouteRoute = SettingsRouteRouteImport.update({
-  id: '/settings',
-  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TemplatesRouteRoute = TemplatesRouteRouteImport.update({
@@ -44,23 +44,23 @@ const ThreadAccountIdThreadIdRoute = ThreadAccountIdThreadIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/scheduled': typeof ScheduledRouteRoute
-  '/settings': typeof SettingsRouteRoute
   '/templates': typeof TemplatesRouteRoute
+  '/compose': typeof ComposeRoute
   '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/scheduled': typeof ScheduledRouteRoute
-  '/settings': typeof SettingsRouteRoute
   '/templates': typeof TemplatesRouteRoute
+  '/compose': typeof ComposeRoute
   '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/scheduled': typeof ScheduledRouteRoute
-  '/settings': typeof SettingsRouteRoute
   '/templates': typeof TemplatesRouteRoute
+  '/compose': typeof ComposeRoute
   '/thread/$accountId/$threadId': typeof ThreadAccountIdThreadIdRoute
 }
 export interface FileRouteTypes {
@@ -68,30 +68,30 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/scheduled'
-    | '/settings'
     | '/templates'
+    | '/compose'
     | '/thread/$accountId/$threadId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/scheduled'
-    | '/settings'
     | '/templates'
+    | '/compose'
     | '/thread/$accountId/$threadId'
   id:
     | '__root__'
     | '/'
     | '/scheduled'
-    | '/settings'
     | '/templates'
+    | '/compose'
     | '/thread/$accountId/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ScheduledRouteRoute: typeof ScheduledRouteRoute
-  SettingsRouteRoute: typeof SettingsRouteRoute
   TemplatesRouteRoute: typeof TemplatesRouteRoute
+  ComposeRoute: typeof ComposeRoute
   ThreadAccountIdThreadIdRoute: typeof ThreadAccountIdThreadIdRoute
 }
 
@@ -104,18 +104,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/compose': {
+      id: '/compose'
+      path: '/compose'
+      fullPath: '/compose'
+      preLoaderRoute: typeof ComposeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/scheduled': {
       id: '/scheduled'
       path: '/scheduled'
       fullPath: '/scheduled'
       preLoaderRoute: typeof ScheduledRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/templates': {
@@ -138,8 +138,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ScheduledRouteRoute: ScheduledRouteRoute,
-  SettingsRouteRoute: SettingsRouteRoute,
   TemplatesRouteRoute: TemplatesRouteRoute,
+  ComposeRoute: ComposeRoute,
   ThreadAccountIdThreadIdRoute: ThreadAccountIdThreadIdRoute,
 }
 export const routeTree = rootRouteImport

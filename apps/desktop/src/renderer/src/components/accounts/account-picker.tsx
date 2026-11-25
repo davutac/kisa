@@ -1,9 +1,10 @@
-import { ShuffleIcon, UserRoundIcon } from "lucide-react";
+import { ShuffleIcon } from "lucide-react";
 import { m, useReducedMotionConfig } from "motion/react";
 import { Fragment } from "react";
 import type { Ref } from "react";
 
-import { Button } from "@/components/ui/button";
+import AccountProviderIcon from "@/components/accounts/account-provider-icon";
+import { Toggle, ToggleGroup } from "@/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -17,10 +18,13 @@ import {
 } from "@/hotkeys";
 import type { HotkeyCommandId } from "@/hotkeys";
 import { easeInOut, NO_MOTION } from "@/lib/motion";
-import type { GoogleAccount } from "@/shared/ipc/auth";
+import { cn } from "@/lib/utils";
+import type { Account } from "@/shared/ipc/accounts";
 
 interface AccountPickerBaseProps {
-  readonly accounts: readonly GoogleAccount[];
+  readonly accounts: readonly Account[];
+  /** Restyles the row, e.g. to sit on the page instead of a card. */
+  readonly className?: string;
   readonly enableHotkeys?: boolean;
   readonly focusRefForAccount?: (accountId: string) => Ref<HTMLButtonElement>;
   readonly label?: string;
@@ -46,58 +50,53 @@ type AccountPickerProps =
   | NullableAccountPickerProps
   | RequiredAccountPickerProps;
 
-interface AccountOptionButtonProps {
-  readonly account?: GoogleAccount;
+interface AccountOptionToggleProps {
+  readonly account?: Account;
   readonly ariaLabel: string;
   readonly command?: HotkeyCommandId;
   readonly description?: string;
-  readonly disabled?: boolean;
   readonly focusRef?: Ref<HTMLButtonElement>;
   readonly isSelected: boolean;
   readonly label: string;
-  readonly onSelect: () => void;
+  readonly value: string;
 }
 
-const AccountOptionAvatar = ({ account }: { account?: GoogleAccount }) => {
-  if (account === undefined) {
-    return <ShuffleIcon className="size-3.5" />;
-  }
-  if (account.avatarUrl === undefined) {
-    return <UserRoundIcon className="size-3.5" />;
-  }
-  return (
-    <img alt="" className="size-full object-cover" src={account.avatarUrl} />
-  );
-};
+// The group's value is a list of strings, so "no account" needs one that no
+// address can be.
+const NULL_OPTION_VALUE = "keep-current-account";
 
-const AccountOptionButton = ({
+const AccountOptionAvatar = ({ account }: { account?: Account }) =>
+  account === undefined ? (
+    <ShuffleIcon className="size-3.5" />
+  ) : (
+    <AccountProviderIcon className="size-3.5" provider={account.provider} />
+  );
+
+const AccountOptionToggle = ({
   account,
   ariaLabel,
   command,
   description,
-  disabled = false,
   focusRef,
   isSelected,
   label,
-  onSelect,
-}: AccountOptionButtonProps) => {
+  value,
+}: AccountOptionToggleProps) => {
   const shouldReduceMotion = useReducedMotionConfig();
 
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button
+          <Toggle
             aria-keyshortcuts={
               command === undefined ? undefined : getHotkeyAriaLabel(command)
             }
             aria-label={ariaLabel}
-            aria-pressed={isSelected}
             className="h-7 min-w-7 shrink justify-start gap-0 overflow-visible rounded-full p-0"
-            disabled={disabled}
-            onClick={onSelect}
             ref={focusRef}
-            type="button"
+            size="default"
+            value={value}
             variant="secondary"
           >
             <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full">
@@ -116,7 +115,7 @@ const AccountOptionButton = ({
             >
               <span className="block truncate px-2.5 pl-1.5">{label}</span>
             </m.span>
-          </Button>
+          </Toggle>
         }
       />
       <TooltipContent className="flex items-start gap-2" side="bottom">
@@ -142,6 +141,7 @@ const AccountOptionButton = ({
 const AccountPicker = (props: AccountPickerProps) => {
   const {
     accounts,
+    className,
     enableHotkeys = false,
     focusRefForAccount,
     label = "From",
@@ -151,22 +151,41 @@ const AccountPicker = (props: AccountPickerProps) => {
   } = props;
 
   return (
-    <div className="bg-card flex min-h-9 shrink-0 items-center px-4 py-1">
+    <div
+      className={cn(
+        "bg-card flex min-h-9 shrink-0 items-center px-4 py-1",
+        className
+      )}
+    >
       <span className="text-muted-foreground w-10 shrink-0 text-xs/relaxed">
         {label}
       </span>
-      <fieldset
+      {/* Arrow keys move between accounts; a press chooses one. Locked, the
+          accounts stay reachable for their tooltips but can't be chosen. */}
+      <ToggleGroup
         aria-label={`${label} account`}
-        className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto"
+        className="no-scrollbar min-w-0 overflow-x-auto"
+        deselectable={false}
+        disabled={locked}
+        onValueChange={([next]) => {
+          if (next === undefined) {
+            return;
+          }
+          if (next !== NULL_OPTION_VALUE) {
+            props.onSelect(next);
+          } else if (props.nullOption !== undefined) {
+            props.onSelect(null);
+          }
+        }}
+        value={[selectedAccountId ?? NULL_OPTION_VALUE]}
       >
         {nullOption === undefined ? null : (
-          <AccountOptionButton
+          <AccountOptionToggle
             ariaLabel={nullOption.label}
             description={nullOption.description}
-            disabled={locked}
             isSelected={selectedAccountId === null}
             label={nullOption.label}
-            onSelect={() => props.onSelect(null)}
+            value={NULL_OPTION_VALUE}
           />
         )}
         {accounts.map((account, index) => {
@@ -181,22 +200,21 @@ const AccountPicker = (props: AccountPickerProps) => {
               {command === undefined ? null : (
                 <AppCommand callback={selectAccount} command={command} />
               )}
-              <AccountOptionButton
+              <AccountOptionToggle
                 account={account}
                 ariaLabel={
                   locked ? `From ${account.email}` : `Select ${account.email}`
                 }
                 command={command}
-                disabled={locked}
                 focusRef={focusRefForAccount?.(account.email)}
                 isSelected={account.email === selectedAccountId}
                 label={account.email}
-                onSelect={selectAccount}
+                value={account.email}
               />
             </Fragment>
           );
         })}
-      </fieldset>
+      </ToggleGroup>
     </div>
   );
 };

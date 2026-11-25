@@ -1,18 +1,28 @@
 import { CopyIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { toast } from "sonner";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 
 import { useTheme } from "@/components/shell/theme-provider";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { createEmailDocument, prepareEmailLinks } from "@/mail/email-frame";
+import {
+  createEmailDocument,
+  isParsedMessageDocument,
+  prepareEmailLinks,
+} from "@/mail/email-frame";
 import { needsLightSurface } from "@/mail/email-surface";
 import { blockRemoteImages } from "@/mail/remote-images";
-import type { GmailMessageBody } from "@/shared/ipc/mail";
+import type { MessageBody } from "@/shared/ipc/mail";
 
 interface MailMessageBodyProps {
   allowRemoteImages: boolean;
-  body: GmailMessageBody;
+  body: MessageBody;
   fallbackText: string;
 }
 
@@ -128,6 +138,35 @@ const MailMessageBody = ({
     resizeObserver.current = observer;
     resizeEmailFrame(frame);
   }, []);
+
+  // The frame's load event waits for every image, and a host that answers
+  // slowly or never holds it back. Until the message is prepared it stays at
+  // its minimum height and its links are as the sender wrote them, so it is
+  // prepared as soon as it is parsed and again when it has loaded. Setting
+  // the frame's content starts a navigation that cannot finish within this
+  // layout effect, so the document seen here is always the one being
+  // replaced.
+  useLayoutEffect(() => {
+    const frame = emailFrameRef.current;
+
+    if (frame === null || emailDocument === undefined) {
+      return;
+    }
+
+    const previous = frame.contentDocument;
+    let request = requestAnimationFrame(function prepareWhenParsed() {
+      if (isParsedMessageDocument(frame.contentDocument, previous)) {
+        prepareEmailFrame(frame);
+        return;
+      }
+
+      request = requestAnimationFrame(prepareWhenParsed);
+    });
+
+    return () => {
+      cancelAnimationFrame(request);
+    };
+  }, [emailDocument, prepareEmailFrame]);
 
   useEffect(
     () => () => {

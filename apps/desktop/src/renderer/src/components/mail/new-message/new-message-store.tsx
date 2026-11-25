@@ -12,12 +12,12 @@ import {
 } from "@/mail/mail-draft";
 import { EMPTY_EMAIL_SIGNATURE_BODY } from "@/shared/email-signature";
 import type { EmailSignatureBody } from "@/shared/email-signature";
-import { truncateGmailSubject } from "@/shared/gmail-subject";
 import type {
   MailDraft,
   MailDraftInput,
   MailDraftSignature,
 } from "@/shared/ipc/mail";
+import { truncateSubject } from "@/shared/mail-subject";
 
 export const EMPTY_RECIPIENTS: EmailRecipients = { bcc: [], cc: [], to: [] };
 
@@ -97,7 +97,7 @@ export const createNewMessageStore = (
       set({ selectedCleanVersionId }),
     setSignature: (signature) => set({ signature }),
     setStashes: (stashes) => set({ stashes }),
-    setSubject: (subject) => set({ subject: truncateGmailSubject(subject) }),
+    setSubject: (subject) => set({ subject: truncateSubject(subject) }),
     signature: initialDraft.signature,
     stashes: [],
     subject: initialDraft.subject,

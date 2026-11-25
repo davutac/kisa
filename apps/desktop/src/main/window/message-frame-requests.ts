@@ -4,7 +4,10 @@ import type { Session, WebFrameMain } from "electron";
 // made from a subframe was made by a message. Once the reader shows a
 // message's images, those requests go to hosts the sender chose. They send no
 // cookies and store none, so a cookie cannot tie one opened message to the
-// next; the reader's address and the HTTP cache still reach those hosts.
+// next, and they send no referrer: the frame's document asks for none, but an
+// element's own `referrerpolicy` overrides that, and only here is the header
+// out of the message's reach. The reader's address and the HTTP cache still
+// reach those hosts.
 
 const isFromMessageFrame = (
   frame: WebFrameMain | null | undefined
@@ -13,26 +16,39 @@ const isFromMessageFrame = (
     return (frame?.parent ?? null) !== null;
   } catch {
     // A frame that is already gone can no longer be told apart; withholding
-    // cookies from its last requests costs nothing.
+    // these headers from its last requests costs nothing.
     return true;
   }
 };
 
-const withoutHeader = <Value>(
+const withoutHeaders = <Value>(
   headers: Readonly<Record<string, Value>>,
-  name: string
+  names: ReadonlySet<string>
 ): Record<string, Value> =>
   Object.fromEntries(
-    Object.entries(headers).filter(([header]) => header.toLowerCase() !== name)
+    Object.entries(headers).filter(
+      ([header]) => !names.has(header.toLowerCase())
+    )
   );
+
+const WITHHELD_REQUEST_HEADERS: ReadonlySet<string> = new Set([
+  "cookie",
+  "referer",
+]);
+const WITHHELD_RESPONSE_HEADERS: ReadonlySet<string> = new Set(["set-cookie"]);
 
 // Electron's webRequest hooks answer through a callback by definition.
 // oxlint-disable promise/prefer-await-to-callbacks
-export const installMessageFrameCookiePolicy = (session: Session): void => {
+export const installMessageFrameRequestPolicy = (session: Session): void => {
   session.webRequest.onBeforeSendHeaders((details, callback) => {
     callback(
       isFromMessageFrame(details.frame)
-        ? { requestHeaders: withoutHeader(details.requestHeaders, "cookie") }
+        ? {
+            requestHeaders: withoutHeaders(
+              details.requestHeaders,
+              WITHHELD_REQUEST_HEADERS
+            ),
+          }
         : {}
     );
   });
@@ -40,9 +56,9 @@ export const installMessageFrameCookiePolicy = (session: Session): void => {
     callback(
       isFromMessageFrame(details.frame) && details.responseHeaders !== undefined
         ? {
-            responseHeaders: withoutHeader(
+            responseHeaders: withoutHeaders(
               details.responseHeaders,
-              "set-cookie"
+              WITHHELD_RESPONSE_HEADERS
             ),
           }
         : {}

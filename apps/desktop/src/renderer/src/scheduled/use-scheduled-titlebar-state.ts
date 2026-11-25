@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { getScheduledMailApi } from "@/platform/desktop";
-import { useGoogleAccounts } from "@/state/google-accounts";
+import { useAccounts } from "@/state/accounts";
 
 interface ScheduledTitlebarState {
   readonly attentionCount: number;
@@ -18,7 +18,7 @@ export const getScheduledTitlebarAccountIds = (
 ): readonly string[] => accounts.map(({ email }) => email);
 
 export const useScheduledTitlebarState = (): ScheduledTitlebarState => {
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const accountIds = useMemo(
     () => getScheduledTitlebarAccountIds(accounts),
     [accounts]

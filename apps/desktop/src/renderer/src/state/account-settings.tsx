@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { createContext, use, useEffect, useState } from "react";
-import { toast } from "sonner";
 
+import { toast } from "@/components/ui/toast";
 import { getSettingsApi } from "@/platform/desktop";
 import type {
   AccountSettings,

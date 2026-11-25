@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 
 import MailAttachmentPill from "@/components/mail/attachment-pill";
+import { toast } from "@/components/ui/toast";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getMailApi } from "@/platform/desktop";
 import { getAttachmentPreviewKind } from "@/shared/attachments";
-import type { GmailAttachmentSummary } from "@/shared/ipc/mail";
+import type { MailAttachmentSummary } from "@/shared/ipc/mail";
 
 interface MailAttachmentListProps {
   accountId: string;
-  attachments: readonly GmailAttachmentSummary[];
+  attachments: readonly MailAttachmentSummary[];
 }
 
 type AttachmentAction = "download" | "preview";
@@ -21,7 +22,7 @@ const MailAttachmentList = ({
   const [activeAttachment, setActiveAttachment] = useState<string>();
 
   const open = async (
-    attachment: GmailAttachmentSummary,
+    attachment: MailAttachmentSummary,
     action: AttachmentAction
   ): Promise<void> => {
     if (mailApi === undefined || attachment.attachmentId === undefined) {
@@ -37,24 +38,29 @@ const MailAttachmentList = ({
     };
     setActiveAttachment(key);
 
-    try {
-      const reply =
-        action === "download"
-          ? await mailApi.saveAttachment(request)
-          : await mailApi.openAttachmentPreview(request);
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply =
+            action === "download"
+              ? await mailApi.saveAttachment(request)
+              : await mailApi.openAttachmentPreview(request);
 
-      if (!reply.ok) {
-        toast.error(reply.error);
+          if (!reply.ok) {
+            toast.error(reply.error);
+          }
+        } catch {
+          toast.error(
+            action === "download"
+              ? "Could not save attachment"
+              : "Could not open attachment preview"
+          );
+        }
+      },
+      () => {
+        setActiveAttachment(undefined);
       }
-    } catch {
-      toast.error(
-        action === "download"
-          ? "Could not save attachment"
-          : "Could not open attachment preview"
-      );
-    } finally {
-      setActiveAttachment(undefined);
-    }
+    );
   };
 
   return attachments.map((attachment, index) => {

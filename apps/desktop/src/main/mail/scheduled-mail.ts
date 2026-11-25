@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
-  googleAccounts,
+  mailAccounts,
   mailDrafts,
   scheduledMessages,
 } from "@repo/database/schemas";
@@ -50,7 +50,10 @@ import {
   loadScheduledMessage,
   withScheduledMailDatabase,
 } from "./scheduled-mail-database";
-import type { ScheduledMessageRow } from "./scheduled-mail-database";
+import type {
+  JoinedScheduledMessage,
+  ScheduledMessageRow,
+} from "./scheduled-mail-database";
 import { createScheduledMailDelivery } from "./scheduled-mail-delivery";
 import {
   toScheduledDraftValues,
@@ -72,6 +75,12 @@ import {
   scheduledMailSummarySelection,
   toScheduledMailSummary,
 } from "./scheduled-mail-summary";
+import {
+  RESTARTED_DELIVERY,
+  entered,
+  getScheduledMailActionRefusal,
+} from "./scheduled-mail-transitions";
+import type { ScheduledMailTransitionName } from "./scheduled-mail-transitions";
 
 const keySerial = new ScheduledMailKeyedSerial();
 
@@ -268,15 +277,13 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
         let previousAttachments: readonly StoredMailDraftAttachment[] = [];
         await database.transaction(async (transaction) => {
           const [account] = await transaction
-            .select({ email: googleAccounts.email })
-            .from(googleAccounts)
-            .where(eq(googleAccounts.email, request.accountId))
+            .select({ accountId: mailAccounts.accountId })
+            .from(mailAccounts)
+            .where(eq(mailAccounts.accountId, request.accountId))
             .limit(1)
             .all();
           if (account === undefined) {
-            throw scheduledMailError(
-              "The Google account is no longer connected"
-            );
+            throw scheduledMailError("The account is no longer connected");
           }
           const existingSchedule =
             await transaction.query.scheduledMessages.findFirst({
@@ -305,14 +312,13 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
           await transaction
             .insert(scheduledMessages)
             .values({
+              ...entered.scheduled(request.scheduledAt),
               attemptCount: 0,
               createdAt: now,
               draftId: request.draftId,
-              nextAttemptAt: request.scheduledAt,
               revision: 1,
               rfcMessageId: `<${randomUUID()}@scheduled.kisa.invalid>`,
               scheduledAt: request.scheduledAt,
-              status: "scheduled",
               updatedAt: now,
             })
             .run();
@@ -326,10 +332,8 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
       }, "Could not schedule email")
     )
     .pipe(
-      Effect.catch((error) =>
-        cleanupAdoptedAttachments((store) =>
-          store.delete(adoption.created)
-        ).pipe(Effect.andThen(Effect.fail(error)))
+      Effect.tapError(() =>
+        cleanupAdoptedAttachments((store) => store.delete(adoption.created))
       )
     );
   yield* cleanupAdoptedAttachments((store) =>
@@ -341,6 +345,23 @@ export const scheduleMail = Effect.fn("scheduleMail")(function* scheduleMail(
   return toScheduledMailSummary(result.row);
 });
 
+const ACTION_REFUSALS = {
+  "being-sent": "The scheduled email is already being sent",
+  gone: "The scheduled email no longer exists",
+} as const;
+
+/** The stored email, if the user's action may still apply to it. */
+const allowUserAction = <Row extends JoinedScheduledMessage>(
+  name: ScheduledMailTransitionName,
+  row: Row | undefined
+): Row => {
+  const refusal = getScheduledMailActionRefusal(name, row?.schedule.status);
+  if (row === undefined || refusal !== undefined) {
+    throw scheduledMailError(ACTION_REFUSALS[refusal ?? "gone"]);
+  }
+  return row;
+};
+
 export const beginScheduledMailEdit = Effect.fn("beginScheduledMailEdit")(
   function* beginScheduledMailEdit(
     request: ScheduledMailKey,
@@ -350,22 +371,13 @@ export const beginScheduledMailEdit = Effect.fn("beginScheduledMailEdit")(
       request,
       Effect.gen(function* loadEditSession() {
         const row = yield* withScheduledMailDatabase(
-          (database) => loadScheduledMessage(database, request),
+          async (database) =>
+            allowUserAction(
+              "edit-begin",
+              await loadScheduledMessage(database, request)
+            ),
           "Could not open scheduled email"
         );
-        if (row === undefined || row.schedule.status === "sent") {
-          return yield* scheduledMailError(
-            "The scheduled email no longer exists"
-          );
-        }
-        if (
-          row.schedule.status === "preparing" ||
-          row.schedule.status === "sending"
-        ) {
-          return yield* scheduledMailError(
-            "The scheduled email is already being sent"
-          );
-        }
         return {
           draft: toMailDraft(row.draft, attachmentOwnerId),
           item: toScheduledMailSummary(row),
@@ -379,17 +391,21 @@ const actionDraft = (
   action: ScheduledMailFinishEditRequest["action"]
 ): MailDraftInput | undefined => ("draft" in action ? action.draft : undefined);
 
+const isUnacknowledgedPossibleDuplicate = (
+  schedule: ScheduledMessageRow,
+  allowPossibleDuplicate: boolean
+): boolean =>
+  schedule.status === "attention" &&
+  schedule.attentionReason === "outcome-unknown" &&
+  !allowPossibleDuplicate;
+
 const assertPossibleDuplicateAcknowledged = (
   schedule: ScheduledMessageRow,
   allowPossibleDuplicate: boolean
 ): void => {
-  if (
-    schedule.status === "attention" &&
-    schedule.attentionReason === "outcome-unknown" &&
-    !allowPossibleDuplicate
-  ) {
+  if (isUnacknowledgedPossibleDuplicate(schedule, allowPossibleDuplicate)) {
     throw scheduledMailError(
-      "Gmail may already have sent this email. Confirm the possible duplicate before sending it again."
+      "The mail server may already have sent this email. Confirm the possible duplicate before sending it again."
     );
   }
 };
@@ -459,7 +475,7 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
           (database) =>
             // oxlint-disable-next-line eslint/complexity -- The tagged edit-action union is intentionally committed in one atomic draft-and-schedule transaction.
             database.transaction(async (transaction) => {
-              const [row] = await transaction
+              const [stored] = await transaction
                 .select(joinedScheduledMessageSelection)
                 .from(scheduledMessages)
                 .innerJoin(
@@ -474,43 +490,36 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                 )
                 .limit(1)
                 .all();
-              if (row === undefined || row.schedule.status === "sent") {
-                throw scheduledMailError(
-                  "The scheduled email no longer exists"
-                );
-              }
-              if (
-                row.schedule.status === "preparing" ||
-                row.schedule.status === "sending"
-              ) {
-                throw scheduledMailError(
-                  "The scheduled email is already being sent"
-                );
-              }
+              const row = allowUserAction(
+                `edit-${request.action.kind}` as const,
+                stored
+              );
               if (
                 request.action.kind === "save" ||
                 request.action.kind === "reschedule" ||
                 request.action.kind === "send-now"
               ) {
-                const account =
-                  await transaction.query.googleAccounts.findFirst({
-                    columns: { email: true },
-                    where: { email: request.accountId },
-                  });
+                const account = await transaction.query.mailAccounts.findFirst({
+                  columns: { accountId: true },
+                  where: { accountId: request.accountId },
+                });
                 if (account === undefined) {
                   throw scheduledMailError(
-                    "The Google account is no longer connected"
+                    "The account is no longer connected"
                   );
                 }
               }
+              // Before any write, so the editor can ask and send the action
+              // again against an untouched email.
               if (
-                request.action.kind === "reschedule" ||
-                request.action.kind === "send-now"
-              ) {
-                assertPossibleDuplicateAcknowledged(
+                (request.action.kind === "reschedule" ||
+                  request.action.kind === "send-now") &&
+                isUnacknowledgedPossibleDuplicate(
                   row.schedule,
                   request.action.allowPossibleDuplicate
-                );
+                )
+              ) {
+                return { kind: "possible-duplicate" as const };
               }
 
               const previousAttachments = decodeAttachments(
@@ -559,21 +568,13 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
                         updatedAt: now,
                       }
                     : {
-                        attemptCount: 0,
-                        attemptId: null,
-                        attentionReason: null,
-                        lastAttemptAt: null,
-                        nextAttemptAt: scheduledAt,
-                        notificationClaimId: null,
-                        notificationClaimedAt: null,
-                        notifiedAt: null,
-                        rateLimitStartedAt: null,
+                        ...RESTARTED_DELIVERY,
+                        ...entered.scheduled(scheduledAt),
                         revision: row.schedule.revision + 1,
                         rfcMessageId: retryingUnknown
                           ? `<${randomUUID()}@scheduled.kisa.invalid>`
                           : row.schedule.rfcMessageId,
                         scheduledAt,
-                        status: "scheduled",
                         updatedAt: now,
                       }
                 )
@@ -633,6 +634,18 @@ export const finishScheduledMailEdit = Effect.fn("finishScheduledMailEdit")(
         )
       );
 
+    if (outcome.kind === "possible-duplicate") {
+      if (adoption !== undefined) {
+        yield* cleanupAdoptedAttachments((store) =>
+          store.delete(adoption.created)
+        );
+      }
+      const unconfirmed: ScheduledMailFinishEditResult = {
+        kind: "possible-duplicate",
+      };
+      return unconfirmed;
+    }
+
     yield* cleanupAdoptedAttachments((store) =>
       store.deleteNotRetained(
         outcome.previousAttachments,
@@ -665,7 +678,7 @@ const cancelOrDiscardScheduledMail = Effect.fn("cancelOrDiscardScheduledMail")(
       request,
       withScheduledMailDatabase((database) =>
         database.transaction(async (transaction) => {
-          const [row] = await transaction
+          const [stored] = await transaction
             .select(joinedScheduledMessageSelection)
             .from(scheduledMessages)
             .innerJoin(mailDrafts, eq(mailDrafts.id, scheduledMessages.draftId))
@@ -677,14 +690,10 @@ const cancelOrDiscardScheduledMail = Effect.fn("cancelOrDiscardScheduledMail")(
             )
             .limit(1)
             .all();
-          if (row === undefined || row.schedule.status === "sent") {
-            throw scheduledMailError("The scheduled email no longer exists");
-          }
-          if (row.schedule.status === "sending") {
-            throw scheduledMailError(
-              "The scheduled email is already being sent"
-            );
-          }
+          const row = allowUserAction(
+            discard ? "row-discard" : "row-cancel",
+            stored
+          );
           const deletion = discard
             ? transaction
                 .delete(mailDrafts)
@@ -753,7 +762,7 @@ export const sendScheduledMailNow = Effect.fn("sendScheduledMailNow")(
       withScheduledMailDatabase(
         (database) =>
           database.transaction(async (transaction) => {
-            const [row] = await transaction
+            const [stored] = await transaction
               .select(joinedScheduledMessageSelection)
               .from(scheduledMessages)
               .innerJoin(
@@ -768,22 +777,13 @@ export const sendScheduledMailNow = Effect.fn("sendScheduledMailNow")(
               )
               .limit(1)
               .all();
-            if (row === undefined || row.schedule.status === "sent") {
-              throw scheduledMailError("The scheduled email no longer exists");
-            }
-            if (row.schedule.status === "sending") {
-              throw scheduledMailError(
-                "The scheduled email is already being sent"
-              );
-            }
-            const account = await transaction.query.googleAccounts.findFirst({
-              columns: { email: true },
-              where: { email: request.accountId },
+            const row = allowUserAction("row-send-now", stored);
+            const account = await transaction.query.mailAccounts.findFirst({
+              columns: { accountId: true },
+              where: { accountId: request.accountId },
             });
             if (account === undefined) {
-              throw scheduledMailError(
-                "The Google account is no longer connected"
-              );
+              throw scheduledMailError("The account is no longer connected");
             }
             assertPossibleDuplicateAcknowledged(
               row.schedule,
@@ -792,22 +792,14 @@ export const sendScheduledMailNow = Effect.fn("sendScheduledMailNow")(
             await transaction
               .update(scheduledMessages)
               .set({
-                attemptCount: 0,
-                attemptId: null,
-                attentionReason: null,
-                lastAttemptAt: null,
-                nextAttemptAt: now,
-                notificationClaimId: null,
-                notificationClaimedAt: null,
-                notifiedAt: null,
-                rateLimitStartedAt: null,
+                ...RESTARTED_DELIVERY,
+                ...entered.scheduled(now),
                 revision: row.schedule.revision + 1,
                 rfcMessageId:
                   row.schedule.attentionReason === "outcome-unknown"
                     ? `<${randomUUID()}@scheduled.kisa.invalid>`
                     : row.schedule.rfcMessageId,
                 scheduledAt: now,
-                status: "scheduled",
                 updatedAt: now,
               })
               .where(
@@ -929,10 +921,8 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
                 .all(),
             "Could not prepare scheduled attachments"
           ).pipe(
-            Effect.catch((error) =>
-              bestEffortDraftAttachmentCleanup(
-                store.delete(adoption.created)
-              ).pipe(Effect.andThen(Effect.fail(error)))
+            Effect.tapError(() =>
+              bestEffortDraftAttachmentCleanup(store.delete(adoption.created))
             )
           );
           if (updated.length === 0) {
@@ -957,25 +947,21 @@ export const adoptLegacyScheduledMailAttachments = Effect.fn(
 });
 
 const scheduledMailLifecycle = createScheduledMailLifecycle({
-  dispatchPendingNotifications: dispatchPendingScheduledMailNotifications,
+  dispatchPendingNotifications: dispatchPendingScheduledMailNotifications(),
   listenForResume: (listener) => {
     powerMonitor.on("resume", listener);
     return () => powerMonitor.off("resume", listener);
   },
-  releaseStaleNotificationClaims: releaseStaleScheduledMailNotificationClaims,
-  scheduleRetry: (run, delayMs) => {
-    const timeout = setTimeout(run, delayMs);
-    return { cancel: () => clearTimeout(timeout) };
-  },
-  startWorker: () => scheduledMailWorker.start(),
-  stopWorker: () => scheduledMailWorker.stop(),
+  releaseStaleNotificationClaims: releaseStaleScheduledMailNotificationClaims(),
+  startWorker: scheduledMailWorker.start(),
+  stopWorker: scheduledMailWorker.stop(),
   wakeWorker: () => {
     void scheduledMailWorker.wake();
   },
 });
 
 export const startScheduledMail = (): Promise<void> =>
-  scheduledMailLifecycle.start();
+  Effect.runPromise(scheduledMailLifecycle.start);
 
 export const stopScheduledMail = (): Promise<void> =>
-  scheduledMailLifecycle.stop();
+  Effect.runPromise(scheduledMailLifecycle.stop);

@@ -1,24 +1,24 @@
 import type { RemoteDatabaseClient } from "@repo/database/remote-client";
+import { mailThreads } from "@repo/database/schemas";
+import { SystemLabel } from "@repo/mail/ids";
 import type { SQL } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 
 import type {
-  GmailSearchFilter,
-  GmailSearchRequest,
-  GmailSearchResults,
-  GmailSenderSuggestion,
-  GmailSenderSuggestionRequest,
-  GmailSenderSuggestions,
-  GmailThreadSummary,
+  MailSearchFilter,
+  MailSearchRequest,
+  MailSearchResults,
+  MailSenderSuggestion,
+  MailSenderSuggestionRequest,
+  MailSenderSuggestions,
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
-import { toDisplayedAttachment } from "./attachment-filename";
 import {
   listCachedCorrespondents,
   loadCachedCorrespondentsRemote,
 } from "./correspondent-cache";
-import { decodeGmailSnippet } from "./html-entities";
+import { toThreadSummary } from "./engine/mail-reads";
 import { toContainsPattern, toFtsMatchQuery } from "./search-match";
 
 const DEFAULT_RESULT_LIMIT = 50;
@@ -36,10 +36,10 @@ const MAX_SENDER_LIMIT = 50;
 const MAX_MATCHED_MESSAGES = 5000;
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class MailSearchError extends Schema.TaggedError<MailSearchError>()(
-  "MailSearchError",
-  { message: Schema.String }
-) {}
+class MailSearchError extends Schema.TaggedError<
+  MailSearchError,
+  { readonly brand: unique symbol }
+>()("MailSearchError", { message: Schema.String }) {}
 
 const withDatabase = <A>(
   message: string,
@@ -49,102 +49,22 @@ const withDatabase = <A>(
     Effect.mapError(() => new MailSearchError({ message }))
   );
 
-/**
- * Raw statements bypass Drizzle's column mapping, so JSON columns arrive as the
- * text SQLite stores rather than as parsed arrays.
- */
-interface SearchThreadRow {
-  readonly account_email: string;
-  readonly attachments: string | null;
-  readonly from: string;
-  readonly has_attachments: number | null;
-  readonly is_unread: number;
-  readonly labels: string | null;
-  readonly latest_at: number;
-  readonly message_count: number;
-  readonly snippet: string;
-  readonly subject: string;
-  readonly thread_id: string;
-}
-
 interface SenderRow {
   readonly address: string;
   readonly message_count: number;
   readonly name: string | null;
 }
 
-type SearchThreadTuple = [
-  accountEmail: string,
-  attachments: string | null,
-  from: string,
-  hasAttachments: number | null,
-  isUnread: number,
-  labels: string | null,
-  latestAt: number,
-  messageCount: number,
-  snippet: string,
-  subject: string,
-  threadId: string,
-];
+/** The search statement returns only ids, in result order. */
+type SearchThreadTuple = [accountId: string, threadId: string];
 
 type SenderTuple = [address: string, name: string | null, messageCount: number];
-
-const toSearchThreadRow = (row: SearchThreadTuple): SearchThreadRow => ({
-  account_email: row[0],
-  attachments: row[1],
-  from: row[2],
-  has_attachments: row[3],
-  is_unread: row[4],
-  labels: row[5],
-  latest_at: row[6],
-  message_count: row[7],
-  snippet: row[8],
-  subject: row[9],
-  thread_id: row[10],
-});
 
 const toSenderRow = (row: SenderTuple): SenderRow => ({
   address: row[0],
   message_count: row[2],
   name: row[1],
 });
-
-const parseJsonArray = <A>(value: string | null): readonly A[] => {
-  if (value === null) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-
-    return Array.isArray(parsed) ? (parsed as readonly A[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const toThreadSummary = (row: SearchThreadRow): GmailThreadSummary => {
-  const attachments = parseJsonArray<GmailThreadSummary["attachments"][number]>(
-    row.attachments
-  ).map(toDisplayedAttachment);
-
-  return {
-    accountId: row.account_email,
-    attachments,
-    from: row.from,
-    hasAttachments:
-      row.has_attachments === null
-        ? attachments.length > 0
-        : row.has_attachments === 1,
-    isUnread: row.is_unread === 1,
-    labels: parseJsonArray<string>(row.labels),
-    latestAt: row.latest_at,
-    messageCount: row.message_count,
-    snippet: decodeGmailSnippet(row.snippet),
-    subject: row.subject,
-    threadId: row.thread_id,
-  };
-};
 
 const clampLimit = (limit: number | undefined, fallback: number, max: number) =>
   limit === undefined ? fallback : Math.min(Math.max(1, limit), max);
@@ -161,7 +81,7 @@ const toAccountList = (accountIds: readonly string[]): SQL =>
  * sender only replied to.
  */
 const toMessageConditions = (
-  filters: readonly GmailSearchFilter[]
+  filters: readonly MailSearchFilter[]
 ): readonly SQL[] =>
   filters.flatMap((filter) => {
     const pattern = toContainsPattern(filter.value);
@@ -183,9 +103,14 @@ const toMessageConditions = (
       : [];
   });
 
+const IS_STARRED = sql`EXISTS (
+  SELECT 1 FROM json_each(t.label_ids) AS thread_label
+  WHERE thread_label.value = ${SystemLabel.starred}
+)`;
+
 /** Filters the cached thread row already answers, so no message scan is needed. */
 const toThreadConditions = (
-  filters: readonly GmailSearchFilter[]
+  filters: readonly MailSearchFilter[]
 ): readonly SQL[] =>
   filters.flatMap((filter) => {
     if (filter.field === "is") {
@@ -193,6 +118,10 @@ const toThreadConditions = (
 
       if (value === "unread") {
         return [sql`t.is_unread = 1`];
+      }
+
+      if (value === "starred") {
+        return [IS_STARRED];
       }
 
       return value === "read" ? [sql`t.is_unread = 0`] : [];
@@ -221,11 +150,19 @@ const toThreadConditions = (
         ];
       }
 
+      // As the Starred place lists it, so a label named "starred" is not it.
+      if (value === "starred") {
+        return [IS_STARRED, sql`t.is_in_spam = 0`, sql`t.is_in_trash = 0`];
+      }
+
       return [
         sql`EXISTS (
           SELECT 1
-          FROM json_each(coalesce(t.labels, '[]')) AS thread_label
-          WHERE lower(thread_label.value) = lower(${filter.value})
+          FROM json_each(t.label_ids) AS thread_label
+          WHERE lower(thread_label.value) IN (
+            lower(${filter.value}),
+            lower('u:' || ${filter.value})
+          )
         )`,
       ];
     }
@@ -242,7 +179,7 @@ const andAll = (conditions: readonly SQL[]): SQL =>
     : sql` AND ${sql.join([...conditions], sql` AND `)}`;
 
 /**
- * Column weights for `bm25`, in the order `gmail_messages_fts` declares them.
+ * Column weights for `bm25`, in the order `mail_messages_fts` declares them.
  * A word in the subject or the sender says far more about what a message is
  * than the same word somewhere in a quoted reply chain, so those columns carry
  * the ranking and the body only separates messages that tie on them.
@@ -264,7 +201,7 @@ const RECENCY_PENALTY = 4;
 const RECENCY_SPAN_MS = 90 * 86_400_000;
 
 /** Lower is a better match: `bm25` returns a negative score. */
-const BM25_SCORE = sql`bm25(gmail_messages_fts, ${sql.raw(String(SUBJECT_WEIGHT))}, ${sql.raw(String(SENDER_WEIGHT))}, ${sql.raw(String(BODY_WEIGHT))})`;
+const BM25_SCORE = sql`bm25(mail_messages_fts, ${sql.raw(String(SUBJECT_WEIGHT))}, ${sql.raw(String(SENDER_WEIGHT))}, ${sql.raw(String(BODY_WEIGHT))})`;
 
 interface MatchedThreads {
   /** True when the rows carry a relevance score worth ordering by. */
@@ -294,45 +231,45 @@ const toMatchedThreadsCte = (
   const scored =
     matchQuery === undefined
       ? {
-          order: sql`m.internal_date DESC`,
+          order: sql`m.received_at DESC`,
           score: sql`0`,
-          source: sql`FROM gmail_messages m WHERE m.account_email IN (${accounts})`,
+          source: sql`FROM mail_messages m WHERE m.account_id IN (${accounts})`,
         }
       : {
           order: sql`score ASC`,
           score: BM25_SCORE,
-          source: sql`FROM gmail_messages_fts
-            JOIN gmail_messages m ON m.rowid = gmail_messages_fts.rowid
-            WHERE gmail_messages_fts MATCH ${matchQuery}
-              AND m.account_email IN (${accounts})`,
+          source: sql`FROM mail_messages_fts
+            JOIN mail_messages m ON m.rowid = mail_messages_fts.rowid
+            WHERE mail_messages_fts MATCH ${matchQuery}
+              AND m.account_id IN (${accounts})`,
         };
 
   return {
     isRanked: matchQuery !== undefined,
     sql: sql`WITH matched AS MATERIALIZED (
-      SELECT account_email, thread_id, min(score) AS score FROM (
-        SELECT m.account_email AS account_email,
+      SELECT account_id, thread_id, min(score) AS score FROM (
+        SELECT m.account_id AS account_id,
                m.thread_id AS thread_id,
                ${scored.score} AS score
         ${scored.source}${andAll(messageConditions)}
         ORDER BY ${scored.order}
         LIMIT ${MAX_MATCHED_MESSAGES}
       )
-      GROUP BY account_email, thread_id
+      GROUP BY account_id, thread_id
     )`,
   };
 };
 
 /**
- * Searches the local mail index rather than Gmail: results are instant, work
- * offline, cost no quota, and cover everything the backfill has walked — which
+ * Searches the local mail index rather than the server: results are instant,
+ * work offline, and cover everything the background index has walked, which
  * is the whole account, not just the inbox.
  *
  * Takes the client rather than reaching for it, so the statement can be run
  * against a real migrated database in tests.
  */
 const toThreadSearchQuery = (
-  request: GmailSearchRequest
+  request: MailSearchRequest
 ): { readonly limit: number; readonly statement: SQL } | undefined => {
   const limit = clampLimit(
     request.limit,
@@ -360,8 +297,8 @@ const toThreadSearchQuery = (
       : [
           sql`EXISTS (
           SELECT 1
-          FROM gmail_threads message_thread
-          WHERE message_thread.account_email = m.account_email
+          FROM mail_threads message_thread
+          WHERE message_thread.account_id = m.account_id
             AND message_thread.thread_id = m.thread_id
             AND message_thread.is_in_spam = 0
         )`,
@@ -380,54 +317,83 @@ const toThreadSearchQuery = (
     limit,
     statement: sql`
       ${matched?.sql ?? sql``}
-      SELECT t.account_email, t.attachments, t."from", t.has_attachments,
-             t.is_unread, t.labels, t.latest_at, t.message_count,
-             t.snippet, t.subject, t.thread_id
-      FROM gmail_threads t
+      SELECT t.account_id, t.thread_id
       ${
+        // From the matched threads to their rows: left to choose, SQLite
+        // reads every thread in the mailbox and looks each up in the matches.
         matched === undefined
-          ? sql``
-          : sql`JOIN matched ON matched.account_email = t.account_email
+          ? sql`FROM mail_threads t`
+          : sql`FROM matched CROSS JOIN mail_threads t
+                ON matched.account_id = t.account_id
                 AND matched.thread_id = t.thread_id`
       }
-      WHERE t.account_email IN (${accounts})${andAll([
+      WHERE t.account_id IN (${accounts})${andAll([
         ...(explicitlySearchesSpam ? [] : [sql`t.is_in_spam = 0`]),
         ...toThreadConditions(filters),
       ])}
-      ORDER BY ${order}, t.account_email ASC, t.thread_id ASC
+      ORDER BY ${order}, t.account_id ASC, t.thread_id ASC
       LIMIT ${limit + 1}
     `,
   };
 };
 
-const toThreadSearchResults = (
-  rows: readonly SearchThreadRow[],
-  limit: number
-): GmailSearchResults => ({
-  hasMore: rows.length > limit,
-  threads: rows.slice(0, limit).map(toThreadSummary),
-});
+/** Loads the matched threads' rows and keeps the search's order. */
+const loadMatchedThreads = async (
+  database: RemoteDatabaseClient,
+  matches: readonly SearchThreadTuple[]
+) => {
+  const byAccount = new Map<string, string[]>();
+  for (const [accountId, threadId] of matches) {
+    byAccount.set(accountId, [...(byAccount.get(accountId) ?? []), threadId]);
+  }
+
+  const rowGroups = await Promise.all(
+    [...byAccount].map(([accountId, threadIds]) =>
+      database
+        .select()
+        .from(mailThreads)
+        .where(
+          and(
+            eq(mailThreads.accountId, accountId),
+            inArray(mailThreads.threadId, threadIds)
+          )
+        )
+        .all()
+    )
+  );
+  const rows = rowGroups.flat();
+  const rowsByKey = new Map(
+    rows.map((row) => [`${row.accountId}\u0000${row.threadId}`, row])
+  );
+
+  return matches.flatMap(([accountId, threadId]) => {
+    const row = rowsByKey.get(`${accountId}\u0000${threadId}`);
+    return row === undefined ? [] : [toThreadSummary(row)];
+  });
+};
 
 export const runIndexedThreadSearchRemote = async (
   database: RemoteDatabaseClient,
-  request: GmailSearchRequest
-): Promise<GmailSearchResults> => {
+  request: MailSearchRequest
+): Promise<MailSearchResults> => {
   const query = toThreadSearchQuery(request);
 
   if (query === undefined) {
     return { hasMore: false, threads: [] };
   }
 
-  const tuples = await database.values<SearchThreadTuple>(query.statement);
-  const rows = tuples.map(toSearchThreadRow);
+  const matches = await database.values<SearchThreadTuple>(query.statement);
 
-  return toThreadSearchResults(rows, query.limit);
+  return {
+    hasMore: matches.length > query.limit,
+    threads: await loadMatchedThreads(database, matches.slice(0, query.limit)),
+  };
 };
 
 /**
  * Recipients come from this account's *sent* mail only. `to_addresses` is a
  * JSON array with no index of its own, so the scan has to be narrowed by
- * something that does have one: `(account_email, from_address)` picks out the
+ * something that does have one: `(account_id, from_address)` picks out the
  * messages this account wrote, which is a small slice of a mailbox — and it is
  * exactly the set `to:` is asking about.
  */
@@ -437,9 +403,9 @@ const toRecipientStatement = (
   limit: number
 ): SQL => sql`
   SELECT recipient.value AS address, '' AS name, count(*) AS message_count
-  FROM gmail_messages m
-  JOIN json_each(coalesce(m.to_addresses, '[]')) AS recipient
-  WHERE m.account_email IN (${accounts})
+  FROM mail_messages m
+  JOIN json_each(m.to_addresses) AS recipient
+  WHERE m.account_id IN (${accounts})
     AND m.from_address IN (${accounts})${pattern}
   GROUP BY lower(recipient.value)
   ORDER BY message_count DESC, address ASC
@@ -451,15 +417,15 @@ const toSenderStatement = (accounts: SQL, pattern: SQL, limit: number): SQL =>
     SELECT m.from_address AS address,
            max(coalesce(m.from_name, '')) AS name,
            count(*) AS message_count
-    FROM gmail_messages m
-    WHERE m.account_email IN (${accounts})${pattern}
+    FROM mail_messages m
+    WHERE m.account_id IN (${accounts})${pattern}
     GROUP BY lower(m.from_address)
     ORDER BY message_count DESC, address ASC
     LIMIT ${limit}
   `;
 
 const toSenderSuggestionQuery = (
-  request: GmailSenderSuggestionRequest
+  request: MailSenderSuggestionRequest
 ): SQL | undefined => {
   const limit = clampLimit(
     request.limit,
@@ -497,21 +463,21 @@ const toSenderSuggestionQuery = (
 
 const toSenderSuggestions = (
   rows: readonly SenderRow[]
-): GmailSenderSuggestions => ({
+): MailSenderSuggestions => ({
   senders: rows.map(
     (row) =>
       ({
         address: row.address,
         messageCount: row.message_count,
         name: row.name === null || row.name.length === 0 ? undefined : row.name,
-      }) satisfies GmailSenderSuggestion
+      }) satisfies MailSenderSuggestion
   ),
 });
 
 const runSenderSuggestionsRemote = async (
   database: RemoteDatabaseClient,
-  request: GmailSenderSuggestionRequest
-): Promise<GmailSenderSuggestions> => {
+  request: MailSenderSuggestionRequest
+): Promise<MailSenderSuggestions> => {
   const query = toSenderSuggestionQuery(request);
 
   if (query === undefined) {
@@ -525,7 +491,7 @@ const runSenderSuggestionsRemote = async (
 };
 
 export const searchIndexedThreads = Effect.fn("searchIndexedThreads")(
-  function* searchIndexedThreads(request: GmailSearchRequest) {
+  function* searchIndexedThreads(request: MailSearchRequest) {
     return yield* withDatabase("Could not search your email", (database) =>
       runIndexedThreadSearchRemote(database, request)
     );
@@ -533,7 +499,7 @@ export const searchIndexedThreads = Effect.fn("searchIndexedThreads")(
 );
 
 export const listIndexedSenders = Effect.fn("listIndexedSenders")(
-  function* listIndexedSenders(request: GmailSenderSuggestionRequest) {
+  function* listIndexedSenders(request: MailSenderSuggestionRequest) {
     if (request.role === "correspondent") {
       const limit = clampLimit(
         request.limit,
@@ -567,13 +533,13 @@ export const warmCorrespondentCache = Effect.fn("warmCorrespondentCache")(
     yield* withDatabase(
       "Could not warm correspondent suggestions",
       async (database) => {
-        const accounts = await database.query.googleAccounts.findMany({
-          columns: { email: true },
+        const accounts = await database.query.mailAccounts.findMany({
+          columns: { accountId: true },
         });
 
         await loadCachedCorrespondentsRemote(
           database,
-          accounts.map(({ email }) => email)
+          accounts.map(({ accountId }) => accountId)
         );
       }
     );

@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 
-import type { GmailIndexProgress } from "../../shared/ipc/mail";
+import type { MailIndexProgress } from "../../shared/ipc/mail";
 import {
   getNativeMailIndexProgress,
   HIDDEN_MAIL_INDEX_PROGRESS,
@@ -13,7 +13,7 @@ export const applyNativeMailIndexProgress = (window: BrowserWindow): void => {
 };
 
 export const setNativeMailIndexProgress = (
-  progress: readonly GmailIndexProgress[]
+  progress: readonly MailIndexProgress[]
 ): void => {
   currentProgress = getNativeMailIndexProgress(progress);
 

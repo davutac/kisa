@@ -11,13 +11,13 @@ Kisa treats attachment bytes as hostile, on-demand content. Metadata belongs to 
 - Cancelling Save As performs no Gmail attachment request and writes nothing.
 - The Download button in a preview opens Save As and writes the bytes already held by that preview session.
 
-Mailbox and message metadata may be available offline, but attachment bytes are not. Opening a preview therefore requires Gmail access unless its preview window has already loaded the bytes.
+Mailbox and message metadata may be available offline, but attachment bytes are not. Opening a preview therefore requires the mail server unless its preview window has already loaded the bytes.
 
 ## Runtime ownership
 
 The normal renderer sends only `accountId`, `messageId`, `attachmentId`, and the MIME `partId` when known. Main resolves the authoritative filename, media type, and declared size from the cached message using the composite account/message key. Renderer-supplied paths, filenames, media types, or bytes are never accepted.
 
-Gmail mints a new `attachmentId` every time a message is fetched, and any refetch (opening a thread, background refresh, history sync, backfill) rewrites the cached one. A renderer can therefore hold an id the cache no longer contains. Main matches the exact `attachmentId` first, then falls back to the stable `partId` within the same message, and always downloads with the cached id.
+An attachment is addressed by its MIME part number within the message, which stays the same however often the message is fetched. The renderer sends it as `partId` (and as `attachmentId`); main prefers `partId`, checks that the cached message lists that part, and downloads the part from a copy of the message on the server.
 
 Main owns four narrow capabilities:
 

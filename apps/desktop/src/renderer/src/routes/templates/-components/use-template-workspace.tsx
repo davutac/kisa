@@ -1,19 +1,18 @@
-// The local edit buffer follows persisted template events while it remains clean.
-// oxlint-disable react/react-compiler
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { EmailComposerValue } from "@/components/mail/email-composer";
 import type { EmailRecipients } from "@/components/mail/email-recipient-fields";
+import { toast } from "@/components/ui/toast";
 import { useAppCommand } from "@/hotkeys";
+import { runWithCleanup } from "@/lib/run-with-cleanup";
 import { getTemplateApi } from "@/platform/desktop";
 import type {
   ComposerTemplate,
   ComposerTemplateInput,
 } from "@/shared/ipc/templates";
 import { validateTemplateText } from "@/shared/template-variables";
+import { useAccounts } from "@/state/accounts";
 import { useComposerTemplates } from "@/state/composer-templates";
-import { useGoogleAccounts } from "@/state/google-accounts";
 
 import {
   createEmptyTemplate,
@@ -27,7 +26,7 @@ import type { TemplateSelectionDirection } from "./template-selection";
 import { useTemplateConfirmations } from "./use-template-confirmations";
 
 export const useTemplateWorkspace = () => {
-  const accounts = useGoogleAccounts();
+  const accounts = useAccounts();
   const { isLoading, templates } = useComposerTemplates();
   const templateApi = useMemo(() => getTemplateApi(), []);
   const accountIds = useMemo(
@@ -42,7 +41,12 @@ export const useTemplateWorkspace = () => {
   const [editorVersion, setEditorVersion] = useState(0);
   const draftRef = useRef(draft);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  draftRef.current = draft;
+
+  // `save` compares against the latest draft after its reply arrives. A layout
+  // effect publishes each committed draft before any later task can run.
+  useLayoutEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
 
   const isDirty =
     draft !== null &&
@@ -67,6 +71,7 @@ export const useTemplateWorkspace = () => {
 
     const latest = templates.find(({ id }) => id === draft.id);
     if (latest === undefined) {
+      // oxlint-disable-next-line react/set-state-in-effect -- A clean buffer mirrors template changes from other windows and account removal; it stays local state because editing takes it over.
       setDraft(null);
       setOriginal(null);
       return;
@@ -167,26 +172,33 @@ export const useTemplateWorkspace = () => {
 
     const submittedDraft = draft;
     setIsSaving(true);
-    try {
-      const reply = await templateApi.save({
-        ...submittedDraft,
-        name: submittedDraft.name.trim(),
-      });
-      if (!reply.ok) {
-        toast.error(reply.error);
-        return;
+    await runWithCleanup(
+      async () => {
+        try {
+          const reply = await templateApi.save({
+            ...submittedDraft,
+            name: submittedDraft.name.trim(),
+          });
+          if (!reply.ok) {
+            toast.error(reply.error);
+            return;
+          }
+          const saved = toTemplateInput(reply.data, accountIds);
+          if (draftRef.current?.id === saved.id) {
+            setOriginal(saved);
+            setDraft((current) =>
+              current === submittedDraft ? saved : current
+            );
+          }
+          toast.success("Template saved");
+        } catch {
+          toast.error("Could not save template");
+        }
+      },
+      () => {
+        setIsSaving(false);
       }
-      const saved = toTemplateInput(reply.data, accountIds);
-      if (draftRef.current?.id === saved.id) {
-        setOriginal(saved);
-        setDraft((current) => (current === submittedDraft ? saved : current));
-      }
-      toast.success("Template saved");
-    } catch {
-      toast.error("Could not save template");
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   const remove = async (): Promise<void> => {
@@ -263,9 +275,9 @@ export const useTemplateWorkspace = () => {
               updateDraft((current) => ({ ...current, subject })),
             variablePreviewContext: getVariablePreviewContext(draft, accounts),
           },
+    createTemplate,
     sidebar: {
       isLoading,
-      onCreate: createTemplate,
       onQueryChange: setQuery,
       onSelect: chooseTemplate,
       query,

@@ -29,6 +29,8 @@ interface MailComposerAttachmentOptions {
   readonly command: "composer.attach" | "threadComposer.attach";
   readonly controller: OutgoingAttachmentComposerController;
   readonly focusRef?: Ref<HTMLButtonElement>;
+  /** Restyles the attached-file tray under the editor. */
+  readonly listClassName?: string;
 }
 
 interface MailComposerHistoryOptions {
@@ -127,7 +129,7 @@ const useMailComposerAttachmentHandlers = (
   );
 
   const handleAttachmentFiles = useCallback(
-    (files: FileList | null): void => {
+    (files: readonly File[]): void => {
       void addAttachments?.(files);
     },
     [addAttachments]
@@ -173,11 +175,9 @@ const MailComposer = ({
     onChange
   );
   const attachmentCommand = attachments?.command ?? "composer.attach";
-  useAppCommand(
-    attachmentCommand,
-    () => attachmentController?.inputRef.current?.click(),
-    { enabled: attachments !== undefined && !disabled }
-  );
+  useAppCommand(attachmentCommand, () => attachmentController?.picker.open(), {
+    enabled: attachments !== undefined && !disabled,
+  });
 
   const aiButtons = aiActions.map((action) => {
     const handleClick = action.onClick;
@@ -215,37 +215,46 @@ const MailComposer = ({
     );
 
   return (
-    <>
-      <EmailComposer
-        {...composerProps}
-        disabled={disabled}
-        getInlineImagePreview={attachmentController?.getInlineImagePreview}
-        loadInlineImagePreview={attachmentController?.loadInlineImagePreview}
-        onApplyTemplate={handleApplyTemplate}
-        onChange={handleChange}
-        onComposerFiles={
-          attachmentController === undefined ? undefined : handleComposerFiles
-        }
-        onInlineImageInsertDiscard={attachmentController?.discardInlineImages}
-        onInlineImageInsertFailure={
-          attachmentController?.fallbackInlineImagesToAttachments
-        }
-        toolbarActions={
-          <>
-            {aiControls}
-            {attachments === undefined ? null : (
-              <OutgoingAttachmentButton
-                command={attachments.command}
-                disabled={disabled}
-                focusRef={attachments.focusRef}
-                inputRef={attachments.controller.inputRef}
-                onFiles={handleAttachmentFiles}
-              />
-            )}
-          </>
-        }
-        toolbarHeader={
-          history === undefined ? null : (
+    <EmailComposer
+      {...composerProps}
+      disabled={disabled}
+      getInlineImagePreview={attachmentController?.getInlineImagePreview}
+      loadInlineImagePreview={attachmentController?.loadInlineImagePreview}
+      onApplyTemplate={handleApplyTemplate}
+      onChange={handleChange}
+      onComposerFiles={
+        attachmentController === undefined ? undefined : handleComposerFiles
+      }
+      onInlineImageInsertDiscard={attachmentController?.discardInlineImages}
+      onInlineImageInsertFailure={
+        attachmentController?.fallbackInlineImagesToAttachments
+      }
+      toolbarActions={
+        <>
+          {aiControls}
+          {attachments === undefined ? null : (
+            <OutgoingAttachmentButton
+              command={attachments.command}
+              disabled={disabled}
+              focusRef={attachments.focusRef}
+              onFiles={handleAttachmentFiles}
+              picker={attachments.controller.picker}
+            />
+          )}
+        </>
+      }
+      toolbarHeader={
+        <>
+          {attachments === undefined ? null : (
+            <OutgoingAttachmentList
+              className={attachments.listClassName}
+              attachments={attachments.controller.attachments.filter(
+                ({ contentId }) => contentId === undefined
+              )}
+              onRemove={handleAttachmentRemove}
+            />
+          )}
+          {history === undefined ? null : (
             <CleanDraftHistoryStrip
               disabled={disabled}
               onDismiss={(version) => history.onDismiss(version)}
@@ -253,18 +262,10 @@ const MailComposer = ({
               selectedVersionId={history.selectedVersionId}
               versions={history.versions}
             />
-          )
-        }
-      />
-      {attachments === undefined ? null : (
-        <OutgoingAttachmentList
-          attachments={attachments.controller.attachments.filter(
-            ({ contentId }) => contentId === undefined
           )}
-          onRemove={handleAttachmentRemove}
-        />
-      )}
-    </>
+        </>
+      }
+    />
   );
 };
 

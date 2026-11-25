@@ -1,8 +1,8 @@
 import * as Schema from "effect/Schema";
 
 import {
-  MAX_GMAIL_ATTACHMENT_COUNT,
-  GmailOutgoingSubject,
+  MAX_OUTGOING_ATTACHMENT_COUNT,
+  MailOutgoingSubject,
   MailDraft,
   MailDraftInput,
 } from "./mail";
@@ -13,7 +13,6 @@ export const MAX_SCHEDULED_MAIL_PREVIEW_LENGTH = 240;
 // Bound IPC payloads without imposing a product-level account limit.
 export const MAX_SCHEDULED_MAIL_SCOPE_ACCOUNT_COUNT = 1000;
 
-const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
 
 export const ScheduledMailAttentionReason = Schema.Literals([
@@ -61,7 +60,7 @@ export type ScheduledMailAttachmentSummary =
 export const ScheduledMailSummary = Schema.Struct({
   ...ScheduledMailKey.fields,
   attachments: Schema.Array(ScheduledMailAttachmentSummary).check(
-    Schema.isMaxLength(MAX_GMAIL_ATTACHMENT_COUNT)
+    Schema.isMaxLength(MAX_OUTGOING_ATTACHMENT_COUNT)
   ),
   attentionReason: Schema.optional(ScheduledMailAttentionReason),
   deliveryState: ScheduledMailDeliveryState,
@@ -72,7 +71,7 @@ export const ScheduledMailSummary = Schema.Struct({
   recipients: Schema.Array(Schema.String),
   revision: PositiveInt,
   scheduledAt: Schema.Int,
-  subject: GmailOutgoingSubject,
+  subject: MailOutgoingSubject,
 });
 export type ScheduledMailSummary = typeof ScheduledMailSummary.Type;
 
@@ -91,7 +90,7 @@ export const ScheduledMailPage = Schema.Struct({
 export type ScheduledMailPage = typeof ScheduledMailPage.Type;
 
 export const ScheduledMailAttentionCount = Schema.Struct({
-  count: NonNegativeInt,
+  count: Schema.Natural,
   hasScheduledMail: Schema.Boolean,
 });
 export type ScheduledMailAttentionCount =
@@ -142,8 +141,15 @@ export const ScheduledMailFinishEditRequest = Schema.Struct({
 export type ScheduledMailFinishEditRequest =
   typeof ScheduledMailFinishEditRequest.Type;
 
+/**
+ * `possible-duplicate` changes nothing: the email may already have been sent,
+ * and the request did not carry the user's acknowledgement of that. Main
+ * decides this from the stored outcome, because an open editor can be older
+ * than the attempt that left the outcome unknown.
+ */
 export const ScheduledMailFinishEditResult = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("finished") }),
+  Schema.Struct({ kind: Schema.Literal("possible-duplicate") }),
   Schema.Struct({
     kind: Schema.Literal("saved"),
     session: ScheduledMailEditSession,

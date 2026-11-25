@@ -2,36 +2,22 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { is } from "@electron-toolkit/utils";
-import type { GmailError } from "@repo/gmail/errors";
-import type { GmailGateway } from "@repo/gmail/gateway";
-import type { GmailMime } from "@repo/gmail/mime";
-import {
-  AccountId,
-  AttachmentId,
-  MessageId,
-  ThreadId,
-} from "@repo/gmail/models";
-import { Gmail } from "@repo/gmail/service";
-import type { GmailStore } from "@repo/gmail/store";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import type { BrowserWindow } from "electron";
 import { dialog } from "electron";
 
 import { getAttachmentPreviewKind } from "../../shared/attachments";
 import type {
-  GmailAttachmentPreview,
-  GmailAttachmentRequest,
-  GmailAttachmentSaveOutcome,
+  MailAttachmentPreview,
+  MailAttachmentRequest,
+  MailAttachmentSaveOutcome,
 } from "../../shared/ipc/mail";
 import { withDatabaseClient } from "../database";
 import { createBrowserWindow } from "../window/browser-window";
 import { readWindowState, writeWindowState } from "../window/window-state";
 import { sanitizeAttachmentFilename } from "./attachment-filename";
 import { markAsDownloaded } from "./download-mark";
-import { GmailGatewayLive } from "./gmail-gateway";
-import { GmailMimeLive } from "./gmail-mime";
-import { GmailStoreLive } from "./gmail-store";
-import { publishReconciledGmailError } from "./thread-reconciliation";
+import { inEngine, loadAttachment } from "./engine/mail-engine";
 
 const MAX_ATTACHMENT_BYTES = 50_000_000;
 const PREVIEW_WINDOW_SIZE = {
@@ -64,59 +50,33 @@ interface PreviewSession {
 }
 
 // oxlint-disable-next-line unicorn/throw-new-error
-class AttachmentActionError extends Schema.TaggedError<AttachmentActionError>()(
-  "AttachmentActionError",
-  { message: Schema.String }
-) {}
+class AttachmentActionError extends Schema.TaggedError<
+  AttachmentActionError,
+  { readonly brand: unique symbol }
+>()("AttachmentActionError", { message: Schema.String }) {}
 
 const actionError = (message: string): AttachmentActionError =>
   new AttachmentActionError({ message });
 
-const GmailLive = Gmail.layerWithoutDependencies.pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(GmailStoreLive, GmailGatewayLive, GmailMimeLive)
-  )
-);
-
-type GmailServices = Gmail | GmailGateway | GmailMime | GmailStore;
-
-const runGmail = <A>(
-  effect: Effect.Effect<A, GmailError, GmailServices>
-): Effect.Effect<A, AttachmentActionError> =>
-  effect.pipe(
-    Effect.provide(GmailLive),
-    // Effect error channels require a handler here; converting to Promise would lose the typed failure.
-    // oxlint-disable-next-line promise/prefer-await-to-callbacks
-    Effect.tapErrorTag("GmailEntityNotFoundError", publishReconciledGmailError),
-    Effect.mapError(() => actionError("Could not load attachment"))
-  );
-
 const resolveAttachment = Effect.fn("resolveAttachment")(
-  function* resolveAttachment(request: GmailAttachmentRequest) {
+  function* resolveAttachment(request: MailAttachmentRequest) {
     const row = yield* withDatabaseClient((database) =>
-      database.query.gmailMessages.findFirst({
+      database.query.mailMessages.findFirst({
+        columns: { attachments: true, threadId: true },
         where: {
-          accountEmail: request.accountId,
+          accountId: request.accountId,
           messageId: request.messageId,
         },
       })
     ).pipe(Effect.mapError(() => actionError("Could not find attachment")));
-    // Refetches rewrite the cached attachment id, so the renderer's may be
-    // stale; fall back to the stable part id and fetch with the cached id.
-    const attachments = row?.attachments ?? [];
-    const attachment =
-      attachments.find(
-        (candidate) => candidate.attachmentId === request.attachmentId
-      ) ??
-      (request.partId === undefined
-        ? undefined
-        : attachments.find((candidate) => candidate.partId === request.partId));
+    // An attachment is addressed by its IMAP part number, which the renderer
+    // receives as both its attachment id and part id.
+    const section = request.partId ?? request.attachmentId;
+    const attachment = row?.attachments?.find(
+      (candidate) => candidate.section === section
+    );
 
-    if (
-      row === undefined ||
-      attachment === undefined ||
-      attachment.attachmentId === undefined
-    ) {
+    if (row === undefined || attachment === undefined) {
       return yield* actionError("This attachment is not available yet");
     }
 
@@ -126,7 +86,7 @@ const resolveAttachment = Effect.fn("resolveAttachment")(
 
     return {
       accountId: request.accountId,
-      attachmentId: attachment.attachmentId,
+      attachmentId: attachment.section,
       filename: sanitizeAttachmentFilename(attachment.filename),
       mediaType: attachment.mediaType,
       messageId: request.messageId,
@@ -139,20 +99,13 @@ const resolveAttachment = Effect.fn("resolveAttachment")(
 const fetchAttachment = Effect.fn("fetchAttachment")(function* fetchAttachment(
   metadata: ResolvedAttachment
 ) {
-  const attachment = yield* runGmail(
-    Gmail.pipe(
-      Effect.flatMap((gmail) =>
-        gmail.getAttachment({
-          accountId: AccountId.make(metadata.accountId),
-          attachmentId: AttachmentId.make(metadata.attachmentId),
-          filename: metadata.filename,
-          mediaType: metadata.mediaType,
-          messageId: MessageId.make(metadata.messageId),
-          threadId: ThreadId.make(metadata.threadId),
-        })
-      )
-    )
-  );
+  const attachment = yield* inEngine(
+    loadAttachment({
+      accountId: metadata.accountId,
+      messageId: metadata.messageId,
+      section: metadata.attachmentId,
+    })
+  ).pipe(Effect.mapError(() => actionError("Could not load attachment")));
 
   if (attachment.bytes.byteLength > MAX_ATTACHMENT_BYTES) {
     return yield* actionError("This attachment is too large to open");
@@ -194,7 +147,7 @@ const saveLoadedAttachment = Effect.fn("saveLoadedAttachment")(
     const destination = yield* chooseSaveDestination(window, filename);
 
     if (destination.canceled || destination.filePath.length === 0) {
-      return "cancelled" satisfies GmailAttachmentSaveOutcome;
+      return "cancelled" satisfies MailAttachmentSaveOutcome;
     }
 
     const attachment = yield* loaded();
@@ -206,7 +159,7 @@ const saveLoadedAttachment = Effect.fn("saveLoadedAttachment")(
         Effect.logWarning("Could not mark a saved attachment as downloaded")
       )
     );
-    return "saved" satisfies GmailAttachmentSaveOutcome;
+    return "saved" satisfies MailAttachmentSaveOutcome;
   }
 );
 
@@ -281,7 +234,7 @@ const createPreviewWindow = Effect.fn("createPreviewWindow")(
 );
 
 export const openAttachmentPreview = Effect.fn("openAttachmentPreview")(
-  function* openAttachmentPreview(request: GmailAttachmentRequest) {
+  function* openAttachmentPreview(request: MailAttachmentRequest) {
     const metadata = yield* resolveAttachment(request);
 
     if (
@@ -297,7 +250,7 @@ export const openAttachmentPreview = Effect.fn("openAttachmentPreview")(
 
 export const saveAttachment = Effect.fn("saveAttachment")(
   function* saveAttachment(
-    request: GmailAttachmentRequest,
+    request: MailAttachmentRequest,
     window: BrowserWindow
   ) {
     const metadata = yield* resolveAttachment(request);
@@ -337,7 +290,7 @@ export const loadAttachmentPreview = Effect.fn("loadAttachmentPreview")(
       filename: loaded.metadata.filename,
       kind,
       mediaType: loaded.metadata.mediaType,
-    } satisfies GmailAttachmentPreview;
+    } satisfies MailAttachmentPreview;
   }
 );
 
