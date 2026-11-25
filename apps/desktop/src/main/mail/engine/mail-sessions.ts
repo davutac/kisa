@@ -8,9 +8,12 @@ import { forgetAccountSignIn, resolveImapAuth } from "./account-credentials";
 
 /**
  * Each account keeps at most one connection per lane, so background sync
- * never queues a thread the user opened behind a long fetch.
+ * never queues a thread the user opened behind a long fetch. The `watch`
+ * lane only ever waits for a second mailbox's news beside the background
+ * lane's wait; no pass or change runs on it.
  */
-export type SessionLane = "background" | "foreground";
+const SESSION_LANES = ["background", "foreground", "watch"] as const;
+export type SessionLane = (typeof SESSION_LANES)[number];
 
 /** An unused connection is closed after this long. */
 const IDLE_CLOSE_MS = 2 * 60_000;
@@ -169,7 +172,7 @@ export const withAccountSession = <A, E, R>(
  */
 export const closeAccountSessions = (accountId: string): Effect.Effect<void> =>
   Effect.forEach(
-    ["background", "foreground"] as const,
+    SESSION_LANES,
     (lane) => {
       const key = poolKey(accountId, lane);
       const pool = pools.get(key);

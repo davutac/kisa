@@ -345,23 +345,25 @@ describe(showNewMailNotifications, () => {
   );
 
   it.each([
-    { isUnread: false, labels: ["INBOX"], state: "read" },
-    { isUnread: true, labels: [], state: "archived" },
-    { isUnread: true, labels: ["TRASH"], state: "trashed" },
-    { isUnread: true, labels: ["SPAM"], state: "spam" },
+    { isUnread: false, labels: ["INBOX"], places: ["inbox"], state: "read" },
+    { isUnread: true, labels: [], places: [], state: "archived" },
+    { isUnread: true, labels: ["TRASH"], places: ["trash"], state: "trashed" },
+    { isUnread: true, labels: ["SPAM"], places: ["spam"], state: "spam" },
     {
       isUnread: true,
       labels: ["INBOX", "TRASH"],
+      places: ["trash"],
       state: "trashed with Inbox label",
     },
     {
       isUnread: true,
       labels: ["INBOX", "SPAM"],
+      places: ["spam"],
       state: "spam with Inbox label",
     },
   ])(
     "dismisses $state threads while preserving unread Inbox and other-account alerts",
-    async ({ isUnread, labels }) => {
+    async ({ isUnread, labels, places }) => {
       mocks.messages = [makeMessage("new", ["INBOX", "UNREAD"])];
       mocks.threads = [{ snippet: "Preview", threadId: "thread-new" }];
       await Promise.all(
@@ -381,15 +383,28 @@ describe(showNewMailNotifications, () => {
         labels: ["INBOX"],
         latestAt: 1,
         messageCount: 1,
+        places: ["inbox"],
         snippet: "Preview",
         subject: "Subject",
         threadId: "thread-new",
       };
       dismissInactiveThreadNotifications([{ kind: "upsert", thread }]);
+      // Unread and in the Inbox, though also in a folder a server calls
+      // Trash: where it is listed is what main sent, not what a label reads.
+      dismissInactiveThreadNotifications([
+        {
+          kind: "upsert",
+          thread: {
+            ...thread,
+            labels: ["INBOX", "TRASH"],
+            places: ["inbox", "label:trash"],
+          },
+        },
+      ]);
       expect(mocks.closedNotificationIds).toStrictEqual([]);
 
       dismissInactiveThreadNotifications([
-        { kind: "upsert", thread: { ...thread, isUnread, labels } },
+        { kind: "upsert", thread: { ...thread, isUnread, labels, places } },
       ]);
       expect(mocks.closedNotificationIds).toStrictEqual([
         "user@example.com:new",
@@ -397,7 +412,7 @@ describe(showNewMailNotifications, () => {
 
       // Replayed sync results must not close an already dismissed alert again.
       dismissInactiveThreadNotifications([
-        { kind: "upsert", thread: { ...thread, isUnread, labels } },
+        { kind: "upsert", thread: { ...thread, isUnread, labels, places } },
       ]);
       expect(mocks.closedNotificationIds).toStrictEqual([
         "user@example.com:new",

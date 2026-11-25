@@ -7,10 +7,14 @@ import {
 
 describe(getThreadDestructiveAction, () => {
   it("permanently deletes only Spam and Trash conversations", () => {
-    expect(getThreadDestructiveAction(["INBOX"])).toBe("trash");
-    expect(getThreadDestructiveAction(["SENT"])).toBe("trash");
-    expect(getThreadDestructiveAction(["SPAM"])).toBe("deleteForever");
-    expect(getThreadDestructiveAction(["SENT", "TRASH"])).toBe("deleteForever");
+    expect(getThreadDestructiveAction(["inbox"])).toBe("trash");
+    expect(getThreadDestructiveAction(["sent"])).toBe("trash");
+    expect(getThreadDestructiveAction(["spam"])).toBe("deleteForever");
+    expect(getThreadDestructiveAction(["trash"])).toBe("deleteForever");
+  });
+
+  it("moves mail in a folder that is only called Trash to Trash", () => {
+    expect(getThreadDestructiveAction(["inbox", "label:trash"])).toBe("trash");
   });
 });
 
@@ -19,20 +23,20 @@ describe(getBulkThreadDestructiveAction, () => {
     expect(getBulkThreadDestructiveAction([])).toBeUndefined();
     expect(
       getBulkThreadDestructiveAction([
-        { labels: ["SPAM"] },
-        { labels: ["TRASH"] },
+        { places: ["spam"] },
+        { places: ["trash"] },
       ])
     ).toBe("deleteForever");
     expect(
       getBulkThreadDestructiveAction([
-        { labels: ["INBOX"] },
-        { labels: ["SENT"] },
+        { places: ["inbox"] },
+        { places: ["sent"] },
       ])
     ).toBe("trash");
     expect(
       getBulkThreadDestructiveAction([
-        { labels: ["INBOX"] },
-        { labels: ["TRASH"] },
+        { places: ["inbox"] },
+        { places: ["trash"] },
       ])
     ).toBeUndefined();
   });

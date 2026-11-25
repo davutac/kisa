@@ -6,7 +6,12 @@ import type { LabelId } from "./ids";
 import { refreshMailboxes } from "./mutations";
 import { MailEngineStore } from "./store";
 import type { MailboxRecord } from "./store";
-import { discoverMailboxes, mergeThreadChanges, toImapMailbox } from "./sync";
+import {
+  discoverMailboxes,
+  mergeThreadChanges,
+  startRelabel,
+  toImapMailbox,
+} from "./sync";
 import type { SyncScope } from "./sync";
 
 /** Names that would read as, or collide with, a system mailbox. */
@@ -139,6 +144,14 @@ export const createLabel = Effect.fn("MailLabels.createLabel")(
   }
 );
 
+/**
+ * Renames on the server, then moves what is cached to the new name, so the
+ * label keeps its colour and its mail is not walked again. That move is by
+ * rule, so the server is read to confirm it. A folder is read where it is
+ * now: a server that renumbered it has it walked again. Gmail gives the new
+ * label to the mail under the old one without reporting a change to that
+ * mail, so the labels of cached copies are read again in the background.
+ */
 export const renameLabel = Effect.fn("MailLabels.renameLabel")(
   function* renameLabel(scope: SyncScope, labelId: LabelId, name: string) {
     const store = yield* MailEngineStore;
@@ -159,7 +172,16 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
     }
 
     const to = { id: userLabelId(target.name), path: target.path };
+    const isGmail = scope.dialect.kind === "gmail";
     yield* scope.session.renameMailbox(label.path, target.path);
+    if (isGmail) {
+      // Asked for before the cache is moved, so a rename cut short after
+      // this still has its labels read.
+      yield* startRelabel(
+        scope.accountId,
+        mailboxes.filter((candidate) => candidate.synced)
+      );
+    }
     // Moved before discovery, which would otherwise drop the old mailbox's
     // copies and its colour and walk the new one from scratch.
     const renamed = yield* store.renameLabel(scope.accountId, {
@@ -168,9 +190,25 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
       to,
     });
     const discovered = yield* discoverMailboxes(scope);
+    const separator = mailbox.delimiter.length === 0 ? "/" : mailbox.delimiter;
+    const read = isGmail
+      ? discovered.changes
+      : mergeThreadChanges(
+          discovered.changes,
+          yield* refreshMailboxes(
+            scope,
+            discovered.mailboxes
+              .map((candidate) => candidate.path)
+              .filter(
+                (path) =>
+                  path === target.path ||
+                  path.startsWith(`${target.path}${separator}`)
+              )
+          )
+        );
 
     return {
-      changes: mergeThreadChanges(renamed, discovered.changes),
+      changes: mergeThreadChanges(renamed, read),
       label: { id: to.id, name: target.name } satisfies LabelResult,
     };
   }
@@ -183,14 +221,13 @@ export const renameLabel = Effect.fn("MailLabels.renameLabel")(
  */
 export const deleteLabel = Effect.fn("MailLabels.deleteLabel")(
   function* deleteLabel(scope: SyncScope, labelId: LabelId) {
-    const store = yield* MailEngineStore;
     const { label, mailboxes } = yield* findLabel(scope, labelId);
 
     if (scope.dialect.kind === "gmail") {
       yield* scope.session.deleteMailbox(label.path);
-      const removed = yield* store.removeLabel(scope.accountId, label.id);
-      const discovered = yield* discoverMailboxes(scope);
-      return mergeThreadChanges(removed, discovered.changes);
+      // The label comes off cached mail when the server's list no longer
+      // has it, which discovery reads: not because its deletion was asked.
+      return (yield* discoverMailboxes(scope)).changes;
     }
 
     const archive = mailboxes.find(
@@ -203,9 +240,14 @@ export const deleteLabel = Effect.fn("MailLabels.deleteLabel")(
       );
     }
 
-    const uids = yield* scope.session.search(label.path, { kind: "all" });
+    // The folder's mail is listed and moved under one UIDVALIDITY, the one
+    // the server gives now: its UIDs are read here, not taken from the cache.
+    const { uidValidity } = yield* scope.session.status(label.path);
+    const uids = yield* scope.session.search(label.path, uidValidity, {
+      kind: "all",
+    });
     if (uids.length > 0) {
-      yield* scope.session.move(label.path, uids, archive.path);
+      yield* scope.session.move(label.path, uidValidity, uids, archive.path);
     }
     const status = yield* scope.session.status(label.path);
     if (status.messages > 0) {

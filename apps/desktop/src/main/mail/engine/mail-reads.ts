@@ -4,6 +4,7 @@ import type { RemoteDatabaseClient } from "@repo/database/remote-client";
 import { mailLabels, mailMessages, mailThreads } from "@repo/database/schemas";
 import type { StoredMailAttachment } from "@repo/database/schemas";
 import { SystemLabel, userLabelId, userLabelPath } from "@repo/mail/ids";
+import { listedMessages } from "@repo/mail/listing";
 import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 
 import type {
@@ -18,6 +19,7 @@ import type {
 } from "../../../shared/ipc/mail";
 import { isMailboxLabelPlace } from "../../../shared/ipc/mail";
 import { labelTextColor } from "../../../shared/label-color";
+import { listingPlaces } from "../../../shared/mailbox-places";
 import { toDisplayedAttachment } from "../attachment-filename";
 
 export const THREAD_PAGE_SIZE = 50;
@@ -69,6 +71,22 @@ export const toAttachmentSummary = (
 
 type ThreadRow = typeof mailThreads.$inferSelect;
 
+/** The places that list a conversation's row: see `listingPlaces`. */
+export const threadPlaces = (
+  row: Pick<
+    ThreadRow,
+    "isInInbox" | "isInSent" | "isInSpam" | "isInTrash" | "labelIds"
+  >
+): readonly string[] =>
+  listingPlaces({
+    isInInbox: row.isInInbox,
+    isInSent: row.isInSent,
+    isInSpam: row.isInSpam,
+    isInTrash: row.isInTrash,
+    isStarred: row.labelIds.includes(SystemLabel.starred),
+    userLabels: row.labelIds.flatMap((labelId) => userLabelPath(labelId) ?? []),
+  });
+
 export const toThreadSummary = (row: ThreadRow): MailThreadSummary => ({
   accountId: row.accountId,
   attachments: row.attachments.map((attachment) =>
@@ -80,13 +98,15 @@ export const toThreadSummary = (row: ThreadRow): MailThreadSummary => ({
   labels: row.labelIds.map(toLabelName),
   latestAt: row.latestAt,
   messageCount: row.messageCount,
+  places: threadPlaces(row),
   snippet: row.snippet,
   subject: row.subject,
   threadId: row.threadId,
 });
 
 /**
- * The threads a mailbox place lists. A label lists every conversation
+ * The threads a mailbox place lists: `listingPlaces`, stated in SQL so a
+ * page is an index scan. A label lists every conversation
  * carrying it outside Spam and Trash, as Gmail's label view does, so mail
  * archived under a label is still there. SQLite folds both sides of the id,
  * so the match ignores ASCII case, as the label catalog does, and a label
@@ -240,6 +260,7 @@ export interface Conversation {
   readonly labels: readonly string[];
   readonly messages: readonly ConversationMessage[];
   readonly missingBodies: boolean;
+  readonly places: readonly string[];
   readonly subject: string;
 }
 
@@ -308,17 +329,21 @@ export const readConversation = async (
     return;
   }
 
-  const rows = await database
-    .select()
-    .from(mailMessages)
-    .where(
-      and(
-        eq(mailMessages.accountId, accountId),
-        eq(mailMessages.threadId, threadId)
+  // The messages the list's row was built from, so opening a conversation
+  // shows what its row promised.
+  const rows = listedMessages(
+    await database
+      .select()
+      .from(mailMessages)
+      .where(
+        and(
+          eq(mailMessages.accountId, accountId),
+          eq(mailMessages.threadId, threadId)
+        )
       )
-    )
-    .orderBy(asc(mailMessages.receivedAt), asc(mailMessages.messageId))
-    .all();
+      .orderBy(asc(mailMessages.receivedAt), asc(mailMessages.messageId))
+      .all()
+  );
   const messages = rows.map(toConversationMessage);
 
   return {
@@ -328,6 +353,7 @@ export const readConversation = async (
       .map(toLabelName),
     messages,
     missingBodies: rows.some((row) => row.bodyState !== "ready"),
+    places: threadPlaces(thread),
     subject: messages[0]?.message.subject ?? "(No subject)",
   };
 };

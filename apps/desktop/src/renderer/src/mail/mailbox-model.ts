@@ -5,16 +5,9 @@ import type {
   MailThreadCursor,
   MailThreadSummary,
 } from "@/shared/ipc/mail";
+import { mailboxPlaceKey } from "@/shared/mailbox-places";
 
-import {
-  hasInboxLabel,
-  hasSentLabel,
-  hasSpamLabel,
-  hasStarredLabel,
-  hasTrashLabel,
-} from "./label";
-import { threadHasMailboxLabel } from "./mailbox-labels";
-import { getMailboxPlaceKey, isLabelPlace } from "./mailbox-place";
+import { getMailboxPlaceKey } from "./mailbox-place";
 
 export const getThreadListChangeAccountId = (
   change: MailThreadListChange
@@ -61,49 +54,24 @@ export const mergeAndSortThreads = (
   return [...threadsById.values()].toSorted(compareThreads);
 };
 
-// The same rule as the cache's thread page query, applied to live updates.
-// Built once per list, so a label place is recognised once, not per thread.
-const toMailboxMatcher = (
-  mailbox: MailboxPlace
-): ((labels: readonly string[]) => boolean) => {
-  if (isLabelPlace(mailbox)) {
-    return (labels) =>
-      threadHasMailboxLabel(labels, mailbox.label) &&
-      !hasSpamLabel(labels) &&
-      !hasTrashLabel(labels);
-  }
-  if (mailbox === "spam") {
-    return hasSpamLabel;
-  }
-  if (mailbox === "trash") {
-    return hasTrashLabel;
-  }
-  if (mailbox === "sent") {
-    return (labels) =>
-      hasSentLabel(labels) && !hasSpamLabel(labels) && !hasTrashLabel(labels);
-  }
-  if (mailbox === "starred") {
-    return (labels) =>
-      hasStarredLabel(labels) &&
-      !hasSpamLabel(labels) &&
-      !hasTrashLabel(labels);
-  }
-  return (labels) =>
-    hasInboxLabel(labels) && !hasSpamLabel(labels) && !hasTrashLabel(labels);
-};
-
+/**
+ * The rows a mailbox list shows. Whether a place lists a conversation is
+ * main's answer, sent with it as `places`: the list only asks whether its
+ * own place is among them, so a live update files a row exactly where the
+ * cache's page query would.
+ */
 export const filterThreadsByScope = (
   threads: readonly MailThreadSummary[],
   accountIds: readonly string[],
   unreadOnly: boolean,
   mailbox: MailboxPlace = "inbox"
 ): readonly MailThreadSummary[] => {
-  const matchesMailbox = toMailboxMatcher(mailbox);
+  const place = mailboxPlaceKey(mailbox);
 
   return threads.filter(
-    ({ accountId, isUnread, labels }) =>
+    ({ accountId, isUnread, places }) =>
       accountIds.includes(accountId) &&
-      matchesMailbox(labels) &&
+      places.includes(place) &&
       (!unreadOnly || isUnread)
   );
 };

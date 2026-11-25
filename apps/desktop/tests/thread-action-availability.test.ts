@@ -14,36 +14,37 @@ const sent = { labelIds: ["SENT"] };
 
 describe("which thread actions apply", () => {
   it("archives only what is in the Inbox, and stars and reports outside Spam and Trash", () => {
-    const places = [
-      ["INBOX"],
-      ["SENT"],
-      ["SPAM"],
-      ["TRASH"],
-      ["INBOX", "TRASH"],
+    const listed = [
+      ["inbox"],
+      ["sent"],
+      ["spam"],
+      ["trash"],
+      // In the Inbox and in a folder a server calls Trash.
+      ["inbox", "label:trash"],
     ];
 
     expect(
-      places.map((labels) => [
-        canArchiveThread(labels),
-        canStarThread(labels),
-        canReportThreadSpam(labels),
+      listed.map((places) => [
+        canArchiveThread(places),
+        canStarThread(places),
+        canReportThreadSpam(places),
       ])
     ).toStrictEqual([
       [true, true, true],
       [false, true, true],
       [false, false, false],
       [false, false, false],
-      [false, false, false],
+      [true, true, true],
     ]);
   });
 
   it("offers Move to Inbox for a received message outside the Inbox, not for the user's own mail", () => {
     expect({
-      archived: hasArchivedMessage(["u:Work"], [received, sent]),
-      inInbox: hasArchivedMessage(["INBOX"], [{ labelIds: ["INBOX"] }]),
-      inSpam: hasArchivedMessage(["SPAM"], [{ labelIds: ["SPAM"] }]),
+      archived: hasArchivedMessage(["label:work"], [received, sent]),
+      inInbox: hasArchivedMessage(["inbox"], [{ labelIds: ["INBOX"] }]),
+      inSpam: hasArchivedMessage(["spam"], [{ labelIds: ["SPAM"] }]),
       ownDraft: hasArchivedMessage([], [{ labelIds: ["DRAFT"] }]),
-      sentOnly: hasArchivedMessage(["SENT"], [sent, sent]),
+      sentOnly: hasArchivedMessage(["sent"], [sent, sent]),
     }).toStrictEqual({
       archived: true,
       inInbox: false,

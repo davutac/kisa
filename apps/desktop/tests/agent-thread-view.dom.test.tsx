@@ -44,6 +44,7 @@ const fakes = vi.hoisted((): ThreadFakes => ({
     awaitsServer: false,
     labels: [],
     messages: [],
+    places: [],
     subject: "",
     threadId: "",
   },
@@ -178,6 +179,7 @@ const message = (
 
 const threadIn = (
   labels: readonly string[],
+  places: readonly string[],
   messageLabels: readonly (readonly string[])[] = [[], ["SENT"], []]
 ): MailThread => ({
   accountId: ME,
@@ -191,6 +193,7 @@ const threadIn = (
     ...entry,
     labelIds: messageLabels[index] ?? [],
   })),
+  places,
   subject: "Quarterly report",
   threadId: "t1",
 });
@@ -225,13 +228,16 @@ const renderThread = (
   labels: readonly string[] = ["INBOX", "Travel"],
   {
     messageLabels,
+    places = ["inbox", "label:travel"],
     withThreadLayer = false,
   }: {
     readonly messageLabels?: readonly (readonly string[])[];
+    /** Where main lists the conversation, sent with its labels. */
+    readonly places?: readonly string[];
     readonly withThreadLayer?: boolean;
   } = {}
 ) => {
-  fakes.thread = threadIn(labels, messageLabels);
+  fakes.thread = threadIn(labels, places, messageLabels);
   render(
     <AccountsProvider
       accounts={[{ email: ME, provider: "gmail" }]}
@@ -507,7 +513,10 @@ describe("the open conversation, for an agent", () => {
 
   it("offers Move to Inbox, on E too, once a received message left the Inbox", async () => {
     const user = userEvent.setup();
-    renderThread(["Travel", "SENT"], { withThreadLayer: true });
+    renderThread(["Travel", "SENT"], {
+      places: ["sent", "label:travel"],
+      withThreadLayer: true,
+    });
     await act(settle);
 
     expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
@@ -521,7 +530,10 @@ describe("the open conversation, for an agent", () => {
   });
 
   it("offers neither Move to Inbox nor Report spam on the user's own mail", async () => {
-    renderThread(["SENT"], { messageLabels: [["SENT"], ["SENT"], ["SENT"]] });
+    renderThread(["SENT"], {
+      messageLabels: [["SENT"], ["SENT"], ["SENT"]],
+      places: ["sent"],
+    });
     await act(settle);
 
     const labels = new Set(onPage().map((entry) => entry.label));
@@ -539,7 +551,7 @@ describe("the open conversation, for an agent", () => {
   });
 
   it("offers no Archive, Star or Report spam in Spam", async () => {
-    renderThread(["SPAM"]);
+    renderThread(["SPAM"], { places: ["spam"] });
     await act(settle);
 
     const labels = new Set(onPage().map((entry) => entry.label));
@@ -551,7 +563,7 @@ describe("the open conversation, for an agent", () => {
   });
 
   it("asks once before deleting a conversation in Trash forever", async () => {
-    renderThread(["TRASH"]);
+    renderThread(["TRASH"], { places: ["trash"] });
     await act(settle);
     expect(
       screen.getByRole("button", { name: "Delete forever" }).dataset

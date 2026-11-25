@@ -19,6 +19,7 @@ import {
   SystemLabel,
   ThreadId,
 } from "@repo/mail/ids";
+import { conversationPlaces, listedMessages } from "@repo/mail/listing";
 import { MailEngineStore } from "@repo/mail/store";
 import type {
   BodyCandidate,
@@ -280,7 +281,8 @@ const recomputeThreads = async (
       removed.push(...emptied.map((threadId) => ThreadId.make(threadId)));
     }
 
-    const rows = [...byThread].map(([threadId, group]) => {
+    const rows = [...byThread].map(([threadId, messagesOfThread]) => {
+      const group = listedMessages(messagesOfThread);
       // Ordered oldest first: the subject is the first message's, and the
       // sender and snippet are the newest message's.
       const [first] = group;
@@ -297,7 +299,7 @@ const recomputeThreads = async (
       const snippet =
         group.toReversed().find((message) => message.snippet.length > 0)
           ?.snippet ?? "";
-      const isInSpam = labels.includes(SystemLabel.spam);
+      const places = conversationPlaces(messagesOfThread);
 
       changed.push(ThreadId.make(threadId));
       return {
@@ -306,17 +308,16 @@ const recomputeThreads = async (
         fromAddress: latest?.fromAddress ?? "",
         fromName: latest?.fromName ?? null,
         hasAttachments: attachments.length > 0,
-        isInInbox: labels.includes(SystemLabel.inbox),
-        isInSent: labels.includes(SystemLabel.sent),
-        isInSpam,
-        isInTrash: labels.includes(SystemLabel.trash),
+        ...places,
         isUnread: group.some((message) => message.isUnread),
         labelIds: labels,
         latestAt: latest?.receivedAt ?? 0,
         latestMessageId: latest?.messageId ?? threadId,
         messageCount: group.length,
         snippet,
-        spamAddedAt: isInSpam ? (spamAddedAt.get(threadId) ?? now) : null,
+        spamAddedAt: places.isInSpam
+          ? (spamAddedAt.get(threadId) ?? now)
+          : null,
         subject: first?.subject ?? "",
         threadId,
         updatedAt: now,
@@ -871,25 +872,38 @@ const toMailboxRecord = (
   uidValidity: fromBigIntText(row.uidValidity),
 });
 
-const toBodyCandidate = (row: {
+/**
+ * A copy to fetch a body from. One whose UIDVALIDITY cannot be read is left
+ * out: without it nothing may be asked of the server by its UID.
+ */
+const toBodyCandidates = (row: {
   readonly mailboxPath: string;
   readonly messageId: string;
   readonly receivedAt: number;
   readonly size: number;
   readonly uid: number;
-}): BodyCandidate => ({
-  mailboxPath: row.mailboxPath,
-  messageId: MessageId.make(row.messageId),
-  receivedAt: row.receivedAt,
-  size: row.size,
-  uid: row.uid,
-});
+  readonly uidValidity: string;
+}): readonly BodyCandidate[] => {
+  const uidValidity = fromBigIntText(row.uidValidity);
+  return uidValidity === undefined
+    ? []
+    : [
+        {
+          mailboxPath: row.mailboxPath,
+          messageId: MessageId.make(row.messageId),
+          receivedAt: row.receivedAt,
+          size: row.size,
+          uid: row.uid,
+          uidValidity,
+        },
+      ];
+};
 
 // A message can have a copy in several mailboxes, each under its own UID,
 // and a body is fetched by the mailbox and UID of one of them. SQLite
 // reads a bare column from the row that holds the aggregate's minimum, so
-// `mailboxPath` and `uid` name the same copy. That only holds while
-// `min(uid)` is the query's sole min or max.
+// `mailboxPath`, `uidValidity` and `uid` name the same copy. That only holds
+// while `min(uid)` is the query's sole min or max.
 //
 // The messages are chosen first and their copies looked up by message:
 // CROSS JOIN keeps SQLite from starting at the account's copies instead,
@@ -936,6 +950,7 @@ const withCopies = (
         receivedAt: messages.receivedAt,
         size: messages.size,
         uid: sql<number>`min(${mailMessageLocations.uid})`,
+        uidValidity: mailMessageLocations.uidValidity,
       })
       .from(messages)
       .crossJoin(mailMessageLocations)
@@ -1090,6 +1105,12 @@ const rememberOrigins = (
   }
 };
 
+/** Whether the message of the row being read carries a label. */
+const messageHasLabel = (label: string): SQL => sql`EXISTS (
+  SELECT 1 FROM json_each(${mailMessages.labelIds}) AS message_label
+  WHERE message_label.value = ${label}
+)`;
+
 export const MailEngineStoreLive = Layer.effect(
   MailEngineStore,
   Effect.gen(function* makeMailEngineStore() {
@@ -1160,7 +1181,7 @@ export const MailEngineStoreLive = Layer.effect(
             ),
             { limit: options.limit }
           );
-          return rows.map(toBodyCandidate);
+          return rows.flatMap(toBodyCandidates);
         }),
 
       clearAccount: (accountId) =>
@@ -1218,6 +1239,65 @@ export const MailEngineStoreLive = Layer.effect(
           );
         }),
 
+      mailboxCounts: (accountId, path) =>
+        database.use("Could not count cached mail", async (client) => {
+          // Unread as the dialect files it, on each copy's own labels.
+          const [counts] = await client.values<[number, number | null]>(sql`
+            SELECT count(*), sum(EXISTS (
+              SELECT 1 FROM json_each(${mailMessageLocations.labelIds}) AS copy_label
+              WHERE copy_label.value = ${SystemLabel.unread}
+            ))
+            FROM ${mailMessageLocations}
+            WHERE ${mailMessageLocations.accountId} = ${accountId}
+              AND ${mailMessageLocations.mailboxPath} = ${path}
+          `);
+          return { copies: counts?.[0] ?? 0, unread: counts?.[1] ?? 0 };
+        }),
+
+      relistHidden: (accountId) =>
+        inTransaction(
+          "Could not list conversations again",
+          async (transaction, now) => {
+            // From the rows under Trash or Spam to their messages. Left to
+            // itself SQLite reads every row of the account to find them, so
+            // the index and the order of the join are both stated.
+            const hiddenUnder = (
+              index: "mail_threads_spam_idx" | "mail_threads_trash_idx",
+              filed: SQL,
+              listedElsewhere: SQL
+            ) =>
+              transaction.values<[string]>(sql`
+                SELECT DISTINCT ${mailThreads.threadId}
+                FROM ${mailThreads} INDEXED BY ${sql.raw(index)}
+                CROSS JOIN ${mailMessages}
+                WHERE ${filed}
+                  AND ${mailThreads.accountId} = ${accountId}
+                  AND ${mailMessages.accountId} = ${mailThreads.accountId}
+                  AND ${mailMessages.threadId} = ${mailThreads.threadId}
+                  AND ${listedElsewhere}
+              `);
+            const outsideTrash = sql`NOT ${messageHasLabel(SystemLabel.trash)}`;
+            const hidden = [
+              ...(await hiddenUnder(
+                "mail_threads_trash_idx",
+                sql`${mailThreads.isInTrash} = 1`,
+                outsideTrash
+              )),
+              ...(await hiddenUnder(
+                "mail_threads_spam_idx",
+                sql`${mailThreads.isInSpam} = 1`,
+                sql`${messageHasLabel(SystemLabel.inbox)}
+                  AND NOT ${messageHasLabel(SystemLabel.spam)}
+                  AND ${outsideTrash}`
+              )),
+            ].map(([threadId]) => threadId);
+
+            return hidden.length === 0
+              ? NO_CHANGES
+              : recomputeThreads(transaction, accountId, hidden, now);
+          }
+        ),
+
       copyOrigins: (accountId, messageIds) =>
         Effect.sync(() => {
           const remembered = copyOriginsByAccount.get(accountId);
@@ -1257,6 +1337,7 @@ export const MailEngineStoreLive = Layer.effect(
             .select({
               mailboxPath: mailMessageLocations.mailboxPath,
               uid: mailMessageLocations.uid,
+              uidValidity: mailMessageLocations.uidValidity,
             })
             .from(mailMessageLocations)
             .where(
@@ -1268,7 +1349,10 @@ export const MailEngineStoreLive = Layer.effect(
             .limit(1)
             .all();
 
-          return attachment === undefined || location === undefined
+          const uidValidity = fromBigIntText(location?.uidValidity);
+          return attachment === undefined ||
+            location === undefined ||
+            uidValidity === undefined
             ? Option.none()
             : Option.some({
                 encoding: attachment.encoding,
@@ -1278,6 +1362,7 @@ export const MailEngineStoreLive = Layer.effect(
                 section: attachment.section,
                 size: attachment.size,
                 uid: location.uid,
+                uidValidity,
               });
         }),
 
@@ -1304,7 +1389,7 @@ export const MailEngineStoreLive = Layer.effect(
           return rows.map(toMailboxRecord);
         }),
 
-      locationUids: (accountId, path) =>
+      locationUids: (accountId, path, from) =>
         database.use("Could not load cached mail", async (client) => {
           const rows = await client
             .select({ uid: mailMessageLocations.uid })
@@ -1312,7 +1397,10 @@ export const MailEngineStoreLive = Layer.effect(
             .where(
               and(
                 eq(mailMessageLocations.accountId, accountId),
-                eq(mailMessageLocations.mailboxPath, path)
+                eq(mailMessageLocations.mailboxPath, path),
+                from === undefined
+                  ? undefined
+                  : gte(mailMessageLocations.uid, from)
               )
             )
             .all();
@@ -1748,7 +1836,7 @@ export const MailEngineStoreLive = Layer.effect(
               inArray(sql`+${mailMessages.bodyState}`, ["none", "failed"])
             )
           );
-          return rows.map(toBodyCandidate);
+          return rows.flatMap(toBodyCandidates);
         }),
 
       threadLocations: (accountId, threadIds) =>
@@ -1763,6 +1851,7 @@ export const MailEngineStoreLive = Layer.effect(
                   messageId: mailMessageLocations.messageId,
                   threadId: mailMessages.threadId,
                   uid: mailMessageLocations.uid,
+                  uidValidity: mailMessageLocations.uidValidity,
                 })
                 // Threads first, then their copies: see `withCopies`.
                 .from(mailMessages)
@@ -1778,14 +1867,23 @@ export const MailEngineStoreLive = Layer.effect(
                 .all()
             )
           );
-          return chunks.flat().map((row) => ({
-            flags: row.flags,
-            labelIds: row.labelIds.map((label) => LabelId.make(label)),
-            mailboxPath: row.mailboxPath,
-            messageId: MessageId.make(row.messageId),
-            threadId: ThreadId.make(row.threadId),
-            uid: row.uid,
-          }));
+          return chunks.flat().flatMap((row) => {
+            const uidValidity = fromBigIntText(row.uidValidity);
+            // Without it nothing may be asked of the server by this UID.
+            return uidValidity === undefined
+              ? []
+              : [
+                  {
+                    flags: row.flags,
+                    labelIds: row.labelIds.map((label) => LabelId.make(label)),
+                    mailboxPath: row.mailboxPath,
+                    messageId: MessageId.make(row.messageId),
+                    threadId: ThreadId.make(row.threadId),
+                    uid: row.uid,
+                    uidValidity,
+                  },
+                ];
+          });
         }),
 
       uidWindowStart: (accountId, path, below, count) =>

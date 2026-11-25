@@ -197,7 +197,9 @@ describe("mail drafts", () => {
       })
     );
     await Effect.runPromise(
-      Effect.all(drafts.map((draft) => cancelHeldSend(draft, 7)))
+      Effect.forEach(drafts, (draft) => cancelHeldSend(draft, 7), {
+        discard: true,
+      })
     );
     rendererEvents.payloads.length = 0;
     await Effect.runPromise(republishDraft(accountId, "reply-draft"));

@@ -36,6 +36,7 @@ const makeThread = (): MailThreadSummary => ({
   labels: ["INBOX"],
   latestAt: 100,
   messageCount: 1,
+  places: ["inbox"],
   snippet: "Snippet",
   subject: "Subject",
   threadId: "thread-1",
@@ -97,7 +98,7 @@ describe("mailbox thread snapshots", () => {
     updateMailboxThreadsSnapshots([
       {
         kind: "upsert",
-        thread: { ...thread, labels: ["TRASH"] },
+        thread: { ...thread, labels: ["TRASH"], places: ["trash"] },
       },
     ]);
 

@@ -174,7 +174,7 @@ describe("opening a connection", () => {
   });
 });
 
-const use = (owner: MailAccount, lane: "background" | "foreground") =>
+const use = (owner: MailAccount, lane: "background" | "foreground" | "watch") =>
   withAccountSession(owner, lane, () => Effect.void);
 
 describe("closing connections on quit", () => {
@@ -186,8 +186,8 @@ describe("closing connections on quit", () => {
   };
 
   it("closes every account's connections together", async () => {
-    signIn.next = [password, password, password, password];
-    const connections = 4;
+    signIn.next = [password, password, password, password, password, password];
+    const connections = 6;
     let closing = 0;
     // Opens only once every close has started: closing one connection after
     // another would wait here forever.
@@ -213,8 +213,10 @@ describe("closing connections on quit", () => {
       Effect.all([
         use(account, "background"),
         use(account, "foreground"),
+        use(account, "watch"),
         use(second, "background"),
         use(second, "foreground"),
+        use(second, "watch"),
       ]).pipe(Effect.provide(connector))
     );
     await Effect.runPromise(closeAllSessions);

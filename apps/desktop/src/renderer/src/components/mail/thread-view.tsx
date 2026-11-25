@@ -18,7 +18,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { hasSpamLabel, hasStarredLabel, hasTrashLabel } from "@/mail/label";
+import { hasStarredLabel } from "@/mail/label";
 import {
   canArchiveThread,
   canReportThreadSpam,
@@ -32,6 +32,7 @@ import type {
   ThreadActionTarget,
 } from "@/mail/use-thread-actions";
 import type { MailThread } from "@/shared/ipc/mail";
+import { isListedIn } from "@/shared/mailbox-places";
 
 // A conversation the cache answers for replaces this before its delayed fade
 // begins, so a fast open never flashes it.
@@ -118,8 +119,8 @@ const MailThreadContent = ({
   const confirm = useConfirm();
   const { setLabel: handleSetLabel } = threadActions;
   const { accountId, threadId } = thread;
-  const isSpam = hasSpamLabel(thread.labels);
-  const isTrash = hasTrashLabel(thread.labels);
+  const isSpam = isListedIn(thread.places, "spam");
+  const isTrash = isListedIn(thread.places, "trash");
   const isStarred = hasStarredLabel(thread.labels);
   const canDeleteForever = isSpam || isTrash;
   const isUnread = thread.labels.includes("UNREAD");
@@ -176,18 +177,18 @@ const MailThreadContent = ({
   // Each applies only where it can change something; the commands follow the
   // buttons, so a key never acts on what its button doesn't offer.
   const commands = {
-    onArchive: canArchiveThread(thread.labels) ? handleArchive : undefined,
+    onArchive: canArchiveThread(thread.places) ? handleArchive : undefined,
     onDeleteForever: onDeleteThreadForever,
-    onMoveToInbox: hasArchivedMessage(thread.labels, thread.messages)
+    onMoveToInbox: hasArchivedMessage(thread.places, thread.messages)
       ? handleMoveToInbox
       : undefined,
     onPopOut: onPopOutThread,
     onReportSpam:
-      canReportThreadSpam(thread.labels) && hasReceivedMessage(thread.messages)
+      canReportThreadSpam(thread.places) && hasReceivedMessage(thread.messages)
         ? handleReportSpam
         : undefined,
     onToggleRead: handleToggleRead,
-    onToggleStar: canStarThread(thread.labels) ? handleToggleStar : undefined,
+    onToggleStar: canStarThread(thread.places) ? handleToggleStar : undefined,
     onTrash: onTrashThread,
   };
   const actions = {

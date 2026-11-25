@@ -39,7 +39,11 @@ export class MailProtocolError extends Schema.TaggedError<
   message: Schema.String,
 }) {}
 
-/** A mailbox named by the cache no longer exists on the server. */
+/**
+ * A mailbox named by the cache no longer exists on the server, or one of
+ * that name exists under another UIDVALIDITY, where the cached UIDs name
+ * other mail or none.
+ */
 export class MailboxMissingError extends Schema.TaggedError<
   MailboxMissingError,
   { readonly brand: unique symbol }

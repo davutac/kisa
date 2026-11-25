@@ -1,4 +1,4 @@
-import { Cause, Exit, Result } from "effect";
+import { Cause, Clock, Deferred, Effect, Exit, Result } from "effect";
 
 /**
  * What one account's background loop is doing. `syncing` is the catch-up pass
@@ -7,7 +7,11 @@ import { Cause, Exit, Result } from "effect";
  * `syncing` begins when the cycle does, so it also covers connecting.
  */
 export type AccountWorkerPhase =
-  | { readonly kind: "idle"; readonly until: number }
+  | {
+      readonly kind: "idle";
+      /** When the poll is due. A loop waiting on the server ignores it. */
+      readonly until: number;
+    }
   | { readonly kind: "indexing" }
   | { readonly kind: "needs-sign-in" }
   | {
@@ -34,22 +38,37 @@ export type AccountCycleOutcome =
  */
 export type SyncRequestSource = "account-connected" | "automatic" | "user";
 
-interface AccountWorkerOptions {
-  readonly now: () => number;
+/**
+ * What a wait for the server's news came to. `sync` asks for a cycle;
+ * `unavailable` means the server cannot be waited on, so the poll decides.
+ */
+export type AccountWatchOutcome = "sync" | "unavailable";
+
+interface AccountWorkerOptions<R> {
   readonly onPhaseChange: (phase: AccountWorkerPhase) => void;
+  /** Between cycles while the server is not being waited on. */
   readonly pollIntervalMs: number;
   readonly retryDelaysMs: readonly number[];
-  readonly runCycle: (
-    cycle: { readonly syncPassEnded: (caughtUp: boolean) => void },
-    signal: AbortSignal
-  ) => Promise<AccountCycleOutcome>;
-  readonly schedule: (
-    run: () => void,
-    delayMs: number
-  ) => { readonly cancel: () => void };
+  /** One cycle. One that fails or dies counts as a failed cycle. */
+  readonly runCycle: (cycle: {
+    readonly syncPassEnded: (caughtUp: boolean) => void;
+  }) => Effect.Effect<AccountCycleOutcome, unknown, R>;
+  /**
+   * Waits for the server to report news while the loop is idle. Completing
+   * `stop` asks it to end and leave its connection usable; the loop waits
+   * for that before its next cycle, which needs the same connection. A wait
+   * that fails counts as `unavailable`. Interrupting the loop interrupts the
+   * wait instead: the account is going away, and the wait may simply be
+   * dropped with its connection.
+   */
+  readonly watch?: (
+    stop: Deferred.Deferred<void>
+  ) => Effect.Effect<AccountWatchOutcome, unknown, R>;
+  /** Cycles the server's news asks for begin at least this far apart. */
+  readonly watchSpacingMs?: number;
 }
 
-export interface AccountWorker {
+export interface AccountWorker<R = never> {
   /**
    * The index status this account's trouble overrides: `paused` while it
    * needs a new sign-in, `failed` while its server cannot be reached.
@@ -57,8 +76,11 @@ export interface AccountWorker {
   readonly indexStatus: () => "failed" | "paused" | undefined;
   readonly phase: () => AccountWorkerPhase;
   readonly requestSync: (source: SyncRequestSource) => void;
-  /** The loop itself. Resolves once the worker has stopped. */
-  readonly run: (signal: AbortSignal) => Promise<void>;
+  /**
+   * The loop itself. It ends when the account is gone, and interrupting it
+   * stops it, whatever it is waiting for.
+   */
+  readonly run: Effect.Effect<void, never, R>;
 }
 
 const REQUEST_RANK = {
@@ -96,14 +118,14 @@ export const toCycleOutcome = (
  * A sync request during a cycle is remembered and earns one more cycle; a
  * request during a wait ends the wait unless the phase says otherwise.
  */
-export const createAccountWorker = ({
-  now,
+export const createAccountWorker = <R = never>({
   onPhaseChange,
   pollIntervalMs,
   retryDelaysMs,
   runCycle,
-  schedule,
-}: AccountWorkerOptions): AccountWorker => {
+  watch,
+  watchSpacingMs = 0,
+}: AccountWorkerOptions<R>): AccountWorker<R> => {
   let phase: AccountWorkerPhase = { kind: "stopped" };
   let failures = 0;
   /** The strongest request that arrived since the running cycle began. */
@@ -115,7 +137,9 @@ export const createAccountWorker = ({
   // reporting each passing failure: `unreachable` waits for the last step.
   let trouble: "sign-in" | "unreachable" | undefined;
   let caughtUpThisCycle = false;
-  let endWait: (() => void) | undefined;
+  /** What ends the wait now running; a sync request completes it. */
+  let waking: Deferred.Deferred<void> | undefined;
+  let lastWatchedSyncAt = Number.NEGATIVE_INFINITY;
 
   const setPhase = (next: AccountWorkerPhase): void => {
     phase = next;
@@ -132,7 +156,10 @@ export const createAccountWorker = ({
     return phase.kind === "needs-sign-in" && source !== "automatic";
   };
 
-  const afterCycle = (outcome: AccountCycleOutcome): AccountWorkerPhase => {
+  const afterCycle = (
+    outcome: AccountCycleOutcome,
+    now: number
+  ): Exclude<AccountWorkerPhase, { readonly kind: "indexing" }> => {
     if (outcome.kind === "account-missing") {
       return { kind: "stopped" };
     }
@@ -140,7 +167,7 @@ export const createAccountWorker = ({
       failures = 0;
       return outcome.moreWork || pending !== undefined
         ? { kind: "syncing" }
-        : { kind: "idle", until: now() + pollIntervalMs };
+        : { kind: "idle", until: now + pollIntervalMs };
     }
     if (outcome.kind === "sign-in-refused") {
       trouble = "sign-in";
@@ -158,7 +185,7 @@ export const createAccountWorker = ({
         attempt: failures,
         kind: "retrying",
         serverDelay: true,
-        until: now() + outcome.retryAfterMs,
+        until: now + outcome.retryAfterMs,
       };
     }
     if (pending !== undefined) {
@@ -171,51 +198,122 @@ export const createAccountWorker = ({
       attempt: failures,
       kind: "retrying",
       serverDelay: false,
-      until: now() + delay,
+      until: now + delay,
     };
   };
 
-  const wait = async (
-    waiting: AccountWorkerPhase,
-    signal: AbortSignal
-  ): Promise<void> => {
-    const ended = Promise.withResolvers<null>();
-    const timer =
-      "until" in waiting
-        ? schedule(() => ended.resolve(null), waiting.until - now())
-        : undefined;
-    endWait = () => ended.resolve(null);
-    if (signal.aborted) {
-      ended.resolve(null);
-    }
-    await ended.promise;
-    endWait = undefined;
-    timer?.cancel();
-  };
-
-  // Disconnect and quit wait for the loop, so abort ends every wait,
-  // including the one for a sign-in, which has no timer of its own.
-  const endWaitOnAbort = (): void => endWait?.();
-
-  const cycle = async (signal: AbortSignal): Promise<AccountCycleOutcome> => {
-    try {
-      return await runCycle(
-        {
-          syncPassEnded: (caughtUp) => {
-            if (!caughtUp || phase.kind !== "syncing") {
-              return;
-            }
-            caughtUpThisCycle = true;
-            trouble = undefined;
-            setPhase({ kind: "indexing" });
-          },
-        },
-        signal
+  /**
+   * Sleeps until `at`, unless a sync request ends the wait first. The time is
+   * absolute, so the wait ends when its phase says it does however long the
+   * steps before the sleep took.
+   */
+  const sleepUntil = Effect.fnUntraced(function* sleepUntil(
+    at: number,
+    wake: Deferred.Deferred<void>
+  ) {
+    const delay = at - (yield* Clock.currentTimeMillis);
+    if (delay > 0) {
+      yield* Deferred.await(wake).pipe(
+        Effect.timeoutOrElse({ duration: delay, orElse: () => Effect.void })
       );
-    } catch {
-      return { kind: "failed" };
     }
-  };
+  });
+
+  /**
+   * The wait between cycles, which `wake` ends: a sync request completes it.
+   *
+   * An idle loop waits on the server where it can: news ends the wait, and
+   * the poll takes over only when the server cannot be waited on. A wait
+   * that failed counts as that too, so a server that keeps failing it is
+   * polled rather than hammered.
+   *
+   * `wake` is also what asks the server wait to stop. It is never raced
+   * against that wait: losing a race would interrupt it and drop its
+   * connection, when all a sync request needs is for it to finish.
+   */
+  const wait = Effect.fnUntraced(function* wait(
+    waiting: Exclude<
+      AccountWorkerPhase,
+      { readonly kind: "indexing" | "stopped" | "syncing" }
+    >,
+    wake: Deferred.Deferred<void>
+  ) {
+    if (waiting.kind === "needs-sign-in") {
+      yield* Deferred.await(wake);
+      return;
+    }
+    if (waiting.kind === "retrying" || watch === undefined) {
+      yield* sleepUntil(waiting.until, wake);
+      return;
+    }
+
+    const watched = yield* Effect.exit(Effect.suspend(() => watch(wake)));
+    if (yield* Deferred.isDone(wake)) {
+      return;
+    }
+    if (Exit.isFailure(watched) || watched.value === "unavailable") {
+      yield* sleepUntil(waiting.until, wake);
+      return;
+    }
+    const startsAt = Math.max(
+      yield* Clock.currentTimeMillis,
+      lastWatchedSyncAt + watchSpacingMs
+    );
+    lastWatchedSyncAt = startsAt;
+    yield* sleepUntil(startsAt, wake);
+  });
+
+  const cycle = Effect.suspend(() =>
+    runCycle({
+      syncPassEnded: (caughtUp) => {
+        if (!caughtUp || phase.kind !== "syncing") {
+          return;
+        }
+        caughtUpThisCycle = true;
+        trouble = undefined;
+        setPhase({ kind: "indexing" });
+      },
+    })
+  ).pipe(
+    Effect.exit,
+    Effect.map((exit): AccountCycleOutcome =>
+      Exit.isSuccess(exit) ? exit.value : { kind: "failed" }
+    )
+  );
+
+  const waitEnded = Effect.sync(() => {
+    waking = undefined;
+  });
+
+  const run = Effect.gen(function* runLoop() {
+    for (;;) {
+      pending = undefined;
+      caughtUpThisCycle = false;
+      setPhase({ kind: "syncing" });
+      const outcome = yield* cycle;
+      const now = yield* Clock.currentTimeMillis;
+
+      // Nothing yields from here until the wait can be ended. A request in
+      // that gap would be too late to count as pending and too early to end
+      // the wait, and would be lost.
+      const next = afterCycle(outcome, now);
+      if (next.kind === "stopped") {
+        return;
+      }
+      if (next.kind !== "syncing") {
+        setPhase(next);
+        const wake: Deferred.Deferred<void> = Deferred.makeUnsafe();
+        waking = wake;
+        yield* wait(next, wake).pipe(Effect.ensuring(waitEnded));
+      }
+    }
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        setPhase({ kind: "stopped" });
+      })
+    )
+  );
 
   return {
     indexStatus: () => {
@@ -226,8 +324,8 @@ export const createAccountWorker = ({
     },
     phase: () => phase,
     requestSync: (source) => {
-      if (endWait !== undefined && endsWait(source)) {
-        endWait();
+      if (waking !== undefined && endsWait(source)) {
+        Deferred.doneUnsafe(waking, Effect.void);
         return;
       }
       if (
@@ -237,32 +335,6 @@ export const createAccountWorker = ({
         pending = source;
       }
     },
-    run: async (signal) => {
-      signal.addEventListener("abort", endWaitOnAbort, { once: true });
-      try {
-        while (!signal.aborted) {
-          pending = undefined;
-          caughtUpThisCycle = false;
-          setPhase({ kind: "syncing" });
-          // oxlint-disable-next-line eslint/no-await-in-loop -- One cycle at a time is the loop.
-          const outcome = await cycle(signal);
-          if (signal.aborted) {
-            break;
-          }
-          const next = afterCycle(outcome);
-          if (next.kind === "stopped") {
-            break;
-          }
-          if (next.kind !== "syncing") {
-            setPhase(next);
-            // oxlint-disable-next-line eslint/no-await-in-loop -- The wait between cycles.
-            await wait(next, signal);
-          }
-        }
-      } finally {
-        signal.removeEventListener("abort", endWaitOnAbort);
-        setPhase({ kind: "stopped" });
-      }
-    },
+    run,
   };
 };

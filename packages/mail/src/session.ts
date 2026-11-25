@@ -1,4 +1,4 @@
-import type { Effect, Redacted, Scope } from "effect";
+import type { Deferred, Effect, Redacted, Scope } from "effect";
 import { Context } from "effect";
 
 import type { MailTransportError } from "./errors";
@@ -20,6 +20,25 @@ export interface MailboxState {
   readonly path: string;
   readonly uidNext: number;
   readonly uidValidity: bigint;
+  /** Messages without `\Seen`, where the server says. */
+  readonly unseen?: number | undefined;
+}
+
+/**
+ * How a wait in a mailbox ended: mail `arrived`, something else `changed`
+ * (mail left, or a flag was set or cleared), or nothing was reported.
+ */
+export type WatchOutcome = "arrived" | "changed" | "quiet";
+
+export interface WatchOptions {
+  /** The wait ends as `quiet` after this long without a report. */
+  readonly maxMs: number;
+  /**
+   * Completed to end the wait early, as `quiet`, with the connection ready
+   * for its next command. Interrupting the wait abandons the connection
+   * instead, as it does for any other call.
+   */
+  readonly stop: Deferred.Deferred<void>;
 }
 
 export interface EnvelopeAddress {
@@ -92,6 +111,13 @@ export type MailboxSearch =
  * One authenticated IMAP connection. Every call names its mailbox; the
  * session selects it (read-only unless the call changes messages) and
  * serializes calls, so callers never manage the selected-mailbox state.
+ *
+ * A UID names a message only under the UIDVALIDITY it was read under: a
+ * mailbox deleted and made again, or rebuilt by its server, numbers its mail
+ * afresh. So every call that takes or returns UIDs also takes the
+ * UIDVALIDITY the caller knows the mailbox under. When the mailbox the
+ * server has under that name carries another, the call sends nothing and
+ * fails with `MailboxMissingError`: the mailbox the caller means is gone.
  */
 export interface ImapSession {
   /** Stores a message in a mailbox (APPEND), as a client files sent mail. */
@@ -104,6 +130,7 @@ export interface ImapSession {
   /** Copies messages into another mailbox (UID COPY). */
   readonly copy: (
     path: string,
+    uidValidity: bigint,
     uids: readonly number[],
     destination: string
   ) => Effect.Effect<void, MailTransportError>;
@@ -116,10 +143,12 @@ export interface ImapSession {
   /** Marks messages deleted and expunges exactly those UIDs where possible. */
   readonly expunge: (
     path: string,
+    uidValidity: bigint,
     uids: readonly number[]
   ) => Effect.Effect<void, MailTransportError>;
   readonly fetch: (
     path: string,
+    uidValidity: bigint,
     selection: UidSelection,
     fields: FetchFields,
     options?: { readonly changedSince?: bigint }
@@ -127,10 +156,19 @@ export interface ImapSession {
   /** One section of one message, still transfer-encoded; `undefined` if gone. */
   readonly fetchSection: (
     path: string,
+    uidValidity: bigint,
     uid: number,
     section: string,
     maxBytes: number
   ) => Effect.Effect<Uint8Array | undefined, MailTransportError>;
+  /**
+   * Whether any message of the mailbox matches. It names no message, so it
+   * takes no UIDVALIDITY: for asking whether mail is there at all.
+   */
+  readonly hasMessage: (
+    path: string,
+    search: MailboxSearch
+  ) => Effect.Effect<boolean, MailTransportError>;
   readonly listMailboxes: Effect.Effect<
     readonly ImapMailbox[],
     MailTransportError
@@ -138,6 +176,7 @@ export interface ImapSession {
   /** Moves messages to another mailbox (UID MOVE, or copy and expunge). */
   readonly move: (
     path: string,
+    uidValidity: bigint,
     uids: readonly number[],
     destination: string
   ) => Effect.Effect<void, MailTransportError>;
@@ -148,11 +187,13 @@ export interface ImapSession {
   /** UIDs of the matching messages, in ascending order. */
   readonly search: (
     path: string,
+    uidValidity: bigint,
     search: MailboxSearch
   ) => Effect.Effect<readonly number[], MailTransportError>;
   /** Adds or removes Gmail labels (STORE ±X-GM-LABELS). */
   readonly setGmailLabels: (
     path: string,
+    uidValidity: bigint,
     uids: readonly number[],
     operation: "add" | "remove",
     labels: readonly string[]
@@ -160,6 +201,7 @@ export interface ImapSession {
   /** Adds or removes flags (STORE ±FLAGS.SILENT); opens the mailbox read-write. */
   readonly setFlags: (
     path: string,
+    uidValidity: bigint,
     uids: readonly number[],
     operation: "add" | "remove",
     flags: readonly string[]
@@ -167,6 +209,15 @@ export interface ImapSession {
   readonly status: (
     path: string
   ) => Effect.Effect<MailboxState, MailTransportError>;
+  /**
+   * Waits in a mailbox until the server reports anything there (IDLE): mail
+   * arriving or leaving, or a flag changing. The session carries no other
+   * call until the wait ends.
+   */
+  readonly watch: (
+    path: string,
+    options: WatchOptions
+  ) => Effect.Effect<WatchOutcome, MailTransportError>;
 }
 
 /**

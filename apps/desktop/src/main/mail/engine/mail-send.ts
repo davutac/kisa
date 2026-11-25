@@ -171,12 +171,12 @@ const appendSentCopy = (
     withCacheLock(
       account.accountId,
       Effect.gen(function* appendToSent() {
-        const existing = yield* scope.session.search(sentPath, {
+        const filed = yield* scope.session.hasMessage(sentPath, {
           kind: "header",
           name: "Message-ID",
           value: `<${composed.messageId}>`,
         });
-        if (existing.length === 0) {
+        if (!filed) {
           yield* scope.session.append(sentPath, composed.sentCopy, ["\\Seen"]);
         }
         const changes = yield* refreshMailboxes(scope, [sentPath]);
@@ -498,14 +498,13 @@ export const findSentMessage = Effect.fn("MailSend.findSentMessage")(
       return false;
     }
 
-    const found = yield* withForeground(account, (scope) =>
-      scope.session.search(
+    return yield* withForeground(account, (scope) =>
+      scope.session.hasMessage(
         mailbox.path,
         isGmail
           ? { kind: "gmailRaw", query: `rfc822msgid:${id}` }
           : { kind: "header", name: "Message-ID", value: `<${id}>` }
       )
     );
-    return found.length > 0;
   }
 );

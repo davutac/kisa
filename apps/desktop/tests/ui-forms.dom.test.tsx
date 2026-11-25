@@ -314,6 +314,7 @@ const THREAD: MailThreadSummary = {
   labels: ["INBOX"],
   latestAt: new Date(2026, 0, 2, 9, 30).getTime(),
   messageCount: 1,
+  places: ["inbox"],
   snippet: "Notes on the engine",
   subject: "Analytical engine",
   threadId: "thread-1",

@@ -112,6 +112,7 @@ const thread = (
   labels: ["INBOX"],
   latestAt: new Date(2026, 0, 2, 9, 30).getTime(),
   messageCount: 1,
+  places: ["inbox"],
   snippet: `About ${subject}`,
   subject,
   threadId,
@@ -562,7 +563,10 @@ describe("mail lists", () => {
 
     it("leaves E to conversations in the Inbox", async () => {
       const { actions } = await renderMailbox([
-        thread("ana@example.com", "sent", "Sent", { labels: ["SENT"] }),
+        thread("ana@example.com", "sent", "Sent", {
+          labels: ["SENT"],
+          places: ["sent"],
+        }),
       ]);
       await press("j");
       await press("e");
@@ -911,7 +915,10 @@ describe("mail lists", () => {
 
     it("keeps its buttons focusable, for their tooltips, while Delete forever waits for an answer", async () => {
       await renderMailbox([
-        thread("ana@example.com", "trashed", "Old", { labels: ["TRASH"] }),
+        thread("ana@example.com", "trashed", "Old", {
+          labels: ["TRASH"],
+          places: ["trash"],
+        }),
       ]);
       await press("j");
       await press("x");
@@ -943,9 +950,11 @@ describe("mail lists", () => {
     it("archives, stars and reports only the conversations each applies to", async () => {
       const starred = thread("ana@example.com", "s1", "Starred", {
         labels: ["INBOX", "STARRED"],
+        places: ["inbox", "starred"],
       });
       const sent = thread("ana@example.com", "s2", "Sent", {
         labels: ["SENT"],
+        places: ["sent"],
       });
       const { actions } = await renderMailbox([starred, sent]);
       await press("j");
@@ -974,8 +983,12 @@ describe("mail lists", () => {
       const { actions } = await renderMailbox([
         thread("ana@example.com", "s1", "One", {
           labels: ["INBOX", "STARRED"],
+          places: ["inbox", "starred"],
         }),
-        thread("ana@example.com", "s2", "Two", { labels: ["STARRED"] }),
+        thread("ana@example.com", "s2", "Two", {
+          labels: ["STARRED"],
+          places: ["starred"],
+        }),
       ]);
       await press("j");
       await press("x");
@@ -995,7 +1008,10 @@ describe("mail lists", () => {
 
     it("offers neither Archive, Star nor Report spam for conversations in Trash", async () => {
       await renderMailbox([
-        thread("ana@example.com", "trashed", "Old", { labels: ["TRASH"] }),
+        thread("ana@example.com", "trashed", "Old", {
+          labels: ["TRASH"],
+          places: ["trash"],
+        }),
       ]);
       await press("j");
       await press("x");

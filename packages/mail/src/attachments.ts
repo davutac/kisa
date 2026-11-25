@@ -40,6 +40,7 @@ export const fetchAttachment = Effect.fn("MailAttachments.fetchAttachment")(
     const attachment = stored.value;
     const bytes = yield* scope.session.fetchSection(
       attachment.mailboxPath,
+      attachment.uidValidity,
       attachment.uid,
       attachment.section,
       MAX_ATTACHMENT_BYTES

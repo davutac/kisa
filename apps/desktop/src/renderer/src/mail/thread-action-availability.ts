@@ -1,4 +1,5 @@
 import type { MailThreadSummary, ThreadMessage } from "@/shared/ipc/mail";
+import { isDiscarded, isListedIn } from "@/shared/mailbox-places";
 
 import {
   hasInboxLabel,
@@ -9,21 +10,27 @@ import {
 } from "./label";
 
 type Labels = readonly string[];
+/** A conversation's `places`: where main lists it. */
+type Places = readonly string[];
 
-/** Spam and Trash hold mail on its way out, where Archive and Star don't apply. */
-const isDiscarded = (labels: Labels): boolean =>
-  hasSpamLabel(labels) || hasTrashLabel(labels);
+// What a conversation's place allows is asked of the places main sent with
+// it, never worked out from its labels. Spam and Trash hold mail on its way
+// out, where Archive and Star don't apply.
 
-export const canArchiveThread = (labels: Labels): boolean =>
-  hasInboxLabel(labels) && !isDiscarded(labels);
+export const canArchiveThread = (places: Places): boolean =>
+  isListedIn(places, "inbox");
 
-export const canStarThread = (labels: Labels): boolean => !isDiscarded(labels);
+export const canStarThread = (places: Places): boolean => !isDiscarded(places);
 
-export const canReportThreadSpam = (labels: Labels): boolean =>
-  !isDiscarded(labels);
+export const canReportThreadSpam = (places: Places): boolean =>
+  !isDiscarded(places);
 
 const isOwnMessage = (labelIds: Labels): boolean =>
   hasSentLabel(labelIds) || labelIds.includes("DRAFT");
+
+/** One message's own labels: in Spam or Trash. */
+const isDiscardedMessage = (labelIds: Labels): boolean =>
+  hasSpamLabel(labelIds) || hasTrashLabel(labelIds);
 
 /**
  * Spam is a verdict on other people's mail: a conversation of only the user's
@@ -39,16 +46,16 @@ export const hasReceivedMessage = (
  * their own sent mail has none, so it is never offered there.
  */
 export const hasArchivedMessage = (
-  labels: Labels,
+  places: Places,
   messages: readonly Pick<ThreadMessage, "labelIds">[]
 ): boolean =>
-  !hasInboxLabel(labels) &&
-  !isDiscarded(labels) &&
+  !isListedIn(places, "inbox") &&
+  !isDiscarded(places) &&
   messages.some(
     ({ labelIds }) =>
       !isOwnMessage(labelIds) &&
       !hasInboxLabel(labelIds) &&
-      !isDiscarded(labelIds)
+      !isDiscardedMessage(labelIds)
   );
 
 /**

@@ -1,4 +1,8 @@
-import { MailConnectionError, MailboxMissingError } from "@repo/mail/errors";
+import {
+  MailConnectionError,
+  MailProtocolError,
+  MailboxMissingError,
+} from "@repo/mail/errors";
 import { AccountId, toMailboxRole } from "@repo/mail/ids";
 import type { BodyStructureNode } from "@repo/mail/mime-structure";
 import type {
@@ -9,8 +13,10 @@ import type {
   MailboxSearch,
   MessageEnvelope,
   UidSelection,
+  WatchOptions,
+  WatchOutcome,
 } from "@repo/mail/session";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 
 /** A message as a test writes it; the server assigns UIDs and mod-sequences. */
 export interface FakeMessageInput {
@@ -183,8 +189,37 @@ export class FakeImapServer {
     readonly path: string;
     readonly selection: UidSelection;
   }[] = [];
+  /**
+   * Called with a command that changes mail just before it is applied: the
+   * moment another client's change lands between a client reading its cache
+   * and sending the command.
+   */
+  beforeCommand: ((call: string) => void) | undefined;
   /** Makes a FETCH fail as a dropped connection would, when it returns true. */
   dropFetch: ((path: string, selection: UidSelection) => boolean) | undefined;
+  /**
+   * Applies a command that changes mail and then fails it, when it returns
+   * true: a connection lost after the server acted and before it answered.
+   */
+  loseAnswer: ((call: string) => boolean) | undefined;
+  /** Added to every UNSEEN count, for a server whose count is not exact. */
+  miscountedUnseen = 0;
+  /**
+   * Called on each FETCH and SEARCH, before it is answered: the moment
+   * another client's change lands in the middle of a pass.
+   */
+  onRead: ((path: string) => void) | undefined;
+  /** Called on each STATUS, before it is answered. */
+  onStatus: ((path: string) => void) | undefined;
+  /** The mailbox of every STATUS, in order. */
+  readonly statuses: string[] = [];
+  /** The mailbox of every wait a client began (IDLE). */
+  readonly watches: string[] = [];
+  private onWatch: (() => void) | undefined;
+  private readonly watchers = new Set<{
+    readonly end: (outcome: WatchOutcome) => void;
+    readonly path: string;
+  }>();
   /**
    * Gmail files a message moved into INBOX in All Mail with the `\Inbox`
    * label. Set to the All Mail path to behave that way.
@@ -192,6 +227,11 @@ export class FakeImapServer {
   private readonly gmailAllMail: string | undefined;
   private readonly mailboxes = new Map<string, FakeMailbox>();
   private modseq = 100n;
+  /**
+   * Each mailbox gets a UIDVALIDITY of its own, as on a server, far enough
+   * from the next that a rebuilt mailbox never reaches another's.
+   */
+  private validities = 7n;
 
   constructor(
     mailboxes: readonly {
@@ -217,9 +257,15 @@ export class FakeImapServer {
         },
         messages: new Map(),
         uidNext: 1,
-        uidValidity: 7n,
+        uidValidity: this.nextValidity(),
       });
     }
+  }
+
+  private nextValidity(): bigint {
+    const validity = this.validities;
+    this.validities += 1000n;
+    return validity;
   }
 
   /** A mailbox created by a client (a new label or folder). */
@@ -235,7 +281,7 @@ export class FakeImapServer {
       },
       messages: new Map(),
       uidNext: 1,
-      uidValidity: 7n,
+      uidValidity: this.nextValidity(),
     });
   }
 
@@ -280,6 +326,33 @@ export class FakeImapServer {
     return mailbox;
   }
 
+  /**
+   * Tells the clients waiting in `path` what happened there, as IDLE does.
+   * Public for Gmail's Inbox, a view of All Mail the fake does not model:
+   * a test changes All Mail and reports it for the Inbox itself.
+   */
+  report(path: string, outcome: "arrived" | "changed"): void {
+    for (const watcher of this.watchers) {
+      if (watcher.path === path) {
+        watcher.end(outcome);
+      }
+    }
+  }
+
+  /** Lets every wait run out, as its clock would. */
+  endWatches(): void {
+    for (const watcher of this.watchers) {
+      watcher.end("quiet");
+    }
+  }
+
+  /** Resolves once a client is waiting, so a test can act on the server then. */
+  nextWatch(): Promise<null> {
+    const started = Promise.withResolvers<null>();
+    this.onWatch = () => started.resolve(null);
+    return started.promise;
+  }
+
   private nextModseq(mailbox: FakeMailbox): bigint {
     this.modseq += 1n;
     mailbox.highestModseq = this.modseq;
@@ -298,6 +371,7 @@ export class FakeImapServer {
       modseq: this.nextModseq(mailbox),
       uid,
     });
+    this.report(path, "arrived");
     return uid;
   }
 
@@ -312,6 +386,22 @@ export class FakeImapServer {
     if (message !== undefined) {
       message.flags = flags;
       message.modseq = this.nextModseq(mailbox);
+      this.report(path, "changed");
+    }
+  }
+
+  /**
+   * Changes a message's flags without a new mod-sequence or a report: what
+   * the server holds when the cache has a flag wrong and nothing says so.
+   */
+  setFlagsUnreported(
+    path: string,
+    uid: number,
+    flags: readonly string[]
+  ): void {
+    const message = this.mailbox(path).messages.get(uid);
+    if (message !== undefined) {
+      message.flags = flags;
     }
   }
 
@@ -326,6 +416,7 @@ export class FakeImapServer {
 
   expunge(path: string, uid: number): void {
     this.mailbox(path).messages.delete(uid);
+    this.report(path, "changed");
   }
 
   /** Moves a copy: it leaves `from` and arrives in `to` under a new UID. */
@@ -336,6 +427,35 @@ export class FakeImapServer {
     }
     this.expunge(from, uid);
     return this.deliver(to, message);
+  }
+
+  /** Copies a message into `to` under a new UID, as another client would. */
+  copy(from: string, uid: number, to: string): number {
+    const message = this.mailbox(from).messages.get(uid);
+    if (message === undefined) {
+      throw new Error("no such message");
+    }
+    return this.deliver(to, message);
+  }
+
+  /**
+   * Everything the server holds, as one fetch of every message in every
+   * mailbox would answer: what a cache is held against.
+   */
+  snapshot(fields: FetchFields): readonly {
+    readonly mailbox: ImapMailbox;
+    readonly messages: readonly FetchedMessage[];
+    readonly uidValidity: bigint;
+  }[] {
+    return [...this.mailboxes.values()].map((mailbox) => ({
+      mailbox: mailbox.info,
+      messages: [...mailbox.messages.values()]
+        .toSorted((left, right) => left.uid - right.uid)
+        .map((message) =>
+          toFetched(message, fields, this.capabilities.has("CONDSTORE"))
+        ),
+      uidValidity: mailbox.uidValidity,
+    }));
   }
 
   /** Rewrites Gmail labels everywhere, as Gmail does on rename or delete. */
@@ -372,6 +492,73 @@ export class FakeImapServer {
           : Effect.sync(() => run(mailbox));
       });
 
+    /**
+     * A command that names messages by UID runs only in a mailbox that has
+     * the caller's UIDVALIDITY, as the adapter refuses it otherwise. That is
+     * looked at when the command applies, after the hooks another client's
+     * change lands in: a rebuild cannot come between the two on a server.
+     */
+    const selected = <A>(
+      path: string,
+      uidValidity: bigint,
+      run: (mailbox: FakeMailbox) => A
+    ) =>
+      Effect.suspend(() => {
+        const mailbox = this.mailboxes.get(path);
+        return mailbox === undefined || mailbox.uidValidity !== uidValidity
+          ? Effect.fail(new MailboxMissingError({ accountId, path }))
+          : Effect.sync(() => run(mailbox));
+      });
+
+    /** `onRead`, for a read of a mailbox that is there. */
+    const reading = (path: string): void => {
+      if (this.mailboxes.has(path)) {
+        this.onRead?.(path);
+      }
+    };
+
+    /**
+     * A command that changes mail: see `beforeCommand` and `loseAnswer`. One
+     * that files messages into a mailbox that is gone is refused, as a
+     * server answers `NO` to it.
+     */
+    const changing = (
+      call: string,
+      path: string,
+      uidValidity: bigint,
+      apply: (mailbox: FakeMailbox) => void,
+      destination?: string
+    ) =>
+      Effect.suspend(
+        (): Effect.Effect<void, MailProtocolError | MailboxMissingError> => {
+          this.beforeCommand?.(call);
+          return destination !== undefined && !this.mailboxes.has(destination)
+            ? Effect.fail(
+                new MailProtocolError({
+                  accountId,
+                  message: "The mail server refused the request",
+                })
+              )
+            : selected(path, uidValidity, (mailbox) => {
+                this.calls.push(call);
+                apply(mailbox);
+              });
+        }
+      ).pipe(
+        Effect.andThen(
+          Effect.suspend(() =>
+            this.loseAnswer?.(call) === true
+              ? Effect.fail(
+                  new MailConnectionError({
+                    accountId,
+                    message: "The connection to the mail server failed",
+                  })
+                )
+              : Effect.void
+          )
+        )
+      );
+
     const copyInto = (
       mailbox: FakeMailbox,
       uids: readonly number[],
@@ -404,11 +591,16 @@ export class FakeImapServer {
           this.deliver(path, parseAppended(raw, flags));
         }),
       capabilities: this.capabilities,
-      copy: (path, uids, destination) =>
-        withMailbox(path, (mailbox) => {
-          this.calls.push(`copy ${path} -> ${destination}`);
-          copyInto(mailbox, uids, destination);
-        }),
+      copy: (path, uidValidity, uids, destination) =>
+        changing(
+          `copy ${path} -> ${destination}`,
+          path,
+          uidValidity,
+          (mailbox) => {
+            copyInto(mailbox, uids, destination);
+          },
+          destination
+        ),
       createMailbox: (path) =>
         Effect.sync(() => {
           this.calls.push(`create ${path}`);
@@ -419,14 +611,13 @@ export class FakeImapServer {
           this.calls.push(`delete ${path}`);
           this.removeMailbox(path);
         }),
-      expunge: (path, uids) =>
-        withMailbox(path, (mailbox) => {
-          this.calls.push(`expunge ${path}`);
+      expunge: (path, uidValidity, uids) =>
+        changing(`expunge ${path}`, path, uidValidity, (mailbox) => {
           for (const uid of uids) {
             mailbox.messages.delete(uid);
           }
         }),
-      fetch: (path, selection, fields, options) =>
+      fetch: (path, uidValidity, selection, fields, options) =>
         this.dropFetch?.(path, selection) === true
           ? Effect.fail(
               new MailConnectionError({
@@ -434,109 +625,181 @@ export class FakeImapServer {
                 message: "The connection to the mail server failed",
               })
             )
-          : withMailbox(path, (mailbox) => {
-              this.calls.push(`fetch ${path}`);
-              this.fetches.push({
-                changedSince: options?.changedSince,
-                fields,
-                path,
-                selection,
-              });
-              const uids =
-                selection.kind === "uids" ? new Set(selection.uids) : undefined;
-              return [...mailbox.messages.values()]
-                .filter((message) =>
-                  uids === undefined
-                    ? selection.kind === "range" &&
-                      message.uid >= selection.from &&
-                      (selection.to === undefined ||
-                        message.uid <= selection.to)
-                    : uids.has(message.uid)
-                )
-                .filter(
-                  (message) =>
-                    options?.changedSince === undefined ||
-                    message.modseq > options.changedSince
-                )
-                .filter(
-                  (message) =>
-                    fields.sections === undefined ||
-                    message.withholdsSections !== true
-                )
-                .toSorted((left, right) => left.uid - right.uid)
-                .map((message) =>
-                  toFetched(message, fields, this.capabilities.has("CONDSTORE"))
-                );
-            }),
-      fetchSection: (path, uid, section) =>
-        withMailbox(path, (mailbox) => {
+          : Effect.sync(() => {
+              reading(path);
+            }).pipe(
+              Effect.andThen(
+                selected(path, uidValidity, (mailbox) => {
+                  this.calls.push(`fetch ${path}`);
+                  this.fetches.push({
+                    changedSince: options?.changedSince,
+                    fields,
+                    path,
+                    selection,
+                  });
+                  const uids =
+                    selection.kind === "uids"
+                      ? new Set(selection.uids)
+                      : undefined;
+                  return [...mailbox.messages.values()]
+                    .filter((message) =>
+                      uids === undefined
+                        ? selection.kind === "range" &&
+                          message.uid >= selection.from &&
+                          (selection.to === undefined ||
+                            message.uid <= selection.to)
+                        : uids.has(message.uid)
+                    )
+                    .filter(
+                      (message) =>
+                        options?.changedSince === undefined ||
+                        message.modseq > options.changedSince
+                    )
+                    .filter(
+                      (message) =>
+                        fields.sections === undefined ||
+                        message.withholdsSections !== true
+                    )
+                    .toSorted((left, right) => left.uid - right.uid)
+                    .map((message) =>
+                      toFetched(
+                        message,
+                        fields,
+                        this.capabilities.has("CONDSTORE")
+                      )
+                    );
+                })
+              )
+            ),
+      fetchSection: (path, uidValidity, uid, section) =>
+        selected(path, uidValidity, (mailbox) => {
           const value = mailbox.messages.get(uid)?.sections?.[section];
           return value === undefined ? undefined : Buffer.from(value, "latin1");
+        }),
+      hasMessage: (path, search) =>
+        withMailbox(path, (mailbox) => {
+          this.onRead?.(path);
+          this.calls.push(`search ${path} ${search.kind}`);
+          return searchMailbox(mailbox, search).length > 0;
         }),
       listMailboxes: Effect.sync(() =>
         [...this.mailboxes.values()].map((mailbox) => mailbox.info)
       ),
-      move: (path, uids, destination) =>
-        withMailbox(path, (mailbox) => {
-          this.calls.push(`move ${path} -> ${destination}`);
-          copyInto(mailbox, uids, destination);
-          for (const uid of uids) {
-            mailbox.messages.delete(uid);
-          }
-        }),
+      move: (path, uidValidity, uids, destination) =>
+        changing(
+          `move ${path} -> ${destination}`,
+          path,
+          uidValidity,
+          (mailbox) => {
+            copyInto(mailbox, uids, destination);
+            for (const uid of uids) {
+              mailbox.messages.delete(uid);
+            }
+          },
+          destination
+        ),
       renameMailbox: (path, destination) =>
         Effect.sync(() => {
           this.calls.push(`rename ${path} -> ${destination}`);
           this.renameMailbox(path, destination);
         }),
-      search: (path, search) =>
-        withMailbox(path, (mailbox) => {
-          this.calls.push(`search ${path} ${search.kind}`);
-          return searchMailbox(mailbox, search);
-        }),
-      setFlags: (path, uids, operation, flags) =>
-        withMailbox(path, (mailbox) => {
-          this.calls.push(`store ${path} ${operation} ${flags.join(" ")}`);
-          for (const uid of uids) {
-            const message = mailbox.messages.get(uid);
-            if (message !== undefined) {
-              this.setFlags(
-                path,
-                uid,
-                operation === "add"
-                  ? [...new Set([...message.flags, ...flags])]
-                  : message.flags.filter((flag) => !flags.includes(flag))
-              );
-            }
-          }
-        }),
-      setGmailLabels: (path, uids, operation, labels) =>
-        withMailbox(path, (mailbox) => {
-          this.calls.push(`label ${path} ${operation} ${labels.join(" ")}`);
-          for (const uid of uids) {
-            const message = mailbox.messages.get(uid);
-            if (message !== undefined) {
-              const current = message.gmailLabels ?? [];
-              this.setGmailLabels(
-                path,
-                uid,
-                operation === "add"
-                  ? [...new Set([...current, ...labels])]
-                  : current.filter((label) => !labels.includes(label))
-              );
-            }
-          }
-        }),
-      status: (path) =>
-        withMailbox(path, (mailbox) => ({
-          highestModseq: this.capabilities.has("CONDSTORE")
-            ? mailbox.highestModseq
-            : undefined,
-          messages: mailbox.messages.size,
+      search: (path, uidValidity, search) =>
+        Effect.sync(() => {
+          reading(path);
+        }).pipe(
+          Effect.andThen(
+            selected(path, uidValidity, (mailbox) => {
+              this.calls.push(`search ${path} ${search.kind}`);
+              return searchMailbox(mailbox, search);
+            })
+          )
+        ),
+      setFlags: (path, uidValidity, uids, operation, flags) =>
+        changing(
+          `store ${path} ${operation} ${flags.join(" ")}`,
           path,
-          uidNext: mailbox.uidNext,
-          uidValidity: mailbox.uidValidity,
-        })),
+          uidValidity,
+          (mailbox) => {
+            for (const uid of uids) {
+              const message = mailbox.messages.get(uid);
+              if (message !== undefined) {
+                this.setFlags(
+                  path,
+                  uid,
+                  operation === "add"
+                    ? [...new Set([...message.flags, ...flags])]
+                    : message.flags.filter((flag) => !flags.includes(flag))
+                );
+              }
+            }
+          }
+        ),
+      setGmailLabels: (path, uidValidity, uids, operation, labels) =>
+        changing(
+          `label ${path} ${operation} ${labels.join(" ")}`,
+          path,
+          uidValidity,
+          (mailbox) => {
+            for (const uid of uids) {
+              const message = mailbox.messages.get(uid);
+              if (message !== undefined) {
+                const current = message.gmailLabels ?? [];
+                this.setGmailLabels(
+                  path,
+                  uid,
+                  operation === "add"
+                    ? [...new Set([...current, ...labels])]
+                    : current.filter((label) => !labels.includes(label))
+                );
+              }
+            }
+          }
+        ),
+      status: (path) =>
+        withMailbox(path, (mailbox) => {
+          this.statuses.push(path);
+          this.onStatus?.(path);
+          return {
+            highestModseq: this.capabilities.has("CONDSTORE")
+              ? mailbox.highestModseq
+              : undefined,
+            messages: mailbox.messages.size,
+            path,
+            uidNext: mailbox.uidNext,
+            uidValidity: mailbox.uidValidity,
+            unseen:
+              [...mailbox.messages.values()].filter(
+                (message) => !message.flags.includes("\\Seen")
+              ).length + this.miscountedUnseen,
+          };
+        }),
+      watch: (path: string, options: WatchOptions) =>
+        Effect.suspend(() => {
+          this.calls.push(`watch ${path}`);
+          this.watches.push(path);
+          const reported = Deferred.makeUnsafe<WatchOutcome>();
+          const watcher = {
+            end: (outcome: WatchOutcome): void => {
+              this.watchers.delete(watcher);
+              Deferred.doneUnsafe(reported, Effect.succeed(outcome));
+            },
+            path,
+          };
+          this.watchers.add(watcher);
+          this.onWatch?.();
+          return Deferred.await(reported).pipe(
+            Effect.raceFirst(
+              Deferred.await(options.stop).pipe(
+                Effect.as<WatchOutcome>("quiet")
+              )
+            ),
+            Effect.ensuring(
+              Effect.sync(() => {
+                this.watchers.delete(watcher);
+              })
+            )
+          );
+        }),
     };
   }
 }

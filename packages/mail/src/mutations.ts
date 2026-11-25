@@ -4,15 +4,11 @@ import { MailProtocolError } from "./errors";
 import { SystemLabel, userLabelPath } from "./ids";
 import type { AccountId, LabelId, MailboxRole, ThreadId } from "./ids";
 import { MailEngineStore } from "./store";
-import type {
-  LocationChange,
-  MailboxRecord,
-  ThreadChanges,
-  ThreadLocation,
-} from "./store";
+import type { MailboxRecord, ThreadChanges, ThreadLocation } from "./store";
 import {
   NO_THREAD_CHANGES,
   mergeThreadChanges,
+  rereadCopies,
   syncMailbox,
   toImapMailbox,
 } from "./sync";
@@ -46,60 +42,42 @@ const hasFlag = (location: ThreadLocation, flag: string): boolean =>
     (candidate) => candidate.toLowerCase() === flag.toLowerCase()
   );
 
+/**
+ * The copies one command can name: those of one mailbox, under the
+ * UIDVALIDITY their UIDs were cached under, which the command carries.
+ */
+interface CopyGroup {
+  readonly path: string;
+  readonly uidValidity: bigint;
+  readonly uids: readonly number[];
+}
+
 const groupByMailbox = (
   locations: readonly ThreadLocation[]
-): ReadonlyMap<string, readonly ThreadLocation[]> => {
-  const groups = new Map<string, ThreadLocation[]>();
-  for (const location of locations) {
-    groups.set(location.mailboxPath, [
-      ...(groups.get(location.mailboxPath) ?? []),
-      location,
-    ]);
+): readonly CopyGroup[] => {
+  const groups = new Map<
+    string,
+    { readonly path: string; readonly uidValidity: bigint; uids: number[] }
+  >();
+  for (const { mailboxPath, uid, uidValidity } of locations) {
+    const key = `${uidValidity} ${mailboxPath}`;
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { path: mailboxPath, uidValidity, uids: [uid] });
+    } else {
+      group.uids.push(uid);
+    }
   }
-  return groups;
+  return [...groups.values()];
 };
 
-const uidsOf = (locations: readonly ThreadLocation[]): readonly number[] =>
-  locations.map((location) => location.uid);
-
-/**
- * One store on a set of copies: an IMAP flag or a Gmail label on the server,
- * and the label it gives the message in the cache. They can point opposite
- * ways: adding `\Seen` removes `UNREAD`.
- */
+/** One store on a set of copies: an IMAP flag or a Gmail label. */
 interface CopyChange {
   readonly flag?: { readonly add: boolean; readonly name: string } | undefined;
   readonly gmailLabel?:
     | { readonly add: boolean; readonly name: string }
     | undefined;
-  readonly label: { readonly add: boolean; readonly id: LabelId };
 }
-
-const withFlag = (
-  flags: readonly string[],
-  flag: CopyChange["flag"]
-): readonly string[] => {
-  if (flag === undefined) {
-    return flags;
-  }
-  const others = flags.filter(
-    (candidate) => candidate.toLowerCase() !== flag.name.toLowerCase()
-  );
-  return flag.add ? [...others, flag.name] : others;
-};
-
-/** A copy's new flags and labels after a store. */
-const toggled = (
-  location: ThreadLocation,
-  change: CopyChange
-): LocationChange => {
-  const others = location.labelIds.filter((label) => label !== change.label.id);
-  return {
-    flags: withFlag(location.flags, change.flag),
-    labelIds: change.label.add ? [...others, change.label.id] : others,
-    uid: location.uid,
-  };
-};
 
 /**
  * Catches the cache up with mailboxes a move, copy or expunge touched. The
@@ -201,21 +179,33 @@ const labelMailbox = (
     : context.mailboxes.find((mailbox) => mailbox.path === label.path);
 };
 
-/** Flag or Gmail-label stores: the server first, then the cached copies. */
+/**
+ * Flag or Gmail-label stores: the server first, then the cached copies as
+ * the server holds them afterwards. They are read back, not written as the
+ * store was meant to leave them: another client may have changed the same
+ * copies at that moment, and a server may answer a store its own way.
+ */
 const storeOnCopies = Effect.fn("MailMutations.storeOnCopies")(
   function* storeOnCopies(
     context: ActionContext,
     targets: readonly ThreadLocation[],
     change: CopyChange
   ) {
-    const store = yield* MailEngineStore;
     const results: ThreadChanges[] = [];
 
-    for (const [path, locations] of groupByMailbox(targets)) {
+    for (const { path, uidValidity, uids } of groupByMailbox(targets)) {
+      // Copies are dropped with their mailbox, so each has one cached.
+      const mailbox = context.mailboxes.find(
+        (candidate) => candidate.path === path
+      );
+      if (mailbox === undefined) {
+        continue;
+      }
       if (change.flag !== undefined) {
         yield* context.scope.session.setFlags(
           path,
-          uidsOf(locations),
+          uidValidity,
+          uids,
           change.flag.add ? "add" : "remove",
           [change.flag.name]
         );
@@ -223,19 +213,24 @@ const storeOnCopies = Effect.fn("MailMutations.storeOnCopies")(
       if (change.gmailLabel !== undefined) {
         yield* context.scope.session.setGmailLabels(
           path,
-          uidsOf(locations),
+          uidValidity,
+          uids,
           change.gmailLabel.add ? "add" : "remove",
           [change.gmailLabel.name]
         );
       }
-      results.push(
-        yield* store.applyLocationChanges(
-          context.scope.accountId,
-          path,
-          locations.map((location) => toggled(location, change)),
-          {}
-        )
+      const reread = yield* rereadCopies(
+        context.scope,
+        toImapMailbox(mailbox),
+        uidValidity,
+        uids
       );
+      results.push(reread.changes);
+      if (!reread.complete) {
+        // A copy the server did not return has left the mailbox, and reading
+        // the mailbox is what finds out which.
+        results.push(yield* refreshMailboxes(context.scope, [path]));
+      }
     }
 
     return mergeThreadChanges(...results);
@@ -256,8 +251,8 @@ const moveCopiesTo = Effect.fn("MailMutations.moveCopiesTo")(
       const sources = groupByMailbox(
         targets.filter((location) => location.mailboxPath !== destination)
       );
-      for (const [path, locations] of sources) {
-        yield* context.scope.session.move(path, uidsOf(locations), destination);
+      for (const { path, uidValidity, uids } of sources) {
+        yield* context.scope.session.move(path, uidValidity, uids, destination);
         touched.add(path);
       }
       touched.add(destination);
@@ -279,10 +274,7 @@ const setRead = (context: ActionContext, read: boolean) =>
     context.locations.filter(
       (location) => hasFlag(location, SEEN_FLAG) !== read
     ),
-    {
-      flag: { add: read, name: SEEN_FLAG },
-      label: { add: !read, id: SystemLabel.unread },
-    }
+    { flag: { add: read, name: SEEN_FLAG } }
   );
 
 const setStar = (context: ActionContext, applied: boolean) =>
@@ -291,10 +283,7 @@ const setStar = (context: ActionContext, applied: boolean) =>
     context.locations.filter(
       (location) => hasFlag(location, FLAGGED_FLAG) !== applied
     ),
-    {
-      flag: { add: applied, name: FLAGGED_FLAG },
-      label: { add: applied, id: SystemLabel.starred },
-    }
+    { flag: { add: applied, name: FLAGGED_FLAG } }
   );
 
 /** Gmail labels are stored on the All Mail copy, by their Gmail name. */
@@ -311,10 +300,7 @@ const setGmailLabel = (
         roleOf(context, location.mailboxPath) === "all" &&
         location.labelIds.includes(labelId) !== applied
     ),
-    {
-      gmailLabel: { add: applied, name: gmailLabel },
-      label: { add: applied, id: labelId },
-    }
+    { gmailLabel: { add: applied, name: gmailLabel } }
   );
 
 /**
@@ -338,18 +324,21 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
           .filter((location) => location.mailboxPath === folder.path)
           .map((location) => location.messageId)
       );
+      // A copy in Trash or Spam is never the one filed: that would bring a
+      // discarded message back, in a conversation that has other mail.
       for (const location of context.locations) {
         if (
           !filed.has(location.messageId) &&
-          !firstCopies.has(location.messageId)
+          !firstCopies.has(location.messageId) &&
+          !isDiscarded(context, location.mailboxPath)
         ) {
           firstCopies.set(location.messageId, location);
         }
       }
-      for (const [path, locations] of groupByMailbox([
+      for (const { path, uidValidity, uids } of groupByMailbox([
         ...firstCopies.values(),
       ])) {
-        yield* context.scope.session.copy(path, uidsOf(locations), folder.path);
+        yield* context.scope.session.copy(path, uidValidity, uids, folder.path);
       }
       return yield* refreshMailboxes(context.scope, [folder.path]);
     }
@@ -385,15 +374,18 @@ const setFolderLabel = Effect.fn("MailMutations.setFolderLabel")(
         ? undefined
         : yield* requireMailbox(context, "archive", "Archive");
 
-    if (redundant.length > 0) {
-      yield* context.scope.session.expunge(folder.path, uidsOf(redundant));
+    for (const { path, uidValidity, uids } of groupByMailbox(redundant)) {
+      yield* context.scope.session.expunge(path, uidValidity, uids);
     }
     if (archive !== undefined) {
-      yield* context.scope.session.move(
-        folder.path,
-        uidsOf(onlyCopies),
-        archive.path
-      );
+      for (const { path, uidValidity, uids } of groupByMailbox(onlyCopies)) {
+        yield* context.scope.session.move(
+          path,
+          uidValidity,
+          uids,
+          archive.path
+        );
+      }
     }
 
     return mergeThreadChanges(
@@ -577,11 +569,11 @@ const deleteForever = Effect.fn("MailMutations.deleteForever")(
 
     const store = yield* MailEngineStore;
     const groups = groupByMailbox(discarded);
-    for (const [path, locations] of groups) {
-      yield* context.scope.session.expunge(path, uidsOf(locations));
+    for (const { path, uidValidity, uids } of groups) {
+      yield* context.scope.session.expunge(path, uidValidity, uids);
     }
     const refreshed = yield* refreshMailboxes(context.scope, [
-      ...groups.keys(),
+      ...new Set(groups.map((group) => group.path)),
     ]);
     // The expunged messages are gone for good, even while a skeleton walk
     // keeps the general clean-up waiting.
@@ -595,8 +587,10 @@ const deleteForever = Effect.fn("MailMutations.deleteForever")(
 
 /**
  * Applies an action to every cached copy of the given conversations, on the
- * server first and then in the cache, so a refused change leaves the cache
- * as the server has it.
+ * server first, so a refused change leaves the cache as the server has it.
+ * The cache then takes what the server holds: a flag or label change reads
+ * its copies back, and a move, copy or expunge reads the mailboxes it
+ * touched.
  */
 export const applyThreadAction = Effect.fn("MailMutations.applyThreadAction")(
   function* applyThreadAction(

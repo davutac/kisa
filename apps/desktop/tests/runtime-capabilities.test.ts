@@ -171,6 +171,7 @@ describe(getRuntimeCapabilities, () => {
           awaitsServer: false,
           labels: [],
           messages: [],
+          places: [],
           subject: "Subject",
           threadId: "thread-id",
         },

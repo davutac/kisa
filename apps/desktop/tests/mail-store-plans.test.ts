@@ -146,6 +146,15 @@ describe("the store's lookups by message", () => {
     expect(plans.filter(readsWholeAccount)).toStrictEqual([]);
   });
 
+  // Runs for every account each time the engine starts.
+  it("finds conversations to list again from the rows under Trash and Spam", async () => {
+    const plans = await plansOf((store) => store.relistHidden(accountId));
+
+    expect(plans.filter(readsWholeAccount)).toStrictEqual([]);
+    expect(plans.join("\n")).toMatch(/mail_threads_trash_idx/u);
+    expect(plans.join("\n")).toMatch(/mail_threads_spam_idx/u);
+  });
+
   it("updates changed copies and their messages by key", async () => {
     const plans = await plansOf((store) =>
       store.applyLocationChanges(

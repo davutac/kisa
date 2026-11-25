@@ -2,7 +2,7 @@ import { mailMailboxes, mailMessages } from "@repo/database/schemas";
 import { fetchAttachment } from "@repo/mail/attachments";
 import { dialects } from "@repo/mail/dialects";
 import { MailProtocolError } from "@repo/mail/errors";
-import type { MailTransportError } from "@repo/mail/errors";
+import type { MailStoreError, MailTransportError } from "@repo/mail/errors";
 import { AccountId, LabelId, MessageId, ThreadId } from "@repo/mail/ids";
 import { createLabel, deleteLabel, renameLabel } from "@repo/mail/labels";
 import {
@@ -18,13 +18,17 @@ import {
   NO_THREAD_CHANGES,
   bodyStep,
   loadThreadBodies,
+  makeDriftMemory,
   mergeThreadChanges,
   relabelStep,
   skeletonStep,
   syncAccount,
 } from "@repo/mail/sync";
-import type { SyncScope } from "@repo/mail/sync";
+import type { DriftMemory, SyncScope } from "@repo/mail/sync";
+import { watchForNews, watchTargets, watchTogether } from "@repo/mail/watch";
+import type { MailboxWatchOutcome, WatchTarget } from "@repo/mail/watch";
 import { and, eq, sql } from "drizzle-orm";
+import type { Deferred } from "effect";
 import {
   Clock,
   Effect,
@@ -32,6 +36,7 @@ import {
   Layer,
   ManagedRuntime,
   Option,
+  Predicate,
   Schema,
   Semaphore,
 } from "effect";
@@ -73,7 +78,11 @@ import { getSenderBrand } from "../sender-brand";
 import { loadTrustedImageSenderCheck } from "../trusted-image-senders";
 import { refreshUnreadBadge } from "../unread-badge";
 import { createAccountWorker, toCycleOutcome } from "./account-worker";
-import type { AccountWorker, SyncRequestSource } from "./account-worker";
+import type {
+  AccountWatchOutcome,
+  AccountWorker,
+  SyncRequestSource,
+} from "./account-worker";
 import { ImapFlowConnectorLive } from "./imap-session";
 import {
   DAY_MS,
@@ -195,8 +204,32 @@ export const forkAccountWork = <R>(
     })
   );
 
-/** Between polls while nothing else wakes the account. */
+/** Between cycles for an account whose server cannot be waited on. */
 const POLL_INTERVAL_MS = 2 * 60_000;
+/**
+ * How long one wait on the server lasts. The cycle after it reads what the
+ * wait does not report, which is everything outside the Inbox, and is how a
+ * connection that died without a word is replaced.
+ */
+const WATCH_SPAN_MS = 5 * 60_000;
+/**
+ * Cycles that new mail starts begin at least this far apart, so a server
+ * that reports mail on every wait cannot keep an account syncing.
+ */
+const WATCH_SPACING_MS = 5000;
+/**
+ * Refreshes that other reports start (mail gone, a flag changed) begin at
+ * least this far apart. The first is immediate; a burst after it is read
+ * together.
+ */
+const WATCH_REFRESH_SPACING_MS = 2000;
+/**
+ * The same for the second mailbox an account waits on. It is paced more
+ * slowly: on Gmail that mailbox is All Mail, where a draft being written on
+ * another device arrives again with every save and removes its last version,
+ * and finding what was removed means listing the whole mailbox.
+ */
+const EXTRA_WATCH_REFRESH_SPACING_MS = 10_000;
 /** How long one background cycle works before syncing new mail again. */
 const CYCLE_BUDGET_MS = 20_000;
 /** Bodies inside this window download first, before older mail. */
@@ -317,7 +350,7 @@ export const publishChanges = Effect.fn("MailEngine.publishChanges")(
  * record of what its loop is doing: the syncing list and the index status
  * the windows receive are both derived from it.
  */
-const workers = new Map<string, AccountWorker>();
+const workers = new Map<string, AccountWorker<EngineServices>>();
 
 /** The accounts whose loop is in its catch-up pass right now. */
 export const getMailEngineSyncStatus = (): MailSyncStatus => ({
@@ -516,6 +549,19 @@ const clearUnusedInlineImagesWhenDue = Effect.fn(
  * the skeleton walk and on bodies, newest first. Reports whether background
  * work is left, so the loop knows whether to continue at once or wait.
  */
+/**
+ * What each account's passes remember about drift, for as long as the app
+ * runs: a count that could not be reconciled is compared again after a
+ * restart.
+ */
+const driftMemories = new Map<string, DriftMemory>();
+
+const driftMemoryOf = (accountId: string): DriftMemory => {
+  const existing = driftMemories.get(accountId) ?? makeDriftMemory();
+  driftMemories.set(accountId, existing);
+  return existing;
+};
+
 const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
   function* backgroundCycle(
     accountId: string,
@@ -530,6 +576,7 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
 
         const synced = yield* syncAccount({
           ...scope,
+          drift: driftMemoryOf(accountId),
           // Announced once saved: a later mailbox may fail the pass, and the
           // next pass finds nothing new to announce.
           discovered: ({ changes, labelsChanged }) =>
@@ -606,6 +653,95 @@ const backgroundCycle = Effect.fn("MailEngine.backgroundCycle")(
   }
 );
 
+/**
+ * Shows what a refresh during a wait changed, and announces mail it was the
+ * first to see: the pass that follows takes that mail as known.
+ */
+const publishRefreshed = (accountId: string, changes: ThreadChanges) =>
+  publishChanges(accountId, changes).pipe(
+    Effect.catch(() => Effect.logWarning("Could not announce changed mail")),
+    Effect.andThen(
+      announceArrivals(
+        accountId,
+        changes.arrived ?? [],
+        notificationActions
+      ).pipe(Effect.ignore)
+    )
+  );
+
+/**
+ * Waits for news of the account: of its Inbox on the background connection,
+ * which a cycle would use next, so the loop ends this wait before it starts
+ * one; and of a second mailbox beside it, on a connection of its own, where
+ * the server can be waited on at all. A refresh inside either wait takes the
+ * cache's turn like a step of a pass does.
+ */
+const watchAccount = Effect.fn("MailEngine.watchAccount")(
+  function* watchAccount(
+    accountId: string,
+    options: {
+      readonly compare: boolean;
+      readonly stop: Deferred.Deferred<void>;
+    }
+  ): Effect.fn.Return<
+    MailboxWatchOutcome,
+    MailEngineError | MailStoreError | MailTransportError,
+    EngineServices
+  > {
+    const account = yield* requireAccount(accountId);
+    const store = yield* MailEngineStore;
+    const targets = watchTargets(yield* store.getMailboxes(account.accountId));
+    if (targets === undefined) {
+      return "unavailable";
+    }
+
+    const watchOn = (
+      session: ImapSession,
+      target: WatchTarget,
+      refreshSpacingMs: number,
+      stop: Deferred.Deferred<void>
+    ) =>
+      watchForNews(
+        {
+          ...scopeOf(account, session),
+          exclusive: (effect) => withCacheLock(accountId, effect),
+        },
+        target,
+        {
+          compare: options.compare,
+          maxMs: WATCH_SPAN_MS,
+          refreshSpacingMs,
+          refreshed: (changes) => publishRefreshed(accountId, changes),
+          stop,
+        }
+      );
+    const { extra } = targets;
+
+    return yield* withAccountSession(account, "background", (session) =>
+      session.capabilities.has("IDLE")
+        ? watchTogether(
+            (stop) =>
+              watchOn(session, targets.primary, WATCH_REFRESH_SPACING_MS, stop),
+            extra === undefined
+              ? []
+              : [
+                  (stop) =>
+                    withAccountSession(account, "watch", (beside) =>
+                      watchOn(
+                        beside,
+                        extra,
+                        EXTRA_WATCH_REFRESH_SPACING_MS,
+                        stop
+                      )
+                    ),
+                ],
+            options.stop
+          )
+        : Effect.succeed<MailboxWatchOutcome>("unavailable")
+    );
+  }
+);
+
 let isEngineRunning = false;
 
 /**
@@ -621,8 +757,8 @@ const startAccountWorker = (accountId: string): void => {
 
   let isSyncing = false;
   let indexStatus: ReturnType<AccountWorker["indexStatus"]>;
-  const worker = createAccountWorker({
-    now: Date.now,
+  let wasServerAhead = false;
+  const worker: AccountWorker<EngineServices> = createAccountWorker({
     onPhaseChange: (phase) => {
       if (workers.get(accountId) !== worker) {
         return;
@@ -642,28 +778,34 @@ const startAccountWorker = (accountId: string): void => {
     },
     pollIntervalMs: POLL_INTERVAL_MS,
     retryDelaysMs: RETRY_DELAYS_MS,
-    runCycle: async (cycle, signal) =>
-      toCycleOutcome(
-        await engineRuntime.runPromiseExit(backgroundCycle(accountId, cycle), {
-          signal,
-        })
+    runCycle: (cycle) =>
+      backgroundCycle(accountId, cycle).pipe(
+        Effect.exit,
+        Effect.map(toCycleOutcome)
       ),
-    schedule: (run, delayMs) => {
-      const timeout = setTimeout(run, delayMs);
-      return {
-        cancel: () => {
-          clearTimeout(timeout);
-        },
-      };
-    },
+    // A failed wait is left failed: the loop polls then, and compares again.
+    watch: (stop) =>
+      Effect.suspend(() =>
+        watchAccount(accountId, { compare: !wasServerAhead, stop })
+      ).pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            wasServerAhead = Exit.isSuccess(exit) && exit.value === "ahead";
+          })
+        ),
+        Effect.map((outcome): AccountWatchOutcome =>
+          outcome === "unavailable" ? "unavailable" : "sync"
+        )
+      ),
+    watchSpacingMs: WATCH_SPACING_MS,
   });
   workers.set(accountId, worker);
 
   const runWorker = async (): Promise<void> => {
     try {
-      await accountMailWorkSupervisor.run(accountId, (signal) =>
-        worker.run(signal)
-      );
+      await accountMailWorkSupervisor.run(accountId, async (signal) => {
+        await engineRuntime.runPromiseExit(worker.run, { signal });
+      });
     } catch {
       // The loop handles its own failures; it only ends on purpose.
     } finally {
@@ -692,6 +834,27 @@ export const requestMailSync = (
   }
 };
 
+/**
+ * Lists again what an earlier build filed under Trash or Spam although it
+ * has mail that belongs in the Inbox. Best effort: a row it misses is
+ * rebuilt when its mail changes.
+ */
+const relistHidden = (accountId: string) =>
+  withCacheLock(
+    accountId,
+    Effect.gen(function* relist() {
+      const store = yield* MailEngineStore;
+      yield* publishChanges(
+        accountId,
+        yield* store.relistHidden(AccountId.make(accountId))
+      );
+    })
+  ).pipe(
+    Effect.catch(() =>
+      Effect.logWarning("Could not list hidden conversations again")
+    )
+  );
+
 let stopListeningForAccounts: (() => void) | undefined;
 
 /** Coming back to Kisa checks for mail, at most this often. */
@@ -699,8 +862,8 @@ const FOCUS_SYNC_INTERVAL_MS = 30_000;
 let lastFocusSyncAt = 0;
 
 /**
- * Without IDLE the loop polls every two minutes, so mail read elsewhere or
- * just arrived would otherwise look stale when the user returns.
+ * The server reports on the Inbox only, and some servers on nothing at all,
+ * so mail changed in other folders could look stale when the user returns.
  */
 export const syncOnFocus = (): void => {
   const now = Date.now();
@@ -732,6 +895,11 @@ export const startMailEngine = async (): Promise<void> => {
     })
   ).catch(() => []);
 
+  await runEngineExit(
+    Effect.forEach(accountIds, ({ accountId }) => relistHidden(accountId), {
+      discard: true,
+    })
+  );
   for (const { accountId } of accountIds) {
     startAccountWorker(accountId);
   }
@@ -772,6 +940,7 @@ export const forgetMailEngineAccount = Effect.fn("MailEngine.forgetAccount")(
     const wasSyncing = workers.get(accountId)?.phase().kind === "syncing";
     workers.delete(accountId);
     cacheLocks.delete(accountId);
+    driftMemories.delete(accountId);
     inlineImageClearings.delete(accountId);
     latestProgress.delete(accountId);
     progressPublishedAt.delete(accountId);
@@ -804,6 +973,24 @@ export const withForeground = <A, E>(
 ): Effect.Effect<A, E | MailTransportError, EngineServices> =>
   withAccountSession(account, "foreground", (session) =>
     use(scopeOf(account, session))
+  );
+
+/**
+ * A foreground read of cached mail by UID: its bodies, or an attachment. One
+ * refused because the mailbox was rebuilt since it was cached asks for a
+ * sync. Only a pass starts that mailbox over, and until one does the same
+ * read is refused each time.
+ */
+const withForegroundRead = <A, E>(
+  account: MailAccount,
+  use: (scope: SyncScope) => Effect.Effect<A, E, EngineServices>
+) =>
+  withForeground(account, use).pipe(
+    Effect.tapError((failure) =>
+      Predicate.isTagged(failure, "MailboxMissingError")
+        ? Effect.sync(() => requestMailSync(account.accountId))
+        : Effect.void
+    )
   );
 
 const INLINE_IMAGE_CONCURRENCY = 3;
@@ -1126,6 +1313,11 @@ export const renameAccountLabel = Effect.fn("MailEngine.renameAccountLabel")(
       (result) => result.changes
     );
     yield* publishLabelCatalogChanged(accountId);
+    if (account.dialect === "gmail") {
+      // The rename leaves the labels of cached mail to be read again, which
+      // the background cycle does.
+      yield* Effect.sync(() => requestMailSync(accountId));
+    }
     return renamed.label;
   }
 );
@@ -1169,7 +1361,7 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
     const account = yield* requireAccount(request.accountId);
 
     if (conversation.missingBodies) {
-      const fetched = yield* withForeground(account, (scope) =>
+      const fetched = yield* withForegroundRead(account, (scope) =>
         loadThreadBodies(scope, ThreadId.make(request.threadId))
       ).pipe(Effect.orElseSucceed(() => NO_THREAD_CHANGES));
       yield* publishChanges(request.accountId, fetched);
@@ -1183,6 +1375,7 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
     const shown = {
       accountId: request.accountId,
       labels: conversation.labels,
+      places: conversation.places,
       subject: conversation.subject,
       threadId: request.threadId,
     };
@@ -1222,7 +1415,7 @@ export const loadThread = Effect.fn("MailEngine.loadThread")(
 export const ensureThreadBodies = Effect.fn("MailEngine.ensureThreadBodies")(
   function* ensureThreadBodies(accountId: string, threadId: string) {
     const account = yield* requireAccount(accountId);
-    const fetched = yield* withForeground(account, (scope) =>
+    const fetched = yield* withForegroundRead(account, (scope) =>
       loadThreadBodies(scope, ThreadId.make(threadId))
     );
     yield* publishChanges(accountId, fetched);
@@ -1246,7 +1439,7 @@ export const loadAttachment = Effect.fn("MailEngine.loadAttachment")(
     readonly section: string;
   }) {
     const account = yield* requireAccount(request.accountId);
-    const attachment = yield* withForeground(account, (scope) =>
+    const attachment = yield* withForegroundRead(account, (scope) =>
       fetchAttachment(scope, MessageId.make(request.messageId), request.section)
     );
 

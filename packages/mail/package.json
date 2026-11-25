@@ -10,13 +10,15 @@
     "./headers": "./src/headers.ts",
     "./ids": "./src/ids.ts",
     "./labels": "./src/labels.ts",
+    "./listing": "./src/listing.ts",
     "./mime-structure": "./src/mime-structure.ts",
     "./mutations": "./src/mutations.ts",
     "./session": "./src/session.ts",
     "./smtp": "./src/smtp.ts",
     "./store": "./src/store.ts",
     "./sync": "./src/sync.ts",
-    "./text-decoding": "./src/text-decoding.ts"
+    "./text-decoding": "./src/text-decoding.ts",
+    "./watch": "./src/watch.ts"
   },
   "scripts": {
     "test": "vitest run",

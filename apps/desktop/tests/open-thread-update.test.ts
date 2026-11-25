@@ -22,6 +22,7 @@ const summary = (
   labels: ["INBOX"],
   latestAt: 1,
   messageCount: 2,
+  places: ["inbox"],
   snippet: "",
   subject: "Hello",
   threadId: "t1",
@@ -47,10 +48,22 @@ describe("an open conversation's list updates", () => {
   it("only moves the labels when the messages are the same", () => {
     expect(
       toOpenThreadUpdate(
-        [{ kind: "upsert", thread: summary({ labels: ["INBOX", "STARRED"] }) }],
+        [
+          {
+            kind: "upsert",
+            thread: summary({
+              labels: ["INBOX", "STARRED"],
+              places: ["inbox", "starred"],
+            }),
+          },
+        ],
         open
       )
-    ).toStrictEqual({ kind: "labels", labels: ["INBOX", "STARRED"] });
+    ).toStrictEqual({
+      kind: "labels",
+      labels: ["INBOX", "STARRED"],
+      places: ["inbox", "starred"],
+    });
   });
 
   it("follows the last summary when one update names the thread twice", () => {
@@ -58,11 +71,11 @@ describe("an open conversation's list updates", () => {
       toOpenThreadUpdate(
         [
           { kind: "upsert", thread: summary({ messageCount: 3 }) },
-          { kind: "upsert", thread: summary({ labels: [] }) },
+          { kind: "upsert", thread: summary({ labels: [], places: [] }) },
         ],
         open
       )
-    ).toStrictEqual({ kind: "labels", labels: [] });
+    ).toStrictEqual({ kind: "labels", labels: [], places: [] });
   });
 
   it("ignores the same thread id in another account, and other threads", () => {
@@ -90,7 +103,7 @@ describe("an open conversation's list updates", () => {
         [{ kind: "upsert", thread: summary({ messageCount: 3 }) }],
         { ...open, shownMessageCount: undefined }
       )
-    ).toStrictEqual({ kind: "labels", labels: ["INBOX"] });
+    ).toStrictEqual({ kind: "labels", labels: ["INBOX"], places: ["inbox"] });
   });
 });
 
@@ -100,6 +113,7 @@ const threadReply = (awaitsServer: boolean): MailThreadReply => ({
     awaitsServer,
     labels: [],
     messages: [],
+    places: [],
     subject: awaitsServer ? "From the cache" : "In full",
     threadId: "1",
   },

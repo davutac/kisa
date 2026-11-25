@@ -4,7 +4,12 @@ export type OpenThreadUpdate =
   /** Its messages changed (a reply sent, one arrived or was removed). */
   | { readonly kind: "reread" }
   /** Only its labels moved, such as read state or a label added. */
-  | { readonly kind: "labels"; readonly labels: readonly string[] };
+  | {
+      readonly kind: "labels";
+      readonly labels: readonly string[];
+      /** Where it is listed now, as main sent it with the labels. */
+      readonly places: readonly string[];
+    };
 
 /**
  * What an open conversation does with a list update. The update carries the
@@ -34,7 +39,11 @@ export const toOpenThreadUpdate = (
   return open.shownMessageCount !== undefined &&
     summary.thread.messageCount !== open.shownMessageCount
     ? { kind: "reread" }
-    : { kind: "labels", labels: summary.thread.labels };
+    : {
+        kind: "labels",
+        labels: summary.thread.labels,
+        places: summary.thread.places,
+      };
 };
 
 /**

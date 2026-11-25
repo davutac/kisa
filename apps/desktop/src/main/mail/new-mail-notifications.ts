@@ -8,6 +8,7 @@ import type {
   MailThreadListChange,
   MailThreadRequest,
 } from "../../shared/ipc/mail";
+import { isListedIn } from "../../shared/mailbox-places";
 import { withDatabaseClient } from "../database-query";
 import {
   createWindow,
@@ -256,10 +257,8 @@ export const dismissInactiveThreadNotifications = (
       dismissThreadNotifications(change.accountId, change.threadId);
     } else if (
       change.kind === "upsert" &&
-      (!change.thread.isUnread ||
-        !change.thread.labels.includes(INBOX_LABEL) ||
-        change.thread.labels.includes("TRASH") ||
-        change.thread.labels.includes("SPAM"))
+      // The Inbox lists nothing that is in Spam or Trash.
+      (!change.thread.isUnread || !isListedIn(change.thread.places, "inbox"))
     ) {
       dismissThreadNotifications(
         change.thread.accountId,

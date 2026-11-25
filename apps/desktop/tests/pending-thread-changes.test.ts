@@ -5,7 +5,7 @@ import {
   beginPendingThreadChange,
   getPendingLabelIds,
   getPendingThreadChanges,
-  projectThreadLabels,
+  projectOpenThread,
   projectThreadSummaries,
 } from "../src/renderer/src/mail/pending-thread-changes";
 import type {
@@ -27,6 +27,7 @@ const makeThread = (
   labels: ["INBOX"],
   latestAt: 100,
   messageCount: 1,
+  places: ["inbox"],
   snippet: "Snippet",
   subject: "Subject",
   threadId,
@@ -78,12 +79,13 @@ describe(projectThreadSummaries, () => {
     ).toStrictEqual([kept]);
     expect(
       filterThreadsByScope(projected, ["a@example.com"], false, "trash")
-    ).toStrictEqual([{ ...trashed, labels: ["TRASH"] }]);
+    ).toStrictEqual([{ ...trashed, labels: ["TRASH"], places: ["trash"] }]);
   });
 
   it("takes an archived conversation off the Inbox, even one with a reply in Sent", () => {
     const archived = makeThread("a@example.com", "1", {
       labels: ["INBOX", "SENT"],
+      places: ["inbox", "sent"],
     });
     const projected = projectThreadSummaries(
       [archived],
@@ -107,7 +109,7 @@ describe(projectThreadSummaries, () => {
     ).toStrictEqual([]);
     expect(
       filterThreadsByScope(projected, ["a@example.com"], false, "sent")
-    ).toStrictEqual([{ ...archived, labels: ["SENT"] }]);
+    ).toStrictEqual([{ ...archived, labels: ["SENT"], places: ["sent"] }]);
   });
 
   it("lists a conversation as starred, and moves a reported one into Spam", () => {
@@ -141,24 +143,87 @@ describe(projectThreadSummaries, () => {
         "starred"
       ),
     }).toStrictEqual({
-      inbox: [{ ...starred, labels: ["INBOX", "STARRED"] }],
-      spam: [{ ...reported, labels: ["SPAM"] }],
-      starred: [{ ...starred, labels: ["INBOX", "STARRED"] }],
+      inbox: [
+        {
+          ...starred,
+          labels: ["INBOX", "STARRED"],
+          places: ["inbox", "starred"],
+        },
+      ],
+      spam: [{ ...reported, labels: ["SPAM"], places: ["spam"] }],
+      starred: [
+        {
+          ...starred,
+          labels: ["INBOX", "STARRED"],
+          places: ["inbox", "starred"],
+        },
+      ],
     });
   });
 
   it("brings a conversation out of Spam or Trash back to the Inbox", () => {
-    const spam = makeThread("a@example.com", "1", { labels: ["SPAM"] });
+    const spam = makeThread("a@example.com", "1", {
+      labels: ["SPAM"],
+      places: ["spam"],
+    });
     const [projected] = projectThreadSummaries(
       [spam],
       pendingOf([["a@example.com:1", [{ kind: "moveToInbox" }]]])
     );
 
-    expect(projected?.labels).toStrictEqual(["INBOX"]);
+    expect(projected).toMatchObject({ labels: ["INBOX"], places: ["inbox"] });
+  });
+
+  // Undo of a trash made in a label's list: the row is back there at once,
+  // not when the server answers.
+  it("brings a trashed conversation straight back into its label's list", () => {
+    const trashed = makeThread("a@example.com", "1", {
+      labels: ["TRASH", "Work"],
+      places: ["trash"],
+    });
+    const projected = projectThreadSummaries(
+      [trashed],
+      pendingOf([["a@example.com:1", [{ kind: "moveToInbox" }]]])
+    );
+
+    expect(
+      filterThreadsByScope(projected, ["a@example.com"], false, {
+        label: "Work",
+      })
+    ).toStrictEqual([
+      {
+        ...trashed,
+        labels: ["Work", "INBOX"],
+        places: ["inbox", "label:work"],
+      },
+    ]);
+  });
+
+  it("keeps the places main sent while a pending change moves the conversation nowhere", () => {
+    // A folder the server calls TRASH: its name reads as the Trash mailbox.
+    const inFolderCalledTrash = makeThread("a@example.com", "1", {
+      isUnread: true,
+      labels: ["INBOX", "TRASH", "UNREAD"],
+      places: ["inbox", "label:trash"],
+    });
+    const [projected] = projectThreadSummaries(
+      [inFolderCalledTrash],
+      pendingOf([
+        ["a@example.com:1", [{ isUnread: false, kind: "setReadState" }]],
+      ])
+    );
+
+    expect(projected).toMatchObject({
+      isUnread: false,
+      places: ["inbox", "label:trash"],
+    });
   });
 
   it("drops a conversation deleted forever", () => {
-    const thread = makeThread("a@example.com", "1", { labels: ["TRASH"] });
+    const thread = makeThread("a@example.com", "1", {
+      labels: ["TRASH"],
+      places: ["trash"],
+    });
 
     expect(
       projectThreadSummaries(
@@ -203,16 +268,17 @@ describe(projectThreadSummaries, () => {
   });
 });
 
-describe(projectThreadLabels, () => {
+describe(projectOpenThread, () => {
   it("shows an open conversation's read state and keeps it while deleting", () => {
     const thread = {
       accountId: "a@example.com",
       labels: ["TRASH"],
+      places: ["trash"],
       threadId: "1",
     };
 
     expect(
-      projectThreadLabels(
+      projectOpenThread(
         thread,
         pendingOf([
           [
@@ -224,22 +290,39 @@ describe(projectThreadLabels, () => {
           ],
         ])
       )
-    ).toStrictEqual(["TRASH", "UNREAD"]);
+    ).toStrictEqual({ labels: ["TRASH", "UNREAD"], places: ["trash"] });
   });
 
-  it("returns the same labels when the conversation has nothing pending", () => {
+  it("is in Trash, for what its view offers, while a trash is on its way", () => {
     const thread = {
       accountId: "a@example.com",
       labels: ["INBOX"],
+      places: ["inbox"],
       threadId: "1",
     };
 
     expect(
-      projectThreadLabels(
+      projectOpenThread(
+        thread,
+        pendingOf([["a@example.com:1", [{ kind: "trash" }]]])
+      )
+    ).toStrictEqual({ labels: ["TRASH"], places: ["trash"] });
+  });
+
+  it("returns the conversation itself when it has nothing pending", () => {
+    const thread = {
+      accountId: "a@example.com",
+      labels: ["INBOX"],
+      places: ["inbox"],
+      threadId: "1",
+    };
+
+    expect(
+      projectOpenThread(
         thread,
         pendingOf([["b@example.com:1", [{ kind: "trash" }]]])
       )
-    ).toBe(thread.labels);
+    ).toBe(thread);
   });
 });
 

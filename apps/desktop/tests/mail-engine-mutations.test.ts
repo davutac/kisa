@@ -93,6 +93,24 @@ const locationPaths = (messageId: string) =>
       .all(messageId) as { mailbox_path: string }[]
   ).map((row) => row.mailbox_path);
 
+/** A message's cached copies: where each is, with its flags and labels. */
+const cachedCopiesOf = (messageId: string) =>
+  (
+    connection
+      .prepare(
+        "SELECT mailbox_path, flags, label_ids FROM mail_message_locations WHERE message_id = ? ORDER BY mailbox_path"
+      )
+      .all(messageId) as {
+      flags: string;
+      label_ids: string;
+      mailbox_path: string;
+    }[]
+  ).map((row) => ({
+    flags: JSON.parse(row.flags) as string[],
+    labelIds: JSON.parse(row.label_ids) as string[],
+    path: row.mailbox_path,
+  }));
+
 describe("thread actions with the Gmail dialect", () => {
   beforeEach(resetDatabase);
 
@@ -251,10 +269,99 @@ describe("thread actions with the Gmail dialect", () => {
       { is_unread: 0 },
     ]);
   });
+
+  it("reads a change back with one fetch of the copies it was made on", async () => {
+    const { scope, server } = await syncGmail("670", "671");
+    server.fetches.splice(0);
+
+    await act(scope, "671", { kind: "setRead", read: false });
+
+    expect(server.fetches).toStrictEqual([
+      {
+        changedSince: undefined,
+        fields: { flags: true, gmail: true },
+        path: ALL_MAIL,
+        selection: { kind: "uids", uids: [2] },
+      },
+    ]);
+    expect(threadRow("671")).toMatchObject({ is_unread: 1 });
+  });
+
+  it("caches what the server made of a change, not what was asked for", async () => {
+    const { scope, server } = await syncGmail("672");
+    // Another client files the message under Work as Kisa stars it.
+    server.beforeCommand = () => {
+      server.beforeCommand = undefined;
+      server.setGmailLabels(ALL_MAIL, 1, ["\\Inbox", "Work"]);
+    };
+
+    await act(scope, "672", label(SystemLabel.starred, true));
+
+    expect(cachedCopiesOf("672")).toStrictEqual([
+      {
+        flags: expect.arrayContaining(["\\Flagged"]),
+        labelIds: expect.arrayContaining([
+          SystemLabel.inbox,
+          SystemLabel.starred,
+          userLabelId("Work"),
+        ]),
+        path: ALL_MAIL,
+      },
+    ]);
+  });
+
+  it("keeps a copy in Trash filed under Trash when its flags are read back", async () => {
+    const { scope } = await syncGmail("673");
+    await act(scope, "673", { kind: "trash" });
+
+    await act(scope, "673", label(SystemLabel.starred, true));
+
+    expect(cachedCopiesOf("673")).toStrictEqual([
+      {
+        flags: expect.arrayContaining(["\\Flagged"]),
+        labelIds: expect.arrayContaining([
+          SystemLabel.starred,
+          SystemLabel.trash,
+        ]),
+        path: TRASH,
+      },
+    ]);
+  });
+
+  it("drops a copy that left the server before the change reached it", async () => {
+    const { scope, server } = await syncGmail("674", "675");
+    server.beforeCommand = () => {
+      server.beforeCommand = undefined;
+      server.expunge(ALL_MAIL, 1);
+    };
+
+    await act(scope, "674", { kind: "setRead", read: false });
+
+    expect(cachedCopiesOf("674")).toStrictEqual([]);
+    expect(cachedCopiesOf("675")).toHaveLength(1);
+  });
 });
 
 describe("thread actions with the generic dialect", () => {
   beforeEach(resetDatabase);
+
+  it("keeps a folder's copy filed under the folder when its flags are read back", async () => {
+    const { scope } = await syncIcloud([{ id: "kept", path: "Receipts" }]);
+    const { message_id: messageId, thread_id: threadId } = genericIds("kept");
+
+    await act(scope, threadId, label(SystemLabel.starred, true));
+
+    expect(cachedCopiesOf(messageId)).toStrictEqual([
+      {
+        flags: expect.arrayContaining(["\\Flagged"]),
+        labelIds: expect.arrayContaining([
+          SystemLabel.starred,
+          userLabelId("Receipts"),
+        ]),
+        path: "Receipts",
+      },
+    ]);
+  });
 
   it("archives by moving the Inbox copy to Archive, and back", async () => {
     const { scope, server } = await syncIcloud([{ id: "a", path: "INBOX" }]);

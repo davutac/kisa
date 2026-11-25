@@ -3,7 +3,6 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   createMailboxLabelItems,
   isMailboxLabelMissing,
-  threadHasMailboxLabel,
   toMailboxLabelRows,
 } from "../src/renderer/src/mail/mailbox-labels";
 import type { MailboxLabelItem } from "../src/renderer/src/mail/mailbox-labels";
@@ -113,20 +112,6 @@ describe(toMailboxLabelRows, () => {
       [0, "Work"],
       [1, "Clients/Acme"],
     ]);
-  });
-});
-
-describe(threadHasMailboxLabel, () => {
-  it("matches a user label without regard to case", () => {
-    expect(threadHasMailboxLabel(["INBOX", "work"], "Work")).toBeTruthy();
-    expect(
-      threadHasMailboxLabel(["INBOX", "Work/Clients"], "Work")
-    ).toBeFalsy();
-  });
-
-  it("never matches a system label to a folder named like it", () => {
-    expect(threadHasMailboxLabel(["SPAM"], "Spam")).toBeFalsy();
-    expect(threadHasMailboxLabel(["Spam"], "Spam")).toBeTruthy();
   });
 });
 

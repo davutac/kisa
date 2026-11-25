@@ -93,7 +93,7 @@ const getRowDestructiveActions = (
   onDeleteForever: (thread: MailThreadSummary) => void,
   onTrash: ThreadActions["trash"]
 ) =>
-  getThreadDestructiveAction(thread.labels) === "deleteForever"
+  getThreadDestructiveAction(thread.places) === "deleteForever"
     ? { onDeleteForever, onTrash: undefined }
     : { onDeleteForever: undefined, onTrash };
 
@@ -287,20 +287,20 @@ const useMailboxThreadCommands = ({
   );
   const isChecking = checkedThreads.length > 0;
   const archivable = checkedThreads.filter((thread) =>
-    canArchiveThread(thread.labels)
+    canArchiveThread(thread.places)
   );
   const starrable = checkedThreads.filter((thread) =>
-    canStarThread(thread.labels)
+    canStarThread(thread.places)
   );
   const canReportChecked = bulkDestructiveAction === "trash";
   /** Whether a command has a target: the selection, or the focused row. */
   const hasTarget = (
     hasCheckedTarget: boolean,
-    appliesTo: (labels: readonly string[]) => boolean
+    appliesTo: (places: readonly string[]) => boolean
   ): boolean =>
     isChecking
       ? hasCheckedTarget
-      : selectedThread !== undefined && appliesTo(selectedThread.labels);
+      : selectedThread !== undefined && appliesTo(selectedThread.places);
   const archiveChecked = (): void => {
     actions.bulkArchive(archivable);
   };
@@ -562,7 +562,7 @@ const MailThreadList = ({
         }
       } else if (selectedThread !== undefined) {
         if (
-          getThreadDestructiveAction(selectedThread.labels) === "deleteForever"
+          getThreadDestructiveAction(selectedThread.places) === "deleteForever"
         ) {
           void requestDeleteForever(selectedThread);
         } else {
@@ -685,7 +685,7 @@ const MailThreadList = ({
                     actions.trash
                   )}
                   onArchive={
-                    canArchiveThread(thread.labels)
+                    canArchiveThread(thread.places)
                       ? actions.archive
                       : undefined
                   }
@@ -693,7 +693,7 @@ const MailThreadList = ({
                   onToggleRead={handleToggleRead}
                   onToggleSelection={handleToggleSelection}
                   onToggleStar={
-                    canStarThread(thread.labels) ? handleToggleStar : undefined
+                    canStarThread(thread.places) ? handleToggleStar : undefined
                   }
                   showAccount={showAccount}
                   top={row.start}

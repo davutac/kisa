@@ -227,12 +227,38 @@ describe("labels with the Gmail dialect", () => {
     });
   });
 
-  it("reads no labels again for an unchanged list, a new label, or a rename in Kisa", async () => {
+  it("reads labels again after a rename in Kisa, and caches them as the server has them", async () => {
+    const { scope, server } = await syncGmailWorkMessage();
+
+    await run(renameLabel(scope, userLabelId("Work"), "Office"));
+    const moved = threadRow("800")?.label_ids;
+    const armed = labelCursors();
+    // What the server made of the rename differs from the rule the cache
+    // was moved by.
+    server.setGmailLabels(ALL_MAIL, 1, ["\\Inbox", "Office"]);
+    const steps = await relabelFully(scope);
+
+    expect({
+      armed,
+      labelIds: threadRow("800")?.label_ids,
+      left: labelCursors(),
+      moved,
+      steps,
+    }).toStrictEqual({
+      armed: [{ label_cursor: 2, path: ALL_MAIL }],
+      labelIds: JSON.stringify(["INBOX", "u:Office"]),
+      left: [],
+      moved: JSON.stringify(["INBOX", "u:Office", "u:Office/Sub"]),
+      // One step reads the copies, and one finds none left.
+      steps: 2,
+    });
+  });
+
+  it("reads no labels again for an unchanged list or a new label", async () => {
     const { scope, server } = await syncGmailWorkMessage();
 
     const unchanged = await syncReportingLabels(scope);
     await run(createLabel(scope, "Travel"));
-    await run(renameLabel(scope, userLabelId("Travel"), "Trips"));
     server.addMailbox("Receipts");
     const added = await syncReportingLabels(scope);
 
@@ -412,6 +438,17 @@ describe("labels with the generic dialect", () => {
         (fetch) => fetch.path === "Bills" && fetch.fields.envelope === true
       )
     ).toStrictEqual([]);
+  });
+
+  it("reads a renamed folder where it is now, with mail that reached it meanwhile", async () => {
+    const { scope, server } = await syncIcloudReceipt();
+    server.deliver("Receipts", genericMessage("late"));
+
+    await run(renameLabel(scope, userLabelId("Receipts"), "Bills"));
+
+    expect(locationPaths(genericMessageIds("late")?.message_id)).toStrictEqual([
+      "Bills",
+    ]);
   });
 
   it("moves a folder's mail to Archive before deleting it", async () => {

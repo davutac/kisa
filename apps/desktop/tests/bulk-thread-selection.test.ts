@@ -25,6 +25,7 @@ const thread = (
   labels,
   latestAt: 0,
   messageCount: 1,
+  places: ["inbox"],
   snippet: "",
   subject: "Subject",
   threadId,

@@ -5,8 +5,9 @@ import type {
   MailThreadRequest,
   MailThreadSummary,
 } from "@/shared/ipc/mail";
+import { listingPlaces } from "@/shared/mailbox-places";
 
-import { withLabelState } from "./label";
+import { isSystemLabel, withLabelState } from "./label";
 import { getThreadSelectionKey } from "./thread-selection";
 
 /**
@@ -43,6 +44,26 @@ const withLabels = (
   ...labels.filter((label) => label !== added && !removed.includes(label)),
   added,
 ];
+
+/**
+ * Where a conversation will be listed once a pending change reaches the
+ * server: the shared rule, over the labels the change leaves it with. This
+ * is a prediction, shown only until the server answers; the places main
+ * sends then replace it. A row without such a change keeps main's places.
+ */
+const predictPlaces = (labels: readonly string[]): readonly string[] =>
+  listingPlaces({
+    isInInbox: labels.includes("INBOX"),
+    isInSent: labels.includes("SENT"),
+    isInSpam: labels.includes("SPAM"),
+    isInTrash: labels.includes("TRASH"),
+    isStarred: labels.includes("STARRED"),
+    userLabels: labels.filter((label) => !isSystemLabel(label)),
+  });
+
+/** Read state is the one change that moves a conversation nowhere. */
+const movesThread = (change: PendingThreadChange): boolean =>
+  change.kind !== "setReadState";
 
 /** `undefined` once the conversation is deleted. */
 const applyChange = (
@@ -113,7 +134,14 @@ export const projectThreadSummary = (
     }
   }
 
-  return { ...thread, isUnread: projected.isUnread, labels: projected.labels };
+  return {
+    ...thread,
+    isUnread: projected.isUnread,
+    labels: projected.labels,
+    places: changes.some(movesThread)
+      ? predictPlaces(projected.labels)
+      : thread.places,
+  };
 };
 
 export const projectThreadSummaries = (
@@ -127,18 +155,27 @@ export const projectThreadSummaries = (
         return projected === undefined ? [] : [projected];
       });
 
+/** What an open conversation's pending actions change in how it shows. */
+interface OpenThreadState {
+  readonly labels: readonly string[];
+  readonly places: readonly string[];
+}
+
 /**
- * An open conversation's labels under its pending actions. Deleting it leaves
- * them as they were: whoever deleted it also closes it.
+ * An open conversation's labels and places under its pending actions, or
+ * the conversation itself when it has none. Deleting it leaves them as they
+ * were: whoever deleted it also closes it.
  */
-export const projectThreadLabels = (
-  thread: MailThreadRequest & { readonly labels: readonly string[] },
+export const projectOpenThread = <
+  Thread extends MailThreadRequest & OpenThreadState,
+>(
+  thread: Thread,
   pending: PendingThreadChanges
-): readonly string[] => {
+): Thread | OpenThreadState => {
   const changes = pending.get(getThreadSelectionKey(thread));
 
   if (changes === undefined) {
-    return thread.labels;
+    return thread;
   }
 
   let projected: ProjectedThread = {
@@ -150,7 +187,14 @@ export const projectThreadLabels = (
     projected = applyChange(projected, change) ?? projected;
   }
 
-  return projected.labels;
+  return {
+    labels: projected.labels,
+    places: changes.some(
+      (change) => movesThread(change) && change.kind !== "deleteForever"
+    )
+      ? predictPlaces(projected.labels)
+      : thread.places,
+  };
 };
 
 /** The labels a conversation has changes to on their way to the server. */

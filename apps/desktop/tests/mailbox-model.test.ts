@@ -24,6 +24,7 @@ const makeThread = (
   labels: ["INBOX"],
   latestAt,
   messageCount: 1,
+  places: ["inbox"],
   snippet: "Snippet",
   subject: "Subject",
   threadId,
@@ -95,7 +96,7 @@ describe(replaceFirstPage, () => {
 });
 
 describe(filterThreadsByScope, () => {
-  it("shows only Inbox conversations in Inbox, so archiving takes one off, while preserving unread scope", () => {
+  it("lists a row under each place main sent for it, within the accounts and the unread filter", () => {
     const unread = makeThread("one@example.com", "unread", 300, {
       isUnread: true,
     });
@@ -103,6 +104,7 @@ describe(filterThreadsByScope, () => {
     const trashed = makeThread("one@example.com", "trashed", 100, {
       isUnread: true,
       labels: ["TRASH"],
+      places: ["trash"],
     });
     const otherAccount = makeThread("two@example.com", "other", 400, {
       isUnread: true,
@@ -110,46 +112,32 @@ describe(filterThreadsByScope, () => {
     const sent = makeThread("one@example.com", "sent", 350, {
       isUnread: true,
       labels: ["SENT"],
+      places: ["sent"],
     });
-    const sentTrash = makeThread("one@example.com", "sent-trash", 325, {
-      labels: ["SENT", "TRASH"],
-    });
-    const archived = makeThread("one@example.com", "archived", 250, {
+    const starredReply = makeThread("one@example.com", "starred", 250, {
       isUnread: true,
       labels: ["SENT", "STARRED"],
+      places: ["sent", "starred"],
     });
-    const all = [
-      unread,
-      read,
-      sent,
-      sentTrash,
-      archived,
-      trashed,
-      otherAccount,
-    ];
+    const all = [unread, read, sent, starredReply, trashed, otherAccount];
+    const listed = (
+      unreadOnly: boolean,
+      place?: "sent" | "starred" | "trash"
+    ) => filterThreadsByScope(all, ["one@example.com"], unreadOnly, place);
 
-    expect(filterThreadsByScope(all, ["one@example.com"], true)).toStrictEqual([
-      unread,
-    ]);
-    expect(
-      filterThreadsByScope(all, ["one@example.com"], false, "starred")
-    ).toStrictEqual([archived]);
-    expect(
-      filterThreadsByScope(
-        [unread, read, sent, sentTrash, trashed, otherAccount],
-        ["one@example.com"],
-        false,
-        "sent"
-      )
-    ).toStrictEqual([sent]);
-    expect(
-      filterThreadsByScope(
-        [unread, read, sent, sentTrash, trashed, otherAccount],
-        ["one@example.com"],
-        false,
-        "trash"
-      )
-    ).toStrictEqual([sentTrash, trashed]);
+    expect({
+      inbox: listed(false),
+      sent: listed(false, "sent"),
+      starred: listed(false, "starred"),
+      trash: listed(false, "trash"),
+      unreadInbox: listed(true),
+    }).toStrictEqual({
+      inbox: [unread, read],
+      sent: [sent, starredReply],
+      starred: [starredReply],
+      trash: [trashed],
+      unreadInbox: [unread],
+    });
   });
 
   it("keeps Spam separate from Inbox for colliding thread ids", () => {
@@ -157,6 +145,7 @@ describe(filterThreadsByScope, () => {
     const spam = makeThread("two@example.com", "shared", 200, {
       isUnread: true,
       labels: ["SPAM", "UNREAD"],
+      places: ["spam"],
     });
 
     expect(
@@ -169,31 +158,49 @@ describe(filterThreadsByScope, () => {
     ).toStrictEqual([spam]);
   });
 
-  it("shows a label's conversations outside Spam and Trash", () => {
-    const archived = makeThread("one@example.com", "archived", 400, {
+  it("lists a label's rows by the label's key, whatever case the place is asked in", () => {
+    const filed = makeThread("one@example.com", "filed", 400, {
       labels: ["Work"],
+      places: ["label:work"],
     });
-    const inbox = makeThread("one@example.com", "inbox", 300, {
-      labels: ["INBOX", "work"],
-    });
-    const trashed = makeThread("one@example.com", "trashed", 200, {
-      labels: ["TRASH", "Work"],
-    });
-    const other = makeThread("one@example.com", "other", 100, {
+    const nested = makeThread("one@example.com", "nested", 100, {
       labels: ["INBOX", "Work/Clients"],
-    });
-    const otherAccount = makeThread("two@example.com", "archived", 50, {
-      labels: ["Work"],
+      places: ["inbox", "label:work/clients"],
     });
 
     expect(
+      filterThreadsByScope([filed, nested], ["one@example.com"], false, {
+        label: "WORK",
+      })
+    ).toStrictEqual([filed]);
+  });
+
+  // The labels a row shows are names: a user label by its path, a system
+  // one by its id. A folder a server calls TRASH reads the same as Trash
+  // there, so a list that worked places out from them filed this row under
+  // Trash and kept it out of the Inbox.
+  it("lists a row by its places where its labels would say otherwise", () => {
+    const inFolderCalledTrash = makeThread("one@example.com", "kept", 300, {
+      labels: ["INBOX", "TRASH"],
+      places: ["inbox", "label:trash"],
+    });
+    const listed = (place?: "trash" | { readonly label: string }) =>
       filterThreadsByScope(
-        [archived, inbox, trashed, other, otherAccount],
+        [inFolderCalledTrash],
         ["one@example.com"],
         false,
-        { label: "Work" }
-      )
-    ).toStrictEqual([archived, inbox]);
+        place
+      );
+
+    expect({
+      folder: listed({ label: "Trash" }),
+      inbox: listed(),
+      trash: listed("trash"),
+    }).toStrictEqual({
+      folder: [inFolderCalledTrash],
+      inbox: [inFolderCalledTrash],
+      trash: [],
+    });
   });
 });
 

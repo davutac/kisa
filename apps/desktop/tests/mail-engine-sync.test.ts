@@ -1,8 +1,9 @@
 // oxlint-disable typescript/no-unsafe-type-assertion
 import { gunzipSync } from "node:zlib";
 
+import { fetchAttachment } from "@repo/mail/attachments";
 import { genericDialect, gmailDialect } from "@repo/mail/dialects";
-import { ThreadId } from "@repo/mail/ids";
+import { MessageId, ThreadId } from "@repo/mail/ids";
 import { setThreadRead } from "@repo/mail/mutations";
 import { MailEngineStore } from "@repo/mail/store";
 import {
@@ -53,6 +54,13 @@ const REPORT_STRUCTURE = {
   ],
   type: "multipart/mixed",
 };
+
+/** A message with a report attached, whose attachment holds `bytes`. */
+const report = (id: string, bytes: string) =>
+  gmailMessage(id, id, {
+    sections: { "1.2": "PGk+cmVwb3J0PC9pPg==", "2": bytes },
+    structure: REPORT_STRUCTURE,
+  });
 
 /** A single-part plain-text body, as the fake server serves it. */
 const plainText = (text: string) => ({
@@ -197,6 +205,31 @@ describe("mail engine with the Gmail dialect", () => {
     await expect(run(bodyStep(scope))).resolves.toBeUndefined();
   });
 
+  it("downloads an attachment, and refuses it from a mailbox rebuilt since", async () => {
+    insertAccount("gmail");
+    const server = new FakeImapServer(GMAIL_MAILBOXES);
+    server.deliver(ALL_MAIL, report("210", "Zmlyc3Q="));
+    server.deliver(ALL_MAIL, report("211", "c2Vjb25k"));
+    const scope = scopeFor(server, gmailDialect);
+    await syncFully(scope);
+    await run(bodyStep(scope));
+    const first = () =>
+      run(fetchAttachment(scope, MessageId.make("210"), "2")).then(
+        (attachment) => Buffer.from(attachment?.bytes ?? []).toString("utf-8")
+      );
+
+    const downloaded = await first();
+    // Elsewhere the first mail is deleted and the mailbox is rebuilt, so its
+    // UID is the second mail now: the bytes there are another message's.
+    server.expunge(ALL_MAIL, 1);
+    server.resetUidValidity(ALL_MAIL);
+
+    await expect(first()).rejects.toMatchObject({
+      _tag: "MailboxMissingError",
+    });
+    expect(downloaded).toBe("first");
+  });
+
   it("follows read state and new mail", async () => {
     const { first, scope, server } = await syncConversation();
     expect(threadRow("300")).toMatchObject({ is_unread: 1, message_count: 2 });
@@ -222,7 +255,13 @@ describe("mail engine with the Gmail dialect", () => {
       body_state: "ready",
       label_ids: JSON.stringify(["INBOX", "UNREAD", "TRASH"]),
     });
-    expect(threadRow("300")).toMatchObject({ is_in_inbox: 1, is_in_trash: 1 });
+    // The conversation's other message is still in the Inbox, so that is
+    // where it is listed, by that message alone.
+    expect(threadRow("300")).toMatchObject({
+      is_in_inbox: 1,
+      is_in_trash: 0,
+      message_count: 1,
+    });
   });
 
   it("removes a message deleted for good, then its empty thread", async () => {

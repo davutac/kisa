@@ -6,7 +6,7 @@ import type { MailThread, MailThreadReply } from "@/shared/ipc/mail";
 import { loadOpenThread, toOpenThreadUpdate } from "./open-thread-update";
 import {
   beginPendingThreadChange,
-  projectThreadLabels,
+  projectOpenThread,
   usePendingThreadChanges,
 } from "./pending-thread-changes";
 
@@ -126,7 +126,11 @@ export const useMailThread = (
               ...current,
               state: {
                 status: "ready",
-                thread: { ...current.state.thread, labels: update.labels },
+                thread: {
+                  ...current.state.thread,
+                  labels: update.labels,
+                  places: update.places,
+                },
               },
             }
           : current
@@ -157,9 +161,9 @@ export const useMailThread = (
   }
 
   const { thread } = result.state;
-  const labels = projectThreadLabels(thread, pendingChanges);
+  const projected = projectOpenThread(thread, pendingChanges);
 
-  return labels === thread.labels
+  return projected === thread
     ? result.state
-    : { status: "ready", thread: { ...thread, labels } };
+    : { status: "ready", thread: { ...thread, ...projected } };
 };

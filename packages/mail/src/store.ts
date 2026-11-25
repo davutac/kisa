@@ -51,6 +51,12 @@ export interface MailboxRecord {
   readonly uidValidity?: bigint | undefined;
 }
 
+/** The copies of a mailbox, counted. */
+export interface MailboxCounts {
+  readonly copies: number;
+  readonly unread: number;
+}
+
 /** What the server last said about a mailbox, saved with the work it covers. */
 export interface MailboxProgress {
   readonly flagCursor?: number | undefined;
@@ -131,6 +137,8 @@ export interface BodyCandidate {
   readonly receivedAt: number;
   readonly size: number;
   readonly uid: number;
+  /** The UIDVALIDITY the copy's UID was read under. */
+  readonly uidValidity: bigint;
 }
 
 /** A cached copy of a thread's message, for changes made on the server. */
@@ -141,6 +149,8 @@ export interface ThreadLocation {
   readonly mailboxPath: string;
   readonly messageId: MessageId;
   readonly uid: number;
+  /** The UIDVALIDITY the copy's UID was read under. */
+  readonly uidValidity: bigint;
 }
 
 export interface StoredAttachment {
@@ -151,6 +161,8 @@ export interface StoredAttachment {
   readonly section: string;
   readonly size: number;
   readonly uid: number;
+  /** The UIDVALIDITY the copy's UID was read under. */
+  readonly uidValidity: bigint;
 }
 
 /** Where one copy of a message was before an action moved it to Trash. */
@@ -225,10 +237,20 @@ export interface MailEngineStoreService {
   readonly getMailboxes: (
     accountId: AccountId
   ) => Effect.Effect<readonly MailboxRecord[], MailStoreError>;
+  /** The UIDs a mailbox has cached, or only those at or above `from`. */
   readonly locationUids: (
     accountId: AccountId,
-    path: string
+    path: string,
+    from?: number
   ) => Effect.Effect<readonly number[], MailStoreError>;
+  /**
+   * How many copies a mailbox has cached, and how many of them are unread,
+   * to hold against the counts the server gives for it.
+   */
+  readonly mailboxCounts: (
+    accountId: AccountId,
+    path: string
+  ) => Effect.Effect<MailboxCounts, MailStoreError>;
   /**
    * Deletes these messages if no copy of them is left. Unlike
    * `collectOrphans`, it does not wait for skeletons: it is for messages the
@@ -262,6 +284,16 @@ export interface MailEngineStoreService {
   readonly renameLabel: (
     accountId: AccountId,
     rename: LabelRename
+  ) => Effect.Effect<ThreadChanges, MailStoreError>;
+  /**
+   * Lists again the conversations a row files under Trash or Spam against
+   * the rule in `listing.ts`: ones with mail outside Trash, or with mail in
+   * the Inbox. A row is rebuilt only when one of its messages changes, so
+   * rows written before that rule would keep such mail out of the Inbox
+   * until then.
+   */
+  readonly relistHidden: (
+    accountId: AccountId
   ) => Effect.Effect<ThreadChanges, MailStoreError>;
   /** Removes copies; their messages stay until `collectOrphans`. */
   readonly removeLocations: (

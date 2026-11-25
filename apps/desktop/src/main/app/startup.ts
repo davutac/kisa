@@ -1,5 +1,5 @@
 import { Effect, Exit, Option } from "effect";
-import { app, dialog } from "electron";
+import { app, dialog, powerMonitor } from "electron";
 
 import type {
   AppStartupErrorPayload,
@@ -9,7 +9,11 @@ import { startThreadCategorization } from "../ai/thread-categorization";
 import { startDatabase, takeImportActivation } from "../database";
 import type { DatabaseError } from "../database";
 import { configureDraftAttachmentStore } from "../mail/draft-attachment-store";
-import { startMailEngine, syncOnFocus } from "../mail/engine/mail-engine";
+import {
+  requestMailSync,
+  startMailEngine,
+  syncOnFocus,
+} from "../mail/engine/mail-engine";
 import { reconcileDraftAttachmentStore } from "../mail/mail-drafts";
 import { warmCorrespondentCache } from "../mail/mail-search";
 import {
@@ -58,6 +62,11 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
     startThreadCategorization();
     void startMailEngine();
     app.on("browser-window-focus", syncOnFocus);
+    // A connection waiting on its server does not outlive sleep, and nothing
+    // says so. Asking for a sync replaces it now, not when the wait runs out.
+    powerMonitor.on("resume", () => {
+      requestMailSync();
+    });
     void startScheduledMail();
     // Give the first mailbox page priority over this one-time full-index scan.
     const warmTimer = setTimeout(() => {

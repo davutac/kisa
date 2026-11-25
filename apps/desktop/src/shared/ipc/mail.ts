@@ -46,6 +46,11 @@ export const MailThreadSummary = Schema.Struct({
   labels: Schema.Array(Schema.String),
   latestAt: Schema.Finite,
   messageCount: Schema.Finite,
+  /**
+   * The places that list the conversation, by key: see `listingPlaces`. Main
+   * decides them, and a window never works them out from `labels`.
+   */
+  places: Schema.Array(Schema.String),
   snippet: Schema.String,
   subject: Schema.String,
   threadId: Schema.String,
@@ -93,6 +98,8 @@ export const MailThread = Schema.Struct({
   awaitsServer: Schema.Boolean,
   labels: Schema.Array(Schema.String),
   messages: Schema.Array(ThreadMessage),
+  /** The places that list the conversation: see `MailThreadSummary`. */
+  places: Schema.Array(Schema.String),
   subject: Schema.String,
   threadId: Schema.String,
 });

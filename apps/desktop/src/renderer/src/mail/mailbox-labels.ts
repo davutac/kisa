@@ -1,7 +1,7 @@
 import type { MailLabelColor, MailLabelSummary } from "@/shared/ipc/mail";
 import type { LabelCatalogLoadStatus } from "@/state/labels";
 
-import { compareLabelDisplayNames, isSystemLabel } from "./label";
+import { compareLabelDisplayNames } from "./label";
 
 export interface MailboxLabelCatalog {
   readonly accountId: string;
@@ -91,23 +91,6 @@ export const getScopeLabelItems = (
       return labels === undefined ? [] : [{ accountId, labels }];
     })
   );
-
-/**
- * Whether a thread carries the label a label place shows. Thread labels name
- * user labels by path and system labels by id, so a folder called "Spam"
- * never matches the Spam mailbox's `SPAM`.
- */
-export const threadHasMailboxLabel = (
-  threadLabels: readonly string[],
-  label: string
-): boolean => {
-  const key = normalizeMailboxLabelName(label);
-
-  return threadLabels.some(
-    (candidate) =>
-      !isSystemLabel(candidate) && normalizeMailboxLabelName(candidate) === key
-  );
-};
 
 /** One sidebar label row, indented under the nearest label above it. */
 export interface MailboxLabelRow {
