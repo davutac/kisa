@@ -63,6 +63,11 @@ import type {
 } from "../../../shared/ipc/mail";
 import { canApplySenderTrust } from "../../../shared/sender-trust";
 import { onAccountConnected } from "../../auth/account-events";
+import { isDemoMode } from "../../demo/demo-mode";
+import {
+  DemoImapConnectorLive,
+  DemoSmtpTransportLive,
+} from "../../demo/demo-transport";
 import { sendRendererEvent } from "../../electron/renderer-events";
 import { getCurrentAppSettings } from "../../settings/app-settings";
 import { accountMailWorkSupervisor } from "../account-mail-work-supervisor";
@@ -120,10 +125,12 @@ export class MailEngineError extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("MailEngineError", { message: Schema.String }) {}
 
+// Demo mode runs the same engine against mail servers held in memory: see
+// docs/architecture/demo-mode.md.
 const EngineLayer = Layer.mergeAll(
   MailEngineStoreLive,
-  ImapFlowConnectorLive,
-  SmtpTransportLive
+  isDemoMode ? DemoImapConnectorLive : ImapFlowConnectorLive,
+  isDemoMode ? DemoSmtpTransportLive : SmtpTransportLive
 ).pipe(Layer.provideMerge(MailDatabaseLive));
 
 const engineRuntime = ManagedRuntime.make(EngineLayer);

@@ -15,6 +15,8 @@ import { createShutdown } from "./app/shutdown";
 import { shouldQuitAfterAllWindowsClose } from "./app/window-lifecycle";
 import { closeDatabase } from "./database";
 import { stopDatabaseImport } from "./database-import";
+import { isDemoMode } from "./demo/demo-mode";
+import { enterDemoProfile, removeDemoProfile } from "./demo/demo-profile";
 import { sendRendererEvent } from "./electron/renderer-events";
 import { startDesktopIpc, stopDesktopIpc } from "./ipc/desktop-ipc-runtime";
 import { stopMailEngine } from "./mail/engine/mail-engine";
@@ -38,7 +40,11 @@ configureLinuxSecretStorage({
   platform: process.platform,
 });
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+// Demo mode gets a profile of its own before anything reads the user data
+// path, the lock below included, so it runs beside a real Kisa and never
+// opens that one's database. Without the profile it does not start at all.
+const hasProfile = !isDemoMode || enterDemoProfile(app);
+const hasSingleInstanceLock = hasProfile && app.requestSingleInstanceLock();
 
 if (hasSingleInstanceLock) {
   registerAppActivation(getMainWindow);
@@ -144,6 +150,8 @@ const shutdown = createShutdown({
 });
 
 app.on("before-quit", shutdown.handleQuitRequest);
+
+app.on("quit", removeDemoProfile);
 
 // The event only fires after the last native window closes. Background mode
 // keeps the main window hidden, so reaching this path with it disabled should

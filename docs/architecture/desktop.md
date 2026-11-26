@@ -38,6 +38,7 @@ apps/desktop/src/
   main/
     app/        lifecycle and activation handling
     auth/       accounts, the Add account window, and sealed credentials
+    demo/       demo mode: in-memory mail servers and sample mail (see demo-mode.md)
     electron/   Electron adapters used by capabilities
     ipc/        transport runtime, method definitions, central installer
     mail/       mail engine runtime, IMAP and SMTP adapters, message presentation

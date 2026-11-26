@@ -68,7 +68,7 @@ React feature or hook
      -> database utility process -> SQLite
 ```
 
-See the [desktop architecture](docs/architecture/desktop.md) and the [mail engine](docs/architecture/mail-engine.md) for details.
+See the [desktop architecture](docs/architecture/desktop.md) and the [mail engine](docs/architecture/mail-engine.md) for details, and [demo mode](docs/architecture/demo-mode.md) for running the app on sample mail.
 
 ## Repository
 
@@ -105,6 +105,14 @@ Outlook accounts need Kisa's Microsoft Entra client ID at build time: copy `apps
 Development uses `<userData>/database/mail.dev.sqlite` and its own sealed key, separate from the installed app's `mail.sqlite` database and key. Databases from before the mail engine (`app.sqlite`, `app.dev.sqlite`) are left as they are and never opened. When one exists, the sign-in screen notes that Kisa starts fresh and everything needs setting up again, for as long as that file is on disk.
 
 Running from source needs no provider setup: accounts connect with an app password as described in [Add an account](#add-an-account).
+
+To see Kisa with sample mail and no account, start it in demo mode:
+
+```bash
+bun run --cwd apps/desktop dev:demo
+```
+
+It shows four made-up accounts, one each on Gmail, iCloud, Outlook and another IMAP server, in a profile of its own that is removed at quit, connects to no mail server, and can run beside a normal Kisa. A packaged build takes the same `--demo` switch. See [demo mode](docs/architecture/demo-mode.md).
 
 Auto-update is off when running from source. To see the sidebar's update button go through its states anyway, start with `KISA_SIMULATE_UPDATE=1 bun run --cwd apps/desktop dev`: a pretend update to 99.0.0 appears a few seconds after launch and can be downloaded and "installed" without contacting the update server or changing the app.
 

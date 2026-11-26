@@ -84,6 +84,7 @@ Bun is the package manager and script runner; the tools it starts (Electron, ele
 - Install: `bun install`; CI uses `bun install --frozen-lockfile`.
 - Develop all persistent tasks: `bun run dev`.
 - Develop only Electron: `bun run --cwd apps/desktop dev`.
+- Develop with sample mail and no account: `bun run --cwd apps/desktop dev:demo`. Demo mode uses a temporary profile and in-memory mail servers, so it never opens the live database; see `docs/architecture/demo-mode.md`.
 - Typecheck: `bun run typecheck`; a narrower example is `bun run --cwd apps/desktop typecheck`.
 - Focused desktop test: `bun run --cwd apps/desktop vitest run tests/<name>.test.ts`.
 - Focused mail package test: `bun run --cwd packages/mail vitest run tests/<name>.test.ts`.
@@ -115,7 +116,7 @@ The main process owns privileged capabilities, including account sign-in and sea
 ## Desktop Code Rules
 
 - Entrypoints are `apps/desktop/src/main/index.ts`, `src/preload/index.ts`, `src/utility/database-process/entry.ts`, and `src/renderer/src/main.tsx`.
-- Main-process ownership is feature-oriented: `app`, `auth`, `database-process`, `electron`, `ipc`, `mail`, `settings`, `updates`, and `window`.
+- Main-process ownership is feature-oriented: `app`, `auth`, `database-process`, `demo`, `electron`, `ipc`, `mail`, `settings`, `updates`, and `window`.
 - Renderer components use feature hooks or `apps/desktop/src/renderer/src/platform/desktop.ts`. They must not import main or preload internals, call Electron directly, or grow a second transport API.
 - Public IPC methods are declared under `main/ipc/methods` and installed only by `desktop-ipc-handlers.ts`. Contracts and Effect Schema codecs live under `src/shared/ipc`; preload exposes the typed bridge.
 - Validate unknown renderer inputs in main and encode main results before they cross back. Keep IPC methods narrow; never expose arbitrary filesystem, shell, database, Gmail URL, or Gmail query access.

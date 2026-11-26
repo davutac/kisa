@@ -19,6 +19,7 @@
     "build:unpack": "electron-builder --dir",
     "build:win": "electron-builder --win",
     "dev": "electron-vite dev",
+    "dev:demo": "electron-vite dev -- --demo",
     "postinstall": "install-electron && electron-builder install-app-deps",
     "start": "electron-vite preview",
     "test": "vitest run",

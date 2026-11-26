@@ -132,6 +132,7 @@ const mocks = vi.hoisted(() => ({
   notifyAccountsChanged: vi.fn<(reply: AccountsReply) => void>(),
   openExternalUrl: vi.fn<(url: string) => boolean>(() => true),
   appFocus: vi.fn<() => void>(),
+  demoMode: false,
   microsoftAvailable: true,
   save: vi.fn<typeof savePasswordAccount>(),
   saveMicrosoft: vi.fn<typeof saveMicrosoftAccount>(),
@@ -231,6 +232,14 @@ vi.mock(
   })
 );
 
+// Demo mode is fixed at launch; here each test chooses it.
+vi.mock(import("../src/main/demo/demo-mode"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  get isDemoMode() {
+    return mocks.demoMode;
+  },
+}));
+
 // The real module reaches for Electron's network stack and shell.
 vi.mock(import("../src/main/auth/microsoft-client"), () => ({
   getMicrosoftOAuthEnvironment: () => {},
@@ -246,6 +255,8 @@ const {
 
 const { MICROSOFT_ACCOUNT_MESSAGES } =
   await import("../src/main/auth/microsoft-account");
+
+const { DEMO_MODE_REFUSAL } = await import("../src/main/demo/demo-mode");
 
 const { openAccountSetup, openAccountSignIn } =
   await import("../src/main/ipc/methods/accounts");
@@ -368,6 +379,7 @@ describe("the Add account window", () => {
       Effect.succeed(AccountId.make("person@outlook.com"))
     );
     mocks.appFocus.mockClear();
+    mocks.demoMode = false;
     mocks.microsoftAvailable = true;
     mocks.notifyAccountsChanged.mockClear();
     mocks.openExternalUrl.mockClear();
@@ -394,6 +406,29 @@ describe("the Add account window", () => {
     expect(openAccountSetup.channel).toBe(ACCOUNTS_OPEN_SETUP_CHANNEL);
     expect(window.options.preload).toMatch(/account-setup\.cjs$/u);
     expect(window.setResizable).toHaveBeenCalledWith(false);
+  });
+
+  // The window signs in to real servers whatever the engine is given, and
+  // without a window nothing can submit a password.
+  it("opens no window in demo mode, to add an account or to sign in again", async () => {
+    mocks.demoMode = true;
+    mocks.findSignIn.mockReturnValue(
+      Effect.succeed({
+        accountId: AccountId.make("name@icloud.com"),
+        email: "name@icloud.com",
+        method: "password",
+      })
+    );
+
+    const refusal = { error: DEMO_MODE_REFUSAL, ok: false };
+
+    await expect(
+      Effect.runPromise(openAccountSetup.handler(undefined))
+    ).resolves.toStrictEqual(refusal);
+    await expect(
+      Effect.runPromise(openAccountSignIn.handler({ email: "name@icloud.com" }))
+    ).resolves.toStrictEqual(refusal);
+    expect(mocks.windows).toHaveLength(0);
   });
 
   it("opens as a dialog over the main window, a sheet on macOS", async () => {

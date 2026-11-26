@@ -9,6 +9,8 @@ import type {
 import { startThreadCategorization } from "../ai/thread-categorization";
 import { startDatabase, takeImportActivation } from "../database";
 import type { DatabaseError } from "../database";
+import { connectDemoAccounts } from "../demo/demo-accounts";
+import { isDemoMode } from "../demo/demo-mode";
 import { configureDraftAttachmentStore } from "../mail/draft-attachment-store";
 import {
   requestMailSync,
@@ -62,6 +64,19 @@ const runStartupOnce = async (): Promise<AppStartupExit> => {
         yield* refreshUnreadBadge().pipe(Effect.ignore);
       })
     );
+
+    if (isDemoMode) {
+      // Before the engine lists its accounts. Failing leaves the demo with
+      // none, which the sign-in screen shows.
+      await Effect.runPromise(
+        connectDemoAccounts().pipe(
+          Effect.catch(() =>
+            Effect.logWarning("Could not connect the demo accounts")
+          )
+        )
+      );
+    }
+
     startThreadCategorization();
     void startMailEngine();
     app.on("browser-window-focus", syncOnFocus);

@@ -30,6 +30,7 @@ import type { DatabaseKeyEncryptor } from "./database-key";
 import { sealDatabaseKey } from "./database-key";
 import { getDatabaseKeyPath } from "./database-path";
 import { decodeDatabaseRecoveryKeyFile } from "./database-recovery-key";
+import { DEMO_MODE_REFUSAL, isDemoMode } from "./demo/demo-mode";
 
 /**
  * How far activation has got, recorded in the manifest so a start that finds
@@ -496,6 +497,12 @@ export const attachDatabaseImportFile = Effect.fn("attachDatabaseImportFile")(
 export const beginDatabaseImportSelection = Effect.fn(
   "beginDatabaseImportSelection"
 )(function* beginDatabaseImportSelectionEffect() {
+  // An import replaces the profile's database at the next start, and the
+  // demo profile lasts for one launch. Every later step needs this session.
+  if (isDemoMode) {
+    return yield* new DatabaseImportError({ message: DEMO_MODE_REFUSAL });
+  }
+
   if (databaseImportState?.state === "importing") {
     return yield* importError();
   }

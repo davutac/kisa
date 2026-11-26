@@ -10,6 +10,7 @@ import { APP_NAME } from "@/constants";
 import { TITLEBAR_HEIGHT } from "@/shared/window-chrome";
 
 import { ACCOUNT_SETUP_HELP_URLS } from "../../shared/mail-account-presets";
+import { DEMO_MODE_REFUSAL, isDemoMode } from "../demo/demo-mode";
 import { openExternalUrl } from "../electron/shell";
 import { toIpcReply } from "../ipc/reply";
 import { ImapFlowConnectorLive } from "../mail/engine/imap-session";
@@ -142,6 +143,12 @@ const loadSetupRenderer = (
 const openSetupWindow = Effect.fn("openSetupWindow")(function* openSetupWindow(
   target: SignInAgainTarget | undefined
 ) {
+  // The window signs in to real servers, whatever the engine talks to. With
+  // no window, nothing can submit a password or start a Microsoft sign-in.
+  if (isDemoMode) {
+    return yield* new PasswordAccountError({ message: DEMO_MODE_REFUSAL });
+  }
+
   if (session !== undefined && !session.window.isDestroyed()) {
     // The open window serves this request, or is busy signing in. Otherwise
     // it was opened for something else, and gives way to this one.

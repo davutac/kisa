@@ -6,6 +6,7 @@ import electronUpdater from "electron-updater";
 import { UPDATES_STATUS_CHANNEL } from "../../shared/ipc/channels";
 import { UpdateStatus } from "../../shared/update-status";
 import { beginQuit } from "../app/quit-state";
+import { isDemoMode } from "../demo/demo-mode";
 import { sendRendererEvent } from "../electron/renderer-events";
 import { createUpdateSimulation } from "./dev-update-simulation";
 import { createUpdateLifecycle } from "./update-lifecycle";
@@ -18,7 +19,8 @@ const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 let isInitialized = false;
 
 const canSelfUpdate = (): boolean => {
-  if (is.dev) {
+  // Demo mode asks no server for anything, updates included.
+  if (is.dev || isDemoMode) {
     return false;
   }
 
