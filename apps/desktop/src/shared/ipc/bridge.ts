@@ -23,6 +23,8 @@ import type {
   AppSettingsReply,
   AppSettingsUpdateRequest,
   AppStartupReply,
+  AppThemeReply,
+  AppThemeRequest,
   LoginItemSettingsReply,
   LoginItemSettingsUpdateRequest,
   ThreadWindowOpenReply,
@@ -355,6 +357,7 @@ export interface DesktopBridge {
   setAppSettings: (
     request: AppSettingsUpdateRequest
   ) => Promise<AppSettingsReply>;
+  setAppTheme: (request: AppThemeRequest) => Promise<AppThemeReply>;
   setLoginItemSettings: (
     request: LoginItemSettingsUpdateRequest
   ) => Promise<LoginItemSettingsReply>;

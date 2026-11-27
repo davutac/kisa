@@ -13,6 +13,10 @@ export interface AppSettingsApi {
   set: DesktopBridge["setAppSettings"];
 }
 
+export interface AppThemeApi {
+  set: DesktopBridge["setAppTheme"];
+}
+
 export interface LoginItemSettingsApi {
   get: DesktopBridge["getLoginItemSettings"];
   set: DesktopBridge["setLoginItemSettings"];
@@ -137,6 +141,7 @@ export interface RuntimeCapabilities {
   accounts?: AccountsApi;
   ai?: AiApi;
   appSettings?: AppSettingsApi;
+  appTheme?: AppThemeApi;
   isWeb: boolean;
   lifecycle?: AppLifecycleApi;
   loginItemSettings?: LoginItemSettingsApi;
@@ -154,6 +159,7 @@ interface DesktopCapabilities {
   accounts: AccountsApi;
   ai: AiApi;
   appSettings: AppSettingsApi;
+  appTheme: AppThemeApi;
   lifecycle: AppLifecycleApi;
   loginItemSettings?: LoginItemSettingsApi;
   mail: MailApi;
@@ -198,6 +204,7 @@ const getDesktopCapabilities = (bridge: DesktopBridge): DesktopCapabilities => {
     appSettings: {
       set: bridge.setAppSettings,
     },
+    appTheme: { set: bridge.setAppTheme },
     lifecycle: { onClosing: bridge.onAppClosing },
     loginItemSettings: bridge.launchAtLoginSupported
       ? {
@@ -311,6 +318,7 @@ export const getRuntimeCapabilities = (
       accounts: undefined,
       ai: undefined,
       appSettings: undefined,
+      appTheme: undefined,
       isWeb: !isElectron,
       lifecycle: undefined,
       loginItemSettings: undefined,
@@ -333,6 +341,9 @@ export const getStartupApi = (): AppStartupApi | undefined =>
 
 export const getAppSettingsApi = (): AppSettingsApi | undefined =>
   getRuntimeCapabilities().appSettings;
+
+export const getAppThemeApi = (): AppThemeApi | undefined =>
+  getRuntimeCapabilities().appTheme;
 
 export const getAppLifecycleApi = (): AppLifecycleApi | undefined =>
   getRuntimeCapabilities().lifecycle;

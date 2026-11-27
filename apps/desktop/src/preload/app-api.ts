@@ -7,6 +7,7 @@ import {
   APP_GET_LOGIN_ITEM_SETTINGS_CHANNEL,
   APP_OPEN_THREAD_WINDOW_CHANNEL,
   APP_SET_LOGIN_ITEM_SETTINGS_CHANNEL,
+  APP_SET_THEME_CHANNEL,
   APP_START_CHANNEL,
   APP_UPDATE_SETTINGS_CHANNEL,
 } from "../shared/ipc/channels";
@@ -19,6 +20,7 @@ export const appApi: Pick<
   | "onAppClosing"
   | "openThreadWindow"
   | "setAppSettings"
+  | "setAppTheme"
   | "setLoginItemSettings"
   | "startApp"
 > = {
@@ -32,6 +34,7 @@ export const appApi: Pick<
     ipcRenderer.invoke(APP_OPEN_THREAD_WINDOW_CHANNEL, request),
   setAppSettings: (request) =>
     ipcRenderer.invoke(APP_UPDATE_SETTINGS_CHANNEL, request),
+  setAppTheme: (request) => ipcRenderer.invoke(APP_SET_THEME_CHANNEL, request),
   setLoginItemSettings: (request) =>
     ipcRenderer.invoke(APP_SET_LOGIN_ITEM_SETTINGS_CHANNEL, request),
   startApp: () => ipcRenderer.invoke(APP_START_CHANNEL),

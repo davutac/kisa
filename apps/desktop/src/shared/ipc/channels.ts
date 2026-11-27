@@ -9,6 +9,8 @@ export const APP_OPEN_THREAD_WINDOW_CHANNEL = "desktop:app:open-thread-window";
 export const APP_SET_LOGIN_ITEM_SETTINGS_CHANNEL =
   "desktop:app:set-login-item-settings";
 
+export const APP_SET_THEME_CHANNEL = "desktop:app:set-theme";
+
 export const APP_UPDATE_SETTINGS_CHANNEL = "desktop:app:update-settings";
 
 export const AI_CLEANUP_DRAFT_CHANNEL = "desktop:ai:cleanup-draft";

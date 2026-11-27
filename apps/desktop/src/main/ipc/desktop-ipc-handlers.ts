@@ -24,6 +24,7 @@ import {
   updateAiWritingSettings,
 } from "./methods/ai";
 import { openThreadWindow, startApp, updateAppSettings } from "./methods/app";
+import { setAppTheme } from "./methods/app-theme";
 import {
   getLoginItemSettings,
   setLoginItemSettings,
@@ -113,6 +114,7 @@ export const installDesktopIpcHandlers = Effect.fn(
   yield* ipc.handle(getLoginItemSettings);
   yield* ipc.handle(setLoginItemSettings);
   yield* ipc.handle(updateAppSettings);
+  yield* ipc.handle(setAppTheme);
   yield* ipc.handle(listAccounts);
   yield* ipc.handle(reorderAccounts);
   yield* ipc.handle(updateAccountName);

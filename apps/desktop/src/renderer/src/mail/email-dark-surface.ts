@@ -16,7 +16,7 @@
 // It runs in the frame's parsed document, from the app's side: the frame
 // itself runs no script.
 
-export interface Rgb {
+interface Rgb {
   readonly r: number;
   readonly g: number;
   readonly b: number;
@@ -27,7 +27,7 @@ interface Rgba extends Rgb {
 }
 
 /** The app's dark card, which shows through the frame. */
-export const DARK_CANVAS: Rgb = { b: 23, g: 23, r: 23 };
+const DARK_CANVAS: Rgb = { b: 23, g: 23, r: 23 };
 
 /** What text must reach against its background (WCAG AA for body text). */
 const MIN_CONTRAST = 4.5;
@@ -53,7 +53,7 @@ export type EmailSurface = "dark" | "light";
 const RGB_PATTERN =
   /^rgba?\(\s*(?<r>[\d.]+)[,\s]+(?<g>[\d.]+)[,\s]+(?<b>[\d.]+)(?:\s*[,/]\s*(?<a>[\d.]+%?))?\s*\)$/u;
 
-export const parseCssColor = (value: string): Rgba | undefined => {
+const parseCssColor = (value: string): Rgba | undefined => {
   const groups = RGB_PATTERN.exec(value.trim())?.groups;
 
   if (groups === undefined) {
@@ -77,7 +77,7 @@ const toCssColor = ({ b, g, r }: Rgb): string =>
   `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 
 /** One colour laid over another, as a see-through one is painted. */
-export const blend = (over: Rgba, under: Rgb): Rgb => ({
+const blend = (over: Rgba, under: Rgb): Rgb => ({
   b: over.b * over.a + under.b * (1 - over.a),
   g: over.g * over.a + under.g * (1 - over.a),
   r: over.r * over.a + under.r * (1 - over.a),
@@ -93,7 +93,7 @@ const luminance = ({ b, g, r }: Rgb): number =>
   0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 
 /** The WCAG contrast ratio of two colours, from 1 to 21. */
-export const contrast = (one: Rgb, other: Rgb): number => {
+const contrast = (one: Rgb, other: Rgb): number => {
   const [darker = 0, lighter = 0] = [luminance(one), luminance(other)].toSorted(
     (left, right) => left - right
   );
@@ -105,7 +105,7 @@ export const contrast = (one: Rgb, other: Rgb): number => {
  * Whether a background only stands in for the page: white, or a light grey
  * or cream. Such a background is let go, so the card shows through.
  */
-export const isPageLikeBackground = (color: Rgb): boolean =>
+const isPageLikeBackground = (color: Rgb): boolean =>
   luminance(color) >= 0.7 &&
   Math.max(color.r, color.g, color.b) - Math.min(color.r, color.g, color.b) <=
     32;
@@ -174,10 +174,7 @@ const LIGHTNESS_STEP = 0.04;
  * is turned over, so black becomes white and a dark blue a light one, then
  * moved further from the background until the text reads.
  */
-export const repairTextColor = (
-  color: Rgb,
-  background: Rgb
-): Rgb | undefined => {
+const repairTextColor = (color: Rgb, background: Rgb): Rgb | undefined => {
   if (contrast(color, background) >= MIN_CONTRAST) {
     return undefined;
   }
@@ -244,7 +241,7 @@ const hasOwnText = (element: Element): boolean => {
 };
 
 /** How much of a height a set of vertical spans covers, overlaps once. */
-export const coveredFraction = (
+const coveredFraction = (
   spans: readonly (readonly [number, number])[],
   height: number
 ): number => {
@@ -275,6 +272,9 @@ interface Plan {
    */
   readonly cards: [number, number][];
 }
+
+/** What a small light box becomes on the dark card: a faint lift. */
+const CHIP_TINT: Rgba = { a: 0.12, b: 255, g: 255, r: 255 };
 
 /** How far apart two channels may be for two page colours to be one. */
 const SAME_PAGE_TOLERANCE = 6;
@@ -325,17 +325,29 @@ const backdropOf = (
   // Only a background that stands in for the page is let go. A white box
   // on a colour the message keeps is part of its design, and stays.
   if (color !== undefined && !parent.isKept && isPageLikeBackground(color)) {
+    const isOtherShade = !isSamePage(parent.page ?? WHITE, color);
+
+    // A small box in another shade than its page sets something apart: a
+    // code, a key, a tag. It keeps a box, in a shade the dark card can show.
+    if (!isBand && isOtherShade && parent.color !== undefined) {
+      const chip = blend(CHIP_TINT, parent.color);
+
+      plan.repairs.push({
+        element,
+        property: "background-color",
+        value: toCssColor(chip),
+      });
+
+      return { ...parent, color: chip };
+    }
+
     plan.repairs.push({
       element,
       property: "background-color",
       value: "transparent",
     });
 
-    if (
-      isBand &&
-      parent.page !== undefined &&
-      !isSamePage(parent.page, color)
-    ) {
+    if (isBand && isOtherShade && parent.page !== undefined) {
       plan.cards.push([top, bottom]);
     }
 
@@ -452,10 +464,15 @@ const planRepairs = (document: Document): readonly Repair[] | undefined => {
 /**
  * Settles which page a message with colours of its own is shown on while
  * the app is dark, once per document: repaired for the dark card, or, when
- * it is built out of backgrounds, switched to the light page it was written
- * for. Preparing a document twice gives the first answer again.
+ * it is built out of backgrounds, left as it came on the page given as the
+ * fallback. That is the light page it was written for, or the dark one for
+ * a message with a dark-mode rule of its own, which it may be dressed for.
+ * Preparing a document twice gives the first answer again.
  */
-export const adaptToDarkSurface = (document: Document): EmailSurface => {
+export const adaptToDarkSurface = (
+  document: Document,
+  fallback: EmailSurface
+): EmailSurface => {
   const root = document.documentElement;
   const settled = root.getAttribute(SURFACE_ATTRIBUTE);
 
@@ -464,7 +481,7 @@ export const adaptToDarkSurface = (document: Document): EmailSurface => {
   }
 
   const repairs = planRepairs(document);
-  const surface: EmailSurface = repairs === undefined ? "light" : "dark";
+  const surface: EmailSurface = repairs === undefined ? fallback : "dark";
 
   for (const { element, property, value } of repairs ?? []) {
     element.style.setProperty(property, value, "important");

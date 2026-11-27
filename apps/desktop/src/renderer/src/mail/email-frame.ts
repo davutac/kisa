@@ -61,6 +61,16 @@ const ACTIVE_START_TAG_PATTERN = /<(?:iframe|link|meta)(?=[\t\n\f\r />])/giu;
 export const neutralizeActiveElements = (html: string): string =>
   html.replaceAll(ACTIVE_START_TAG_PATTERN, "<param");
 
+// On the app's own card a message has no padding above or below it, so one
+// whose first line brings no margin would sit against the header. These empty
+// blocks give it a least gap as a margin, not as padding: a margin collapses
+// with the message's own, so a message that opens with a paragraph keeps the
+// gap it had instead of gaining a second one. A light page has padding.
+const EDGE_GAP_STYLE = `      body::before, body::after { content: ""; display: block; }
+      body::before { margin-bottom: 12px; }
+      body::after { margin-top: 12px; }
+`;
+
 /**
  * The document a message is shown in. `<base target="_blank">` makes a link
  * the message gave no target open a new window, which main sends to the
@@ -104,7 +114,7 @@ export const createEmailDocument = (
         overflow-wrap: anywhere;
         font: 14px/1.55 system-ui, sans-serif;
       }
-      body, body * { user-select: text !important; }
+${lightSurface ? "" : EDGE_GAP_STYLE}      body, body * { user-select: text !important; }
       img { max-width: 100%; height: auto; }
       /* An inline image still on its way from the server, or one it could not
          give, keeps its space without a broken-image icon. */
@@ -120,6 +130,7 @@ export const createEmailDocument = (
       :root:where([data-kisa-surface="light"]) { color-scheme: light; }
       html:where([data-kisa-surface="light"]), :where(html[data-kisa-surface="light"]) body { background: Canvas; }
       :where(html[data-kisa-surface="light"]) body { padding: 12px 48px 12px 16px; }
+      :where(html[data-kisa-surface="light"]) body::before, :where(html[data-kisa-surface="light"]) body::after { display: none; }
     </style>
   </head>
   <body>${neutralizeActiveElements(html)}</body>

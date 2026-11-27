@@ -18,7 +18,10 @@ import {
   isParsedMessageDocument,
   prepareEmailLinks,
 } from "@/mail/email-frame";
-import { needsLightSurface } from "@/mail/email-surface";
+import {
+  hasDarkSchemeRule,
+  hasOwnColors as htmlHasOwnColors,
+} from "@/mail/email-surface";
 import { blockRemoteImages } from "@/mail/remote-images";
 import type { MessageBody } from "@/shared/ipc/mail";
 
@@ -99,7 +102,11 @@ const MailMessageBody = ({
   const onPointerDownRef = useRef(onFramePointerDown);
   const resizeObserver = useRef<ResizeObserver | null>(null);
   const { resolvedTheme } = useTheme();
-  const hasOwnColors = body.html !== undefined && needsLightSurface(body.html);
+  const hasOwnColors = body.html !== undefined && htmlHasOwnColors(body.html);
+
+  // A message with a dark-mode rule of its own is not given a light page
+  // unless the reader asks: it may already be dressed for a dark one.
+  const hasDarkRule = body.html !== undefined && hasDarkSchemeRule(body.html);
   // The reader's choice to see this message as its sender coloured it.
   const [showsOwnColors, setShowsOwnColors] = useState(false);
   // The document that turned out to be built out of backgrounds, if any.
@@ -110,6 +117,10 @@ const MailMessageBody = ({
   const adaptsToDark =
     hasOwnColors && resolvedTheme === "dark" && !showsOwnColors;
 
+  // The light page a message with colours of its own is given from the
+  // start, when it is not repaired for the dark card instead.
+  const hasLightPage = hasOwnColors && (showsOwnColors || !hasDarkRule);
+
   const emailDocument = useMemo(
     () =>
       body.html === undefined
@@ -119,15 +130,17 @@ const MailMessageBody = ({
             {
               allowRemoteImages,
               colorScheme: resolvedTheme,
-              lightSurface: hasOwnColors && !adaptsToDark,
+              lightSurface: !adaptsToDark && hasLightPage,
             }
           ),
-    [adaptsToDark, allowRemoteImages, body.html, hasOwnColors, resolvedTheme]
+    [adaptsToDark, allowRemoteImages, body.html, hasLightPage, resolvedTheme]
   );
 
+  // Whether the message sits on a light page: the one it was given from the
+  // start, or the one a repair that gave up switched it to.
   const lightSurface = adaptsToDark
     ? emailDocument !== undefined && lightDocument === emailDocument
-    : hasOwnColors;
+    : hasLightPage;
 
   // Offered while the choice changes anything: not for a message that stays
   // on its light page either way.
@@ -188,7 +201,10 @@ const MailMessageBody = ({
       if (
         adaptsToDark &&
         emailDocument !== undefined &&
-        adaptToDarkSurface(frameBody.ownerDocument) === "light"
+        adaptToDarkSurface(
+          frameBody.ownerDocument,
+          hasDarkRule ? "dark" : "light"
+        ) === "light"
       ) {
         setLightDocument(emailDocument);
       }
@@ -204,7 +220,7 @@ const MailMessageBody = ({
       resizeObserver.current = observer;
       resizeEmailFrame(frame);
     },
-    [adaptsToDark, emailDocument, handleFramePointerDown]
+    [adaptsToDark, emailDocument, handleFramePointerDown, hasDarkRule]
   );
 
   // The frame's load event waits for every image, and a host that answers

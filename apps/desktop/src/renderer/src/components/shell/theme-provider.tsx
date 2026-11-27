@@ -4,6 +4,8 @@ import { Preferences, usePreference } from "@ui-sdk/react/preferences";
 import { useLayoutEffect } from "react";
 import type { ReactNode } from "react";
 
+import { getAppThemeApi } from "@/platform/desktop";
+
 export type Theme = "dark" | "light" | "system";
 
 export type ColorScheme = "dark" | "light";
@@ -30,11 +32,24 @@ const toColorScheme = (resolved: SystemColorScheme): ColorScheme =>
 
 // `main.css` styles dark mode from a `dark` class on `<html>`, and the windows'
 // CSP runs no inline script, so the class is set here before the first paint.
-const applyColorScheme = ({ resolved }: ColorSchemeState): void => {
+// Electron is told the choice itself, not what it resolved to, so "system"
+// goes on following the system. Native menus and each frame's
+// `prefers-color-scheme` then answer for the app's theme.
+const syncNativeTheme = async (theme: Theme): Promise<void> => {
+  try {
+    await getAppThemeApi()?.set({ theme });
+  } catch {
+    // A window with no desktop bridge, or a call that fails, leaves Electron
+    // following the system, as it did before it was told anything.
+  }
+};
+
+const applyColorScheme = ({ resolved, value }: ColorSchemeState): void => {
   document.documentElement.classList.toggle(
     "dark",
     toColorScheme(resolved) === "dark"
   );
+  void syncNativeTheme(value);
 };
 
 const ThemeProvider = ({ children }: { readonly children: ReactNode }) => {

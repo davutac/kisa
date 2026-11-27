@@ -106,6 +106,24 @@ export const ThreadWindowOpenReply = IpcReply(Schema.Void);
 
 export type ThreadWindowOpenReply = typeof ThreadWindowOpenReply.Type;
 
+/**
+ * The appearance the reader chose for the app. Main hands it to Electron, so
+ * what follows the system's appearance by default follows the app's instead:
+ * native menus and window chrome, and `prefers-color-scheme` in every frame,
+ * a message's included.
+ */
+export const AppTheme = Schema.Literals(["dark", "light", "system"]);
+
+export type AppTheme = typeof AppTheme.Type;
+
+export const AppThemeRequest = Schema.Struct({ theme: AppTheme });
+
+export type AppThemeRequest = typeof AppThemeRequest.Type;
+
+export const AppThemeReply = IpcReply(Schema.Void);
+
+export type AppThemeReply = typeof AppThemeReply.Type;
+
 export const AppSettingsUpdateRequest = AppSettings;
 
 export type AppSettingsUpdateRequest = typeof AppSettingsUpdateRequest.Type;

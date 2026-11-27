@@ -8,9 +8,15 @@
 const AUTHOR_COLOR_PATTERN =
   /<font\b|\sbgcolor\s*=|[\s;{"']color\s*:|[\s;{"']background(?:-color)?\s*:/iu;
 
-// A sender who wrote a dark-mode rule has thought about both schemes already,
-// so forcing a light canvas would override the work rather than rescue it.
 const DARK_SCHEME_PATTERN = /prefers-color-scheme\s*:\s*dark/iu;
 
-export const needsLightSurface = (html: string): boolean =>
-  !DARK_SCHEME_PATTERN.test(html) && AUTHOR_COLOR_PATTERN.test(html);
+/** Whether a message picks colours of its own, for text or backgrounds. */
+export const hasOwnColors = (html: string): boolean =>
+  AUTHOR_COLOR_PATTERN.test(html);
+
+/**
+ * Whether a message carries a rule for dark mode. That is no promise it reads
+ * well on a dark page: the rule often only swaps a logo.
+ */
+export const hasDarkSchemeRule = (html: string): boolean =>
+  DARK_SCHEME_PATTERN.test(html);
