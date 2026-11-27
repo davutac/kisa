@@ -17,7 +17,7 @@
     },
     "apps/desktop": {
       "name": "kisa",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "catalog:",
         "@electron-toolkit/utils": "catalog:",
