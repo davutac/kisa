@@ -51,6 +51,7 @@
       "electron-updater": "^6.8.11",
       "electron-vite": "6.0.0",
       "effect": "4.1.5",
+      "happy-dom": "^21.0.4",
       "husky": "^9.1.7",
       "imapflow": "2.12.2",
       "lucide-react": "^1.79.0",

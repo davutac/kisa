@@ -18,7 +18,7 @@ const FieldErrorIndicator = ({ id, message }: FieldErrorIndicatorProps) => (
       render={
         <Button
           aria-label={message}
-          className="text-destructive hover:text-destructive focus-visible:ring-destructive/30 border-0 hover:bg-transparent active:not-aria-[haspopup]:translate-y-0 dark:hover:bg-transparent"
+          className="text-destructive hover:text-destructive focus-visible:ring-destructive/30 border-0 hover:bg-transparent active:not-aria-[haspopup]:scale-100 dark:hover:bg-transparent"
           size="icon-sm"
           type="button"
           variant="ghost"

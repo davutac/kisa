@@ -45,8 +45,8 @@ const SidebarFavoriteToggle = ({
           render={
             <Toggle
               aria-label={`Favorite ${favorite.label}`}
-              // Centered by margins, not a translate, so the buttons'
-              // `active:translate-y-px` press nudges it instead of undoing it.
+              // Centered by margins, not a transform, so the buttons' press
+              // effect adds to it instead of undoing it.
               className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-1.5 my-auto opacity-0 group-hover/favorite:opacity-100 focus-visible:opacity-100"
               onPressedChange={() => toggleFavorite(favorite)}
               pressed={isFavorite}

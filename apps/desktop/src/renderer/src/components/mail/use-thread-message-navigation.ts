@@ -11,12 +11,12 @@ export const useThreadMessageNavigation = (
 ) => {
   const messageHeaderRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const expandedMessageId = useThreadConversationStore(
-    (state) => state.expandedMessageId
-  );
-
   const selectedMessageId = useThreadConversationStore(
     (state) => state.selectedMessageId
+  );
+
+  const isSelectedMessageExpanded = useThreadConversationStore((state) =>
+    state.expandedMessageIds.has(state.selectedMessageId)
   );
 
   const openMessage = useThreadConversationStore((state) => state.openMessage);
@@ -81,15 +81,19 @@ export const useThreadMessageNavigation = (
 
       if (
         nextMessageId === null ||
-        (nextMessageId === selectedMessageId &&
-          expandedMessageId === selectedMessageId)
+        (nextMessageId === selectedMessageId && isSelectedMessageExpanded)
       ) {
         return;
       }
 
       openAndFocusMessage(nextMessageId);
     },
-    [expandedMessageId, messageIds, openAndFocusMessage, selectedMessageId]
+    [
+      isSelectedMessageExpanded,
+      messageIds,
+      openAndFocusMessage,
+      selectedMessageId,
+    ]
   );
 
   useAppCommand("thread.nextMessage", () => moveSelection(1), {
@@ -108,5 +112,6 @@ export const useThreadMessageNavigation = (
     focusSelectedMessage,
     registerMessageHeader,
     selectedMessageId,
+    showMessage: openAndFocusMessage,
   };
 };

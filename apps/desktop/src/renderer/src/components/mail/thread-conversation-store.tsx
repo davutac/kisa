@@ -4,49 +4,78 @@ import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 
 interface ThreadConversationState {
-  expandedMessageId: string | null;
+  // Several messages may be open at once; the selected one is the target of
+  // reply, forward, and message navigation, open or not.
+  expandedMessageIds: ReadonlySet<string>;
   selectedMessageId: string;
   openMessage: (messageId: string) => void;
   reconcileMessages: (messageIds: readonly string[]) => void;
+  selectMessage: (messageId: string) => void;
   toggleMessage: (messageId: string) => void;
 }
 
+const withMessage = (
+  messageIds: ReadonlySet<string>,
+  messageId: string
+): ReadonlySet<string> =>
+  messageIds.has(messageId) ? messageIds : new Set([...messageIds, messageId]);
+
 export const createThreadConversationStore = (initialMessageId: string) =>
   createStore<ThreadConversationState>()((set) => ({
-    expandedMessageId: initialMessageId,
+    expandedMessageIds: new Set([initialMessageId]),
     openMessage: (messageId) => {
-      set({ expandedMessageId: messageId, selectedMessageId: messageId });
+      set((state) => ({
+        expandedMessageIds: withMessage(state.expandedMessageIds, messageId),
+        selectedMessageId: messageId,
+      }));
     },
     reconcileMessages: (messageIds) => {
       set((state) => {
+        const expandedMessageIds = new Set(
+          [...state.expandedMessageIds].filter((messageId) =>
+            messageIds.includes(messageId)
+          )
+        );
+
+        const expandedChanged =
+          expandedMessageIds.size !== state.expandedMessageIds.size;
+
         if (messageIds.includes(state.selectedMessageId)) {
-          return state;
+          return expandedChanged ? { expandedMessageIds } : state;
         }
 
         const fallbackMessageId = messageIds.at(-1);
 
-        return fallbackMessageId === undefined
-          ? state
-          : {
-              expandedMessageId: fallbackMessageId,
-              selectedMessageId: fallbackMessageId,
-            };
+        if (fallbackMessageId === undefined) {
+          return expandedChanged ? { expandedMessageIds } : state;
+        }
+
+        return {
+          expandedMessageIds: withMessage(
+            expandedMessageIds,
+            fallbackMessageId
+          ),
+          selectedMessageId: fallbackMessageId,
+        };
       });
+    },
+    selectMessage: (messageId) => {
+      set((state) =>
+        state.selectedMessageId === messageId
+          ? state
+          : { selectedMessageId: messageId }
+      );
     },
     selectedMessageId: initialMessageId,
     toggleMessage: (messageId) => {
       set((state) => {
-        if (state.selectedMessageId !== messageId) {
-          return {
-            expandedMessageId: messageId,
-            selectedMessageId: messageId,
-          };
+        const expandedMessageIds = new Set(state.expandedMessageIds);
+
+        if (!expandedMessageIds.delete(messageId)) {
+          expandedMessageIds.add(messageId);
         }
 
-        return {
-          expandedMessageId:
-            state.expandedMessageId === messageId ? null : messageId,
-        };
+        return { expandedMessageIds, selectedMessageId: messageId };
       });
     },
   }));

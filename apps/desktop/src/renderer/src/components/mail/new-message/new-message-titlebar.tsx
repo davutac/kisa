@@ -75,7 +75,7 @@ const ScheduledEmailTitle = ({
       <Button
         aria-keyshortcuts={getHotkeyAriaLabel("composer.close")}
         aria-label="Back to Scheduled"
-        className="app-titlebar-interactive text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 h-auto rounded-sm border-0 p-0 text-[length:inherit] leading-[inherit] transition-colors hover:no-underline active:not-aria-[haspopup]:translate-y-0 data-disabled:opacity-100"
+        className="app-titlebar-interactive text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 h-auto rounded-sm border-0 p-0 text-[length:inherit] leading-[inherit] transition-colors hover:no-underline active:not-aria-[haspopup]:scale-100 data-disabled:opacity-100"
         disabled={disabled}
         onClick={onBack}
         title={`Back to Scheduled (${closeDisplay.bindings[0]})`}

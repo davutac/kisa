@@ -44,7 +44,7 @@ const MailMessageHeader = ({
         <AccordionTrigger
           aria-current={selected ? "true" : undefined}
           aria-label={`${expanded ? "Collapse" : "Expand"} message from ${message.from}, ${sentAt}`}
-          className="hover:bg-muted/50 focus-visible:bg-muted/70 absolute inset-0 h-auto cursor-pointer rounded-none border-0 p-0 transition-colors focus-visible:ring-0 active:not-aria-[haspopup]:translate-y-0"
+          className="hover:bg-muted/50 focus-visible:bg-muted/70 absolute inset-0 h-auto cursor-pointer rounded-none border-0 p-0 transition-colors focus-visible:ring-0 active:not-aria-[haspopup]:scale-100"
           ref={buttonRef}
           variant="link"
         />

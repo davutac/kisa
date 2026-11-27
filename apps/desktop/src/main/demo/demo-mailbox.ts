@@ -98,6 +98,30 @@ const thread = (
 const note = (...paragraphs: readonly string[]): string =>
   paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("");
 
+const quotedSender = (from: Person): string =>
+  `${from.name} &lt;${from.address}&gt;`;
+
+/** A reply's quote as Gmail writes it, and as Kisa's own replies carry it. */
+const gmailQuote = (from: Person, sent: string, html: string): string =>
+  `<div><br></div><div class="gmail_quote"><div class="gmail_attr">On ${sent}, ${quotedSender(from)} wrote:<br></div><blockquote class="gmail_quote" style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex">${html}</blockquote></div>`;
+
+/** A reply's quote as Apple Mail writes it. */
+const appleQuote = (from: Person, sent: string, html: string): string =>
+  `<div><br><div>On ${sent}, ${quotedSender(from)} wrote:</div><br class="Apple-interchange-newline"><blockquote type="cite"><div>${html}</div></blockquote></div>`;
+
+/**
+ * A reply's quote as Outlook for Windows writes it: a header block under a
+ * bordered rule, in a wrapper of its own, with the original after the wrapper.
+ */
+const outlookQuote = (
+  from: Person,
+  to: Person,
+  sent: string,
+  subject: string,
+  html: string
+): string =>
+  `<style>p.MsoNormal{margin:0cm;font-size:11pt;font-family:Calibri,sans-serif}</style><div><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm"><p class="MsoNormal"><b>From:</b> ${quotedSender(from)}<br><b>Sent:</b> ${sent}<br><b>To:</b> ${quotedSender(to)}<br><b>Subject:</b> ${subject}</p></div></div><p class="MsoNormal">&nbsp;</p>${html}`;
+
 /** A designed message on its own light page, as a company's mail is. */
 const sheet = (accent: string, content: string): string =>
   `<div style="background:#f3f0e9;padding:28px 16px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f2933"><div style="max-width:540px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden"><div style="height:6px;background:${accent}"></div><div style="padding:28px 32px">${content}</div></div></div>`;
@@ -213,50 +237,59 @@ const AWARDS: Person = {
 
 const HARBOR = "Clients/Harbor Coffee";
 
+// The rebrand thread quotes each earlier message the way a different client
+// would, and each reply carries the quotes of the one it answers, so its last
+// message holds a chain of three: Gmail's quote of Apple Mail's of Outlook's.
+const ROUND_TWO = note(
+  "Hi Jonas,",
+  "Round two is attached. We kept the hand-drawn wordmark from the first round and rebuilt everything around it: a warmer palette, a tighter grid for the bags, and a simpler mark for the cup sleeves.",
+  "Pages 4 to 7 show the bags in all five roasts. I would look at those first.",
+  "Maya"
+);
+
+const ROUND_TWO_REPLY = note(
+  "Maya, this is a big step up.",
+  "The clay colour is exactly the warmth we were missing. My only worry is the moss green on the decaf bag, which reads a little cold next to the others on the shelf.",
+  "I am showing it to the shop managers tomorrow morning and will come back with their notes.",
+  "Jonas"
+);
+
+const ROUND_TWO_DECAF = note(
+  "Good catch on the decaf. I will try it two steps warmer and send both side by side.",
+  "Tell me what the shop managers say about the menu boards in particular. They are the people who have to read them from behind the counter."
+);
+
+const ROUND_TWO_REPLY_SENT =
+  ROUND_TWO_REPLY +
+  outlookQuote(
+    MAYA_WORK,
+    JONAS,
+    "Monday, 09:14",
+    "Rebrand: round two feedback",
+    ROUND_TWO
+  );
+
+const ROUND_TWO_DECAF_SENT =
+  ROUND_TWO_DECAF + appleQuote(JONAS, "Tuesday at 10:17", ROUND_TWO_REPLY_SENT);
+
 const workThreads = (): readonly DemoThread[] => [
   thread(
     "Rebrand: round two feedback",
     [INBOX, HARBOR],
     [
-      mail(
-        MAYA_WORK,
-        2 * DAY + 3 * HOUR,
-        note(
-          "Hi Jonas,",
-          "Round two is attached. We kept the hand-drawn wordmark from the first round and rebuilt everything around it: a warmer palette, a tighter grid for the bags, and a simpler mark for the cup sleeves.",
-          "Pages 4 to 7 show the bags in all five roasts. I would look at those first.",
-          "Maya"
-        ),
-        {
-          attachments: [
-            pdf("Harbor-Coffee-Brand-v2.pdf", "Harbor Coffee Roasters", [
-              "Brand direction, round two",
-              "1. Wordmark and cup mark",
-              "2. Palette: harbor blue, clay, oat, moss",
-              "3. Packaging grid for five roasts",
-              "4. Signage and menu boards",
-            ]),
-          ],
-        }
-      ),
-      mail(
-        JONAS,
-        DAY + 5 * HOUR,
-        note(
-          "Maya, this is a big step up.",
-          "The clay colour is exactly the warmth we were missing. My only worry is the moss green on the decaf bag, which reads a little cold next to the others on the shelf.",
-          "I am showing it to the shop managers tomorrow morning and will come back with their notes.",
-          "Jonas"
-        )
-      ),
-      mail(
-        MAYA_WORK,
-        DAY + 2 * HOUR,
-        note(
-          "Good catch on the decaf. I will try it two steps warmer and send both side by side.",
-          "Tell me what the shop managers say about the menu boards in particular. They are the people who have to read them from behind the counter."
-        )
-      ),
+      mail(MAYA_WORK, 2 * DAY + 3 * HOUR, ROUND_TWO, {
+        attachments: [
+          pdf("Harbor-Coffee-Brand-v2.pdf", "Harbor Coffee Roasters", [
+            "Brand direction, round two",
+            "1. Wordmark and cup mark",
+            "2. Palette: harbor blue, clay, oat, moss",
+            "3. Packaging grid for five roasts",
+            "4. Signage and menu boards",
+          ]),
+        ],
+      }),
+      mail(JONAS, DAY + 5 * HOUR, ROUND_TWO_REPLY_SENT),
+      mail(MAYA_WORK, DAY + 2 * HOUR, ROUND_TWO_DECAF_SENT),
       mail(
         JONAS,
         6,
@@ -265,7 +298,7 @@ const workThreads = (): readonly DemoThread[] => [
           "<b>Menu boards:</b> prices need to be one size larger, they are hard to read from the queue.<br><b>Cup sleeves:</b> can the mark sit lower, so a hand does not cover it?",
           "If you can turn those around this week, we are ready to sign off and book the printer.",
           "Jonas"
-        ),
+        ) + gmailQuote(MAYA_WORK, "Wed, 13:17", ROUND_TWO_DECAF_SENT),
         { isStarred: true, isUnread: true }
       ),
     ]

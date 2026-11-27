@@ -24,7 +24,7 @@ export interface MailLabelBadgeProps {
 // The badge's own buttons only take Kisa's Button for its behavior; these
 // classes undo its padding, height and focus ring to keep the badge's look.
 const badgeButtonClassName =
-  "h-auto min-w-0 gap-0 border-0 p-0 text-[length:inherit] leading-[inherit] hover:bg-transparent hover:text-current focus-visible:ring-0 active:not-aria-[haspopup]:translate-y-0 dark:hover:bg-transparent";
+  "h-auto min-w-0 gap-0 border-0 p-0 text-[length:inherit] leading-[inherit] hover:bg-transparent hover:text-current focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 dark:hover:bg-transparent";
 
 const MailLabelBadge = ({
   className,

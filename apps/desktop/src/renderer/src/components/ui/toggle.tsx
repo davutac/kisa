@@ -12,10 +12,12 @@ export { ToggleIcon } from "@ui-sdk/react/toggle";
 type ClassNameProps<Props> = Omit<Props, "className"> & { className?: string };
 
 // The pressed look holds on hover: the unpressed variant's `hover:text-*` and
-// ghost's later-emitted `dark:hover:bg-muted/50` tie with it otherwise.
+// ghost's later-emitted `dark:hover:bg-muted/50` tie with it otherwise. It
+// holds in dark mode too, where outline's `dark:bg-input/30` would keep its
+// own fill under the pressed text color.
 const pressedClassName = {
   default:
-    "data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:hover:bg-primary/80 dark:data-pressed:hover:bg-primary/80 data-pressed:hover:text-primary-foreground",
+    "data-pressed:bg-primary dark:data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:hover:bg-primary/80 dark:data-pressed:hover:bg-primary/80 data-pressed:hover:text-primary-foreground",
   ghost: "",
   secondary:
     "data-pressed:bg-secondary data-pressed:text-secondary-foreground data-pressed:hover:bg-secondary/80 dark:data-pressed:hover:bg-secondary/80 data-pressed:hover:text-secondary-foreground",

@@ -8,8 +8,15 @@ import { cn } from "@/lib/utils";
 const aiSurfaceClassName =
   "relative isolate overflow-hidden shadow-[0_0_0.5rem_color-mix(in_oklch,var(--primary)_8%,transparent)] before:pointer-events-none before:absolute before:top-1/2 before:left-1/2 before:-z-20 before:aspect-square before:w-[200%] before:-translate-x-1/2 before:-translate-y-1/2 before:animate-[spin_5s_linear_infinite] before:bg-[conic-gradient(from_0deg,var(--primary),var(--secondary),var(--accent),var(--primary))] before:content-[''] after:pointer-events-none after:absolute after:inset-px after:-z-10 after:rounded-[inherit] after:bg-card after:content-[''] hover:shadow-[0_0_0.75rem_color-mix(in_oklch,var(--primary)_14%,transparent)] hover:after:bg-[color-mix(in_oklch,var(--card)_94%,var(--accent))] motion-reduce:before:animate-none";
 
+// A press shrinks the button a little instead of nudging it down: a button
+// that moves grows its container's scrollable area, so one in a row that
+// scrolls sideways would flash a scrollbar. The footer's wide segments keep
+// the nudge, where a shrink would open gaps beside them and nothing scrolls.
+const FOOTER_PRESS =
+  "active:not-aria-[haspopup]:translate-y-px active:not-aria-[haspopup]:scale-100";
+
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none data-disabled:opacity-50 aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none data-disabled:opacity-50 aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -38,9 +45,8 @@ const buttonVariants = cva(
         "icon-xs": "size-5 rounded-sm [&_svg:not([class*='size-'])]:size-2.5",
         "icon-sm": "size-6 [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-8 [&_svg:not([class*='size-'])]:size-4",
-        footer:
-          "h-auto min-w-0 flex-1 gap-1 rounded-none border-0 px-4 py-2 text-sm [&_svg:not([class*='size-'])]:size-4",
-        "footer-icon": "size-12 rounded-none border-0 p-0",
+        footer: `h-auto min-w-0 flex-1 gap-1 rounded-none border-0 px-4 py-2 text-sm [&_svg:not([class*='size-'])]:size-4 ${FOOTER_PRESS}`,
+        "footer-icon": `size-12 rounded-none border-0 p-0 ${FOOTER_PRESS}`,
       },
     },
     defaultVariants: {

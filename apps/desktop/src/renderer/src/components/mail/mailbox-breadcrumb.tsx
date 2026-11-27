@@ -20,7 +20,7 @@ import { useMailboxNavigation } from "@/mail/use-mailbox-navigation";
 // Crumbs read as text in the list's color: the link variant without its
 // color, underline, size, padding, or press nudge, and free to shrink.
 const crumbButtonClassName =
-  "app-titlebar-interactive hover:text-foreground focus-visible:ring-ring/50 block h-auto max-w-48 shrink truncate rounded-sm border-0 p-0 font-normal text-current text-[length:inherit] leading-[inherit] transition-colors hover:no-underline active:not-aria-[haspopup]:translate-y-0";
+  "app-titlebar-interactive hover:text-foreground focus-visible:ring-ring/50 block h-auto max-w-48 shrink truncate rounded-sm border-0 p-0 font-normal text-current text-[length:inherit] leading-[inherit] transition-colors hover:no-underline active:not-aria-[haspopup]:scale-100";
 
 interface OpenThreadCrumb {
   /** The mailbox crumb's name for leaving the conversation. */

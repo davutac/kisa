@@ -25,7 +25,7 @@ const MailCopyEmailButton = ({
   <Button
     aria-label={`Copy ${email}`}
     className={cn(
-      "group/email focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-ring/30 dark:hover:bg-muted pointer-events-auto relative -mx-1 h-auto min-w-0 shrink cursor-copy justify-start gap-0 overflow-hidden rounded-sm border-0 px-1 text-left text-[length:inherit] leading-[inherit] font-normal transition-colors focus-visible:ring-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid active:not-aria-[haspopup]:translate-y-0",
+      "group/email focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-ring/30 dark:hover:bg-muted pointer-events-auto relative -mx-1 h-auto min-w-0 shrink cursor-copy justify-start gap-0 overflow-hidden rounded-sm border-0 px-1 text-left text-[length:inherit] leading-[inherit] font-normal transition-colors focus-visible:ring-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid active:not-aria-[haspopup]:scale-100",
       className
     )}
     onClick={() => copyEmail(email)}

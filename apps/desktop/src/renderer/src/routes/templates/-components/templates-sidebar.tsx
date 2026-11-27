@@ -71,7 +71,7 @@ const TemplatesSidebar = ({
             aria-describedby={summaryId}
             aria-label={template.name}
             className={cn(
-              "text-foreground/80 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent flex h-auto w-full flex-col items-start justify-start gap-0.5 px-2.5 py-2 text-left active:not-aria-[haspopup]:translate-y-0",
+              "text-foreground/80 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent flex h-auto w-full flex-col items-start justify-start gap-0.5 px-2.5 py-2 text-left active:not-aria-[haspopup]:scale-100",
               isSelected && "bg-accent text-accent-foreground"
             )}
             onClick={() => onSelect(template)}

@@ -22,7 +22,7 @@ const MailSearchFilterPill = ({
     <span className="max-w-48 truncate font-medium">{filter.value}</span>
     <Button
       aria-label={`Remove ${filter.field}:${filter.value} filter`}
-      className="text-muted-foreground hover:text-foreground hover:bg-foreground/10 dark:hover:bg-foreground/10 size-5 rounded-sm border-0 p-0 focus-visible:ring-1 active:not-aria-[haspopup]:translate-y-0"
+      className="text-muted-foreground hover:text-foreground hover:bg-foreground/10 dark:hover:bg-foreground/10 size-5 rounded-sm border-0 p-0 focus-visible:ring-1 active:not-aria-[haspopup]:scale-100"
       onClick={onRemove}
       size="xs"
       type="button"

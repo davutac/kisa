@@ -112,6 +112,14 @@ export const createEmailDocument = (
       pre { overflow: auto; white-space: pre-wrap; }
       table { max-width: 100%; }
       a[href] { color: LinkText; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+      /* A message first shown on the app's dark card that turns out to be
+         built out of backgrounds is given its light page here, in place:
+         see adaptToDarkSurface. :where() keeps these rules no stronger than
+         the ones above, so a page the sender styled still wins, as it does
+         on a light page set from the start. */
+      :root:where([data-kisa-surface="light"]) { color-scheme: light; }
+      html:where([data-kisa-surface="light"]), :where(html[data-kisa-surface="light"]) body { background: Canvas; }
+      :where(html[data-kisa-surface="light"]) body { padding: 12px 48px 12px 16px; }
     </style>
   </head>
   <body>${neutralizeActiveElements(html)}</body>

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import MailMessageActions from "@/components/mail/message-actions";
 import MailReplyArea from "@/components/mail/reply-area";
@@ -18,6 +18,7 @@ import { Accordion } from "@/components/ui/accordion";
 import { useInstanceValue } from "@/hooks/use-instance-value";
 import { useAppCommand } from "@/hotkeys";
 import { getThreadEmailAddresses, parseMailboxAddress } from "@/mail/address";
+import { isForwardSubject } from "@/mail/quoted-text";
 import { shouldShowReplyAll } from "@/mail/reply-recipients";
 import type { ThreadMessage, MailDraftInput } from "@/shared/ipc/mail";
 
@@ -32,32 +33,42 @@ interface NonEmptyMailThreadConversationProps extends MailThreadConversationProp
   latestMessage: ThreadMessage;
 }
 
-// The open message is always the selected one, or none, so a press on any
-// header is the store's toggle: it opens and selects another message, or
-// opens or closes the selected one. `contents` keeps the messages in the
+// Several messages may be open at once. A press on a header reports the whole
+// open set; the one message it added or removed is the one pressed, so the
+// store toggles it and selects it. `contents` keeps the messages in the
 // conversation's own flex layout.
 const MessageAccordion = ({ children }: { readonly children: ReactNode }) => {
-  const expandedMessageId = useThreadConversationStore(
-    (state) => state.expandedMessageId
+  const expandedMessageIds = useThreadConversationStore(
+    (state) => state.expandedMessageIds
   );
 
   const toggleMessage = useThreadConversationStore(
     (state) => state.toggleMessage
   );
 
+  const value = useMemo(() => [...expandedMessageIds], [expandedMessageIds]);
+
   return (
     <Accordion
       aria-label="Messages"
       className="contents"
-      collapsible
-      onValueChange={(value) => {
-        const messageId = value[0] ?? expandedMessageId;
+      multiple
+      onValueChange={(nextValue) => {
+        const opened = nextValue.find(
+          (messageId) => !expandedMessageIds.has(messageId)
+        );
 
-        if (messageId !== undefined && messageId !== null) {
+        const closed = value.find(
+          (messageId) => !nextValue.includes(messageId)
+        );
+
+        const messageId = opened ?? closed;
+
+        if (messageId !== undefined) {
           toggleMessage(messageId);
         }
       }}
-      value={expandedMessageId === null ? [] : [expandedMessageId]}
+      value={value}
     >
       {children}
     </Accordion>
@@ -73,8 +84,12 @@ const MailThreadConversationContent = ({
   const replyComposerFocusRef = useRef<ComposerFocusHandle | null>(null);
   const replyAreaRef = useRef<HTMLElement>(null);
 
-  const { focusSelectedMessage, registerMessageHeader, selectedMessageId } =
-    useThreadMessageNavigation(messages);
+  const {
+    focusSelectedMessage,
+    registerMessageHeader,
+    selectedMessageId,
+    showMessage,
+  } = useThreadMessageNavigation(messages);
 
   const selectedMessage =
     messages.find((message) => message.id === selectedMessageId) ??
@@ -199,13 +214,16 @@ const MailThreadConversationContent = ({
   return (
     <>
       <MessageAccordion>
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <MailThreadMessage
             accountId={accountId}
+            conversation={messages}
             fallbackRecipient={accountId}
+            foldsQuotedText={index > 0 && !isForwardSubject(message.subject)}
             key={message.id}
             message={message}
             onHeaderRef={registerMessageHeader}
+            onShowMessage={showMessage}
           />
         ))}
       </MessageAccordion>
